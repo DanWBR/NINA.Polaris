@@ -95,6 +95,13 @@ public sealed class LiveStackStatusContributor : IStatusContributor {
                 etaFrames = liveStack.LastEta?.RemainingFrames,
                 etaSeconds = liveStack.LastEta?.RemainingSeconds,
                 etaConfidence = liveStack.LastEta?.Confidence,
+                etaSlope = liveStack.LastEta?.Slope,
+                // Quality timeline for the LIVE SNR/HFR chart. The full
+                // per-frame series lives server-side; broadcast a
+                // downsampled view (<=80 points) so the chart works in the
+                // server-owned path — the old client-capture loop that used
+                // to feed it is retired.
+                qualitySeries = BuildQualitySeries(liveStack.QualityHistory),
                 // Stacking activity + dropped-frame visibility: true
                 // while a frame is being integrated, plus the running
                 // dropped count and the reason/time of the last drop.
@@ -152,6 +159,28 @@ public sealed class LiveStackStatusContributor : IStatusContributor {
                 }
             };
 
+    }
+
+    // Downsample the quality timeline to at most MaxSeriesPoints points
+    // (even stride, always keeping the newest sample) so the 1 Hz WS tick
+    // stays small. Each point is a compact object the LIVE chart reads
+    // directly: f=frame, t=elapsed s, snr=cumulative SNR, hfr, stars.
+    private const int MaxSeriesPoints = 80;
+    private static object[] BuildQualitySeries(IReadOnlyList<LiveStackingService.LiveStackQualitySample> hist) {
+        int n = hist.Count;
+        if (n == 0) return Array.Empty<object>();
+        int stride = n <= MaxSeriesPoints ? 1 : (int)Math.Ceiling(n / (double)MaxSeriesPoints);
+        var outList = new List<object>(Math.Min(n, MaxSeriesPoints) + 1);
+        for (int i = 0; i < n; i += stride) {
+            var s = hist[i];
+            outList.Add(new { f = s.Frame, t = s.ElapsedSec, snr = s.CumulativeSnr, hfr = s.MedianHfr, stars = s.StarCount });
+        }
+        // Always include the newest sample so the head of the curve is current.
+        if ((n - 1) % stride != 0) {
+            var s = hist[n - 1];
+            outList.Add(new { f = s.Frame, t = s.ElapsedSec, snr = s.CumulativeSnr, hfr = s.MedianHfr, stars = s.StarCount });
+        }
+        return outList.ToArray();
     }
 
 }
