@@ -56,6 +56,14 @@ public class SensorConstantsTests {
     }
 
     [Test]
+    public void Fallback_ASI183_Gain111_MatchesChart() {
+        Assert.That(SensorConstants.TryFallback("ZWO ASI183MM Pro", 111, out var c), Is.True);
+        Assert.That(c.ElectronsPerAdu, Is.EqualTo(0.066).Within(1e-4));
+        Assert.That(c.ReadNoiseE, Is.EqualTo(2.15).Within(1e-4));
+        Assert.That(c.FullWellE, Is.EqualTo(4100).Within(1));
+    }
+
+    [Test]
     public void Fallback_UnknownCamera_False() {
         Assert.That(SensorConstants.TryFallback("QHY268C", 100, out _), Is.False);
     }
