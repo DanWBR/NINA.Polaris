@@ -672,15 +672,6 @@
                  Hidden on very narrow viewports to keep the badge row tidy. -->
             <span class="status-chip status-clock" x-text="currentTime"
                   title="Current time" data-no-i18n></span>
-            <!-- Scheduled rig teardown countdown. Shown only while armed;
-                 click jumps to the Settings card to review/cancel. Amber, or
-                 red in the final 5 min / while firing. -->
-            <button class="status-chip" x-show="scheduledShutdown.utc" x-cloak
-                    @click="tab='settings'; $nextTick(() => document.getElementById('scheduled-shutdown-card')?.scrollIntoView({behavior:'smooth'}))"
-                    :style="'cursor:pointer;border:none;background:none;-webkit-appearance:none;appearance:none;padding:0;'+((scheduledShutdown.running || (scheduledShutdownSecondsLeft!==null && scheduledShutdownSecondsLeft<=300)) ? 'color:#f87171' : 'color:#fbbf24')"
-                    :title="$t('Scheduled rig shutdown') + (scheduledShutdown.shutdownHost ? ' + ' + $t('host power off') : '')">
-                <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.14em"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg> <span x-text="scheduledShutdownCountdown"></span>
-            </button>
             <!-- DBGLOG-6: log inspector badge. Always visible (helps
                  trust + discoverability), colours by unread severity:
                  red when there are unread errors, amber for unread
@@ -758,6 +749,17 @@
                           stroke-linecap="round"/>
                 </svg>
                 <span class="tray-label" x-text="uiLocked ? 'Unlock UI' : 'Lock UI'"></span>
+            </button>
+            <!-- Scheduled rig teardown countdown. Shown only while armed;
+                 sits at the far right so it doesn't split the info badges.
+                 Click jumps to the Settings card to review/cancel. Amber, or
+                 red in the final 5 min / while firing. -->
+            <button class="status-chip" x-cloak
+                    x-show="scheduledShutdown.utc && (scheduledShutdown.running || scheduledShutdownSecondsLeft > 0)"
+                    @click="openSettingsCard('scheduled-shutdown-card')"
+                    :style="'cursor:pointer;border:none;background:none;-webkit-appearance:none;appearance:none;padding:0;'+((scheduledShutdown.running || (scheduledShutdownSecondsLeft!==null && scheduledShutdownSecondsLeft<=300)) ? 'color:#f87171' : 'color:#fbbf24')"
+                    :title="$t('Scheduled rig shutdown') + (scheduledShutdown.shutdownHost ? ' + ' + $t('host power off') : '')">
+                <svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.14em"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg> <span x-text="scheduledShutdownCountdown"></span>
             </button>
             </div><!-- /.status-bar-tray-items -->
             </div><!-- /.status-tray -->
@@ -1767,9 +1769,6 @@
                             <button type="button" class="livestack-trig-tab"
                                     :class="{ active: trigTab === 'recenter' }"
                                     @click="trigTab = 'recenter'">⊹ Re-center</button>
-                            <button type="button" class="livestack-trig-tab"
-                                    :class="{ active: trigTab === 'checkpoints' }"
-                                    @click="trigTab = 'checkpoints'">💾 <span x-text="$t('Checkpoints')"></span></button>
                         </div>
 
                         <fieldset class="livestack-triggers-block" x-show="trigTab === 'refocus'">
@@ -1978,8 +1977,15 @@
                             </div>
                         </fieldset>
 
-                        <fieldset class="livestack-triggers-block" x-show="trigTab === 'checkpoints'">
-                            <legend x-text="$t('Partial-stack checkpoints')"></legend>
+                        </div><!-- /tab control wrapper (trigTab) -->
+                    </details>
+
+                    <!-- Partial-stack checkpoints: its own collapsible groupbox,
+                         opens when a cadence or auto-stop is set. -->
+                    <details class="livestack-triggers"
+                             :open="liveStackTriggers.checkpointEveryNFrames > 0 || liveStackTriggers.checkpointEveryMinutes > 0 || liveStackTriggers.autoStopAtTargetSnr">
+                        <summary>💾 <span x-text="$t('Partial-stack checkpoints')"></span></summary>
+                        <fieldset class="livestack-triggers-block">
                             <p class="hint" style="margin:0 0 6px 0; font-size:11px"
                                x-text="$t('Auto-save the running stack on a cadence: a crash safety net and a quality-vs-time record.')"></p>
                             <div class="livestack-triggers-row">
@@ -2020,7 +2026,6 @@
                                         x-text="'⬇ ' + $t('Export quality CSV')"></button>
                             </div>
                         </fieldset>
-                        </div><!-- /tab control wrapper (trigTab) -->
                     </details>
 
                     <!-- LSPP-6: per-frame pre-processing panel. Same

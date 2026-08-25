@@ -30788,6 +30788,23 @@ function ninaApp() {
                 c.classList.add('is-collapsed');
             });
         },
+        // Switch to the Settings tab and scroll a card into view. nextTick
+        // alone fires before the settings grid is laid out (and before
+        // reorderSettings moves the node), so the old inline scrollIntoView
+        // silently did nothing. Retry until the card is actually visible.
+        openSettingsCard(id) {
+            this.tab = 'settings';
+            let tries = 0;
+            const go = () => {
+                const el = document.getElementById(id);
+                if (el && el.offsetParent !== null) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    return;
+                }
+                if (tries++ < 25) setTimeout(go, 80);
+            };
+            this.$nextTick(() => setTimeout(go, 40));
+        },
         // Group the settings cards by category (with a header row per group)
         // and sort alphabetically within each group. Pure DOM reorder of the
         // existing card nodes — preserves all Alpine bindings/x-init. Runs once.
