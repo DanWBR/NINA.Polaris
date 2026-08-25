@@ -255,6 +255,28 @@ public static class LiveStackEndpoints {
             });
         });
 
+        // Quality report: the SNR/HFR timeline as CSV, one row per integrated
+        // frame, plus a checkpoint flag. Downloadable straight from the URL.
+        group.MapGet("/quality-report", (LiveStackingService stack, LiveStackCheckpointService checkpoints) => {
+            var series = stack.QualityHistory;
+            var ckFrames = new HashSet<int>();
+            foreach (var c in checkpoints.Manifest) ckFrames.Add(c.Frame);
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("frame,elapsed_sec,cumulative_snr,frame_snr,median_hfr,star_count,frame_mean,checkpoint");
+            var ci = System.Globalization.CultureInfo.InvariantCulture;
+            foreach (var s in series) {
+                sb.Append(s.Frame).Append(',')
+                  .Append(s.ElapsedSec.ToString("0.###", ci)).Append(',')
+                  .Append(s.CumulativeSnr.ToString("0.###", ci)).Append(',')
+                  .Append(s.FrameSnr.ToString("0.###", ci)).Append(',')
+                  .Append(s.MedianHfr.ToString("0.###", ci)).Append(',')
+                  .Append(s.StarCount).Append(',')
+                  .Append(s.FrameMean.ToString("0.###", ci)).Append(',')
+                  .Append(ckFrames.Contains(s.Frame) ? "1" : "0").Append('\n');
+            }
+            return Results.Text(sb.ToString(), "text/csv");
+        });
+
         // ----- LSPP-3: per-frame pre-processing settings + status -----
         //
         // GET returns both the persisted settings (so the UI can
