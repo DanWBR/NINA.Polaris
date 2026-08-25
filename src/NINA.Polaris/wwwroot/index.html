@@ -1212,6 +1212,12 @@
                                 <span class="lsq-value" style="color:var(--warn,#e0a030)"
                                       x-text="liveStackStatus?.rejectedFrames ?? 0"></span>
                             </div>
+                            <div class="lsq-cell" x-show="formatExposureAdvice()" x-cloak>
+                                <span class="lsq-label" x-text="$t('Sub')"></span>
+                                <span class="lsq-value" style="cursor:help"
+                                      :title="exposureAdviceTitle()"
+                                      x-text="formatExposureAdvice()"></span>
+                            </div>
                             <div class="lsq-target">
                                 <label>Target
                                     <input type="number" class="input-sm" min="0" max="500" step="1"
@@ -1777,6 +1783,9 @@
                             <button type="button" class="livestack-trig-tab"
                                     :class="{ active: trigTab === 'recenter' }"
                                     @click="trigTab = 'recenter'">⊹ Re-center</button>
+                            <button type="button" class="livestack-trig-tab"
+                                    :class="{ active: trigTab === 'checkpoints' }"
+                                    @click="trigTab = 'checkpoints'">💾 <span x-text="$t('Checkpoints')"></span></button>
                         </div>
 
                         <fieldset class="livestack-triggers-block" x-show="trigTab === 'refocus'">
@@ -1950,6 +1959,49 @@
                             <div class="livestack-triggers-row text-warn"
                                  x-show="ditherSync.dithering || liveStackStatus?.triggers?.executingKind === 'dither'"
                                  x-text="$t('Dithering…')"></div>
+                        </fieldset>
+
+                        <fieldset class="livestack-triggers-block" x-show="trigTab === 'checkpoints'">
+                            <legend x-text="$t('Partial-stack checkpoints')"></legend>
+                            <p class="hint" style="margin:0 0 6px 0; font-size:11px"
+                               x-text="$t('Auto-save the running stack on a cadence: a crash safety net and a quality-vs-time record.')"></p>
+                            <div class="livestack-triggers-row">
+                                <label><span x-text="$t('Every')"></span>
+                                    <input type="number" min="0" step="1"
+                                           x-model.number="liveStackTriggers.checkpointEveryNFrames"
+                                           @change="saveLiveStackTriggers()" class="input-sm" style="width:70px">
+                                    <span x-text="$t('frames')"></span>
+                                </label>
+                                <label><span x-text="$t('Every')"></span>
+                                    <input type="number" min="0" step="1"
+                                           x-model.number="liveStackTriggers.checkpointEveryMinutes"
+                                           @change="saveLiveStackTriggers()" class="input-sm" style="width:70px">
+                                    <span x-text="$t('minutes')"></span>
+                                </label>
+                            </div>
+                            <div class="livestack-triggers-row">
+                                <label><span x-text="$t('Keep last')"></span>
+                                    <input type="number" min="0" step="1"
+                                           x-model.number="liveStackTriggers.checkpointKeepLast"
+                                           @change="saveLiveStackTriggers()" class="input-sm" style="width:70px">
+                                </label>
+                                <span class="text-muted" style="font-size:11px" x-text="$t('(0 = keep all)')"></span>
+                            </div>
+                            <div class="livestack-triggers-row" style="margin-top:6px">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" x-model="liveStackTriggers.autoStopAtTargetSnr"
+                                           @change="saveLiveStackTriggers()">
+                                    <span x-text="$t('Stop capture when Target SNR is reached')"></span>
+                                </label>
+                            </div>
+                            <div class="livestack-triggers-row" style="margin-top:6px">
+                                <span class="text-muted" style="font-size:11px"
+                                      x-show="checkpoints.length" x-cloak>
+                                    <span x-text="checkpoints.length"></span> <span x-text="$t('checkpoints saved')"></span>
+                                </span>
+                                <button class="btn btn-sm" @click="exportQualityReport()"
+                                        x-text="'⬇ ' + $t('Export quality CSV')"></button>
+                            </div>
                         </fieldset>
                         </div><!-- /tab control wrapper (trigTab) -->
                     </details>

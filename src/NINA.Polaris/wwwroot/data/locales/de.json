@@ -4484,5 +4484,21 @@
   "Could not start download: ": "Download konnte nicht gestartet werden: ",
   "Filter wheel": "Filterrad",
   "Flat panel": "Flatfield-Panel",
-  "Item scale": "Skalierung der Elemente"
+  "Item scale": "Skalierung der Elemente",
+  "Sub": "Sub",
+  "Run Sensor Analysis for a sub-exposure recommendation": "Sensor Analysis ausführen für eine Empfehlung zur Sub-Belichtung",
+  "from Sensor Analysis": "aus Sensor Analysis",
+  "estimated from the published sensor curve": "geschätzt aus der veröffentlichten Sensorkurve",
+  "(limited by star saturation)": "(begrenzt durch Sternsättigung)",
+  "Suggested sub-exposure": "Empfohlene Sub-Belichtung",
+  "Checkpoints": "Checkpoints",
+  "Partial-stack checkpoints": "Checkpoints des Teil-Stacks",
+  "Auto-save the running stack on a cadence: a crash safety net and a quality-vs-time record.": "Speichert den laufenden Stack automatisch in einem Intervall: Absturzsicherung und ein Qualitäts-Zeit-Protokoll.",
+  "frames": "Frames",
+  "minutes": "Minuten",
+  "Keep last": "Letzte behalten",
+  "(0 = keep all)": "(0 = alle behalten)",
+  "Stop capture when Target SNR is reached": "Aufnahme stoppen, wenn Target SNR erreicht ist",
+  "checkpoints saved": "Checkpoints gespeichert",
+  "Export quality CSV": "Qualitäts-CSV exportieren"
 }

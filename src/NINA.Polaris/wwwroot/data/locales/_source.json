@@ -3860,5 +3860,21 @@
   "Could not start download: ": "",
   "Filter wheel": "",
   "Flat panel": "",
-  "Item scale": ""
+  "Item scale": "",
+  "Sub": "Sub",
+  "Run Sensor Analysis for a sub-exposure recommendation": "Run Sensor Analysis for a sub-exposure recommendation",
+  "from Sensor Analysis": "from Sensor Analysis",
+  "estimated from the published sensor curve": "estimated from the published sensor curve",
+  "(limited by star saturation)": "(limited by star saturation)",
+  "Suggested sub-exposure": "Suggested sub-exposure",
+  "Checkpoints": "Checkpoints",
+  "Partial-stack checkpoints": "Partial-stack checkpoints",
+  "Auto-save the running stack on a cadence: a crash safety net and a quality-vs-time record.": "Auto-save the running stack on a cadence: a crash safety net and a quality-vs-time record.",
+  "frames": "frames",
+  "minutes": "minutes",
+  "Keep last": "Keep last",
+  "(0 = keep all)": "(0 = keep all)",
+  "Stop capture when Target SNR is reached": "Stop capture when Target SNR is reached",
+  "checkpoints saved": "checkpoints saved",
+  "Export quality CSV": "Export quality CSV"
 }
