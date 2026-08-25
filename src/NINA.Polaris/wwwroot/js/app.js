@@ -281,6 +281,11 @@ function ninaApp() {
         // {f,t,snr,hfr,stars}) broadcast in the liveStack WS block; feeds the
         // SNR/HFR chart in the server-owned path. See updateHfrChart().
         liveStackSeries: [],
+        // Sub-exposure advice (/exposure-advice) + checkpoint manifest, both
+        // polled while LIVE runs. exposureAdvice is null until first fetched.
+        exposureAdvice: null,
+        checkpoints: [],
+        _expAdviceTick: 0,
 
         // Live stacking
         // Default false: the session comes up disarmed (matches the
@@ -399,7 +404,13 @@ function ninaApp() {
             ditherRaOnly: false,
             ditherSettlePixels: 3.0,
             ditherSettleTime: 3,
-            ditherSettleTimeout: 60
+            ditherSettleTimeout: 60,
+            // Partial-stack checkpoints (save the running stack on a cadence)
+            // + auto-stop when the stack reaches Target SNR.
+            checkpointEveryNFrames: 0,
+            checkpointEveryMinutes: 0,
+            checkpointKeepLast: 5,
+            autoStopAtTargetSnr: false
         },
         // LSPP-3 + LSPP-6: per-frame pre-processing settings. Local
         // copy of the EquipmentProfile.LiveStackPreProcessing state.
@@ -22094,6 +22105,50 @@ function ninaApp() {
             return `~${h} h ${m} m`;
         },
 
+        // Sub-exposure advice from /exposure-advice: the optimal sub for the
+        // current sky (measured background + sensor read noise/e-per-ADU).
+        // Polled while LIVE runs; rendered as a "suggested sub" hint.
+        async loadExposureAdvice() {
+            try { this.exposureAdvice = await this.apiGet('/api/livestack/exposure-advice'); }
+            catch (e) { /* keep the last value */ }
+        },
+        // Compact label for the quality box: "~34s" or "~2s (sat)"; null hides it.
+        formatExposureAdvice() {
+            const a = this.exposureAdvice;
+            if (!a || a.available === false || a.recommendedSeconds == null) return null;
+            const s = a.recommendedSeconds;
+            const t = s < 1 ? s.toFixed(1) : Math.round(s);
+            return a.saturationLimited ? `~${t}s ⚠` : `~${t}s`;
+        },
+        // Tooltip explaining the advice (basis + measured sky).
+        exposureAdviceTitle() {
+            const a = this.exposureAdvice;
+            if (!a) return '';
+            if (a.available === false) return this.$t('Run Sensor Analysis for a sub-exposure recommendation');
+            const basis = a.basis === 'measured' ? this.$t('from Sensor Analysis')
+                        : a.basis === 'estimated' ? this.$t('estimated from the published sensor curve') : '';
+            const sat = a.saturationLimited ? ' ' + this.$t('(limited by star saturation)') : '';
+            return `${this.$t('Suggested sub-exposure')} ${basis}${sat}`;
+        },
+        async loadCheckpoints() {
+            try { this.checkpoints = await this.apiGet('/api/livestack/checkpoints') || []; }
+            catch (e) { this.checkpoints = []; }
+        },
+        // Download the SNR/HFR quality timeline as CSV (via apiFetch so auth
+        // is carried; blob download works in the app shell).
+        async exportQualityReport() {
+            try {
+                const resp = await this.apiFetch('/api/livestack/quality-report');
+                const text = await resp.text();
+                const blob = new Blob([text], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = 'live-stack-quality.csv';
+                document.body.appendChild(a); a.click(); a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+            } catch (e) { this.toastFail(this.$t('Export failed'), e); }
+        },
+
         // LIVE metrics bar: for a target still EAST of the meridian, show the
         // time until it transits (a flip may be needed past it). Once the target
         // is WEST of the meridian (already crossed), "time until meridian" is
@@ -43171,6 +43226,12 @@ function ninaApp() {
                     if (Array.isArray(ls.qualitySeries)) {
                         this.liveStackSeries = ls.qualitySeries;
                         try { this.updateHfrChart(); } catch (e) {}
+                    }
+                    // Poll the sub-exposure advice + checkpoint manifest every
+                    // ~10 s while LIVE runs (they change slowly).
+                    if ((this._expAdviceTick++ % 10) === 0) {
+                        this.loadExposureAdvice();
+                        this.loadCheckpoints();
                     }
                     // The stack's working resolution goes in its OWN field. It
                     // used to be written over stats.width, which meant the
