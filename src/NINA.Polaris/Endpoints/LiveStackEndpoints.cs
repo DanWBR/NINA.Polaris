@@ -199,6 +199,62 @@ public static class LiveStackEndpoints {
         group.MapGet("/checkpoints", (LiveStackCheckpointService checkpoints) =>
             Results.Ok(checkpoints.Manifest));
 
+        // Sub-exposure advice: the optimal sub length for the current sky using
+        // the "swamp the read noise" criterion, from the measured sky background
+        // and the sensor's read noise + e-/ADU (Sensor Analysis PTC, else a
+        // curated published-curve fallback, else the raw sky measurement only).
+        group.MapGet("/exposure-advice", (LiveStackingService stack, EquipmentManager equip,
+                                          ProfileService profiles, SensorAnalysisStore sensorStore) => {
+            var cam = equip.Camera;
+            var rig = profiles.ActiveEquipmentProfile;
+            string camName = cam?.DeviceName ?? "";
+            int gain = cam?.Gain ?? rig?.DefaultGain ?? 0;
+            double offset = rig?.DefaultOffset ?? 0;
+            double exposure = stack.AverageExposureSec;
+            double bgAdu = stack.LastFrameBackgroundAdu;
+            double peakAdu = stack.LastFramePeakAdu;
+            double skyRateAdu = exposure > 0 ? Math.Max(0, bgAdu - offset) / exposure : 0;
+
+            // Resolve electron constants: measured PTC first, then fallback table.
+            string basis;
+            double ePerAdu, readE; double? fullWellE = null;
+            var sa = string.IsNullOrEmpty(camName) ? null : sensorStore.LatestForCamera(camName);
+            var row = sa != null ? SensorConstants.NearestRow(sa, gain) : null;
+            if (row != null && row.ElectronsPerAdu > 0 && row.ReadNoiseE > 0) {
+                ePerAdu = row.ElectronsPerAdu; readE = row.ReadNoiseE;
+                fullWellE = row.FullWellE > 0 ? row.FullWellE : null;
+                basis = "measured";
+            } else if (SensorConstants.TryFallback(camName, gain, out var f)) {
+                ePerAdu = f.ElectronsPerAdu; readE = f.ReadNoiseE; fullWellE = f.FullWellE;
+                basis = "estimated";
+            } else {
+                // No sensor constants: return the assumption-free sky measurement.
+                return Results.Ok(new {
+                    basis = "unavailable", available = false, camera = camName, gain,
+                    offsetAdu = offset, currentExposureSeconds = exposure,
+                    backgroundAdu = bgAdu, peakAdu, skyRateAduPerSec = skyRateAdu,
+                    note = "Run Sensor Analysis (SETTINGS) for a sub-exposure recommendation."
+                });
+            }
+
+            double skyRateE = SubExposureCalculator.SkyRateEPerSec(bgAdu, offset, ePerAdu, exposure);
+            double? peakRateE = (exposure > 0 && peakAdu > offset)
+                ? Math.Max(0, peakAdu - offset) * ePerAdu / exposure : (double?)null;
+            var advice = SubExposureCalculator.Recommend(readE, skyRateE, 0.05, fullWellE, peakRateE);
+
+            return Results.Ok(new {
+                basis, available = advice != null, camera = camName, gain,
+                offsetAdu = offset, currentExposureSeconds = exposure,
+                backgroundAdu = bgAdu, peakAdu, skyRateAduPerSec = skyRateAdu,
+                electronsPerAdu = ePerAdu, readNoiseE = readE, fullWellE,
+                skyRateEPerSec = skyRateE,
+                recommendedSeconds = advice?.RecommendedSeconds,
+                optimalSeconds = advice?.OptimalSeconds,
+                saturationCapSeconds = advice?.SaturationCapSeconds,
+                saturationLimited = advice?.SaturationLimited ?? false
+            });
+        });
+
         // ----- LSPP-3: per-frame pre-processing settings + status -----
         //
         // GET returns both the persisted settings (so the UI can

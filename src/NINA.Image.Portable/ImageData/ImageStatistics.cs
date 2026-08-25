@@ -123,6 +123,23 @@ public class ImageStatistics : IImageStatistics {
     }
 
     /// <summary>
+    /// Background SNR plus the median (a robust sky-background proxy, ADU) and
+    /// the peak pixel — computed together so the live path can derive the
+    /// sky-background rate (for the sub-exposure advisor) and a saturation
+    /// ceiling without a redundant median pass. The median histogram is already
+    /// built for the SNR; only the max adds a light memory-bound scan.
+    /// </summary>
+    public static (double snr, double median, ushort max) ComputeBackgroundSnrWithStats(ushort[] data) {
+        if (data == null || data.Length == 0) return (0, 0, 0);
+        var median = ComputeMedianViaHistogram(data);
+        var mad = ComputeMAD(data, median);
+        var snr = ComputeBackgroundSnr(data, median, mad);
+        ushort max = 0;
+        for (int i = 0; i < data.Length; i++) { var v = data[i]; if (v > max) max = v; }
+        return (snr, median, max);
+    }
+
+    /// <summary>
     /// Plain arithmetic mean of the pixel values. Used for the live-view
     /// "Mean" readout. A single memory-bound pass, parallelized in local
     /// partition sums so it's cheap enough to run on every live-stack frame
