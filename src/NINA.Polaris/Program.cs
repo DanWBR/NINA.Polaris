@@ -236,6 +236,9 @@ builder.Services.AddSingleton<LiveStackTriggersService>();
 // Partial-stack checkpoints: subscribes to the frame stream at
 // construction and writes the running stack to checkpoints/ on a cadence.
 builder.Services.AddSingleton<LiveStackCheckpointService>();
+// Watchdog: auto-stop at target SNR + cloud/focus-drift alerts, off the
+// frame stream. Subscribes at construction.
+builder.Services.AddSingleton<LiveStackWatchdogService>();
 // REFSUG-1: trend-based refocus suggestion. Listens to the same
 // FrameIntegrated event as LSTR-3 but only when RefocusEnabled is
 // OFF — covers manual-focuser users who cannot be auto-fired.
@@ -737,6 +740,9 @@ app.Services.GetRequiredService<LiveStackTriggersService>();
 // the live-stack frame stream in its constructor to write partial-stack
 // checkpoints on a cadence; it must be alive before the first frame.
 app.Services.GetRequiredService<LiveStackCheckpointService>();
+// Same eager-resolve rationale: the watchdog subscribes to the frame stream
+// in its constructor for auto-stop + quality alerts.
+app.Services.GetRequiredService<LiveStackWatchdogService>();
 // REFSUG-1: same eager-resolve rationale. RefocusSuggestionService
 // hooks LiveStackingService.FrameIntegrated in its constructor and
 // must be alive before the first live-stack frame arrives.
