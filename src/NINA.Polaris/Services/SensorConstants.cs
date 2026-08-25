@@ -56,6 +56,22 @@ public static class SensorConstants {
         // gain 111 (a common working point): e/ADU 12-bit ~1.05 → 0.066 16-bit.
         ("ASI183",  0,   0.225,  3.00, 15000),
         ("ASI183",  111, 0.066,  2.15,  4100),
+        // ZWO ASI4400MC Pro (IMX366): 14-bit ADC (×4 → 16-bit); 74.6 ke- full
+        // well, unity gain ~132, HCG step @ 136. Chart e/ADU (14-bit) ÷ 4.
+        ("ASI4400", 0,   1.125,  7.60, 74600),
+        ("ASI4400", 136, 0.238,  1.60, 15000),
+        // ZWO ASI533MC/MM Pro (IMX533): 14-bit ADC (×4 → 16-bit); 50 ke- full
+        // well, HCG @ 100. Chart e/ADU (14-bit) ÷ 4.
+        ("ASI533",  0,   0.7625, 3.80, 50000),
+        ("ASI533",  100, 0.250,  1.50, 15000),
+        // ZWO ASI294MC/MM Pro (IMX294, Bin1): 12-bit ADC (×16 → 16-bit);
+        // 14.4 ke- full well, unity gain ~108, no sharp HCG step. Chart ÷ 16.
+        ("ASI294",  0,   0.219,  2.65, 14417),
+        ("ASI294",  120, 0.058,  1.77,  3700),
+        // ZWO ASI6200MC/MM Pro (IMX455): native 16-bit ADC (chart e/ADU already
+        // in the FITS domain, no scaling); 51 ke- full well, HCG @ 100.
+        ("ASI6200", 0,   0.785,  3.30, 51000),
+        ("ASI6200", 100, 0.260,  1.35, 20000),
     };
 
     public static bool TryFallback(string? camera, int gain, out Constants constants) {

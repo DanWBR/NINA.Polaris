@@ -63,6 +63,16 @@ public class SensorConstantsTests {
         Assert.That(c.FullWellE, Is.EqualTo(4100).Within(1));
     }
 
+    [TestCase("ZWO ASI4400MC Pro", 136, 0.238, 1.60)]
+    [TestCase("ZWO ASI533MC Pro", 100, 0.250, 1.50)]
+    [TestCase("ZWO ASI294MM Pro", 120, 0.058, 1.77)]
+    [TestCase("ZWO ASI6200MC Pro", 100, 0.260, 1.35)]
+    public void Fallback_MoreCameras_MatchCharts(string cam, int gain, double eadu, double read) {
+        Assert.That(SensorConstants.TryFallback(cam, gain, out var c), Is.True);
+        Assert.That(c.ElectronsPerAdu, Is.EqualTo(eadu).Within(1e-4));
+        Assert.That(c.ReadNoiseE, Is.EqualTo(read).Within(1e-4));
+    }
+
     [Test]
     public void Fallback_UnknownCamera_False() {
         Assert.That(SensorConstants.TryFallback("QHY268C", 100, out _), Is.False);
