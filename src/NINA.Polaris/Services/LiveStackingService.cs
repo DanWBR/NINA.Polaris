@@ -583,6 +583,13 @@ public class LiveStackingService {
     // retired client-side capture loop, so it read blank in server-owned live).
     public double LastFrameMean { get; private set; }
 
+    // Robust sky-background proxy (median ADU) and peak pixel of the latest raw
+    // frame, computed alongside LastFrameSnr in one pass. The sub-exposure
+    // advisor derives the sky rate (median − offset, per second) and a
+    // saturation ceiling (peak vs full well) from these.
+    public double LastFrameBackgroundAdu { get; private set; }
+    public double LastFramePeakAdu { get; private set; }
+
     // 16-bit luminance histogram + stats of the latest colour stack, surfaced
     // over the WS status so the LIVE histogram panel shows the real 16-bit data
     // even though the colour frame is broadcast as an 8-bit JPEG. Null until a
@@ -886,6 +893,8 @@ public class LiveStackingService {
             LastFrameSnr = 0;
             CumulativeSnr = 0;
             LastFrameMean = 0;
+            LastFrameBackgroundAdu = 0;
+            LastFramePeakAdu = 0;
             RejectedFrames = 0;
             LastRejectReason = null;
             LastRejectAt = null;
@@ -1586,7 +1595,10 @@ public class LiveStackingService {
         // - CumulativeSnr is the SNR of the running-mean accumulator,
         //   computed from _accumulator.
         try {
-            LastFrameSnr = ComputeFrameSnr(imageData.Data);
+            var (fSnr, fMedian, fMax) = ImageStatistics.ComputeBackgroundSnrWithStats(imageData.Data);
+            LastFrameSnr = fSnr;
+            LastFrameBackgroundAdu = fMedian;
+            LastFramePeakAdu = fMax;
             LastFrameMean = ImageStatistics.ComputeMean(imageData.Data);
             CumulativeSnr = ComputeCumulativeSnrFromAccumulator();
             RecordQualitySample(_frameCount, medianHfr, stars.Count);
