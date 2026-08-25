@@ -659,13 +659,24 @@ public class LiveStackingService {
         ColorHistMean = mean;
         ColorHistStd = cnt > 0 ? Math.Sqrt(Math.Max(0, sumSq / cnt - mean * mean)) : 0;
     }
-    /// <summary>Rolling history of (frameCount, cumulativeSnr) used
-    /// by <see cref="SnrEtaCalculator"/> to fit the √N model + ETA.
-    /// Capped at 50 entries — beyond that the fit is dominated by
-    /// recent samples anyway and we'd just be paying memory for
-    /// nothing.</summary>
-    public IReadOnlyList<(int frame, double snr)> SnrHistory => _snrHistory;
-    private readonly List<(int frame, double snr)> _snrHistory = new(50);
+    /// <summary>One point on the LIVE quality timeline: the stack state
+    /// right after integrating a frame. The (frame, CumulativeSnr) pair
+    /// feeds <see cref="SnrEtaCalculator"/>; the full record backs the
+    /// LIVE SNR/HFR chart, the checkpoint manifest, the sub-exposure
+    /// advice and the cloud/drift alerts. <c>ElapsedSec</c> is
+    /// integration time (frozen while paused), so predictions can be
+    /// time-based, not only frame-based.</summary>
+    public sealed record LiveStackQualitySample(
+        int Frame, double ElapsedSec, double CumulativeSnr,
+        double FrameSnr, double MedianHfr, int StarCount, double FrameMean);
+
+    /// <summary>Rolling quality timeline used by the ETA fit, the LIVE
+    /// chart, and the report/alert helpers. Capped at 300 entries —
+    /// enough to draw a whole session and fit the √N model, and trivial
+    /// in memory.</summary>
+    public IReadOnlyList<LiveStackQualitySample> QualityHistory => _qualityHistory;
+    private readonly List<LiveStackQualitySample> _qualityHistory = new(300);
+    private const int QualityHistoryCap = 300;
     /// <summary>Cached last ETA result. Recomputed each AddFrame so
     /// the WS broadcaster can serve it without re-fitting.</summary>
     public SnrEtaCalculator.EtaResult? LastEta { get; private set; }
@@ -894,7 +905,7 @@ public class LiveStackingService {
             RejectedFrames = 0;
             LastRejectReason = null;
             LastRejectAt = null;
-            _snrHistory.Clear();
+            _qualityHistory.Clear();
             LastEta = null;
             // LSPP-3+4: target switch -> drop the master cache so the
             // next frame re-resolves with the new filter/exposure/gain.
@@ -1594,7 +1605,7 @@ public class LiveStackingService {
             LastFrameSnr = ComputeFrameSnr(imageData.Data);
             LastFrameMean = ImageStatistics.ComputeMean(imageData.Data);
             CumulativeSnr = ComputeCumulativeSnrFromAccumulator();
-            RecordSnrSample(_frameCount, CumulativeSnr);
+            RecordQualitySample(_frameCount, medianHfr, stars.Count);
             RecomputeEta();
         } catch (Exception ex) {
             _logger.LogDebug(ex, "Live stack: SNR computation failed (non-fatal)");
@@ -1830,22 +1841,29 @@ public class LiveStackingService {
         return ComputeFrameSnr(stacked);
     }
 
-    private void RecordSnrSample(int frame, double snr) {
-        if (frame <= 0 || !double.IsFinite(snr) || snr < 0) return;
-        // Deduplicate identical frame numbers (defensive — shouldn't
-        // happen but a duplicate WS message from the WASM client
-        // could in theory arrive).
-        if (_snrHistory.Count > 0 && _snrHistory[_snrHistory.Count - 1].frame == frame) {
-            _snrHistory[_snrHistory.Count - 1] = (frame, snr);
+    private void RecordQualitySample(int frame, double medianHfr, int starCount) {
+        if (frame <= 0 || !double.IsFinite(CumulativeSnr) || CumulativeSnr < 0) return;
+        var sample = new LiveStackQualitySample(
+            frame, ElapsedSeconds, CumulativeSnr, LastFrameSnr,
+            double.IsFinite(medianHfr) ? medianHfr : 0, starCount, LastFrameMean);
+        // Deduplicate identical frame numbers (defensive — a duplicated
+        // integration shouldn't append two points for the same frame).
+        if (_qualityHistory.Count > 0 && _qualityHistory[_qualityHistory.Count - 1].Frame == frame) {
+            _qualityHistory[_qualityHistory.Count - 1] = sample;
             return;
         }
-        _snrHistory.Add((frame, snr));
-        if (_snrHistory.Count > 50) _snrHistory.RemoveAt(0);
+        _qualityHistory.Add(sample);
+        if (_qualityHistory.Count > QualityHistoryCap) _qualityHistory.RemoveAt(0);
     }
 
     private void RecomputeEta() {
-        if (!TargetSnr.HasValue) { LastEta = null; return; }
-        LastEta = SnrEtaCalculator.Estimate(_snrHistory, TargetSnr.Value, AverageExposureSec);
+        if (!TargetSnr.HasValue || _qualityHistory.Count == 0) { LastEta = null; return; }
+        // Project the timeline to the (frame, snr) pairs the √N fitter consumes.
+        var series = new (int frame, double snr)[_qualityHistory.Count];
+        for (int i = 0; i < _qualityHistory.Count; i++) {
+            series[i] = (_qualityHistory[i].Frame, _qualityHistory[i].CumulativeSnr);
+        }
+        LastEta = SnrEtaCalculator.Estimate(series, TargetSnr.Value, AverageExposureSec);
     }
 
     public ushort[] GetStackedResult() {

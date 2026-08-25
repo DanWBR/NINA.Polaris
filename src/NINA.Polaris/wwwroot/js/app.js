@@ -277,6 +277,10 @@ function ninaApp() {
         // so don't wire it back to a UI that means "frames this session".
         sessionCaptures: 0,
         imageHistory: [],
+        // Server-authoritative LIVE quality timeline (downsampled series of
+        // {f,t,snr,hfr,stars}) broadcast in the liveStack WS block; feeds the
+        // SNR/HFR chart in the server-owned path. See updateHfrChart().
+        liveStackSeries: [],
 
         // Live stacking
         // Default false: the session comes up disarmed (matches the
@@ -22003,8 +22007,8 @@ function ninaApp() {
                                 afterBody: (items) => {
                                     if (!items?.length) return '';
                                     const i = items[0].dataIndex;
-                                    const hist = (this.imageHistory || []).slice().reverse();
-                                    const stars = parseInt(hist[i]?.stars) || 0;
+                                    const series = this._hfrChartSeries || [];
+                                    const stars = parseInt(series[i]?.stars) || 0;
                                     return stars > 0 ? `Stars: ${stars}` : '';
                                 }
                             }
@@ -22022,11 +22026,16 @@ function ninaApp() {
                 }
             }));
             if (!c) return;
-            // imageHistory is newest-first → reverse for chronological order
-            const hist = (this.imageHistory || []).slice().reverse();
-            c.data.labels = hist.map((_, i) => i + 1);
-            c.data.datasets[0].data = hist.map(h => parseFloat(h.snr) || 0);
-            c.data.datasets[1].data = hist.map(h => parseFloat(h.hfr) || 0);
+            // Prefer the server-authoritative quality timeline (server-owned
+            // LIVE path). Fall back to the legacy client-capture imageHistory
+            // (newest-first → reverse for chronological order).
+            const series = (this.liveStackSeries && this.liveStackSeries.length)
+                ? this.liveStackSeries.map(s => ({ snr: parseFloat(s.snr) || 0, hfr: parseFloat(s.hfr) || 0, stars: parseInt(s.stars) || 0, f: s.f }))
+                : (this.imageHistory || []).slice().reverse().map(h => ({ snr: parseFloat(h.snr) || 0, hfr: parseFloat(h.hfr) || 0, stars: parseInt(h.stars) || 0 }));
+            this._hfrChartSeries = series;
+            c.data.labels = series.map((s, i) => s.f || (i + 1));
+            c.data.datasets[0].data = series.map(s => s.snr);
+            c.data.datasets[1].data = series.map(s => s.hfr);
             c.update('none');
         },
 
@@ -43549,6 +43558,14 @@ function ninaApp() {
                         this.stats.mean = Math.round(ls.lastFrameMean);
                     if (typeof ls.lastFrameSnr === 'number' && ls.lastFrameSnr > 0)
                         this.stats.snr = ls.lastFrameSnr.toFixed(1);
+                    // Feed the SNR/HFR-over-time chart from the server's
+                    // quality timeline. The retired client-capture loop used
+                    // to fill imageHistory; in server-owned LIVE this series
+                    // is the only source, so the chart was blank without it.
+                    if (Array.isArray(ls.qualitySeries)) {
+                        this.liveStackSeries = ls.qualitySeries;
+                        try { this.updateHfrChart(); } catch (e) {}
+                    }
                     // The stack's working resolution goes in its OWN field. It
                     // used to be written over stats.width, which meant the
                     // per-frame value from _renderRawFrame survived for a
