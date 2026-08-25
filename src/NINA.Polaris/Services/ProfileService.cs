@@ -595,7 +595,11 @@ public class ProfileService {
                 RecenterEveryNFrames = src.LiveStackTriggers.RecenterEveryNFrames,
                 RecenterEveryMinutes = src.LiveStackTriggers.RecenterEveryMinutes,
                 RecenterDriftArcsec = src.LiveStackTriggers.RecenterDriftArcsec,
-                RecenterToleranceArcsec = src.LiveStackTriggers.RecenterToleranceArcsec
+                RecenterToleranceArcsec = src.LiveStackTriggers.RecenterToleranceArcsec,
+                CheckpointEveryNFrames = src.LiveStackTriggers.CheckpointEveryNFrames,
+                CheckpointEveryMinutes = src.LiveStackTriggers.CheckpointEveryMinutes,
+                CheckpointKeepLast = src.LiveStackTriggers.CheckpointKeepLast,
+                AutoStopAtTargetSnr = src.LiveStackTriggers.AutoStopAtTargetSnr
             },
             // FW-1: Flat Wizard per-rig defaults (TargetADU, tolerance,
             // frame count, exposure bounds, binning, max iterations,

@@ -117,4 +117,23 @@ public class LiveStackTriggers {
     /// stacking commits to that pointing. Skipped silently when no
     /// mount target is set.</summary>
     public bool RecenterOnStart { get; set; }
+
+    // ----- Partial-stack checkpoints + auto-stop -----
+
+    /// <summary>Save a checkpoint (a MASTER FITS of the running stack)
+    /// every this many integrated frames. 0 = disabled.</summary>
+    public int CheckpointEveryNFrames { get; set; }
+
+    /// <summary>Save a checkpoint every this many minutes of integration
+    /// time (frozen while paused). 0 = disabled.</summary>
+    public int CheckpointEveryMinutes { get; set; }
+
+    /// <summary>Keep only the most recent N checkpoint files per session
+    /// on disk; older ones are pruned as new ones land. 0 = keep all.</summary>
+    public int CheckpointKeepLast { get; set; } = 5;
+
+    /// <summary>Stop the LIVE capture loop automatically once the
+    /// cumulative stack SNR reaches the rig's Target SNR. Off by default;
+    /// a no-op when no Target SNR is set.</summary>
+    public bool AutoStopAtTargetSnr { get; set; }
 }
