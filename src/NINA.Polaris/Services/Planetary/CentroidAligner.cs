@@ -97,4 +97,24 @@ public static class CentroidAligner {
 
         return new Centroid(sumX / sumW, sumY / sumW);
     }
+
+    /// <summary>Fraction of the frame that clears the target threshold. Near 1
+    /// means the target FILLS the frame (a lunar/solar close-up: all surface, no
+    /// sky), which is exactly where the centroid degenerates to the frame centre
+    /// and phase-correlation alignment must take over. A small planet on black
+    /// sky sits near 0; a bounded disc with sky around it sits well below the
+    /// switch-over threshold, so centroid alignment keeps handling those.</summary>
+    public static double FillFraction(ushort[] pixels, int width, int height) {
+        if (pixels == null || pixels.Length != width * height || width < 3 || height < 3)
+            return 0.0;
+        ushort peak = 0;
+        ushort background = ushort.MaxValue;
+        for (int i = 0; i < pixels.Length; i++) { var v = pixels[i]; if (v > peak) peak = v; }
+        for (int i = 0; i < pixels.Length; i += 97) { var v = pixels[i]; if (v < background) background = v; }
+        if (peak <= background) return 0.0;
+        double threshold = background + ThresholdFraction * (peak - background);
+        long above = 0;
+        for (int i = 0; i < pixels.Length; i++) if (pixels[i] > threshold) above++;
+        return (double)above / pixels.Length;
+    }
 }

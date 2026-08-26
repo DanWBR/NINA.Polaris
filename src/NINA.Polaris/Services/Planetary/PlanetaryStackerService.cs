@@ -140,18 +140,42 @@ public class PlanetaryStackerService {
 
             // Phase 4: Align ---------------------------------------------------
             SetPhase(job, StackPhase.Aligning);
-            var centroids = new CentroidAligner.Centroid[picked.Length];
-            for (int k = 0; k < picked.Length; k++) {
-                ct.ThrowIfCancellationRequested();
-                var frame = reader.ReadFrameAsUshort(picked[k]);
-                centroids[k] = CentroidAligner.Find(frame, reader.Width, reader.Height);
-                if (k % 25 == 0) { job.FramesAligned = k + 1; Notify(job); }
-            }
-            // Reference centroid = first frame's. Compute integer offsets
-            // for each kept frame so we can do nearest-neighbour shift
-            // during stack. Sub-pixel refinement would require resampling
+            // Per-frame integer shift (dst = src + (dx,dy)) aligning each kept
+            // frame to the first. Sub-pixel refinement would need resampling
             // (bilinear / lanczos), deferred to follow-up.
-            var refC = centroids[0];
+            var shifts = new (int dx, int dy)[picked.Length];
+            var refFrame = reader.ReadFrameAsUshort(picked[0]);
+            // A target that FILLS the frame — a lunar/solar close-up, all surface
+            // with no sky and no limb — has no centroid to track: ~every pixel
+            // clears the threshold, the intensity-weighted centre never moves, and
+            // the stack gets no alignment (soft/doubled). Switch to phase
+            // correlation there; it keys on surface detail (craters, terminator).
+            // A bounded disc or a planet on black sky stays on the centroid (its
+            // fill fraction is well below the switch-over).
+            bool surface = Math.Min(reader.Width, reader.Height) >= 128
+                && CentroidAligner.FillFraction(refFrame, reader.Width, reader.Height) >= 0.6;
+            if (surface) {
+                _logger.LogInformation(
+                    "Planetary align: frame-filling target -> phase correlation ({N} frames)", picked.Length);
+                var pc = new PhaseCorrelationAligner(refFrame, reader.Width, reader.Height);
+                for (int k = 0; k < picked.Length; k++) {
+                    ct.ThrowIfCancellationRequested();
+                    shifts[k] = k == 0 ? (0, 0) : pc.Align(reader.ReadFrameAsUshort(picked[k]));
+                    if (k % 25 == 0) { job.FramesAligned = k + 1; Notify(job); }
+                }
+            } else {
+                var centroids = new CentroidAligner.Centroid[picked.Length];
+                for (int k = 0; k < picked.Length; k++) {
+                    ct.ThrowIfCancellationRequested();
+                    var frame = k == 0 ? refFrame : reader.ReadFrameAsUshort(picked[k]);
+                    centroids[k] = CentroidAligner.Find(frame, reader.Width, reader.Height);
+                    if (k % 25 == 0) { job.FramesAligned = k + 1; Notify(job); }
+                }
+                var refC = centroids[0];
+                for (int k = 0; k < picked.Length; k++)
+                    shifts[k] = ((int)Math.Round(refC.X - centroids[k].X),
+                                 (int)Math.Round(refC.Y - centroids[k].Y));
+            }
 
             // Phase 5: Stack ---------------------------------------------------
             SetPhase(job, StackPhase.Stacking);
@@ -169,13 +193,12 @@ public class PlanetaryStackerService {
             for (int k = 0; k < picked.Length; k++) {
                 ct.ThrowIfCancellationRequested();
                 var frame = reader.ReadFrameAsUshort(picked[k]);
-                int dx, dy;
+                int dx = shifts[k].dx, dy = shifts[k].dy;
                 if (cfa) {
-                    dx = (int)Math.Round((refC.X - centroids[k].X) / 2.0) * 2;
-                    dy = (int)Math.Round((refC.Y - centroids[k].Y) / 2.0) * 2;
-                } else {
-                    dx = (int)Math.Round(refC.X - centroids[k].X);
-                    dy = (int)Math.Round(refC.Y - centroids[k].Y);
+                    // Preserve the CFA phase: round to the nearest EVEN pixel so
+                    // R/G/B samples don't land on each other's positions.
+                    dx = (int)Math.Round(dx / 2.0) * 2;
+                    dy = (int)Math.Round(dy / 2.0) * 2;
                 }
                 for (int y = 0; y < reader.Height; y++) {
                     int sy = y - dy;
