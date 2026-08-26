@@ -206,6 +206,10 @@ PublishScripts/
 **/[Pp]ackages/*
 # except build/, which is used as an MSBuild target.
 !**/[Pp]ackages/build/
+# except the INDI driver package-group build configs — these are source, not
+# NuGet restore output (the broad packages/* rule above catches them by name).
+!/packaging/indi/packages/
+!/packaging/indi/packages/*.conf
 # Uncomment if necessary however generally it will be regenerated when needed
 #!**/[Pp]ackages/repositories.config
 # NuGet v3's project.json files produces more ignorable files
