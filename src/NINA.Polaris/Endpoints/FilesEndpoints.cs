@@ -643,6 +643,17 @@ public static class FilesEndpoints {
             } catch (Exception ex) { return MapError(ex); }
         });
 
+        // Write a small UTF-8 text file to a host path chosen in the Save dialog
+        // (config exports: calibration / settings / rig set / plan).
+        g.MapPost("/write-text", async (FileBrowserService svc, WriteTextRequest req, CancellationToken ct) => {
+            if (string.IsNullOrWhiteSpace(req?.Path))
+                return Results.BadRequest(new { error = "path is required" });
+            try {
+                await svc.WriteTextAsync(req.Path, req.Content ?? "", req.Overwrite, ct);
+                return Results.Ok(new { path = svc.ResolveSafe(req.Path, mustExist: true) });
+            } catch (Exception ex) { return MapError(ex); }
+        });
+
         // Batch rename from FITS header values. dryRun=true returns the
         // old→new mapping for the preview without touching disk; the apply
         // call (dryRun=false) performs the renames. See
@@ -755,6 +766,7 @@ public static class FilesEndpoints {
     public record DiscardRequest(string Path);
     public record DeleteRequest(List<string> Paths, bool Confirmed);
     public record MkdirRequest(string Parent, string Name);
+    public record WriteTextRequest(string Path, string? Content, bool Overwrite = true);
     public record RenameRequest(string Path, string NewName);
     public record BatchRenameRequest(List<string> Paths, string Template, bool DryRun);
     public record ZipRequest(List<string> Paths, string? RootForNames, string? FileName);

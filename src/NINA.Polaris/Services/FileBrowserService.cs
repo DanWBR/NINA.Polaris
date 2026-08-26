@@ -298,6 +298,22 @@ public class FileBrowserService {
         return Task.CompletedTask;
     }
 
+    /// <summary>Write a small UTF-8 text file to a host path the operator chose in
+    /// the Save dialog. Blocklist-checked; the target folder must already exist
+    /// (the dialog only offers folders it listed). Used for config exports
+    /// (calibration, settings, rig set, plan) that land on the host next to the
+    /// captures rather than on the browsing device.</summary>
+    public async Task WriteTextAsync(string path, string content, bool overwrite, CancellationToken ct = default) {
+        var full = ResolveSafe(path, mustExist: false);
+        if (!overwrite && File.Exists(full))
+            throw new IOException("A file with that name already exists.");
+        var dir = Path.GetDirectoryName(full);
+        if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir))
+            throw new DirectoryNotFoundException("The target folder does not exist.");
+        await File.WriteAllTextAsync(full, content ?? "", ct);
+        _logger.LogInformation("FileOp WriteText {Path} ({Bytes} bytes)", full, (content ?? "").Length);
+    }
+
     public Task RenameAsync(string path, string newName) {
         var p = ResolveSafe(path, mustExist: true);
         var safeName = SanitiseSegment(newName);

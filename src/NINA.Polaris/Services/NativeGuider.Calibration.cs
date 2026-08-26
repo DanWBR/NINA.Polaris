@@ -268,4 +268,70 @@ public sealed partial class NativeGuider {
         return true;
     }
 
+    /// <summary>Snapshot the active calibration as a portable record for "Save
+    /// calibration to file". Prefers the persisted record for the gear currently
+    /// fitted (it carries the steps + scatter for the Review plot); falls back to
+    /// the legacy slot, then to synthesising from the live in-memory calibration.
+    /// Returns null when there is nothing to save.</summary>
+    public NativeCalibrationData? ExportCalibrationData() {
+        var key = CalibrationKey();
+        var persisted = Rig.NativeCalibrations?
+            .LastOrDefault(c => string.Equals(c.Key, key, StringComparison.OrdinalIgnoreCase))
+            ?? Rig.NativeCalibration;
+        if (persisted != null) return persisted;
+        if (!_calibration.IsValid) return null;
+        return new NativeCalibrationData {
+            Key = key,
+            XAngle = _calibration.XAngle, YAngle = _calibration.YAngle,
+            XRate = _calibration.XRate, YRate = _calibration.YRate,
+            DeclinationRad = _calibration.DeclinationRad,
+            BacklashMs = _calibration.BacklashMs,
+            PierSide = (int)_calibration.CalibrationPierSide,
+            PixelScale = PixelScale,
+            Binning = Math.Clamp(Rig.NativeGuideBin <= 0 ? 1 : Rig.NativeGuideBin, 1, 4),
+            SavedAtUtc = DateTime.UtcNow.ToString("o"),
+        };
+    }
+
+    /// <summary>Load a calibration from a saved file into the running guider and
+    /// persist it. Re-keys the record to the equipment currently fitted so it
+    /// becomes the one restored for this gear from now on — the point of loading a
+    /// known-good file is to make it stick — while keeping every measured value.
+    /// Returns false when the file carries no usable rates.</summary>
+    public bool ImportCalibrationData(NativeCalibrationData d) {
+        if (d == null) return false;
+        // A calibration with no rates would send the guider nowhere; reject it
+        // rather than load a dead one.
+        if (d.XRate == 0 && d.YRate == 0) {
+            RaiseAlert("Calibration file has no guide rates.");
+            return false;
+        }
+        d.Key = CalibrationKey();
+        if (string.IsNullOrWhiteSpace(d.SavedAtUtc)) d.SavedAtUtc = DateTime.UtcNow.ToString("o");
+        _calibration = new GuideCalibration(d.XAngle, d.YAngle, d.XRate, d.YRate,
+            d.DeclinationRad, true, d.BacklashMs, (PierSide)d.PierSide);
+        _raAlgo.Reset();
+        _decAlgo.Reset();
+        _backlashComp.Reset();
+        const int cap = 12;
+        try {
+            _profiles.UpdateEquipmentProfile(Rig.Id, r => {
+                r.NativeCalibration = d;
+                r.NativeCalibrations ??= new();
+                r.NativeCalibrations.RemoveAll(c =>
+                    string.Equals(c.Key, d.Key, StringComparison.OrdinalIgnoreCase));
+                r.NativeCalibrations.Add(d);
+                if (r.NativeCalibrations.Count > cap)
+                    r.NativeCalibrations.RemoveRange(0, r.NativeCalibrations.Count - cap);
+            });
+        } catch (Exception ex) { _logger.LogWarning(ex, "Failed to persist imported calibration"); }
+        // Rebuild the Review-panel snapshot from the freshly persisted record.
+        TryRestoreCalibration();
+        RaiseInfo("Guide calibration loaded from file.");
+        _logger.LogInformation(
+            "Imported native calibration: xAngle={Xa:F3} xRate={Xr:F5} yAngle={Ya:F3} yRate={Yr:F5}",
+            _calibration.XAngle, _calibration.XRate, _calibration.YAngle, _calibration.YRate);
+        return true;
+    }
+
 }

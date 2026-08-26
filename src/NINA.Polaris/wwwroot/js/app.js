@@ -2528,6 +2528,24 @@ function ninaApp() {
             error: '',
             preview: { open: false, path: '', name: '', kind: '', textContent: null }
         },
+        // Reusable host-side Save/Open file dialog. Browses the HOST filesystem
+        // via /api/files/* so it works on every client (phone/Firefox/http) and
+        // lands files on the host next to the captures. _openHostFileDialog()
+        // returns a Promise that resolves to a host path (or null on cancel).
+        hostDialog: {
+            open: false,
+            mode: 'save',        // 'save' | 'open'
+            title: '',
+            cwd: '',
+            roots: [],
+            entries: [],
+            loading: false,
+            error: '',
+            filename: '',        // typed name (save mode)
+            accept: [],          // extension filter, e.g. ['.json']; empty = all
+            selectedPath: '',    // highlighted file (open mode)
+            _resolve: null
+        },
         // FILES-tab plate solve state (mirrors previewSolve* from
         // PREVIEW but operates on a file path instead of LatestImage).
         filesSolveBusy: false,
@@ -17623,6 +17641,145 @@ function ninaApp() {
 
         filesReload() { return this.filesCd(this.files.cwd); },
 
+        // ---- Reusable host-side Save/Open file dialog ---------------------
+        // Opens a modal that browses the HOST filesystem via /api/files/*.
+        // Returns a Promise resolving to a chosen host path, or null on cancel.
+        // mode:'save' shows a filename box; mode:'open' returns the picked file.
+        _openHostFileDialog(opts = {}) {
+            const d = this.hostDialog;
+            d.mode = opts.mode === 'open' ? 'open' : 'save';
+            d.title = opts.title || (d.mode === 'save' ? 'Save to host' : 'Open from host');
+            d.accept = Array.isArray(opts.accept) ? opts.accept : [];
+            d.filename = opts.suggestedName || '';
+            d.selectedPath = '';
+            d.error = '';
+            d.open = true;
+            this._hostDialogInit();
+            return new Promise((resolve) => { d._resolve = resolve; });
+        },
+
+        async _hostDialogInit() {
+            const d = this.hostDialog;
+            try { d.roots = await this.apiGet('/api/files/roots'); }
+            catch { d.roots = []; }
+            // Start in the last-visited FILES folder, else the Studio home, else
+            // the imageOutputDir, else the first platform root.
+            let start = this.files.cwd || '';
+            if (!start) {
+                try {
+                    const sr = await this.apiGet('/api/files/studio-root');
+                    if (sr && sr.effective) start = sr.effective;
+                } catch { /* fall through to other candidates */ }
+            }
+            const candidates = [start, this.settings.imageOutputDir, d.roots[0] && d.roots[0].name].filter(Boolean);
+            for (const c of candidates) { if (await this._hostDialogCd(c)) break; }
+        },
+
+        async _hostDialogCd(path) {
+            if (!path) return false;
+            const d = this.hostDialog;
+            d.loading = true; d.error = '';
+            try {
+                const r = await this.apiGet('/api/files/list?path=' + encodeURIComponent(path) + '&hidden=false');
+                d.cwd = r.path || path;
+                const acc = (d.accept || []).map(x => x.toLowerCase());
+                const match = (name) => acc.length === 0 || acc.some(e => name.toLowerCase().endsWith(e));
+                d.entries = (r.entries || [])
+                    .filter(e => e.isDirectory || match(e.name))
+                    .sort((a, b) => (a.isDirectory !== b.isDirectory)
+                        ? (a.isDirectory ? -1 : 1)
+                        : a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+                d.selectedPath = '';
+                return true;
+            } catch (e) {
+                d.entries = []; d.error = e.message || 'List failed';
+                return false;
+            } finally { d.loading = false; }
+        },
+
+        _hostDialogUp() {
+            const p = (this.hostDialog.cwd || '').replace(/[\/\\]+$/, '');
+            const cut = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'));
+            if (cut > 0) this._hostDialogCd(p.slice(0, cut));
+            else if (cut === 0) this._hostDialogCd(p.slice(0, 1));
+        },
+
+        _hostDialogClickEntry(e) {
+            if (e.isDirectory) { this._hostDialogCd(e.path); return; }
+            this.hostDialog.selectedPath = e.path;
+            this.hostDialog.filename = e.name;   // save mode: reuse the name
+        },
+
+        _hostDialogDblEntry(e) {
+            if (e.isDirectory) { this._hostDialogCd(e.path); return; }
+            this._hostDialogClickEntry(e);
+            this._hostDialogConfirm();
+        },
+
+        async _hostDialogMkdir() {
+            const d = this.hostDialog;
+            const name = ((await this._promptTextAsync({
+                title: 'New folder', message: 'Folder name:', placeholder: 'my-folder', okLabel: 'Create'
+            })) || '').trim();
+            if (!name) return;
+            try {
+                await this.apiPostJson('/api/files/mkdir', { parent: d.cwd, name });
+                await this._hostDialogCd(d.cwd);
+            } catch (e) { this.toastFail('Create folder failed', e); }
+        },
+
+        _hostJoin(dir, name) {
+            const sep = (dir.includes('\\') && !dir.includes('/')) ? '\\' : '/';
+            return dir.replace(/[\/\\]+$/, '') + sep + name;
+        },
+
+        _hostDialogConfirm() {
+            const d = this.hostDialog;
+            let path = null;
+            if (d.mode === 'open') {
+                path = d.selectedPath || null;
+                if (!path) { d.error = 'Select a file.'; return; }
+            } else {
+                let name = (d.filename || '').trim();
+                if (!name) { d.error = 'Enter a file name.'; return; }
+                if ((d.accept || []).length && !/\.[^./\\]+$/.test(name)) name += d.accept[0];
+                path = this._hostJoin(d.cwd, name);
+            }
+            d.open = false;
+            const r = d._resolve; d._resolve = null;
+            if (r) r(path);
+        },
+
+        _hostDialogCancel() {
+            const d = this.hostDialog;
+            d.open = false;
+            const r = d._resolve; d._resolve = null;
+            if (r) r(null);
+        },
+
+        // Save a JS object (or JSON string) to a host path the operator picks.
+        // Returns the written host path, or null if cancelled.
+        async _hostSaveJson({ suggestedName, data, title }) {
+            const path = await this._openHostFileDialog({ mode: 'save', suggestedName, accept: ['.json'], title });
+            if (!path) return null;
+            const content = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+            try {
+                const r = await this.apiPostJson('/api/files/write-text', { path, content, overwrite: true });
+                return (r && r.path) || path;
+            } catch (e) { this.toastFail('Save failed', e); return null; }
+        },
+
+        // Pick a JSON/text file from the host and return its text (or null).
+        async _hostPickText({ title, accept } = {}) {
+            const path = await this._openHostFileDialog({ mode: 'open', accept: accept || ['.json'], title });
+            if (!path) return null;
+            try {
+                const r = await this.apiGet('/api/files/read-text?path=' + encodeURIComponent(path) + '&maxBytes=1048576');
+                if (r && r.truncated) { this.toast('File too large to load fully', 'error'); return null; }
+                return (r && typeof r.text === 'string') ? r.text : null;
+            } catch (e) { this.toastFail('Load failed', e); return null; }
+        },
+
         // Folders first, then case-insensitive name order. Matches the
         // convention every desktop file manager uses.
         _filesSortCmp(a, b) {
@@ -21737,6 +21894,42 @@ function ninaApp() {
             } catch (e) { this.toastFail('Clear failed', e); }
         },
 
+        // Save the current guide calibration to a file the operator names (native
+        // Save dialog where supported). The auto-persist is keyed to the exact
+        // gear and is dropped when any of it changes, so a known-good calibration
+        // is easily lost -- this keeps a copy that can be reloaded on demand.
+        async exportGuideCalibration() {
+            try {
+                const data = await this.apiGet('/api/guider/export-calibration');
+                if (!data || !data.calibration) { this.toast('No calibration to save yet', 'error'); return; }
+                const rig = (this.activeRig || 'rig').replace(/[^\w.-]+/g, '_').slice(0, 40);
+                const stamp = new Date().toISOString().slice(0, 10);
+                const out = { _polarisGuideCalibration: 1, calibration: data.calibration };
+                if (await this._hostSaveJson({
+                    suggestedName: `polaris-guide-calibration-${rig}-${stamp}.json`,
+                    data: out, title: 'Save guide calibration' }))
+                    this.toast('Calibration saved to file', 'ok');
+            } catch (e) { this.toastFail('Save calibration failed', e); }
+        },
+
+        // Load a guide calibration from a host file and apply it to the gear
+        // fitted now.
+        async importGuideCalibration() {
+            try {
+                const text = await this._hostPickText({ title: 'Load guide calibration' });
+                if (text == null) return;
+                const obj = JSON.parse(text);
+                // Accept either the wrapped export ({_polarisGuideCalibration,calibration})
+                // or a bare calibration object.
+                const cal = (obj && obj.calibration) ? obj.calibration : obj;
+                if (!cal || (cal.XRate == null && cal.xRate == null))
+                    throw new Error('Not a Polaris guide-calibration file');
+                await this.apiPostJson('/api/guider/import-calibration', { calibration: cal });
+                await this.loadGuiderStatus?.();
+                this.toast('Calibration loaded from file', 'ok');
+            } catch (e) { this.toastFail('Load calibration failed', e); }
+        },
+
         // ASIAIR-style session guide logs: list + download the files saved
         // under logs/guide/ (native PHD2-format logs + external PHD2 copies).
         async loadGuideLogs() {
@@ -23411,29 +23604,38 @@ function ninaApp() {
         },
 
         // Export the selected plan as a shareable JSON file (download).
-        exportPlan() {
+        async exportPlan() {
             if (!this.plan) return;
             try {
                 // Strip the library id so a re-import lands as a new plan
                 // rather than implying it's the same stored entry.
                 const out = JSON.parse(JSON.stringify(this.plan));
                 out.id = '';
-                const data = JSON.stringify({ _polarisPlan: 1, plan: out }, null, 2);
-                const blob = new Blob([data], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
                 const safe = (this.plan.name || 'plan').replace(/[^\w.-]+/g, '_').slice(0, 60);
-                a.href = url; a.download = `polaris-plan-${safe}.json`;
-                document.body.appendChild(a); a.click(); a.remove();
-                setTimeout(() => URL.revokeObjectURL(url), 1000);
-                this.toast('Plan exported', 'ok');
+                if (await this._hostSaveJson({
+                    suggestedName: `polaris-plan-${safe}.json`,
+                    data: { _polarisPlan: 1, plan: out }, title: 'Save plan' }))
+                    this.toast('Plan exported', 'ok');
             } catch (e) { this.toastFail('Export failed', e); }
         },
 
-        // Open the file picker for importing a plan JSON.
-        importPlanPrompt() {
-            const el = this.$refs.planImportFile;
-            if (el) el.click();
+        // Open the host file dialog to import a plan JSON.
+        async importPlanPrompt() {
+            try {
+                const text = await this._hostPickText({ title: 'Load plan' });
+                if (text == null) return;
+                let obj = JSON.parse(text);
+                let p = (obj && obj.plan && Array.isArray(obj.plan.targets)) ? obj.plan : obj;
+                if (!p || !Array.isArray(p.targets)) throw new Error('Not a Polaris plan file');
+                p.id = '';
+                if (!p.name) p.name = 'Imported plan';
+                (p.targets || []).forEach(t => { t.id = 'T' + Math.random().toString(36).slice(2); });
+                const r = await this.apiPost('/api/plan/plans', p);
+                const created = await r.json();
+                this.plans.push(created);
+                this.selectPlan(created.id);
+                this.toast('Plan imported: ' + (created.name || ''), 'ok');
+            } catch (e) { this.toastFail('Import failed', e); }
         },
 
         // Read a plan JSON file (exported here or hand-shared) and add it to
@@ -32184,7 +32386,8 @@ function ninaApp() {
             try {
                 const data = await this.apiGet('/api/equipment/rigs/export');
                 const stamp = new Date().toISOString().slice(0, 10);
-                if (await this._saveJsonFile('polaris-rigs-' + stamp + '.json', data))
+                if (await this._hostSaveJson({
+                    suggestedName: 'polaris-rigs-' + stamp + '.json', data, title: 'Save rig set' }))
                     this.toast('Rig set saved to file', 'ok');
             } catch (e) { this.toastFail('Save rig set failed', e); }
         },
@@ -32192,7 +32395,7 @@ function ninaApp() {
         // Load a rig-set file and restore it (merge by id -- see the server).
         async importRigs() {
             try {
-                const text = await this._pickJsonFileText('rigImportFile');
+                const text = await this._hostPickText({ title: 'Load rig set' });
                 if (text == null) return;
                 const obj = JSON.parse(text);
                 const res = await this.apiPostJson('/api/equipment/rigs/import', obj);
@@ -32209,7 +32412,8 @@ function ninaApp() {
                 const resp = await this.apiFetch('/api/system/profile/export');
                 const text = await resp.text();
                 const stamp = new Date().toISOString().slice(0, 10);
-                if (await this._saveJsonFile('polaris-settings-' + stamp + '.json', text))
+                if (await this._hostSaveJson({
+                    suggestedName: 'polaris-settings-' + stamp + '.json', data: text, title: 'Save all settings' }))
                     this.toast('All settings saved to file', 'ok');
             } catch (e) { this.toastFail('Save settings failed', e); }
         },
@@ -32218,7 +32422,7 @@ function ninaApp() {
         // everything), so confirm first, then reload so all settings re-read.
         async importSettings() {
             try {
-                const text = await this._pickJsonFileText('settingsImportFile');
+                const text = await this._hostPickText({ title: 'Restore all settings' });
                 if (text == null) return;
                 // Validate it's JSON before the destructive confirm.
                 JSON.parse(text);
