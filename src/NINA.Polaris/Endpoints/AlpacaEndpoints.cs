@@ -384,8 +384,8 @@ public static class AlpacaEndpoints {
         });
 
         // ---- CoverCalibrator (flat panel) ----
-        // Alpaca's modern flat-panel interface is "covercalibrator". Older ASCOM
-        // drivers may expose a separate "Switch" device, those don't surface here.
+        // Alpaca's modern flat-panel interface is "covercalibrator". A separate
+        // "Switch" device (power boxes) has its own routes further down.
         group.MapGet("/covercalibrator/info", async (string host, int port, int? device) => {
             var c = new AlpacaCoverCalibrator(host, port, device ?? 0);
             try {
@@ -448,6 +448,29 @@ public static class AlpacaEndpoints {
             var w = new AlpacaObservingConditions(host, port, device ?? 0);
             try { await w.SetConnectedAsync(connect); return Results.Ok(new { connected = await w.GetConnectedAsync() }); }
             catch (Exception ex) { return Results.Problem($"Alpaca observingconditions connect failed: {ex.Message}"); }
+        });
+
+        // ---- Switch (power box / relay boards) ----
+        // The Alpaca Discover panel offers a Connect/Probe button for any
+        // discovered Switch device, so the raw-probe routes have to exist here
+        // too (the equipment-card flow uses /api/switch/* instead). Thin wrapper
+        // over AlpacaSwitch, same shape as the other device types above.
+        group.MapGet("/switch/info", async (string host, int port, int? device) => {
+            var s = new AlpacaSwitch(host, port, device ?? 0);
+            try {
+                return Results.Ok(new {
+                    name = await s.GetNameAsync(),
+                    connected = await s.GetConnectedAsync(),
+                    switchCount = await s.GetMaxSwitchAsync()
+                });
+            } catch (Exception ex) { return Results.Problem($"Alpaca switch query failed: {ex.Message}"); }
+        });
+        group.MapPost("/switch/connect", async (string host, int port, int? device, bool connect) => {
+            var s = new AlpacaSwitch(host, port, device ?? 0);
+            try {
+                if (connect) await s.ConnectAsync(); else await s.DisconnectAsync();
+                return Results.Ok(new { connected = await s.GetConnectedAsync() });
+            } catch (Exception ex) { return Results.Problem($"Alpaca switch connect failed: {ex.Message}"); }
         });
     }
 }

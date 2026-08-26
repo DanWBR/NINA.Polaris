@@ -54,6 +54,7 @@ public sealed class AlpacaCamera : ICamera, IDisposable {
     private int _bitDepth = 16;
     private int _sensorType; // 0=Mono 1=Color 2=RGGB 3=CMYG 4=CMYG2 5=LRGB
     private bool _sensorTypeKnown;
+    private int _bayerOffsetX, _bayerOffsetY; // ASCOM Bayer matrix offset
     private bool _canCool, _canBin, _canAbort, _hasGain, _hasOffset;
     private int _maxBinX = 1;
     private int _gainMin, _gainMax;
@@ -202,6 +203,14 @@ public sealed class AlpacaCamera : ICamera, IDisposable {
         var sensorRaw = await SafeGetAsync<int?>(() => _client.GetAsync<int?>("sensortype", ct), null);
         _sensorTypeKnown = sensorRaw.HasValue;
         _sensorType = sensorRaw ?? 0;
+        // Bayer matrix offset (ASCOM BayerOffsetX/Y). The SensorType names the
+        // CFA family (RGGB), but the offset sets which colour is at the top-left
+        // pixel: a "RGGB" sensor reporting offset (1,0) actually presents as
+        // GRBG (e.g. the Seestar S50). Probe them so MapBayer picks the right
+        // pattern. Servers that don't expose them default to (0,0) = RGGB, the
+        // previous behaviour.
+        _bayerOffsetX = await SafeGetAsync(() => _client.GetAsync<int>("bayeroffsetx", ct), 0);
+        _bayerOffsetY = await SafeGetAsync(() => _client.GetAsync<int>("bayeroffsety", ct), 0);
 
         // Reset ROI to the full sensor. The ASCOM Remote Server (or
         // Alpaca Omni Simulator) hosts the same ICameraV3 driver as
@@ -350,7 +359,7 @@ public sealed class AlpacaCamera : ICamera, IDisposable {
 
         var (px, width, height, channels) = await DownloadImageAsync(ct);
 
-        var bayer = MapBayer(_sensorType);
+        var bayer = MapBayer(_sensorType, _bayerOffsetX, _bayerOffsetY);
         var props = new ImageProperties {
             Width = width,
             Height = height,
@@ -723,14 +732,24 @@ public sealed class AlpacaCamera : ICamera, IDisposable {
         _ => Core.Enum.SensorType.Monochrome
     };
 
-    // Only sensorType 2 maps to a BayerPattern that BayerPatternEnum
-    // knows about. Alpaca's CMYG variants don't have an entry in our
-    // enum so they fall through to None (debayering still uses the
-    // SensorType field above).
-    private static BayerPatternEnum MapBayer(int alpaca) => alpaca switch {
-        2 => BayerPatternEnum.RGGB,
-        _ => BayerPatternEnum.None
-    };
+    // Only sensorType 2 (the RGGB/Bayer family) maps to a BayerPattern that
+    // BayerPatternEnum knows about. Alpaca's CMYG variants have no entry in our
+    // enum so they fall through to None (debayering still uses the SensorType
+    // field above). Within the RGGB family the ASCOM BayerOffsetX/Y set which
+    // colour sits at the top-left pixel:
+    //   (0,0)=RGGB  (1,0)=GRBG  (0,1)=GBRG  (1,1)=BGGR
+    // so a "RGGB" sensor with a non-zero offset (e.g. the Seestar S50 at (1,0))
+    // is read as its real pattern instead of always RGGB.
+    private static BayerPatternEnum MapBayer(int alpaca, int offsetX, int offsetY) {
+        if (alpaca != 2) return BayerPatternEnum.None;
+        return ((offsetX & 1), (offsetY & 1)) switch {
+            (0, 0) => BayerPatternEnum.RGGB,
+            (1, 0) => BayerPatternEnum.GRBG,
+            (0, 1) => BayerPatternEnum.GBRG,
+            (1, 1) => BayerPatternEnum.BGGR,
+            _ => BayerPatternEnum.RGGB
+        };
+    }
 
     private static T SafeGet<T>(Func<Task<T>> read, T fallback) {
         try { return read().GetAwaiter().GetResult(); }
