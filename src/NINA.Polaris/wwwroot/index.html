@@ -5435,6 +5435,14 @@
                                     <button class="btn btn-sm" @click="guiderClearCalibration()"
                                             :disabled="!guider.calDetails || guider.calibrating"
                                             title="Forget the saved calibration for this rig">Clear</button>
+                                    <button class="btn btn-sm" x-show="guider.backend === 'native'"
+                                            @click="exportGuideCalibration()"
+                                            :disabled="guider.calibrating"
+                                            title="Save this calibration to a file, so you can reload it instead of recalibrating when it is lost">Save file</button>
+                                    <button class="btn btn-sm" x-show="guider.backend === 'native'"
+                                            @click="importGuideCalibration()"
+                                            :disabled="guider.calibrating"
+                                            title="Load a calibration from a saved file and use it for the gear fitted now">Load file</button>
                                     <button class="btn btn-sm" @click="showCalReview = false">✕</button>
                                 </span>
                             </div>
@@ -21577,6 +21585,57 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <button class="btn btn-sm btn-primary" @click="_textAccept()"
                         :disabled="!textModal.allowEmpty && !(textModal.value || '').trim()"
                         x-text="textModal.okLabel || 'OK'"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reusable host-side Save/Open file dialog. Browses the HOST filesystem
+         via /api/files/*, so it works on every client and lands files on the
+         host next to the captures. Driven by _openHostFileDialog(); used by the
+         calibration, settings, rig-set and plan save/load actions. -->
+    <div class="confirm-modal-overlay hostdlg-overlay"
+         x-show="hostDialog.open" x-cloak
+         @click.self="_hostDialogCancel()">
+        <div class="hostdlg-card">
+            <div class="hostdlg-head">
+                <span class="hostdlg-title" x-text="hostDialog.title"></span>
+                <button class="btn btn-sm" @click="_hostDialogCancel()">✕</button>
+            </div>
+            <div class="hostdlg-bar">
+                <button class="btn btn-sm" @click="_hostDialogUp()" title="Up one folder">↑</button>
+                <input class="input hostdlg-path" readonly :value="hostDialog.cwd">
+                <select class="equip-select" @change="if ($event.target.value) { _hostDialogCd($event.target.value); $event.target.value=''; }"
+                        title="Jump to a drive / root">
+                    <option value="">Roots…</option>
+                    <template x-for="r in hostDialog.roots" :key="r.name">
+                        <option :value="r.name" x-text="r.label || r.name"></option>
+                    </template>
+                </select>
+                <button class="btn btn-sm" @click="_hostDialogMkdir()" title="Create a new folder here">New folder</button>
+            </div>
+            <div class="hostdlg-list">
+                <div x-show="hostDialog.loading" class="text-muted" style="padding:12px">Loading…</div>
+                <div x-show="hostDialog.error" class="hostdlg-err" x-text="hostDialog.error"></div>
+                <template x-for="e in hostDialog.entries" :key="e.path">
+                    <div class="hostdlg-row"
+                         :class="{ 'is-sel': hostDialog.selectedPath === e.path, 'is-dir': e.isDirectory }"
+                         @click="_hostDialogClickEntry(e)"
+                         @dblclick="_hostDialogDblEntry(e)">
+                        <span class="hostdlg-ico" x-text="e.isDirectory ? '📁' : '📄'"></span>
+                        <span class="hostdlg-name" x-text="e.name"></span>
+                    </div>
+                </template>
+                <div x-show="!hostDialog.loading && !hostDialog.error && hostDialog.entries.length === 0"
+                     class="text-muted" style="padding:12px">Empty folder</div>
+            </div>
+            <div class="hostdlg-foot">
+                <input x-show="hostDialog.mode === 'save'" class="input hostdlg-fname"
+                       x-model="hostDialog.filename" placeholder="file-name.json"
+                       @keydown.enter="_hostDialogConfirm()">
+                <span style="flex:1"></span>
+                <button class="btn btn-sm" @click="_hostDialogCancel()">Cancel</button>
+                <button class="btn btn-sm btn-primary" @click="_hostDialogConfirm()"
+                        x-text="hostDialog.mode === 'save' ? 'Save' : 'Open'"></button>
             </div>
         </div>
     </div>

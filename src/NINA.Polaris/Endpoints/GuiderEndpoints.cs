@@ -178,6 +178,30 @@ public static class GuiderEndpoints {
             return Results.Ok(new { cleared = true });
         });
 
+        // ----- Save / load the pointing calibration to a file -----
+        // The auto-persist is keyed to the exact gear (guide cam, binning, focal
+        // length, mount) and is dropped whenever any of it changes, so a good
+        // calibration is easily lost. Export/import lets the operator keep a
+        // known-good calibration and reload it on demand.
+        group.MapGet("/export-calibration", (ActiveGuiderProvider guiders) => {
+            if (guiders.Active is not NativeGuider ng)
+                return Results.BadRequest(new { error = "Save/load calibration is only available on the native guider." });
+            var data = ng.ExportCalibrationData();
+            if (data == null)
+                return Results.BadRequest(new { error = "No calibration to save yet — calibrate first." });
+            return Results.Ok(new { calibration = data });
+        });
+
+        group.MapPost("/import-calibration", (ImportCalibrationBody body, ActiveGuiderProvider guiders) => {
+            if (guiders.Active is not NativeGuider ng)
+                return Results.BadRequest(new { error = "Save/load calibration is only available on the native guider." });
+            if (body?.Calibration == null)
+                return Results.BadRequest(new { error = "No calibration found in the file." });
+            return ng.ImportCalibrationData(body.Calibration)
+                ? Results.Ok(new { imported = true })
+                : Results.BadRequest(new { error = "The calibration file is invalid." });
+        });
+
         group.MapGet("/equipment", async (PHD2Client phd2) => {
             if (!phd2.IsConnected)
                 return Results.Ok(new { connected = false });
@@ -892,4 +916,5 @@ public static class GuiderEndpoints {
     public record PredictiveDto(double WormPeriodSec, int WindowSamples, double Blend);
     public record ModeBody(string? Mode);
     public record FramesBody(int Frames);
+    public record ImportCalibrationBody(NativeCalibrationData? Calibration);
 }

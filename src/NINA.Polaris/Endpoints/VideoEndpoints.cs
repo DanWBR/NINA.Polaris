@@ -96,7 +96,7 @@ public static class VideoEndpoints {
                         .Select(fi => new {
                             path = fi.FullName,
                             name = fi.Name,
-                            target = fi.Directory?.Name ?? "",
+                            target = TargetOfRecording(outDir ?? "", fi.FullName),
                             rig = string.IsNullOrWhiteSpace(outDir) ? "" : RigOfRecording(outDir!, fi.FullName),
                             sizeBytes = fi.Length,
                             modifiedUtc = fi.LastWriteTimeUtc
@@ -111,32 +111,23 @@ public static class VideoEndpoints {
             if (string.IsNullOrWhiteSpace(outDir) || !Directory.Exists(outDir))
                 return Results.Ok(new { recordings = Array.Empty<object>() });
 
-            var roots = new List<string>();
+            // PLANSCAN: recordings now land at {rig}/{target}/planetary/x.ser --
+            // a level deeper than the old {rig}/planetary. Walking a per-rig
+            // "planetary" root with AllDirectories never reaches
+            // {rig}/{target}/planetary, because that is a SIBLING of
+            // {rig}/planetary, not a child. So every clip recorded with a target
+            // set (Moon, Jupiter, ...) silently vanished from the process picker.
+            // Scan the whole capture root (the Studio home) instead: a *.ser file
+            // only ever lives in a planetary folder, so this covers every layout
+            // past and present and matches nothing that is not a recording.
             try {
-                // Every rig, not only the active one: switching rigs must not
-                // hide the clips recorded last night.
-                foreach (var rigDir in Directory.EnumerateDirectories(outDir)) {
-                    var p = Path.Combine(rigDir, "planetary");
-                    if (Directory.Exists(p)) roots.Add(p);
-                }
-            } catch { /* an unreadable capture root simply yields the legacy one */ }
-            var legacy = Path.Combine(outDir, "planetary");
-            if (Directory.Exists(legacy)) roots.Add(legacy);
-            if (roots.Count == 0)
-                return Results.Ok(new { recordings = Array.Empty<object>() });
-
-            try {
-                var recordings = roots
-                    .SelectMany(r => Directory.EnumerateFiles(r, "*.ser", SearchOption.AllDirectories))
-                    // A rig folder literally named "planetary" would otherwise
-                    // be walked twice, as a rig root and as the legacy one.
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                var recordings = Directory.EnumerateFiles(outDir, "*.ser", SearchOption.AllDirectories)
                     .Select(p => new FileInfo(p))
                     .OrderByDescending(fi => fi.LastWriteTimeUtc)
                     .Select(fi => new {
                         path = fi.FullName,
                         name = fi.Name,
-                        target = fi.Directory?.Name ?? "",
+                        target = TargetOfRecording(outDir, fi.FullName),
                         // Which rig a clip belongs to, so the picker can tell
                         // two identically named targets apart. Empty for the
                         // legacy tree, which predates the distinction.
@@ -262,6 +253,37 @@ public static class VideoEndpoints {
                     return parts[0];
             }
         } catch { /* a path outside the capture root has no rig to report */ }
+        return "";
+    }
+
+    /// <summary>The target a recording sits under, read back from its path, so
+    /// the picker can label a clip "Moon" / "Jupiter" instead of the literal
+    /// "planetary" folder it lives in. Handles every on-disk layout:
+    /// <list type="bullet">
+    ///   <item>current <c>{rig}/{target}/planetary/x.ser</c> and previous
+    ///         <c>{rig}/planetary/{target}/x.ser</c> → the target folder</item>
+    ///   <item>no target <c>{rig}/planetary/x.ser</c> → empty (the folder above
+    ///         "planetary" is the rig, not a target)</item>
+    ///   <item>legacy <c>planetary/{target}/x.ser</c> → the target folder</item>
+    /// </list></summary>
+    private static string TargetOfRecording(string outDir, string filePath) {
+        try {
+            var parent = new FileInfo(filePath).Directory;
+            if (parent == null) return "";
+            // Recorded directly under a "planetary" folder: the target, if any,
+            // is the folder ABOVE it -- unless that folder is the rig root.
+            if (parent.Name.Equals("planetary", StringComparison.OrdinalIgnoreCase)) {
+                var grand = parent.Parent;
+                if (grand == null) return "";
+                var rig = RigOfRecording(outDir, filePath);
+                if (!string.IsNullOrEmpty(rig) &&
+                    grand.Name.Equals(rig, StringComparison.OrdinalIgnoreCase)) return "";
+                return grand.Name.Equals("planetary", StringComparison.OrdinalIgnoreCase)
+                    ? "" : grand.Name;
+            }
+            // Older layouts keep the clip directly inside the target folder.
+            return parent.Name;
+        } catch { /* an unreadable path has no target to report */ }
         return "";
     }
 
