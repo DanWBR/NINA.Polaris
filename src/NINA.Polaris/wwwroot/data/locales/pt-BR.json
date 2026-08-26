@@ -4500,5 +4500,6 @@
   "(0 = keep all)": "(0 = manter todos)",
   "Stop capture when Target SNR is reached": "Parar a captura ao atingir o Target SNR",
   "checkpoints saved": "checkpoints salvos",
-  "Export quality CSV": "Exportar CSV de qualidade"
+  "Export quality CSV": "Exportar CSV de qualidade",
+  "Select power box": "Selecione a power box"
 }

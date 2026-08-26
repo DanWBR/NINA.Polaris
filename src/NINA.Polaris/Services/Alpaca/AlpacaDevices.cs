@@ -418,6 +418,12 @@ public class AlpacaSwitch : ISwitchDevice {
     public bool IsConnected => Safe(_c.GetAsync<bool>("connected")).GetAwaiter().GetResult();
     public int SwitchCount => _descriptors.Count;
 
+    // Lightweight probes for the /api/alpaca/switch/* discovery routes, matching
+    // the other AlpacaDevices (no full connect / descriptor build required).
+    public Task<string?> GetNameAsync(CancellationToken ct = default) => _c.GetAsync<string>("name", ct);
+    public Task<bool> GetConnectedAsync(CancellationToken ct = default) => Safe(_c.GetAsync<bool>("connected", ct));
+    public Task<int> GetMaxSwitchAsync(CancellationToken ct = default) => Safe(_c.GetAsync<int>("maxswitch", ct));
+
     private static string Q(int i) => i.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     public async Task ConnectAsync(CancellationToken ct = default) {

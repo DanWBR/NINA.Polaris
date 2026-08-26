@@ -8224,14 +8224,15 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <select class="equip-select" x-show="equipSwitchDriver !== 'indi'"
                                         @change="equipSwitchChoice = $event.target.value"
                                         :disabled="powerBoxDiscovering">
-                                    <option value="">
-                                        <span x-show="powerBoxDiscovering">Detecting…</span>
-                                        <span x-show="!powerBoxDiscovering && powerBoxVendorDevices.length === 0">No devices found</span>
-                                        <span x-show="!powerBoxDiscovering && powerBoxVendorDevices.length > 0">Select power box</span>
-                                    </option>
+                                    <!-- Placeholder text must live on the <option> itself: a
+                                         browser renders only an option's flattened text, ignoring
+                                         display:none on nested spans, so the three x-show spans
+                                         used to concatenate into one string always. -->
+                                    <option value=""
+                                            x-text="powerBoxDiscovering ? $t('Detecting…') : (powerBoxVendorDevices.length === 0 ? $t('No devices found') : $t('Select power box'))"></option>
                                     <template x-for="s in powerBoxVendorDevices" :key="s.id">
                                         <option :value="s.id" :selected="equipSwitchChoice === s.id"
-                                                x-text="s.name"></option>
+                                                x-text="s.model || s.detail || s.id"></option>
                                     </template>
                                 </select>
                                 <button class="btn btn-sm btn-primary" @click="equipConnectSwitch()"

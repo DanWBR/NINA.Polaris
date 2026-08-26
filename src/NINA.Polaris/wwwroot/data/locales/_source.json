@@ -3876,5 +3876,6 @@
   "(0 = keep all)": "(0 = keep all)",
   "Stop capture when Target SNR is reached": "Stop capture when Target SNR is reached",
   "checkpoints saved": "checkpoints saved",
-  "Export quality CSV": "Export quality CSV"
+  "Export quality CSV": "Export quality CSV",
+  "Select power box": "Select power box"
 }
