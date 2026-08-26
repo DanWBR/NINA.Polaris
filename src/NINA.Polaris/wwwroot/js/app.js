@@ -730,6 +730,10 @@ function ninaApp() {
         // toolbar fits on one row; clicking Search reveals + focuses the input.
         skySearchOpen: false,
         skyTarget: null,
+        // Last DEFINITE sky target (a selected catalog object or a clicked
+        // RA/Dec). Preferred by GoTo / Slew & Center / Sync over the live map
+        // centre, which drifts in RA while you wait (#13). Cleared on a drag.
+        _skyFixedTarget: null,
 
         // User toggle: when ON, picking a target (map click, search
         // hit, Stellarium import) smoothly pans the sky engine to
@@ -12586,6 +12590,17 @@ function ninaApp() {
             // timestamp and treats any echo before it as a pan-echo
             // (skyTarget kept verbatim) instead of a user drag.
             this._skyProgrammaticPanUntil = Date.now() + 3000;
+            // Remember a genuinely fixed sky target (a catalog object, or a
+            // definite RA/Dec) so GoTo / Slew & Center / Sync use its fixed
+            // coordinates rather than the live map centre — which the engine
+            // stores in Alt/Az and silently drifts in RA (~15°/h) as the sky
+            // rotates while you wait before pressing the button (#13). A manual
+            // drag clears it (see the 'center' fromDrag handler below).
+            if (objectName && Number.isFinite(raHours) && Number.isFinite(decDeg)) {
+                this._skyFixedTarget = { ra: raHours, dec: decDeg, name: objectName };
+            } else {
+                this._skyFixedTarget = null;
+            }
             this._skySendMessage({
                 type: 'look-at',
                 raDeg: (raHours || 0) * 15,
@@ -12593,6 +12608,24 @@ function ninaApp() {
                 fovDeg: fovDeg || undefined,
                 objectName: objectName || undefined
             });
+        },
+
+        // Resolve the sky target for GoTo / Slew & Center / Sync. A fixed
+        // catalog object or clicked point wins over the live map centre (which
+        // drifts in RA — see _skyLookAt). The live centre is only the fallback
+        // for a fresh map with nothing selected.
+        async _resolveSkyTarget() {
+            const fixed = this._skyFixedTarget;
+            if (fixed && Number.isFinite(fixed.ra) && Number.isFinite(fixed.dec)) {
+                return { ra: fixed.ra, dec: fixed.dec };
+            }
+            try {
+                const c = await this._skyGetCenter();
+                if (c && Number.isFinite(c.raDeg) && Number.isFinite(c.decDeg)) {
+                    return { ra: c.raDeg / 15, dec: c.decDeg };
+                }
+            } catch { /* fall through to skyTarget */ }
+            return this._currentSlewTarget();
         },
 
         // Read back the current map centre. Async, engine replies via
@@ -14054,6 +14087,10 @@ function ninaApp() {
                                     ra: c.raDeg / 15,
                                     dec: c.decDeg
                                 };
+                                // A genuine drag means "go where I dragged", so
+                                // any previously-selected fixed target no longer
+                                // applies — fall back to the live centre.
+                                this._skyFixedTarget = null;
                             }
                             // Re-push so the red target rectangle
                             // re-anchors at the new centre. Mount
@@ -14079,6 +14116,9 @@ function ninaApp() {
                                 name: 'Click ' + msg.raDeg.toFixed(2) + ',' + msg.decDeg.toFixed(2),
                                 ra: msg.raDeg / 15, dec: msg.decDeg
                             };
+                            // A click is a definite RA/Dec — treat it as a fixed
+                            // target so a later GoTo doesn't drift.
+                            this._skyFixedTarget = { ra: msg.raDeg / 15, dec: msg.decDeg, name: this.skyTarget.name };
                         }
                         break;
                     default:
@@ -39121,21 +39161,10 @@ function ninaApp() {
         // Falls back to a picked skyTarget if the map centre can't
         // be read for any reason.
         async slewAndCenter() {
-            // SWE-5: prefer the live engine centre (= where the red
-            // target rectangle is right now). The bridge's change-hook
-            // updates skyTarget on every observer.yaw/pitch mutation,
-            // but on the very first call after page load it may not
-            // have fired yet, querying the engine directly closes
-            // that gap and gives an exact "go to what's centred"
-            // semantics regardless of skyTarget freshness.
-            let target = null;
-            try {
-                const c = await this._skyGetCenter();
-                if (c && Number.isFinite(c.raDeg) && Number.isFinite(c.decDeg)) {
-                    target = { ra: c.raDeg / 15, dec: c.decDeg };
-                }
-            } catch { /* fall through to skyTarget */ }
-            if (!target) target = this._currentSlewTarget();
+            // Target resolution (fixed catalog object / click over the drifting
+            // live centre) is shared with Slew Only and Sync — see
+            // _resolveSkyTarget / _skyLookAt (#13).
+            let target = await this._resolveSkyTarget();
             if (!target) {
                 this.toast('Sky map not ready', 'error');
                 return;
@@ -39166,14 +39195,7 @@ function ninaApp() {
         // (live engine centre = where the red rectangle is) but
         // skips the plate-solve loop.
         async slewToCurrent() {
-            let target = null;
-            try {
-                const c = await this._skyGetCenter();
-                if (c && Number.isFinite(c.raDeg) && Number.isFinite(c.decDeg)) {
-                    target = { ra: c.raDeg / 15, dec: c.decDeg };
-                }
-            } catch { /* fall through to skyTarget */ }
-            if (!target) target = this._currentSlewTarget();
+            let target = await this._resolveSkyTarget();
             if (!target) { this.toast('Sky map not ready', 'error'); return; }
             if (this._blockIfBelowHorizon(target.ra, target.dec)) return;
             return this.slewTo(target.ra, target.dec);
@@ -39292,14 +39314,7 @@ function ninaApp() {
         // confirm. A wrong sync throws off later GoTos, hence the modal.
         async syncMountHere() {
             if (!this.mount.connected) { this.toast('Connect a mount first', 'error'); return; }
-            let target = null;
-            try {
-                const c = await this._skyGetCenter();
-                if (c && Number.isFinite(c.raDeg) && Number.isFinite(c.decDeg)) {
-                    target = { ra: c.raDeg / 15, dec: c.decDeg };
-                }
-            } catch { /* fall through */ }
-            if (!target) target = this._currentSlewTarget();
+            let target = await this._resolveSkyTarget();
             if (!target) { this.toast('Sky map not ready', 'error'); return; }
             const name = (this.skyTarget && this.skyTarget.name) ? this.skyTarget.name + '\n  ' : '';
             if (!await this._confirmAsync(

@@ -114,6 +114,16 @@ public class MountSafetyGuardService : BackgroundService {
     private bool _sawCrossing;
     private bool _flippedSinceCrossing;
 
+    // ---- altitude-floor per-slew arming ----
+    // Birdbath AltAz mounts (Seestar S50, Dwarf, Vespera) rest folded at
+    // altitude ≈ -90° and every GoTo necessarily climbs out through low/negative
+    // altitude, so a stateless "below the floor" check aborts on the first poll.
+    // Arm the abort only once the OTA has reached the floor during THIS slew;
+    // then a genuine wrong-way descent (starts high, drops below) still trips
+    // while climbing out of the stow does not.
+    private bool _altGuardSlewingPrev;
+    private bool _altGuardArmed;
+
     // ---- guiding circuit breaker ----
     private int _consecutiveGuideFailures;
     private IGuider? _subscribedGuider;
@@ -255,14 +265,23 @@ public class MountSafetyGuardService : BackgroundService {
             : (!Tripped && AltitudeFloorDeg > 0);
         if (!Tripped && floorArmed) {
             var scope = _equip.Telescope;
-            if (scope is { IsConnected: true, IsSlewing: true }) {
+            bool slewingNow = scope is { IsConnected: true, IsSlewing: true };
+            // A new slew (idle -> slewing since the last tick) disarms the
+            // altitude floor until the OTA climbs to it, so a birdbath mount
+            // starting from its folded ≈-90° stow doesn't abort on frame one.
+            if (slewingNow && !_altGuardSlewingPrev) _altGuardArmed = false;
+            if (slewingNow) {
                 double ra = scope.RightAscension, dec = scope.Declination;
                 if (!double.IsNaN(ra) && !double.IsNaN(dec)) {
                     double altDeg = CurrentAltitude(scope.Altitude, ra, dec);
                     double floorDeg = flipping ? FlipFloorDeg : AltitudeFloorDeg;
+                    // Arm the ordinary floor once the OTA reaches it this slew.
+                    // Flips keep their own horizon-strict transit logic and
+                    // aren't gated by the arming flag.
+                    if (!flipping && altDeg >= floorDeg) _altGuardArmed = true;
                     bool abort = flipping
                         ? MountSlewSafety.ShouldAbortForFlipTransit(altDeg, floorDeg, true)
-                        : MountSlewSafety.ShouldAbortForAltitude(altDeg, floorDeg, true);
+                        : (_altGuardArmed && MountSlewSafety.ShouldAbortForAltitude(altDeg, floorDeg, true));
                     if (abort) {
                         try { await scope.AbortSlewAsync(ct); }
                         catch (Exception ex) { _logger.LogWarning(ex, "Safety: abort-slew (altitude) failed"); }
@@ -277,6 +296,7 @@ public class MountSafetyGuardService : BackgroundService {
                     }
                 }
             }
+            _altGuardSlewingPrev = slewingNow;
         }
 
         bool active = SessionActive;
