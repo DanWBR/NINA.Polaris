@@ -26,7 +26,11 @@ namespace NINA.INDI.Devices;
 /// vectors into the generic <see cref="ISwitchDevice"/> channel model:
 ///
 /// <list type="bullet">
-/// <item>each element of a (non-system) switch vector → a boolean channel;</item>
+/// <item>each element of a (non-system) switch vector → a boolean channel,
+///   named "&lt;vector&gt; · &lt;element&gt;" so identically-labelled elements of
+///   different vectors (four "Camera" entries, one per port) stay apart;</item>
+/// <item>a two-element OneOfMany Off/On vector → a SINGLE boolean channel
+///   named after the vector, writing both members on toggle;</item>
 /// <item>each writable element of a number vector → an analog channel
 ///   (carrying the driver's min/max/step);</item>
 /// <item>each read-only number element → a read-only sensor channel
@@ -50,8 +54,12 @@ public class IndiSwitch : ISwitchDevice {
         "CONNECTION_MODE", "ACTIVE_DEVICES", "FIRMWARE_INFO"
     };
 
+    // OffElement is set only for a collapsed OneOfMany Off/On pair: the
+    // element that has to be driven to the opposite state so the vector keeps
+    // exactly one member on (a 1OfMany vector with nothing on is invalid).
     private readonly record struct ChannelMap(string Property, string Element, bool IsSwitch,
-        string Name, double Min, double Max, double Step, bool Writable);
+        string Name, double Min, double Max, double Step, bool Writable,
+        string? OffElement = null);
 
     private readonly List<ChannelMap> _map = new();
 
@@ -92,23 +100,100 @@ public class IndiSwitch : ISwitchDevice {
             if (SystemVectors.Contains(name)) continue;
             var prop = kv.Value;
 
+            // The vector's own label is the only thing that says WHICH outlet
+            // an element belongs to: indi_asi_power publishes four identical
+            // 9-element type selectors whose elements are all labelled
+            // "Camera", "Focuser", … and are only distinguished by their
+            // vector ("Port 1" … "Port 4"). Without the prefix the UI is an
+            // undifferentiated wall of toggles.
+            var vector = string.IsNullOrWhiteSpace(prop.Label) ? name : prop.Label;
+
             if (prop is IndiSwitchProperty sw) {
-                foreach (var elem in sw.Values.Keys) {
-                    var label = sw.Labels.TryGetValue(elem, out var l) && !string.IsNullOrWhiteSpace(l) ? l : elem;
-                    _map.Add(new ChannelMap(name, elem, IsSwitch: true, label,
-                        Min: 0, Max: 1, Step: 1, Writable: prop.Permission != IndiPropertyPermission.ReadOnly));
+                bool writable = prop.Permission != IndiPropertyPermission.ReadOnly;
+                var elems = sw.Values.Keys.ToList();
+
+                // A genuine Off/On pair under the OneOfMany rule is ONE physical
+                // outlet, not two channels — publish a single toggle bound to
+                // the "on" member (indi_asi_power's ONOFF<n>, and the same shape
+                // in several relay/dust-cap drivers). Require BOTH an on-labelled
+                // and an off-labelled member, so a two-value *selector* (e.g. a
+                // "None / Camera" port-type vector) is NOT mistaken for a toggle.
+                if (sw.Rule == IndiSwitchRule.OneOfMany && elems.Count == 2) {
+                    var onElem = elems.FirstOrDefault(e => IsOnLabel(ElementLabel(sw, e)));
+                    var offElem = elems.FirstOrDefault(e => IsOffLabel(ElementLabel(sw, e)));
+                    if (onElem != null && offElem != null
+                        && !string.Equals(onElem, offElem, StringComparison.Ordinal)) {
+                        _map.Add(new ChannelMap(name, onElem, IsSwitch: true, vector,
+                            Min: 0, Max: 1, Step: 1, Writable: writable, OffElement: offElem));
+                        continue;
+                    }
+                }
+
+                foreach (var elem in elems) {
+                    _map.Add(new ChannelMap(name, elem, IsSwitch: true,
+                        Qualify(vector, ElementLabel(sw, elem)),
+                        Min: 0, Max: 1, Step: 1, Writable: writable));
                 }
             } else if (prop is IndiNumberProperty num) {
                 bool writable = prop.Permission != IndiPropertyPermission.ReadOnly;
                 foreach (var pair in num.Values) {
                     var elem = pair.Value;
                     var label = string.IsNullOrWhiteSpace(elem.Label) ? pair.Key : elem.Label;
-                    _map.Add(new ChannelMap(name, pair.Key, IsSwitch: false, label,
+                    _map.Add(new ChannelMap(name, pair.Key, IsSwitch: false,
+                        Qualify(vector, label),
                         elem.Min, elem.Max, elem.Step, writable));
                 }
             }
         }
+
+        DisambiguateNames();
     }
+
+    /// <summary>Vector labels are not unique either: indi_asi_power labels all
+    /// four of its on/off vectors "On/Off" and all four PWM vectors "Duty
+    /// Cycle". Whatever is still colliding after qualification gets the INDI
+    /// property name appended, so every row is addressable before the operator
+    /// renames it.</summary>
+    private void DisambiguateNames() {
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var m in _map)
+            counts[m.Name] = counts.TryGetValue(m.Name, out var c) ? c + 1 : 1;
+
+        for (int i = 0; i < _map.Count; i++) {
+            if (counts[_map[i].Name] > 1)
+                _map[i] = _map[i] with { Name = $"{_map[i].Name} ({_map[i].Property})" };
+        }
+    }
+
+    private static string ElementLabel(IndiSwitchProperty sw, string elem)
+        => sw.Labels.TryGetValue(elem, out var l) && !string.IsNullOrWhiteSpace(l) ? l : elem;
+
+    /// <summary>"Port 1" + "Camera" → "Port 1 · Camera"; collapses to the bare
+    /// element name when the vector adds nothing (single-element vectors like
+    /// a dew PWM rail, or a vector labelled the same as its element).</summary>
+    private static string Qualify(string vector, string element)
+        => string.IsNullOrWhiteSpace(vector)
+           || vector.Equals(element, StringComparison.OrdinalIgnoreCase)
+            ? element
+            : $"{vector} · {element}";
+
+    private static bool IsOnLabel(string label) => label.Trim() switch {
+        var s when s.Equals("on", StringComparison.OrdinalIgnoreCase) => true,
+        var s when s.Equals("enable", StringComparison.OrdinalIgnoreCase) => true,
+        var s when s.Equals("enabled", StringComparison.OrdinalIgnoreCase) => true,
+        var s when s.Equals("true", StringComparison.OrdinalIgnoreCase) => true,
+        var s when s.Equals("yes", StringComparison.OrdinalIgnoreCase) => true,
+        _ => false,
+    };
+
+    private static bool IsOffLabel(string label) => label.Trim() switch {
+        var s when s.Equals("off", StringComparison.OrdinalIgnoreCase) => true,
+        var s when s.Equals("disable", StringComparison.OrdinalIgnoreCase) => true,
+        var s when s.Equals("disabled", StringComparison.OrdinalIgnoreCase) => true,
+        var s when s.Equals("false", StringComparison.OrdinalIgnoreCase) => true,
+        var s when s.Equals("no", StringComparison.OrdinalIgnoreCase) => true,
+        _ => false,
+    };
 
     public IReadOnlyList<SwitchChannel> Channels {
         get {
@@ -159,10 +244,14 @@ public class IndiSwitch : ISwitchDevice {
     }
 
     private async Task WriteSwitchAsync(ChannelMap m, bool on, CancellationToken ct) {
-        // Power outlets are AnyOfMany, so writing the single target element
-        // toggles just it. Ack-based so a driver rejection surfaces as an error.
-        var ack = await _client.SetSwitchAsyncAck(DeviceName, m.Property,
-            new Dictionary<string, bool> { [m.Element] = on }, ct: ct);
+        // AnyOfMany outlets: writing the single target element toggles just it.
+        // A collapsed OneOfMany pair also needs its sibling driven to the
+        // opposite state, or the vector would end up with no member on and the
+        // driver would reject (or silently keep) the write.
+        var payload = new Dictionary<string, bool> { [m.Element] = on };
+        if (m.OffElement is { } off) payload[off] = !on;
+        // Ack-based so a driver rejection surfaces as an error.
+        var ack = await _client.SetSwitchAsyncAck(DeviceName, m.Property, payload, ct: ct);
         if (ack.Rejected)
             throw new InvalidOperationException(
                 $"Power box '{DeviceName}' rejected {m.Name} = {(on ? "On" : "Off")}: "
