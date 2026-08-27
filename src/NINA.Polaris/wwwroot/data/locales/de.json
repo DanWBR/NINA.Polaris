@@ -4539,5 +4539,6 @@
   "Highlights are within range. The preview is auto-stretched, so trust this, not the on-screen brightness.": "Die Lichter sind im Bereich. Die Vorschau wird automatisch gestreckt, verlass dich auf diesen Wert, nicht auf die Bildhelligkeit.",
   "Power box toggle failed": "Umschalten der Powerbox fehlgeschlagen",
   "Power box set failed": "Einstellen der Powerbox fehlgeschlagen",
-  "Power box select failed": "Auswahl an der Powerbox fehlgeschlagen"
+  "Power box select failed": "Auswahl an der Powerbox fehlgeschlagen",
+  "Live stack quality": "Live-Stack-Qualität"
 }

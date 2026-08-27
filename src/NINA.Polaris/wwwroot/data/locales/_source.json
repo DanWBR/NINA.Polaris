@@ -3915,5 +3915,6 @@
   "Highlights are within range. The preview is auto-stretched, so trust this, not the on-screen brightness.": "Highlights are within range. The preview is auto-stretched, so trust this, not the on-screen brightness.",
   "Power box toggle failed": "Power box toggle failed",
   "Power box set failed": "Power box set failed",
-  "Power box select failed": "Power box select failed"
+  "Power box select failed": "Power box select failed",
+  "Live stack quality": "Live stack quality"
 }

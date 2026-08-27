@@ -1171,12 +1171,13 @@
                          estate. Hidden by default; toggled via the ⊟
                          button in preview-overlay-controls above. -->
                     <div class="live-history-overlay"
-                         x-show="liveOverlayVisible && imageHistory.length > 0"
+                         x-show="!liveHudDismissed && ((liveOverlayVisible && imageHistory.length > 0) || liveStackStatus?.isRunning)"
                          x-cloak>
                         <div class="live-history-overlay-header">
-                            <span>Image history (<span x-text="imageHistory.length"></span>)</span>
-                            <button class="btn btn-sm" @click="clearImageHistory()">Clear</button>
-                            <button class="btn btn-sm" @click="liveOverlayVisible = false"
+                            <span x-show="imageHistory.length > 0">Image history (<span x-text="imageHistory.length"></span>)</span>
+                            <span x-show="imageHistory.length === 0">Live stack quality</span>
+                            <button class="btn btn-sm" x-show="imageHistory.length > 0" @click="clearImageHistory()">Clear</button>
+                            <button class="btn btn-sm" @click="liveOverlayVisible = false; liveHudDismissed = true"
                                     title="Hide overlay">✕</button>
                         </div>
 
@@ -1242,7 +1243,7 @@
                             </span>
                         </div>
 
-                        <div class="live-history-overlay-thumbs">
+                        <div class="live-history-overlay-thumbs" x-show="imageHistory.length > 0">
                             <template x-for="(img, i) in imageHistory.slice(0, 20)" :key="img.id || i">
                                 <div class="history-thumb" @click="openHistoryItem(img)"
                                      :title="img.time + ' · ' + img.exposure + 's · G' + img.gain">
@@ -1256,7 +1257,7 @@
                             </template>
                         </div>
                         <div class="live-history-overlay-chart"
-                             x-show="imageHistory.length >= 2">
+                             x-show="imageHistory.length >= 2 || (liveStackSeries && liveStackSeries.length >= 2)">
                             <div class="live-history-overlay-chart-label">SNR &amp; HFR</div>
                             <div class="chart-container chart-container-sm">
                                 <canvas x-ref="hfrChart" id="hfrChart"></canvas>
