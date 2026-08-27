@@ -12550,9 +12550,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 </p>
                                 <div class="stack-pickers">
                                     <button class="btn btn-sm btn-primary" @click="stackAddFiles(def.slot)"
-                                            x-text="'＋ ' + $t('Add files…')"></button>
-                                    <button class="btn btn-sm" @click="stackAddFolder(def.slot)"
-                                            x-text="'📁 ' + $t('Add folder…')"></button>
+                                            x-text="'＋ ' + $t('Add frames…')"></button>
                                     <button class="btn btn-sm" @click="stackAddToSlot(def.slot)"
                                             :disabled="files.selectedPaths.length === 0"
                                             :title="$t('Add the files selected in the file browser')"
@@ -21726,8 +21724,9 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                          :class="{ 'is-sel': _hostEntrySelected(e), 'is-dir': e.isDirectory }"
                          @click="_hostDialogClickEntry(e)"
                          @dblclick="_hostDialogDblEntry(e)">
-                        <span x-show="hostDialog.mode === 'open-multi' && !e.isDirectory" class="hostdlg-check"
-                              x-text="_hostEntrySelected(e) ? '☑' : '☐'"></span>
+                        <input type="checkbox" x-show="hostDialog.mode === 'open-multi' && !e.isDirectory"
+                               :checked="_hostEntrySelected(e)"
+                               @click.stop="_hostDialogClickEntry(e)">
                         <span class="hostdlg-ico" x-text="e.isDirectory ? '📁' : '📄'"></span>
                         <span class="hostdlg-name" x-text="e.name"></span>
                     </div>
@@ -21739,6 +21738,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <input x-show="hostDialog.mode === 'save'" class="input hostdlg-fname"
                        x-model="hostDialog.filename" placeholder="file-name.json"
                        @keydown.enter="_hostDialogConfirm()">
+                <button class="btn btn-sm" x-show="hostDialog.mode === 'open-multi'"
+                        @click="_hostDialogSelectAllFiles()" x-text="$t('Select all')"></button>
                 <span style="flex:1"></span>
                 <button class="btn btn-sm" @click="_hostDialogCancel()">Cancel</button>
                 <span x-show="hostDialog.mode === 'folder'" class="hostdlg-fname text-muted"
