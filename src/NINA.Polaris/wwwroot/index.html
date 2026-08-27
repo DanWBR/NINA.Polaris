@@ -10245,7 +10245,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                  sits at the top so the user can pivot inside the
                  planning group without bouncing through the sidebar. -->
             <!-- MILKY WAY planner (SKY sub-view): galactic core tonight -->
-            <div x-show="tab === 'milkyway'" class="tab-panel">
+            <div x-show="tab === 'milkyway'" class="tab-panel milkyway-panel">
                 <div class="sky-subtabs">
                     <button class="sky-subtab-pill" :class="{ active: tab === 'sky' }"
                             @click="tab = 'sky'; $nextTick(() => initSkyViewer())">
@@ -10284,7 +10284,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <p class="hint" x-text="$t('The galactic core (in Sagittarius) is the bright heart of the summer Milky Way. It needs a dark sky and a low southern horizon. Shoot it during the best window below, tracked, with short wide-field subs.')"></p>
 
                 <div class="mw-summary" x-show="milkyWay.data"
-                     style="display:flex; gap:18px; flex-wrap:wrap; margin:10px 0">
+                     style="display:flex; gap:18px; flex-wrap:wrap">
                     <div style="min-width:120px">
                         <div class="text-muted" style="font-size:11px" x-text="$t('Peak altitude')"></div>
                         <div><strong x-text="milkyWay.data?.peak ? Math.round(milkyWay.data.peak.altDeg) + '°' : '—'"></strong>
@@ -10313,9 +10313,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </div>
                 </div>
 
-                <div style="height:220px; margin:8px 0"><canvas id="milkyWayChart"></canvas></div>
+                <div style="height:220px"><canvas id="milkyWayChart"></canvas></div>
 
-                <div class="af-row" style="display:flex; gap:8px; align-items:center; margin-top:8px">
+                <div class="af-row" style="display:flex; gap:8px; align-items:center">
                     <button class="btn btn-primary" @click="milkyWayPreset()" x-text="'📷 ' + $t('Set up nightscape capture')"></button>
                     <span class="text-muted" style="font-size:11px" x-text="$t('Loads a wide-field preset on the Live tab.')"></span>
                 </div>
