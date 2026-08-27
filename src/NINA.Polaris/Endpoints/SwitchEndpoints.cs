@@ -54,6 +54,9 @@ public static class SwitchEndpoints {
                     // role): options + active index render as ONE dropdown.
                     options = c.Options,
                     selected = c.Selected,
+                    // Physical-port group index (-1 = ungrouped): the UI gathers a
+                    // port's role/outlet/dew channels under one heading.
+                    group = c.Group,
                     // A read-only channel is a MEASUREMENT, not a control: on a
                     // power box these are the input voltage, current draw,
                     // temperature, humidity and dew point. They arrive through

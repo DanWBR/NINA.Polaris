@@ -213,6 +213,24 @@ public class IndiSwitch : ISwitchDevice {
 
     public IReadOnlyList<SwitchChannel> Channels {
         get {
+            // Port grouping: an INDI vector family that ends in the same integer
+            // is one physical port -- indi_asi_power publishes DEV{n} (role
+            // selector), ONOFF{n} and DUTYCYCLE{n} all 0-based, so port n's role,
+            // outlet and dew-PWM share trailing index n. Group only when >=2
+            // channels share the index, so a lone numbered property, or a
+            // single-vector hub like a Pegasus UPB (AnyOfMany, no per-port
+            // property index), stays ungrouped -- exactly the shape those boxes
+            // rely on.
+            var portCounts = new Dictionary<int, int>();
+            foreach (var mm in _map) {
+                int g = TrailingInt(mm.Property);
+                if (g >= 0) portCounts[g] = portCounts.TryGetValue(g, out var c) ? c + 1 : 1;
+            }
+            int GroupOf(string property) {
+                int g = TrailingInt(property);
+                return g >= 0 && portCounts.TryGetValue(g, out var c) && c >= 2 ? g : -1;
+            }
+
             var list = new List<SwitchChannel>(_map.Count);
             for (int i = 0; i < _map.Count; i++) {
                 var m = _map[i];
@@ -225,7 +243,8 @@ public class IndiSwitch : ISwitchDevice {
                         if (_client.GetSwitch(DeviceName, m.Property, sel[j].Key)) { selected = j; break; }
                     list.Add(new SwitchChannel(i, m.Name, Boolean: false, Value: selected,
                         m.Min, m.Max, m.Step, m.Writable, $"{m.Property}",
-                        Options: sel.Select(o => o.Label).ToList(), Selected: selected));
+                        Options: sel.Select(o => o.Label).ToList(), Selected: selected,
+                        Group: GroupOf(m.Property)));
                     continue;
                 }
                 double value = m.IsSwitch
@@ -236,10 +255,20 @@ public class IndiSwitch : ISwitchDevice {
                 // across reconnects -- which is what operator-assigned names are
                 // stored against.
                 list.Add(new SwitchChannel(i, m.Name, m.IsSwitch, value,
-                    m.Min, m.Max, m.Step, m.Writable, $"{m.Property}.{m.Element}"));
+                    m.Min, m.Max, m.Step, m.Writable, $"{m.Property}.{m.Element}",
+                    Group: GroupOf(m.Property)));
             }
             return list;
         }
+    }
+
+    // Trailing run of digits in a property name (DEV0 -> 0, DUTYCYCLE12 -> 12);
+    // -1 when there are no trailing digits.
+    private static int TrailingInt(string s) {
+        if (string.IsNullOrEmpty(s)) return -1;
+        int end = s.Length, i = end;
+        while (i > 0 && char.IsDigit(s[i - 1])) i--;
+        return i == end ? -1 : (int.TryParse(s.AsSpan(i), out var n) ? n : -1);
     }
 
     public int SwitchCount => _map.Count;

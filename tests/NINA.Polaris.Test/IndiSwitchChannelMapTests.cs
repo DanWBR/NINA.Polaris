@@ -72,6 +72,14 @@ public class IndiSwitchChannelMapTests {
         Labels = { [name + "0"] = "None", [name + "1"] = "Camera", [name + "2"] = "Focuser" },
     };
 
+    // A per-port PWM duty-cycle number vector (indi_asi_power's DUTYCYCLE{n}).
+    private static IndiNumberProperty Duty(string name) => new() {
+        Name = name,
+        Label = "Duty Cycle",
+        Permission = IndiPropertyPermission.ReadWrite,
+        Values = { [name] = new IndiNumberElement { Label = "Duty Cycle", Value = 0, Min = 0, Max = 100, Step = 1 } },
+    };
+
     /// <summary>Element labels repeat across the four port vectors ("Camera"
     /// four times); the vector label is the only thing that tells them apart,
     /// so it has to end up in the channel name.</summary>
@@ -169,6 +177,58 @@ public class IndiSwitchChannelMapTests {
             Is.EquivalentTo(new[] { "Power · Mount", "Power · Camera" }));
         Assert.That(sw.Channels.Select(c => c.Key),
             Is.EquivalentTo(new[] { "POWER_CONTROL.PORT_1", "POWER_CONTROL.PORT_2" }));
+    }
+
+    /// <summary>indi_asi_power publishes, per physical port, a role selector
+    /// (DEV{n}), an on/off (ONOFF{n}) and a PWM duty (DUTYCYCLE{n}), all 0-based.
+    /// Channels whose property shares the trailing index belong to one port and
+    /// carry the same Group, so the UI can gather them under "Port n+1".</summary>
+    [Test]
+    public async Task AsiPowerFamilies_GroupByTrailingPropertyIndex() {
+        using var client = ClientWith(
+            RoleSelector("DEV0", "Port 1", on: 0), OnOff("ONOFF0", on: false), Duty("DUTYCYCLE0"),
+            RoleSelector("DEV1", "Port 2", on: 1), OnOff("ONOFF1", on: true), Duty("DUTYCYCLE1"));
+        var sw = new IndiSwitch(client, Dev);
+        await sw.RefreshAsync();
+
+        var byProp = sw.Channels.ToDictionary(c => c.Key.Split('.')[0]);
+        Assert.That(byProp["DEV0"].Group, Is.EqualTo(0));
+        Assert.That(byProp["ONOFF0"].Group, Is.EqualTo(0));
+        Assert.That(byProp["DUTYCYCLE0"].Group, Is.EqualTo(0));
+        Assert.That(byProp["DEV1"].Group, Is.EqualTo(1));
+        Assert.That(byProp["ONOFF1"].Group, Is.EqualTo(1));
+        Assert.That(byProp["DUTYCYCLE1"].Group, Is.EqualTo(1));
+    }
+
+    /// <summary>A Pegasus-style hub (one AnyOfMany vector holding every outlet)
+    /// has no per-port property index, so NOTHING groups — the flat layout those
+    /// boxes rely on is preserved.</summary>
+    [Test]
+    public async Task PegasusStyleHub_StaysUngrouped() {
+        var upb = new IndiSwitchProperty {
+            Name = "POWER_CONTROL",
+            Label = "Power",
+            Rule = IndiSwitchRule.AnyOfMany,
+            Permission = IndiPropertyPermission.ReadWrite,
+            Values = { ["PORT_1"] = true, ["PORT_2"] = false, ["PORT_3"] = false, ["PORT_4"] = false },
+            Labels = { ["PORT_1"] = "Mount", ["PORT_2"] = "Camera", ["PORT_3"] = "Dew", ["PORT_4"] = "Focuser" },
+        };
+        using var client = ClientWith(upb);
+        var sw = new IndiSwitch(client, Dev);
+        await sw.RefreshAsync();
+
+        Assert.That(sw.Channels.All(c => c.Group == -1),
+            "a single-vector hub must not be split into ports");
+    }
+
+    /// <summary>A lone property that happens to end in a digit is not a port:
+    /// grouping needs at least two channels sharing the index.</summary>
+    [Test]
+    public async Task LoneNumberedProperty_StaysUngrouped() {
+        using var client = ClientWith(OnOff("ONOFF0", on: true));
+        var sw = new IndiSwitch(client, Dev);
+        await sw.RefreshAsync();
+        Assert.That(sw.Channels.Single().Group, Is.EqualTo(-1));
     }
 
     /// <summary>Read-only number elements (the driver's I2C voltage/current

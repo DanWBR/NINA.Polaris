@@ -38055,6 +38055,27 @@ function ninaApp() {
         powerBoxControls() {
             return (this.powerBox.channels || []).filter(c => c.writable);
         },
+        // Group the writable channels by physical port (INDI vector index, e.g.
+        // ASI Power's DEV{n}/ONOFF{n}/DUTYCYCLE{n} → one "Port n+1" group), so a
+        // port's role/outlet/dew heater render together. Channels with no port
+        // index (group < 0 — a Pegasus-style single-vector hub) fall into one
+        // trailing, heading-less group, preserving the old flat layout.
+        powerBoxGroups() {
+            const chans = this.powerBoxControls();
+            const byGroup = {};
+            const order = [];
+            const ungrouped = [];
+            for (const c of chans) {
+                const g = (typeof c.group === 'number') ? c.group : -1;
+                if (g < 0) { ungrouped.push(c); continue; }
+                if (!byGroup[g]) { byGroup[g] = []; order.push(g); }
+                byGroup[g].push(c);
+            }
+            order.sort((a, b) => a - b);
+            const out = order.map(g => ({ key: 'pg' + g, label: 'Port ' + (g + 1), channels: byGroup[g] }));
+            if (ungrouped.length) out.push({ key: 'pg-other', label: '', channels: ungrouped });
+            return out;
+        },
 
         // Read-only channels are measurements (input voltage, current draw,
         // temperature, humidity, dew point). They come from the same generic
