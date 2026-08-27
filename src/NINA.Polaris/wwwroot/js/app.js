@@ -26402,6 +26402,23 @@ function ninaApp() {
             const p = this.sharpnessPercent();
             return p >= 95 ? 'sharp-peak' : p >= 75 ? 'sharp-near' : 'sharp-far';
         },
+        // Clipping meter: honest exposure read, since the preview auto-stretches.
+        clipLabel() {
+            const c = this.cameraStream.clipPercent;
+            if (c == null) return this._t('measuring...');
+            const pct = c < 0.1 ? '0' : (c < 10 ? c.toFixed(1) : Math.round(c).toString());
+            return pct + '% ' + this._t('clipped');
+        },
+        clipTone() {
+            const c = this.cameraStream.clipPercent || 0;
+            return c >= 10 ? 'clip-bad' : (c >= 1 ? 'clip-warn' : 'clip-ok');
+        },
+        clipHint() {
+            const c = this.cameraStream.clipPercent || 0;
+            if (c >= 10) return this._t('Overexposed: highlights are blown. Lower gain and/or exposure until this is near 0.');
+            if (c >= 1) return this._t('Some highlights are clipping. Ease gain or exposure down.');
+            return this._t('Highlights are within range. The preview is auto-stretched, so trust this, not the on-screen brightness.');
+        },
         // Polyline over the 2 Hz history, scaled to the window's own min/max so
         // the shape of the last minute is visible even when the changes are a
         // few percent. A flat line means the last turns changed nothing.

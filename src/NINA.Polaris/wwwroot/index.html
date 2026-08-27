@@ -4288,6 +4288,22 @@
                             </div>
                         </div>
 
+                        <!-- Clipping meter. The preview auto-stretches every
+                             frame, so a blown highlight still looks correctly
+                             exposed on screen; this is the honest read of the
+                             raw exposure that goes to the SER. -->
+                        <div class="sharp-panel clip-panel" x-show="cameraStream.running" x-cloak>
+                            <div class="sharp-head">
+                                <span class="sharp-label">Clipping</span>
+                                <span class="sharp-pct" x-text="clipLabel()"></span>
+                            </div>
+                            <div class="sharp-bar">
+                                <div class="sharp-bar-fill" :class="clipTone()"
+                                     :style="'width:' + Math.min(100, (cameraStream.clipPercent || 0)) + '%'"></div>
+                            </div>
+                            <div class="text-muted" style="font-size:10.5px" x-text="clipHint()"></div>
+                        </div>
+
                         <!-- FOV / ROI: crop the sensor down to a tight
          box centered on the planet so the SER file
          stays small + fps climbs (planetary capture

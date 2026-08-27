@@ -4531,5 +4531,10 @@
   "Load failed": "Error al cargar",
   "Not a Polaris guide-calibration file": "No es un archivo de calibración de guiado de Polaris",
   "Save calibration failed": "Error al guardar la calibración",
-  "Load calibration failed": "Error al cargar la calibración"
+  "Load calibration failed": "Error al cargar la calibración",
+  "Clipping": "Saturación",
+  "clipped": "saturado",
+  "Overexposed: highlights are blown. Lower gain and/or exposure until this is near 0.": "Sobreexpuesto: las luces están quemadas. Baje ganancia y/o exposición hasta que quede cerca de 0.",
+  "Some highlights are clipping. Ease gain or exposure down.": "Algunas luces se están saturando. Baje un poco la ganancia o la exposición.",
+  "Highlights are within range. The preview is auto-stretched, so trust this, not the on-screen brightness.": "Las luces están dentro del rango. La vista previa se auto-estira, así que confíe en este valor, no en el brillo en pantalla."
 }
