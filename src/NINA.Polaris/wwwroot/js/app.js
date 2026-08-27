@@ -17827,6 +17827,15 @@ function ninaApp() {
 
         filesReload() { return this.filesCd(this.files.cwd); },
 
+        // Copy the Studio browser's current folder path to the clipboard
+        // (click/tap the path badge in the header).
+        async copyStudioPath() {
+            const p = this.files?.cwd;
+            if (!p) return;
+            if (await this._copyText(p)) this.toast(this.$t('Folder path copied'), 'ok', 1600);
+            else this.toast(this.$t('Could not copy the path'), 'warn');
+        },
+
         // ---- Reusable host-side Save/Open file dialog ---------------------
         // Opens a modal that browses the HOST filesystem via /api/files/*.
         // Returns a Promise resolving to a chosen host path, or null on cancel.
