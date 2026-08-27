@@ -57,9 +57,15 @@ public class IndiSwitch : ISwitchDevice {
     // OffElement is set only for a collapsed OneOfMany Off/On pair: the
     // element that has to be driven to the opposite state so the vector keeps
     // exactly one member on (a 1OfMany vector with nothing on is invalid).
+    //
+    // Selector is set only for a OneOfMany vector with MORE than two members
+    // (a power port's None/Camera/Focuser/… role picker): the whole vector is
+    // ONE dropdown channel, its options in element order (Key = INDI element,
+    // Label = display). Set by index; the driver clears the other members.
     private readonly record struct ChannelMap(string Property, string Element, bool IsSwitch,
         string Name, double Min, double Max, double Step, bool Writable,
-        string? OffElement = null);
+        string? OffElement = null,
+        IReadOnlyList<(string Key, string Label)>? Selector = null);
 
     private readonly List<ChannelMap> _map = new();
 
@@ -127,6 +133,16 @@ public class IndiSwitch : ISwitchDevice {
                             Min: 0, Max: 1, Step: 1, Writable: writable, OffElement: offElem));
                         continue;
                     }
+                }
+
+                // A OneOfMany vector with more than two members is a SELECTOR:
+                // exactly one option is on (a port's role: None/Camera/Focuser/…).
+                // Publish it as ONE dropdown channel instead of a wall of toggles.
+                if (sw.Rule == IndiSwitchRule.OneOfMany && elems.Count > 2) {
+                    var opts = elems.Select(e => (Key: e, Label: ElementLabel(sw, e))).ToList();
+                    _map.Add(new ChannelMap(name, elems[0], IsSwitch: true, vector,
+                        Min: 0, Max: opts.Count - 1, Step: 1, Writable: writable, Selector: opts));
+                    continue;
                 }
 
                 foreach (var elem in elems) {
@@ -200,6 +216,18 @@ public class IndiSwitch : ISwitchDevice {
             var list = new List<SwitchChannel>(_map.Count);
             for (int i = 0; i < _map.Count; i++) {
                 var m = _map[i];
+                // Selector: one dropdown for the whole vector. Selected = the
+                // index of the member currently on; key is the vector (stable
+                // across reconnects, like the other channels).
+                if (m.Selector is { Count: > 0 } sel) {
+                    int selected = -1;
+                    for (int j = 0; j < sel.Count; j++)
+                        if (_client.GetSwitch(DeviceName, m.Property, sel[j].Key)) { selected = j; break; }
+                    list.Add(new SwitchChannel(i, m.Name, Boolean: false, Value: selected,
+                        m.Min, m.Max, m.Step, m.Writable, $"{m.Property}",
+                        Options: sel.Select(o => o.Label).ToList(), Selected: selected));
+                    continue;
+                }
                 double value = m.IsSwitch
                     ? (_client.GetSwitch(DeviceName, m.Property, m.Element) ? 1 : 0)
                     : _client.GetNumber(DeviceName, m.Property, m.Element);
@@ -218,6 +246,8 @@ public class IndiSwitch : ISwitchDevice {
 
     public async Task SetBoolAsync(int id, bool on, CancellationToken ct = default) {
         var m = Get(id);
+        // A selector is not a toggle; on == pick the first option (best effort).
+        if (m.Selector is { Count: > 0 }) { await SetSelectedAsync(id, on ? 0 : -1, ct); return; }
         if (m.IsSwitch) {
             await WriteSwitchAsync(m, on, ct);
         } else {
@@ -228,12 +258,32 @@ public class IndiSwitch : ISwitchDevice {
 
     public async Task SetValueAsync(int id, double value, CancellationToken ct = default) {
         var m = Get(id);
+        // For a selector, the value IS the option index.
+        if (m.Selector is { Count: > 0 }) { await SetSelectedAsync(id, (int)Math.Round(value), ct); return; }
         if (m.IsSwitch) {
             await WriteSwitchAsync(m, value != 0, ct);
         } else {
             var clamped = m.Max > m.Min ? Math.Clamp(value, m.Min, m.Max) : value;
             await WriteNumberAsync(m, clamped, ct);
         }
+    }
+
+    public async Task SetSelectedAsync(int id, int index, CancellationToken ct = default) {
+        var m = Get(id);
+        if (m.Selector is not { Count: > 0 } sel)
+            throw new NotSupportedException($"Power box '{DeviceName}' channel {id} is not a selector.");
+        if (index < 0 || index >= sel.Count)
+            throw new ArgumentOutOfRangeException(nameof(index),
+                $"Selector '{m.Name}' has no option {index} (have {sel.Count}).");
+        // OneOfMany: drive the chosen member on and every other off in one write,
+        // so a strict driver that validates the whole vector still accepts it.
+        var payload = new Dictionary<string, bool>(sel.Count);
+        for (int j = 0; j < sel.Count; j++) payload[sel[j].Key] = j == index;
+        var ack = await _client.SetSwitchAsyncAck(DeviceName, m.Property, payload, ct: ct);
+        if (ack.Rejected)
+            throw new InvalidOperationException(
+                $"Power box '{DeviceName}' rejected {m.Name} = {sel[index].Label}: "
+                + (string.IsNullOrEmpty(ack.AlertMessage) ? "(no message from driver)" : ack.AlertMessage));
     }
 
     private ChannelMap Get(int id) {

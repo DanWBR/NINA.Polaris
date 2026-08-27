@@ -50,6 +50,10 @@ public static class SwitchEndpoints {
                     boolean = c.Boolean,
                     value = double.IsNaN(c.Value) ? 0.0 : c.Value,
                     min = c.Min, max = c.Max, step = c.Step, writable = c.Writable,
+                    // Selector (OneOfMany >2, e.g. a port's None/Camera/Focuser/…
+                    // role): options + active index render as ONE dropdown.
+                    options = c.Options,
+                    selected = c.Selected,
                     // A read-only channel is a MEASUREMENT, not a control: on a
                     // power box these are the input voltage, current draw,
                     // temperature, humidity and dew point. They arrive through
@@ -176,10 +180,27 @@ public static class SwitchEndpoints {
                 return Results.Json(new { error = ex.Message }, statusCode: 500);
             }
         });
+
+        // Pick an option of a selector channel (a OneOfMany port-role dropdown).
+        group.MapPost("/set-selected", async (EquipmentManager equip, SetSwitchSelectedRequest request) => {
+            if (equip.Switch == null)
+                return Results.BadRequest(new { error = "No power box connected" });
+            try {
+                await equip.Switch.SetSelectedAsync(request.Id, request.Index);
+                return Results.Ok(new { id = request.Id, selected = request.Index });
+            } catch (ArgumentOutOfRangeException ex) {
+                return Results.BadRequest(new { error = ex.Message });
+            } catch (NotSupportedException ex) {
+                return Results.BadRequest(new { error = ex.Message });
+            } catch (InvalidOperationException ex) {
+                return Results.Json(new { error = ex.Message }, statusCode: 500);
+            }
+        });
     }
 
     public record SetSwitchBoolRequest(int Id, bool On);
     public record SetSwitchValueRequest(int Id, double Value);
+    public record SetSwitchSelectedRequest(int Id, int Index);
 
     /// <param name="Names">Channel Key to operator-assigned name. Replaces the
     /// stored map wholesale, so the caller sends the full set.</param>

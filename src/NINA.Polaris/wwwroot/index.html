@@ -8019,8 +8019,19 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                                 @click="powerBoxToggle(ch)"
                                                 :class="ch.value ? 'btn-active' : ''"
                                                 x-text="ch.value ? 'ON' : 'OFF'"></button>
+                                        <!-- selector: a OneOfMany port-role group (None/Camera/…)
+                                             as one dropdown instead of a wall of toggles -->
+                                        <template x-if="ch.options && ch.options.length">
+                                            <select class="input-sm" style="min-width:150px"
+                                                    :disabled="!ch.writable"
+                                                    @change="powerBoxSetSelected(ch, $event.target.value)">
+                                                <template x-for="(opt, i) in ch.options" :key="'pbopt-'+ch.id+'-'+i">
+                                                    <option :value="i" :selected="i === ch.selected" x-text="opt"></option>
+                                                </template>
+                                            </select>
+                                        </template>
                                         <!-- analog / PWM channel -->
-                                        <template x-if="!ch.boolean">
+                                        <template x-if="!ch.boolean && !(ch.options && ch.options.length)">
                                             <span style="display:flex; gap:4px; align-items:center">
                                                 <input type="number" class="input-sm" style="width:70px"
                                                        :min="ch.min" :max="ch.max" :step="ch.step || 1"

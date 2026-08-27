@@ -4536,5 +4536,8 @@
   "clipped": "saturado",
   "Overexposed: highlights are blown. Lower gain and/or exposure until this is near 0.": "Superexposto: os brilhos estouraram. Reduza ganho e/ou exposição até ficar perto de 0.",
   "Some highlights are clipping. Ease gain or exposure down.": "Alguns brilhos estão saturando. Reduza um pouco o ganho ou a exposição.",
-  "Highlights are within range. The preview is auto-stretched, so trust this, not the on-screen brightness.": "Os brilhos estão dentro da faixa. O preview é auto-esticado, então confie neste valor, não no brilho da tela."
+  "Highlights are within range. The preview is auto-stretched, so trust this, not the on-screen brightness.": "Os brilhos estão dentro da faixa. O preview é auto-esticado, então confie neste valor, não no brilho da tela.",
+  "Power box toggle failed": "Falha ao alternar a caixa de alimentação",
+  "Power box set failed": "Falha ao ajustar a caixa de alimentação",
+  "Power box select failed": "Falha ao selecionar na caixa de alimentação"
 }
