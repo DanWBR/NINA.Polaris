@@ -4539,5 +4539,6 @@
   "Highlights are within range. The preview is auto-stretched, so trust this, not the on-screen brightness.": "Las luces están dentro del rango. La vista previa se auto-estira, así que confíe en este valor, no en el brillo en pantalla.",
   "Power box toggle failed": "Error al conmutar la caja de alimentación",
   "Power box set failed": "Error al ajustar la caja de alimentación",
-  "Power box select failed": "Error al seleccionar en la caja de alimentación"
+  "Power box select failed": "Error al seleccionar en la caja de alimentación",
+  "Live stack quality": "Calidad del live stack"
 }

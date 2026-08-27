@@ -3970,6 +3970,10 @@ function ninaApp() {
         // history button in .preview-overlay-controls; preference
         // persisted in localStorage so it survives reloads.
         liveOverlayVisible: false,
+        // Dismiss flag for the LIVE quality HUD. The HUD auto-opens while a
+        // stack runs (see the WS handler); the overlay's close button sets this
+        // until the next stack starts, so it is dismissable without staying gone.
+        liveHudDismissed: false,
         showCrosshair: false,
         showGrid: false,
         showPixelReadout: false,
@@ -43834,7 +43838,13 @@ function ninaApp() {
                 // Whole payload kept around so the triggers panel can
                 // read .triggers + per-frame HFR / star count without
                 // a second source of truth.
+                const _wasLiveRunning = this.liveStackStatus?.isRunning;
                 this.liveStackStatus = msg.liveStack;
+                // Auto-open the quality HUD when a stack starts, so SNR / ETA /
+                // sub-exposure advice + the SNR-HFR chart are visible without
+                // hunting for the overlay toggle (they used to be gated behind
+                // the retired client-capture imageHistory, blank in server mode).
+                if (msg.liveStack.isRunning && !_wasLiveRunning) this.liveHudDismissed = false;
                 // Colour stacking: whether it's actually engaged this
                 // session (toggle ON + reference frame was Bayered).
                 if (typeof msg.liveStack.colorActive === 'boolean')
