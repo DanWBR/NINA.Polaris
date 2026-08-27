@@ -1323,7 +1323,11 @@ public class EquipmentManager : IDisposable {
                     min = Safe(c.Min),
                     max = Safe(c.Max),
                     step = Safe(c.Step),
-                    writable = c.Writable
+                    writable = c.Writable,
+                    // Selector (OneOfMany >2): options + the active index, so the
+                    // UI shows one dropdown instead of a wall of toggles.
+                    options = c.Options,
+                    selected = c.Selected
                 }).ToList()
             };
         }

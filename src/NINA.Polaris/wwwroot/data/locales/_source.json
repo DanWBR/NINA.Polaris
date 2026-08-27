@@ -3912,5 +3912,8 @@
   "clipped": "clipped",
   "Overexposed: highlights are blown. Lower gain and/or exposure until this is near 0.": "Overexposed: highlights are blown. Lower gain and/or exposure until this is near 0.",
   "Some highlights are clipping. Ease gain or exposure down.": "Some highlights are clipping. Ease gain or exposure down.",
-  "Highlights are within range. The preview is auto-stretched, so trust this, not the on-screen brightness.": "Highlights are within range. The preview is auto-stretched, so trust this, not the on-screen brightness."
+  "Highlights are within range. The preview is auto-stretched, so trust this, not the on-screen brightness.": "Highlights are within range. The preview is auto-stretched, so trust this, not the on-screen brightness.",
+  "Power box toggle failed": "Power box toggle failed",
+  "Power box set failed": "Power box set failed",
+  "Power box select failed": "Power box select failed"
 }

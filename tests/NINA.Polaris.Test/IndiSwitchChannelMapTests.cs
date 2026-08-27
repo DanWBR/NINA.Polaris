@@ -61,6 +61,17 @@ public class IndiSwitchChannelMapTests {
         Labels = { [name + "OFF"] = "Off", [name + "ON"] = "On" },
     };
 
+    // A port's role picker: a OneOfMany vector with MORE than two members. `on`
+    // is the index of the member currently selected.
+    private static IndiSwitchProperty RoleSelector(string name, string label, int on) => new() {
+        Name = name,
+        Label = label,
+        Rule = IndiSwitchRule.OneOfMany,
+        Permission = IndiPropertyPermission.ReadWrite,
+        Values = { [name + "0"] = on == 0, [name + "1"] = on == 1, [name + "2"] = on == 2 },
+        Labels = { [name + "0"] = "None", [name + "1"] = "Camera", [name + "2"] = "Focuser" },
+    };
+
     /// <summary>Element labels repeat across the four port vectors ("Camera"
     /// four times); the vector label is the only thing that tells them apart,
     /// so it has to end up in the channel name.</summary>
@@ -102,6 +113,39 @@ public class IndiSwitchChannelMapTests {
 
         var names = sw.Channels.Select(c => c.Name).ToList();
         Assert.That(names, Is.EquivalentTo(new[] { "On/Off (ONOFF0)", "On/Off (ONOFF1)" }));
+    }
+
+    /// <summary>A OneOfMany vector with more than two members (a port's
+    /// None/Camera/Focuser/… role) is ONE selector channel — a dropdown — not a
+    /// toggle per member. This is the field report against v0.98.51: the ASI
+    /// Power ports came out as a wall of nine toggles each.</summary>
+    [Test]
+    public async Task OneOfManyOverTwoMembers_BecomesOneSelectorDropdown() {
+        using var client = ClientWith(RoleSelector("PORT0", "Port 1", on: 1));
+        var sw = new IndiSwitch(client, Dev);
+        await sw.RefreshAsync();
+
+        Assert.That(sw.SwitchCount, Is.EqualTo(1), "the whole vector is one dropdown, not a toggle per role");
+        var ch = sw.Channels[0];
+        Assert.That(ch.Name, Is.EqualTo("Port 1"));
+        Assert.That(ch.Boolean, Is.False);
+        Assert.That(ch.Options, Is.EqualTo(new[] { "None", "Camera", "Focuser" }));
+        Assert.That(ch.Selected, Is.EqualTo(1), "Camera is the member currently on");
+        Assert.That(ch.Value, Is.EqualTo(1).Within(0.001));
+        Assert.That(ch.Key, Is.EqualTo("PORT0"), "keyed by the vector, stable across reconnects");
+    }
+
+    /// <summary>Two role selectors keep distinct dropdowns, keyed by vector.</summary>
+    [Test]
+    public async Task TwoRoleSelectors_StayDistinctDropdowns() {
+        using var client = ClientWith(RoleSelector("PORT0", "Port 1", on: 0),
+                                      RoleSelector("PORT1", "Port 2", on: 2));
+        var sw = new IndiSwitch(client, Dev);
+        await sw.RefreshAsync();
+
+        Assert.That(sw.SwitchCount, Is.EqualTo(2));
+        Assert.That(sw.Channels.Select(c => c.Name), Is.EquivalentTo(new[] { "Port 1", "Port 2" }));
+        Assert.That(sw.Channels.Single(c => c.Name == "Port 2").Selected, Is.EqualTo(2));
     }
 
     /// <summary>AnyOfMany vectors (Pegasus-style hubs, one vector holding all

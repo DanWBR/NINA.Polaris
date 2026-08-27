@@ -37907,6 +37907,18 @@ function ninaApp() {
                 this.toastFail('Power box set failed', e);
             }
         },
+        // Pick an option of a selector channel (a OneOfMany port-role dropdown).
+        async powerBoxSetSelected(ch, index) {
+            const i = Number(index);
+            if (!Number.isInteger(i) || i < 0) return;
+            try {
+                await this.apiPost('/api/switch/set-selected', { id: ch.id, index: i });
+                const label = (ch.options && ch.options[i]) || i;
+                this.toast(`${ch.displayName || ch.name} = ${label}`, 'ok');
+            } catch (e) {
+                this.toastFail('Power box select failed', e);
+            }
+        },
         async powerBoxRefresh() {
             try { await this.apiPost('/api/switch/refresh'); }
             catch (e) { this.toast('Power box refresh failed', 'error'); }

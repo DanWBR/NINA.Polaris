@@ -34,6 +34,13 @@ namespace NINA.Image.Interfaces;
 /// per-backend and opaque to callers: <c>PROPERTY.ELEMENT</c> for INDI,
 /// <c>#index</c> for ASCOM/Alpaca, which have no richer identity to offer.</para>
 /// </summary>
+/// <para>A channel with a non-empty <see cref="Options"/> list is a SELECTOR:
+/// a mutually-exclusive group (an INDI OneOfMany vector with more than two
+/// members, e.g. a power port's None/Camera/Focuser/… role) that the UI renders
+/// as a single dropdown instead of a wall of toggles. <see cref="Selected"/> is
+/// the index of the active option (-1 = none). Set it with
+/// <see cref="ISwitchDevice.SetSelectedAsync"/>. Ordinary boolean/analog
+/// channels leave <see cref="Options"/> null.</para>
 public sealed record SwitchChannel(
     int Id,
     string Name,
@@ -43,7 +50,9 @@ public sealed record SwitchChannel(
     double Max,
     double Step,
     bool Writable,
-    string Key = "");
+    string Key = "",
+    IReadOnlyList<string>? Options = null,
+    int Selected = -1);
 
 /// <summary>
 /// A generic multi-channel switch / power box (ASCOM ISwitchV2 semantics),
@@ -74,6 +83,12 @@ public interface ISwitchDevice {
     /// <summary>Set an analog channel value (clamped to the channel's
     /// min/max). For a boolean channel any non-zero value means on.</summary>
     Task SetValueAsync(int id, double value, CancellationToken ct = default);
+
+    /// <summary>Select option <paramref name="index"/> of a selector channel (a
+    /// mutually-exclusive group, e.g. a OneOfMany port-role vector). Default:
+    /// unsupported — only backends that publish selectors (INDI) override it.</summary>
+    Task SetSelectedAsync(int id, int index, CancellationToken ct = default) =>
+        throw new NotSupportedException("This device has no selector channels.");
 
     /// <summary>Re-read the channel set + current values from the device.</summary>
     Task RefreshAsync(CancellationToken ct = default);

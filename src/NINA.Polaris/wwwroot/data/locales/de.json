@@ -4536,5 +4536,8 @@
   "clipped": "übersteuert",
   "Overexposed: highlights are blown. Lower gain and/or exposure until this is near 0.": "Überbelichtet: die Lichter sind ausgefressen. Verstärkung und/oder Belichtung senken, bis dieser Wert nahe 0 liegt.",
   "Some highlights are clipping. Ease gain or exposure down.": "Einige Lichter übersteuern. Verstärkung oder Belichtung etwas verringern.",
-  "Highlights are within range. The preview is auto-stretched, so trust this, not the on-screen brightness.": "Die Lichter sind im Bereich. Die Vorschau wird automatisch gestreckt, verlass dich auf diesen Wert, nicht auf die Bildhelligkeit."
+  "Highlights are within range. The preview is auto-stretched, so trust this, not the on-screen brightness.": "Die Lichter sind im Bereich. Die Vorschau wird automatisch gestreckt, verlass dich auf diesen Wert, nicht auf die Bildhelligkeit.",
+  "Power box toggle failed": "Umschalten der Powerbox fehlgeschlagen",
+  "Power box set failed": "Einstellen der Powerbox fehlgeschlagen",
+  "Power box select failed": "Auswahl an der Powerbox fehlgeschlagen"
 }
