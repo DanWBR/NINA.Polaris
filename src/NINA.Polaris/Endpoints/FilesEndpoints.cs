@@ -354,7 +354,11 @@ public static class FilesEndpoints {
                                     stretchFromPath: stretchRefFull,
                                     bayerOverride: bayerOverride)), ct);
                     }
-                    case PreviewKind.RasterPassthrough: {
+                    case PreviewKind.RasterPassthrough:
+                    // A video (mp4/webm/mov/…) streams the same way: the physical
+                    // file with range processing so an <video> element can seek.
+                    // An animated GIF is RasterPassthrough and plays in an <img>.
+                    case PreviewKind.Video: {
                         // Serve the physical source file directly: validators
                         // (ETag + Last-Modified) and 304 handling for free,
                         // no cache copy needed since the source IS the bytes.

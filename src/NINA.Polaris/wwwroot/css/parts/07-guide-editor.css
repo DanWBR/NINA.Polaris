@@ -1899,6 +1899,50 @@
     font-size: 13px;
 }
 
+/* ---- Studio media viewer (animated GIF / video playback) ------------ */
+.media-viewer-card {
+    width: min(90vw, 1100px);
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+    overflow: hidden;
+}
+.media-viewer-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+}
+.media-viewer-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.media-viewer-body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    background: #000;
+    min-height: 200px;
+    overflow: auto;
+}
+.media-viewer-media {
+    max-width: 100%;
+    max-height: 78vh;
+    display: block;
+    object-fit: contain;
+}
+
 /* ---- Auth brand mark (loading / setup / login) ----------------------
    Polaris icon shown above the modal heading. On the boot/loading
    variant a thin accent-colored ring spins around it; on

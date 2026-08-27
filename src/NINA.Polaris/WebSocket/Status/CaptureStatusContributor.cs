@@ -29,9 +29,10 @@ public sealed class CaptureStatusContributor : IStatusContributor {
     private readonly SlewPreviewService _slewPreview;
     private readonly NINA.Polaris.Services.Planetary.VideoRecordingService _videoRecording;
     private readonly NINA.Polaris.Services.Planetary.PlanetaryStackerService _videoStacker;
+    private readonly NINA.Polaris.Services.Timelapse.MediaEncodeService _mediaEncode;
     private readonly DitherBarrier _ditherBarrier;
 
-    public CaptureStatusContributor(AuxCaptureService auxCapture, CaptureProgressService captureProgress, CoolingRampService coolingRamp, LiveCaptureService liveCapture, SlewPreviewService slewPreview, NINA.Polaris.Services.Planetary.VideoRecordingService videoRecording, NINA.Polaris.Services.Planetary.PlanetaryStackerService videoStacker, DitherBarrier ditherBarrier) {
+    public CaptureStatusContributor(AuxCaptureService auxCapture, CaptureProgressService captureProgress, CoolingRampService coolingRamp, LiveCaptureService liveCapture, SlewPreviewService slewPreview, NINA.Polaris.Services.Planetary.VideoRecordingService videoRecording, NINA.Polaris.Services.Planetary.PlanetaryStackerService videoStacker, NINA.Polaris.Services.Timelapse.MediaEncodeService mediaEncode, DitherBarrier ditherBarrier) {
         _auxCapture = auxCapture;
         _captureProgress = captureProgress;
         _coolingRamp = coolingRamp;
@@ -39,10 +40,11 @@ public sealed class CaptureStatusContributor : IStatusContributor {
         _slewPreview = slewPreview;
         _videoRecording = videoRecording;
         _videoStacker = videoStacker;
+        _mediaEncode = mediaEncode;
         _ditherBarrier = ditherBarrier;
     }
 
-    public IReadOnlyCollection<string> Keys { get; } = new[] { "capture", "liveCapture", "auxCapture", "cooling", "videoRecording", "videoStack", "slewPreview", "ditherSync" };
+    public IReadOnlyCollection<string> Keys { get; } = new[] { "capture", "liveCapture", "auxCapture", "cooling", "videoRecording", "videoStack", "mediaEncode", "slewPreview", "ditherSync" };
 
     public void Contribute(StatusTick tick) {
         var auxCapture = _auxCapture;
@@ -115,6 +117,23 @@ public sealed class CaptureStatusContributor : IStatusContributor {
                 done = videoStacker.CurrentJob.Phase
                     is NINA.Polaris.Services.Planetary.StackPhase.Ok
                     or NINA.Polaris.Services.Planetary.StackPhase.Fail
+            };
+
+            // Time-lapse / SER->MP4 encode job (VIDEO tab). Null when idle.
+            var enc = _mediaEncode.CurrentJob;
+            tick.Blocks["mediaEncode"] = enc == null ? null : new {
+                id = enc.Id,
+                phase = enc.Phase.ToString(),
+                totalFrames = enc.TotalFrames,
+                framesRendered = enc.FramesRendered,
+                encodedFrames = enc.EncodedFrames,
+                gifDone = enc.GifDone,
+                mp4Done = enc.Mp4Done,
+                outputPathGif = enc.OutputPathGif,
+                outputPathMp4 = enc.OutputPathMp4,
+                error = enc.Error,
+                done = enc.Phase is NINA.Polaris.Services.Timelapse.EncodePhase.Ok
+                    or NINA.Polaris.Services.Timelapse.EncodePhase.Fail
             };
 
             // FW-1: Flat Wizard state (AUTORUN → Flat Wizard

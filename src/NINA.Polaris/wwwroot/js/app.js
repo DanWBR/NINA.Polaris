@@ -2546,6 +2546,25 @@ function ninaApp() {
             selectedPath: '',    // highlighted file (open mode)
             _resolve: null
         },
+        // VIDEO > Time-lapse sub-tab: build a movie from a folder of frames.
+        timelapse: {
+            framesDir: '',
+            frames: [],          // [{path,name,sizeBytes}]
+            fps: 15,
+            maxDim: 1280,
+            format: 'gif',       // 'gif' | 'mp4' | 'both'
+            everyNth: 1,
+            outputName: 'timelapse',
+            loop: true,
+            ffmpegAvailable: false,
+            ffmpegProbed: false
+        },
+        // Live encode-job status (time-lapse or SER->MP4), from the WS mediaEncode
+        // block. Null when idle.
+        mediaEncode: null,
+        _mediaEncodePromptedId: null,
+        // Studio media viewer: plays an animated GIF (<img>) or a video (<video>).
+        mediaViewer: { open: false, url: '', kind: '', name: '' },
         // FILES-tab plate solve state (mirrors previewSolve* from
         // PREVIEW but operates on a file path instead of LatestImage).
         filesSolveBusy: false,
@@ -17651,8 +17670,9 @@ function ninaApp() {
         // mode:'save' shows a filename box; mode:'open' returns the picked file.
         _openHostFileDialog(opts = {}) {
             const d = this.hostDialog;
-            d.mode = opts.mode === 'open' ? 'open' : 'save';
-            d.title = opts.title || (d.mode === 'save' ? 'Save to host' : 'Open from host');
+            d.mode = (opts.mode === 'open' || opts.mode === 'folder') ? opts.mode : 'save';
+            d.title = opts.title || (d.mode === 'save' ? 'Save to host'
+                : d.mode === 'folder' ? 'Choose folder' : 'Open from host');
             d.accept = Array.isArray(opts.accept) ? opts.accept : [];
             d.filename = opts.suggestedName || '';
             d.selectedPath = '';
@@ -17740,7 +17760,10 @@ function ninaApp() {
         _hostDialogConfirm() {
             const d = this.hostDialog;
             let path = null;
-            if (d.mode === 'open') {
+            if (d.mode === 'folder') {
+                path = d.cwd || null;
+                if (!path) { d.error = 'Open a folder first.'; return; }
+            } else if (d.mode === 'open') {
                 path = d.selectedPath || null;
                 if (!path) { d.error = 'Select a file.'; return; }
             } else {
@@ -17782,6 +17805,12 @@ function ninaApp() {
                 if (r && r.truncated) { this.toast('File too large to load fully', 'error'); return null; }
                 return (r && typeof r.text === 'string') ? r.text : null;
             } catch (e) { this.toastFail('Load failed', e); return null; }
+        },
+
+        // Pick a host FOLDER (navigate in, then "Use this folder"). Returns the
+        // chosen directory path, or null on cancel.
+        async _hostPickFolder({ title } = {}) {
+            return await this._openHostFileDialog({ mode: 'folder', title });
         },
 
         // Folders first, then case-insensitive name order. Matches the
@@ -18292,6 +18321,15 @@ function ninaApp() {
             const ext = (entry.name.toLowerCase().split('.').pop() || '');
             const imgExts = ['fits','fit','fts','xisf','png','jpg','jpeg','gif','bmp','webp','tif','tiff'];
             const textExts = ['txt','log','md','json','xml','csv'];
+            const videoExts = ['mp4','webm','mov','avi','m4v','mkv'];
+
+            // An animated GIF or a video plays in the media viewer, not the still
+            // image viewer (OpenSeadragon shows only a GIF's first frame and can't
+            // play video).
+            if (ext === 'gif' || videoExts.includes(ext)) {
+                this.openMediaViewer(entry.fullPath, entry.name);
+                return;
+            }
 
             if (imgExts.includes(ext)) {
                 // Reuse the same OpenSeadragon viewer STUDIO uses. Set
@@ -26765,6 +26803,91 @@ function ninaApp() {
             try { await this.apiPost(`/api/video/stack/${this.videoStack.id}/abort`); }
             catch (e) { this.toastFail('Abort failed', e, 'warn'); }
         },
+
+        // ---- Time-lapse (VIDEO > Time-lapse) + SER->MP4 -------------------
+        async timelapseProbeFfmpeg() {
+            if (this.timelapse.ffmpegProbed) return;
+            try {
+                const r = await this.apiGet('/api/video/timelapse/ffmpeg-available');
+                this.timelapse.ffmpegAvailable = !!(r && r.available);
+            } catch { /* leave false */ }
+            this.timelapse.ffmpegProbed = true;
+        },
+        async timelapseInit() {
+            await this.timelapseProbeFfmpeg();
+            if (this.timelapse.framesDir) await this.loadTimelapseFrames();
+        },
+        async timelapsePickFolder() {
+            const dir = await this._hostPickFolder({ title: 'Choose frames folder' });
+            if (!dir) return;
+            this.timelapse.framesDir = dir;
+            await this.loadTimelapseFrames();
+        },
+        async loadTimelapseFrames() {
+            const dir = this.timelapse.framesDir;
+            if (!dir) return;
+            try {
+                const r = await this.apiGet('/api/video/timelapse/frames?dir=' + encodeURIComponent(dir));
+                this.timelapse.frames = r.frames || [];
+                if (!this.timelapse.frames.length) this.toast('No image frames found in that folder', 'warn');
+            } catch (e) { this.timelapse.frames = []; this.toastFail('Could not list frames', e); }
+        },
+        async timelapseStart() {
+            const t = this.timelapse;
+            if (!t.framesDir) { this.toast('Choose a frames folder first', 'warn'); return; }
+            if (!t.frames.length) { this.toast('No frames to build', 'warn'); return; }
+            if (t.format === 'mp4' && !t.ffmpegAvailable) { this.toast('MP4 needs ffmpeg on the host', 'warn'); return; }
+            try {
+                await this.apiPostJson('/api/video/timelapse/start', {
+                    dir: t.framesDir, fps: Number(t.fps) || 15, maxDim: Number(t.maxDim) || 1280,
+                    format: t.format, everyNth: Number(t.everyNth) || 1,
+                    outputName: t.outputName || 'timelapse', loop: !!t.loop });
+                this.toast('Building time-lapse…', 'ok');
+            } catch (e) { this.toastFail('Time-lapse failed to start', e); }
+        },
+        async timelapseAbort() {
+            const id = this.mediaEncode?.id;
+            if (!id) return;
+            try { await this.apiPost(`/api/video/timelapse/${id}/abort`); }
+            catch (e) { this.toastFail('Abort failed', e, 'warn'); }
+        },
+        // Convert a recorded SER to MP4 (Process tab). ffmpeg-only.
+        async serToMp4(serPath) {
+            if (!serPath) return;
+            await this.timelapseProbeFfmpeg();
+            if (!this.timelapse.ffmpegAvailable) { this.toast('SER to MP4 needs ffmpeg on the host', 'warn'); return; }
+            try {
+                await this.apiPostJson('/api/video/ser-to-mp4', { serPath, fps: 20 });
+                this.toast('Converting SER to MP4…', 'ok');
+            } catch (e) { this.toastFail('SER to MP4 failed to start', e); }
+        },
+        // On a finished encode, offer once to play the result in the Studio.
+        async _maybePromptEncodeDone() {
+            const j = this.mediaEncode;
+            if (!j || !j.done) return;
+            if (this._mediaEncodePromptedId === j.id) return;
+            this._mediaEncodePromptedId = j.id;
+            if (j.phase === 'Fail') { this.toast('Encode failed: ' + (j.error || ''), 'error'); return; }
+            const out = j.outputPathMp4 || j.outputPathGif;
+            if (!out) return;
+            const name = (out.split(/[\\/]/).pop()) || out;
+            const ok = await this._confirmAsync(
+                `Saved:\n\n${name}\n\nPlay it in the Studio?`,
+                { title: 'Time-lapse ready', okLabel: 'Play', cancelLabel: 'Not now' });
+            if (ok) this.openMediaViewer(out, name);
+        },
+        // Studio media viewer: animated GIF plays in an <img>, video in a <video>.
+        openMediaViewer(path, name) {
+            const ext = (path.split('.').pop() || '').toLowerCase();
+            const kind = ext === 'gif' ? 'gif'
+                : (['mp4', 'webm', 'mov', 'avi', 'm4v', 'mkv'].includes(ext) ? 'video' : 'img');
+            this.mediaViewer = {
+                open: true, kind,
+                name: name || (path.split(/[\\/]/).pop() || path),
+                url: this.authUrl('/api/files/preview?path=' + encodeURIComponent(path))
+            };
+        },
+        closeMediaViewer() { this.mediaViewer = { open: false, url: '', kind: '', name: '' }; },
         // Fetch the per-frame quality scores once per job, as soon as the
         // analysis phase has produced them (phase past Analyzing). The scores
         // are omitted from the WS status (can be 10k+ doubles), so they come
@@ -43687,6 +43810,10 @@ function ninaApp() {
                 this.videoStack = msg.videoStack;  // null when idle
                 this._maybeFetchStackQualities();
                 this._maybePromptStackDone();
+            }
+            if (msg.mediaEncode !== undefined) {
+                this.mediaEncode = msg.mediaEncode;  // null when idle
+                this._maybePromptEncodeDone();
             }
             if (msg.slewPreview) this.slewPreview = msg.slewPreview;
             // Auto-push to network storage: live counters for the Settings card.
