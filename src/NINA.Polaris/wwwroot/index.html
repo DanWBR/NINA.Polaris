@@ -811,7 +811,7 @@
             <!-- Sky group: this single button covers the Sky map,
                  Tonight's Best, and Weather sub-tabs (selectable
                  via the pill row at the top of each panel). -->
-            <button class="nav-btn" :class="{ active: tab === 'sky' || tab === 'tonight' || tab === 'weather' }" @click="tab = 'sky'; $nextTick(() => initSkyViewer())" title="Sky Explorer (map · Tonight · Weather)">
+            <button class="nav-btn" :class="{ active: tab === 'sky' || tab === 'tonight' || tab === 'weather' || tab === 'milkyway' }" @click="tab = 'sky'; $nextTick(() => initSkyViewer())" title="Sky Explorer (map · Tonight · Weather · Milky Way)">
                 <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><ellipse cx="12" cy="12" rx="10" ry="4" fill="none" stroke="currentColor" stroke-width="1.5"/><line x1="12" y1="2" x2="12" y2="22" stroke="currentColor" stroke-width="1.5"/></svg>
                 <span class="nav-label">Sky</span>
             </button>
@@ -3837,6 +3837,8 @@
                             @click="videoTab = 'process'; loadVideoSerList(); timelapseProbeFfmpeg(); $nextTick(() => drawVideoQualityChart())">Process</button>
                     <button class="video-tab" :class="{ active: videoTab === 'timelapse' }"
                             @click="videoTab = 'timelapse'; timelapseInit()">Time-lapse</button>
+                    <button class="video-tab" :class="{ active: videoTab === 'startrails' }"
+                            @click="videoTab = 'startrails'; starTrailInit()"><span x-text="$t('Star trails')"></span></button>
                 </div>
 
                 <!-- ===== Tab 1: Capture ===== -->
@@ -4615,6 +4617,73 @@
                     </div>
                     <div class="stats-bar" x-show="mediaEncode?.phase === 'Fail'" style="margin-top:10px">
                         <span class="text-err">✗ <span x-text="mediaEncode?.error"></span></span>
+                    </div>
+                </div>
+
+                <!-- ===== Tab 4: Star trails ===== -->
+                <div x-show="videoTab === 'startrails'" class="video-process-pane">
+                    <p class="hint" x-text="$t('Fix the camera and turn tracking off: the sky drifts and each star paints an arc. Frames are combined by keeping the brightest pixel (lighten). Longer sessions make longer trails; aim near the celestial pole for circular ones.')"></p>
+
+                    <div class="preview-area startrail-preview" style="min-height:220px; margin:8px 0">
+                        <canvas id="starTrailCanvas" class="preview-canvas"></canvas>
+                        <div class="preview-overlay text-muted"
+                             x-show="!starTrail || starTrail?.framesCaptured === 0"
+                             x-text="$t('The growing trail composite will appear here.')"></div>
+                    </div>
+
+                    <div class="af-row" style="display:flex; gap:12px; align-items:center; flex-wrap:wrap">
+                        <label x-text="$t('Exposure (s)')"></label>
+                        <input type="number" min="1" max="120" step="1" x-model.number="starTrails.exposure" class="input-sm" style="width:70px">
+                        <label>Gain</label>
+                        <input type="number" min="0" max="1000" step="1" x-model.number="starTrails.gain" class="input-sm" style="width:70px">
+                        <label>Bin</label>
+                        <input type="number" min="1" max="4" step="1" x-model.number="starTrails.binning" class="input-sm" style="width:52px">
+                        <label x-text="$t('Interval (s)')"></label>
+                        <input type="number" min="0" max="60" step="1" x-model.number="starTrails.interval" class="input-sm" style="width:56px">
+                        <label x-text="$t('Max frames')"></label>
+                        <input type="number" min="0" max="100000" step="1" x-model.number="starTrails.maxFrames" class="input-sm" style="width:70px" :placeholder="$t('∞')">
+                    </div>
+
+                    <div class="af-row" style="display:flex; gap:14px; align-items:center; flex-wrap:wrap; margin-top:8px">
+                        <label><input type="checkbox" x-model="starTrails.turnTrackingOff"> <span x-text="$t('Turn mount tracking off')"></span></label>
+                        <label><input type="checkbox" x-model="starTrails.cosmetic"> <span x-text="$t('Remove hot pixels')"></span></label>
+                        <label><input type="checkbox" x-model="starTrails.saveSubs"> <span x-text="$t('Keep individual frames')"></span></label>
+                        <label><input type="checkbox" x-model="starTrails.alsoTimelapse"> <span x-text="$t('Also build a time-lapse')"></span></label>
+                    </div>
+
+                    <div class="af-row" style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-top:8px">
+                        <label x-text="$t('Name')"></label>
+                        <input type="text" x-model="starTrails.outputName" class="input-sm" style="width:140px">
+                    </div>
+
+                    <div class="af-row" style="display:flex; gap:8px; align-items:center; margin-top:12px">
+                        <button class="btn btn-primary" @click="starTrailStart()"
+                                x-show="!starTrail || starTrail?.done"
+                                x-text="'▶ ' + $t('Start star trails')"></button>
+                        <button class="btn btn-warning" @click="starTrailStop()"
+                                x-show="starTrail && !starTrail?.done"
+                                x-text="'■ ' + $t('Stop and save')"></button>
+                        <button class="btn btn-danger" @click="starTrailAbort()"
+                                x-show="starTrail && !starTrail?.done">Abort</button>
+                    </div>
+
+                    <div class="af-progress" x-show="starTrail && !starTrail?.done" style="margin-top:10px">
+                        <div class="af-progress-info">
+                            <span>Phase: <strong x-text="starTrail?.phase"></strong></span>
+                            <span><strong x-text="starTrail?.framesCaptured || 0"></strong> <span x-text="$t('frames')"></span></span>
+                            <span x-show="starTrail?.trackingOff" class="text-muted" x-text="$t('tracking off')"></span>
+                            <span x-show="starTrail?.elapsedSec" class="text-muted"
+                                  x-text="Math.round(starTrail?.elapsedSec || 0) + 's'"></span>
+                        </div>
+                    </div>
+
+                    <div class="stats-bar" x-show="starTrail?.phase === 'Ok'"
+                         style="margin-top:10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+                        <span class="text-ok">✓ <span x-text="$t('Saved')"></span> (<strong x-text="starTrail?.framesCaptured"></strong> <span x-text="$t('frames')"></span>)</span>
+                        <button class="btn btn-sm" x-show="starTrail?.outputPathJpg" @click="openMediaViewer(starTrail.outputPathJpg)" x-text="'🖼 ' + $t('Open')"></button>
+                    </div>
+                    <div class="stats-bar" x-show="starTrail?.phase === 'Fail'" style="margin-top:10px">
+                        <span class="text-err">✗ <span x-text="starTrail?.error"></span></span>
                     </div>
                 </div>
             </div>
@@ -9202,6 +9271,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             title="3-day cloud / seeing / transparency outlook">
                         <span class="sky-subtab-icon">☁</span> Weather
                     </button>
+                    <button class="sky-subtab-pill" :class="{ active: tab === 'milkyway' }"
+                            @click="tab = 'milkyway'; loadMilkyWay()">
+                        <span class="sky-subtab-icon">✨</span> <span x-text="$t('Milky Way')"></span>
+                    </button>
                 </div>
 
                 <div class="sky-toolbar">
@@ -10296,6 +10369,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             @click="tab = 'weather'; loadWeatherForecast()">
                         <span class="sky-subtab-icon">☁</span> Weather
                     </button>
+                    <button class="sky-subtab-pill" :class="{ active: tab === 'milkyway' }"
+                            @click="tab = 'milkyway'; loadMilkyWay()">
+                        <span class="sky-subtab-icon">✨</span> <span x-text="$t('Milky Way')"></span>
+                    </button>
                 </div>
                 <div class="panel-header">
                     Tonight's Best
@@ -10452,6 +10529,83 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                  the comment on TONIGHT'S BEST above; same pill row
                  sits at the top so the user can pivot inside the
                  planning group without bouncing through the sidebar. -->
+            <!-- MILKY WAY planner (SKY sub-view): galactic core tonight -->
+            <div x-show="tab === 'milkyway'" class="tab-panel">
+                <div class="sky-subtabs">
+                    <button class="sky-subtab-pill" :class="{ active: tab === 'sky' }"
+                            @click="tab = 'sky'; $nextTick(() => initSkyViewer())">
+                        <span class="sky-subtab-icon">🌌</span> Sky map
+                    </button>
+                    <button class="sky-subtab-pill" :class="{ active: tab === 'tonight' }"
+                            @click="tab = 'tonight'; loadTonightsBest()">
+                        <span class="sky-subtab-icon">⭐</span> Tonight's Best
+                    </button>
+                    <button class="sky-subtab-pill" :class="{ active: tab === 'weather' }"
+                            @click="tab = 'weather'; loadWeatherForecast()">
+                        <span class="sky-subtab-icon">☁</span> Weather
+                    </button>
+                    <button class="sky-subtab-pill" :class="{ active: tab === 'milkyway' }"
+                            @click="tab = 'milkyway'; loadMilkyWay()">
+                        <span class="sky-subtab-icon">✨</span> <span x-text="$t('Milky Way')"></span>
+                    </button>
+                </div>
+                <div class="panel-header">
+                    <span x-text="$t('Milky Way core tonight')"></span>
+                    <span class="status-indicator-sm"
+                          :class="milkyWay.loading ? 'warn' : (milkyWay.data?.visible ? 'ok' : 'idle')"
+                          x-text="milkyWay.loading ? 'loading' : (milkyWay.data?.visible ? $t('visible') : $t('not up tonight'))"></span>
+                    <span class="muted" style="font-size:11px;margin-left:auto"
+                          x-show="milkyWay.lastFetched"
+                          x-text="'Updated ' + milkyWay.lastFetched?.toLocaleTimeString()"></span>
+                    <button class="btn btn-sm" @click="loadMilkyWay()" :disabled="milkyWay.loading">Refresh</button>
+                </div>
+
+                <div x-show="milkyWay.error" class="weather-message"><span x-text="milkyWay.error"></span></div>
+                <div x-show="milkyWay.data && !milkyWay.data.hasLocation" class="weather-message">
+                    <span x-text="$t('Set your location in Settings to plan the Milky Way for your site.')"></span>
+                    <button class="btn btn-sm" @click="tab = 'settings'" x-text="$t('Open Settings')"></button>
+                </div>
+
+                <p class="hint" x-text="$t('The galactic core (in Sagittarius) is the bright heart of the summer Milky Way. It needs a dark sky and a low southern horizon. Shoot it during the best window below, tracked, with short wide-field subs.')"></p>
+
+                <div class="mw-summary" x-show="milkyWay.data"
+                     style="display:flex; gap:18px; flex-wrap:wrap; margin:10px 0">
+                    <div style="min-width:120px">
+                        <div class="text-muted" style="font-size:11px" x-text="$t('Peak altitude')"></div>
+                        <div><strong x-text="milkyWay.data?.peak ? Math.round(milkyWay.data.peak.altDeg) + '°' : '—'"></strong>
+                            <span class="text-muted" x-show="milkyWay.data?.peak"
+                                  x-text="'@ ' + mwFmtTime(milkyWay.data?.peak?.utc)"></span></div>
+                    </div>
+                    <div style="min-width:150px">
+                        <div class="text-muted" style="font-size:11px" x-text="$t('Best window')"></div>
+                        <template x-if="milkyWay.data?.bestWindow">
+                            <div><strong x-text="mwFmtTime(milkyWay.data.bestWindow.startUtc) + ' – ' + mwFmtTime(milkyWay.data.bestWindow.endUtc)"></strong>
+                                <span class="text-muted" x-text="'(' + (milkyWay.data.bestWindow.hours || 0).toFixed(1) + ' h)'"></span></div>
+                        </template>
+                        <template x-if="milkyWay.data && !milkyWay.data.bestWindow">
+                            <div class="text-muted" x-text="$t('not up in the dark tonight')"></div>
+                        </template>
+                    </div>
+                    <div style="min-width:120px">
+                        <div class="text-muted" style="font-size:11px" x-text="$t('Dark window')"></div>
+                        <div x-show="milkyWay.data?.darkWindow"><strong
+                            x-text="mwFmtTime(milkyWay.data?.darkWindow?.startUtc) + ' – ' + mwFmtTime(milkyWay.data?.darkWindow?.endUtc)"></strong></div>
+                        <div class="text-muted" x-show="!milkyWay.data?.darkWindow" x-text="'—'"></div>
+                    </div>
+                    <div style="min-width:120px">
+                        <div class="text-muted" style="font-size:11px" x-text="$t('Moon')"></div>
+                        <div><span class="status-indicator-sm" :class="mwMoonBadge().cls" x-text="mwMoonBadge().label"></span></div>
+                    </div>
+                </div>
+
+                <div style="height:220px; margin:8px 0"><canvas id="milkyWayChart"></canvas></div>
+
+                <div class="af-row" style="display:flex; gap:8px; align-items:center; margin-top:8px">
+                    <button class="btn btn-primary" @click="milkyWayPreset()" x-text="'📷 ' + $t('Set up nightscape capture')"></button>
+                    <span class="text-muted" style="font-size:11px" x-text="$t('Loads a wide-field preset on the Live tab.')"></span>
+                </div>
+            </div>
+
             <div x-show="tab === 'weather'" class="tab-panel weather-panel">
                 <div class="sky-subtabs">
                     <button class="sky-subtab-pill" :class="{ active: tab === 'sky' }"
@@ -10465,6 +10619,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <button class="sky-subtab-pill" :class="{ active: tab === 'weather' }"
                             @click="tab = 'weather'; loadWeatherForecast()">
                         <span class="sky-subtab-icon">☁</span> Weather
+                    </button>
+                    <button class="sky-subtab-pill" :class="{ active: tab === 'milkyway' }"
+                            @click="tab = 'milkyway'; loadMilkyWay()">
+                        <span class="sky-subtab-icon">✨</span> <span x-text="$t('Milky Way')"></span>
                     </button>
                 </div>
                 <div class="panel-header">
