@@ -14,6 +14,7 @@
 
 using NINA.Polaris.Services;
 using NINA.Polaris.Services.Planetary;
+using NINA.Polaris.Services.Timelapse;
 
 namespace NINA.Polaris.Endpoints;
 
@@ -225,7 +226,116 @@ public static class VideoEndpoints {
             stacker.Abort(jobId);
             return Results.Ok(new { aborted = true });
         });
+
+        // ----- Time-lapse (frames folder -> GIF / MP4) -----
+
+        // Whether MP4 can be produced on this host (ffmpeg present). GIF always can.
+        group.MapGet("/timelapse/ffmpeg-available", (MediaEncodeService encoder) =>
+            Results.Ok(new { available = encoder.FfmpegAvailable }));
+
+        // List the still image frames (FITS / JPG / PNG / TIFF / …) in a folder,
+        // natural-sorted, for the time-lapse picker.
+        group.MapGet("/timelapse/frames", (FileBrowserService browser, string? dir) => {
+            if (string.IsNullOrWhiteSpace(dir))
+                return Results.BadRequest(new { error = "dir is required" });
+            string root;
+            try { root = browser.ResolveSafe(dir!, mustExist: true); }
+            catch (Exception ex) { return Results.BadRequest(new { error = ex.Message }); }
+            if (!Directory.Exists(root))
+                return Results.BadRequest(new { error = "Not a directory: " + root });
+            try {
+                var frames = ImageFrames(root)
+                    .Select(p => new FileInfo(p))
+                    .Select(fi => new { path = fi.FullName, name = fi.Name, sizeBytes = fi.Length })
+                    .ToList();
+                return Results.Ok(new { frames, count = frames.Count, dir = root });
+            } catch (Exception ex) {
+                return Results.Ok(new { frames = Array.Empty<object>(), count = 0, error = ex.Message });
+            }
+        });
+
+        group.MapPost("/timelapse/start", (MediaEncodeService encoder, FileBrowserService browser,
+                                           TimelapseStartRequest req) => {
+            if (string.IsNullOrWhiteSpace(req?.Dir))
+                return Results.BadRequest(new { error = "dir is required" });
+            string root;
+            try { root = browser.ResolveSafe(req.Dir!, mustExist: true); }
+            catch (Exception ex) { return Results.BadRequest(new { error = ex.Message }); }
+            var files = ImageFrames(root).ToList();
+            if (files.Count == 0)
+                return Results.BadRequest(new { error = "No image frames in that folder." });
+            var fmt = ParseFormat(req.Format);
+            if (fmt is EncodeFormat.Mp4 or EncodeFormat.Both && !encoder.FfmpegAvailable && fmt == EncodeFormat.Mp4)
+                return Results.BadRequest(new { error = "MP4 needs ffmpeg, which is not installed on this host." });
+            var cfg = new EncodeConfig(
+                OutputDir: Path.Combine(root, "timelapse"),
+                OutputName: req.OutputName ?? "timelapse",
+                Fps: Math.Clamp(req.Fps ?? 15, 1, 60),
+                MaxDim: Math.Clamp(req.MaxDim ?? 1280, 100, 4000),
+                Format: fmt,
+                Loop: req.Loop ?? true);
+            var job = encoder.StartJob(new FolderFrameSource(files, Math.Max(1, req.EveryNth ?? 1)), cfg);
+            return Results.Accepted($"/api/video/timelapse/{job.Id}", new { jobId = job.Id });
+        });
+
+        // Convert a recorded SER clip to MP4 (reuses the same encoder; MP4-only,
+        // so it requires ffmpeg).
+        group.MapPost("/ser-to-mp4", (MediaEncodeService encoder, FileBrowserService browser,
+                                      SerToMp4Request req) => {
+            if (string.IsNullOrWhiteSpace(req?.SerPath))
+                return Results.BadRequest(new { error = "serPath is required" });
+            if (!encoder.FfmpegAvailable)
+                return Results.BadRequest(new { error = "MP4 needs ffmpeg, which is not installed on this host." });
+            string ser;
+            try { ser = browser.ResolveSafe(req.SerPath!, mustExist: true); }
+            catch (Exception ex) { return Results.BadRequest(new { error = ex.Message }); }
+            SerFrameSource source;
+            try { source = new SerFrameSource(new SerFileReader(ser)); }
+            catch (Exception ex) { return Results.BadRequest(new { error = "Could not open SER: " + ex.Message }); }
+            var cfg = new EncodeConfig(
+                OutputDir: req.OutputDir ?? Path.GetDirectoryName(ser)!,
+                OutputName: req.OutputName ?? Path.GetFileNameWithoutExtension(ser),
+                Fps: Math.Clamp(req.Fps ?? 20, 1, 60),
+                MaxDim: Math.Clamp(req.MaxDim ?? 1600, 100, 4000),
+                Format: EncodeFormat.Mp4,
+                Loop: true);
+            var job = encoder.StartJob(source, cfg);
+            return Results.Accepted($"/api/video/timelapse/{job.Id}", new { jobId = job.Id });
+        });
+
+        group.MapGet("/timelapse/{jobId}", (MediaEncodeService encoder, string jobId) => {
+            var j = encoder.GetJob(jobId);
+            if (j == null) return Results.NotFound(new { error = "No such job" });
+            return Results.Ok(new {
+                id = j.Id, phase = j.Phase.ToString(), totalFrames = j.TotalFrames,
+                framesRendered = j.FramesRendered, encodedFrames = j.EncodedFrames,
+                gifDone = j.GifDone, mp4Done = j.Mp4Done,
+                outputPathGif = j.OutputPathGif, outputPathMp4 = j.OutputPathMp4, error = j.Error,
+                done = j.Phase is EncodePhase.Ok or EncodePhase.Fail
+            });
+        });
+
+        group.MapPost("/timelapse/{jobId}/abort", (MediaEncodeService encoder, string jobId) => {
+            encoder.Abort(jobId);
+            return Results.Ok(new { aborted = true });
+        });
     }
+
+    // Still image frames in a folder, natural-sorted (so frame_2 sorts before
+    // frame_10 even when the sequence is not zero-padded).
+    private static IEnumerable<string> ImageFrames(string dir) =>
+        Directory.EnumerateFiles(dir)
+            .Where(p => FileBrowserService.ClassifyForPreview(p)
+                is PreviewKind.Fits or PreviewKind.RasterPassthrough or PreviewKind.TiffDecode)
+            .OrderBy(p => System.Text.RegularExpressions.Regex.Replace(
+                Path.GetFileName(p), @"\d+", m => m.Value.PadLeft(12, '0')),
+                StringComparer.OrdinalIgnoreCase);
+
+    private static EncodeFormat ParseFormat(string? f) => (f ?? "").Trim().ToLowerInvariant() switch {
+        "gif" => EncodeFormat.Gif,
+        "mp4" => EncodeFormat.Mp4,
+        _ => EncodeFormat.Both
+    };
 
     /// <summary>The rig a recording sits under, read back from its path.
     ///
@@ -306,4 +416,21 @@ public static class VideoEndpoints {
         /// <summary>Significant ADC depth (8..16). Omitted = auto-detect.</summary>
         int? Bits = null,
         string? OutputPath = null);
+
+    public record TimelapseStartRequest(
+        string? Dir,
+        int? Fps = null,
+        int? MaxDim = null,
+        /// <summary>"gif" | "mp4" | "both" (default). MP4 needs ffmpeg.</summary>
+        string? Format = null,
+        int? EveryNth = null,
+        string? OutputName = null,
+        bool? Loop = null);
+
+    public record SerToMp4Request(
+        string? SerPath,
+        int? Fps = null,
+        int? MaxDim = null,
+        string? OutputName = null,
+        string? OutputDir = null);
 }

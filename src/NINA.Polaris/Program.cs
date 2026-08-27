@@ -226,6 +226,10 @@ builder.Services.AddSingleton<MultiImagerCaptureService>();
 builder.Services.AddSingleton<AuxCaptureService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Planetary.VideoRecordingService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Planetary.PlanetaryStackerService>();
+// Time-lapse / SER->MP4 builder: renders a frame source (folder of stills or a
+// SER) into an animated GIF (self-contained) and/or an MP4 (ffmpeg when present).
+builder.Services.AddSingleton<NINA.Polaris.Services.External.FfmpegService>();
+builder.Services.AddSingleton<NINA.Polaris.Services.Timelapse.MediaEncodeService>();
 // KC-1: Keep Centered control loop. Toggled from the VIDEO sidebar
 // while a planetary stream is running -- pulses N/S/E/W to fight
 // drift and keep the planet on the frame center.

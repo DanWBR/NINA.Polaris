@@ -641,6 +641,11 @@ public class FileBrowserService {
             ".gif"                      => "image/gif",
             ".bmp"                      => "image/bmp",
             ".webp"                     => "image/webp",
+            ".mp4" or ".m4v"            => "video/mp4",
+            ".webm"                     => "video/webm",
+            ".mov"                      => "video/quicktime",
+            ".avi"                      => "video/x-msvideo",
+            ".mkv"                      => "video/x-matroska",
             ".txt" or ".log"            => "text/plain",
             ".md"                       => "text/markdown",
             ".json"                     => "application/json",
@@ -663,6 +668,7 @@ public class FileBrowserService {
             ".xisf"                     => PreviewKind.Fits,  // future: XISF reader; routed via the same JPEG path
             ".png" or ".jpg" or ".jpeg" or ".gif" or ".bmp" or ".webp" => PreviewKind.RasterPassthrough,
             ".tif" or ".tiff"           => PreviewKind.TiffDecode,
+            ".mp4" or ".m4v" or ".webm" or ".mov" or ".avi" or ".mkv" => PreviewKind.Video,
             ".txt" or ".log" or ".md" or ".json" or ".xml" or ".csv" => PreviewKind.Text,
             _                           => PreviewKind.None
         };
@@ -677,7 +683,7 @@ public class FileBrowserService {
     }
 }
 
-public enum PreviewKind { None, Fits, RasterPassthrough, TiffDecode, Text }
+public enum PreviewKind { None, Fits, RasterPassthrough, TiffDecode, Text, Video }
 
 public sealed record DirEntry(
     string Name, string FullPath, bool IsDirectory,

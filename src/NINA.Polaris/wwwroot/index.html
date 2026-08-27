@@ -3834,7 +3834,9 @@
                     <button class="video-tab" :class="{ active: videoTab === 'capture' }"
                             @click="videoTab = 'capture'">Capture</button>
                     <button class="video-tab" :class="{ active: videoTab === 'process' }"
-                            @click="videoTab = 'process'; loadVideoSerList(); $nextTick(() => drawVideoQualityChart())">Process</button>
+                            @click="videoTab = 'process'; loadVideoSerList(); timelapseProbeFfmpeg(); $nextTick(() => drawVideoQualityChart())">Process</button>
+                    <button class="video-tab" :class="{ active: videoTab === 'timelapse' }"
+                            @click="videoTab = 'timelapse'; timelapseInit()">Time-lapse</button>
                 </div>
 
                 <!-- ===== Tab 1: Capture ===== -->
@@ -4494,6 +4496,25 @@
                         </button>
                         <button class="btn btn-danger" @click="videoAbortStack()"
                                 :disabled="!videoStack || videoStack?.done">Abort</button>
+                        <button class="btn btn-sm" @click="serToMp4(video.processSerPath)"
+                                :disabled="!video.processSerPath || (mediaEncode && !mediaEncode?.done) || !timelapse.ffmpegAvailable"
+                                :title="timelapse.ffmpegAvailable ? 'Convert this SER clip to a playable MP4' : 'MP4 needs ffmpeg installed on the host'">
+                            🎞 SER → MP4</button>
+                    </div>
+
+                    <!-- SER->MP4 encode progress (shares the mediaEncode job block). -->
+                    <div class="af-progress" x-show="mediaEncode && !mediaEncode?.done"
+                         style="margin-top:10px">
+                        <div class="af-progress-bar">
+                            <div class="af-progress-fill"
+                                 :style="'width: ' + (mediaEncode?.totalFrames ? Math.round(100 * (mediaEncode?.framesRendered || 0) / mediaEncode.totalFrames) : 0) + '%'"></div>
+                        </div>
+                        <div class="af-progress-info">
+                            <span>SER → MP4: <strong x-text="mediaEncode?.phase"></strong></span>
+                            <span x-show="mediaEncode?.totalFrames">
+                                <strong x-text="(mediaEncode?.framesRendered || 0) + '/' + mediaEncode?.totalFrames"></strong> frames
+                            </span>
+                        </div>
                     </div>
 
                     <!-- Live progress -->
@@ -4536,6 +4557,64 @@
                     </div>
                     <div class="stats-bar" x-show="videoStack?.phase === 'Fail'" style="margin-top:10px">
                         <span class="text-err">✗ <span x-text="videoStack?.error"></span></span>
+                    </div>
+                </div>
+
+                <!-- ===== Tab 3: Time-lapse ===== -->
+                <div x-show="videoTab === 'timelapse'" class="video-process-pane">
+                    <p class="hint" x-text="$t('Build a movie from a folder of frames (FITS, JPG, PNG, TIFF). GIF plays everywhere; MP4 needs ffmpeg on the host.')"></p>
+                    <div class="af-row" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+                        <button class="btn btn-sm" @click="timelapsePickFolder()">📁 Choose frames folder</button>
+                        <code x-show="timelapse.framesDir" x-text="timelapse.framesDir" style="font-size:11px; overflow-wrap:anywhere"></code>
+                        <button class="btn btn-sm" x-show="timelapse.framesDir" @click="loadTimelapseFrames()" title="Rescan folder">↻</button>
+                        <span x-show="timelapse.framesDir" class="text-muted"><strong x-text="timelapse.frames.length"></strong> <span x-text="$t('frames')"></span></span>
+                    </div>
+                    <div class="af-row" style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-top:10px">
+                        <label>FPS <input type="number" min="1" max="60" step="1" x-model.number="timelapse.fps" class="input-sm" style="width:60px"></label>
+                        <label x-text="$t('Max size')"></label>
+                        <input type="number" min="100" max="4000" step="10" x-model.number="timelapse.maxDim" class="input-sm" style="width:80px">
+                        <label x-text="$t('Every Nth')"></label>
+                        <input type="number" min="1" max="100" step="1" x-model.number="timelapse.everyNth" class="input-sm" style="width:56px">
+                        <label x-text="$t('Name')"></label>
+                        <input type="text" x-model="timelapse.outputName" class="input-sm" style="width:120px">
+                        <label><input type="checkbox" x-model="timelapse.loop"> <span x-text="$t('Loop GIF')"></span></label>
+                    </div>
+                    <div class="af-row" style="display:flex; gap:10px; align-items:center; margin-top:8px">
+                        <span x-text="$t('Format:')"></span>
+                        <label><input type="radio" value="gif" x-model="timelapse.format"> GIF</label>
+                        <label :class="{ 'text-muted': !timelapse.ffmpegAvailable }">
+                            <input type="radio" value="mp4" x-model="timelapse.format" :disabled="!timelapse.ffmpegAvailable"> MP4</label>
+                        <label :class="{ 'text-muted': !timelapse.ffmpegAvailable }">
+                            <input type="radio" value="both" x-model="timelapse.format" :disabled="!timelapse.ffmpegAvailable"> <span x-text="$t('Both')"></span></label>
+                        <span x-show="!timelapse.ffmpegAvailable" class="text-muted" style="font-size:11px" x-text="$t('MP4 needs ffmpeg on the host')"></span>
+                    </div>
+                    <div class="af-row" style="display:flex; gap:8px; align-items:center; margin-top:12px">
+                        <button class="btn btn-primary" @click="timelapseStart()"
+                                :disabled="!timelapse.frames.length || (mediaEncode && !mediaEncode?.done)">
+                            <span x-show="!mediaEncode || mediaEncode?.done" x-text="'▶ ' + $t('Build time-lapse')"></span>
+                            <span x-show="mediaEncode && !mediaEncode?.done" x-text="mediaEncode?.phase + '…'"></span>
+                        </button>
+                        <button class="btn btn-danger" @click="timelapseAbort()"
+                                :disabled="!mediaEncode || mediaEncode?.done">Abort</button>
+                    </div>
+                    <div class="af-progress" x-show="mediaEncode && !mediaEncode?.done" style="margin-top:10px">
+                        <div class="af-progress-bar">
+                            <div class="af-progress-fill"
+                                 :style="'width: ' + (mediaEncode?.totalFrames ? Math.round(100 * (mediaEncode?.framesRendered || 0) / mediaEncode.totalFrames) : 0) + '%'"></div>
+                        </div>
+                        <div class="af-progress-info">
+                            <span>Phase: <strong x-text="mediaEncode?.phase"></strong></span>
+                            <span x-show="mediaEncode?.totalFrames"><strong x-text="(mediaEncode?.framesRendered || 0) + '/' + mediaEncode?.totalFrames"></strong> <span x-text="$t('rendered')"></span></span>
+                        </div>
+                    </div>
+                    <div class="stats-bar" x-show="mediaEncode?.phase === 'Ok'"
+                         style="margin-top:10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+                        <span class="text-ok">✓ <span x-text="$t('Done')"></span></span>
+                        <button class="btn btn-sm" x-show="mediaEncode?.outputPathGif" @click="openMediaViewer(mediaEncode.outputPathGif)" x-text="'▶ ' + $t('Play GIF')"></button>
+                        <button class="btn btn-sm" x-show="mediaEncode?.outputPathMp4" @click="openMediaViewer(mediaEncode.outputPathMp4)" x-text="'▶ ' + $t('Play MP4')"></button>
+                    </div>
+                    <div class="stats-bar" x-show="mediaEncode?.phase === 'Fail'" style="margin-top:10px">
+                        <span class="text-err">✗ <span x-text="mediaEncode?.error"></span></span>
                     </div>
                 </div>
             </div>
@@ -21662,8 +21741,33 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                        @keydown.enter="_hostDialogConfirm()">
                 <span style="flex:1"></span>
                 <button class="btn btn-sm" @click="_hostDialogCancel()">Cancel</button>
+                <span x-show="hostDialog.mode === 'folder'" class="hostdlg-fname text-muted"
+                      style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+                      :title="hostDialog.cwd" x-text="hostDialog.cwd"></span>
                 <button class="btn btn-sm btn-primary" @click="_hostDialogConfirm()"
-                        x-text="hostDialog.mode === 'save' ? 'Save' : 'Open'"></button>
+                        x-text="hostDialog.mode === 'save' ? 'Save' : hostDialog.mode === 'folder' ? 'Use this folder' : 'Open'"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Studio media viewer: an animated GIF plays in an <img>, a video in a
+         <video> element; both stream from /api/files/preview (range-ready).
+         <template x-if> creates/destroys the element with the modal so a video
+         stops on close and a GIF restarts fresh. -->
+    <div class="confirm-modal-overlay" x-show="mediaViewer.open" x-cloak
+         @click.self="closeMediaViewer()">
+        <div class="media-viewer-card">
+            <div class="media-viewer-head">
+                <span class="media-viewer-title" :title="mediaViewer.name" x-text="mediaViewer.name"></span>
+                <button class="btn btn-sm" @click="closeMediaViewer()">✕</button>
+            </div>
+            <div class="media-viewer-body">
+                <template x-if="mediaViewer.open && mediaViewer.kind === 'video'">
+                    <video :src="mediaViewer.url" controls autoplay loop playsinline class="media-viewer-media"></video>
+                </template>
+                <template x-if="mediaViewer.open && mediaViewer.kind !== 'video'">
+                    <img :src="mediaViewer.url" :alt="mediaViewer.name" class="media-viewer-media">
+                </template>
             </div>
         </div>
     </div>
