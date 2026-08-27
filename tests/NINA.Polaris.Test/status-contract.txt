@@ -84,6 +84,7 @@ decon.etaSeconds
 decon.fraction
 decon.phase
 decon.runId
+ditherSync
 equipment
 equipment.indi
 equipment.indi.connected
@@ -242,6 +243,7 @@ liveStack.triggers.referenceDecDeg
 liveStack.triggers.referenceRaHours
 liveStack.triggers.referenceSolved
 liveStack.width
+mediaEncode
 meridianFlip
 meridianFlip.flipsCompleted
 meridianFlip.hourAngleHours
@@ -314,6 +316,7 @@ plateSolve.seq
 plateSolve.source
 plateSolve.truncated
 polarAlignment
+scheduledShutdown
 sensorAnalysis
 sensorAnalysis.phase
 sensorAnalysis.progress
@@ -360,6 +363,7 @@ slewPreview.enabled
 slewPreview.lastCheckedAt
 slewPreview.lastError
 slewPreview.slewing
+starTrail
 storagePush
 storagePush.connected
 storagePush.currentFile

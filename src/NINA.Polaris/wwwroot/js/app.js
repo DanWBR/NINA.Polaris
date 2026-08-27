@@ -2563,6 +2563,23 @@ function ninaApp() {
         // block. Null when idle.
         mediaEncode: null,
         _mediaEncodePromptedId: null,
+        // VIDEO > Star trails sub-tab: fixed-camera capture + MAX composite.
+        starTrails: {
+            exposure: 20,
+            gain: 0,
+            binning: 1,
+            interval: 0,
+            maxFrames: 0,        // 0 = unlimited
+            turnTrackingOff: true,
+            cosmetic: true,
+            saveSubs: false,
+            alsoTimelapse: false,
+            outputName: 'startrail'
+        },
+        // Star-trail job status from the WS starTrail block. Null when idle.
+        starTrail: null,
+        // SKY > Milky Way sub-pill: "galactic core tonight" planner summary.
+        milkyWay: { loading: false, error: '', data: null, lastFetched: null },
         // Studio media viewer: plays an animated GIF (<img>) or a video (<video>).
         mediaViewer: { open: false, url: '', kind: '', name: '' },
         // FILES-tab plate solve state (mirrors previewSolve* from
@@ -11024,6 +11041,10 @@ function ninaApp() {
                 // Live, but while a server stack runs the client drops kind-0
                 // frames so ONLY the stack can paint the LIVE view.
                 case 6:  return ['liveCanvas'];                            // LiveStack
+                // Star-trails growing MAX composite (VIDEO → Star trails) goes
+                // to its own canvas so the building trail doesn't leak onto the
+                // LIVE or video-capture views.
+                case 7:  return ['starTrailCanvas'];                        // StarTrail
                 // Live frames (LIVE-tab capture + live-stack output) go to
                 // liveCanvas only.
                 case 0:
@@ -26888,6 +26909,126 @@ function ninaApp() {
             };
         },
         closeMediaViewer() { this.mediaViewer = { open: false, url: '', kind: '', name: '' }; },
+
+        // ---- Star trails (VIDEO > Star trails) --------------------------
+        starTrailInit() {
+            // Seed the exposure/gain from the current quick-capture values the
+            // first time the tab opens, so the form isn't empty.
+            if (!this._starTrailSeeded) {
+                if (this.exposure > 0) this.starTrails.exposure = Math.max(1, Math.round(this.exposure));
+                if (this.gain != null) this.starTrails.gain = this.gain | 0;
+                this._starTrailSeeded = true;
+            }
+        },
+        async starTrailStart() {
+            const s = this.starTrails;
+            if (!(s.exposure > 0)) { this.toast('Set an exposure first', 'warn'); return; }
+            try {
+                await this.apiPostJson('/api/startrail/start', {
+                    exposureSeconds: Number(s.exposure) || 20,
+                    gain: Number(s.gain) || 0,
+                    binning: Number(s.binning) || 1,
+                    intervalSeconds: Number(s.interval) || 0,
+                    maxFrames: Number(s.maxFrames) || 0,
+                    turnTrackingOff: !!s.turnTrackingOff,
+                    cosmeticCorrection: !!s.cosmetic,
+                    saveSubs: !!s.saveSubs,
+                    alsoTimelapse: !!s.alsoTimelapse,
+                    outputName: s.outputName || 'startrail'
+                });
+                this.toast('Star trails started', 'ok');
+            } catch (e) { this.toastFail('Could not start star trails', e); }
+        },
+        async starTrailStop() {
+            const id = this.starTrail?.id;
+            if (!id) return;
+            try { await this.apiPost(`/api/startrail/${id}/stop`); this.toast('Finishing…', 'ok'); }
+            catch (e) { this.toastFail('Stop failed', e, 'warn'); }
+        },
+        async starTrailAbort() {
+            const id = this.starTrail?.id;
+            if (!id) return;
+            try { await this.apiPost(`/api/startrail/${id}/abort`); }
+            catch (e) { this.toastFail('Abort failed', e, 'warn'); }
+        },
+
+        // ---- Milky Way planner (SKY > Milky Way) ------------------------
+        // Galactic core ~ RA 17h45m40s / Dec -29°. The chart is drawn from the
+        // generic /api/sky/altitude with those fixed coords; /api/sky/milky-way
+        // adds the "tonight" summary (peak, dark + best window, moon).
+        async loadMilkyWay() {
+            this.milkyWay.loading = true; this.milkyWay.error = '';
+            try {
+                const [summary, alt] = await Promise.all([
+                    this.apiGet('/api/sky/milky-way'),
+                    this.apiGet('/api/sky/altitude?ra=17.7611&dec=-29.0078&stepMinutes=15')
+                ]);
+                this.milkyWay.data = summary;
+                this.milkyWay.lastFetched = new Date();
+                this.$nextTick(() => this._renderMilkyWayChart(alt.samples || []));
+            } catch (e) {
+                this.milkyWay.error = e?.message || 'Could not load the Milky Way planner';
+            } finally { this.milkyWay.loading = false; }
+        },
+        _renderMilkyWayChart(samples) {
+            const canvas = document.getElementById('milkyWayChart');
+            if (!canvas || typeof Chart === 'undefined') return;
+            if (this._milkyWayChart) { try { this._milkyWayChart.destroy(); } catch {} this._milkyWayChart = null; }
+            try {
+                const t = this._chartTheme();
+                this._milkyWayChart = new Chart(canvas, {
+                    type: 'line',
+                    plugins: [ this._nowLinePlugin(samples) ],
+                    data: {
+                        labels: samples.map(s => new Date(s.utc).toLocaleTimeString([],
+                            { hour: '2-digit', minute: '2-digit' })),
+                        datasets: [
+                            { label: 'Altitude',
+                              data: samples.map(s => Math.max(0, s.altitudeDeg)),
+                              borderColor: '#ce93d8',
+                              backgroundColor: 'rgba(206,147,216,0.14)',
+                              tension: 0.25, pointRadius: 0, borderWidth: 1.5, fill: true }
+                        ]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false, animation: false,
+                        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                        scales: {
+                            x: { display: true,
+                                 ticks: { color: t.tick, font: { size: 9 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 8 },
+                                 grid: { color: t.grid, drawTicks: false } },
+                            y: { min: 0, max: 90,
+                                 ticks: { color: t.tick, font: { size: 9 } },
+                                 grid: { color: t.grid } }
+                        }
+                    }
+                });
+            } catch { /* leave canvas blank */ }
+        },
+        mwFmtTime(utc) {
+            return utc ? new Date(utc).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
+        },
+        // Moon-interference chip for the summary: quiet when the moon is down or
+        // faint+far, a warning when it's up, bright and close to the core.
+        mwMoonBadge() {
+            const m = this.milkyWay.data?.moon;
+            if (!m || m.sepDeg == null || isNaN(m.sepDeg)) return { label: '—', cls: 'idle' };
+            const illum = Math.round((m.illumination || 0) * 100);
+            if (!m.up) return { label: this.$t('Moon down') + ' · ' + illum + '%', cls: 'ok' };
+            const sep = Math.round(m.sepDeg);
+            const bad = m.sepDeg < 40 && illum > 40;
+            return { label: this.$t('Moon up') + ' · ' + illum + '% · ' + sep + '° ' + this.$t('away'),
+                     cls: bad ? 'warn' : 'ok' };
+        },
+        // Lighter "nightscape" preset: seed a wide-field short sub + switch to
+        // the LIVE tab so the operator arms the existing live stack. Deliberately
+        // does not touch hardware on its own.
+        milkyWayPreset() {
+            this.exposure = 30;   // tracked wide-field default
+            this.tab = 'live';
+            this.toast(this.$t('Nightscape preset: 30s subs. On the Live tab, make sure tracking is on, then Start.'), 'ok');
+        },
+
         // Fetch the per-frame quality scores once per job, as soon as the
         // analysis phase has produced them (phase past Analyzing). The scores
         // are omitted from the WS status (can be 10k+ doubles), so they come
@@ -43836,6 +43977,7 @@ function ninaApp() {
                 this.mediaEncode = msg.mediaEncode;  // null when idle
                 this._maybePromptEncodeDone();
             }
+            if (msg.starTrail !== undefined) this.starTrail = msg.starTrail;  // null when idle
             if (msg.slewPreview) this.slewPreview = msg.slewPreview;
             // Auto-push to network storage: live counters for the Settings card.
             // Kept separate from the storagePush config-form object.

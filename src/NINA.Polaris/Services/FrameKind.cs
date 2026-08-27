@@ -52,5 +52,9 @@ public enum FrameKind {
     /// ONLY stack results while a server stack runs — any stray kind-0 frame
     /// (a raw sub, a driver CFA dropout rendering mono) is ignored instead of
     /// flashing between the colour stack and a B&amp;W frame.</summary>
-    LiveStack = 6
+    LiveStack = 6,
+    /// <summary>Star-trails growing MAX composite (VIDEO → Star trails).
+    /// Goes to starTrailCanvas only, so the building trail doesn't leak onto
+    /// the LIVE or video-capture canvases.</summary>
+    StarTrail = 7
 }

@@ -484,6 +484,86 @@ public static class SkyEndpoints {
             });
         });
 
+        // ---- Milky Way core planner ----
+        // The galactic core (around Sagittarius A*) is the summer-Milky-Way
+        // target beginners ask for. Same night window + altitude machinery as
+        // /altitude, condensed to a "tonight" summary: peak, the dark window,
+        // the best contiguous stretch it's usably high AND the sky is dark, and
+        // moon interference. The chart itself is drawn from /altitude with these
+        // fixed coordinates, so this endpoint only carries the summary.
+        group.MapGet("/milky-way", (AltitudeService alt, ProfileService profiles,
+                                    int? stepMinutes, double? minAlt) => {
+            // Galactic centre ~ RA 17h45m40s / Dec -29°00'28".
+            const double CoreRa = 17.7611, CoreDec = -29.0078;
+            var p = profiles.Active;
+            var window = alt.ComputeNightWindow();
+            bool haveLoc = Math.Abs(p.Latitude) > 0.01 || Math.Abs(p.Longitude) > 0.01;
+            DateTime from = haveLoc ? window.Sunset : DateTime.UtcNow.AddHours(-6);
+            DateTime to = haveLoc ? window.Sunrise : DateTime.UtcNow.AddHours(6);
+            int step = Math.Clamp(stepMinutes ?? 10, 1, 60);
+            double floor = Math.Clamp(minAlt ?? 10.0, 0, 60);
+
+            var track = alt.ComputeTrack(CoreRa, CoreDec, from, to, step);
+            AltSample? peak = null;
+            foreach (var s in track)
+                if (peak == null || s.AltitudeDeg > peak.AltitudeDeg) peak = s;
+
+            // Dark window = astronomical dusk → dawn (sun below -18°).
+            DateTime darkStart = haveLoc ? window.AstronomicalDuskUtc : from;
+            DateTime darkEnd = haveLoc ? window.AstronomicalDawnUtc : to;
+
+            // Longest contiguous stretch the core is above `floor` AND the sky is
+            // dark — the window worth shooting.
+            DateTime? bStart = null, bEnd = null;
+            double bMax = double.MinValue, bLen = 0;
+            DateTime? curStart = null, curEnd = null;
+            double curMax = double.MinValue;
+            void Flush() {
+                if (curStart != null && curEnd != null) {
+                    double len = (curEnd.Value - curStart.Value).TotalHours;
+                    if (len > bLen) { bLen = len; bStart = curStart; bEnd = curEnd; bMax = curMax; }
+                }
+                curStart = null; curEnd = null; curMax = double.MinValue;
+            }
+            foreach (var s in track) {
+                bool ok = s.Utc >= darkStart && s.Utc <= darkEnd && s.AltitudeDeg >= floor;
+                if (ok) {
+                    curStart ??= s.Utc;
+                    curEnd = s.Utc;
+                    if (s.AltitudeDeg > curMax) curMax = s.AltitudeDeg;
+                } else { Flush(); }
+            }
+            Flush();
+
+            // Moon interference at the core's best moment.
+            var when = peak?.Utc ?? DateTime.UtcNow;
+            double moonSep = double.NaN, moonAlt = double.NaN, moonIllum = double.NaN;
+            bool moonUp = false;
+            try {
+                var observer = new Observer(p.Latitude, p.Longitude, p.Altitude);
+                var meq = Astronomy.Equator(Body.Moon, new AstroTime(when), observer,
+                    EquatorEpoch.OfDate, Aberration.Corrected);
+                moonSep = AngularSeparationDeg(CoreRa, CoreDec, meq.ra, meq.dec);
+                var (mAlt, _) = AltitudeService.RaDecToAltAz(meq.ra, meq.dec, when, p.Latitude, p.Longitude);
+                moonAlt = mAlt; moonUp = mAlt > 0;
+                moonIllum = Astronomy.Illumination(Body.Moon, new AstroTime(when)).phase_fraction;
+            } catch { /* leave NaN */ }
+
+            return Results.Ok(new {
+                core = new { raHours = CoreRa, decDeg = CoreDec },
+                fromUtc = from,
+                toUtc = to,
+                minAltDeg = floor,
+                hasLocation = haveLoc,
+                visible = peak != null && peak.AltitudeDeg >= floor && bStart != null,
+                peak = peak == null ? null : new { utc = peak.Utc, altDeg = peak.AltitudeDeg, azDeg = peak.AzimuthDeg },
+                darkWindow = haveLoc ? new { startUtc = darkStart, endUtc = darkEnd } : null,
+                bestWindow = bStart == null ? null
+                    : new { startUtc = bStart, endUtc = bEnd, hours = bLen, maxAltDeg = bMax },
+                moon = new { sepDeg = moonSep, altitudeDeg = moonAlt, illumination = moonIllum, up = moonUp }
+            });
+        });
+
         // ---- Custom horizon (az→alt visibility mask) ----
 
         group.MapGet("/horizon", (ProfileService profile) =>

@@ -30,9 +30,10 @@ public sealed class CaptureStatusContributor : IStatusContributor {
     private readonly NINA.Polaris.Services.Planetary.VideoRecordingService _videoRecording;
     private readonly NINA.Polaris.Services.Planetary.PlanetaryStackerService _videoStacker;
     private readonly NINA.Polaris.Services.Timelapse.MediaEncodeService _mediaEncode;
+    private readonly NINA.Polaris.Services.StarTrail.StarTrailService _starTrail;
     private readonly DitherBarrier _ditherBarrier;
 
-    public CaptureStatusContributor(AuxCaptureService auxCapture, CaptureProgressService captureProgress, CoolingRampService coolingRamp, LiveCaptureService liveCapture, SlewPreviewService slewPreview, NINA.Polaris.Services.Planetary.VideoRecordingService videoRecording, NINA.Polaris.Services.Planetary.PlanetaryStackerService videoStacker, NINA.Polaris.Services.Timelapse.MediaEncodeService mediaEncode, DitherBarrier ditherBarrier) {
+    public CaptureStatusContributor(AuxCaptureService auxCapture, CaptureProgressService captureProgress, CoolingRampService coolingRamp, LiveCaptureService liveCapture, SlewPreviewService slewPreview, NINA.Polaris.Services.Planetary.VideoRecordingService videoRecording, NINA.Polaris.Services.Planetary.PlanetaryStackerService videoStacker, NINA.Polaris.Services.Timelapse.MediaEncodeService mediaEncode, NINA.Polaris.Services.StarTrail.StarTrailService starTrail, DitherBarrier ditherBarrier) {
         _auxCapture = auxCapture;
         _captureProgress = captureProgress;
         _coolingRamp = coolingRamp;
@@ -41,10 +42,11 @@ public sealed class CaptureStatusContributor : IStatusContributor {
         _videoRecording = videoRecording;
         _videoStacker = videoStacker;
         _mediaEncode = mediaEncode;
+        _starTrail = starTrail;
         _ditherBarrier = ditherBarrier;
     }
 
-    public IReadOnlyCollection<string> Keys { get; } = new[] { "capture", "liveCapture", "auxCapture", "cooling", "videoRecording", "videoStack", "mediaEncode", "slewPreview", "ditherSync" };
+    public IReadOnlyCollection<string> Keys { get; } = new[] { "capture", "liveCapture", "auxCapture", "cooling", "videoRecording", "videoStack", "mediaEncode", "starTrail", "slewPreview", "ditherSync" };
 
     public void Contribute(StatusTick tick) {
         var auxCapture = _auxCapture;
@@ -134,6 +136,24 @@ public sealed class CaptureStatusContributor : IStatusContributor {
                 error = enc.Error,
                 done = enc.Phase is NINA.Polaris.Services.Timelapse.EncodePhase.Ok
                     or NINA.Polaris.Services.Timelapse.EncodePhase.Fail
+            };
+
+            // Star-trails capture + MAX composite (VIDEO tab). Null when idle.
+            // The growing composite itself rides the image stream (FrameKind
+            // StarTrail); this block is just the job counters.
+            var st = _starTrail.CurrentJob;
+            tick.Blocks["starTrail"] = st == null ? null : new {
+                id = st.Id,
+                phase = st.Phase.ToString(),
+                framesCaptured = st.FramesCaptured,
+                exposureSec = st.ExposureSeconds,
+                elapsedSec = ((st.CompletedAt ?? DateTime.UtcNow) - st.StartedAt).TotalSeconds,
+                trackingOff = st.TrackingOff,
+                outputPathFits = st.OutputPathFits,
+                outputPathJpg = st.OutputPathJpg,
+                error = st.Error,
+                done = st.Phase is NINA.Polaris.Services.StarTrail.StarTrailPhase.Ok
+                    or NINA.Polaris.Services.StarTrail.StarTrailPhase.Fail
             };
 
             // FW-1: Flat Wizard state (AUTORUN → Flat Wizard

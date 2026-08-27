@@ -229,6 +229,9 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Planetary.PlanetaryStackerSe
 // SER) into an animated GIF (self-contained) and/or an MP4 (ffmpeg when present).
 builder.Services.AddSingleton<NINA.Polaris.Services.External.FfmpegService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Timelapse.MediaEncodeService>();
+// Star trails: fixed-camera (tracking off) capture + per-pixel MAX composite,
+// previewed live and saved as a FITS master + JPEG; can feed the time-lapse builder.
+builder.Services.AddSingleton<NINA.Polaris.Services.StarTrail.StarTrailService>();
 // KC-1: Keep Centered control loop. Toggled from the VIDEO sidebar
 // while a planetary stream is running -- pulses N/S/E/W to fight
 // drift and keep the planet on the frame center.
@@ -1373,6 +1376,7 @@ app.Map("/canopus/{**rest}", async (HttpContext ctx,
 app.MapEquipmentEndpoints();
 app.MapCameraEndpoints();
 app.MapVideoEndpoints();
+app.MapStarTrailEndpoints();
 app.MapTelescopeEndpoints();
 app.MapFocuserEndpoints();
 app.MapAuxEndpoints();
