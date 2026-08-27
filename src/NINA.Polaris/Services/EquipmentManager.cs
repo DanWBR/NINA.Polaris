@@ -1160,7 +1160,10 @@ public class EquipmentManager : IDisposable {
                     // Selector (OneOfMany >2): options + the active index, so the
                     // UI shows one dropdown instead of a wall of toggles.
                     options = c.Options,
-                    selected = c.Selected
+                    selected = c.Selected,
+                    // Physical-port group (-1 = ungrouped), so the UI can gather
+                    // a port's role/outlet/dew channels under one heading.
+                    group = c.Group
                 }).ToList()
             };
         }

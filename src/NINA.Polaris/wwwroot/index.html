@@ -8086,8 +8086,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     </template>
                                 </div>
 
-                                <!-- Controls: outlets, dew/PWM, adjustable rails -->
-                                <template x-for="ch in powerBoxControls()" :key="'pbch-'+ch.id">
+                                <!-- Controls, grouped by physical port when the
+                                     driver exposes a port index (ASI Power: a
+                                     port's role/outlet/dew heater together);
+                                     otherwise one flat group with no heading. -->
+                                <template x-for="grp in powerBoxGroups()" :key="grp.key">
+                                <div class="pb-group" :class="{ 'pb-group-boxed': grp.label }">
+                                    <div class="pb-group-head" x-show="grp.label" x-text="grp.label"></div>
+                                    <template x-for="ch in grp.channels" :key="'pbch-'+ch.id">
                                     <div class="equip-inline-controls">
                                         <span style="min-width:96px" x-show="!powerBoxEditNames"
                                               :title="ch.name" x-text="ch.displayName || ch.name"></span>
@@ -8120,6 +8126,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                             </span>
                                         </template>
                                     </div>
+                                    </template>
+                                </div>
                                 </template>
 
                                 <!-- Readings: read-only channels are

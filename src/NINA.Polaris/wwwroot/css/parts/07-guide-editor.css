@@ -1943,6 +1943,21 @@
     object-fit: contain;
 }
 
+/* ---- Power-box per-port grouping ------------------------------------ */
+.pb-group-boxed {
+    border-left: 2px solid var(--border);
+    padding-left: 8px;
+    margin: 6px 0;
+}
+.pb-group-head {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    font-weight: 600;
+    margin: 4px 0 2px;
+}
+
 /* ---- Auth brand mark (loading / setup / login) ----------------------
    Polaris icon shown above the modal heading. On the boot/loading
    variant a thin accent-colored ring spins around it; on

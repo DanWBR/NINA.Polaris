@@ -52,7 +52,13 @@ public sealed record SwitchChannel(
     bool Writable,
     string Key = "",
     IReadOnlyList<string>? Options = null,
-    int Selected = -1);
+    int Selected = -1,
+    /// <summary>Physical-port group index (0-based), or -1 when ungrouped.
+    /// Channels sharing a port (an INDI vector family like DEV{n}/ONOFF{n}/
+    /// DUTYCYCLE{n}) carry the same value so the UI can group them under one
+    /// "Port" heading. A single-vector hub (Pegasus AnyOfMany) has no per-port
+    /// index and stays -1.</summary>
+    int Group = -1);
 
 /// <summary>
 /// A generic multi-channel switch / power box (ASCOM ISwitchV2 semantics),
