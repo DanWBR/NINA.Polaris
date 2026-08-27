@@ -2534,7 +2534,7 @@ function ninaApp() {
         // returns a Promise that resolves to a host path (or null on cancel).
         hostDialog: {
             open: false,
-            mode: 'save',        // 'save' | 'open'
+            mode: 'save',        // 'save' | 'open' | 'folder' | 'open-multi'
             title: '',
             cwd: '',
             roots: [],
@@ -2544,6 +2544,7 @@ function ninaApp() {
             filename: '',        // typed name (save mode)
             accept: [],          // extension filter, e.g. ['.json']; empty = all
             selectedPath: '',    // highlighted file (open mode)
+            selectedPaths: [],   // checked files (open-multi mode)
             _resolve: null
         },
         // VIDEO > Time-lapse sub-tab: build a movie from a folder of frames.
@@ -2737,6 +2738,47 @@ function ninaApp() {
             { key: 'biases', label: 'Biases', hint: 'Read-noise calibration (minimum exposure)' }
         ],
 
+        // WBPP-style Stacking sub-tabs. The four frame tabs each drive one
+        // stack.* slot; Process holds the settings + the one-click Run.
+        stackTab: (() => { try { return localStorage.getItem('polaris-stack-tab') || 'lights'; } catch { return 'lights'; } })(),
+        setStackTab(t) { this.stackTab = t; try { localStorage.setItem('polaris-stack-tab', t); } catch {} },
+        stackTabDefs: [
+            { key: 'lights',  label: 'Lights',  slot: 'lights' },
+            { key: 'biases',  label: 'Biases',  slot: 'biases' },
+            { key: 'darks',   label: 'Darks',   slot: 'darks' },
+            { key: 'flats',   label: 'Flats',   slot: 'flats' },
+            { key: 'process', label: 'Process', slot: null }
+        ],
+        stackFrameTabDefs: [
+            { key: 'lights', slot: 'lights', optional: false,
+              hint: 'Your target frames. Required, at least two.',
+              empty: 'Add your light frames with Add files or Add folder.' },
+            { key: 'biases', slot: 'biases', optional: true,
+              hint: 'Read-noise calibration, shortest exposure. Optional.',
+              empty: 'Optional. Add raw bias frames, or a single master bias.' },
+            { key: 'darks', slot: 'darks', optional: true,
+              hint: 'Thermal calibration, same exposure and gain as the lights. Optional.',
+              empty: 'Optional. Add raw dark frames, or a single master dark.' },
+            { key: 'flats', slot: 'flats', optional: true,
+              hint: 'Optical calibration for vignetting and dust. Optional.',
+              empty: 'Optional. Add raw flat frames, or a single master flat.' }
+        ],
+        // Process-tab settings + the running orchestrator job (WBPP one-click).
+        preprocess: (() => {
+            const d = { method: 'SigmaClippedMean', drizzleScale: 1, drizzlePixfrac: 1.0,
+                        grade: false, gradeKeepPercent: 80, outputDir: '', job: null };
+            try { const raw = localStorage.getItem('polaris-preprocess');
+                  if (raw) Object.assign(d, JSON.parse(raw), { job: null }); } catch (e) { /* ignore */ }
+            return d;
+        })(),
+        _preprocessPersist() {
+            try {
+                const { method, drizzleScale, drizzlePixfrac, grade, gradeKeepPercent, outputDir } = this.preprocess;
+                localStorage.setItem('polaris-preprocess',
+                    JSON.stringify({ method, drizzleScale, drizzlePixfrac, grade, gradeKeepPercent, outputDir }));
+            } catch (e) { /* quota / private mode */ }
+        },
+
         _stackPersist() {
             try {
                 if (typeof localStorage === 'undefined') return;
@@ -2791,6 +2833,106 @@ function ninaApp() {
             const msg = `${added} adicionado(s) a ${label}`
                 + (dupes > 0 ? ` (${dupes} ja estava(m) no slot)` : '');
             this.toast(msg, added > 0 ? 'ok' : 'info', 2400);
+        },
+
+        // Merge a set of absolute paths into a slot (FITS/XISF only, deduped),
+        // persist, toast a summary. Shared by the browser-selection, Add files,
+        // and Add folder paths. Returns how many were newly added.
+        _stackMergePaths(slotKey, incoming) {
+            if (!Array.isArray(this.stack[slotKey])) return 0;
+            const selected = (incoming || []).filter(p => this._stackIsStackable(p));
+            if (selected.length === 0) { this.toast('No FITS/XISF files to add', 'warn'); return 0; }
+            const before = this.stack[slotKey].length;
+            const merged = [...this.stack[slotKey]];
+            const seen = new Set(merged);
+            for (const p of selected) if (!seen.has(p)) { merged.push(p); seen.add(p); }
+            const added = merged.length - before;
+            this.stack[slotKey] = merged;
+            this._stackPersist();
+            const dupes = selected.length - added;
+            const label = (this.stackSlotDefs.find(s => s.key === slotKey) || {}).label || slotKey;
+            this.toast(`${added} added to ${label}` + (dupes > 0 ? ` (${dupes} already there)` : ''),
+                added > 0 ? 'ok' : 'info', 2400);
+            return added;
+        },
+        // Pick individual host files (multi-select) into a slot.
+        async stackAddFiles(slotKey) {
+            const paths = await this._hostPickFiles({
+                title: 'Choose frames', accept: ['.fits', '.fit', '.fts', '.xisf'] });
+            if (!paths || !paths.length) return;
+            this._stackMergePaths(slotKey, paths);
+        },
+        // Pick a host folder and add every FITS/XISF in it to a slot.
+        async stackAddFolder(slotKey) {
+            const dir = await this._hostPickFolder({ title: 'Choose a folder of frames' });
+            if (!dir) return;
+            try {
+                const r = await this.apiGet('/api/files/list?path=' + encodeURIComponent(dir) + '&hidden=false');
+                const paths = (r.entries || []).filter(e => !e.isDirectory)
+                    .map(e => this._hostEntryPath(e)).filter(p => this._stackIsStackable(p));
+                if (!paths.length) { this.toast('No FITS/XISF files in that folder', 'warn'); return; }
+                this._stackMergePaths(slotKey, paths);
+            } catch (e) { this.toastFail('Could not list folder', e); }
+        },
+
+        // ---- WBPP one-click preprocess (Process tab) --------------------
+        async preprocessPickFolder() {
+            const dir = await this._hostPickFolder({ title: 'Working folder for outputs' });
+            if (!dir) return;
+            this.preprocess.outputDir = dir;
+            this._preprocessPersist();
+        },
+        async preprocessRun() {
+            const p = this.preprocess;
+            if (this.stack.lights.length < 2) { this.toast('Add at least two light frames', 'warn'); return; }
+            this._preprocessPersist();
+            try {
+                const r = await this.apiPostJson('/api/studio/preprocess', {
+                    lights: this.stack.lights, biases: this.stack.biases,
+                    darks: this.stack.darks, flats: this.stack.flats,
+                    method: p.method, drizzleScale: Number(p.drizzleScale) || 1,
+                    drizzlePixfrac: Number(p.drizzlePixfrac) || 1.0,
+                    grade: !!p.grade, gradeKeepPercent: Number(p.gradeKeepPercent) || 80,
+                    outputDir: p.outputDir || null
+                });
+                const jobId = r && r.jobId;
+                if (!jobId) throw new Error('No job id returned');
+                this.preprocess.job = { jobId, inProgress: true, phase: 'Preparing',
+                    stage: 'queued', done: 0, total: this.stack.lights.length };
+                this._preprocessPoll(jobId);
+                this.toast('Preprocessing started', 'ok');
+            } catch (e) { this.toastFail('Could not start preprocessing', e); }
+        },
+        async _preprocessPoll(jobId) {
+            const started = Date.now();
+            while (true) {
+                await new Promise(res => setTimeout(res, 800));
+                if (!this.preprocess.job || this.preprocess.job.jobId !== jobId) return;  // superseded
+                let s;
+                try { s = await this.apiGet('/api/studio/preprocess/' + jobId + '/status'); }
+                catch { continue; }
+                this.preprocess.job = { jobId, inProgress: s.inProgress, phase: s.phase,
+                    stage: s.stage, done: s.done, total: s.total, outputPath: s.outputPath, error: s.error };
+                if (!s.inProgress) {
+                    if (s.phase === 'Done') this.toast('Stacking complete', 'ok');
+                    else if (s.phase === 'Failed') this.toast('Stacking failed: ' + (s.error || ''), 'error');
+                    return;
+                }
+                if (Date.now() - started > 3 * 3600 * 1000) return;   // 3h safety
+            }
+        },
+        async preprocessAbort() {
+            const id = this.preprocess.job?.jobId;
+            if (!id) return;
+            try { await this.apiPost('/api/studio/preprocess/' + id + '/abort'); this.toast('Aborting…', 'warn'); }
+            catch (e) { this.toastFail('Abort failed', e, 'warn'); }
+        },
+        // Jump the Files browser to the folder holding a produced output.
+        stackRevealOutput(path) {
+            if (!path) return;
+            const dir = path.replace(/[\/\\][^\/\\]+$/, '');
+            this.setStudioTab('files');
+            if (dir && typeof this.filesCd === 'function') this.filesCd(dir);
         },
 
         stackRemoveFromSlot(slotKey, path) {
@@ -17691,17 +17833,22 @@ function ninaApp() {
         // mode:'save' shows a filename box; mode:'open' returns the picked file.
         _openHostFileDialog(opts = {}) {
             const d = this.hostDialog;
-            d.mode = (opts.mode === 'open' || opts.mode === 'folder') ? opts.mode : 'save';
+            d.mode = ['open', 'folder', 'open-multi'].includes(opts.mode) ? opts.mode : 'save';
             d.title = opts.title || (d.mode === 'save' ? 'Save to host'
-                : d.mode === 'folder' ? 'Choose folder' : 'Open from host');
+                : d.mode === 'folder' ? 'Choose folder'
+                : d.mode === 'open-multi' ? 'Choose files' : 'Open from host');
             d.accept = Array.isArray(opts.accept) ? opts.accept : [];
             d.filename = opts.suggestedName || '';
             d.selectedPath = '';
+            d.selectedPaths = [];
             d.error = '';
             d.open = true;
             this._hostDialogInit();
             return new Promise((resolve) => { d._resolve = resolve; });
         },
+        // The entry's absolute path. The /api/files/list DTO emits `fullPath`;
+        // older code read `path`, so accept either.
+        _hostEntryPath(e) { return e.fullPath || e.path || ''; },
 
         async _hostDialogInit() {
             const d = this.hostDialog;
@@ -17750,15 +17897,30 @@ function ninaApp() {
         },
 
         _hostDialogClickEntry(e) {
-            if (e.isDirectory) { this._hostDialogCd(e.path); return; }
-            this.hostDialog.selectedPath = e.path;
-            this.hostDialog.filename = e.name;   // save mode: reuse the name
+            const p = this._hostEntryPath(e);
+            if (e.isDirectory) { this._hostDialogCd(p); return; }
+            const d = this.hostDialog;
+            if (d.mode === 'open-multi') {
+                // Toggle membership; the confirm button returns the whole set.
+                if (d.selectedPaths.includes(p)) d.selectedPaths = d.selectedPaths.filter(x => x !== p);
+                else d.selectedPaths = [...d.selectedPaths, p];
+                return;
+            }
+            d.selectedPath = p;
+            d.filename = e.name;   // save mode: reuse the name
+        },
+        _hostEntrySelected(e) {
+            const d = this.hostDialog;
+            const p = this._hostEntryPath(e);
+            return d.mode === 'open-multi' ? d.selectedPaths.includes(p) : (d.selectedPath === p);
         },
 
         _hostDialogDblEntry(e) {
-            if (e.isDirectory) { this._hostDialogCd(e.path); return; }
+            const p = this._hostEntryPath(e);
+            if (e.isDirectory) { this._hostDialogCd(p); return; }
+            // In multi mode a double-click just toggles (don't close on it).
             this._hostDialogClickEntry(e);
-            this._hostDialogConfirm();
+            if (this.hostDialog.mode !== 'open-multi') this._hostDialogConfirm();
         },
 
         async _hostDialogMkdir() {
@@ -17781,6 +17943,13 @@ function ninaApp() {
         _hostDialogConfirm() {
             const d = this.hostDialog;
             let path = null;
+            if (d.mode === 'open-multi') {
+                if (!d.selectedPaths.length) { d.error = 'Select at least one file.'; return; }
+                d.open = false;
+                const r = d._resolve; d._resolve = null;
+                if (r) r(d.selectedPaths.slice());
+                return;
+            }
             if (d.mode === 'folder') {
                 path = d.cwd || null;
                 if (!path) { d.error = 'Open a folder first.'; return; }
@@ -17832,6 +18001,12 @@ function ninaApp() {
         // chosen directory path, or null on cancel.
         async _hostPickFolder({ title } = {}) {
             return await this._openHostFileDialog({ mode: 'folder', title });
+        },
+
+        // Pick one or more individual host files (checkbox multi-select).
+        // Returns an array of absolute paths, or null on cancel.
+        async _hostPickFiles({ title, accept } = {}) {
+            return await this._openHostFileDialog({ mode: 'open-multi', title, accept });
         },
 
         // Folders first, then case-insensitive name order. Matches the

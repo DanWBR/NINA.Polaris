@@ -193,6 +193,30 @@ public static class StudioEndpoints {
             return p == null ? Results.NotFound() : Results.Ok(p);
         });
 
+        // --- WBPP-style one-click preprocess (orchestrated) ------------
+        // Body: PreprocessRequest { lights[], biases[], darks[], flats[],
+        //   method, drizzleScale, drizzlePixfrac, grade, gradeKeepPercent, outputDir }.
+        // Builds the master calibration frames -> calibrates the lights ->
+        // grades + drops weak subs (optional) -> registers + integrates, as one
+        // server-owned job. Status mirrors the current sub-stage; abort cancels
+        // between stages.
+        g.MapPost("/preprocess", (PreprocessOrchestrator svc, PreprocessRequest req) => {
+            if (req?.Lights == null || req.Lights.Count < 2)
+                return Results.BadRequest(new { error = "Add at least 2 light frames." });
+            var jobId = svc.StartJob(req);
+            return Results.Accepted(value: new { jobId });
+        });
+
+        g.MapGet("/preprocess/{jobId}/status", (PreprocessOrchestrator svc, string jobId) => {
+            var p = svc.GetStatus(jobId);
+            return p == null ? Results.NotFound() : Results.Ok(p);
+        });
+
+        g.MapPost("/preprocess/{jobId}/abort", (PreprocessOrchestrator svc, string jobId) => {
+            svc.Abort(jobId);
+            return Results.Ok(new { aborted = true });
+        });
+
         // --- subframe grading (rank subs by quality, pick keepers) -----
         // Measure each light's star count + median HFR and rank them, then
         // select the best for stacking. Runs in the background (star-detecting
