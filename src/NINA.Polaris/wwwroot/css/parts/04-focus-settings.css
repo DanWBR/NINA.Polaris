@@ -230,7 +230,8 @@
    the flex gap (14-16 px) below the strip preserves breathing room
    before the next child. */
 .tonight-panel > .sky-subtabs:first-child,
-.weather-panel > .sky-subtabs:first-child {
+.weather-panel > .sky-subtabs:first-child,
+.milkyway-panel > .sky-subtabs:first-child {
     margin: -16px -16px 0;
 }
 

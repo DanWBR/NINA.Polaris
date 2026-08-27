@@ -190,7 +190,8 @@
 
 /* ──────────────────────── /EDITOR ──────────────────────── */
 
-.tonight-panel {
+.tonight-panel,
+.milkyway-panel {
     padding: 16px;
     overflow-y: auto;
     gap: 14px;
