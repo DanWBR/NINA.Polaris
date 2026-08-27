@@ -84,7 +84,8 @@ public class MasterFrameService {
     /// need to be indexed before stacking, a fresh capture can be
     /// combined immediately. Metadata (filter, gain, exposure) is
     /// read from each frame's FITS header on load.</para></summary>
-    public string StartJob(IReadOnlyList<string> framePaths, MasterType type, IntegrationMethod method) {
+    public string StartJob(IReadOnlyList<string> framePaths, MasterType type, IntegrationMethod method,
+                           string? outputDir = null) {
         var jobId = Guid.NewGuid().ToString("N")[..8];
         var progress = new MasterProgress {
             JobId = jobId,
@@ -93,7 +94,7 @@ public class MasterFrameService {
             Stage = "queued"
         };
         _jobs[jobId] = progress;
-        _ = Task.Run(() => RunJob(jobId, framePaths, type, method));
+        _ = Task.Run(() => RunJob(jobId, framePaths, type, method, outputDir));
         return jobId;
     }
 
@@ -107,7 +108,8 @@ public class MasterFrameService {
     // a deep enough tile that the per-tile seek overhead is negligible.
     private const long StripBudgetBytes = 96L * 1024 * 1024;
 
-    private void RunJob(string jobId, IReadOnlyList<string> framePaths, MasterType type, IntegrationMethod method) {
+    private void RunJob(string jobId, IReadOnlyList<string> framePaths, MasterType type, IntegrationMethod method,
+                        string? outputDir) {
         try {
             for (int i = 0; i < framePaths.Count; i++) {
                 var path = framePaths[i];
@@ -162,11 +164,18 @@ public class MasterFrameService {
             // ---- Phase 3: write master FITS -------------------------
             _jobs[jobId] = _jobs[jobId] with { Stage = "writing" };
 
-            var rigName = _profile.ActiveEquipmentProfile?.Name ?? "Default";
-            var outRoot = _profile.Active.ImageOutputDir;
-            if (string.IsNullOrWhiteSpace(outRoot))
-                throw new InvalidOperationException("ImageOutputDir not set.");
-            var dir = Path.Combine(outRoot, Sanitize(rigName), "calibration", "masters");
+            // Working-folder override (WBPP orchestrator) drops masters straight
+            // under {outputDir}/masters; otherwise the per-rig calibration library.
+            string dir;
+            if (!string.IsNullOrWhiteSpace(outputDir)) {
+                dir = Path.Combine(outputDir!, "masters");
+            } else {
+                var rigName = _profile.ActiveEquipmentProfile?.Name ?? "Default";
+                var outRoot = _profile.Active.ImageOutputDir;
+                if (string.IsNullOrWhiteSpace(outRoot))
+                    throw new InvalidOperationException("ImageOutputDir not set.");
+                dir = Path.Combine(outRoot, Sanitize(rigName), "calibration", "masters");
+            }
             Directory.CreateDirectory(dir);
 
             var key = type switch {

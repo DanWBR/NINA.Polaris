@@ -93,7 +93,10 @@ public class BatchStackingService {
         // Drizzle: 1 = off (native-resolution resample + combine), 2/3 = drizzle
         // integrate onto a scale× finer grid. Pixfrac is the drop shrink (0,1].
         int DrizzleScale = 1,
-        double DrizzlePixfrac = 1.0);
+        double DrizzlePixfrac = 1.0,
+        // Working-folder override (WBPP orchestrator). null = per-rig
+        // {rig}/integrated/ tree; set = the master light lands in {OutputDir}.
+        string? OutputDir = null);
 
     public string StartJob(IntegrationRequest req) {
         if (!Enum.TryParse<IntegrationMethod>(req.Method, true, out var method)) {
@@ -108,7 +111,7 @@ public class BatchStackingService {
             Total = req.FramePaths.Count,
             Stage = "queued"
         };
-        _ = Task.Run(() => RunJob(jobId, req.FramePaths, method, scale, pixfrac));
+        _ = Task.Run(() => RunJob(jobId, req.FramePaths, method, scale, pixfrac, req.OutputDir));
         return jobId;
     }
 
@@ -153,7 +156,7 @@ public class BatchStackingService {
     }
 
     private void RunJob(string jobId, IReadOnlyList<string> framePaths, IntegrationMethod method,
-                        int drizzleScale = 1, double drizzlePixfrac = 1.0) {
+                        int drizzleScale = 1, double drizzlePixfrac = 1.0, string? outputDir = null) {
         string? tempDir = null;
         try {
             // ---- Phase 1: detect stars (no pixels retained) ----------
@@ -313,11 +316,16 @@ public class BatchStackingService {
                 double emptyPct = integ[0].EmptyFraction() * 100;
 
                 _jobs[jobId] = _jobs[jobId] with { Stage = "writing", IntegrationPercent = 100 };
-                var rigNameD = _profile.ActiveEquipmentProfile?.Name ?? "Default";
-                var outRootD = _profile.Active.ImageOutputDir
-                    ?? throw new InvalidOperationException("ImageOutputDir not set.");
-                var dirD = Path.Combine(outRootD, Sanitize(rigNameD), "integrated",
-                    Sanitize(target), Sanitize(filter));
+                string dirD;
+                if (!string.IsNullOrWhiteSpace(outputDir)) {
+                    dirD = outputDir!;
+                } else {
+                    var rigNameD = _profile.ActiveEquipmentProfile?.Name ?? "Default";
+                    var outRootD = _profile.Active.ImageOutputDir
+                        ?? throw new InvalidOperationException("ImageOutputDir not set.");
+                    dirD = Path.Combine(outRootD, Sanitize(rigNameD), "integrated",
+                        Sanitize(target), Sanitize(filter));
+                }
                 Directory.CreateDirectory(dirD);
                 var fileNameD =
                     $"master_light_{Sanitize(target)}_{Sanitize(filter)}_drz{drizzleScale}x_x{dzN}_{dzExposure:0}s.fits";
@@ -535,11 +543,18 @@ public class BatchStackingService {
             // ---- Phase 4: write integrated master FITS -------------
             _jobs[jobId] = _jobs[jobId] with { Stage = "writing" };
 
-            var rigName = _profile.ActiveEquipmentProfile?.Name ?? "Default";
-            var outRoot = _profile.Active.ImageOutputDir
-                ?? throw new InvalidOperationException("ImageOutputDir not set.");
-            var dir = Path.Combine(outRoot, Sanitize(rigName), "integrated",
-                Sanitize(target), Sanitize(filter));
+            // Working-folder override (WBPP orchestrator) drops the master light
+            // straight into {outputDir}; otherwise the per-rig integrated tree.
+            string dir;
+            if (!string.IsNullOrWhiteSpace(outputDir)) {
+                dir = outputDir!;
+            } else {
+                var rigName = _profile.ActiveEquipmentProfile?.Name ?? "Default";
+                var outRoot = _profile.Active.ImageOutputDir
+                    ?? throw new InvalidOperationException("ImageOutputDir not set.");
+                dir = Path.Combine(outRoot, Sanitize(rigName), "integrated",
+                    Sanitize(target), Sanitize(filter));
+            }
             Directory.CreateDirectory(dir);
 
             var fileName =

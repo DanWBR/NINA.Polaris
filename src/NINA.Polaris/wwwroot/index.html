@@ -12760,58 +12760,130 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <div class="files-right-pane stack-pane" data-tour="studio-stack"
                          x-show="studioTab === 'stacking'">
                         <div class="stack-header">
-                            <h3 class="stack-title">Stack workspace</h3>
+                            <h3 class="stack-title" x-text="$t('Stack workspace')"></h3>
                             <button class="btn btn-sm"
                                     @click="stackClearAll()"
                                     :disabled="stackSlotDefs.every(d => stack[d.key].length === 0)
                                               && stack.masterDarks.length === 0
                                               && stack.masterFlats.length === 0
                                               && stack.masterBiases.length === 0">
-                                Clear all
+                                <span x-text="$t('Clear all')"></span>
                             </button>
                         </div>
 
-                        <template x-for="def in stackSlotDefs" :key="def.key">
-                            <details class="stack-slot" open>
-                                <summary class="stack-slot-head">
-                                    <span class="stack-slot-label" x-text="def.label"></span>
-                                    <span class="stack-slot-count"
-                                          x-text="'(' + stack[def.key].length + ')'"></span>
-                                    <span class="stack-slot-hint" x-text="def.hint"></span>
-                                </summary>
-                                <div class="stack-slot-actions">
-                                    <button class="btn btn-sm btn-primary"
-                                            @click="stackAddToSlot(def.key)"
+                        <!-- WBPP-style sub-tabs: a tab per frame type + Process. -->
+                        <div class="studio-subtabs stack-subtabs">
+                            <template x-for="t in stackTabDefs" :key="t.key">
+                                <button class="studio-subtab" :class="{ active: stackTab === t.key }"
+                                        @click="setStackTab(t.key)">
+                                    <span x-text="$t(t.label)"></span>
+                                    <span x-show="t.slot" class="stack-subtab-count"
+                                          x-text="'(' + (stack[t.slot] ? stack[t.slot].length : 0) + ')'"></span>
+                                </button>
+                            </template>
+                        </div>
+
+                        <!-- Frame tabs (lights/biases/darks/flats). -->
+                        <template x-for="def in stackFrameTabDefs" :key="def.key">
+                            <div x-show="stackTab === def.key" class="stack-frame-pane">
+                                <p class="hint">
+                                    <span x-text="$t(def.hint)"></span>
+                                    <span x-show="def.optional" class="stack-optional-badge" x-text="$t('optional')"></span>
+                                </p>
+                                <div class="stack-pickers">
+                                    <button class="btn btn-sm btn-primary" @click="stackAddFiles(def.slot)"
+                                            x-text="'＋ ' + $t('Add files…')"></button>
+                                    <button class="btn btn-sm" @click="stackAddFolder(def.slot)"
+                                            x-text="'📁 ' + $t('Add folder…')"></button>
+                                    <button class="btn btn-sm" @click="stackAddToSlot(def.slot)"
                                             :disabled="files.selectedPaths.length === 0"
-                                            :title="files.selectedPaths.length === 0
-                                                ? 'Select FITS files in the browser first'
-                                                : 'Add ' + files.selectedPaths.length + ' selected to ' + def.label">
-                                        + Add selection
-                                    </button>
-                                    <button class="btn btn-sm"
-                                            @click="stackClearSlot(def.key)"
-                                            :disabled="stack[def.key].length === 0">
-                                        Clear
-                                    </button>
+                                            :title="$t('Add the files selected in the file browser')"
+                                            x-text="$t('From browser')"></button>
+                                    <button class="btn btn-sm" @click="stackClearSlot(def.slot)"
+                                            :disabled="stack[def.slot].length === 0" x-text="$t('Clear')"></button>
+                                    <span class="text-muted" style="margin-left:auto">
+                                        <strong x-text="stack[def.slot].length"></strong> <span x-text="$t('frames')"></span></span>
                                 </div>
-                                <ul class="stack-slot-list" x-show="stack[def.key].length > 0">
-                                    <template x-for="path in stack[def.key]" :key="path">
+                                <ul class="stack-slot-list" x-show="stack[def.slot].length > 0">
+                                    <template x-for="path in stack[def.slot]" :key="path">
                                         <li class="stack-slot-item" :title="path">
-                                            <span class="stack-slot-name"
-                                                  x-text="stackBasename(path)"></span>
+                                            <span class="stack-slot-name" x-text="stackBasename(path)"></span>
                                             <button class="stack-slot-remove"
-                                                    @click="stackRemoveFromSlot(def.key, path)"
-                                                    title="Remove from slot">×</button>
+                                                    @click="stackRemoveFromSlot(def.slot, path)"
+                                                    title="Remove">×</button>
                                         </li>
                                     </template>
                                 </ul>
-                                <p class="stack-slot-empty"
-                                   x-show="stack[def.key].length === 0">
-                                    Select frames in the browser on the
-                                    left and click "+ Add selection".
-                                </p>
-                            </details>
+                                <p class="stack-slot-empty" x-show="stack[def.slot].length === 0"
+                                   x-text="$t(def.empty)"></p>
+                            </div>
                         </template>
+
+                        <!-- Process tab: settings + one-click Run + Advanced. -->
+                        <div x-show="stackTab === 'process'" class="stack-process-pane">
+                            <div class="stack-proc-row">
+                                <label x-text="$t('Integration')"></label>
+                                <select x-model="preprocess.method" class="input-sm">
+                                    <option value="Mean" x-text="$t('Mean')"></option>
+                                    <option value="Median" x-text="$t('Median')"></option>
+                                    <option value="SigmaClippedMean" x-text="$t('Sigma clip')"></option>
+                                </select>
+                                <label x-text="$t('Drizzle')"></label>
+                                <select x-model.number="preprocess.drizzleScale" class="input-sm">
+                                    <option :value="1" x-text="$t('Off')"></option>
+                                    <option :value="2">2x</option>
+                                    <option :value="3">3x</option>
+                                </select>
+                            </div>
+                            <div class="stack-proc-row">
+                                <label><input type="checkbox" x-model="preprocess.grade">
+                                    <span x-text="$t('Grade and drop weak subs')"></span></label>
+                                <template x-if="preprocess.grade">
+                                    <span><span x-text="$t('keep best')"></span>
+                                        <input type="number" min="10" max="100" step="5"
+                                               x-model.number="preprocess.gradeKeepPercent" class="input-sm" style="width:64px">%</span>
+                                </template>
+                            </div>
+                            <div class="stack-proc-row">
+                                <button class="btn btn-sm" @click="preprocessPickFolder()"
+                                        x-text="'📁 ' + $t('Working folder…')"></button>
+                                <code x-show="preprocess.outputDir" x-text="preprocess.outputDir"
+                                      style="font-size:11px; overflow-wrap:anywhere"></code>
+                                <span x-show="!preprocess.outputDir" class="text-muted"
+                                      x-text="$t('Default output location')"></span>
+                            </div>
+                            <div class="stack-proc-row">
+                                <button class="btn btn-primary" @click="preprocessRun()"
+                                        :disabled="stack.lights.length < 2 || (preprocess.job && preprocess.job.inProgress)"
+                                        x-text="'▶ ' + $t('Run')"></button>
+                                <button class="btn btn-danger" @click="preprocessAbort()"
+                                        :disabled="!preprocess.job || !preprocess.job.inProgress"
+                                        x-text="$t('Abort')"></button>
+                                <span x-show="stack.lights.length < 2" class="text-muted"
+                                      style="font-size:11px" x-text="$t('Add at least two lights to run.')"></span>
+                            </div>
+                            <div class="af-progress" x-show="preprocess.job && preprocess.job.inProgress" style="margin-top:10px">
+                                <div class="af-progress-bar">
+                                    <div class="af-progress-fill"
+                                         :style="'width: ' + (preprocess.job?.total ? Math.round(100 * (preprocess.job?.done || 0) / preprocess.job.total) : 0) + '%'"></div>
+                                </div>
+                                <div class="af-progress-info">
+                                    <span><strong x-text="preprocess.job?.phase"></strong></span>
+                                    <span class="text-muted" x-text="preprocess.job?.stage"></span>
+                                </div>
+                            </div>
+                            <div class="stats-bar" x-show="preprocess.job?.phase === 'Done'" style="margin-top:10px">
+                                <span class="text-ok">✓ <span x-text="$t('Stacked')"></span></span>
+                                <button class="btn btn-sm" x-show="preprocess.job?.outputPath"
+                                        @click="stackRevealOutput(preprocess.job.outputPath)"
+                                        x-text="$t('Reveal in Files')"></button>
+                            </div>
+                            <div class="stats-bar" x-show="preprocess.job?.phase === 'Failed'" style="margin-top:10px">
+                                <span class="text-err">✗ <span x-text="preprocess.job?.error"></span></span>
+                            </div>
+
+                            <details class="stack-advanced" style="margin-top:14px">
+                                <summary x-text="$t('Advanced (per-stage)')"></summary>
 
                         <!-- UNIF-3b: action toolbar. Each button posts
                              paths from the corresponding slot to the
@@ -12918,6 +12990,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                       x-show="stack.activeJob?.done != null && stack.activeJob?.total"
                                       x-text="'(' + (stack.activeJob?.done) + '/' + (stack.activeJob?.total) + ')'"></span>
                             </div>
+                        </div>
+                            </details>
                         </div>
                     </div>
                     <!-- Auto Workflow pane (planned). Placeholder for now;
@@ -21889,11 +21963,13 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             <div class="hostdlg-list">
                 <div x-show="hostDialog.loading" class="text-muted" style="padding:12px">Loading…</div>
                 <div x-show="hostDialog.error" class="hostdlg-err" x-text="hostDialog.error"></div>
-                <template x-for="e in hostDialog.entries" :key="e.path">
+                <template x-for="e in hostDialog.entries" :key="_hostEntryPath(e)">
                     <div class="hostdlg-row"
-                         :class="{ 'is-sel': hostDialog.selectedPath === e.path, 'is-dir': e.isDirectory }"
+                         :class="{ 'is-sel': _hostEntrySelected(e), 'is-dir': e.isDirectory }"
                          @click="_hostDialogClickEntry(e)"
                          @dblclick="_hostDialogDblEntry(e)">
+                        <span x-show="hostDialog.mode === 'open-multi' && !e.isDirectory" class="hostdlg-check"
+                              x-text="_hostEntrySelected(e) ? '☑' : '☐'"></span>
                         <span class="hostdlg-ico" x-text="e.isDirectory ? '📁' : '📄'"></span>
                         <span class="hostdlg-name" x-text="e.name"></span>
                     </div>
@@ -21910,8 +21986,13 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <span x-show="hostDialog.mode === 'folder'" class="hostdlg-fname text-muted"
                       style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
                       :title="hostDialog.cwd" x-text="hostDialog.cwd"></span>
+                <span x-show="hostDialog.mode === 'open-multi'" class="text-muted"
+                      x-text="hostDialog.selectedPaths.length + ' selected'"></span>
                 <button class="btn btn-sm btn-primary" @click="_hostDialogConfirm()"
-                        x-text="hostDialog.mode === 'save' ? 'Save' : hostDialog.mode === 'folder' ? 'Use this folder' : 'Open'"></button>
+                        x-text="hostDialog.mode === 'save' ? 'Save'
+                                : hostDialog.mode === 'folder' ? 'Use this folder'
+                                : hostDialog.mode === 'open-multi' ? ('Add ' + hostDialog.selectedPaths.length + ' file(s)')
+                                : 'Open'"></button>
             </div>
         </div>
     </div>

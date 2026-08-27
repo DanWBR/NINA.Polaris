@@ -64,7 +64,10 @@ public class CalibrationService {
         // caller doesn't need a library lookup before posting.
         string? MasterDarkPath,
         string? MasterFlatPath,
-        string? MasterBiasPath);
+        string? MasterBiasPath,
+        // Working-folder override (WBPP orchestrator). null = per-rig
+        // {rig}/calibrated/ tree; set = {OutputDir}/calibrated/.
+        string? OutputDir = null);
 
     public string StartJob(CalibrationRequest req) {
         var jobId = Guid.NewGuid().ToString("N")[..8];
@@ -120,13 +123,16 @@ public class CalibrationService {
             }
 
             var rigName = _profile.ActiveEquipmentProfile?.Name ?? "Default";
-            var outRoot = _profile.Active.ImageOutputDir
-                ?? throw new InvalidOperationException("ImageOutputDir not set.");
+            // ImageOutputDir is only required when there's no working-folder override.
+            var outRoot = _profile.Active.ImageOutputDir ?? "";
+            if (string.IsNullOrWhiteSpace(outRoot) && string.IsNullOrWhiteSpace(req.OutputDir))
+                throw new InvalidOperationException("ImageOutputDir not set.");
 
             int done = 0;
             int succeeded = 0;
             int failed = 0;
             string? firstError = null;
+            var outputs = new List<string>();
 
             for (int i = 0; i < req.LightPaths.Count; i++) {
                 var lightPath = req.LightPaths[i];
@@ -135,8 +141,9 @@ public class CalibrationService {
                     Done = done
                 };
                 try {
-                    CalibrateOne(lightPath, req, masters, LoadMaster, GetNormalizedFlat,
+                    var outPath = CalibrateOne(lightPath, req, masters, LoadMaster, GetNormalizedFlat,
                                  outRoot, rigName);
+                    outputs.Add(outPath);
                     succeeded++;
                 } catch (Exception ex) {
                     failed++;
@@ -155,7 +162,8 @@ public class CalibrationService {
                 Done = done,
                 Succeeded = succeeded,
                 Failed = failed,
-                Error = firstError
+                Error = firstError,
+                CalibratedPaths = outputs
             };
         } catch (Exception ex) {
             _logger.LogError(ex, "Calibration job {JobId} failed", jobId);
@@ -167,7 +175,7 @@ public class CalibrationService {
         }
     }
 
-    private void CalibrateOne(
+    private string CalibrateOne(
             string lightPath, CalibrationRequest req, MasterIndex masters,
             Func<string, BaseImageData> loadMaster,
             Func<string, string?, (float[] norm, double mean)> getNormFlat,
@@ -232,8 +240,9 @@ public class CalibrationService {
 
         // ---- Write output ----------------------------------------
         var filterFolder = string.IsNullOrEmpty(filter) ? "L" : filter;
-        var dir = Path.Combine(outRoot, Sanitize(rigName), "calibrated",
-            Sanitize(target), Sanitize(filterFolder));
+        var dir = !string.IsNullOrWhiteSpace(req.OutputDir)
+            ? Path.Combine(req.OutputDir!, "calibrated", Sanitize(target), Sanitize(filterFolder))
+            : Path.Combine(outRoot, Sanitize(rigName), "calibrated", Sanitize(target), Sanitize(filterFolder));
         Directory.CreateDirectory(dir);
         var fileName = "cal_" + Path.GetFileName(lightPath);
         var outPath = Path.Combine(dir, fileName);
@@ -262,6 +271,7 @@ public class CalibrationService {
         if (flatPath != null) kw.Add(new("MFLAT", Path.GetFileName(flatPath)));
         if (biasPath != null && darkPath == null) kw.Add(new("MBIAS", Path.GetFileName(biasPath)));
         FITSWriter.Write(calibrated, outPath, customKeywords: kw);
+        return outPath;
     }
 
     // --- Helpers -------------------------------------------------
@@ -312,4 +322,7 @@ public record CalibrationProgress {
     public int Failed { get; init; }
     public string Stage { get; init; } = "";
     public string? Error { get; init; }
+    // Absolute paths of the calibrated lights (WBPP orchestrator feeds these
+    // straight into integration). Populated on completion.
+    public List<string>? CalibratedPaths { get; init; }
 }
