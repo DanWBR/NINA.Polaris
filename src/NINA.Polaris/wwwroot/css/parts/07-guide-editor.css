@@ -1811,8 +1811,10 @@
    /api/files/*). Bigger than the confirm card because it holds a
    scrolling file list. Uses the same overlay + tokens. */
 .hostdlg-card {
-    width: min(560px, 94vw);
-    max-height: 82vh;
+    /* A real file browser: wide + tall so picking many frames isn't cramped. */
+    width: min(1040px, 95vw);
+    height: 88vh;
+    max-height: 88vh;
     display: flex;
     flex-direction: column;
     background: var(--bg-secondary);
