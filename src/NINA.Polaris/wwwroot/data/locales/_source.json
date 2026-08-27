@@ -3907,5 +3907,10 @@
   "Load failed": "Load failed",
   "Not a Polaris guide-calibration file": "Not a Polaris guide-calibration file",
   "Save calibration failed": "Save calibration failed",
-  "Load calibration failed": "Load calibration failed"
+  "Load calibration failed": "Load calibration failed",
+  "Clipping": "Clipping",
+  "clipped": "clipped",
+  "Overexposed: highlights are blown. Lower gain and/or exposure until this is near 0.": "Overexposed: highlights are blown. Lower gain and/or exposure until this is near 0.",
+  "Some highlights are clipping. Ease gain or exposure down.": "Some highlights are clipping. Ease gain or exposure down.",
+  "Highlights are within range. The preview is auto-stretched, so trust this, not the on-screen brightness.": "Highlights are within range. The preview is auto-stretched, so trust this, not the on-screen brightness."
 }

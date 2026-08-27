@@ -2060,6 +2060,12 @@ label select.input-sm.select-compact {
 .sharp-bar-fill.sharp-far  { background: var(--text-muted); }
 .sharp-bar-fill.sharp-near { background: var(--warn, #d98c00); }
 .sharp-bar-fill.sharp-peak { background: var(--ok, #3fb950); }
+/* Clipping meter tones: low is good (green), rising into amber, then red when
+   highlights are being blown. Inverse sense of the sharpness bar. */
+.sharp-bar-fill.clip-ok   { background: var(--ok, #3fb950); }
+.sharp-bar-fill.clip-warn { background: var(--warn, #d98c00); }
+.sharp-bar-fill.clip-bad  { background: var(--danger, #e05260); }
+.clip-panel .sharp-pct { font-variant-numeric: tabular-nums; }
 .sharp-trace {
     width: 100%;
     height: 34px;

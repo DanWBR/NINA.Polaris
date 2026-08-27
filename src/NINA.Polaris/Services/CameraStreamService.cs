@@ -336,6 +336,13 @@ public class CameraStreamService : IDisposable {
     public double Sharpness { get; private set; }
     public double SharpnessBest { get; private set; }
 
+    /// <summary>Percent of the last sampled frame at or near the sensor ceiling.
+    /// The video preview auto-stretches every frame, so a blown highlight still
+    /// looks correctly exposed on screen — this is the honest read of exposure.
+    /// ~0 is good; a high value on a planetary target means gain/exposure is too
+    /// high and detail is being clipped away before it reaches the SER.</summary>
+    public double ClipPercent { get; private set; }
+
     private void UpdateSharpness(IImageData frame) {
         // Sampling twice a second is plenty for a human turning a knob, and it
         // keeps a 130 fps stream from spending every core on the metric: on a
@@ -358,6 +365,17 @@ public class CameraStreamService : IDisposable {
                 _sharpHistory.Enqueue(v);
                 while (_sharpHistory.Count > SharpHistoryLength) _sharpHistory.Dequeue();
             }
+            // Clipping meter over the same frame: fraction of pixels at/near the
+            // sensor ceiling. Stride-sampled (every 4th pixel) so a fast stream
+            // doesn't pay for a full scan; ~98% of full scale counts as
+            // effectively saturated. The ceiling follows the frame's bit depth so
+            // an 8-bit stream measures against 255, a 16-bit one against 65535.
+            int bits = frame.Properties.BitDepth;
+            if (bits < 8 || bits > 16) bits = 16;
+            int clipThreshold = (int)(((1 << bits) - 1) * 0.98);
+            long clipped = 0, total = 0;
+            for (int i = 0; i < px.Length; i += 4) { if (px[i] >= clipThreshold) clipped++; total++; }
+            ClipPercent = total > 0 ? 100.0 * clipped / total : 0.0;
         } catch (Exception ex) {
             _logger.LogDebug(ex, "Sharpness metric failed for a stream frame");
         }
@@ -369,6 +387,7 @@ public class CameraStreamService : IDisposable {
     public void ResetSharpness() {
         Sharpness = 0;
         SharpnessBest = 0;
+        ClipPercent = 0;
         lock (_sharpLock) _sharpHistory.Clear();
     }
 
