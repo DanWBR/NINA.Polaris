@@ -4618,5 +4618,8 @@
   "Stacked": "Empilé",
   "Reveal in Files": "Afficher dans Fichiers",
   "Advanced (per-stage)": "Avancé (par étape)",
-  "Add the files selected in the file browser": "Ajouter les fichiers sélectionnés dans l'explorateur"
+  "Add the files selected in the file browser": "Ajouter les fichiers sélectionnés dans l'explorateur",
+  "Copy the folder path": "Copier le chemin du dossier",
+  "Folder path copied": "Chemin du dossier copié",
+  "Could not copy the path": "Impossible de copier le chemin"
 }

@@ -12126,6 +12126,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <span style="flex:1"></span>
                     <span class="status-indicator-sm"
                           :class="files.loading ? 'warn' : (files.error ? 'error' : 'ok')"
+                          :style="files.cwd ? 'cursor:pointer' : ''"
+                          :title="files.cwd ? $t('Copy the folder path') : ''"
+                          @click="copyStudioPath()"
                           x-text="files.loading ? 'loading…' : (files.error || files.cwd || 'no path')"></span>
                 </div>
 
@@ -12771,10 +12774,12 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             </button>
                         </div>
 
-                        <!-- WBPP-style sub-tabs: a tab per frame type + Process. -->
-                        <div class="studio-subtabs stack-subtabs">
+                        <!-- WBPP-style sub-tabs: a tab per frame type + Process.
+                             Uses the canonical .video-tabstrip / .video-tab
+                             pattern so it matches every other sub-tabstrip. -->
+                        <div class="video-tabstrip stack-subtabs">
                             <template x-for="t in stackTabDefs" :key="t.key">
-                                <button class="studio-subtab" :class="{ active: stackTab === t.key }"
+                                <button class="video-tab" :class="{ active: stackTab === t.key }"
                                         @click="setStackTab(t.key)">
                                     <span x-text="$t(t.label)"></span>
                                     <span x-show="t.slot" class="stack-subtab-count"

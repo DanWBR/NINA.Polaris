@@ -1219,8 +1219,9 @@
 @media (max-width: 900px) {
     .stack-width-ctl { display: none; }
 }
-/* WBPP-style Stacking sub-tabs + per-type pickers + Process pane. */
-.stack-subtabs { margin: 10px 0 12px; }
+/* WBPP-style Stacking sub-tabs + per-type pickers + Process pane.
+   The strip reuses .video-tabstrip / .video-tab (canonical). */
+.stack-subtabs { margin-top: 4px; }
 .stack-subtab-count {
     margin-left: 4px; color: var(--text-muted);
     font-variant-numeric: tabular-nums; font-size: 11px;
