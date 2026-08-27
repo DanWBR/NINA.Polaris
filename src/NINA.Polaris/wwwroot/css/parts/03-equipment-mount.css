@@ -1192,7 +1192,7 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    margin-bottom: 12px;
+    margin-bottom: 4px;
 }
 .stack-title {
     margin: 0;
@@ -1221,13 +1221,15 @@
 }
 /* WBPP-style Stacking sub-tabs + per-type pickers + Process pane.
    The strip reuses .video-tabstrip / .video-tab (canonical). */
-.stack-subtabs { margin-top: 4px; }
+.stack-subtabs { margin-top: 2px; }
 .stack-subtab-count {
     margin-left: 4px; color: var(--text-muted);
     font-variant-numeric: tabular-nums; font-size: 11px;
 }
-.stack-frame-pane, .stack-process-pane { padding: 4px 2px 8px; }
-.stack-pickers { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
+.stack-frame-pane, .stack-process-pane { padding: 0 0 6px; }
+/* Tame the hint paragraph's default margins so tabs -> hint isn't a big gap. */
+.stack-frame-pane > .hint, .stack-process-pane > .hint { margin: 2px 0 10px; }
+.stack-pickers { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
 .stack-optional-badge {
     margin-left: 8px; padding: 1px 7px; border-radius: 10px;
     background: var(--bg-secondary, rgba(255,255,255,.06)); color: var(--text-muted);
