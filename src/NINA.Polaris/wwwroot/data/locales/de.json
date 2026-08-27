@@ -4621,5 +4621,6 @@
   "Add the files selected in the file browser": "Die im Datei-Browser ausgewählten Dateien hinzufügen",
   "Copy the folder path": "Ordnerpfad kopieren",
   "Folder path copied": "Ordnerpfad kopiert",
-  "Could not copy the path": "Pfad konnte nicht kopiert werden"
+  "Could not copy the path": "Pfad konnte nicht kopiert werden",
+  "Add frames…": "Frames hinzufügen…"
 }

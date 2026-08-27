@@ -1810,11 +1810,15 @@
    A file browser modal that navigates the HOST filesystem (via
    /api/files/*). Bigger than the confirm card because it holds a
    scrolling file list. Uses the same overlay + tokens. */
+/* Leave a clear gap between the dialog and the window edges (overlay padding),
+   so the card never sits flush against the top/bottom. */
+.hostdlg-overlay { padding: 4vh 16px; box-sizing: border-box; }
 .hostdlg-card {
-    /* A real file browser: wide + tall so picking many frames isn't cramped. */
-    width: min(1040px, 95vw);
-    height: 88vh;
-    max-height: 88vh;
+    /* A real file browser: wide + tall so picking many frames isn't cramped.
+       max-height:100% keeps it inside the overlay padding. */
+    width: min(1040px, 100%);
+    height: 84vh;
+    max-height: 100%;
     display: flex;
     flex-direction: column;
     background: var(--bg-secondary);

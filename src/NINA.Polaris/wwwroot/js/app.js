@@ -17956,6 +17956,23 @@ function ninaApp() {
             const p = this._hostEntryPath(e);
             return d.mode === 'open-multi' ? d.selectedPaths.includes(p) : (d.selectedPath === p);
         },
+        // Toggle-select every file in the current folder (multi-select dialog):
+        // check them all, or clear them if they're already all checked. This is
+        // how "grab the whole folder" works from the checkbox picker.
+        _hostDialogSelectAllFiles() {
+            const d = this.hostDialog;
+            const files = (d.entries || []).filter(e => !e.isDirectory).map(e => this._hostEntryPath(e));
+            if (!files.length) return;
+            const allIn = files.every(p => d.selectedPaths.includes(p));
+            if (allIn) {
+                const drop = new Set(files);
+                d.selectedPaths = d.selectedPaths.filter(p => !drop.has(p));
+            } else {
+                const set = new Set(d.selectedPaths);
+                for (const p of files) set.add(p);
+                d.selectedPaths = [...set];
+            }
+        },
 
         _hostDialogDblEntry(e) {
             const p = this._hostEntryPath(e);
