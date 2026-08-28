@@ -50,7 +50,8 @@ public static class FitsThumbnailer {
     /// </param>
     public static byte[] RenderJpegFromPath(string fitsPath, int maxDim = 256, int quality = 85,
                                             string? stretchFromPath = null,
-                                            BayerPatternEnum? bayerOverride = null) {
+                                            BayerPatternEnum? bayerOverride = null,
+                                            bool asinh = false) {
         using var fs = File.OpenRead(fitsPath);
         var img = FITSReader.Read(fs);
         var w = img.Properties.Width;
@@ -80,14 +81,15 @@ public static class FitsThumbnailer {
             Array.Copy(ch.R, 0, rgb, 0,         plane);
             Array.Copy(ch.G, 0, rgb, plane,     plane);
             Array.Copy(ch.B, 0, rgb, plane * 2, plane);
-            return RenderJpegFromRgbPlanes(rgb, w, h, bits, maxDim, quality, overrideParams);
+            return RenderJpegFromRgbPlanes(rgb, w, h, bits, maxDim, quality, overrideParams, asinh);
         }
 
         if (img.Properties.IsColor) {
-            return RenderJpegFromRgbPlanes(img.Data, w, h, bits, maxDim, quality, overrideParams);
+            return RenderJpegFromRgbPlanes(img.Data, w, h, bits, maxDim, quality, overrideParams, asinh);
         }
         return RenderJpegFromBuffer(img.Data, w, h, bits, maxDim, quality,
-            overrideParams != null && overrideParams.Length > 0 ? overrideParams[0] : null);
+            overrideParams != null && overrideParams.Length > 0 ? overrideParams[0] : null,
+            asinh: asinh);
     }
 
     /// <summary>
@@ -288,7 +290,8 @@ public static class FitsThumbnailer {
                                               NINA.Image.ImageAnalysis.AutoStretch.StretchParams? overrideParams = null,
                                               bool guideStretch = false,
                                               bool bayer = false,
-                                              double guideGamma = 1.0) {
+                                              double guideGamma = 1.0,
+                                              bool asinh = false) {
         // bayer=true: the buffer is a raw Bayer mosaic (e.g. a colour guide
         // camera). Rendering it as grayscale shows the alternating per-cell
         // sensitivities as a harsh checkerboard once stretched. Collapse each
@@ -336,7 +339,12 @@ public static class FitsThumbnailer {
         // same histogram.
         // guideStretch picks the dark-background guide-camera preset
         // instead of the DSO 15%-grey default (see AutoStretch.ApplyGuide).
-        byte[] stretched = overrideParams != null
+        // asinh (auto-HDR): a hyperbolic tone curve computed per frame,
+        // ignoring any pinned params — it lifts shadows and compresses
+        // highlights so an eclipse frame shows corona and disc together.
+        byte[] stretched = asinh
+            ? NINA.Image.ImageAnalysis.AutoStretch.ApplyAsinh(pixels, width, height, bitDepth)
+            : overrideParams != null
             ? NINA.Image.ImageAnalysis.AutoStretch.ApplyManual(
                 pixels, width, height,
                 overrideParams.Black, overrideParams.Mid, overrideParams.White, bitDepth)
@@ -394,13 +402,15 @@ public static class FitsThumbnailer {
     /// </summary>
     public static byte[] RenderJpegFromRgbPlanes(ushort[] pixels, int width, int height,
                                                  int bitDepth, int maxDim = 256, int quality = 85,
-                                                 NINA.Image.ImageAnalysis.AutoStretch.StretchParams[]? overrideParams = null) {
+                                                 NINA.Image.ImageAnalysis.AutoStretch.StretchParams[]? overrideParams = null,
+                                                 bool asinh = false) {
         int planeSize = width * height;
         if (pixels.Length < planeSize * 3)
             // Defensive, caller mis-claimed colour. Fall back to mono
             // so the user at least sees something instead of a crash.
             return RenderJpegFromBuffer(pixels, width, height, bitDepth, maxDim, quality,
-                overrideParams != null && overrideParams.Length > 0 ? overrideParams[0] : null);
+                overrideParams != null && overrideParams.Length > 0 ? overrideParams[0] : null,
+                asinh: asinh);
 
         // Reduce all three planes to ~preview resolution BEFORE the (heavy)
         // per-channel stretch + RGBA interleave + SKBitmap steps. This is what
@@ -424,7 +434,12 @@ public static class FitsThumbnailer {
         // per-channel params instead of recomputing. Each channel still
         // uses its own R/G/B param so colour balance survives.
         byte[] rs, gs, bs;
-        if (overrideParams != null && overrideParams.Length >= 3) {
+        if (asinh) {
+            // Auto-HDR: per-channel hyperbolic tone curve, per frame.
+            rs = NINA.Image.ImageAnalysis.AutoStretch.ApplyAsinh(r, width, height, bitDepth);
+            gs = NINA.Image.ImageAnalysis.AutoStretch.ApplyAsinh(g, width, height, bitDepth);
+            bs = NINA.Image.ImageAnalysis.AutoStretch.ApplyAsinh(b, width, height, bitDepth);
+        } else if (overrideParams != null && overrideParams.Length >= 3) {
             var ps = overrideParams;
             rs = NINA.Image.ImageAnalysis.AutoStretch.ApplyManual(r, width, height,
                 ps[0].Black, ps[0].Mid, ps[0].White, bitDepth);

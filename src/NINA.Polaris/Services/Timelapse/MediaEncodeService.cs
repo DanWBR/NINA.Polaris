@@ -89,10 +89,13 @@ public class MediaEncodeService {
             Directory.CreateDirectory(tmp);
 
             // Render each frame once to a temp JPEG (shared by both encoders).
+            // One aligner per job: stabilize mode pins its reference to frame 0.
+            var aligner = new FrameAligner(cfg.AlignMode);
             SetPhase(job, EncodePhase.Rendering);
             for (int i = 0; i < count; i++) {
                 ct.ThrowIfCancellationRequested();
                 var jpeg = source.RenderJpeg(i, cfg.MaxDim, quality: 90);
+                if (aligner.Enabled) jpeg = aligner.Process(jpeg, i);
                 await File.WriteAllBytesAsync(Path.Combine(tmp, $"frame_{i:D5}.jpg"), jpeg, ct);
                 job.FramesRendered = i + 1;
                 if (i % 5 == 0 || i == count - 1) Notify(job);
@@ -171,7 +174,11 @@ public record EncodeConfig(
     int Fps = 15,
     int MaxDim = 1280,
     EncodeFormat Format = EncodeFormat.Gif,
-    bool Loop = true);
+    bool Loop = true,
+    // Frame registration before encoding: null/"off" | "auto" | "center" (move
+    // a bright disc to the middle) | "stabilize" (lock a filled surface to
+    // frame 0). "true"/"1" maps to "center" for the old boolean option.
+    string? AlignMode = null);
 
 public class EncodeJob {
     public string Id { get; set; } = "";

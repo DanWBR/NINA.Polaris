@@ -267,14 +267,21 @@ public static class VideoEndpoints {
             var fmt = ParseFormat(req.Format);
             if (fmt is EncodeFormat.Mp4 or EncodeFormat.Both && !encoder.FfmpegAvailable && fmt == EncodeFormat.Mp4)
                 return Results.BadRequest(new { error = "MP4 needs ffmpeg, which is not installed on this host." });
+            // Back-compat: the old boolean "center the disc" maps to "center".
+            var alignMode = !string.IsNullOrWhiteSpace(req.AlignMode) ? req.AlignMode
+                          : (req.Center == true ? "center" : null);
             var cfg = new EncodeConfig(
                 OutputDir: Path.Combine(root, "timelapse"),
                 OutputName: req.OutputName ?? "timelapse",
                 Fps: Math.Clamp(req.Fps ?? 15, 1, 60),
                 MaxDim: Math.Clamp(req.MaxDim ?? 1280, 100, 4000),
                 Format: fmt,
-                Loop: req.Loop ?? true);
-            var job = encoder.StartJob(new FolderFrameSource(files, Math.Max(1, req.EveryNth ?? 1)), cfg);
+                Loop: req.Loop ?? true,
+                AlignMode: alignMode);
+            var job = encoder.StartJob(
+                new FolderFrameSource(files, Math.Max(1, req.EveryNth ?? 1),
+                    perFrameStretch: req.AutoContrast ?? false, hdr: req.AutoHdr ?? false),
+                cfg);
             return Results.Accepted($"/api/video/timelapse/{job.Id}", new { jobId = job.Id });
         });
 
@@ -425,7 +432,16 @@ public static class VideoEndpoints {
         string? Format = null,
         int? EveryNth = null,
         string? OutputName = null,
-        bool? Loop = null);
+        bool? Loop = null,
+        /// <summary>Frame registration: "off" | "auto" | "center" (move a bright
+        /// disc to the middle) | "stabilize" (lock a filled surface to frame 0).</summary>
+        string? AlignMode = null,
+        /// <summary>Auto-contrast: stretch each frame on its own histogram.</summary>
+        bool? AutoContrast = null,
+        /// <summary>Auto-HDR: asinh tone curve per frame (eclipse dynamic range).</summary>
+        bool? AutoHdr = null,
+        /// <summary>Legacy boolean center-the-disc option; maps to AlignMode="center".</summary>
+        bool? Center = null);
 
     public record SerToMp4Request(
         string? SerPath,

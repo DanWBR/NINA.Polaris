@@ -288,6 +288,49 @@ public static class AutoStretch {
     }
 
     /// <summary>
+    /// asinh (hyperbolic) tone map: a high-dynamic-range compression that lifts
+    /// shadows and compresses highlights, so a frame with a huge brightness range
+    /// (an eclipse corona plus the disc) shows detail across the whole scale. The
+    /// robust black/white points come from <see cref="ComputeAutoStretchParams"/>;
+    /// between them the curve is <c>asinh(k*x)/asinh(k)</c> (concave, through
+    /// (0,0) and (1,1)). Higher <paramref name="strength"/> = more aggressive.
+    /// </summary>
+    public static byte[] ApplyAsinh(ushort[] data, int width, int height,
+                                    int bitDepth = 16, double strength = 8.0) {
+        var p = ComputeAutoStretchParams(data, width, height, bitDepth);
+        return ApplyAsinh(data, width, height, p.Black, p.White, bitDepth, strength);
+    }
+
+    public static byte[] ApplyAsinh(ushort[] data, int width, int height,
+                                    double black, double white, int bitDepth = 16, double strength = 8.0) {
+        int pixelCount = width * height;
+        var result = new byte[pixelCount];
+        if (data.Length == 0) return result;
+
+        black = Math.Clamp(black, 0.0, 1.0);
+        white = Math.Clamp(white, 0.0, 1.0);
+        if (white <= black) white = Math.Min(1.0, black + 1e-6);
+        double k = Math.Max(0.1, strength);
+        double invAsinhK = 1.0 / Math.Asinh(k);
+        double maxVal = (1 << bitDepth) - 1;
+
+        var lut = new byte[65536];
+        for (int i = 0; i < 65536; i++) {
+            double normalized = i / maxVal;
+            double clipped = Math.Clamp((normalized - black) / (white - black), 0, 1);
+            double stretched = Math.Asinh(k * clipped) * invAsinhK;
+            lut[i] = (byte)Math.Clamp(stretched * 255.0, 0, 255);
+        }
+
+        int n = Math.Min(data.Length, pixelCount);
+        Parallel.ForEach(Partitioner.Create(0, n), range => {
+            for (int i = range.Item1; i < range.Item2; i++)
+                result[i] = lut[data[i]];
+        });
+        return result;
+    }
+
+    /// <summary>
     /// Compute the auto-stretch parameters (black/mid/white, all normalised
     /// 0..1) without applying them. Used by the STUDIO viewer to seed
     /// sliders with sensible defaults before the user starts tweaking.
