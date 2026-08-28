@@ -125,17 +125,27 @@ public class FrameAlignerTests {
     }
 
     [Test]
-    public void Stabilize_RejectsASpuriousLargeStep() {
-        // A single wild correlation must not throw the frame across the canvas;
-        // the running offset holds instead. Frame 1 sits at a modest drift, then
-        // frame 2 (identical content, no real motion) must keep frame 1's offset.
+    public void Stabilize_CoastsThroughALowContrastFrame() {
+        // A near-textureless frame (a Moon near eclipse totality: no detail to
+        // lock onto) gives a diffuse correlation peak. Rather than jump on that
+        // noise, the aligner must HOLD the last confident offset.
         int w = 128, h = 128;
         var fa = new FrameAligner("stabilize");
         fa.Offset(Craters(w, h, 0, 0), w, h, 0);
-        var s1 = fa.Offset(Craters(w, h, 3, 2), w, h, 1);
-        var s2 = fa.Offset(Craters(w, h, 3, 2), w, h, 2);   // no further motion
-        Assert.That(s2.dx, Is.EqualTo(s1.dx));
-        Assert.That(s2.dy, Is.EqualTo(s1.dy));
+        var s1 = fa.Offset(Craters(w, h, 3, 2), w, h, 1);   // confident: drift (-3,-2)
+
+        // Flat frame with only faint noise -> low PSR -> coast.
+        var flat = new ushort[w * h];
+        for (int i = 0; i < flat.Length; i++) flat[i] = (ushort)(30000 + (i * 2654435761u % 40));
+        var s2 = fa.Offset(flat, w, h, 2);
+        Assert.That(s2.dx, Is.EqualTo(s1.dx), "held the last confident dx");
+        Assert.That(s2.dy, Is.EqualTo(s1.dy), "held the last confident dy");
+
+        // When texture returns, it re-locks against the last confident frame
+        // (frame 1), capturing the real drift across the dim gap.
+        var s3 = fa.Offset(Craters(w, h, 6, 4), w, h, 3);
+        Assert.That(s3.dx, Is.EqualTo(-6).Within(1));
+        Assert.That(s3.dy, Is.EqualTo(-4).Within(1));
     }
 
     [Test]

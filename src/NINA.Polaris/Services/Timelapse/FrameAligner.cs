@@ -39,14 +39,20 @@ public sealed class FrameAligner {
 
     private Mode _mode;
     // Stabilize: sequential registration. Each frame is correlated against the
-    // PREVIOUS frame (always nearly identical, so the peak is unambiguous) and
-    // the small step shift is accumulated into a running offset back to frame 0.
-    // Anchoring every frame directly to frame 0 breaks down over a long session
-    // (the Moon/Sun drifts and its terminator/illumination change, so late
-    // frames diverge too far from frame 0 and phase correlation locks the wrong
-    // peak) — the very "some frames still misaligned" symptom.
-    private ushort[]? _prevLum;
-    private int _accDx, _accDy;             // cumulative shift onto frame 0
+    // last CONFIDENT frame and the step is accumulated into a running offset back
+    // to frame 0. Anchoring every frame directly to frame 0 breaks down over a
+    // long session (the Moon/Sun drifts and its terminator/illumination change,
+    // so late frames diverge too far from frame 0 and phase correlation locks the
+    // wrong peak). When the correlation peak is weak — a low-contrast frame with
+    // no detail to lock onto, e.g. a Moon near eclipse totality — the shift can't
+    // be trusted, so we COAST: hold the last confident position and keep that
+    // frame as the reference, re-locking when the subject brightens again.
+    private ushort[]? _refLum;              // last confident reference frame
+    private int _refDx, _refDy;             // its cumulative shift onto frame 0
+
+    // Minimum peak-to-sidelobe ratio to trust a correlation. Below this the frame
+    // is too diffuse to register (near-eclipse dimming); coast instead.
+    private const double ConfidenceThreshold = 5.0;
 
     public FrameAligner(string? mode) => _mode = Parse(mode);
 
@@ -109,27 +115,30 @@ public sealed class FrameAligner {
             return TimelapseAlign.CenterOffset(lum, width, height);
 
         if (_mode == Mode.Stabilize) {
-            if (_prevLum == null || _prevLum.Length != lum.Length) {
+            if (_refLum == null || _refLum.Length != lum.Length) {
                 // First frame defines "in place"; nothing accumulated yet.
-                _prevLum = lum;
-                _accDx = _accDy = 0;
+                _refLum = lum;
+                _refDx = _refDy = 0;
                 return (0, 0);
             }
-            // Correlate against the previous frame. Align returns the shift
-            // (dst = src + (dx,dy)) that lands THIS frame on the previous one;
-            // composing those small steps gives the offset back to frame 0.
-            var pc = new PhaseCorrelationAligner(_prevLum, width, height);
-            var (sdx, sdy) = pc.Align(lum);
-            // Reject a spurious peak: consecutive frames drift by a little, so a
-            // step larger than a quarter of the frame is almost certainly a
-            // mis-locked correlation. Carry the running offset unchanged rather
-            // than throwing that frame across the canvas.
+            // Correlate against the last confident frame. Align returns the shift
+            // (dst = src + (dx,dy)) landing THIS frame on the reference, plus a
+            // PSR confidence; the reference's own offset composes it back to frame 0.
+            var pc = new PhaseCorrelationAligner(_refLum, width, height);
+            var (sdx, sdy, conf) = pc.AlignWithConfidence(lum);
             int maxStep = Math.Max(4, Math.Min(width, height) / 4);
-            if (Math.Abs(sdx) > maxStep || Math.Abs(sdy) > maxStep) { sdx = 0; sdy = 0; }
-            _accDx = Math.Clamp(_accDx + sdx, -width, width);
-            _accDy = Math.Clamp(_accDy + sdy, -height, height);
-            _prevLum = lum;
-            return (_accDx, _accDy);
+            bool trustworthy = conf >= ConfidenceThreshold
+                && Math.Abs(sdx) <= maxStep && Math.Abs(sdy) <= maxStep;
+            if (!trustworthy)
+                // Too diffuse (or an implausible jump) to measure: hold the last
+                // confident position and keep its reference for the next frame.
+                return (_refDx, _refDy);
+
+            int dx = Math.Clamp(_refDx + sdx, -width, width);
+            int dy = Math.Clamp(_refDy + sdy, -height, height);
+            // Promote this frame to the reference for the next one.
+            _refLum = lum; _refDx = dx; _refDy = dy;
+            return (dx, dy);
         }
 
         return (0, 0);
