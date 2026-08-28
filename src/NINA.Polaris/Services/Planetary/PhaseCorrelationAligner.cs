@@ -69,7 +69,18 @@ public sealed class PhaseCorrelationAligner {
     /// aligns to the reference, in the same convention as the centroid path
     /// (destination = source + (dx, dy); the stacker samples at x−dx).</summary>
     public (int dx, int dy) Align(ushort[] frame) {
-        if (frame == null || frame.Length < (_oy + _n) * _w) return (0, 0);
+        var r = AlignWithConfidence(frame);
+        return (r.dx, r.dy);
+    }
+
+    /// <summary>As <see cref="Align"/>, plus a peak-to-sidelobe ratio (PSR) that
+    /// says how trustworthy the shift is: a sharp, isolated correlation peak
+    /// (well-textured frames related by a pure shift) gives a high PSR; a diffuse
+    /// surface (low contrast / low SNR, e.g. a Moon near eclipse totality where
+    /// there's little detail to lock onto) gives a low one. Callers use it to
+    /// coast through frames whose shift can't be measured instead of jumping.</summary>
+    public (int dx, int dy, double confidence) AlignWithConfidence(ushort[] frame) {
+        if (frame == null || frame.Length < (_oy + _n) * _w) return (0, 0, 0);
         ExtractInto(frame, _curRe, _curIm);
         Fft2(_curRe, _curIm, inverse: false);
         // Cross-power spectrum R = F_ref · conj(F_cur) / |F_ref · conj(F_cur)|.
@@ -86,11 +97,29 @@ public sealed class PhaseCorrelationAligner {
         int peak = 0; double best = double.NegativeInfinity;
         for (int i = 0; i < len; i++) { double v = _curRe[i]; if (v > best) { best = v; peak = i; } }
         int py = peak / _n, px = peak % _n;
+
+        // PSR = (peak - mean) / std over the surface, excluding a small window
+        // around the peak. Scale-invariant, so it doesn't depend on frame energy.
+        double sum = 0, sum2 = 0; long cnt = 0; const int excl = 5;
+        for (int y = 0; y < _n; y++) {
+            int dyw = Math.Abs(y - py); if (dyw > _n / 2) dyw = _n - dyw;
+            for (int x = 0; x < _n; x++) {
+                int dxw = Math.Abs(x - px); if (dxw > _n / 2) dxw = _n - dxw;
+                if (dyw <= excl && dxw <= excl) continue;   // skip the peak lobe
+                double v = _curRe[y * _n + x];
+                sum += v; sum2 += v * v; cnt++;
+            }
+        }
+        double mean = sum / Math.Max(1, cnt);
+        double var = sum2 / Math.Max(1, cnt) - mean * mean;
+        double std = Math.Sqrt(Math.Max(0, var));
+        double psr = (best - mean) / (std + 1e-12);
+
         // Wrap the delta into [-n/2, n/2). The peak sits at the shift itself,
         // which in this convention is the stacker's dst = src + (dx, dy).
         int dx = px <= _n / 2 ? px : px - _n;
         int dy = py <= _n / 2 ? py : py - _n;
-        return (dx, dy);
+        return (dx, dy, psr);
     }
 
     // Copy the central ROI, remove the DC (subtract the ROI mean so the flat
