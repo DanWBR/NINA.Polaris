@@ -4593,7 +4593,18 @@
                         <label x-text="$t('Name')"></label>
                         <input type="text" x-model="timelapse.outputName" class="input-sm" style="width:120px">
                         <label><input type="checkbox" x-model="timelapse.loop"> <span x-text="$t('Loop GIF')"></span></label>
-                        <label :title="$t('Aligns each frame so a bright Sun/Moon disk stays centered (eclipse).')"><input type="checkbox" x-model="timelapse.center"> <span x-text="$t('Keep the Sun/Moon centered')"></span></label>
+                    </div>
+                    <div class="af-row" style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-top:8px">
+                        <label x-text="$t('Align')"></label>
+                        <select x-model="timelapse.alignMode" class="input-sm" style="width:auto"
+                                :title="$t('Register frames so the subject stays put. Center: move a bright Sun/Moon disk to the middle. Stabilize: lock a frame-filling surface (lunar/solar close-up) to the first frame.')">
+                            <option value="off" x-text="$t('Off')"></option>
+                            <option value="auto" x-text="$t('Auto')"></option>
+                            <option value="center" x-text="$t('Center disc')"></option>
+                            <option value="stabilize" x-text="$t('Stabilize surface')"></option>
+                        </select>
+                        <label :title="$t('Stretch each frame on its own histogram (for brightness that swings across the sequence, e.g. an eclipse).')"><input type="checkbox" x-model="timelapse.autoContrast"> <span x-text="$t('Auto contrast')"></span></label>
+                        <label :title="$t('Asinh tone curve per frame: lifts shadows and compresses highlights so corona and disk show together (eclipse dynamic range).')"><input type="checkbox" x-model="timelapse.autoHdr"> <span x-text="$t('Auto HDR')"></span></label>
                     </div>
                     <div class="af-row" style="display:flex; gap:10px; align-items:center; margin-top:8px">
                         <span x-text="$t('Format:')"></span>

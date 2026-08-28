@@ -89,11 +89,13 @@ public class MediaEncodeService {
             Directory.CreateDirectory(tmp);
 
             // Render each frame once to a temp JPEG (shared by both encoders).
+            // One aligner per job: stabilize mode pins its reference to frame 0.
+            var aligner = new FrameAligner(cfg.AlignMode);
             SetPhase(job, EncodePhase.Rendering);
             for (int i = 0; i < count; i++) {
                 ct.ThrowIfCancellationRequested();
                 var jpeg = source.RenderJpeg(i, cfg.MaxDim, quality: 90);
-                if (cfg.Center) jpeg = CenterSubject(jpeg);
+                if (aligner.Enabled) jpeg = aligner.Process(jpeg, i);
                 await File.WriteAllBytesAsync(Path.Combine(tmp, $"frame_{i:D5}.jpg"), jpeg, ct);
                 job.FramesRendered = i + 1;
                 if (i % 5 == 0 || i == count - 1) Notify(job);
@@ -150,36 +152,6 @@ public class MediaEncodeService {
         return new GifFrame(rgb, w, h);
     }
 
-    // Shift a rendered frame so a bright Sun/Moon disk sits at the image center,
-    // keeping the subject steady across the movie. Skia glue (Linux runtime); the
-    // centering decision is the pure TimelapseAlign helper. Any failure returns
-    // the frame untouched.
-    private static byte[] CenterSubject(byte[] jpeg) {
-        try {
-            using var bmp = SKBitmap.Decode(jpeg);
-            if (bmp == null) return jpeg;
-            int w = bmp.Width, h = bmp.Height;
-            var px = bmp.Pixels;                 // SKColor[]
-            var lum = new ushort[w * h];
-            for (int i = 0; i < px.Length; i++) {
-                // Rec.601 luminance, promoted to the 16-bit domain the aligner uses.
-                int y = (299 * px[i].Red + 587 * px[i].Green + 114 * px[i].Blue) / 1000;
-                lum[i] = (ushort)(y << 8);
-            }
-            var (dx, dy) = TimelapseAlign.CenterOffset(lum, w, h);
-            if (dx == 0 && dy == 0) return jpeg;
-
-            using var shifted = new SKBitmap(w, h, bmp.ColorType, bmp.AlphaType);
-            using (var canvas = new SKCanvas(shifted)) {
-                canvas.Clear(SKColors.Black);
-                canvas.DrawBitmap(bmp, dx, dy);
-            }
-            using var img = SKImage.FromBitmap(shifted);
-            using var data = img.Encode(SKEncodedImageFormat.Jpeg, 90);
-            return data.ToArray();
-        } catch { return jpeg; }
-    }
-
     private static string SanitizeName(string? name) {
         name = (name ?? "").Trim();
         if (string.IsNullOrEmpty(name)) return "timelapse";
@@ -203,8 +175,10 @@ public record EncodeConfig(
     int MaxDim = 1280,
     EncodeFormat Format = EncodeFormat.Gif,
     bool Loop = true,
-    // Center a bright Sun/Moon disk in each frame before encoding (eclipse time-lapse).
-    bool Center = false);
+    // Frame registration before encoding: null/"off" | "auto" | "center" (move
+    // a bright disc to the middle) | "stabilize" (lock a filled surface to
+    // frame 0). "true"/"1" maps to "center" for the old boolean option.
+    string? AlignMode = null);
 
 public class EncodeJob {
     public string Id { get; set; } = "";

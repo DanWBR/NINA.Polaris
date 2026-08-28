@@ -1,4 +1,12 @@
 {
+  "Align": "Align",
+  "Center disc": "Center disc",
+  "Stabilize surface": "Stabilize surface",
+  "Auto contrast": "Auto contrast",
+  "Auto HDR": "Auto HDR",
+  "Register frames so the subject stays put. Center: move a bright Sun/Moon disk to the middle. Stabilize: lock a frame-filling surface (lunar/solar close-up) to the first frame.": "Register frames so the subject stays put. Center: move a bright Sun/Moon disk to the middle. Stabilize: lock a frame-filling surface (lunar/solar close-up) to the first frame.",
+  "Stretch each frame on its own histogram (for brightness that swings across the sequence, e.g. an eclipse).": "Stretch each frame on its own histogram (for brightness that swings across the sequence, e.g. an eclipse).",
+  "Asinh tone curve per frame: lifts shadows and compresses highlights so corona and disk show together (eclipse dynamic range).": "Asinh tone curve per frame: lifts shadows and compresses highlights so corona and disk show together (eclipse dynamic range).",
   "📈 View": "",
   "Guide log": "",
   "Guiding session": "",

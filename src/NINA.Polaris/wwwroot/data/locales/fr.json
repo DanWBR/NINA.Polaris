@@ -1,4 +1,12 @@
 {
+  "Align": "Aligner",
+  "Center disc": "Centrer le disque",
+  "Stabilize surface": "Stabiliser la surface",
+  "Auto contrast": "Contraste auto",
+  "Auto HDR": "HDR auto",
+  "Register frames so the subject stays put. Center: move a bright Sun/Moon disk to the middle. Stabilize: lock a frame-filling surface (lunar/solar close-up) to the first frame.": "Recale les images pour que le sujet reste fixe. Center : déplace le disque brillant du Soleil/de la Lune au centre. Stabilize : verrouille une surface qui remplit l'image (gros plan lunaire/solaire) sur la première image.",
+  "Stretch each frame on its own histogram (for brightness that swings across the sequence, e.g. an eclipse).": "Étire chaque image selon son propre histogramme (pour une luminosité qui varie au fil de la séquence, par ex. une éclipse).",
+  "Asinh tone curve per frame: lifts shadows and compresses highlights so corona and disk show together (eclipse dynamic range).": "Courbe de tons asinh par image : relève les ombres et compresse les hautes lumières pour montrer couronne et disque ensemble (plage dynamique d'éclipse).",
   "📈 View": "📈 Voir",
   "Guide log": "Journal de guidage",
   "Guiding session": "Session de guidage",

@@ -41,15 +41,27 @@ public sealed class FolderFrameSource : IFrameSource {
     private static readonly string[] FitsExt = { ".fits", ".fit", ".fts" };
     private readonly List<string> _files;
     private readonly string? _stretchRef;   // a FITS reference file, pins the stretch
+    private readonly bool _hdr;             // asinh auto-HDR tone, per frame
 
-    public FolderFrameSource(IReadOnlyList<string> files, int everyNth) {
+    /// <param name="perFrameStretch">Auto-contrast: stretch each FITS frame on
+    /// its own histogram instead of pinning to one reference (for a sequence
+    /// whose brightness swings, e.g. an eclipse).</param>
+    /// <param name="hdr">Auto-HDR: render FITS frames with an asinh tone curve
+    /// (lifts shadows, compresses highlights) instead of the default MTF.</param>
+    public FolderFrameSource(IReadOnlyList<string> files, int everyNth,
+                             bool perFrameStretch = false, bool hdr = false) {
         everyNth = Math.Max(1, everyNth);
         _files = new List<string>();
         for (int i = 0; i < files.Count; i += everyNth) _files.Add(files[i]);
+        _hdr = hdr;
         // Pin the FITS auto-stretch to a mid-sequence FITS frame: a per-file
-        // stretch would rescale every frame independently and flicker.
-        _stretchRef = _files.Where(IsFits)
-            .Skip(_files.Count(IsFits) / 2).FirstOrDefault()
+        // stretch would rescale every frame independently and flicker. When
+        // perFrameStretch (auto-contrast) is on, leave the reference null so
+        // each frame stretches on its own histogram. asinh (hdr) is also
+        // computed per frame, so it doesn't pin either.
+        _stretchRef = (perFrameStretch || hdr) ? null
+            : _files.Where(IsFits)
+                .Skip(_files.Count(IsFits) / 2).FirstOrDefault()
             ?? _files.FirstOrDefault(IsFits);
     }
 
@@ -61,7 +73,8 @@ public sealed class FolderFrameSource : IFrameSource {
     public byte[] RenderJpeg(int index, int maxDim, int quality) {
         var f = _files[index];
         if (IsFits(f))
-            return FitsThumbnailer.RenderJpegFromPath(f, maxDim, quality, stretchFromPath: _stretchRef);
+            return FitsThumbnailer.RenderJpegFromPath(f, maxDim, quality,
+                stretchFromPath: _stretchRef, asinh: _hdr);
         return RasterToJpeg(f, maxDim, quality);
     }
 
