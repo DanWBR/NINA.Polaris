@@ -38,7 +38,15 @@ public sealed class FrameAligner {
     public enum Mode { Off, Auto, Center, Stabilize }
 
     private Mode _mode;
-    private PhaseCorrelationAligner? _pc;   // built lazily on frame 0 for stabilize
+    // Stabilize: sequential registration. Each frame is correlated against the
+    // PREVIOUS frame (always nearly identical, so the peak is unambiguous) and
+    // the small step shift is accumulated into a running offset back to frame 0.
+    // Anchoring every frame directly to frame 0 breaks down over a long session
+    // (the Moon/Sun drifts and its terminator/illumination change, so late
+    // frames diverge too far from frame 0 and phase correlation locks the wrong
+    // peak) — the very "some frames still misaligned" symptom.
+    private ushort[]? _prevLum;
+    private int _accDx, _accDy;             // cumulative shift onto frame 0
 
     public FrameAligner(string? mode) => _mode = Parse(mode);
 
@@ -101,18 +109,27 @@ public sealed class FrameAligner {
             return TimelapseAlign.CenterOffset(lum, width, height);
 
         if (_mode == Mode.Stabilize) {
-            if (_pc == null) {
-                // Reference = the first frame; it defines "in place".
-                _pc = new PhaseCorrelationAligner(lum, width, height);
+            if (_prevLum == null || _prevLum.Length != lum.Length) {
+                // First frame defines "in place"; nothing accumulated yet.
+                _prevLum = lum;
+                _accDx = _accDy = 0;
                 return (0, 0);
             }
-            // Align returns the shift (dst = src + (dx,dy)) that lands this frame
-            // back on the reference — same convention CenterOffset and the
-            // planetary stacker use, so apply it directly.
-            var (dx, dy) = _pc.Align(lum);
-            dx = Math.Clamp(dx, -width, width);
-            dy = Math.Clamp(dy, -height, height);
-            return (dx, dy);
+            // Correlate against the previous frame. Align returns the shift
+            // (dst = src + (dx,dy)) that lands THIS frame on the previous one;
+            // composing those small steps gives the offset back to frame 0.
+            var pc = new PhaseCorrelationAligner(_prevLum, width, height);
+            var (sdx, sdy) = pc.Align(lum);
+            // Reject a spurious peak: consecutive frames drift by a little, so a
+            // step larger than a quarter of the frame is almost certainly a
+            // mis-locked correlation. Carry the running offset unchanged rather
+            // than throwing that frame across the canvas.
+            int maxStep = Math.Max(4, Math.Min(width, height) / 4);
+            if (Math.Abs(sdx) > maxStep || Math.Abs(sdy) > maxStep) { sdx = 0; sdy = 0; }
+            _accDx = Math.Clamp(_accDx + sdx, -width, width);
+            _accDy = Math.Clamp(_accDy + sdy, -height, height);
+            _prevLum = lum;
+            return (_accDx, _accDy);
         }
 
         return (0, 0);

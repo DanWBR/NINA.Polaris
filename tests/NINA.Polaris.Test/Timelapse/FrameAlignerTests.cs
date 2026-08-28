@@ -109,6 +109,36 @@ public class FrameAlignerTests {
     }
 
     [Test]
+    public void Stabilize_AccumulatesGradualDriftAcrossFrames() {
+        // Sequential registration: each frame drifts a small step from the last;
+        // the running offset must track the TOTAL drift back to frame 0.
+        int w = 128, h = 128;
+        var fa = new FrameAligner("stabilize");
+        Assert.That(fa.Offset(Craters(w, h, 0, 0), w, h, 0), Is.EqualTo((0, 0)));
+        // frame 1 drifted (+2,+1) from 0; frame 2 drifted (+4,+2) from 0.
+        var s1 = fa.Offset(Craters(w, h, 2, 1), w, h, 1);
+        var s2 = fa.Offset(Craters(w, h, 4, 2), w, h, 2);
+        Assert.That(s1.dx, Is.EqualTo(-2).Within(1));
+        Assert.That(s1.dy, Is.EqualTo(-1).Within(1));
+        Assert.That(s2.dx, Is.EqualTo(-4).Within(1));
+        Assert.That(s2.dy, Is.EqualTo(-2).Within(1));
+    }
+
+    [Test]
+    public void Stabilize_RejectsASpuriousLargeStep() {
+        // A single wild correlation must not throw the frame across the canvas;
+        // the running offset holds instead. Frame 1 sits at a modest drift, then
+        // frame 2 (identical content, no real motion) must keep frame 1's offset.
+        int w = 128, h = 128;
+        var fa = new FrameAligner("stabilize");
+        fa.Offset(Craters(w, h, 0, 0), w, h, 0);
+        var s1 = fa.Offset(Craters(w, h, 3, 2), w, h, 1);
+        var s2 = fa.Offset(Craters(w, h, 3, 2), w, h, 2);   // no further motion
+        Assert.That(s2.dx, Is.EqualTo(s1.dx));
+        Assert.That(s2.dy, Is.EqualTo(s1.dy));
+    }
+
+    [Test]
     public void Auto_ResolvesToStabilizeForAFilledSurface() {
         int w = 128, h = 128;
         var fa = new FrameAligner("auto");
