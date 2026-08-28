@@ -22,25 +22,32 @@ namespace NINA.Polaris.Services.Timelapse;
 /// (takes a luminance buffer, returns an integer offset) so it's unit-testable;
 /// the pixel shift itself is done by the caller.
 ///
-/// Uses the same <see cref="CentroidAligner"/> the planetary stacker uses for a
-/// bounded disc on sky (a partial-eclipse crescent included). There is no
-/// circle/limb fit, so a deep crescent's centroid leans toward the bright side;
-/// for the partial phases and a full disk it centers cleanly.
+/// Primary method is a limb (circle) fit, <see cref="DiskFit"/>, which recovers
+/// the true disc center even from a partial-eclipse crescent. When no clear limb
+/// can be fit it falls back to the intensity-weighted <see cref="CentroidAligner"/>
+/// the planetary stacker uses (with a frame-filling guard).
 /// </summary>
 public static class TimelapseAlign {
-    /// <summary>Offset (dx, dy) that moves the bright subject's centroid to the
-    /// image center. Returns (0,0) when there's nothing sensible to center:
-    /// an empty/ambiguous frame (Find falls back to frame-center) or a
-    /// frame-filling surface (no bounded disc to move).</summary>
+    /// <summary>Offset (dx, dy) that moves the bright subject to the image
+    /// center. Returns (0,0) when there's nothing sensible to center: an
+    /// empty/ambiguous frame or a frame-filling surface (no bounded disc).</summary>
     public static (int dx, int dy) CenterOffset(ushort[] lum, int width, int height) {
         if (lum == null || width <= 0 || height <= 0 || lum.Length < (long)width * height)
             return (0, 0);
-        // A subject that fills the frame has no meaningful center to move to.
-        if (CentroidAligner.FillFraction(lum, width, height) >= 0.85) return (0, 0);
 
-        var c = CentroidAligner.Find(lum, width, height);
-        int dx = (int)Math.Round(width / 2.0 - c.X);
-        int dy = (int)Math.Round(height / 2.0 - c.Y);
+        double centerX, centerY;
+        if (DiskFit.TryFindCenter(lum, width, height, out var fx, out var fy)) {
+            // Limb fit: precise, and robust to an eclipse crescent.
+            centerX = fx; centerY = fy;
+        } else {
+            // Fallback: a frame-filling subject has no center to move to.
+            if (CentroidAligner.FillFraction(lum, width, height) >= 0.85) return (0, 0);
+            var c = CentroidAligner.Find(lum, width, height);
+            centerX = c.X; centerY = c.Y;
+        }
+
+        int dx = (int)Math.Round(width / 2.0 - centerX);
+        int dy = (int)Math.Round(height / 2.0 - centerY);
         // Clamp so a spurious detection can't shove the whole frame off-canvas.
         dx = Math.Clamp(dx, -width, width);
         dy = Math.Clamp(dy, -height, height);
