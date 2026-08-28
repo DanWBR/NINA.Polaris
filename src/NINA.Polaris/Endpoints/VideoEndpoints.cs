@@ -273,7 +273,8 @@ public static class VideoEndpoints {
                 Fps: Math.Clamp(req.Fps ?? 15, 1, 60),
                 MaxDim: Math.Clamp(req.MaxDim ?? 1280, 100, 4000),
                 Format: fmt,
-                Loop: req.Loop ?? true);
+                Loop: req.Loop ?? true,
+                Center: req.Center ?? false);
             var job = encoder.StartJob(new FolderFrameSource(files, Math.Max(1, req.EveryNth ?? 1)), cfg);
             return Results.Accepted($"/api/video/timelapse/{job.Id}", new { jobId = job.Id });
         });
@@ -425,7 +426,9 @@ public static class VideoEndpoints {
         string? Format = null,
         int? EveryNth = null,
         string? OutputName = null,
-        bool? Loop = null);
+        bool? Loop = null,
+        /// <summary>Center a bright Sun/Moon disk in each frame (eclipse).</summary>
+        bool? Center = null);
 
     public record SerToMp4Request(
         string? SerPath,

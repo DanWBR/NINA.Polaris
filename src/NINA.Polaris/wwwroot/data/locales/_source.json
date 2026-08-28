@@ -4003,5 +4003,7 @@
   "Copy the folder path": "Copy the folder path",
   "Folder path copied": "Folder path copied",
   "Could not copy the path": "Could not copy the path",
-  "Add frames…": "Add frames…"
+  "Add frames…": "Add frames…",
+  "Keep the Sun/Moon centered": "Keep the Sun/Moon centered",
+  "Aligns each frame so a bright Sun/Moon disk stays centered (eclipse).": "Aligns each frame so a bright Sun/Moon disk stays centered (eclipse)."
 }

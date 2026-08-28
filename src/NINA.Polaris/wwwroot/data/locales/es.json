@@ -4622,5 +4622,7 @@
   "Copy the folder path": "Copiar la ruta de la carpeta",
   "Folder path copied": "Ruta de la carpeta copiada",
   "Could not copy the path": "No se pudo copiar la ruta",
-  "Add frames…": "Añadir frames…"
+  "Add frames…": "Añadir frames…",
+  "Keep the Sun/Moon centered": "Mantener el Sol/Luna centrado",
+  "Aligns each frame so a bright Sun/Moon disk stays centered (eclipse).": "Alinea cada cuadro para que el disco del Sol/Luna quede centrado (eclipse)."
 }

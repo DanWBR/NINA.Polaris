@@ -2557,6 +2557,7 @@ function ninaApp() {
             everyNth: 1,
             outputName: 'timelapse',
             loop: true,
+            center: false,
             ffmpegAvailable: false,
             ffmpegProbed: false
         },
@@ -27063,7 +27064,7 @@ function ninaApp() {
                 await this.apiPostJson('/api/video/timelapse/start', {
                     dir: t.framesDir, fps: Number(t.fps) || 15, maxDim: Number(t.maxDim) || 1280,
                     format: t.format, everyNth: Number(t.everyNth) || 1,
-                    outputName: t.outputName || 'timelapse', loop: !!t.loop });
+                    outputName: t.outputName || 'timelapse', loop: !!t.loop, center: !!t.center });
                 this.toast('Building time-lapse…', 'ok');
             } catch (e) { this.toastFail('Time-lapse failed to start', e); }
         },
