@@ -26328,6 +26328,61 @@ function ninaApp() {
             }
         },
 
+        // Send the solved position straight to the PLAN as a target, named after
+        // whatever the catalog says is there (the same lookup planAddTargetFromMount
+        // uses). If a plan target already sits within a few arcmin -- the same
+        // object shot across several sessions -- select that one instead of adding
+        // a duplicate, so months of exposure accrue to a single target.
+        async filesSolveSendToPlan() {
+            const r = this.filesSolveResult;
+            if (!r || !r.success) { this.toast('Solve the image first', 'warn'); return; }
+            if (!this.plan) {
+                this.toast('Open or create a plan first', 'warn');
+                this.tab = 'plan';
+                return;
+            }
+            const existing = this._planTargetNear(r.raHours, r.decDeg, 6);
+            if (existing) {
+                this.planSelectedTargetId = existing.id;
+                this.tab = 'plan';
+                this.toast('Already in this plan: ' + existing.name + ' (selected)', 'ok');
+                return;
+            }
+            const t = this._blankTarget();
+            t.raHours = r.raHours;
+            t.decDeg = r.decDeg;
+            t.rotation = r.rotationDeg ?? 0;
+            const hit = await this._identifyNameAt(r.raHours, r.decDeg);
+            const base = (this.filesSolveModal?.fileName || '').replace(/\.[^.]+$/, '');
+            t.name = hit?.name || (base ? ('Solved ' + base) : ('RA ' + r.raHours.toFixed(2) + 'h'));
+            if (hit?.thumbKey) t.thumbKey = hit.thumbKey;
+            this._planPushTarget(t);
+            this.tab = 'plan';
+            this.toast('Added ' + t.name + ' to plan', 'ok');
+        },
+
+        // Nearest plan target to (raHours, decDeg) within `arcmin`, else null.
+        // Lets a repeat session merge into the target it already belongs to.
+        _planTargetNear(raHours, decDeg, arcmin) {
+            if (!this.plan || !Array.isArray(this.plan.targets)) return null;
+            const tol = arcmin / 60;   // degrees
+            let best = null, bestSep = tol;
+            for (const t of this.plan.targets) {
+                if (!Number.isFinite(t.raHours) || !Number.isFinite(t.decDeg)) continue;
+                const sep = this._angSepDeg(raHours * 15, t.raHours * 15, decDeg, t.decDeg);
+                if (sep <= bestSep) { bestSep = sep; best = t; }
+            }
+            return best;
+        },
+
+        // Great-circle angular separation in degrees; RA/Dec passed in degrees.
+        _angSepDeg(ra1, ra2, dec1, dec2) {
+            const d2r = Math.PI / 180;
+            const s = Math.sin(dec1 * d2r) * Math.sin(dec2 * d2r)
+                + Math.cos(dec1 * d2r) * Math.cos(dec2 * d2r) * Math.cos((ra1 - ra2) * d2r);
+            return Math.acos(Math.min(1, Math.max(-1, s))) / d2r;
+        },
+
         async previewAbort() {
             this.preview.looping = false;   // stop the chain first
             // Free the shutter immediately. The in-flight capture request can
