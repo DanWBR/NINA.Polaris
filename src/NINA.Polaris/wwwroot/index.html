@@ -12370,6 +12370,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                             title="Slew to the solved RA/Dec and center (iterative plate-solve convergence)">
                                         Slew &amp; Center
                                     </button>
+                                    <button class="btn btn-sm"
+                                            @click="filesSolveSendToPlan()"
+                                            title="Add this solved position to the PLAN as a target. Identifies the object automatically and merges into an existing target if one is already there.">
+                                        Send to PLAN
+                                    </button>
                                 </div>
                                 <p class="text-muted" style="font-size:11px; margin-top:6px"
                                    x-show="filesSolveResult.wcsWritten">

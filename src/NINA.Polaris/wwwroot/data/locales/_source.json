@@ -1,4 +1,8 @@
 {
+  "Send to PLAN": "Send to PLAN",
+  "Add this solved position to the PLAN as a target. Identifies the object automatically and merges into an existing target if one is already there.": "Add this solved position to the PLAN as a target. Identifies the object automatically and merges into an existing target if one is already there.",
+  "Solve the image first": "Solve the image first",
+  "Open or create a plan first": "Open or create a plan first",
   "Align": "Align",
   "Center disc": "Center disc",
   "Stabilize surface": "Stabilize surface",

@@ -1,4 +1,8 @@
 {
+  "Send to PLAN": "An PLAN senden",
+  "Add this solved position to the PLAN as a target. Identifies the object automatically and merges into an existing target if one is already there.": "Fügt diese gelöste Position als Ziel zum PLAN hinzu. Erkennt das Objekt automatisch und führt es mit einem vorhandenen Ziel zusammen, falls hier bereits eines ist.",
+  "Solve the image first": "Löse zuerst das Bild",
+  "Open or create a plan first": "Öffne oder erstelle zuerst einen Plan",
   "Align": "Ausrichten",
   "Center disc": "Scheibe zentrieren",
   "Stabilize surface": "Oberfläche stabilisieren",
