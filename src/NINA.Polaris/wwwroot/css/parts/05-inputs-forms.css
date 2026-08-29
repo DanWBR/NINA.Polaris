@@ -1868,6 +1868,13 @@ body.link-offline .preview-pane::after {
     display: flex;
     flex-direction: column;
     min-height: 0;
+    /* Grid items default to min-width:auto (min-content), which floors this
+       1fr preview track at the canvas's intrinsic width. Without this the
+       track can't shrink to make room, so widening the controls panel
+       (--editor-panel-w) overflows the grid and .editor-workspace's
+       overflow:hidden clips the panel off to the right instead of growing it
+       leftward. min-width:0 lets the track shrink so the panel grows properly. */
+    min-width: 0;
     background: #000;
 }
 .editor-preview-toolbar {
