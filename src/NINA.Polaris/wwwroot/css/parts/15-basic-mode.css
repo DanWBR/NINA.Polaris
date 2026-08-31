@@ -49,9 +49,12 @@
     border:1px solid var(--bs-border); color:var(--text); font-size:15px; backdrop-filter:blur(8px);
     display:flex; align-items:center; justify-content:center; padding:0; line-height:1}
 .basic-shell .bs-topicn.on{border-color:var(--bs-accent2); color:var(--bs-accent2)}
-.basic-shell .bs-temp{pointer-events:auto; position:absolute; left:8px; top:6px; height:32px; display:flex;
+.basic-shell .bs-topleft{position:absolute; left:8px; top:6px; display:flex; align-items:center; gap:6px; z-index:31}
+.basic-shell .bs-fulltop{pointer-events:auto; height:32px; padding:0 12px; border-radius:16px; background:var(--bs-panel);
+    border:1px solid var(--bs-border); color:var(--bs-muted); font-size:12px; font-weight:600; font-family:inherit; white-space:nowrap}
+.basic-shell .bs-temp{pointer-events:auto; height:32px; display:flex;
     align-items:center; gap:6px; padding:0 10px; background:var(--bs-panel); border:1px solid var(--bs-border);
-    border-radius:16px; font-size:12px; color:var(--bs-accent2); backdrop-filter:blur(8px); z-index:31}
+    border-radius:16px; font-size:12px; color:var(--bs-accent2); backdrop-filter:blur(8px)}
 .basic-shell .bs-status{pointer-events:auto; position:absolute; right:8px; top:6px; height:32px; display:flex;
     align-items:center; gap:6px; padding:0 10px; background:var(--bs-panel); border:1px solid var(--bs-border);
     border-radius:16px; font-size:12px; color:var(--bs-muted); backdrop-filter:blur(8px); z-index:31}
@@ -345,7 +348,10 @@
 .basic-shell .bs-cdev{display:flex; align-items:center; gap:8px; font-size:13px; padding:2px 0}
 .basic-shell .bs-cdlbl{color:var(--bs-muted); min-width:66px}
 .basic-shell .bs-cdname{color:var(--text); font-weight:600; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:none}
-.basic-shell .bs-cdev .bs-cbtn{margin-left:auto}
+.basic-shell .bs-cdsel{flex:1; min-width:0; height:32px; border-radius:10px; border:1px solid var(--bs-border);
+    background:#0e1422; color:var(--text); padding:0 8px; font-size:12px; font-family:inherit; appearance:auto}
+.basic-shell .bs-cdsel:disabled{opacity:.7}
+.basic-shell .bs-cdev .bs-cbtn{margin-left:auto; flex:none}
 .basic-shell .bs-cnote{font-size:11px; color:var(--bs-muted); line-height:1.35}
 .basic-shell .bs-cnote.ok{color:var(--bs-ok)} .basic-shell .bs-cnote.warn{color:var(--bs-warn)}
 .basic-shell .bs-clink{background:none; border:0; color:var(--bs-accent2); font-size:11px; font-weight:700; font-family:inherit; padding:0; text-decoration:underline}

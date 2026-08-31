@@ -27831,6 +27831,56 @@ function ninaApp() {
                     this.connectIndi();
                 }
             } catch (e) { }
+            // Populate the per-role device dropdowns: refresh the INDI list, and
+            // discover vendor/ASCOM/Alpaca devices for any non-INDI role.
+            try { if (this.indiConnected && this.refreshDevices) this.refreshDevices(); } catch (e) { }
+            try {
+                if (this.cameraDriver !== 'indi' && this.detectVendorCameras) this.detectVendorCameras();
+                if (this.mountDriver !== 'indi' && this.detectVendorMounts) this.detectVendorMounts();
+                if (this.focuserDriver !== 'indi' && this.detectVendorFocusers) this.detectVendorFocusers();
+                if (this.filterWheelDriver !== 'indi' && this.detectVendorFilterWheels) this.detectVendorFilterWheels();
+            } catch (e) { }
+        },
+        // ---- Basic equipment per-role device picker ----
+        // Options for a role's device <select>: the shared INDI device list when
+        // the role's driver is INDI, else that role's discovered vendor devices.
+        // The currently connected device is always surfaced so the select shows
+        // it even before discovery has run.
+        _basicRoleMap: {
+            camera: { driver: 'cameraDriver', vendor: 'cameraVendorDevices', choice: 'equipCameraChoice', name: 'selectedCamera' },
+            mount: { driver: 'mountDriver', vendor: 'mountVendorDevices', choice: 'equipMountChoice', name: 'selectedTelescope' },
+            focuser: { driver: 'focuserDriver', vendor: 'focuserVendorDevices', choice: 'equipFocuserChoice', name: 'selectedFocuser' },
+            filter: { driver: 'filterWheelDriver', vendor: 'filterWheelVendorDevices', choice: 'equipFilterChoice', name: 'selectedFilterWheel' },
+            guide: { driver: 'guideCameraDriver', vendor: 'guideCameraVendorDevices', choice: 'guideCamera', name: null }
+        },
+        basicRoleConnectedName(role) {
+            if (role === 'guide') return (this.guider && this.guider.guideCameraName) || '';
+            const cfg = this._basicRoleMap[role];
+            return (cfg && cfg.name && this[cfg.name]) || '';
+        },
+        basicDevOptions(role) {
+            const cfg = this._basicRoleMap[role];
+            if (!cfg) return [];
+            let list;
+            if (this[cfg.driver] === 'indi') {
+                list = (this.devices || []).map(d => ({ value: d.name, label: d.name + (d.driver ? ' (' + d.driver + ')' : '') }));
+            } else {
+                list = (this[cfg.vendor] || []).map(d => ({ value: d.id, label: (d.model || d.name || d.id) + (d.detail ? ' (' + d.detail + ')' : '') }));
+            }
+            const cur = this.basicRoleConnectedName(role);
+            if (cur && !list.some(o => o.value === cur)) list.unshift({ value: cur, label: cur });
+            return list;
+        },
+        basicDevSelected(role, value) {
+            const cfg = this._basicRoleMap[role];
+            if (!cfg) return false;
+            const choice = cfg.choice ? this[cfg.choice] : '';
+            return (choice ? choice : this.basicRoleConnectedName(role)) === value;
+        },
+        basicSetDevChoice(role, value) {
+            if (role === 'guide') { if (this.setGuideCamera) this.setGuideCamera(value); else this.guideCamera = value; return; }
+            const cfg = this._basicRoleMap[role];
+            if (cfg && cfg.choice) this[cfg.choice] = value;
         },
         // Open the equipment-detection wizard. It creates/edits an INDI profile,
         // which is a Full-UI concern, so drop to the full UI (the detect modal

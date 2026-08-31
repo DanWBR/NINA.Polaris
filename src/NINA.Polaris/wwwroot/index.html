@@ -64,7 +64,7 @@
          Inert unless a manifest URL is configured (assistant-config.json). -->
     <link rel="stylesheet" href="/css/parts/13-assistant.css?v=20260705-assist15">
     <link rel="stylesheet" href="/css/parts/14-uiscale-text.css?v=20260707-hintsize">
-    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260831-basic20">
+    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260831-basic21">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -20053,7 +20053,10 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         <!-- Collapsed: a small pill to bring the sequence list back. -->
         <button class="bs-seqreopen" x-show="basicScreen==='autorun' && !seqOpen" x-cloak @click="seqOpen=true">&#9776; <span x-text="sequence.length"></span> <span x-text="sequence.length===1 ? 'set' : 'sets'"></span></button>
 
-        <div class="bs-temp">&#10052; <b class="bs-num" x-text="(cameraTemp!=null ? Number(cameraTemp).toFixed(1) : '--') + '&deg;C'"></b></div>
+        <div class="bs-topleft">
+            <button class="bs-fulltop" @click="basicSetPref('off')" title="Full UI">Full UI</button>
+            <div class="bs-temp">&#10052; <b class="bs-num" x-text="(cameraTemp!=null ? Number(cameraTemp).toFixed(1) : '--') + '&deg;C'"></b></div>
+        </div>
         <div class="bs-topbar">
             <button class="bs-topicn" :class="basicScreen==='guide' ? 'on' : ''" @click="basicGoMode('guide')" title="Guide" aria-label="Guide">&#128760;</button>
             <button class="bs-modepill" @click="modeMenu = !modeMenu"><span x-text="basicScreen==='focus' ? 'Focus' : (basicScreen==='autorun' ? 'Autorun' : (basicScreen==='guide' ? 'Guide' : (basicScreen==='live' ? 'Live' : (basicScreen==='video' ? 'Video' : (basicScreen==='sky' ? 'Sky' : (basicScreen==='config' ? 'Setup' : 'Preview'))))))"></span> <span class="bs-caret">&#9660;</span></button>
@@ -20107,15 +20110,35 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     <button class="bs-cbtn primary" :disabled="equipBulkBusy" @click="basicConnectAll()">Connect all</button>
                     <button class="bs-cbtn" :disabled="equipBulkBusy" @click="equipDisconnectAll()">Disconnect all</button>
                 </div>
-                <div class="bs-cdev"><span class="bs-dot" :class="selectedCamera ? '' : 'off'"></span><span class="bs-cdlbl">Camera</span><span class="bs-cdname bs-name" x-text="selectedCamera || equipCameraChoice || '—'"></span>
+                <div class="bs-cdev"><span class="bs-dot" :class="selectedCamera ? '' : 'off'"></span><span class="bs-cdlbl">Camera</span>
+                    <select class="bs-cdsel" :disabled="!!selectedCamera" @change="basicSetDevChoice('camera', $event.target.value)">
+                        <option value="" x-text="basicDevOptions('camera').length ? 'Select device' : 'No devices'"></option>
+                        <template x-for="o in basicDevOptions('camera')" :key="'cam-'+o.value"><option :value="o.value" :selected="basicDevSelected('camera', o.value)" x-text="o.label"></option></template>
+                    </select>
                     <button class="bs-cbtn xs" @click="selectedCamera ? equipDisconnectCamera() : equipConnectCamera()" x-text="selectedCamera ? 'Disconnect' : 'Connect'"></button></div>
-                <div class="bs-cdev"><span class="bs-dot" :class="mount.connected ? '' : 'off'"></span><span class="bs-cdlbl">Mount</span><span class="bs-cdname bs-name" x-text="selectedTelescope || equipMountChoice || '—'"></span>
+                <div class="bs-cdev"><span class="bs-dot" :class="mount.connected ? '' : 'off'"></span><span class="bs-cdlbl">Mount</span>
+                    <select class="bs-cdsel" :disabled="mount.connected" @change="basicSetDevChoice('mount', $event.target.value)">
+                        <option value="" x-text="basicDevOptions('mount').length ? 'Select device' : 'No devices'"></option>
+                        <template x-for="o in basicDevOptions('mount')" :key="'mnt-'+o.value"><option :value="o.value" :selected="basicDevSelected('mount', o.value)" x-text="o.label"></option></template>
+                    </select>
                     <button class="bs-cbtn xs" @click="mount.connected ? equipDisconnectMount() : equipConnectMount()" x-text="mount.connected ? 'Disconnect' : 'Connect'"></button></div>
-                <div class="bs-cdev"><span class="bs-dot" :class="focusConnected ? '' : 'off'"></span><span class="bs-cdlbl">Focuser</span><span class="bs-cdname bs-name" x-text="selectedFocuser || equipFocuserChoice || '—'"></span>
+                <div class="bs-cdev"><span class="bs-dot" :class="focusConnected ? '' : 'off'"></span><span class="bs-cdlbl">Focuser</span>
+                    <select class="bs-cdsel" :disabled="focusConnected" @change="basicSetDevChoice('focuser', $event.target.value)">
+                        <option value="" x-text="basicDevOptions('focuser').length ? 'Select device' : 'No devices'"></option>
+                        <template x-for="o in basicDevOptions('focuser')" :key="'foc-'+o.value"><option :value="o.value" :selected="basicDevSelected('focuser', o.value)" x-text="o.label"></option></template>
+                    </select>
                     <button class="bs-cbtn xs" @click="focusConnected ? equipDisconnectFocuser() : equipConnectFocuser()" x-text="focusConnected ? 'Disconnect' : 'Connect'"></button></div>
-                <div class="bs-cdev"><span class="bs-dot" :class="(filterWheel && filterWheel.connected) ? '' : 'off'"></span><span class="bs-cdlbl">Filter</span><span class="bs-cdname bs-name" x-text="(filterWheel && filterWheel.name) || equipFilterChoice || '—'"></span>
+                <div class="bs-cdev"><span class="bs-dot" :class="(filterWheel && filterWheel.connected) ? '' : 'off'"></span><span class="bs-cdlbl">Filter</span>
+                    <select class="bs-cdsel" :disabled="filterWheel && filterWheel.connected" @change="basicSetDevChoice('filter', $event.target.value)">
+                        <option value="" x-text="basicDevOptions('filter').length ? 'Select device' : 'No devices'"></option>
+                        <template x-for="o in basicDevOptions('filter')" :key="'fw-'+o.value"><option :value="o.value" :selected="basicDevSelected('filter', o.value)" x-text="o.label"></option></template>
+                    </select>
                     <button class="bs-cbtn xs" @click="(filterWheel && filterWheel.connected) ? equipDisconnectFilter() : equipConnectFilter()" x-text="(filterWheel && filterWheel.connected) ? 'Disconnect' : 'Connect'"></button></div>
-                <div class="bs-cdev"><span class="bs-dot" :class="guider.guideCameraConnected ? '' : 'off'"></span><span class="bs-cdlbl">Guide cam</span><span class="bs-cdname bs-name" x-text="guider.guideCameraName || guideCamera || '—'"></span>
+                <div class="bs-cdev"><span class="bs-dot" :class="guider.guideCameraConnected ? '' : 'off'"></span><span class="bs-cdlbl">Guide cam</span>
+                    <select class="bs-cdsel" :disabled="guider.guideCameraConnected" @change="basicSetDevChoice('guide', $event.target.value)">
+                        <option value="" x-text="basicDevOptions('guide').length ? 'Select device' : 'No devices'"></option>
+                        <template x-for="o in basicDevOptions('guide')" :key="'gcam-'+o.value"><option :value="o.value" :selected="basicDevSelected('guide', o.value)" x-text="o.label"></option></template>
+                    </select>
                     <button class="bs-cbtn xs" @click="guider.guideCameraConnected ? equipDisconnectGuideCamera() : equipConnectGuideCamera()" x-text="guider.guideCameraConnected ? 'Disconnect' : 'Connect'"></button></div>
                 <div class="bs-cnote">Editing the INDI profile or INDI settings is done in the full UI.
                     <button class="bs-clink" @click="basicSetPref('off')">Open full UI</button></div>
@@ -20462,7 +20485,6 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             <div class="bs-chip bs-num" x-show="basicScreen==='focus'" x-cloak>Step <b x-text="focusStepFast"></b></div>
             <div class="bs-chip bs-num" x-show="basicScreen==='focus' && autoFocus.lastHfr" x-cloak>HFR <b x-text="autoFocus.lastHfr?.toFixed(2)"></b></div>
             <div class="bs-chip" x-show="basicScreen==='guide'" x-cloak><span class="bs-dot" :class="guider.guideCameraConnected ? '' : 'off'"></span><span class="bs-name" x-text="guider.guideCameraName || 'Guide cam'"></span></div>
-            <button class="bs-full" @click="basicSetPref('off')">Full UI</button>
             <button class="bs-conn" :class="basicAnyDisconnected() ? 'warn' : ''" @click="basicConnectAll()"
                     x-text="basicAnyDisconnected() ? 'Connect' : 'Connected'"></button>
         </div>
@@ -20480,7 +20502,6 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <button class="bs-tbtn bs-tstart" x-show="seqState==='idle'" :disabled="!sequence.length" @click="startSequence()">&#9654; Start</button>
                 <button class="bs-tbtn bs-tpause" x-show="seqState!=='idle'" @click="pauseSequence()" x-text="seqState==='paused' ? '▶ Resume' : '❙❙ Pause'"></button>
                 <button class="bs-tbtn bs-tstop" x-show="seqState!=='idle'" @click="stopSequence()">&#9632; Stop</button>
-                <button class="bs-full" @click="basicSetPref('off')">Full UI</button>
                 <button class="bs-conn" :class="basicAnyDisconnected() ? 'warn' : ''" @click="basicConnectAll()"
                         x-text="basicAnyDisconnected() ? 'Connect' : 'Connected'"></button>
             </div>
