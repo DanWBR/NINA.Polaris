@@ -64,7 +64,7 @@
          Inert unless a manifest URL is configured (assistant-config.json). -->
     <link rel="stylesheet" href="/css/parts/13-assistant.css?v=20260705-assist15">
     <link rel="stylesheet" href="/css/parts/14-uiscale-text.css?v=20260707-hintsize">
-    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260831-basic21">
+    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260831-basic22">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -20053,10 +20053,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         <!-- Collapsed: a small pill to bring the sequence list back. -->
         <button class="bs-seqreopen" x-show="basicScreen==='autorun' && !seqOpen" x-cloak @click="seqOpen=true">&#9776; <span x-text="sequence.length"></span> <span x-text="sequence.length===1 ? 'set' : 'sets'"></span></button>
 
-        <div class="bs-topleft">
-            <button class="bs-fulltop" @click="basicSetPref('off')" title="Full UI">Full UI</button>
-            <div class="bs-temp">&#10052; <b class="bs-num" x-text="(cameraTemp!=null ? Number(cameraTemp).toFixed(1) : '--') + '&deg;C'"></b></div>
-        </div>
+        <div class="bs-temp">&#10052; <b class="bs-num" x-text="(cameraTemp!=null ? Number(cameraTemp).toFixed(1) : '--') + '&deg;C'"></b></div>
         <div class="bs-topbar">
             <button class="bs-topicn" :class="basicScreen==='guide' ? 'on' : ''" @click="basicGoMode('guide')" title="Guide" aria-label="Guide">&#128760;</button>
             <button class="bs-modepill" @click="modeMenu = !modeMenu"><span x-text="basicScreen==='focus' ? 'Focus' : (basicScreen==='autorun' ? 'Autorun' : (basicScreen==='guide' ? 'Guide' : (basicScreen==='live' ? 'Live' : (basicScreen==='video' ? 'Video' : (basicScreen==='sky' ? 'Sky' : (basicScreen==='config' ? 'Setup' : 'Preview'))))))"></span> <span class="bs-caret">&#9660;</span></button>
@@ -20102,12 +20099,9 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 </div>
                 <div class="bs-crow">
                     <span class="bs-dot" :class="indiConnected ? '' : 'off'"></span>
-                    <span class="bs-clbl">INDI server</span>
+                    <span class="bs-clbl">INDI</span>
                     <span class="bs-cval bs-num" x-text="indiConnected ? 'Connected' : 'Connecting…'"></span>
-                    <button class="bs-cbtn" x-show="!indiConnected" @click="connectIndi()">Connect</button>
-                </div>
-                <div class="bs-cbtns">
-                    <button class="bs-cbtn primary" :disabled="equipBulkBusy" @click="basicConnectAll()">Connect all</button>
+                    <button class="bs-cbtn primary" style="margin-left:auto" :disabled="equipBulkBusy" @click="basicConnectAll()">Connect all</button>
                     <button class="bs-cbtn" :disabled="equipBulkBusy" @click="equipDisconnectAll()">Disconnect all</button>
                 </div>
                 <div class="bs-cdev"><span class="bs-dot" :class="selectedCamera ? '' : 'off'"></span><span class="bs-cdlbl">Camera</span>
@@ -20477,6 +20471,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
 
         <div class="bs-bottom" x-show="basicScreen!=='autorun'">
+            <button class="bs-full" @click="basicSetPref('off')">Full Mode</button>
             <div class="bs-chip" x-show="basicScreen==='preview' || basicScreen==='live' || basicScreen==='video'"><span class="bs-dot" :class="selectedCamera ? '' : 'off'"></span><span class="bs-name" x-text="selectedCamera || 'Cam'"></span></div>
             <div class="bs-chip" x-show="basicScreen==='preview' || basicScreen==='live' || basicScreen==='guide' || basicScreen==='video' || basicScreen==='sky'"><span class="bs-dot" :class="mount.connected ? '' : 'off'"></span><span class="bs-name" x-text="selectedTelescope || 'Mount'"></span></div>
             <div class="bs-chip" x-show="basicScreen==='preview'"><span class="bs-dot" :class="focusConnected ? '' : 'off'"></span><span class="bs-name" x-text="selectedFocuser || 'Focuser'"></span></div>
@@ -20493,6 +20488,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         <div class="bs-autobar" x-show="basicScreen==='autorun'" x-cloak>
             <div class="bs-pbar"><i :style="'width:' + (seqProgress ? seqProgress() : 0) + '%'"></i></div>
             <div class="bs-prow">
+                <button class="bs-full" @click="basicSetPref('off')">Full Mode</button>
                 <div class="bs-pinfo bs-num" x-show="seqStatus && seqState!=='idle'">
                     Frame <b x-text="(seqStatus && seqStatus.totalFramesCompleted) || 0"></b> / <b x-text="(seqStatus && seqStatus.totalFrames) || 0"></b>
                     <span x-show="seqStatus && seqStatus.items && seqStatus.items.length"> &middot; set <b x-text="((seqStatus && seqStatus.currentItemIndex)||0)+1"></b>/<b x-text="(seqStatus && seqStatus.items ? seqStatus.items.length : sequence.length)"></b></span>
