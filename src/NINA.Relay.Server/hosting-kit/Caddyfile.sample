@@ -1,0 +1,29 @@
+# Caddy front for the hosted relay (RUNBOOK.md option A).
+#
+# Terminates TLS with a Let's Encrypt WILDCARD cert obtained through the
+# DNS-01 challenge, which subdomain tenant routing requires (HTTP-01 cannot
+# issue wildcards). Needs a Caddy build with your DNS provider's plugin,
+# e.g.:  caddy add-package github.com/caddy-dns/cloudflare
+#
+# Replace relay.example.com with your suffix and set the DNS API token
+# (for Cloudflare: a token scoped to Zone / DNS / Edit on that zone only).
+
+relay.example.com, *.relay.example.com {
+    tls {
+        dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+    }
+
+    # Everything, including the /_tunnel WebSocket and the browser-side
+    # WebSocket streams, proxies straight through; Caddy handles Upgrade
+    # automatically.
+    reverse_proxy 127.0.0.1:6000
+
+    # The relay keeps long-lived tunnels; don't let Caddy time them out.
+    @tunnel path /_tunnel
+    reverse_proxy @tunnel 127.0.0.1:6000 {
+        transport http {
+            read_timeout 0
+            write_timeout 0
+        }
+    }
+}

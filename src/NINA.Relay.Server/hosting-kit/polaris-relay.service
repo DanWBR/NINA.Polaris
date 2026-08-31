@@ -1,0 +1,29 @@
+# systemd unit for the hosted Polaris relay.
+# Install: cp polaris-relay.service /etc/systemd/system/ && systemctl daemon-reload
+# The binary listens on 127.0.0.1:6000 (Caddy or Cloudflare terminates TLS in front).
+[Unit]
+Description=Polaris Relay Server (multi-tenant tunnel)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=relay
+Group=relay
+WorkingDirectory=/opt/polaris-relay
+ExecStart=/opt/polaris-relay/NINA.Relay.Server
+Restart=always
+RestartSec=3
+# The relay is a proxy: it needs sockets and its own state files, nothing else.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/polaris-relay
+PrivateTmp=true
+# Keep a runaway in check on a small VPS.
+MemoryMax=1G
+TasksMax=512
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
