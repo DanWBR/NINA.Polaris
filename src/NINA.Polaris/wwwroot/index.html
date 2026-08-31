@@ -64,7 +64,7 @@
          Inert unless a manifest URL is configured (assistant-config.json). -->
     <link rel="stylesheet" href="/css/parts/13-assistant.css?v=20260705-assist15">
     <link rel="stylesheet" href="/css/parts/14-uiscale-text.css?v=20260707-hintsize">
-    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260829-basic16">
+    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260831-basic17">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -20055,9 +20055,9 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
 
         <div class="bs-temp">&#10052; <b class="bs-num" x-text="(cameraTemp!=null ? Number(cameraTemp).toFixed(1) : '--') + '&deg;C'"></b></div>
         <div class="bs-topbar">
-            <button class="bs-modepill" @click="modeMenu = !modeMenu"><span x-text="basicScreen==='focus' ? 'Focus' : (basicScreen==='autorun' ? 'Autorun' : (basicScreen==='guide' ? 'Guide' : (basicScreen==='live' ? 'Live' : (basicScreen==='video' ? 'Video' : 'Preview'))))"></span> <span class="bs-caret">&#9660;</span></button>
+            <button class="bs-modepill" @click="modeMenu = !modeMenu"><span x-text="basicScreen==='focus' ? 'Focus' : (basicScreen==='autorun' ? 'Autorun' : (basicScreen==='guide' ? 'Guide' : (basicScreen==='live' ? 'Live' : (basicScreen==='video' ? 'Video' : (basicScreen==='sky' ? 'Sky' : 'Preview')))))"></span> <span class="bs-caret">&#9660;</span></button>
         </div>
-        <div class="bs-status" :class="{ run: (basicScreen==='focus' && autoFocus.state==='running') || (basicScreen==='autorun' && seqState==='running') || (basicScreen==='guide' && guider.guiding) || (basicScreen==='live' && liveStackEnabled) || (basicScreen==='video' && videoRecording.recording) }">&#9679; <b x-text="basicScreen==='focus'
+        <div class="bs-status" :class="{ run: (basicScreen==='focus' && autoFocus.state==='running') || (basicScreen==='autorun' && seqState==='running') || (basicScreen==='guide' && guider.guiding) || (basicScreen==='live' && liveStackEnabled) || (basicScreen==='video' && videoRecording.recording) || (basicScreen==='sky' && slewCenterJobId) }">&#9679; <b x-text="basicScreen==='focus'
                 ? (autoFocus.state==='running' ? ('AF ' + (autoFocus.phase || 'running')) : (autoFocus.success ? 'AF done' : 'Idle'))
                 : basicScreen==='autorun'
                 ? (seqState==='running' ? 'Running' : (seqState==='paused' ? 'Paused' : 'Idle'))
@@ -20067,22 +20067,52 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 ? (liveStackEnabled ? 'Stacking' : (capturing || looping ? 'Capturing' : 'Stopped'))
                 : basicScreen==='video'
                 ? (videoRecording.recording ? ('REC ' + (videoRecording.frames || 0)) : (cameraStream.running ? 'Streaming' : 'Idle'))
+                : basicScreen==='sky'
+                ? (slewCenterJobId ? 'Slewing' : (skyTarget ? skyTarget.name : 'Browsing'))
                 : (captureProgressActive() ? captureProgressLabel() : (preview.busy ? 'Exposing' : (preview.looping ? 'Looping' : 'Idle')))"></b></div>
 
         <div class="bs-modemenu" x-show="modeMenu" @click.outside="modeMenu=false" x-cloak>
             <button :class="basicScreen==='preview' ? 'on' : ''" @click="basicGoMode('preview'); modeMenu=false"><span class="bs-em">&#128065;</span>Preview</button>
             <button :class="basicScreen==='focus' ? 'on' : ''" @click="basicGoMode('focus'); modeMenu=false"><span class="bs-em">&#127919;</span>Focus</button>
             <button :class="basicScreen==='guide' ? 'on' : ''" @click="basicGoMode('guide'); modeMenu=false"><span class="bs-em">&#128760;</span>Guide</button>
+            <button :class="basicScreen==='sky' ? 'on' : ''" @click="basicGoMode('sky'); modeMenu=false"><span class="bs-em">&#127756;</span>Sky</button>
             <button :class="basicScreen==='autorun' ? 'on' : ''" @click="basicGoMode('autorun'); modeMenu=false"><span class="bs-em">&#128247;</span>Autorun</button>
             <button @click="basicGoMode('plan'); modeMenu=false"><span class="bs-em">&#128506;</span>Plan</button>
             <button :class="basicScreen==='live' ? 'on' : ''" @click="basicGoMode('live'); modeMenu=false"><span class="bs-em">&#10024;</span>Live</button>
             <button :class="basicScreen==='video' ? 'on' : ''" @click="basicGoMode('video'); modeMenu=false"><span class="bs-em">&#127916;</span>Video</button>
         </div>
 
-        <div class="bs-rail left">
+        <div class="bs-rail left" x-show="basicScreen!=='sky'">
             <button class="bs-icn" @click="_pzFit(basicActiveCanvas())" title="Fit"><span class="bs-big">&#9635;</span>Fit</button>
             <button class="bs-icn" :class="guideOverlay.on ? 'on' : ''" @click="toggleGuideOverlay()" title="Guiding graph (drag + resize)"><span class="bs-big">&#128760;</span>Guide</button>
             <button class="bs-icn" @click="_pzZoomButton(basicActiveCanvas(), 1.3)" title="Zoom in"><span class="bs-big">&#128269;</span>Zoom</button>
+        </div>
+
+        <!-- Sky: object search + results + selected-target card. The map
+             itself is the real #skyFrame iframe relocated into the image slot. -->
+        <div class="bs-skysearch" x-show="basicScreen==='sky'" x-cloak>
+            <input class="bs-skyinput" type="text" inputmode="search" placeholder="Search object (M42, NGC...)"
+                   x-model="skySearch" @keyup.enter="searchSky()">
+            <button class="bs-skygo" @click="searchSky()" title="Search">&#128269;</button>
+        </div>
+        <div class="bs-skyresults" x-show="basicScreen==='sky' && skyShowResults && skyResults.length" x-cloak>
+            <template x-for="(obj, i) in skyResults.slice(0,7)" :key="obj.name + '|' + i">
+                <button class="bs-skyres" @click="selectSkyTarget(obj)">
+                    <span class="bs-skyres-nm" x-text="obj.name"></span>
+                    <span class="bs-skyres-sub bs-num"><span x-text="obj.type || ''"></span><template x-if="typeof obj.magnitude === 'number'"><span> &middot; mag <span x-text="obj.magnitude"></span></span></template></span>
+                </button>
+            </template>
+        </div>
+        <div class="bs-tcard" x-show="basicScreen==='sky' && skyInfo.visible" x-cloak>
+            <div class="bs-tnm" x-text="skyInfo.title"></div>
+            <div class="bs-tsub" x-text="skyInfo.subtitle || ''"></div>
+            <div class="bs-tgrid bs-num">
+                <span x-show="Number.isFinite(skyInfo.raDeg)">RA <b x-text="Number.isFinite(skyInfo.raDeg) ? formatRA(skyInfo.raDeg/15) : ''"></b></span>
+                <span x-show="Number.isFinite(skyInfo.decDeg)">Dec <b x-text="Number.isFinite(skyInfo.decDeg) ? formatDec(skyInfo.decDeg) : ''"></b></span>
+                <span x-show="typeof skyInfo.magnitude === 'number'">Mag <b x-text="skyInfo.magnitude"></b></span>
+            </div>
+            <button class="bs-tgoto" @click="skyInfoSlewCenter()" :disabled="!mount.connected || slewCenterJobId">&#127919; Slew &amp; Center</button>
+            <button class="bs-tgoto2" @click="skyInfoSlewOnly()" :disabled="!mount.connected || slewCenterJobId">GoTo only (no plate-solve)</button>
         </div>
 
         <div class="bs-rail right">
@@ -20265,7 +20295,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
 
         <div class="bs-bottom" x-show="basicScreen!=='autorun'">
             <div class="bs-chip" x-show="basicScreen==='preview' || basicScreen==='live' || basicScreen==='video'"><span class="bs-dot" :class="selectedCamera ? '' : 'off'"></span><span class="bs-name" x-text="selectedCamera || 'Cam'"></span></div>
-            <div class="bs-chip" x-show="basicScreen==='preview' || basicScreen==='live' || basicScreen==='guide' || basicScreen==='video'"><span class="bs-dot" :class="mount.connected ? '' : 'off'"></span><span class="bs-name" x-text="selectedTelescope || 'Mount'"></span></div>
+            <div class="bs-chip" x-show="basicScreen==='preview' || basicScreen==='live' || basicScreen==='guide' || basicScreen==='video' || basicScreen==='sky'"><span class="bs-dot" :class="mount.connected ? '' : 'off'"></span><span class="bs-name" x-text="selectedTelescope || 'Mount'"></span></div>
             <div class="bs-chip" x-show="basicScreen==='preview'"><span class="bs-dot" :class="focusConnected ? '' : 'off'"></span><span class="bs-name" x-text="selectedFocuser || 'Focuser'"></span></div>
             <button class="bs-auto" x-show="basicScreen==='preview'" :class="stretchAuto ? 'on' : ''" @click="toggleAutoStretch()">Auto stretch</button>
             <div class="bs-chip" x-show="basicScreen==='focus'" x-cloak><span class="bs-dot" :class="focusConnected ? '' : 'off'"></span><span class="bs-name" x-text="selectedFocuser || 'Focuser'"></span></div>

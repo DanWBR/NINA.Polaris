@@ -27581,6 +27581,16 @@ function ninaApp() {
                 });
                 return;
             }
+            // Sky relocates the planetarium iframe into the image slot. Reparenting
+            // an iframe reloads it, but tab='sky' keeps it alive while in this mode.
+            if (this.basicScreen === 'sky') {
+                this.tab = 'sky';
+                this.$nextTick(() => {
+                    this._basicMove('#skyFrame', 'basicImageSlot');
+                    this._basicClampGuideOverlay();
+                });
+                return;
+            }
             // Per-screen: which tab owns the pipeline, which canvas to relocate,
             // and a CSS fallback selector for its .preview-area wrapper.
             const cfg = ({
@@ -27644,7 +27654,7 @@ function ninaApp() {
         // Mode menu: Preview and Focus are curated field screens; the others jump
         // to the full UI on that tab until their own field screens are built.
         basicGoMode(m) {
-            if (m === 'preview' || m === 'focus' || m === 'autorun' || m === 'guide' || m === 'live' || m === 'video') { this.basicSetScreen(m); return; }
+            if (['preview', 'focus', 'autorun', 'guide', 'live', 'video', 'sky'].includes(m)) { this.basicSetScreen(m); return; }
             const map = { plan: 'plan' };
             const tabId = map[m] || 'home';
             this.basicSetPref('off');
