@@ -89,15 +89,15 @@
 /* Controls inherit the user's UI font (buttons/inputs don't inherit by default). */
 .basic-shell button, .basic-shell input, .basic-shell select{font-family:inherit}
 
-/* mount pad -- sits to the LEFT of the exposure rail so the d-pad never
-   collides with the shutter in the bottom-right corner */
-.basic-shell .bs-mount{position:absolute; right:100px; bottom:56px; z-index:22; display:flex; align-items:flex-end; gap:6px}
+/* mount pad -- bottom-left, just right of the icon rail (clear of the shutter
+   on the right). The d-pad expands to the right when opened. */
+.basic-shell .bs-mount{position:absolute; left:60px; right:auto; bottom:56px; z-index:22; display:flex; align-items:flex-end; gap:6px}
 .basic-shell .bs-mount .bs-grid{display:grid; grid-template-columns:repeat(3,42px); grid-template-rows:repeat(3,42px);
     gap:5px; background:var(--bs-panel); border:1px solid var(--bs-border); border-radius:14px; padding:8px; backdrop-filter:blur(8px)}
 .basic-shell .bs-mount .bs-grid button{border:0; border-radius:9px; background:var(--bs-chip); color:var(--text); font-size:16px}
 .basic-shell .bs-mount .bs-grid button.mid{background:transparent; font-size:10px; color:var(--bs-muted)}
 .basic-shell .bs-mount .bs-grid button:active{background:var(--bs-accent); color:#fff}
-.basic-shell .bs-mount .bs-side{display:flex; flex-direction:column; gap:6px; align-items:flex-end}
+.basic-shell .bs-mount .bs-side{display:flex; flex-direction:column; gap:6px; align-items:flex-start}
 .basic-shell .bs-mount .bs-pill{background:var(--bs-panel); border:1px solid var(--bs-border); border-radius:10px;
     padding:6px 8px; font-size:11px; text-align:center; min-width:58px; backdrop-filter:blur(8px); color:var(--text)}
 .basic-shell .bs-mount .bs-pill.on{border-color:var(--bs-ok); color:var(--bs-ok)}
@@ -229,10 +229,6 @@
     .basic-shell .bs-full{padding:0 10px; font-size:12px}
     .basic-shell .bs-conn{padding:0 12px; font-size:12px}
     .basic-shell .bs-seqp{bottom:120px}
-    /* portrait has room on the right (the exposure rail sits up top), so the
-       collapsed mount cluster (Track + the reveal arrow) hugs the right edge
-       instead of floating mid-screen. */
-    .basic-shell .bs-mount{right:8px}
 }
 
 .basic-shell :focus-visible{outline:2px solid var(--bs-accent2); outline-offset:2px}
