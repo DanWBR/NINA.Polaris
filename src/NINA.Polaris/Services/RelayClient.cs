@@ -54,8 +54,11 @@ public class RelayClient : IHostedService, IDisposable {
     public string? AssignedHostname { get; private set; }
     public string? LastError { get; private set; }
 
-    public RelayClient(IConfiguration config, ILogger<RelayClient> logger) {
+    private readonly ProfileService _profiles;
+
+    public RelayClient(IConfiguration config, ProfileService profiles, ILogger<RelayClient> logger) {
         _config = config;
+        _profiles = profiles;
         _logger = logger;
         _localHttpPort = config.GetValue("Server:Http:Port", 5080);
         _local = new HttpClient {
@@ -64,29 +67,65 @@ public class RelayClient : IHostedService, IDisposable {
         };
     }
 
-    public Task StartAsync(CancellationToken cancellationToken) {
-        if (!_config.GetValue("Relay:Enabled", false)) {
-            _logger.LogInformation("Relay client disabled (set Relay:Enabled=true to enable)");
-            State = RelayClientState.Disabled;
-            return Task.CompletedTask;
+    /// <summary>
+    /// The settings the tunnel actually runs with. The profile wins when the
+    /// user enabled the relay there (the SETTINGS card path); otherwise the
+    /// Relay:* configuration keys apply, which keeps pre-existing headless
+    /// installs (appsettings.json / env vars) working unchanged.
+    /// </summary>
+    private (bool enabled, string? url, string? token) EffectiveConfig() {
+        var p = _profiles.Active;
+        if (p != null && p.RelayEnabled) {
+            return (true, p.RelayServerUrl?.Trim(), p.RelayToken?.Trim());
         }
+        return (_config.GetValue("Relay:Enabled", false),
+                _config.GetValue<string>("Relay:ServerUrl"),
+                _config.GetValue<string>("Relay:Token"));
+    }
 
-        var url = _config.GetValue<string>("Relay:ServerUrl");
-        var token = _config.GetValue<string>("Relay:Token");
+    public Task StartAsync(CancellationToken cancellationToken) {
+        StartTunnel();
+        return Task.CompletedTask;
+    }
+
+    private void StartTunnel() {
+        var (enabled, url, token) = EffectiveConfig();
+        if (!enabled) {
+            _logger.LogInformation("Relay client disabled (enable it in SETTINGS or set Relay:Enabled=true)");
+            State = RelayClientState.Disabled;
+            return;
+        }
         if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(token)) {
             _logger.LogWarning("Relay enabled but ServerUrl/Token not configured");
             State = RelayClientState.MisconfigError;
-            return Task.CompletedTask;
+            return;
         }
 
         _cts = new CancellationTokenSource();
         _runner = Task.Run(() => RunWithReconnectAsync(url, token, _cts.Token));
-        return Task.CompletedTask;
     }
 
     public Task StopAsync(CancellationToken cancellationToken) {
         _cts?.Cancel();
         return _runner ?? Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Tear the tunnel down and bring it back up with the current effective
+    /// settings. Called by POST /api/system/relay/config after a save so a
+    /// changed URL/token applies without restarting Polaris.
+    /// </summary>
+    public async Task RestartAsync() {
+        _cts?.Cancel();
+        var runner = _runner;
+        if (runner != null) {
+            try { await Task.WhenAny(runner, Task.Delay(TimeSpan.FromSeconds(5))); } catch { }
+        }
+        _cts = null;
+        _runner = null;
+        AssignedHostname = null;
+        LastError = null;
+        StartTunnel();
     }
 
     private async Task RunWithReconnectAsync(string url, string token, CancellationToken ct) {
@@ -111,7 +150,10 @@ public class RelayClient : IHostedService, IDisposable {
             try { await Task.Delay(backoff, ct); } catch { break; }
             backoff = TimeSpan.FromSeconds(Math.Min(maxBackoff.TotalSeconds, backoff.TotalSeconds * 1.5));
         }
-        State = RelayClientState.Disabled;
+        // Only stamp Disabled if no newer runner has taken over (RestartAsync
+        // cancels this token and immediately starts a fresh tunnel; a slow
+        // exit here must not overwrite the new tunnel's state).
+        if (_cts == null || _cts.Token == ct) State = RelayClientState.Disabled;
     }
 
     private async Task RunOnceAsync(string url, string token, CancellationToken ct) {

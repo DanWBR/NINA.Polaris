@@ -565,6 +565,14 @@ function ninaApp() {
             error: null
         },
 
+        // Relay tunnel (SETTINGS card): remote access through a relay server
+        // without port-forwarding. token is write-only; hasToken mirrors
+        // whether one is stored server-side (same pattern as storagePush).
+        relayCfg: {
+            enabled: false, serverUrl: '', token: '', hasToken: false,
+            state: 'disabled', hostname: null, lastError: null, saving: false
+        },
+
         // HELP-1: in-app tutorial state. tutorial null = landing
         // (4-card picker); otherwise one of 'firstNight', 'capture',
         // 'workflowsPicker', 'lrgb', 'planetary', 'pcc', 'troubleshoot'.
@@ -28640,6 +28648,66 @@ function ninaApp() {
                 localStorage.setItem('slewPreviewVisible',
                     this.slewPreviewVisible ? '1' : '0');
             } catch { /* non-fatal */ }
+        },
+
+        // ---- Relay tunnel (Settings card) ----
+        _applyRelayStatus(r) {
+            if (!r) return;
+            this.relayCfg.enabled = !!r.enabled;
+            this.relayCfg.serverUrl = r.serverUrl || '';
+            this.relayCfg.hasToken = !!r.hasToken;
+            this.relayCfg.state = r.state || 'disabled';
+            this.relayCfg.hostname = r.hostname || null;
+            this.relayCfg.lastError = r.lastError || null;
+        },
+        async loadRelayConfig() {
+            try { this._applyRelayStatus(await this.apiGet('/api/system/relay')); }
+            catch (e) { /* card shows the defaults */ }
+        },
+        async saveRelayConfig() {
+            this.relayCfg.saving = true;
+            try {
+                const r = await this.apiPostJson('/api/system/relay/config', null, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        enabled: !!this.relayCfg.enabled,
+                        serverUrl: this.relayCfg.serverUrl || '',
+                        // null = keep the stored token; the field is cleared
+                        // after a successful save so it never lingers on screen.
+                        token: this.relayCfg.token ? this.relayCfg.token : null
+                    })
+                });
+                this.relayCfg.token = '';
+                this._applyRelayStatus(r);
+                this.toast('Relay settings saved', 'ok');
+                // The tunnel connects in the background; poll a few times so
+                // the pill walks connecting -> connected without a reload.
+                this._relayPoll(6);
+            } catch (e) {
+                this.toastFail('Could not save relay settings', e);
+            } finally {
+                this.relayCfg.saving = false;
+            }
+        },
+        _relayPoll(left) {
+            if (left <= 0) return;
+            setTimeout(async () => {
+                try { this._applyRelayStatus(await this.apiGet('/api/system/relay')); } catch (e) { }
+                if (this.relayCfg.state === 'connecting' || this.relayCfg.state === 'reconnecting') {
+                    this._relayPoll(left - 1);
+                }
+            }, 2000);
+        },
+        relayStateLabel() {
+            return ({
+                connected: 'Connected',
+                connecting: 'Connecting…',
+                reconnecting: 'Reconnecting…',
+                authfailed: 'Token rejected',
+                misconfigerror: 'Not configured',
+                disabled: 'Off'
+            })[this.relayCfg.state] || this.relayCfg.state;
         },
 
         // ---- Auto-push to network storage (Settings card) ----
