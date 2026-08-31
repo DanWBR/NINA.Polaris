@@ -1,0 +1,36 @@
+{
+  "tenants": [
+    {
+      "token": "REPLACE-openssl-rand-hex-32-STANDARD",
+      "hostname": "alice",
+      "enabled": true,
+      "requestsPerSecond": 10,
+      "burstRequests": 30,
+      "bytesPerSecond": 2097152,
+      "burstBytes": 16777216,
+      "monthlyBytes": 32212254720,
+      "note": "standard tier: 30 GB/month, 2 MB/s sustained"
+    },
+    {
+      "token": "REPLACE-openssl-rand-hex-32-TRIAL",
+      "hostname": "trial-bob",
+      "enabled": true,
+      "requestsPerSecond": 5,
+      "bytesPerSecond": 1048576,
+      "monthlyBytes": 5368709120,
+      "expiresAt": "2026-12-31T23:59:59Z",
+      "note": "trial tier: 5 GB, expires; set expiresAt to issue date + 30 days"
+    },
+    {
+      "token": "REPLACE-openssl-rand-hex-32-HEAVY",
+      "hostname": "carol",
+      "enabled": true,
+      "requestsPerSecond": 10,
+      "burstRequests": 30,
+      "bytesPerSecond": 5242880,
+      "burstBytes": 33554432,
+      "monthlyBytes": 107374182400,
+      "note": "heavy tier (by request): 100 GB/month, 5 MB/s"
+    }
+  ]
+}
