@@ -173,6 +173,17 @@ public class UserProfile {
     public string? LetsEncryptStatus { get; set; }            // last operation outcome (Ok / Error / "in progress")
     public string? LetsEncryptLastError { get; set; }         // last failure message (null on success)
 
+    // Relay tunnel (remote access from outside the LAN, no port-forwarding).
+    // Client-side settings live in the profile so the SETTINGS card can
+    // configure them without editing appsettings.json; the Relay:* config
+    // keys remain as a fallback for headless installs and are consulted only
+    // when RelayEnabled here is false. Token persisted in plain JSON for the
+    // same reason as the DuckDns token above; it is never returned by
+    // GET /api/system/relay (only hasToken).
+    public bool RelayEnabled { get; set; } = false;
+    public string RelayServerUrl { get; set; } = "";          // e.g. wss://relay.example.com/_tunnel
+    public string RelayToken { get; set; } = "";              // tenant token issued by the relay operator
+
     // Auto-push of saved images to network storage (NAS / share / SSH box).
     // Global (one target for the host), persisted in plain JSON like the
     // DuckDns/PHD2 creds above — the profile file is already gated by OS

@@ -62,11 +62,41 @@ public static class SystemEndpoints {
             }
         });
 
-        group.MapGet("/relay", (RelayClient relay) => Results.Ok(new {
-            state = relay.State.ToString().ToLowerInvariant(),
-            hostname = relay.AssignedHostname,
-            lastError = relay.LastError
-        }));
+        group.MapGet("/relay", (RelayClient relay, ProfileService profiles) => {
+            var p = profiles.Active;
+            return Results.Ok(new {
+                state = relay.State.ToString().ToLowerInvariant(),
+                hostname = relay.AssignedHostname,
+                lastError = relay.LastError,
+                enabled = p?.RelayEnabled ?? false,
+                serverUrl = p?.RelayServerUrl ?? "",
+                // The token itself never leaves the host; the UI only needs to
+                // know whether one is stored so it can show a placeholder.
+                hasToken = !string.IsNullOrEmpty(p?.RelayToken)
+            });
+        });
+
+        // Save the relay settings from the SETTINGS card and re-establish the
+        // tunnel in place. Token semantics mirror the storage-push password:
+        // null = keep the stored one, empty string = clear it.
+        group.MapPost("/relay/config", async (RelayConfigRequest req,
+            RelayClient relay, ProfileService profiles) => {
+            var p = profiles.Active;
+            if (p == null) return Results.Problem("no active profile", statusCode: 500);
+            if (req.Enabled.HasValue) p.RelayEnabled = req.Enabled.Value;
+            if (req.ServerUrl != null) p.RelayServerUrl = req.ServerUrl.Trim();
+            if (req.Token != null) p.RelayToken = req.Token.Trim();
+            profiles.Save();
+            await relay.RestartAsync();
+            return Results.Ok(new {
+                state = relay.State.ToString().ToLowerInvariant(),
+                hostname = relay.AssignedHostname,
+                lastError = relay.LastError,
+                enabled = p.RelayEnabled,
+                serverUrl = p.RelayServerUrl,
+                hasToken = !string.IsNullOrEmpty(p.RelayToken)
+            });
+        });
 
         // Which SBC config TUIs are installed, so the UI can offer an
         // "Optimize SBC" launcher (runs them via the Remote Terminal over SSH
@@ -649,6 +679,7 @@ public static class SystemEndpoints {
     record TerminalEnableRequest(bool Enabled);
     record UiLanguageRequest(string? Language);
     record ScheduledShutdownRequest(string Utc, bool ShutdownHost);
+    record RelayConfigRequest(bool? Enabled, string? ServerUrl, string? Token);
 }
 /// <summary>Body of POST /api/system/install-to-disk.</summary>
 public record DiskInstallRequest(string Device);

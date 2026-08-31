@@ -511,8 +511,17 @@ for many users, with options and costs, is covered in
 
 ### Connecting the host
 
-On the Polaris host, add a section to `appsettings.json` and
-restart:
+The simple path is the **Remote access relay** card in **SETTINGS**:
+tick **Enable the relay tunnel**, paste the tunnel URL and the access
+token the relay operator issued, and click **Save and connect**. The
+tunnel comes up in place, no restart, and the card shows the state
+and, once connected, the public address the rig is reachable at. The
+token is stored on the host and never shown again; the field's
+placeholder just tells you one is set.
+
+The same settings can go in `appsettings.json` instead, which suits a
+headless install managed by scripts (the card's settings take
+precedence when the card is enabled):
 
 ```jsonc
 {
@@ -526,15 +535,16 @@ restart:
 }
 ```
 
-The two `ClientCert*` keys are optional and only needed for mTLS;
-there is no tenant id on the host, the relay assigns the hostname
-from the token. The host opens a persistent WebSocket connection (a
-long-lived two-way channel, the same technology the live status feed
-uses) to the relay and keeps it open; its state is reported at
-`GET /api/system/relay` (**Connected** once the tunnel is up).
-Internally the tunnel delivers requests to the host's loopback HTTP
-port (5080 by default, following `Server:Http:Port`), which is one
-of the reasons that port exists.
+The two `ClientCert*` keys are optional, only needed for mTLS, and
+available only through `appsettings.json`; there is no tenant id on
+the host, the relay assigns the hostname from the token. The host
+opens a persistent WebSocket connection (a long-lived two-way
+channel, the same technology the live status feed uses) to the relay
+and keeps it open; its state is reported at `GET /api/system/relay`
+(**Connected** once the tunnel is up). Internally the tunnel
+delivers requests to the host's loopback HTTP port (5080 by default,
+following `Server:Http:Port`), which is one of the reasons that port
+exists.
 
 ### Using it from a browser
 

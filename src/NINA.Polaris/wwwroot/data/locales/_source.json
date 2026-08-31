@@ -4017,5 +4017,16 @@
   "Could not copy the path": "Could not copy the path",
   "Add frames…": "Add frames…",
   "Keep the Sun/Moon centered": "Keep the Sun/Moon centered",
-  "Aligns each frame so a bright Sun/Moon disk stays centered (eclipse).": "Aligns each frame so a bright Sun/Moon disk stays centered (eclipse)."
+  "Aligns each frame so a bright Sun/Moon disk stays centered (eclipse).": "Aligns each frame so a bright Sun/Moon disk stays centered (eclipse).",
+  "Remote access relay": "Remote access relay",
+  "Reach Polaris from anywhere through a relay server, with no port-forwarding on your router. Paste the tunnel URL and access token issued by your relay operator, or run your own relay: the server ships in the Polaris repository.": "Reach Polaris from anywhere through a relay server, with no port-forwarding on your router. Paste the tunnel URL and access token issued by your relay operator, or run your own relay: the server ships in the Polaris repository.",
+  "Enable the relay tunnel": "Enable the relay tunnel",
+  "Relay server URL": "Relay server URL",
+  "Access token": "Access token",
+  "Save and connect": "Save and connect",
+  "Reachable at": "Reachable at",
+  "Token rejected": "Token rejected",
+  "Not configured": "Not configured",
+  "Relay settings saved": "Relay settings saved",
+  "Could not save relay settings": "Could not save relay settings"
 }
