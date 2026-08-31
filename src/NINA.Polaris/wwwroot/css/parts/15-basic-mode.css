@@ -21,7 +21,13 @@
     background:radial-gradient(120% 90% at 60% 40%, #0b1424 0%, #05080f 70%); z-index:1}
 .basic-shell #basicImageSlot .preview-area{position:absolute !important; inset:0 !important;
     width:100% !important; height:100% !important; margin:0 !important}
-.basic-shell #basicImageSlot .pz-toolbar{display:none !important}
+/* Strip the desktop preview chrome that rides along with the relocated area;
+   keep the canvases and the centered empty-state (.preview-overlay) message. */
+.basic-shell #basicImageSlot .pz-toolbar,
+.basic-shell #basicImageSlot .histo-panel,
+.basic-shell #basicImageSlot .preview-overlay-controls,
+.basic-shell #basicImageSlot .preview-overlay-info,
+.basic-shell #basicImageSlot .quick-controls{display:none !important}
 
 /* top bar */
 .basic-shell .bs-topbar{position:absolute; top:0; left:0; right:0; height:44px; display:flex;
@@ -83,8 +89,9 @@
 .basic-shell .bs-guidebox .bs-grms .bs-ra{color:#59a9ff}
 .basic-shell .bs-guidebox .bs-grms .bs-dec{color:#ff5d5d}
 
-/* mount pad */
-.basic-shell .bs-mount{position:absolute; right:8px; bottom:56px; z-index:22; display:flex; align-items:flex-end; gap:6px}
+/* mount pad -- sits to the LEFT of the exposure rail so the d-pad never
+   collides with the shutter in the bottom-right corner */
+.basic-shell .bs-mount{position:absolute; right:100px; bottom:56px; z-index:22; display:flex; align-items:flex-end; gap:6px}
 .basic-shell .bs-mount .bs-grid{display:grid; grid-template-columns:repeat(3,42px); grid-template-rows:repeat(3,42px);
     gap:5px; background:var(--bs-panel); border:1px solid var(--bs-border); border-radius:14px; padding:8px; backdrop-filter:blur(8px)}
 .basic-shell .bs-mount .bs-grid button{border:0; border-radius:9px; background:var(--bs-chip); color:var(--text); font-size:16px}

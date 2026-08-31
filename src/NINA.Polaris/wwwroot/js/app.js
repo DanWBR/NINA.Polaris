@@ -27544,8 +27544,12 @@ function ninaApp() {
                 try { document.body.style.zoom = '1'; } catch (e) { }
                 this.$nextTick(() => {
                     const slot = document.getElementById('basicImageSlot');
-                    const area = document.querySelector('.preview-tab-panel .preview-area')
-                        || document.querySelector('.preview-area');
+                    // Pin to THE preview canvas so we never grab the LIVE tab's
+                    // look-alike .preview-area (its overlay controls + empty-state
+                    // text were bleeding into the shell).
+                    const canvas = document.getElementById('previewCanvas');
+                    const area = (canvas && canvas.closest('.preview-area'))
+                        || document.querySelector('.preview-tab-panel .preview-area');
                     if (slot && area && area.parentNode !== slot) {
                         this._basicPrevHome = area.parentNode;
                         this._basicPrevNext = area.nextSibling;
