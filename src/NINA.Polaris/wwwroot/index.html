@@ -64,6 +64,7 @@
          Inert unless a manifest URL is configured (assistant-config.json). -->
     <link rel="stylesheet" href="/css/parts/13-assistant.css?v=20260705-assist15">
     <link rel="stylesheet" href="/css/parts/14-uiscale-text.css?v=20260707-hintsize">
+    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260831-basic26">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -20222,6 +20223,561 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
+    <!-- Basic (phone-only) field mode: an ASIAIR-style curated shell over the
+         same Alpine state. Only rendered on phones (basicMode); the live image
+         is the real .preview-area relocated into #basicImageSlot. -->
+    <template x-if="basicMode">
+    <div class="basic-shell" x-data="{ modeMenu:false, mountOpen:true, expandedField:null, editName:null, editExp:null, editGain:null, seqOpen:true, focusOpen:true }">
+        <div id="basicImageSlot"></div>
+        <div id="basicCurveSlot" x-show="basicScreen==='focus'" x-cloak></div>
+        <div id="basicGuideGraphSlot" x-show="basicScreen==='guide'" x-cloak></div>
+
+        <!-- Live stacking quality HUD: SNR / frames / ETA / state. -->
+        <div class="bs-lhud" x-show="basicScreen==='live' && liveStackStatus" x-cloak>
+            <div class="bs-lsnr num"><span class="v" x-text="(liveStackStatus && liveStackStatus.cumulativeSnr > 0) ? liveStackStatus.cumulativeSnr.toFixed(1) : '--'"></span><span class="l">SNR</span></div>
+            <div class="bs-lrow num"><span>Frames <b x-text="(liveStackStatus && liveStackStatus.frameCount) || 0"></b></span><span x-show="(liveStackStatus && liveStackStatus.rejectedFrames) > 0">Dropped <b x-text="(liveStackStatus && liveStackStatus.rejectedFrames) || 0"></b></span></div>
+            <div class="bs-leta num" x-show="formatSnrEta(liveStackStatus)" x-text="formatSnrEta(liveStackStatus)"></div>
+            <span class="bs-lstate" :class="liveStackEnabled ? '' : 'off'" x-text="liveStackEnabled ? '● Stacking' : '⏸ Stopped'"></span>
+        </div>
+
+        <!-- Video quality HUD: sharpness (focus aid) / FPS / REC frames+duration. -->
+        <div class="bs-lhud" x-show="basicScreen==='video' && cameraStream.running" x-cloak>
+            <div class="bs-vsh bs-num"><span>Sharpness</span><b x-text="Math.round((cameraStream.sharpnessBest || 0) * 100) + '%'"></b></div>
+            <div class="bs-vshbar"><i :style="'width:' + Math.round((cameraStream.sharpnessBest || 0) * 100) + '%'"></i></div>
+            <div class="bs-lrow num"><span>FPS <b x-text="(cameraStream.fps || 0).toFixed ? cameraStream.fps.toFixed(0) : cameraStream.fps"></b></span><span x-show="(videoRecording.droppedFrames||0) > 0">Dropped <b x-text="videoRecording.droppedFrames || 0"></b></span></div>
+            <span class="bs-lstate" :class="videoRecording.recording ? 'rec' : 'off'"
+                  x-text="videoRecording.recording ? ('● REC ' + (videoRecording.frames || 0) + ' · ' + Math.round(videoRecording.durationSec || 0) + 's') : 'Ready to record'"></span>
+        </div>
+
+        <!-- Autorun: the sequence of frame sets. Tap the name to rename, the type
+             chip to cycle LIGHT/DARK/FLAT/BIAS, the exposure to type an exact
+             value; FLAT sets get an Auto (measured) exposure toggle. -->
+        <div class="bs-seqp" x-show="basicScreen==='autorun' && seqOpen" x-cloak>
+            <div class="bs-seqh">
+                <button class="bs-seqhide" @click="seqOpen=false" title="Hide the list to see the frame">&#10096;</button>
+                <span><b x-text="sequence.length"></b> <span x-text="sequence.length===1 ? 'set' : 'sets'"></span></span>
+                <button class="bs-seqadd" @click="basicSeqAdd()">+ Add set</button>
+            </div>
+            <div class="bs-seql">
+                <template x-for="(item, i) in sequence" :key="i">
+                    <div class="bs-seqrow" :class="{ run: seqState==='running' && seqStatus && seqStatus.currentItemIndex===i }">
+                        <button class="bs-seqen" :class="item.enabled ? '' : 'off'" @click="basicSeqToggle(item)" x-text="item.enabled ? '✓' : ''"></button>
+                        <div class="bs-seqmeta">
+                            <input x-show="editName===i" x-cloak class="bs-seqnminput" type="text" x-model="item.name"
+                                   @blur="editName=null; basicSeqSync()" @keydown.enter="editName=null; basicSeqSync()" @keydown.escape="editName=null">
+                            <button x-show="editName!==i" class="bs-seqnm" @click="editName=i; $nextTick(() => { const e=$el.parentElement.querySelector('.bs-seqnminput'); if(e){e.focus(); e.select();} })"
+                                    x-text="item.name || ('Target ' + (i+1))"></button>
+                            <div class="bs-seqsub bs-num">
+                                <button class="bs-typ" @click="basicSeqCycleType(item)" x-text="item.imageType || 'LIGHT'"></button>
+                                <button class="bs-seqauto" x-show="item.imageType==='FLAT'" x-cloak :class="item.autoExposure ? 'on' : ''" @click="basicSeqToggleAuto(item)">Auto</button>
+                                <span x-show="!(item.imageType==='FLAT' && item.autoExposure)">
+                                    <input x-show="editExp===i" x-cloak class="bs-seqexpinput" type="number" inputmode="decimal" step="any" min="0.001"
+                                           x-model.number="item.exposure" @blur="editExp=null; basicSeqSync()" @keydown.enter="editExp=null; basicSeqSync()" @keydown.escape="editExp=null">
+                                    <button x-show="editExp!==i" class="bs-seqexp" x-text="item.exposure + 's'"
+                                            @click="editExp=i; $nextTick(() => { const e=$el.closest('.bs-seqsub').querySelector('.bs-seqexpinput'); if(e){e.focus(); e.select();} })"></button>
+                                </span>
+                                <span>
+                                    <input x-show="editGain===i" x-cloak class="bs-seqgaininput" type="number" inputmode="numeric" step="1" min="0"
+                                           x-model.number="item.gain" @blur="editGain=null; basicSeqSync()" @keydown.enter="editGain=null; basicSeqSync()" @keydown.escape="editGain=null">
+                                    <button x-show="editGain!==i" class="bs-seqexp" x-text="'gain ' + (item.gain ?? 0)"
+                                            @click="editGain=i; $nextTick(() => { const e=$el.closest('.bs-seqsub').querySelector('.bs-seqgaininput'); if(e){e.focus(); e.select();} })"></button>
+                                </span>
+                                <span x-show="item.filter" x-text="item.filter"></span>
+                                <span>&times;<span x-text="item.count"></span></span>
+                            </div>
+                        </div>
+                        <div class="bs-seqcnt">
+                            <button @click="basicSeqCount(item,-1)" :disabled="seqState==='running'">&minus;</button>
+                            <span class="bs-num" x-text="item.count"></span>
+                            <button @click="basicSeqCount(item,1)" :disabled="seqState==='running'">+</button>
+                        </div>
+                        <button class="bs-seqrm" @click="basicSeqRemove(i)" :disabled="seqState==='running'">&times;</button>
+                    </div>
+                </template>
+                <div class="bs-seqempty" x-show="!sequence.length">No sets yet. Tap "+ Add set".</div>
+            </div>
+        </div>
+        <!-- Collapsed: a small pill to bring the sequence list back. -->
+        <button class="bs-seqreopen" x-show="basicScreen==='autorun' && !seqOpen" x-cloak @click="seqOpen=true">&#9776; <span x-text="sequence.length"></span> <span x-text="sequence.length===1 ? 'set' : 'sets'"></span></button>
+
+        <div class="bs-temp">&#10052; <b class="bs-num" x-text="(cameraTemp!=null ? Number(cameraTemp).toFixed(1) : '--') + '&deg;C'"></b></div>
+        <div class="bs-topbar">
+            <button class="bs-topicn" :class="basicScreen==='guide' ? 'on' : ''" @click="basicGoMode('guide')" title="Guide" aria-label="Guide">&#128760;</button>
+            <button class="bs-modepill" @click="modeMenu = !modeMenu"><span x-text="basicScreen==='focus' ? 'Focus' : (basicScreen==='autorun' ? 'Autorun' : (basicScreen==='guide' ? 'Guide' : (basicScreen==='live' ? 'Live' : (basicScreen==='video' ? 'Video' : (basicScreen==='sky' ? 'Sky' : (basicScreen==='config' ? 'Setup' : 'Preview'))))))"></span> <span class="bs-caret">&#9660;</span></button>
+            <button class="bs-topicn" :class="basicScreen==='config' ? 'on' : ''" @click="basicGoMode('config')" title="Setup" aria-label="Setup">&#9881;</button>
+        </div>
+        <div class="bs-status" :class="{ run: (basicScreen==='focus' && autoFocus.state==='running') || (basicScreen==='autorun' && seqState==='running') || (basicScreen==='guide' && guider.guiding) || (basicScreen==='live' && liveStackEnabled) || (basicScreen==='video' && videoRecording.recording) || (basicScreen==='sky' && slewCenterJobId) }">&#9679; <b x-text="basicScreen==='focus'
+                ? (autoFocus.state==='running' ? ('AF ' + (autoFocus.phase || 'running')) : (autoFocus.success ? 'AF done' : 'Idle'))
+                : basicScreen==='autorun'
+                ? (seqState==='running' ? 'Running' : (seqState==='paused' ? 'Paused' : 'Idle'))
+                : basicScreen==='guide'
+                ? (guider.calibrating ? 'Calibrating' : (guider.guiding ? (guider.paused ? 'Paused' : 'Guiding') : (guider.looping ? 'Looping' : 'Idle')))
+                : basicScreen==='live'
+                ? (liveStackEnabled ? 'Stacking' : (capturing || looping ? 'Capturing' : 'Stopped'))
+                : basicScreen==='video'
+                ? (videoRecording.recording ? ('REC ' + (videoRecording.frames || 0)) : (cameraStream.running ? 'Streaming' : 'Idle'))
+                : basicScreen==='sky'
+                ? (slewCenterJobId ? 'Slewing' : (skyTarget ? skyTarget.name : 'Browsing'))
+                : basicScreen==='config'
+                ? (basicAnyDisconnected() ? 'Setup' : 'All connected')
+                : (captureProgressActive() ? captureProgressLabel() : (preview.busy ? 'Exposing' : (preview.looping ? 'Looping' : 'Idle')))"></b></div>
+
+        <div class="bs-modemenu" x-show="modeMenu" @click.outside="modeMenu=false" x-cloak>
+            <button :class="basicScreen==='preview' ? 'on' : ''" @click="basicGoMode('preview'); modeMenu=false"><span class="bs-em">&#128065;</span>Preview</button>
+            <button :class="basicScreen==='focus' ? 'on' : ''" @click="basicGoMode('focus'); modeMenu=false"><span class="bs-em">&#127919;</span>Focus</button>
+            <button :class="basicScreen==='sky' ? 'on' : ''" @click="basicGoMode('sky'); modeMenu=false"><span class="bs-em">&#127756;</span>Sky</button>
+            <button :class="basicScreen==='autorun' ? 'on' : ''" @click="basicGoMode('autorun'); modeMenu=false"><span class="bs-em">&#128247;</span>Autorun</button>
+            <button :class="basicScreen==='live' ? 'on' : ''" @click="basicGoMode('live'); modeMenu=false"><span class="bs-em">&#10024;</span>Live</button>
+            <button :class="basicScreen==='video' ? 'on' : ''" @click="basicGoMode('video'); modeMenu=false"><span class="bs-em">&#127916;</span>Video</button>
+        </div>
+
+        <!-- ================= CONFIG / SETUP screen ================= -->
+        <!-- Scrollable, full-width stacked cards bound to the SAME state the Full
+             UI settings use. Complex flows (equipment-detect wizard, WiFi switch,
+             software update) reuse the native modals, which float above this shell. -->
+        <div class="bs-config" x-show="basicScreen==='config'" x-cloak>
+
+            <!-- Equipment connection (uses the active/default rig; no rig picker) -->
+            <div class="bs-card">
+                <div class="bs-cardh">
+                    <div class="bs-cardt">Equipment</div>
+                    <button class="bs-cbtn" @click="basicDetectEquipment()" title="Auto-detect connected equipment">&#128269; Detect</button>
+                </div>
+                <div class="bs-crow">
+                    <span class="bs-indistat" x-show="basicUsesIndi()">
+                        <span class="bs-dot" :class="indiConnected ? '' : 'off'"></span>
+                        <span class="bs-clbl">INDI</span>
+                        <span class="bs-cval bs-num" x-text="indiConnected ? 'Connected' : 'Connecting…'"></span>
+                    </span>
+                    <button class="bs-cbtn primary" style="margin-left:auto" :disabled="equipBulkBusy" @click="basicConnectAll()">Connect all</button>
+                    <button class="bs-cbtn" :disabled="equipBulkBusy" @click="equipDisconnectAll()">Disconnect all</button>
+                </div>
+                <div class="bs-cdev"><span class="bs-dot" :class="selectedCamera ? '' : 'off'"></span><span class="bs-cdlbl">Camera</span>
+                    <select class="bs-cdsel" :disabled="!!selectedCamera" @change="basicSetDevChoice('camera', $event.target.value)">
+                        <option value="" x-text="basicDevOptions('camera').length ? 'Select device' : 'No devices'"></option>
+                        <template x-for="o in basicDevOptions('camera')" :key="'cam-'+o.value"><option :value="o.value" :selected="basicDevSelected('camera', o.value)" x-text="o.label"></option></template>
+                    </select>
+                    <button class="bs-cbtn xs bs-cfg" @click="basicOpenEquipConfig('camera')" title="Settings">&#9881;</button>
+                    <button class="bs-cbtn xs" @click="selectedCamera ? equipDisconnectCamera() : equipConnectCamera()" x-text="selectedCamera ? 'Disconnect' : 'Connect'"></button></div>
+                <div class="bs-cdev"><span class="bs-dot" :class="mount.connected ? '' : 'off'"></span><span class="bs-cdlbl">Mount</span>
+                    <select class="bs-cdsel" :disabled="mount.connected" @change="basicSetDevChoice('mount', $event.target.value)">
+                        <option value="" x-text="basicDevOptions('mount').length ? 'Select device' : 'No devices'"></option>
+                        <template x-for="o in basicDevOptions('mount')" :key="'mnt-'+o.value"><option :value="o.value" :selected="basicDevSelected('mount', o.value)" x-text="o.label"></option></template>
+                    </select>
+                    <button class="bs-cbtn xs bs-cfg" @click="basicOpenEquipConfig('mount')" title="Settings">&#9881;</button>
+                    <button class="bs-cbtn xs" @click="mount.connected ? equipDisconnectMount() : equipConnectMount()" x-text="mount.connected ? 'Disconnect' : 'Connect'"></button></div>
+                <div class="bs-cdev"><span class="bs-dot" :class="focusConnected ? '' : 'off'"></span><span class="bs-cdlbl">Focuser</span>
+                    <select class="bs-cdsel" :disabled="focusConnected" @change="basicSetDevChoice('focuser', $event.target.value)">
+                        <option value="" x-text="basicDevOptions('focuser').length ? 'Select device' : 'No devices'"></option>
+                        <template x-for="o in basicDevOptions('focuser')" :key="'foc-'+o.value"><option :value="o.value" :selected="basicDevSelected('focuser', o.value)" x-text="o.label"></option></template>
+                    </select>
+                    <button class="bs-cbtn xs bs-cfg" @click="basicOpenEquipConfig('focuser')" title="Settings">&#9881;</button>
+                    <button class="bs-cbtn xs" @click="focusConnected ? equipDisconnectFocuser() : equipConnectFocuser()" x-text="focusConnected ? 'Disconnect' : 'Connect'"></button></div>
+                <div class="bs-cdev"><span class="bs-dot" :class="(filterWheel && filterWheel.connected) ? '' : 'off'"></span><span class="bs-cdlbl">Filter</span>
+                    <select class="bs-cdsel" :disabled="filterWheel && filterWheel.connected" @change="basicSetDevChoice('filter', $event.target.value)">
+                        <option value="" x-text="basicDevOptions('filter').length ? 'Select device' : 'No devices'"></option>
+                        <template x-for="o in basicDevOptions('filter')" :key="'fw-'+o.value"><option :value="o.value" :selected="basicDevSelected('filter', o.value)" x-text="o.label"></option></template>
+                    </select>
+                    <button class="bs-cbtn xs bs-cfg" @click="basicOpenEquipConfig('filter')" title="Settings">&#9881;</button>
+                    <button class="bs-cbtn xs" @click="(filterWheel && filterWheel.connected) ? equipDisconnectFilter() : equipConnectFilter()" x-text="(filterWheel && filterWheel.connected) ? 'Disconnect' : 'Connect'"></button></div>
+                <div class="bs-cdev"><span class="bs-dot" :class="guider.guideCameraConnected ? '' : 'off'"></span><span class="bs-cdlbl">Guide cam</span>
+                    <select class="bs-cdsel" :disabled="guider.guideCameraConnected" @change="basicSetDevChoice('guide', $event.target.value)">
+                        <option value="" x-text="basicDevOptions('guide').length ? 'Select device' : 'No devices'"></option>
+                        <template x-for="o in basicDevOptions('guide')" :key="'gcam-'+o.value"><option :value="o.value" :selected="basicDevSelected('guide', o.value)" x-text="o.label"></option></template>
+                    </select>
+                    <button class="bs-cbtn xs bs-cfg" @click="basicOpenEquipConfig('guide')" title="Settings">&#9881;</button>
+                    <button class="bs-cbtn xs" @click="guider.guideCameraConnected ? equipDisconnectGuideCamera() : equipConnectGuideCamera()" x-text="guider.guideCameraConnected ? 'Disconnect' : 'Connect'"></button></div>
+                <div class="bs-cnote">Editing the INDI profile or INDI settings is done in the full UI.
+                    <button class="bs-clink" @click="basicSetPref('off')">Open full UI</button></div>
+            </div>
+
+            <!-- Field-UI scale (basic mode only) -->
+            <div class="bs-card">
+                <div class="bs-cardt">Field UI scale</div>
+                <div class="bs-cnote">Sizes the field interface only. Does not affect the full UI.</div>
+                <div class="bs-scalerow">
+                    <button class="bs-cbtn xs" @click="basicStepUiScale(-1)">&minus;</button>
+                    <input class="bs-scaleslider" type="range" min="0.7" max="1.4" step="0.05" x-model.number="basicUiScale" @input="basicApplyUiScale()">
+                    <button class="bs-cbtn xs" @click="basicStepUiScale(1)">+</button>
+                    <span class="bs-cval bs-num" x-text="Math.round((basicUiScale||1)*100) + '%'"></span>
+                </div>
+            </div>
+
+            <!-- 1. Home folder (studio home) -->
+            <div class="bs-card">
+                <div class="bs-cardt">Studio home folder</div>
+                <div class="bs-cval bs-mono" x-text="settings.imageOutputDir || 'Not set'"></div>
+                <div class="bs-cbtns"><button class="bs-cbtn primary" @click="basicPickStudioHome()">&#128193; Change folder</button></div>
+            </div>
+
+            <!-- 2. Display name -->
+            <div class="bs-card">
+                <div class="bs-cardt">Display name</div>
+                <div class="bs-cinrow">
+                    <input class="bs-cinput" type="text" x-model="deviceFriendlyName" placeholder="Polaris" @keyup.enter="saveDeviceName()">
+                    <button class="bs-cbtn primary" @click="saveDeviceName()">Save</button>
+                </div>
+            </div>
+
+            <!-- 3. Plate solving -->
+            <div class="bs-card">
+                <div class="bs-cardt">Plate solving</div>
+                <label class="bs-cfield"><span class="bs-cflbl">Solver</span>
+                    <select class="bs-cinput" x-model="psConfig.primary">
+                        <template x-for="s in psSolvers" :key="s.id">
+                            <option :value="s.id" x-text="s.name + (s.available ? '' : ' (not installed)')"></option>
+                        </template>
+                    </select>
+                </label>
+                <label class="bs-cfield"><span class="bs-cflbl">Search radius (deg)</span>
+                    <input class="bs-cinput bs-num" type="number" inputmode="numeric" min="0" step="1" x-model.number="psConfig.searchRadiusDeg">
+                </label>
+                <label class="bs-ccheck"><input type="checkbox" x-model="psConfig.useBlindFallback"><span>Blind solve fallback</span></label>
+                <div class="bs-cbtns"><button class="bs-cbtn primary" :disabled="psSaving" @click="savePlateSolveConfig()">Save</button></div>
+                <div class="bs-cnote">Solver paths and advanced options are in the full UI.</div>
+            </div>
+
+            <!-- 4. WiFi -->
+            <div class="bs-card">
+                <div class="bs-cardt">WiFi</div>
+                <template x-if="network && network.supportedOs && network.hasWifi">
+                    <div>
+                        <div class="bs-crow">
+                            <span class="bs-dot" :class="network.mode==='station' ? '' : 'off'"></span>
+                            <span class="bs-clbl" x-text="networkModeLabel()"></span>
+                            <span class="bs-cval bs-name" x-text="network.ssid || '—'"></span>
+                        </div>
+                        <div class="bs-cnote bs-num" x-show="network.ip"><span x-text="network.ip"></span><span x-show="network.mode==='station' && network.signal>0"> · <span x-text="network.signal"></span>% signal</span></div>
+                        <div class="bs-cbtns"><button class="bs-cbtn primary" :disabled="networkSwitching" @click="networkOpenSwitchDialog()" x-text="network.mode==='station' ? 'Join a different WiFi' : 'Switch to WiFi'"></button></div>
+                    </div>
+                </template>
+                <template x-if="!(network && network.supportedOs && network.hasWifi)">
+                    <div class="bs-cnote" x-text="(network && network.unsupportedReason) || 'WiFi management is not available on this host.'"></div>
+                </template>
+            </div>
+
+            <!-- 5. Network storage -->
+            <div class="bs-card">
+                <div class="bs-cardt">Network storage</div>
+                <label class="bs-ccheck"><input type="checkbox" x-model="storagePush.enabled" @change="saveStorageConfig()"><span>Auto-push captures to a share</span></label>
+                <template x-if="storagePush.enabled">
+                    <div>
+                        <label class="bs-cfield"><span class="bs-cflbl">Protocol</span>
+                            <select class="bs-cinput" x-model="storagePush.kind">
+                                <option value="smb">SMB / NAS</option>
+                                <option value="sftp">SFTP (SSH)</option>
+                                <option value="local">Mounted folder</option>
+                            </select>
+                        </label>
+                        <label class="bs-cfield" x-show="storagePush.kind!=='local'"><span class="bs-cflbl">Host</span>
+                            <input class="bs-cinput" type="text" x-model="storagePush.host" placeholder="192.168.0.50"></label>
+                        <label class="bs-cfield" x-show="storagePush.kind==='smb'"><span class="bs-cflbl">Share</span>
+                            <input class="bs-cinput" type="text" x-model="storagePush.share" placeholder="astro"></label>
+                        <label class="bs-cfield" x-show="storagePush.kind!=='smb'"><span class="bs-cflbl" x-text="storagePush.kind==='local' ? 'Destination path' : 'Remote path'"></span>
+                            <input class="bs-cinput" type="text" x-model="storagePush.basePath" placeholder="/mnt/nas/astro"></label>
+                        <label class="bs-cfield" x-show="storagePush.kind!=='local'"><span class="bs-cflbl">Username</span>
+                            <input class="bs-cinput" type="text" autocomplete="off" x-model="storagePush.username"></label>
+                        <label class="bs-cfield" x-show="storagePush.kind!=='local'"><span class="bs-cflbl">Password</span>
+                            <input class="bs-cinput" type="password" autocomplete="new-password" x-model="storagePush.password" :placeholder="storagePush.hasPassword ? '•••••• (unchanged)' : ''"></label>
+                        <div class="bs-cbtns">
+                            <button class="bs-cbtn primary" @click="saveStorageConfig()">Save</button>
+                            <button class="bs-cbtn" :disabled="storagePush.testing" @click="testStorageConnection()" x-text="storagePush.testing ? 'Testing…' : 'Test'"></button>
+                        </div>
+                        <div class="bs-cnote" x-show="storagePush.testResult" x-cloak :class="storagePush.testOk ? 'ok' : 'warn'" x-text="storagePush.testResult"></div>
+                    </div>
+                </template>
+            </div>
+
+            <!-- 6. Software update -->
+            <div class="bs-card">
+                <div class="bs-cardt">Software update</div>
+                <div class="bs-cinrow">
+                    <div class="bs-cval bs-num" style="flex:1; min-width:0" x-show="update.currentVersion">
+                        <span x-show="!update.available">Running v<span x-text="update.currentVersion"></span></span>
+                        <span x-show="update.available" style="color:var(--bs-accent2)">Update available: v<span x-text="update.latestVersion"></span></span>
+                    </div>
+                    <button class="bs-cbtn primary" :disabled="update.checking" @click="checkUpdateManual()" x-text="update.checking ? 'Checking…' : 'Check for updates'"></button>
+                    <button class="bs-cbtn" x-show="update.available" x-cloak @click="openUpdateModal()">View &amp; install</button>
+                </div>
+            </div>
+
+            <!-- 7. Power -->
+            <div class="bs-card">
+                <div class="bs-cardt">Power</div>
+                <div class="bs-cbtns">
+                    <button class="bs-cbtn" :disabled="power.restarting" @click="restartPolaris()" x-text="power.restarting ? 'Restarting…' : '🔄 Restart Polaris'"></button>
+                    <button class="bs-cbtn danger" :disabled="!power.canReboot || power.rebooting" @click="rebootDevice()" x-text="power.rebooting ? 'Rebooting…' : '⟳ Reboot'"></button>
+                    <button class="bs-cbtn danger" :disabled="!power.canShutdown || power.shuttingDown" @click="shutdownDevice()" x-text="power.shuttingDown ? 'Shutting down…' : '⏻ Shut down'"></button>
+                </div>
+                <label class="bs-ccheck" x-show="power.loaded && power.platform==='windows'" x-cloak><input type="checkbox" :checked="power.autoStartEnabled" :disabled="power.autoStartBusy" @change="toggleAutoStart()"><span>Start at Windows boot</span></label>
+            </div>
+
+
+        </div>
+
+        <div class="bs-rail left" x-show="basicScreen!=='sky' && basicScreen!=='config'">
+            <button class="bs-icn" @click="_pzFit(basicActiveCanvas())" title="Fit"><span class="bs-big">&#9635;</span>Fit</button>
+            <button class="bs-icn" :class="guideOverlay.on ? 'on' : ''" @click="toggleGuideOverlay()" title="Guiding graph (drag + resize)"><span class="bs-big">&#128760;</span>Guide</button>
+            <button class="bs-icn" @click="_pzZoomButton(basicActiveCanvas(), 1.3)" title="Zoom in"><span class="bs-big">&#128269;</span>Zoom</button>
+        </div>
+
+        <!-- Sky: object search + results + selected-target card. The map
+             itself is the real #skyFrame iframe relocated into the image slot. -->
+        <div class="bs-skysearch" x-show="basicScreen==='sky'" x-cloak>
+            <input class="bs-skyinput" type="text" inputmode="search" placeholder="Search object (M42, NGC...)"
+                   x-model="skySearch" @keyup.enter="searchSky()">
+            <button class="bs-skygo" @click="searchSky()" title="Search">&#128269;</button>
+        </div>
+        <div class="bs-skyresults" x-show="basicScreen==='sky' && skyShowResults && skyResults.length" x-cloak>
+            <template x-for="(obj, i) in skyResults.slice(0,7)" :key="obj.name + '|' + i">
+                <button class="bs-skyres" @click="selectSkyTarget(obj)">
+                    <span class="bs-skyres-nm" x-text="obj.name"></span>
+                    <span class="bs-skyres-sub bs-num"><span x-text="obj.type || ''"></span><template x-if="typeof obj.magnitude === 'number'"><span> &middot; mag <span x-text="obj.magnitude"></span></span></template></span>
+                </button>
+            </template>
+        </div>
+        <div class="bs-tcard" x-show="basicScreen==='sky' && skyInfo.visible" x-cloak>
+            <div class="bs-tnm" x-text="skyInfo.title"></div>
+            <div class="bs-tsub" x-text="skyInfo.subtitle || ''"></div>
+            <div class="bs-tgrid bs-num">
+                <span x-show="Number.isFinite(skyInfo.raDeg)">RA <b x-text="Number.isFinite(skyInfo.raDeg) ? formatRA(skyInfo.raDeg/15) : ''"></b></span>
+                <span x-show="Number.isFinite(skyInfo.decDeg)">Dec <b x-text="Number.isFinite(skyInfo.decDeg) ? formatDec(skyInfo.decDeg) : ''"></b></span>
+                <span x-show="typeof skyInfo.magnitude === 'number'">Mag <b x-text="skyInfo.magnitude"></b></span>
+            </div>
+            <button class="bs-tgoto" @click="skyInfoSlewCenter()" :disabled="!mount.connected || slewCenterJobId">&#127919; Slew &amp; Center</button>
+            <button class="bs-tgoto2" @click="skyInfoSlewOnly()" :disabled="!mount.connected || slewCenterJobId">GoTo only (no plate-solve)</button>
+        </div>
+
+        <div class="bs-rail right">
+            <div class="bs-expcol">
+                <div class="bs-expwrap" x-show="basicScreen==='preview' || basicScreen==='focus'">
+                    <button class="bs-exp" x-show="expandedField!=='exp'" @click="expandedField='exp'">
+                        <div class="bs-k">EXP</div><div class="bs-v bs-num" x-text="preview.exposure + 's'"></div></button>
+                    <div class="bs-exp bs-exp-open" x-show="expandedField==='exp'" x-cloak>
+                        <button class="bs-k bs-k-btn" @click="expandedField=null" title="Collapse">EXP &#9652;</button>
+                        <div class="bs-stepper">
+                            <button class="bs-stepbtn" @click="basicStep('exposure',-1)">&minus;</button>
+                            <input class="bs-stepinput bs-num" type="number" inputmode="decimal" step="any" min="0.001" max="3600" x-model.number="preview.exposure">
+                            <button class="bs-stepbtn" @click="basicStep('exposure',1)">+</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="bs-expwrap" x-show="basicScreen==='preview'">
+                    <button class="bs-exp" x-show="expandedField!=='gain'" @click="expandedField='gain'">
+                        <div class="bs-k">GAIN</div><div class="bs-v bs-num" x-text="preview.gain"></div></button>
+                    <div class="bs-exp bs-exp-open" x-show="expandedField==='gain'" x-cloak>
+                        <button class="bs-k bs-k-btn" @click="expandedField=null" title="Collapse">GAIN &#9652;</button>
+                        <div class="bs-stepper">
+                            <button class="bs-stepbtn" @click="basicStep('gain',-1)">&minus;</button>
+                            <input class="bs-stepinput bs-num" type="number" inputmode="numeric" step="1" min="0" x-model.number="preview.gain">
+                            <button class="bs-stepbtn" @click="basicStep('gain',1)">+</button>
+                        </div>
+                    </div>
+                </div>
+                <button class="bs-exp" x-show="basicScreen==='preview'" @click="basicCycleBin()"><div class="bs-k">BIN</div><div class="bs-v bs-num" x-text="preview.binning + '&times;' + preview.binning"></div></button>
+                <div class="bs-shutter" x-show="basicScreen==='preview'" role="button" :aria-label="(preview.busy||preview.looping) ? 'Abort' : 'Capture'"
+                     :class="{ looping: preview.looping, busy: preview.busy }"
+                     @pointerdown="shutterPointerDown($event, previewShutterCtx())"
+                     @pointerup="shutterPointerUp($event, previewShutterCtx())"
+                     @pointercancel="shutterPointerCancel()"
+                     @pointerleave="shutterPointerCancel()">
+                    <div class="bs-core"></div>
+                </div>
+                <button class="bs-lreset" x-show="basicScreen==='preview'" @click="basicSaveFrame()" title="Capture and save a frame">&#128190; Save</button>
+                <button class="bs-af" x-show="basicScreen==='focus'" x-cloak
+                        :class="autoFocus.state==='running' ? 'running' : ''"
+                        @click="autoFocus.state==='running' ? abortAutoFocus() : startAutoFocus()"
+                        x-text="autoFocus.state==='running' ? 'Stop' : 'Run AF'"></button>
+
+                <!-- Guide controls -->
+                <template x-if="basicScreen==='guide'">
+                    <div class="bs-gcol">
+                        <button class="bs-gbtn" @click="guiderLoop()" :disabled="guider.looping || guider.calibrating"><span class="bs-big">&#8635;</span>Loop</button>
+                        <button class="bs-gmain" :class="(guider.guiding||guider.calibrating) ? 'stop' : ''"
+                                @click="(guider.guiding||guider.calibrating) ? guiderStop() : guiderStart()"
+                                x-text="(guider.guiding||guider.calibrating) ? 'Stop' : 'Guide'"></button>
+                        <button class="bs-gbtn" @click="guiderFindStar()" :disabled="guider.guiding || guider.calibrating"><span class="bs-big">&#9737;</span>Auto star</button>
+                        <button class="bs-gbtn" @click="guiderDither()" :disabled="!guider.guiding"><span class="bs-big">&#8942;</span>Dither</button>
+                        <button class="bs-gbtn" @click="phd2SmartCalibrate()" :disabled="guider.calibrating"><span class="bs-big">&#8853;</span>Calibrate</button>
+                    </div>
+                </template>
+
+                <!-- Live stacking: exposure/gain/bin (top-level state), the stack
+                     shutter (press = start/continue, press again = stop), + Reset. -->
+                <template x-if="basicScreen==='live'">
+                    <div class="bs-expcol">
+                        <div class="bs-expwrap">
+                            <button class="bs-exp" x-show="expandedField!=='lexp'" @click="expandedField='lexp'">
+                                <div class="bs-k">EXP</div><div class="bs-v bs-num" x-text="exposure + 's'"></div></button>
+                            <div class="bs-exp bs-exp-open" x-show="expandedField==='lexp'" x-cloak>
+                                <button class="bs-k bs-k-btn" @click="expandedField=null" title="Collapse">EXP &#9652;</button>
+                                <div class="bs-stepper">
+                                    <button class="bs-stepbtn" @click="basicStepLive('exposure',-1)">&minus;</button>
+                                    <input class="bs-stepinput bs-num" type="number" inputmode="decimal" step="any" min="0.001" max="3600" x-model.number="exposure">
+                                    <button class="bs-stepbtn" @click="basicStepLive('exposure',1)">+</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bs-expwrap">
+                            <button class="bs-exp" x-show="expandedField!=='lgain'" @click="expandedField='lgain'">
+                                <div class="bs-k">GAIN</div><div class="bs-v bs-num" x-text="gain"></div></button>
+                            <div class="bs-exp bs-exp-open" x-show="expandedField==='lgain'" x-cloak>
+                                <button class="bs-k bs-k-btn" @click="expandedField=null" title="Collapse">GAIN &#9652;</button>
+                                <div class="bs-stepper">
+                                    <button class="bs-stepbtn" @click="basicStepLive('gain',-1)">&minus;</button>
+                                    <input class="bs-stepinput bs-num" type="number" inputmode="numeric" step="1" min="0" x-model.number="gain">
+                                    <button class="bs-stepbtn" @click="basicStepLive('gain',1)">+</button>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="bs-exp" @click="basicCycleBinLive()"><div class="bs-k">BIN</div><div class="bs-v bs-num" x-text="binning + '&times;' + binning"></div></button>
+                        <div class="bs-shutter" role="button" :aria-label="(capturing||looping) ? 'Stop stacking' : 'Start stacking'"
+                             :class="{ looping: liveStackEnabled || capturing || looping, busy: capturing }"
+                             @pointerdown="shutterPointerDown($event, liveShutterCtx())"
+                             @pointerup="shutterPointerUp($event, liveShutterCtx())"
+                             @pointercancel="shutterPointerCancel()"
+                             @pointerleave="shutterPointerCancel()">
+                            <div class="bs-core"></div>
+                        </div>
+                        <button class="bs-lreset" @click="resetLiveStack()">&#8635; Reset</button>
+                        <button class="bs-lreset" @click="saveServerStack()" title="Save the current stack to disk">&#128190; Save</button>
+                        <button class="bs-lreset" :class="liveStackSaveFrames ? 'on' : ''" @click="liveStackSaveFrames = !liveStackSaveFrames; saveLiveStackSaveFrames()" title="Also save every sub-frame to disk">Save frames</button>
+                    </div>
+                </template>
+
+                <!-- Video: exposure/gain (ms), ROI selector, Stream toggle, and
+                     the red Record shutter. -->
+                <template x-if="basicScreen==='video'">
+                    <div class="bs-expcol">
+                        <div class="bs-expwrap">
+                            <button class="bs-exp" x-show="expandedField!=='vexp'" @click="expandedField='vexp'">
+                                <div class="bs-k">EXP</div><div class="bs-v bs-num" x-text="basicVideoExpLabel()"></div></button>
+                            <div class="bs-exp bs-exp-open" x-show="expandedField==='vexp'" x-cloak>
+                                <button class="bs-k bs-k-btn" @click="expandedField=null" title="Collapse">EXP &#9652;</button>
+                                <div class="bs-stepper">
+                                    <button class="bs-stepbtn" @click="basicStepVideo('exposure',-1)">&minus;</button>
+                                    <input class="bs-stepinput bs-num" type="number" inputmode="decimal" step="any" min="0.0001" x-model.number="video.exposure">
+                                    <button class="bs-stepbtn" @click="basicStepVideo('exposure',1)">+</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bs-expwrap">
+                            <button class="bs-exp" x-show="expandedField!=='vgain'" @click="expandedField='vgain'">
+                                <div class="bs-k">GAIN</div><div class="bs-v bs-num" x-text="video.gain"></div></button>
+                            <div class="bs-exp bs-exp-open" x-show="expandedField==='vgain'" x-cloak>
+                                <button class="bs-k bs-k-btn" @click="expandedField=null" title="Collapse">GAIN &#9652;</button>
+                                <div class="bs-stepper">
+                                    <button class="bs-stepbtn" @click="basicStepVideo('gain',-1)">&minus;</button>
+                                    <input class="bs-stepinput bs-num" type="number" inputmode="numeric" step="1" min="0" x-model.number="video.gain">
+                                    <button class="bs-stepbtn" @click="basicStepVideo('gain',1)">+</button>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="bs-exp" @click="basicCycleRoi()"><div class="bs-k">ROI</div><div class="bs-v bs-num" x-text="video.roiSize > 0 ? video.roiSize : 'Full'"></div></button>
+                        <div class="bs-shutter bs-recshutter" role="button" :aria-label="videoRecording.recording ? 'Stop recording' : 'Start recording'"
+                             :class="{ looping: videoRecording.recording }"
+                             @pointerdown="shutterPointerDown($event, videoShutterCtx())"
+                             @pointerup="shutterPointerUp($event, videoShutterCtx())"
+                             @pointercancel="shutterPointerCancel()"
+                             @pointerleave="shutterPointerCancel()">
+                            <div class="bs-core"></div>
+                        </div>
+                        <button class="bs-lreset" :class="cameraStream.running ? 'on' : ''" @click="videoToggleStream()" :disabled="!selectedCamera || videoRecording.recording">&#127909; Stream</button>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Focus: AF progress under the status chip, and the manual nudge pad. -->
+        <div class="bs-afprog" x-show="basicScreen==='focus' && autoFocus.state==='running'" x-cloak>
+            <i :style="'width:' + Math.round(100 * Math.max(0, (autoFocus.currentSampleIndex + 1)) / Math.max(1, autoFocus.steps, autoFocus.currentSampleIndex + 1)) + '%'"></i>
+        </div>
+        <div class="bs-nudge" x-show="(basicScreen==='focus' || basicScreen==='video') && focusOpen" x-cloak>
+            <span class="bs-nudgelbl">focus</span>
+            <button title="Out fast" :disabled="autoFocus.state==='running'" @pointerdown.prevent="startFocusNudgeRepeat(-focusStepFast)" @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()">&laquo;</button>
+            <button title="Out slow" :disabled="autoFocus.state==='running'" @pointerdown.prevent="startFocusNudgeRepeat(-focusStepSlow)" @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()">&lsaquo;</button>
+            <div class="bs-pos bs-num"><div class="bs-pk">POSITION</div><div class="bs-pv" x-text="focusPosition ?? '--'"></div></div>
+            <button title="In slow" :disabled="autoFocus.state==='running'" @pointerdown.prevent="startFocusNudgeRepeat(focusStepSlow)" @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()">&rsaquo;</button>
+            <button title="In fast" :disabled="autoFocus.state==='running'" @pointerdown.prevent="startFocusNudgeRepeat(focusStepFast)" @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()">&raquo;</button>
+            <button class="bs-nudgehide" @click="focusOpen=false" title="Hide focus">&times;</button>
+        </div>
+        <button class="bs-focusreopen" x-show="(basicScreen==='focus' || basicScreen==='video') && !focusOpen" x-cloak @click="focusOpen=true">&#9737; focus</button>
+
+        <div class="bs-mount" x-show="basicScreen==='preview' || basicScreen==='video'" :class="{ 'mp-collapsed': !mountOpen }">
+            <div class="bs-side">
+                <button class="bs-icn" style="width:38px;height:38px" @click="mountOpen=!mountOpen" title="Mount pad"><span class="bs-big">&#10530;</span></button>
+                <button class="bs-pill" :class="mount.tracking ? 'on' : ''" @click="toggleTracking()">Track</button>
+                <div class="bs-spd" x-show="mountOpen && (mount.slewRates || []).length" x-cloak>
+                    <div class="bs-spdh"><span>Speed</span><b x-text="(mount.slewRates && mount.slewRates[mountSlewRateIndex]) ? mount.slewRates[mountSlewRateIndex].name : '--'"></b></div>
+                    <input type="range" min="0" :max="Math.max(0, (mount.slewRates || []).length - 1)"
+                           :value="mountSlewRateIndex < 0 ? 0 : mountSlewRateIndex" @input="setMountSlewRate($event.target.value)">
+                </div>
+            </div>
+            <div class="bs-grid">
+                <button class="mid"></button>
+                <button aria-label="North" @pointerdown="mountMoveStart('north',$event)" @pointerup="mountMoveStop()" @pointerleave="mountMoveStop()">&#9650;</button>
+                <button class="mid"></button>
+                <button aria-label="West" @pointerdown="mountMoveStart('west',$event)" @pointerup="mountMoveStop()" @pointerleave="mountMoveStop()">&#9664;</button>
+                <button class="mid" @click="mountStop()">&#9632;</button>
+                <button aria-label="East" @pointerdown="mountMoveStart('east',$event)" @pointerup="mountMoveStop()" @pointerleave="mountMoveStop()">&#9654;</button>
+                <button class="mid"></button>
+                <button aria-label="South" @pointerdown="mountMoveStart('south',$event)" @pointerup="mountMoveStop()" @pointerleave="mountMoveStop()">&#9660;</button>
+                <button class="mid"></button>
+            </div>
+        </div>
+
+        <div class="bs-bottom" x-show="basicScreen!=='autorun'">
+            <button class="bs-full" @click="basicSetPref('off')">Full Mode</button>
+            <div class="bs-chip" x-show="basicScreen==='preview' || basicScreen==='live' || basicScreen==='video'"><span class="bs-dot" :class="selectedCamera ? '' : 'off'"></span><span class="bs-name" x-text="selectedCamera || 'Cam'"></span></div>
+            <div class="bs-chip" x-show="basicScreen==='preview' || basicScreen==='live' || basicScreen==='guide' || basicScreen==='video' || basicScreen==='sky'"><span class="bs-dot" :class="mount.connected ? '' : 'off'"></span><span class="bs-name" x-text="selectedTelescope || 'Mount'"></span></div>
+            <div class="bs-chip" x-show="basicScreen==='preview'"><span class="bs-dot" :class="focusConnected ? '' : 'off'"></span><span class="bs-name" x-text="selectedFocuser || 'Focuser'"></span></div>
+            <button class="bs-auto" x-show="basicScreen==='preview'" :class="stretchAuto ? 'on' : ''" @click="toggleAutoStretch()">Auto stretch</button>
+            <div class="bs-chip" x-show="basicScreen==='focus'" x-cloak><span class="bs-dot" :class="focusConnected ? '' : 'off'"></span><span class="bs-name" x-text="selectedFocuser || 'Focuser'"></span></div>
+            <div class="bs-chip bs-num" x-show="basicScreen==='focus'" x-cloak>Step <b x-text="focusStepFast"></b></div>
+            <div class="bs-chip bs-num" x-show="basicScreen==='focus' && autoFocus.lastHfr" x-cloak>HFR <b x-text="autoFocus.lastHfr?.toFixed(2)"></b></div>
+            <div class="bs-chip" x-show="basicScreen==='guide'" x-cloak><span class="bs-dot" :class="guider.guideCameraConnected ? '' : 'off'"></span><span class="bs-name" x-text="guider.guideCameraName || 'Guide cam'"></span></div>
+            <div class="bs-mountacts" x-show="mount.connected && (basicScreen==='preview' || basicScreen==='live' || basicScreen==='guide' || basicScreen==='video' || basicScreen==='sky')" x-cloak>
+                <button class="bs-mbtn" @click="telescopeFindHome()">&#8962; Home</button>
+                <button class="bs-mbtn" @click="basicMountPark()">&#9209; Park</button>
+                <button class="bs-mbtn" @click="basicMountSync()">&#8646; Sync</button>
+            </div>
+        </div>
+
+        <!-- Autorun transport: overall progress + Start / Pause / Stop. -->
+        <div class="bs-autobar" x-show="basicScreen==='autorun'" x-cloak>
+            <div class="bs-pbar"><i :style="'width:' + (seqProgress ? seqProgress() : 0) + '%'"></i></div>
+            <div class="bs-prow">
+                <button class="bs-full" @click="basicSetPref('off')">Full Mode</button>
+                <div class="bs-pinfo bs-num" x-show="seqStatus && seqState!=='idle'">
+                    Frame <b x-text="(seqStatus && seqStatus.totalFramesCompleted) || 0"></b> / <b x-text="(seqStatus && seqStatus.totalFrames) || 0"></b>
+                    <span x-show="seqStatus && seqStatus.items && seqStatus.items.length"> &middot; set <b x-text="((seqStatus && seqStatus.currentItemIndex)||0)+1"></b>/<b x-text="(seqStatus && seqStatus.items ? seqStatus.items.length : sequence.length)"></b></span>
+                </div>
+                <div class="bs-pinfo" x-show="!(seqStatus && seqState!=='idle')" x-text="sequence.length ? (sequence.length + (sequence.length===1?' set queued':' sets queued')) : 'No sets'"></div>
+                <div class="bs-spacer"></div>
+                <button class="bs-tbtn bs-tstart" x-show="seqState==='idle'" :disabled="!sequence.length" @click="startSequence()">&#9654; Start</button>
+                <button class="bs-tbtn bs-tpause" x-show="seqState!=='idle'" @click="pauseSequence()" x-text="seqState==='paused' ? '▶ Resume' : '❙❙ Pause'"></button>
+                <button class="bs-tbtn bs-tstop" x-show="seqState!=='idle'" @click="stopSequence()">&#9632; Stop</button>
+            </div>
+        </div>
+
+        <!-- Per-device settings modal: hosts the RELOCATED full-UI equipment card. -->
+        <div class="bs-modal" x-show="basicEquipModal" x-cloak @click.self="basicCloseEquipConfig()">
+            <div class="bs-modalcard">
+                <div class="bs-modalhead">
+                    <span x-text="basicEquipModalTitle()"></span>
+                    <button class="bs-cbtn xs" @click="basicCloseEquipConfig()">&times;</button>
+                </div>
+                <div class="bs-modalbody" id="basicEquipModalBody"></div>
+            </div>
+        </div>
+
+    </div>
+    </template>
+
+    <!-- Return to field mode from the full UI, phones only. -->
+    <button class="basic-return" x-show="deviceIsPhone && !basicMode" x-cloak
+            @click="basicSetPref('auto')">&#128241; Field mode</button>
+
     <!-- ASIAIR-style floating guiding overlay: translucent, read-only,
          always-on-top mini graph. Draggable by its header, corner-resizable,
          visible from any tab. Toggled from the GUIDE bottom bar. Geometry +
@@ -22137,7 +22693,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260807-deviceport"></script>
+    <script src="/js/app.js?v=20260831-wifisetup"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

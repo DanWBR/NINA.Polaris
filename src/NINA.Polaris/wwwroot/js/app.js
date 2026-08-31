@@ -4525,6 +4525,22 @@ function ninaApp() {
         // brand badge in the status bar.
         appVersion: '',
 
+        // --- Basic (phone-only) field mode ---
+        // A curated ASIAIR-style shell that reuses this same state. Gated on the
+        // SHORTER viewport side so it triggers on a phone in any orientation but
+        // never on a tablet or desktop.
+        deviceIsPhone: false,
+        basicMode: false,
+        basicModePref: (function () { try { return localStorage.getItem('polaris.basicMode') || 'auto'; } catch (e) { return 'auto'; } })(),
+        basicScreen: 'preview',
+        // Basic-mode-only UI scale (independent of the Full-UI body zoom, which
+        // is pinned to 1 in basic mode). Persisted, clamped to [0.7, 1.4].
+        basicUiScale: (function () { try { const v = parseFloat(localStorage.getItem('polaris.basicUiScale')); return (v >= 0.7 && v <= 1.4) ? v : 1.0; } catch (e) { return 1.0; } })(),
+        _basicIndiTried: false,   // one-shot guard for the config-screen INDI auto-connect
+        basicEquipModal: null,    // which device's settings modal is open ('camera'|'mount'|...)
+        _basicModalMoved: null,   // {el, home, next} full-UI card relocated into the settings modal
+        _basicMoved: null,   // [{el, home, next}] surfaces relocated into the shell
+
         init() {
             this.updateClock();
             setInterval(() => this.updateClock(), 1000);
@@ -4538,6 +4554,16 @@ function ninaApp() {
             // Restore all resizable side-panel / column widths.
             this._restorePanelWidths();
             this._restoreNavPad();
+
+            // Basic (phone-only) field mode. Recompute on every resize/rotate so
+            // it engages on a phone in any orientation and never on tablet/desktop.
+            this._recomputeBasicMode();
+            window.addEventListener('resize', () => this._recomputeBasicMode());
+            window.addEventListener('orientationchange', () => this._recomputeBasicMode());
+            this.$watch('basicMode', (v) => { if (v) this._basicEnter(); else this._basicExit(); });
+            // Resume the deferred first-run WiFi prompt once the location modal closes.
+            this.$watch('showLocationSetup', (v) => { if (!v && this._wifiSetupPending) { this._wifiSetupPending = false; this._maybeShowWifiSetup(); } });
+            if (this.basicMode) this.$nextTick(() => this._basicEnter());
 
             // Restore the guide-frame brightness/contrast slider prefs.
             try {
@@ -5126,7 +5152,9 @@ function ninaApp() {
             // Control density (Settings → Appearance). Restore the saved % and
             // push it into --pad-scale before first paint.
             const padSaved = parseInt(localStorage.getItem('nina-pad-scale'), 10);
-            this.padScale = Number.isFinite(padSaved) ? padSaved : 100;
+            // Phones default the control density to 70% (tighter padding) so more
+            // of the desktop UI fits; desktop/tablet stay at 100%.
+            this.padScale = Number.isFinite(padSaved) ? padSaved : (this._isPhoneViewport() ? 70 : 100);
             this.applyPadScale();
             this.padScaleDraft = this.padScale;
 
@@ -7502,10 +7530,19 @@ function ninaApp() {
         // loaded AND as the value the Reset button restores to.
         _defaultUiZoom() {
             try {
+                // Phones (short viewport side) default the FULL UI to 80% so the
+                // desktop layout is usable without an immediate manual zoom.
+                const shortSide = Math.min(window.innerWidth || 0, window.innerHeight || 0);
+                if (shortSide > 0 && shortSide <= 540) return 0.80;
                 if (window.matchMedia('(max-width: 640px)').matches) return 0.75;
                 if (window.matchMedia('(max-width: 960px)').matches) return 0.85;
             } catch (_) { /* matchMedia missing in very old browsers */ }
             return 1.0;
+        },
+        // A phone (by the shorter viewport side), used for phone-only defaults.
+        _isPhoneViewport() {
+            const s = Math.min(window.innerWidth || 0, window.innerHeight || 0);
+            return s > 0 && s <= 540;
         },
 
         // Commit uiZoomDraft (slider position) → uiZoom (live page
@@ -7516,7 +7553,9 @@ function ninaApp() {
             const z = Math.max(0.5, Math.min(1.5, +this.uiZoomDraft || 1.0));
             this.uiZoom = z;
             this.uiZoomDraft = z;
-            document.body.style.zoom = String(z);
+            // Basic (phone) mode owns its own touch-sized layout; the small-screen
+            // body zoom would shrink its fixed shell, so it uses its own scale.
+            document.body.style.zoom = this.basicMode ? String(this.basicUiScale || 1) : String(z);
             // Expose the zoom to CSS so prominent texts can scale at half rate
             // (see 14-uiscale-text.css: --text-rescale).
             document.documentElement.style.setProperty('--ui-zoom', String(z));
@@ -7764,7 +7803,7 @@ function ninaApp() {
             const z = this._defaultUiZoom();
             this.uiZoom = z;
             this.uiZoomDraft = z;
-            document.body.style.zoom = String(z);
+            document.body.style.zoom = this.basicMode ? String(this.basicUiScale || 1) : String(z);
             document.documentElement.style.setProperty('--ui-zoom', String(z));
             this._assistantPushUi();
         },
@@ -11981,6 +12020,25 @@ function ninaApp() {
                     this.showLocationSetup = true;
                 });
             }
+        },
+
+        // First-run WiFi nudge: on a Linux host that manages WiFi and is NOT yet
+        // on a station network (a fresh board falls back to its own hotspot),
+        // offer to join the user's WiFi. Skipped on Windows/macOS (WiFi is not
+        // managed by Polaris there) and once the user has answered once. Deferred
+        // while the first-run location modal is open so modals don't stack.
+        async _maybeShowWifiSetup() {
+            const net = this.network;
+            if (!net || !net.supportedOs || !net.nmcliInstalled || !net.hasWifi) return;
+            if (net.mode === 'station') return;   // already on WiFi
+            try { if (localStorage.getItem('polaris-wifi-prompted') === '1') return; } catch (_) { }
+            if (this.showLocationSetup) { this._wifiSetupPending = true; return; }
+            try { localStorage.setItem('polaris-wifi-prompted', '1'); } catch (_) { }
+            const ok = await this._confirmAsync(
+                'This device is running its own hotspot. Connect it to your home WiFi ' +
+                'so you can reach it on your normal network.',
+                { title: 'Connect Polaris to your WiFi?', okLabel: 'Connect to WiFi', cancelLabel: 'Later' });
+            if (ok) this.networkOpenSwitchDialog();
         },
 
         async geocodeAddress() {
@@ -27494,6 +27552,450 @@ function ninaApp() {
         // column), so dragging the grip LEFT always grows the panel. The width
         // lives in a CSS var (consumed by the panel + any sibling margin/flex),
         // clamped to [min, min(max, 70vw)] and persisted to localStorage.
+        // ---- Basic (phone-only) field mode ----
+        _recomputeBasicMode() {
+            const shortSide = Math.min(window.innerWidth || 0, window.innerHeight || 0);
+            // Phones sit around 360-430px on the short side in any orientation;
+            // tablets are ~600px+. 540 cleanly separates them.
+            this.deviceIsPhone = shortSide > 0 && shortSide <= 540;
+            this.basicMode = this.deviceIsPhone && this.basicModePref !== 'off';
+            // Mark the body so the Full-UI modals reused inside basic mode
+            // (host file picker, detect wizard, update, wifi) can be pinned to
+            // the phone viewport — those elements live outside .basic-shell.
+            try { document.body.classList.toggle('basic-active', !!this.basicMode); } catch (e) { }
+        },
+        basicSetPref(pref) {
+            this.basicModePref = pref;
+            try { localStorage.setItem('polaris.basicMode', pref); } catch (e) { }
+            this._recomputeBasicMode();
+        },
+        // Relocate the live preview surface (canvas + pan/zoom) into the shell so
+        // there's a single WS paint path and gesture handler. Neutralise the body
+        // zoom (the shell has its own touch-sized layout) and keep the preview
+        // pipeline active so frames keep arriving.
+        _basicEnter() {
+            try {
+                try { document.body.style.zoom = String(this.basicUiScale || 1); } catch (e) { }
+                this._basicApplyScreen();
+            } catch (e) { }
+        },
+        // Relocate the ACTIVE screen's live surfaces into the shell (one WS paint
+        // path + one gesture handler), restoring whatever the previous screen
+        // moved. Preview -> the preview .preview-area; Focus -> the AF
+        // .af-preview-area (image + star ring + zoomed star) plus the V-curve.
+        // Which live canvas the active screen shows (Fit/Zoom target it too).
+        basicActiveCanvas() {
+            return this.basicScreen === 'focus' ? 'focusCanvas'
+                : this.basicScreen === 'autorun' ? 'autorunCanvas'
+                : this.basicScreen === 'live' ? 'liveCanvas'
+                : this.basicScreen === 'video' ? 'videoCaptureCanvas'
+                : 'previewCanvas';   // guide uses an <img>, not a pz canvas
+        },
+        _basicApplyScreen() {
+            this._basicRestoreMoved();
+            // Guide relocates two pieces from the PHD2 view: the guide-cam image
+            // to the image slot and the history graph (which carries its own RMS
+            // + scale HUD) to a bottom strip.
+            if (this.basicScreen === 'guide') {
+                this.tab = 'guide';
+                this.$nextTick(() => {
+                    const cam = document.querySelector('.phd2-cam');
+                    if (cam) this._basicMove(cam, 'basicImageSlot');
+                    this._basicMove('.phd2-graph', 'basicGuideGraphSlot');
+                    this._basicClampGuideOverlay();
+                });
+                return;
+            }
+            // Sky relocates the planetarium iframe into the image slot. Reparenting
+            // an iframe reloads it, but tab='sky' keeps it alive while in this mode.
+            if (this.basicScreen === 'sky') {
+                this.tab = 'sky';
+                this.$nextTick(() => {
+                    this._basicMove('#skyFrame', 'basicImageSlot');
+                    this._basicClampGuideOverlay();
+                });
+                return;
+            }
+            // Config is a static, scrollable card list rendered by the shell
+            // itself (no pipeline, no relocation). _basicRestoreMoved above
+            // already put any previously relocated node back.
+            if (this.basicScreen === 'config') {
+                this.basicConfigEnter();
+                return;
+            }
+            // Per-screen: which tab owns the pipeline, which canvas to relocate,
+            // and a CSS fallback selector for its .preview-area wrapper.
+            const cfg = ({
+                preview: { tab: 'preview', canvas: 'previewCanvas', sel: '.preview-tab-panel .preview-area' },
+                focus: { tab: 'focus', canvas: 'focusCanvas', sel: '.af-preview-area', chart: true },
+                autorun: { tab: 'sequence', canvas: 'autorunCanvas', sel: '.autorun-preview' },
+                live: { tab: 'live', canvas: 'liveCanvas', sel: '.preview-area' },
+                video: { tab: 'video', canvas: 'videoCaptureCanvas', sel: '.preview-area' }
+            })[this.basicScreen] || null;
+            if (!cfg) { this.tab = 'preview'; return; }
+            this.tab = cfg.tab;
+            this.$nextTick(() => {
+                const cv = document.getElementById(cfg.canvas);
+                const area = (cv && cv.closest('.preview-area')) || document.querySelector(cfg.sel);
+                if (area) this._basicMove(area, 'basicImageSlot');
+                if (cfg.chart) this._basicMove('.af-chart', 'basicCurveSlot');
+                try { this._pzFit && this._pzFit(cfg.canvas); } catch (e) { }
+                this._basicClampGuideOverlay();
+            });
+        },
+        _basicMove(sel, slotId) {
+            try {
+                const el = (typeof sel === 'string') ? document.querySelector(sel) : sel;
+                const slot = document.getElementById(slotId);
+                if (el && slot && el.parentNode !== slot) {
+                    if (!this._basicMoved) this._basicMoved = [];
+                    this._basicMoved.push({ el, home: el.parentNode, next: el.nextSibling });
+                    slot.appendChild(el);
+                }
+            } catch (e) { }
+        },
+        _basicRestoreMoved() {
+            (this._basicMoved || []).forEach(m => {
+                try { if (m.el && m.home) m.home.insertBefore(m.el, m.next || null); } catch (e) { }
+            });
+            this._basicMoved = [];
+        },
+        basicSetScreen(s) {
+            this.basicScreen = s;
+            if (this.basicMode) this._basicApplyScreen();
+        },
+        // The floating guide overlay is reused in basic mode (draggable +
+        // resizable). Its geometry persists from the desktop, so pull it back
+        // inside the phone viewport if it would otherwise land off-screen.
+        _basicClampGuideOverlay() {
+            try {
+                const gv = this.guideOverlay; if (!gv) return;
+                const vw = window.innerWidth, vh = window.innerHeight;
+                if (typeof gv.w === 'number') gv.w = Math.min(gv.w, vw - 16);
+                if (typeof gv.h === 'number') gv.h = Math.min(gv.h, vh - 16);
+                if (typeof gv.left === 'number') gv.left = Math.max(4, Math.min(gv.left, vw - (gv.w || 120) - 4));
+                if (typeof gv.top === 'number') gv.top = Math.max(48, Math.min(gv.top, vh - (gv.h || 100) - 4));
+            } catch (e) { }
+        },
+        _basicExit() {
+            try {
+                this._basicRestoreMoved();
+                try { this.applyUiZoom && this.applyUiZoom(); } catch (e) { }
+            } catch (e) { }
+        },
+        // Mode menu: Preview and Focus are curated field screens; the others jump
+        // to the full UI on that tab until their own field screens are built.
+        basicGoMode(m) {
+            if (['preview', 'focus', 'autorun', 'guide', 'live', 'video', 'sky', 'config'].includes(m)) { this.basicSetScreen(m); return; }
+            const map = { plan: 'plan' };
+            const tabId = map[m] || 'home';
+            this.basicSetPref('off');
+            if (this.helpOpenTab) this.helpOpenTab(tabId); else this.tab = tabId;
+        },
+        // --- Autorun (basic field screen) sequence edits ---
+        basicSeqAdd() {
+            try { this.addSequenceItem(); this.syncSequenceToServer && this.syncSequenceToServer(); } catch (e) { }
+        },
+        basicSeqCount(item, d) {
+            if (!item) return;
+            item.count = Math.max(1, (Number(item.count) || 1) + d);
+            try { this.syncSequenceToServer && this.syncSequenceToServer(); } catch (e) { }
+        },
+        basicSeqToggle(item) {
+            if (!item) return;
+            item.enabled = !item.enabled;
+            try { this.syncSequenceToServer && this.syncSequenceToServer(); } catch (e) { }
+        },
+        basicSeqRemove(i) {
+            if (this.seqState === 'running') { this.toast && this.toast('Stop the run first', 'warn'); return; }
+            this.sequence.splice(i, 1);
+            try { this.syncSequenceToServer && this.syncSequenceToServer(); } catch (e) { }
+        },
+        // Persist after an inline rename (bound with x-model).
+        basicSeqSync() {
+            try { this.syncSequenceToServer && this.syncSequenceToServer(); } catch (e) { }
+        },
+        // Tap the type chip to cycle the frame type.
+        basicSeqCycleType(item) {
+            if (!item) return;
+            const types = ['LIGHT', 'DARK', 'FLAT', 'BIAS'];
+            const i = types.indexOf(item.imageType || 'LIGHT');
+            item.imageType = types[(i + 1) % types.length];
+            this.basicSeqSync();
+        },
+        // FLAT auto-exposure toggle (the capture engine reads item.autoExposure
+        // when imageType is FLAT and measures the flat exposure itself).
+        basicSeqToggleAuto(item) {
+            if (!item) return;
+            item.autoExposure = !item.autoExposure;
+            this.basicSeqSync();
+        },
+        basicCycleBin() {
+            this.preview.binning = (Number(this.preview.binning) || 1) >= 2 ? 1 : 2;
+        },
+        // LIVE uses the top-level exposure/gain/binning (the server-owned live
+        // loop reads these), separate from preview.*.
+        basicStepLive(field, dir) {
+            if (field === 'exposure') {
+                const p = [0.5, 1, 2, 4, 8, 16, 30, 60, 120, 180, 300, 600];
+                const cur = Number(this.exposure) || 1;
+                let i = p.findIndex(x => x >= cur - 1e-9);
+                let ni;
+                if (i < 0) { ni = p.length - 1; }
+                else { const exact = Math.abs(p[i] - cur) < 1e-6; ni = dir > 0 ? (exact ? i + 1 : i) : (i - 1); }
+                this.exposure = p[Math.max(0, Math.min(p.length - 1, ni))];
+            } else if (field === 'gain') {
+                const info = this.equipCameraInfo || {};
+                const lo = Number.isFinite(info.gainMin) ? info.gainMin : 0;
+                const hi = Number.isFinite(info.gainMax) ? info.gainMax : 1000;
+                this.gain = Math.max(lo, Math.min(hi, Math.round((Number(this.gain) || 0) + dir * 10)));
+            }
+        },
+        basicCycleBinLive() {
+            this.binning = (Number(this.binning) || 1) >= 2 ? 1 : 2;
+        },
+        // VIDEO uses video.exposure (seconds, but planetary is sub-second) and
+        // video.gain. Its own short-exposure ladder.
+        basicStepVideo(field, dir) {
+            if (field === 'exposure') {
+                const p = [0.0005, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1];
+                const cur = Number(this.video.exposure) || 0.05;
+                let i = p.findIndex(x => x >= cur - 1e-12);
+                let ni;
+                if (i < 0) { ni = p.length - 1; }
+                else { const exact = Math.abs(p[i] - cur) < 1e-9; ni = dir > 0 ? (exact ? i + 1 : i) : (i - 1); }
+                this.video.exposure = p[Math.max(0, Math.min(p.length - 1, ni))];
+            } else if (field === 'gain') {
+                const info = this.equipCameraInfo || {};
+                const lo = Number.isFinite(info.gainMin) ? info.gainMin : 0;
+                const hi = Number.isFinite(info.gainMax) ? info.gainMax : 1000;
+                this.video.gain = Math.max(lo, Math.min(hi, Math.round((Number(this.video.gain) || 0) + dir * 20)));
+            }
+        },
+        // Format the video exposure for display: ms under a second, else seconds.
+        basicVideoExpLabel() {
+            const e = Number(this.video.exposure) || 0;
+            return e < 1 ? (Math.round(e * 1000) + 'ms') : (e + 's');
+        },
+        // Cycle the capture ROI (full sensor -> square subframes), applied via the
+        // same helper the desktop ROI pills use.
+        basicCycleRoi() {
+            const p = [0, 1280, 800, 640, 480, 320];
+            const cur = Number(this.video.roiSize) || 0;
+            let i = p.indexOf(cur); if (i < 0) i = 0;
+            const nv = p[(i + 1) % p.length];
+            if (nv === 0) this.videoSetRoiRect(0, 0, 'square', 0);
+            else this.videoSetRoiRect(nv, nv, 'square', nv);
+        },
+        // PREVIEW: save the current view by capturing a fresh frame with disk-save
+        // forced on (there's no server endpoint to save the already-shown frame).
+        async basicSaveFrame() {
+            const prev = this.preview.saveToDisk;
+            this.preview.saveToDisk = true;
+            try { await this.previewTakeSnap(); this.toast && this.toast('Frame saved', 'ok'); }
+            catch (e) { this.toastFail ? this.toastFail('Save failed', e) : (this.toast && this.toast('Save failed', 'error')); }
+            finally { this.preview.saveToDisk = prev; }
+        },
+        // Nudge EXP / GAIN from the inline stepper (the input itself takes any
+        // typed value). Exposure walks a sensible preset ladder; gain steps by 10
+        // within the camera's gain range.
+        basicStep(field, dir) {
+            if (field === 'exposure') {
+                const p = [0.5, 1, 2, 4, 8, 16, 30, 60, 120, 180, 300, 600];
+                const cur = Number(this.preview.exposure) || 1;
+                let i = p.findIndex(x => x >= cur - 1e-9);
+                let ni;
+                if (i < 0) { ni = dir > 0 ? p.length - 1 : p.length - 1; }
+                else {
+                    const exact = Math.abs(p[i] - cur) < 1e-6;
+                    ni = dir > 0 ? (exact ? i + 1 : i) : (i - 1);
+                }
+                ni = Math.max(0, Math.min(p.length - 1, ni));
+                this.preview.exposure = p[ni];
+            } else if (field === 'gain') {
+                const info = this.equipCameraInfo || {};
+                const lo = Number.isFinite(info.gainMin) ? info.gainMin : 0;
+                const hi = Number.isFinite(info.gainMax) ? info.gainMax : 1000;
+                const v = (Number(this.preview.gain) || 0) + dir * 10;
+                this.preview.gain = Math.max(lo, Math.min(hi, Math.round(v)));
+            }
+        },
+        async basicConnectAll() {
+            // A beginner shouldn't have to think about the INDI server link, so
+            // bring it up first (a no-op when it's already connected), then run
+            // the normal per-role bulk connect.
+            try { if (this.basicUsesIndi && this.basicUsesIndi() && !this.indiConnected && this.connectIndi) await this.connectIndi(); }
+            catch (e) { /* best-effort */ }
+            try { await this.equipConnectAll(); }
+            catch (e) { if (this.toast) this.toast('Connect failed', 'warn'); }
+        },
+        basicAnyDisconnected() {
+            return !(this.mount && this.mount.connected) || !this.selectedCamera;
+        },
+
+        // ---- Basic CONFIG screen ----
+        // Fired when the Setup screen opens: refresh the cards' backing data and,
+        // per the field-UI assumption that Polaris always auto-connects to the
+        // INDI server, verify the link and bring it up once if it isn't already.
+        basicConfigEnter() {
+            try { this.loadDeviceName && this.loadDeviceName(); } catch (e) { }
+            try { this.loadPlateSolveConfig && this.loadPlateSolveConfig(); } catch (e) { }
+            try { this.loadStorageConfig && this.loadStorageConfig(); } catch (e) { }
+            try { this.loadPowerInfo && this.loadPowerInfo(); } catch (e) { }
+            try {
+                if (this.basicUsesIndi() && !this.indiConnected && !this._basicIndiTried && this.connectIndi) {
+                    this._basicIndiTried = true;
+                    this.connectIndi();
+                }
+            } catch (e) { }
+            // Populate the per-role device dropdowns: refresh the INDI list, and
+            // discover vendor/ASCOM/Alpaca devices for any non-INDI role.
+            try { if (this.indiConnected && this.refreshDevices) this.refreshDevices(); } catch (e) { }
+            try {
+                if (this.cameraDriver !== 'indi' && this.detectVendorCameras) this.detectVendorCameras();
+                if (this.mountDriver !== 'indi' && this.detectVendorMounts) this.detectVendorMounts();
+                if (this.focuserDriver !== 'indi' && this.detectVendorFocusers) this.detectVendorFocusers();
+                if (this.filterWheelDriver !== 'indi' && this.detectVendorFilterWheels) this.detectVendorFilterWheels();
+            } catch (e) { }
+        },
+        // ---- Basic equipment per-role device picker ----
+        // Options for a role's device <select>: the shared INDI device list when
+        // the role's driver is INDI, else that role's discovered vendor devices.
+        // The currently connected device is always surfaced so the select shows
+        // it even before discovery has run.
+        _basicRoleMap: {
+            camera: { driver: 'cameraDriver', vendor: 'cameraVendorDevices', choice: 'equipCameraChoice', name: 'selectedCamera' },
+            mount: { driver: 'mountDriver', vendor: 'mountVendorDevices', choice: 'equipMountChoice', name: 'selectedTelescope' },
+            focuser: { driver: 'focuserDriver', vendor: 'focuserVendorDevices', choice: 'equipFocuserChoice', name: 'selectedFocuser' },
+            filter: { driver: 'filterWheelDriver', vendor: 'filterWheelVendorDevices', choice: 'equipFilterChoice', name: 'selectedFilterWheel' },
+            guide: { driver: 'guideCameraDriver', vendor: 'guideCameraVendorDevices', choice: 'guideCamera', name: null }
+        },
+        basicRoleConnectedName(role) {
+            if (role === 'guide') return (this.guider && this.guider.guideCameraName) || '';
+            const cfg = this._basicRoleMap[role];
+            return (cfg && cfg.name && this[cfg.name]) || '';
+        },
+        // True when any role is set to the INDI backend; on an ASCOM/Alpaca
+        // (typically Windows) rig this is false, so the field UI skips the INDI
+        // server line and its auto-connect entirely.
+        basicUsesIndi() {
+            return ['cameraDriver', 'mountDriver', 'focuserDriver', 'filterWheelDriver', 'guideCameraDriver']
+                .some(k => this[k] === 'indi');
+        },
+        basicDevOptions(role) {
+            const cfg = this._basicRoleMap[role];
+            if (!cfg) return [];
+            let list;
+            if (this[cfg.driver] === 'indi') {
+                list = (this.devices || []).map(d => ({ value: d.name, label: d.name + (d.driver ? ' (' + d.driver + ')' : '') }));
+            } else {
+                list = (this[cfg.vendor] || []).map(d => ({ value: d.id, label: (d.model || d.name || d.id) + (d.detail ? ' (' + d.detail + ')' : '') }));
+            }
+            // Always surface the current pick / connected device so the select
+            // shows it even before discovery runs (matters on ASCOM/Alpaca rigs
+            // where there is no always-on device list like INDI's).
+            const cur = (cfg.choice && this[cfg.choice]) || this.basicRoleConnectedName(role);
+            if (cur && !list.some(o => o.value === cur)) list.unshift({ value: cur, label: cur });
+            return list;
+        },
+        basicDevSelected(role, value) {
+            const cfg = this._basicRoleMap[role];
+            if (!cfg) return false;
+            const choice = cfg.choice ? this[cfg.choice] : '';
+            return (choice ? choice : this.basicRoleConnectedName(role)) === value;
+        },
+        basicSetDevChoice(role, value) {
+            if (role === 'guide') { if (this.setGuideCamera) this.setGuideCamera(value); else this.guideCamera = value; return; }
+            const cfg = this._basicRoleMap[role];
+            if (cfg && cfg.choice) this[cfg.choice] = value;
+        },
+        // Per-device settings modal: relocate the REAL full-UI equipment card
+        // (found by its title) into a basic-mode modal so the field user gets
+        // the exact same settings, then restore it on close.
+        _basicEquipTitles: { camera: 'Main Camera', mount: 'Telescope Mount', focuser: 'Main Scope Focus Motor', filter: 'Filter Wheel', guide: 'Guiding System' },
+        _basicFindEquipCard(role) {
+            const want = this._basicEquipTitles[role];
+            if (!want) return null;
+            return [...document.querySelectorAll('.equip-card')].find(c => {
+                const t = c.querySelector('.equip-card-title');
+                return t && t.textContent.trim() === want;
+            }) || null;
+        },
+        basicOpenEquipConfig(role) {
+            const card = this._basicFindEquipCard(role);
+            if (!card) { this.basicSetPref('off'); return; }   // fall back to the full UI
+            this.basicEquipModal = role;
+            this.$nextTick(() => {
+                const slot = document.getElementById('basicEquipModalBody');
+                if (slot && card.parentNode !== slot) {
+                    this._basicModalMoved = { el: card, home: card.parentNode, next: card.nextSibling };
+                    slot.appendChild(card);
+                }
+            });
+        },
+        basicCloseEquipConfig() {
+            const m = this._basicModalMoved;
+            if (m && m.el && m.home) { try { m.home.insertBefore(m.el, m.next || null); } catch (e) { } }
+            this._basicModalMoved = null;
+            this.basicEquipModal = null;
+        },
+        basicEquipModalTitle() {
+            return ({ camera: 'Camera settings', mount: 'Mount settings', focuser: 'Focuser settings', filter: 'Filter wheel settings', guide: 'Guiding settings' })[this.basicEquipModal] || 'Settings';
+        },
+        // Bottom-bar mount actions, each behind a confirm. Home reuses
+        // telescopeFindHome (which confirms on its own); Park and Sync add one.
+        async basicMountPark() {
+            if (!this.mount.connected) { this.toast('Connect a mount first', 'error'); return; }
+            if (!await this._confirmAsync(
+                'Park the mount? It slews to its park position and stops tracking.',
+                { title: 'Park mount', okLabel: 'Park', cancelLabel: 'Cancel', danger: true })) return;
+            return this.parkMount();
+        },
+        async basicMountSync() {
+            if (!this.mount.connected) { this.toast('Connect a mount first', 'error'); return; }
+            if (!await this._confirmAsync(
+                'Plate-solve the current view and sync the mount to it? The mount does not move; ' +
+                'this corrects where it thinks it is pointing. Needs a camera and clear sky.',
+                { title: 'Solve & sync mount', okLabel: 'Solve & sync', cancelLabel: 'Cancel' })) return;
+            return this.solveAndSyncHere();
+        },
+        // Open the equipment-detection wizard. It creates/edits an INDI profile,
+        // which is a Full-UI concern, so drop to the full UI (the detect modal
+        // floats above everything) and run the scan there.
+        basicDetectEquipment() {
+            this.basicSetPref('off');
+            this.$nextTick(() => { try { this.indiDetectScan && this.indiDetectScan(); } catch (e) { } });
+        },
+        // Studio home (image output root) via the host folder picker.
+        async basicPickStudioHome() {
+            try {
+                const path = await this._hostPickFolder({ title: 'Studio home folder' });
+                if (!path) return;
+                const r = await this.apiPostJson('/api/files/studio-root', null, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path })
+                });
+                this.settings.imageOutputDir = (r && r.imageOutputDir) || path;
+                this.toast('Studio home set to ' + this.settings.imageOutputDir, 'ok');
+                this.apiPost('/api/studio/rescan').catch(() => { });
+            } catch (e) { this.toastFail ? this.toastFail('Could not set studio home', e) : this.toast('Could not set studio home', 'error'); }
+        },
+        // Basic-mode-only UI scale. The Full-UI body zoom is deliberately pinned
+        // to 1 while in basic mode (its small-screen default would shrink the
+        // fixed touch shell), so basic mode drives body.zoom off ITS OWN factor.
+        basicApplyUiScale() {
+            const s = Math.max(0.7, Math.min(1.4, +this.basicUiScale || 1.0));
+            this.basicUiScale = s;
+            try { if (this.basicMode) document.body.style.zoom = String(s); } catch (e) { }
+            try { localStorage.setItem('polaris.basicUiScale', String(s)); } catch (e) { }
+        },
+        basicStepUiScale(dir) {
+            const s = Math.max(0.7, Math.min(1.4, (+this.basicUiScale || 1.0) + dir * 0.05));
+            this.basicUiScale = Math.round(s * 100) / 100;
+            this.basicApplyUiScale();
+        },
+
         _panelResize(ev, varName, storeKey, def, min, max, dir) {
             ev.preventDefault();
             const grip = ev.currentTarget;
@@ -44571,6 +45073,11 @@ function ninaApp() {
                 if (msg.network.hasWifi && !this._netIfacesLoaded) {
                     this._netIfacesLoaded = true;
                     this.networkFetchInterfaces();
+                }
+                // Once, when we first learn the network state, offer first-run WiFi setup.
+                if (!this._wifiSetupChecked) {
+                    this._wifiSetupChecked = true;
+                    this._maybeShowWifiSetup();
                 }
             }
             if (msg.cameraStream) {
