@@ -4550,6 +4550,8 @@ function ninaApp() {
             window.addEventListener('resize', () => this._recomputeBasicMode());
             window.addEventListener('orientationchange', () => this._recomputeBasicMode());
             this.$watch('basicMode', (v) => { if (v) this._basicEnter(); else this._basicExit(); });
+            // Resume the deferred first-run WiFi prompt once the location modal closes.
+            this.$watch('showLocationSetup', (v) => { if (!v && this._wifiSetupPending) { this._wifiSetupPending = false; this._maybeShowWifiSetup(); } });
             if (this.basicMode) this.$nextTick(() => this._basicEnter());
 
             // Restore the guide-frame brightness/contrast slider prefs.
@@ -11988,6 +11990,25 @@ function ninaApp() {
                     this.showLocationSetup = true;
                 });
             }
+        },
+
+        // First-run WiFi nudge: on a Linux host that manages WiFi and is NOT yet
+        // on a station network (a fresh board falls back to its own hotspot),
+        // offer to join the user's WiFi. Skipped on Windows/macOS (WiFi is not
+        // managed by Polaris there) and once the user has answered once. Deferred
+        // while the first-run location modal is open so modals don't stack.
+        async _maybeShowWifiSetup() {
+            const net = this.network;
+            if (!net || !net.supportedOs || !net.nmcliInstalled || !net.hasWifi) return;
+            if (net.mode === 'station') return;   // already on WiFi
+            try { if (localStorage.getItem('polaris-wifi-prompted') === '1') return; } catch (_) { }
+            if (this.showLocationSetup) { this._wifiSetupPending = true; return; }
+            try { localStorage.setItem('polaris-wifi-prompted', '1'); } catch (_) { }
+            const ok = await this._confirmAsync(
+                'This device is running its own hotspot. Connect it to your home WiFi ' +
+                'so you can reach it on your normal network.',
+                { title: 'Connect Polaris to your WiFi?', okLabel: 'Connect to WiFi', cancelLabel: 'Later' });
+            if (ok) this.networkOpenSwitchDialog();
         },
 
         async geocodeAddress() {
@@ -44675,6 +44696,11 @@ function ninaApp() {
                 if (msg.network.hasWifi && !this._netIfacesLoaded) {
                     this._netIfacesLoaded = true;
                     this.networkFetchInterfaces();
+                }
+                // Once, when we first learn the network state, offer first-run WiFi setup.
+                if (!this._wifiSetupChecked) {
+                    this._wifiSetupChecked = true;
+                    this._maybeShowWifiSetup();
                 }
             }
             if (msg.cameraStream) {
