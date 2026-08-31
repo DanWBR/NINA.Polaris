@@ -8,7 +8,7 @@
 .basic-shell{
     position:fixed; inset:0; z-index:800; background:#04060c;
     color:var(--text, #e8edf7);
-    font-family:-apple-system,Segoe UI,Roboto,system-ui,sans-serif;
+    /* No font-family here: inherit the user's chosen UI font from body. */
     -webkit-user-select:none; user-select:none;
     --bs-panel:rgba(14,20,34,.82); --bs-border:#243049; --bs-muted:#8a97b0;
     --bs-accent:#4c8dff; --bs-accent2:#6cc4ff; --bs-ok:#37c871;
@@ -78,16 +78,8 @@
     width:28px; height:28px; background:var(--bs-danger)}
 .basic-shell .bs-shutter:active{transform:scale(.95)}
 
-/* guide box */
-.basic-shell .bs-guidebox{position:absolute; left:60px; top:52px; width:190px; background:var(--bs-panel);
-    border:1px solid var(--bs-border); border-radius:12px; padding:8px; z-index:20; backdrop-filter:blur(8px)}
-.basic-shell .bs-guidebox .bs-gh{display:flex; justify-content:space-between; align-items:center;
-    font-size:11px; color:var(--bs-muted); margin-bottom:4px}
-.basic-shell .bs-guidebox .bs-gh b{color:var(--bs-ok)}
-.basic-shell .bs-guidebox canvas{width:100%; height:64px; display:block; background:#070b14; border-radius:6px}
-.basic-shell .bs-guidebox .bs-grms{display:flex; gap:10px; margin-top:5px; font-size:10px}
-.basic-shell .bs-guidebox .bs-grms .bs-ra{color:#59a9ff}
-.basic-shell .bs-guidebox .bs-grms .bs-dec{color:#ff5d5d}
+/* Controls inherit the user's UI font (buttons/inputs don't inherit by default). */
+.basic-shell button, .basic-shell input, .basic-shell select{font-family:inherit}
 
 /* mount pad -- sits to the LEFT of the exposure rail so the d-pad never
    collides with the shutter in the bottom-right corner */
@@ -140,4 +132,4 @@
 /* return-to-field pill, shown on a phone that escaped to the full UI */
 .basic-return{position:fixed; left:50%; bottom:10px; transform:translateX(-50%); z-index:790;
     height:34px; padding:0 16px; border-radius:17px; background:rgba(76,141,255,.92); color:#fff;
-    border:0; font-weight:700; font-size:13px; box-shadow:0 6px 20px rgba(0,0,0,.4)}
+    border:0; font-weight:700; font-size:13px; font-family:inherit; box-shadow:0 6px 20px rgba(0,0,0,.4)}

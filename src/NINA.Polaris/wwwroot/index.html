@@ -64,7 +64,7 @@
          Inert unless a manifest URL is configured (assistant-config.json). -->
     <link rel="stylesheet" href="/css/parts/13-assistant.css?v=20260705-assist15">
     <link rel="stylesheet" href="/css/parts/14-uiscale-text.css?v=20260707-hintsize">
-    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260829-basic4">
+    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260829-basic5">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -19980,7 +19980,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          same Alpine state. Only rendered on phones (basicMode); the live image
          is the real .preview-area relocated into #basicImageSlot. -->
     <template x-if="basicMode">
-    <div class="basic-shell" x-data="{ modeMenu:false, mountOpen:true, basicGuideOpen:false, expandedField:null }">
+    <div class="basic-shell" x-data="{ modeMenu:false, mountOpen:true, expandedField:null }">
         <div id="basicImageSlot"></div>
 
         <div class="bs-temp">&#10052; <b class="bs-num" x-text="(cameraTemp!=null ? Number(cameraTemp).toFixed(1) : '--') + '&deg;C'"></b></div>
@@ -20000,17 +20000,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
 
         <div class="bs-rail left">
             <button class="bs-icn" @click="_pzFit('previewCanvas')" title="Fit"><span class="bs-big">&#9635;</span>Fit</button>
-            <button class="bs-icn" :class="basicGuideOpen ? 'on' : ''" @click="basicGuideOpen=!basicGuideOpen" title="Guiding graph"><span class="bs-big">&#128760;</span>Guide</button>
+            <button class="bs-icn" :class="guideOverlay.on ? 'on' : ''" @click="toggleGuideOverlay()" title="Guiding graph (drag + resize)"><span class="bs-big">&#128760;</span>Guide</button>
             <button class="bs-icn" @click="_pzZoomButton('previewCanvas', 1.3)" title="Zoom in"><span class="bs-big">&#128269;</span>Zoom</button>
-        </div>
-
-        <div class="bs-guidebox" x-show="basicGuideOpen && guider.connected" x-cloak>
-            <div class="bs-gh"><span>Guiding</span><b class="bs-num" x-text="'RMS ' + (Number(guider.rmsTotal||0)).toFixed(2) + '&Prime;'"></b></div>
-            <canvas x-ref="basicGuideGraph" width="360" height="128"></canvas>
-            <div class="bs-grms bs-num">
-                <span class="bs-ra" x-text="'RA ' + (Number(guider.rmsRA||0)).toFixed(2) + '&Prime;'"></span>
-                <span class="bs-dec" x-text="'DEC ' + (Number(guider.rmsDec||0)).toFixed(2) + '&Prime;'"></span>
-            </div>
         </div>
 
         <div class="bs-rail right">
@@ -20090,7 +20081,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          always-on-top mini graph. Draggable by its header, corner-resizable,
          visible from any tab. Toggled from the GUIDE bottom bar. Geometry +
          visibility persist in localStorage. -->
-    <div class="guide-overlay" x-show="guideOverlay.on && guider.connected && !basicMode" x-cloak
+    <div class="guide-overlay" x-show="guideOverlay.on && guider.connected" x-cloak
          :style="guideOverlayStyle()">
         <div class="guide-overlay-head" @pointerdown="guideOverlayDragStart($event)">
             <span class="guide-overlay-title">Guiding</span>

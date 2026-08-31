@@ -4522,7 +4522,6 @@ function ninaApp() {
         basicMode: false,
         basicModePref: (function () { try { return localStorage.getItem('polaris.basicMode') || 'auto'; } catch (e) { return 'auto'; } })(),
         basicScreen: 'preview',
-        _basicGuideTimer: null,
         _basicPrevArea: null, _basicPrevHome: null, _basicPrevNext: null,
 
         init() {
@@ -27556,14 +27555,26 @@ function ninaApp() {
                         this._basicPrevArea = area;
                         slot.appendChild(area);
                     }
-                    this._basicStartGuideGraph();
+                    this._basicClampGuideOverlay();
                     try { this._pzFit && this._pzFit('previewCanvas'); } catch (e) { }
                 });
             } catch (e) { }
         },
+        // The floating guide overlay is reused in basic mode (draggable +
+        // resizable). Its geometry persists from the desktop, so pull it back
+        // inside the phone viewport if it would otherwise land off-screen.
+        _basicClampGuideOverlay() {
+            try {
+                const gv = this.guideOverlay; if (!gv) return;
+                const vw = window.innerWidth, vh = window.innerHeight;
+                if (typeof gv.w === 'number') gv.w = Math.min(gv.w, vw - 16);
+                if (typeof gv.h === 'number') gv.h = Math.min(gv.h, vh - 16);
+                if (typeof gv.left === 'number') gv.left = Math.max(4, Math.min(gv.left, vw - (gv.w || 120) - 4));
+                if (typeof gv.top === 'number') gv.top = Math.max(48, Math.min(gv.top, vh - (gv.h || 100) - 4));
+            } catch (e) { }
+        },
         _basicExit() {
             try {
-                if (this._basicGuideTimer) { clearInterval(this._basicGuideTimer); this._basicGuideTimer = null; }
                 const area = this._basicPrevArea;
                 if (area && this._basicPrevHome) {
                     this._basicPrevHome.insertBefore(area, this._basicPrevNext || null);
@@ -27571,21 +27582,6 @@ function ninaApp() {
                 this._basicPrevArea = this._basicPrevHome = this._basicPrevNext = null;
                 try { this.applyUiZoom && this.applyUiZoom(); } catch (e) { }
             } catch (e) { }
-        },
-        // Redraw the shell's guide graph from live guider data, reusing the
-        // shared PHD2-style renderer (no edit to the WS handler needed).
-        _basicStartGuideGraph() {
-            if (this._basicGuideTimer) clearInterval(this._basicGuideTimer);
-            const tick = () => {
-                try {
-                    const c = this.$refs && this.$refs.basicGuideGraph;
-                    if (c && this.basicMode) {
-                        this._drawGuidePhdGraphTo(c, this.guidePhdScale, this.guider.recentSteps);
-                    }
-                } catch (e) { }
-            };
-            this._basicGuideTimer = setInterval(tick, 700);
-            tick();
         },
         // Mode menu: Preview is the curated field screen; the others jump to the
         // full UI on that tab until their own field screens are built.
