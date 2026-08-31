@@ -19,8 +19,13 @@
 /* live image: the relocated .preview-area fills this slot */
 .basic-shell #basicImageSlot{position:absolute; inset:0; overflow:hidden;
     background:radial-gradient(120% 90% at 60% 40%, #0b1424 0%, #05080f 70%); z-index:1}
-.basic-shell #basicImageSlot .preview-area{position:absolute !important; inset:0 !important;
+.basic-shell #basicImageSlot .preview-area,
+.basic-shell #basicImageSlot .af-preview-area{position:absolute !important; inset:0 !important;
     width:100% !important; height:100% !important; margin:0 !important}
+/* the zoomed-star inset defaults bottom-right (clashes with the rail/bottom bar);
+   move it bottom-left, clear of the left rail. */
+.basic-shell #basicImageSlot .af-star-zoom{left:60px !important; bottom:56px !important;
+    right:auto !important; top:auto !important; z-index:21}
 /* Strip the desktop preview chrome that rides along with the relocated area;
    keep the canvases and the centered empty-state (.preview-overlay) message. */
 .basic-shell #basicImageSlot .pz-toolbar,
@@ -126,6 +131,32 @@
 .basic-shell .bs-stepbtn:active{background:var(--bs-accent); color:#fff}
 .basic-shell .bs-stepinput{flex:1; min-width:0; height:42px; text-align:center; font-size:18px; font-weight:700;
     background:#070b14; border:1px solid var(--bs-border); border-radius:10px; color:var(--text)}
+
+/* ---- Focus screen ---- */
+.basic-shell .bs-status.run b{color:var(--bs-warn)}
+.basic-shell .bs-af{width:92px; height:52px; margin-top:4px; border:0; border-radius:14px;
+    background:var(--bs-accent); color:#fff; font-weight:800; font-size:15px; box-shadow:0 6px 18px rgba(76,141,255,.35)}
+.basic-shell .bs-af.running{background:var(--bs-danger); box-shadow:0 6px 18px rgba(255,93,93,.35)}
+.basic-shell .bs-af:active{transform:scale(.96)}
+.basic-shell .bs-afprog{position:absolute; right:8px; top:38px; width:120px; height:6px; border-radius:3px;
+    background:#1a2740; overflow:hidden; z-index:31}
+.basic-shell .bs-afprog i{display:block; height:100%; background:var(--bs-accent2); transition:width .2s}
+.basic-shell .bs-nudge{position:absolute; left:50%; bottom:56px; transform:translateX(-50%); z-index:23;
+    display:flex; align-items:center; gap:6px; background:var(--bs-panel); border:1px solid var(--bs-border);
+    border-radius:14px; padding:8px 10px; backdrop-filter:blur(8px)}
+.basic-shell .bs-nudge button{min-width:44px; height:44px; border:0; border-radius:10px; background:var(--bs-chip);
+    color:var(--text); font-size:18px; font-weight:700}
+.basic-shell .bs-nudge button:active{background:var(--bs-accent); color:#fff}
+.basic-shell .bs-nudge button:disabled{opacity:.4}
+.basic-shell .bs-pos{min-width:74px; text-align:center}
+.basic-shell .bs-pos .bs-pk{font-size:9px; color:var(--bs-muted)}
+.basic-shell .bs-pos .bs-pv{font-size:16px; font-weight:700}
+.basic-shell #basicCurveSlot{position:absolute; left:60px; top:52px; width:200px; height:92px; z-index:22;
+    background:var(--bs-panel); border:1px solid var(--bs-border); border-radius:12px; padding:6px; backdrop-filter:blur(8px)}
+.basic-shell #basicCurveSlot .af-chart{width:100%; height:100%; margin:0}
+.basic-shell #basicCurveSlot .chart-container{position:relative; width:100%; height:100%}
+.basic-shell #basicCurveSlot .af-chart-legend{display:none}
+.basic-shell .bs-chip b{color:var(--text); font-weight:700}
 
 .basic-shell :focus-visible{outline:2px solid var(--bs-accent2); outline-offset:2px}
 

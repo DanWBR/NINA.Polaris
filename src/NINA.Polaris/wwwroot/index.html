@@ -64,7 +64,7 @@
          Inert unless a manifest URL is configured (assistant-config.json). -->
     <link rel="stylesheet" href="/css/parts/13-assistant.css?v=20260705-assist15">
     <link rel="stylesheet" href="/css/parts/14-uiscale-text.css?v=20260707-hintsize">
-    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260829-basic5">
+    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260829-basic6">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -19982,16 +19982,19 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <template x-if="basicMode">
     <div class="basic-shell" x-data="{ modeMenu:false, mountOpen:true, expandedField:null }">
         <div id="basicImageSlot"></div>
+        <div id="basicCurveSlot" x-show="basicScreen==='focus'" x-cloak></div>
 
         <div class="bs-temp">&#10052; <b class="bs-num" x-text="(cameraTemp!=null ? Number(cameraTemp).toFixed(1) : '--') + '&deg;C'"></b></div>
         <div class="bs-topbar">
-            <button class="bs-modepill" @click="modeMenu = !modeMenu">Preview <span class="bs-caret">&#9660;</span></button>
+            <button class="bs-modepill" @click="modeMenu = !modeMenu"><span x-text="basicScreen==='focus' ? 'Focus' : 'Preview'"></span> <span class="bs-caret">&#9660;</span></button>
         </div>
-        <div class="bs-status">&#9679; <b x-text="captureProgressActive() ? captureProgressLabel() : (preview.busy ? 'Exposing' : (preview.looping ? 'Looping' : 'Idle'))"></b></div>
+        <div class="bs-status" :class="{ run: basicScreen==='focus' && autoFocus.state==='running' }">&#9679; <b x-text="basicScreen==='focus'
+                ? (autoFocus.state==='running' ? ('AF ' + (autoFocus.phase || 'running')) : (autoFocus.success ? 'AF done' : 'Idle'))
+                : (captureProgressActive() ? captureProgressLabel() : (preview.busy ? 'Exposing' : (preview.looping ? 'Looping' : 'Idle')))"></b></div>
 
         <div class="bs-modemenu" x-show="modeMenu" @click.outside="modeMenu=false" x-cloak>
-            <button class="on" @click="basicGoMode('preview'); modeMenu=false"><span class="bs-em">&#128065;</span>Preview</button>
-            <button @click="basicGoMode('focus'); modeMenu=false"><span class="bs-em">&#127919;</span>Focus</button>
+            <button :class="basicScreen==='preview' ? 'on' : ''" @click="basicGoMode('preview'); modeMenu=false"><span class="bs-em">&#128065;</span>Preview</button>
+            <button :class="basicScreen==='focus' ? 'on' : ''" @click="basicGoMode('focus'); modeMenu=false"><span class="bs-em">&#127919;</span>Focus</button>
             <button @click="basicGoMode('autorun'); modeMenu=false"><span class="bs-em">&#128247;</span>Autorun</button>
             <button @click="basicGoMode('plan'); modeMenu=false"><span class="bs-em">&#128506;</span>Plan</button>
             <button @click="basicGoMode('live'); modeMenu=false"><span class="bs-em">&#10024;</span>Live</button>
@@ -19999,9 +20002,9 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
 
         <div class="bs-rail left">
-            <button class="bs-icn" @click="_pzFit('previewCanvas')" title="Fit"><span class="bs-big">&#9635;</span>Fit</button>
+            <button class="bs-icn" @click="_pzFit(basicScreen==='focus' ? 'focusCanvas' : 'previewCanvas')" title="Fit"><span class="bs-big">&#9635;</span>Fit</button>
             <button class="bs-icn" :class="guideOverlay.on ? 'on' : ''" @click="toggleGuideOverlay()" title="Guiding graph (drag + resize)"><span class="bs-big">&#128760;</span>Guide</button>
-            <button class="bs-icn" @click="_pzZoomButton('previewCanvas', 1.3)" title="Zoom in"><span class="bs-big">&#128269;</span>Zoom</button>
+            <button class="bs-icn" @click="_pzZoomButton(basicScreen==='focus' ? 'focusCanvas' : 'previewCanvas', 1.3)" title="Zoom in"><span class="bs-big">&#128269;</span>Zoom</button>
         </div>
 
         <div class="bs-rail right">
@@ -20018,7 +20021,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                         </div>
                     </div>
                 </div>
-                <div class="bs-expwrap">
+                <div class="bs-expwrap" x-show="basicScreen==='preview'">
                     <button class="bs-exp" x-show="expandedField!=='gain'" @click="expandedField='gain'">
                         <div class="bs-k">GAIN</div><div class="bs-v bs-num" x-text="preview.gain"></div></button>
                     <div class="bs-exp bs-exp-open" x-show="expandedField==='gain'" x-cloak>
@@ -20030,8 +20033,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                         </div>
                     </div>
                 </div>
-                <button class="bs-exp" @click="basicCycleBin()"><div class="bs-k">BIN</div><div class="bs-v bs-num" x-text="preview.binning + '&times;' + preview.binning"></div></button>
-                <div class="bs-shutter" role="button" :aria-label="(preview.busy||preview.looping) ? 'Abort' : 'Capture'"
+                <button class="bs-exp" x-show="basicScreen==='preview'" @click="basicCycleBin()"><div class="bs-k">BIN</div><div class="bs-v bs-num" x-text="preview.binning + '&times;' + preview.binning"></div></button>
+                <div class="bs-shutter" x-show="basicScreen==='preview'" role="button" :aria-label="(preview.busy||preview.looping) ? 'Abort' : 'Capture'"
                      :class="{ looping: preview.looping, busy: preview.busy }"
                      @pointerdown="shutterPointerDown($event, previewShutterCtx())"
                      @pointerup="shutterPointerUp($event, previewShutterCtx())"
@@ -20039,10 +20042,26 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                      @pointerleave="shutterPointerCancel()">
                     <div class="bs-core"></div>
                 </div>
+                <button class="bs-af" x-show="basicScreen==='focus'" x-cloak
+                        :class="autoFocus.state==='running' ? 'running' : ''"
+                        @click="autoFocus.state==='running' ? abortAutoFocus() : startAutoFocus()"
+                        x-text="autoFocus.state==='running' ? 'Stop' : 'Run AF'"></button>
             </div>
         </div>
 
-        <div class="bs-mount" :class="{ 'mp-collapsed': !mountOpen }">
+        <!-- Focus: AF progress under the status chip, and the manual nudge pad. -->
+        <div class="bs-afprog" x-show="basicScreen==='focus' && autoFocus.state==='running'" x-cloak>
+            <i :style="'width:' + Math.round(100 * Math.max(0, (autoFocus.currentSampleIndex + 1)) / Math.max(1, autoFocus.steps, autoFocus.currentSampleIndex + 1)) + '%'"></i>
+        </div>
+        <div class="bs-nudge" x-show="basicScreen==='focus'" x-cloak>
+            <button title="Out fast" :disabled="autoFocus.state==='running'" @pointerdown.prevent="startFocusNudgeRepeat(-focusStepFast)" @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()">&laquo;</button>
+            <button title="Out slow" :disabled="autoFocus.state==='running'" @pointerdown.prevent="startFocusNudgeRepeat(-focusStepSlow)" @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()">&lsaquo;</button>
+            <div class="bs-pos bs-num"><div class="bs-pk">POSITION</div><div class="bs-pv" x-text="focusPosition ?? '--'"></div></div>
+            <button title="In slow" :disabled="autoFocus.state==='running'" @pointerdown.prevent="startFocusNudgeRepeat(focusStepSlow)" @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()">&rsaquo;</button>
+            <button title="In fast" :disabled="autoFocus.state==='running'" @pointerdown.prevent="startFocusNudgeRepeat(focusStepFast)" @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()">&raquo;</button>
+        </div>
+
+        <div class="bs-mount" x-show="basicScreen==='preview'" :class="{ 'mp-collapsed': !mountOpen }">
             <div class="bs-side">
                 <button class="bs-icn" style="width:38px;height:38px" @click="mountOpen=!mountOpen" title="Mount pad"><span class="bs-big">&#10530;</span></button>
                 <button class="bs-pill" :class="mount.tracking ? 'on' : ''" @click="toggleTracking()">Track</button>
@@ -20061,10 +20080,13 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
 
         <div class="bs-bottom">
-            <div class="bs-chip"><span class="bs-dot" :class="mount.connected ? '' : 'off'"></span>Mount</div>
-            <div class="bs-chip"><span class="bs-dot" :class="selectedCamera ? '' : 'off'"></span>Cam</div>
-            <div class="bs-chip"><span class="bs-dot" :class="focusConnected ? '' : 'off'"></span>Focus</div>
-            <button class="bs-auto" :class="stretchAuto ? 'on' : ''" @click="toggleAutoStretch()">Auto stretch</button>
+            <div class="bs-chip" x-show="basicScreen==='preview'"><span class="bs-dot" :class="mount.connected ? '' : 'off'"></span>Mount</div>
+            <div class="bs-chip" x-show="basicScreen==='preview'"><span class="bs-dot" :class="selectedCamera ? '' : 'off'"></span>Cam</div>
+            <div class="bs-chip" x-show="basicScreen==='preview'"><span class="bs-dot" :class="focusConnected ? '' : 'off'"></span>Focus</div>
+            <button class="bs-auto" x-show="basicScreen==='preview'" :class="stretchAuto ? 'on' : ''" @click="toggleAutoStretch()">Auto stretch</button>
+            <div class="bs-chip" x-show="basicScreen==='focus'" x-cloak><span class="bs-dot" :class="focusConnected ? '' : 'off'"></span>Focuser</div>
+            <div class="bs-chip bs-num" x-show="basicScreen==='focus'" x-cloak>Step <b x-text="focusStepFast"></b></div>
+            <div class="bs-chip bs-num" x-show="basicScreen==='focus' && autoFocus.lastHfr" x-cloak>HFR <b x-text="autoFocus.lastHfr?.toFixed(2)"></b></div>
             <button class="bs-full" @click="basicSetPref('off')">Full UI</button>
             <button class="bs-conn" :class="basicAnyDisconnected() ? 'warn' : ''" @click="basicConnectAll()"
                     x-text="basicAnyDisconnected() ? 'Connect' : 'Connected'"></button>

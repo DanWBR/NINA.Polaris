@@ -4522,7 +4522,7 @@ function ninaApp() {
         basicMode: false,
         basicModePref: (function () { try { return localStorage.getItem('polaris.basicMode') || 'auto'; } catch (e) { return 'auto'; } })(),
         basicScreen: 'preview',
-        _basicPrevArea: null, _basicPrevHome: null, _basicPrevNext: null,
+        _basicMoved: null,   // [{el, home, next}] surfaces relocated into the shell
 
         init() {
             this.updateClock();
@@ -27539,26 +27539,58 @@ function ninaApp() {
         // pipeline active so frames keep arriving.
         _basicEnter() {
             try {
-                this.tab = 'preview';
                 try { document.body.style.zoom = '1'; } catch (e) { }
-                this.$nextTick(() => {
-                    const slot = document.getElementById('basicImageSlot');
-                    // Pin to THE preview canvas so we never grab the LIVE tab's
-                    // look-alike .preview-area (its overlay controls + empty-state
-                    // text were bleeding into the shell).
-                    const canvas = document.getElementById('previewCanvas');
-                    const area = (canvas && canvas.closest('.preview-area'))
-                        || document.querySelector('.preview-tab-panel .preview-area');
-                    if (slot && area && area.parentNode !== slot) {
-                        this._basicPrevHome = area.parentNode;
-                        this._basicPrevNext = area.nextSibling;
-                        this._basicPrevArea = area;
-                        slot.appendChild(area);
-                    }
-                    this._basicClampGuideOverlay();
-                    try { this._pzFit && this._pzFit('previewCanvas'); } catch (e) { }
-                });
+                this._basicApplyScreen();
             } catch (e) { }
+        },
+        // Relocate the ACTIVE screen's live surfaces into the shell (one WS paint
+        // path + one gesture handler), restoring whatever the previous screen
+        // moved. Preview -> the preview .preview-area; Focus -> the AF
+        // .af-preview-area (image + star ring + zoomed star) plus the V-curve.
+        _basicApplyScreen() {
+            this._basicRestoreMoved();
+            const focus = this.basicScreen === 'focus';
+            this.tab = focus ? 'focus' : 'preview';
+            this.$nextTick(() => {
+                if (focus) {
+                    const fc = document.getElementById('focusCanvas');
+                    const area = (fc && fc.closest('.af-preview-area'))
+                        || document.querySelector('.af-preview-area');
+                    if (area) this._basicMove(area, 'basicImageSlot');
+                    this._basicMove('.af-chart', 'basicCurveSlot');
+                    try { this._pzFit && this._pzFit('focusCanvas'); } catch (e) { }
+                } else {
+                    // Pin to THE preview canvas so we never grab the LIVE tab's
+                    // look-alike .preview-area.
+                    const pc = document.getElementById('previewCanvas');
+                    const area = (pc && pc.closest('.preview-area'))
+                        || document.querySelector('.preview-tab-panel .preview-area');
+                    if (area) this._basicMove(area, 'basicImageSlot');
+                    try { this._pzFit && this._pzFit('previewCanvas'); } catch (e) { }
+                }
+                this._basicClampGuideOverlay();
+            });
+        },
+        _basicMove(sel, slotId) {
+            try {
+                const el = (typeof sel === 'string') ? document.querySelector(sel) : sel;
+                const slot = document.getElementById(slotId);
+                if (el && slot && el.parentNode !== slot) {
+                    if (!this._basicMoved) this._basicMoved = [];
+                    this._basicMoved.push({ el, home: el.parentNode, next: el.nextSibling });
+                    slot.appendChild(el);
+                }
+            } catch (e) { }
+        },
+        _basicRestoreMoved() {
+            (this._basicMoved || []).forEach(m => {
+                try { if (m.el && m.home) m.home.insertBefore(m.el, m.next || null); } catch (e) { }
+            });
+            this._basicMoved = [];
+        },
+        basicSetScreen(s) {
+            this.basicScreen = s;
+            if (this.basicMode) this._basicApplyScreen();
         },
         // The floating guide overlay is reused in basic mode (draggable +
         // resizable). Its geometry persists from the desktop, so pull it back
@@ -27575,19 +27607,15 @@ function ninaApp() {
         },
         _basicExit() {
             try {
-                const area = this._basicPrevArea;
-                if (area && this._basicPrevHome) {
-                    this._basicPrevHome.insertBefore(area, this._basicPrevNext || null);
-                }
-                this._basicPrevArea = this._basicPrevHome = this._basicPrevNext = null;
+                this._basicRestoreMoved();
                 try { this.applyUiZoom && this.applyUiZoom(); } catch (e) { }
             } catch (e) { }
         },
-        // Mode menu: Preview is the curated field screen; the others jump to the
-        // full UI on that tab until their own field screens are built.
+        // Mode menu: Preview and Focus are curated field screens; the others jump
+        // to the full UI on that tab until their own field screens are built.
         basicGoMode(m) {
-            if (m === 'preview') { this.basicScreen = 'preview'; return; }
-            const map = { focus: 'focus', autorun: 'sequence', plan: 'plan', live: 'live', video: 'video' };
+            if (m === 'preview' || m === 'focus') { this.basicSetScreen(m); return; }
+            const map = { autorun: 'sequence', plan: 'plan', live: 'live', video: 'video' };
             const tabId = map[m] || 'home';
             this.basicSetPref('off');
             if (this.helpOpenTab) this.helpOpenTab(tabId); else this.tab = tabId;
