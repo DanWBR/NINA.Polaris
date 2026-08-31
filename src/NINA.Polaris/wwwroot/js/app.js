@@ -27562,10 +27562,23 @@ function ninaApp() {
         basicActiveCanvas() {
             return this.basicScreen === 'focus' ? 'focusCanvas'
                 : this.basicScreen === 'autorun' ? 'autorunCanvas'
-                : 'previewCanvas';
+                : 'previewCanvas';   // guide uses an <img>, not a pz canvas
         },
         _basicApplyScreen() {
             this._basicRestoreMoved();
+            // Guide relocates two pieces from the PHD2 view: the guide-cam image
+            // to the image slot and the history graph (which carries its own RMS
+            // + scale HUD) to a bottom strip.
+            if (this.basicScreen === 'guide') {
+                this.tab = 'guide';
+                this.$nextTick(() => {
+                    const cam = document.querySelector('.phd2-cam');
+                    if (cam) this._basicMove(cam, 'basicImageSlot');
+                    this._basicMove('.phd2-graph', 'basicGuideGraphSlot');
+                    this._basicClampGuideOverlay();
+                });
+                return;
+            }
             // Per-screen: which tab owns the pipeline, which canvas to relocate,
             // and a CSS fallback selector for its .preview-area wrapper.
             const cfg = ({
@@ -27627,7 +27640,7 @@ function ninaApp() {
         // Mode menu: Preview and Focus are curated field screens; the others jump
         // to the full UI on that tab until their own field screens are built.
         basicGoMode(m) {
-            if (m === 'preview' || m === 'focus' || m === 'autorun') { this.basicSetScreen(m); return; }
+            if (m === 'preview' || m === 'focus' || m === 'autorun' || m === 'guide') { this.basicSetScreen(m); return; }
             const map = { plan: 'plan', live: 'live', video: 'video' };
             const tabId = map[m] || 'home';
             this.basicSetPref('off');
