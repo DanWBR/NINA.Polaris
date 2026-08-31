@@ -120,6 +120,20 @@
     color:#fff; font-weight:700; font-size:13px; margin-left:auto}
 .basic-shell .bs-conn.warn{background:var(--bs-warn); color:#20160a}
 
+/* long-press EXP/GAIN keypad */
+.basic-shell .bs-numedit{position:absolute; inset:0; z-index:60; display:flex; align-items:center;
+    justify-content:center; background:rgba(2,4,8,.55); backdrop-filter:blur(2px)}
+.basic-shell .bs-numcard{background:#0e1422; border:1px solid var(--bs-border); border-radius:14px;
+    padding:16px; width:min(280px,82vw); box-shadow:0 16px 48px rgba(0,0,0,.6)}
+.basic-shell .bs-numlabel{font-size:13px; color:var(--bs-muted); margin-bottom:10px; text-align:center}
+.basic-shell .bs-numinput{width:100%; font-size:24px; font-weight:700; text-align:center; background:#070b14;
+    border:1px solid var(--bs-border); border-radius:10px; color:var(--text); padding:10px 8px}
+.basic-shell .bs-numhint{font-size:11px; color:var(--bs-muted); text-align:center; margin-top:6px}
+.basic-shell .bs-numrow{display:flex; gap:8px; margin-top:12px}
+.basic-shell .bs-numrow button{flex:1; height:42px; border-radius:10px; font-weight:700; font-size:14px; border:0}
+.basic-shell .bs-numcancel{background:var(--bs-chip); color:var(--text)}
+.basic-shell .bs-numok{background:var(--bs-accent); color:#fff}
+
 .basic-shell :focus-visible{outline:2px solid var(--bs-accent2); outline-offset:2px}
 
 /* return-to-field pill, shown on a phone that escaped to the full UI */

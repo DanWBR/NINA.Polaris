@@ -64,7 +64,7 @@
          Inert unless a manifest URL is configured (assistant-config.json). -->
     <link rel="stylesheet" href="/css/parts/13-assistant.css?v=20260705-assist15">
     <link rel="stylesheet" href="/css/parts/14-uiscale-text.css?v=20260707-hintsize">
-    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260829-basic2">
+    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260829-basic3">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -19980,7 +19980,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          same Alpine state. Only rendered on phones (basicMode); the live image
          is the real .preview-area relocated into #basicImageSlot. -->
     <template x-if="basicMode">
-    <div class="basic-shell" x-data="{ modeMenu:false, mountOpen:true }">
+    <div class="basic-shell" x-data="{ modeMenu:false, mountOpen:true, basicGuideOpen:false }">
         <div id="basicImageSlot"></div>
 
         <div class="bs-temp">&#10052; <b class="bs-num" x-text="(cameraTemp!=null ? Number(cameraTemp).toFixed(1) : '--') + '&deg;C'"></b></div>
@@ -20000,11 +20000,11 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
 
         <div class="bs-rail left">
             <button class="bs-icn" @click="_pzFit('previewCanvas')" title="Fit"><span class="bs-big">&#9635;</span>Fit</button>
-            <button class="bs-icn" :class="guideOverlay.on ? 'on' : ''" @click="toggleGuideOverlay()" title="Guiding"><span class="bs-big">&#128760;</span>Guide</button>
+            <button class="bs-icn" :class="basicGuideOpen ? 'on' : ''" @click="basicGuideOpen=!basicGuideOpen" title="Guiding graph"><span class="bs-big">&#128760;</span>Guide</button>
             <button class="bs-icn" @click="_pzZoomButton('previewCanvas', 1.3)" title="Zoom in"><span class="bs-big">&#128269;</span>Zoom</button>
         </div>
 
-        <div class="bs-guidebox" x-show="guider.connected" x-cloak>
+        <div class="bs-guidebox" x-show="basicGuideOpen && guider.connected" x-cloak>
             <div class="bs-gh"><span>Guiding</span><b class="bs-num" x-text="'RMS ' + (Number(guider.rmsTotal||0)).toFixed(2) + '&Prime;'"></b></div>
             <canvas x-ref="basicGuideGraph" width="360" height="128"></canvas>
             <div class="bs-grms bs-num">
@@ -20015,8 +20015,12 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
 
         <div class="bs-rail right">
             <div class="bs-expcol">
-                <button class="bs-exp" @click="basicCycleExp()"><div class="bs-k">EXP</div><div class="bs-v bs-num" x-text="preview.exposure + 's'"></div></button>
-                <button class="bs-exp" @click="basicCycleGain()"><div class="bs-k">GAIN</div><div class="bs-v bs-num" x-text="preview.gain"></div></button>
+                <button class="bs-exp" title="Tap to cycle, hold to type a value"
+                        @pointerdown="basicNumDown('exposure')" @pointerup="basicNumUp('exposure')"
+                        @pointerleave="basicNumCancel()" @pointercancel="basicNumCancel()"><div class="bs-k">EXP</div><div class="bs-v bs-num" x-text="preview.exposure + 's'"></div></button>
+                <button class="bs-exp" title="Tap to cycle, hold to type a value"
+                        @pointerdown="basicNumDown('gain')" @pointerup="basicNumUp('gain')"
+                        @pointerleave="basicNumCancel()" @pointercancel="basicNumCancel()"><div class="bs-k">GAIN</div><div class="bs-v bs-num" x-text="preview.gain"></div></button>
                 <button class="bs-exp" @click="basicCycleBin()"><div class="bs-k">BIN</div><div class="bs-v bs-num" x-text="preview.binning + '&times;' + preview.binning"></div></button>
                 <div class="bs-shutter" role="button" :aria-label="(preview.busy||preview.looping) ? 'Abort' : 'Capture'"
                      :class="{ looping: preview.looping, busy: preview.busy }"
@@ -20056,6 +20060,21 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             <button class="bs-conn" :class="basicAnyDisconnected() ? 'warn' : ''" @click="basicConnectAll()"
                     x-text="basicAnyDisconnected() ? 'Connect' : 'Connected'"></button>
         </div>
+
+        <!-- Long-press keypad for an exact EXP / GAIN value. -->
+        <div class="bs-numedit" x-show="basicEdit.open" x-cloak @click.self="basicCancelNum()">
+            <div class="bs-numcard">
+                <div class="bs-numlabel" x-text="basicEdit.label"></div>
+                <input class="bs-numinput bs-num" type="number" inputmode="decimal"
+                       x-model="basicEdit.value" :min="basicEdit.min" :max="basicEdit.max" step="any"
+                       @keydown.enter="basicCommitNum()" @keydown.escape="basicCancelNum()">
+                <div class="bs-numhint bs-num" x-text="'Range ' + basicEdit.min + ' to ' + basicEdit.max"></div>
+                <div class="bs-numrow">
+                    <button class="bs-numcancel" @click="basicCancelNum()">Cancel</button>
+                    <button class="bs-numok" @click="basicCommitNum()">Set</button>
+                </div>
+            </div>
+        </div>
     </div>
     </template>
 
@@ -20067,7 +20086,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          always-on-top mini graph. Draggable by its header, corner-resizable,
          visible from any tab. Toggled from the GUIDE bottom bar. Geometry +
          visibility persist in localStorage. -->
-    <div class="guide-overlay" x-show="guideOverlay.on && guider.connected" x-cloak
+    <div class="guide-overlay" x-show="guideOverlay.on && guider.connected && !basicMode" x-cloak
          :style="guideOverlayStyle()">
         <div class="guide-overlay-head" @pointerdown="guideOverlayDragStart($event)">
             <span class="guide-overlay-title">Guiding</span>
