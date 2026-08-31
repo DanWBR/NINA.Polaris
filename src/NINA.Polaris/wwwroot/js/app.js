@@ -27562,6 +27562,7 @@ function ninaApp() {
         basicActiveCanvas() {
             return this.basicScreen === 'focus' ? 'focusCanvas'
                 : this.basicScreen === 'autorun' ? 'autorunCanvas'
+                : this.basicScreen === 'live' ? 'liveCanvas'
                 : 'previewCanvas';   // guide uses an <img>, not a pz canvas
         },
         _basicApplyScreen() {
@@ -27584,7 +27585,8 @@ function ninaApp() {
             const cfg = ({
                 preview: { tab: 'preview', canvas: 'previewCanvas', sel: '.preview-tab-panel .preview-area' },
                 focus: { tab: 'focus', canvas: 'focusCanvas', sel: '.af-preview-area', chart: true },
-                autorun: { tab: 'sequence', canvas: 'autorunCanvas', sel: '.autorun-preview' }
+                autorun: { tab: 'sequence', canvas: 'autorunCanvas', sel: '.autorun-preview' },
+                live: { tab: 'live', canvas: 'liveCanvas', sel: '.preview-area' }
             })[this.basicScreen] || null;
             if (!cfg) { this.tab = 'preview'; return; }
             this.tab = cfg.tab;
@@ -27640,8 +27642,8 @@ function ninaApp() {
         // Mode menu: Preview and Focus are curated field screens; the others jump
         // to the full UI on that tab until their own field screens are built.
         basicGoMode(m) {
-            if (m === 'preview' || m === 'focus' || m === 'autorun' || m === 'guide') { this.basicSetScreen(m); return; }
-            const map = { plan: 'plan', live: 'live', video: 'video' };
+            if (m === 'preview' || m === 'focus' || m === 'autorun' || m === 'guide' || m === 'live') { this.basicSetScreen(m); return; }
+            const map = { plan: 'plan', video: 'video' };
             const tabId = map[m] || 'home';
             this.basicSetPref('off');
             if (this.helpOpenTab) this.helpOpenTab(tabId); else this.tab = tabId;
@@ -27686,6 +27688,27 @@ function ninaApp() {
         },
         basicCycleBin() {
             this.preview.binning = (Number(this.preview.binning) || 1) >= 2 ? 1 : 2;
+        },
+        // LIVE uses the top-level exposure/gain/binning (the server-owned live
+        // loop reads these), separate from preview.*.
+        basicStepLive(field, dir) {
+            if (field === 'exposure') {
+                const p = [0.5, 1, 2, 4, 8, 16, 30, 60, 120, 180, 300, 600];
+                const cur = Number(this.exposure) || 1;
+                let i = p.findIndex(x => x >= cur - 1e-9);
+                let ni;
+                if (i < 0) { ni = p.length - 1; }
+                else { const exact = Math.abs(p[i] - cur) < 1e-6; ni = dir > 0 ? (exact ? i + 1 : i) : (i - 1); }
+                this.exposure = p[Math.max(0, Math.min(p.length - 1, ni))];
+            } else if (field === 'gain') {
+                const info = this.equipCameraInfo || {};
+                const lo = Number.isFinite(info.gainMin) ? info.gainMin : 0;
+                const hi = Number.isFinite(info.gainMax) ? info.gainMax : 1000;
+                this.gain = Math.max(lo, Math.min(hi, Math.round((Number(this.gain) || 0) + dir * 10)));
+            }
+        },
+        basicCycleBinLive() {
+            this.binning = (Number(this.binning) || 1) >= 2 ? 1 : 2;
         },
         // Nudge EXP / GAIN from the inline stepper (the input itself takes any
         // typed value). Exposure walks a sensible preset ladder; gain steps by 10

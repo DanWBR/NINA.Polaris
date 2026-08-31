@@ -64,7 +64,7 @@
          Inert unless a manifest URL is configured (assistant-config.json). -->
     <link rel="stylesheet" href="/css/parts/13-assistant.css?v=20260705-assist15">
     <link rel="stylesheet" href="/css/parts/14-uiscale-text.css?v=20260707-hintsize">
-    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260829-basic13">
+    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260829-basic14">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -19985,6 +19985,14 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         <div id="basicCurveSlot" x-show="basicScreen==='focus'" x-cloak></div>
         <div id="basicGuideGraphSlot" x-show="basicScreen==='guide'" x-cloak></div>
 
+        <!-- Live stacking quality HUD: SNR / frames / ETA / state. -->
+        <div class="bs-lhud" x-show="basicScreen==='live' && liveStackStatus" x-cloak>
+            <div class="bs-lsnr num"><span class="v" x-text="(liveStackStatus && liveStackStatus.cumulativeSnr > 0) ? liveStackStatus.cumulativeSnr.toFixed(1) : '--'"></span><span class="l">SNR</span></div>
+            <div class="bs-lrow num"><span>Frames <b x-text="(liveStackStatus && liveStackStatus.frameCount) || 0"></b></span><span x-show="(liveStackStatus && liveStackStatus.rejectedFrames) > 0">Dropped <b x-text="(liveStackStatus && liveStackStatus.rejectedFrames) || 0"></b></span></div>
+            <div class="bs-leta num" x-show="formatSnrEta(liveStackStatus)" x-text="formatSnrEta(liveStackStatus)"></div>
+            <span class="bs-lstate" :class="liveStackEnabled ? '' : 'off'" x-text="liveStackEnabled ? '● Stacking' : '⏸ Stopped'"></span>
+        </div>
+
         <!-- Autorun: the sequence of frame sets. Tap the name to rename, the type
              chip to cycle LIGHT/DARK/FLAT/BIAS, the exposure to type an exact
              value; FLAT sets get an Auto (measured) exposure toggle. -->
@@ -20038,14 +20046,16 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
 
         <div class="bs-temp">&#10052; <b class="bs-num" x-text="(cameraTemp!=null ? Number(cameraTemp).toFixed(1) : '--') + '&deg;C'"></b></div>
         <div class="bs-topbar">
-            <button class="bs-modepill" @click="modeMenu = !modeMenu"><span x-text="basicScreen==='focus' ? 'Focus' : (basicScreen==='autorun' ? 'Autorun' : (basicScreen==='guide' ? 'Guide' : 'Preview'))"></span> <span class="bs-caret">&#9660;</span></button>
+            <button class="bs-modepill" @click="modeMenu = !modeMenu"><span x-text="basicScreen==='focus' ? 'Focus' : (basicScreen==='autorun' ? 'Autorun' : (basicScreen==='guide' ? 'Guide' : (basicScreen==='live' ? 'Live' : 'Preview')))"></span> <span class="bs-caret">&#9660;</span></button>
         </div>
-        <div class="bs-status" :class="{ run: (basicScreen==='focus' && autoFocus.state==='running') || (basicScreen==='autorun' && seqState==='running') || (basicScreen==='guide' && guider.guiding) }">&#9679; <b x-text="basicScreen==='focus'
+        <div class="bs-status" :class="{ run: (basicScreen==='focus' && autoFocus.state==='running') || (basicScreen==='autorun' && seqState==='running') || (basicScreen==='guide' && guider.guiding) || (basicScreen==='live' && liveStackEnabled) }">&#9679; <b x-text="basicScreen==='focus'
                 ? (autoFocus.state==='running' ? ('AF ' + (autoFocus.phase || 'running')) : (autoFocus.success ? 'AF done' : 'Idle'))
                 : basicScreen==='autorun'
                 ? (seqState==='running' ? 'Running' : (seqState==='paused' ? 'Paused' : 'Idle'))
                 : basicScreen==='guide'
                 ? (guider.calibrating ? 'Calibrating' : (guider.guiding ? (guider.paused ? 'Paused' : 'Guiding') : (guider.looping ? 'Looping' : 'Idle')))
+                : basicScreen==='live'
+                ? (liveStackEnabled ? 'Stacking' : (capturing || looping ? 'Capturing' : 'Stopped'))
                 : (captureProgressActive() ? captureProgressLabel() : (preview.busy ? 'Exposing' : (preview.looping ? 'Looping' : 'Idle')))"></b></div>
 
         <div class="bs-modemenu" x-show="modeMenu" @click.outside="modeMenu=false" x-cloak>
@@ -20054,7 +20064,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             <button :class="basicScreen==='guide' ? 'on' : ''" @click="basicGoMode('guide'); modeMenu=false"><span class="bs-em">&#128760;</span>Guide</button>
             <button :class="basicScreen==='autorun' ? 'on' : ''" @click="basicGoMode('autorun'); modeMenu=false"><span class="bs-em">&#128247;</span>Autorun</button>
             <button @click="basicGoMode('plan'); modeMenu=false"><span class="bs-em">&#128506;</span>Plan</button>
-            <button @click="basicGoMode('live'); modeMenu=false"><span class="bs-em">&#10024;</span>Live</button>
+            <button :class="basicScreen==='live' ? 'on' : ''" @click="basicGoMode('live'); modeMenu=false"><span class="bs-em">&#10024;</span>Live</button>
             <button @click="basicGoMode('video'); modeMenu=false"><span class="bs-em">&#127916;</span>Video</button>
         </div>
 
@@ -20066,7 +20076,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
 
         <div class="bs-rail right">
             <div class="bs-expcol">
-                <div class="bs-expwrap" x-show="basicScreen!=='autorun'">
+                <div class="bs-expwrap" x-show="basicScreen==='preview' || basicScreen==='focus'">
                     <button class="bs-exp" x-show="expandedField!=='exp'" @click="expandedField='exp'">
                         <div class="bs-k">EXP</div><div class="bs-v bs-num" x-text="preview.exposure + 's'"></div></button>
                     <div class="bs-exp bs-exp-open" x-show="expandedField==='exp'" x-cloak>
@@ -20116,6 +20126,47 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                         <button class="bs-gbtn" @click="phd2SmartCalibrate()" :disabled="guider.calibrating"><span class="bs-big">&#8853;</span>Calibrate</button>
                     </div>
                 </template>
+
+                <!-- Live stacking: exposure/gain/bin (top-level state), the stack
+                     shutter (press = start/continue, press again = stop), + Reset. -->
+                <template x-if="basicScreen==='live'">
+                    <div class="bs-expcol">
+                        <div class="bs-expwrap">
+                            <button class="bs-exp" x-show="expandedField!=='lexp'" @click="expandedField='lexp'">
+                                <div class="bs-k">EXP</div><div class="bs-v bs-num" x-text="exposure + 's'"></div></button>
+                            <div class="bs-exp bs-exp-open" x-show="expandedField==='lexp'" x-cloak>
+                                <button class="bs-k bs-k-btn" @click="expandedField=null" title="Collapse">EXP &#9652;</button>
+                                <div class="bs-stepper">
+                                    <button class="bs-stepbtn" @click="basicStepLive('exposure',-1)">&minus;</button>
+                                    <input class="bs-stepinput bs-num" type="number" inputmode="decimal" step="any" min="0.001" max="3600" x-model.number="exposure">
+                                    <button class="bs-stepbtn" @click="basicStepLive('exposure',1)">+</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bs-expwrap">
+                            <button class="bs-exp" x-show="expandedField!=='lgain'" @click="expandedField='lgain'">
+                                <div class="bs-k">GAIN</div><div class="bs-v bs-num" x-text="gain"></div></button>
+                            <div class="bs-exp bs-exp-open" x-show="expandedField==='lgain'" x-cloak>
+                                <button class="bs-k bs-k-btn" @click="expandedField=null" title="Collapse">GAIN &#9652;</button>
+                                <div class="bs-stepper">
+                                    <button class="bs-stepbtn" @click="basicStepLive('gain',-1)">&minus;</button>
+                                    <input class="bs-stepinput bs-num" type="number" inputmode="numeric" step="1" min="0" x-model.number="gain">
+                                    <button class="bs-stepbtn" @click="basicStepLive('gain',1)">+</button>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="bs-exp" @click="basicCycleBinLive()"><div class="bs-k">BIN</div><div class="bs-v bs-num" x-text="binning + '&times;' + binning"></div></button>
+                        <div class="bs-shutter" role="button" :aria-label="(capturing||looping) ? 'Stop stacking' : 'Start stacking'"
+                             :class="{ looping: liveStackEnabled || capturing || looping, busy: capturing }"
+                             @pointerdown="shutterPointerDown($event, liveShutterCtx())"
+                             @pointerup="shutterPointerUp($event, liveShutterCtx())"
+                             @pointercancel="shutterPointerCancel()"
+                             @pointerleave="shutterPointerCancel()">
+                            <div class="bs-core"></div>
+                        </div>
+                        <button class="bs-lreset" @click="resetLiveStack()">&#8635; Reset</button>
+                    </div>
+                </template>
             </div>
         </div>
 
@@ -20150,15 +20201,14 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
 
         <div class="bs-bottom" x-show="basicScreen!=='autorun'">
-            <div class="bs-chip" x-show="basicScreen==='preview'"><span class="bs-dot" :class="mount.connected ? '' : 'off'"></span>Mount</div>
-            <div class="bs-chip" x-show="basicScreen==='preview'"><span class="bs-dot" :class="selectedCamera ? '' : 'off'"></span>Cam</div>
-            <div class="bs-chip" x-show="basicScreen==='preview'"><span class="bs-dot" :class="focusConnected ? '' : 'off'"></span>Focus</div>
+            <div class="bs-chip" x-show="basicScreen==='preview' || basicScreen==='live'"><span class="bs-dot" :class="selectedCamera ? '' : 'off'"></span><span class="bs-name" x-text="selectedCamera || 'Cam'"></span></div>
+            <div class="bs-chip" x-show="basicScreen==='preview' || basicScreen==='live' || basicScreen==='guide'"><span class="bs-dot" :class="mount.connected ? '' : 'off'"></span><span class="bs-name" x-text="selectedTelescope || 'Mount'"></span></div>
+            <div class="bs-chip" x-show="basicScreen==='preview'"><span class="bs-dot" :class="focusConnected ? '' : 'off'"></span><span class="bs-name" x-text="selectedFocuser || 'Focuser'"></span></div>
             <button class="bs-auto" x-show="basicScreen==='preview'" :class="stretchAuto ? 'on' : ''" @click="toggleAutoStretch()">Auto stretch</button>
-            <div class="bs-chip" x-show="basicScreen==='focus'" x-cloak><span class="bs-dot" :class="focusConnected ? '' : 'off'"></span>Focuser</div>
+            <div class="bs-chip" x-show="basicScreen==='focus'" x-cloak><span class="bs-dot" :class="focusConnected ? '' : 'off'"></span><span class="bs-name" x-text="selectedFocuser || 'Focuser'"></span></div>
             <div class="bs-chip bs-num" x-show="basicScreen==='focus'" x-cloak>Step <b x-text="focusStepFast"></b></div>
             <div class="bs-chip bs-num" x-show="basicScreen==='focus' && autoFocus.lastHfr" x-cloak>HFR <b x-text="autoFocus.lastHfr?.toFixed(2)"></b></div>
-            <div class="bs-chip" x-show="basicScreen==='guide'" x-cloak><span class="bs-dot" :class="guider.guideCameraConnected ? '' : 'off'"></span>Guide cam</div>
-            <div class="bs-chip" x-show="basicScreen==='guide'" x-cloak><span class="bs-dot" :class="mount.connected ? '' : 'off'"></span>Mount</div>
+            <div class="bs-chip" x-show="basicScreen==='guide'" x-cloak><span class="bs-dot" :class="guider.guideCameraConnected ? '' : 'off'"></span><span class="bs-name" x-text="guider.guideCameraName || 'Guide cam'"></span></div>
             <button class="bs-full" @click="basicSetPref('off')">Full UI</button>
             <button class="bs-conn" :class="basicAnyDisconnected() ? 'warn' : ''" @click="basicConnectAll()"
                     x-text="basicAnyDisconnected() ? 'Connect' : 'Connected'"></button>
