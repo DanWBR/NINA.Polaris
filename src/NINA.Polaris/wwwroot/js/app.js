@@ -27563,6 +27563,7 @@ function ninaApp() {
             return this.basicScreen === 'focus' ? 'focusCanvas'
                 : this.basicScreen === 'autorun' ? 'autorunCanvas'
                 : this.basicScreen === 'live' ? 'liveCanvas'
+                : this.basicScreen === 'video' ? 'videoCaptureCanvas'
                 : 'previewCanvas';   // guide uses an <img>, not a pz canvas
         },
         _basicApplyScreen() {
@@ -27586,7 +27587,8 @@ function ninaApp() {
                 preview: { tab: 'preview', canvas: 'previewCanvas', sel: '.preview-tab-panel .preview-area' },
                 focus: { tab: 'focus', canvas: 'focusCanvas', sel: '.af-preview-area', chart: true },
                 autorun: { tab: 'sequence', canvas: 'autorunCanvas', sel: '.autorun-preview' },
-                live: { tab: 'live', canvas: 'liveCanvas', sel: '.preview-area' }
+                live: { tab: 'live', canvas: 'liveCanvas', sel: '.preview-area' },
+                video: { tab: 'video', canvas: 'videoCaptureCanvas', sel: '.preview-area' }
             })[this.basicScreen] || null;
             if (!cfg) { this.tab = 'preview'; return; }
             this.tab = cfg.tab;
@@ -27642,8 +27644,8 @@ function ninaApp() {
         // Mode menu: Preview and Focus are curated field screens; the others jump
         // to the full UI on that tab until their own field screens are built.
         basicGoMode(m) {
-            if (m === 'preview' || m === 'focus' || m === 'autorun' || m === 'guide' || m === 'live') { this.basicSetScreen(m); return; }
-            const map = { plan: 'plan', video: 'video' };
+            if (m === 'preview' || m === 'focus' || m === 'autorun' || m === 'guide' || m === 'live' || m === 'video') { this.basicSetScreen(m); return; }
+            const map = { plan: 'plan' };
             const tabId = map[m] || 'home';
             this.basicSetPref('off');
             if (this.helpOpenTab) this.helpOpenTab(tabId); else this.tab = tabId;
@@ -27709,6 +27711,48 @@ function ninaApp() {
         },
         basicCycleBinLive() {
             this.binning = (Number(this.binning) || 1) >= 2 ? 1 : 2;
+        },
+        // VIDEO uses video.exposure (seconds, but planetary is sub-second) and
+        // video.gain. Its own short-exposure ladder.
+        basicStepVideo(field, dir) {
+            if (field === 'exposure') {
+                const p = [0.0005, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1];
+                const cur = Number(this.video.exposure) || 0.05;
+                let i = p.findIndex(x => x >= cur - 1e-12);
+                let ni;
+                if (i < 0) { ni = p.length - 1; }
+                else { const exact = Math.abs(p[i] - cur) < 1e-9; ni = dir > 0 ? (exact ? i + 1 : i) : (i - 1); }
+                this.video.exposure = p[Math.max(0, Math.min(p.length - 1, ni))];
+            } else if (field === 'gain') {
+                const info = this.equipCameraInfo || {};
+                const lo = Number.isFinite(info.gainMin) ? info.gainMin : 0;
+                const hi = Number.isFinite(info.gainMax) ? info.gainMax : 1000;
+                this.video.gain = Math.max(lo, Math.min(hi, Math.round((Number(this.video.gain) || 0) + dir * 20)));
+            }
+        },
+        // Format the video exposure for display: ms under a second, else seconds.
+        basicVideoExpLabel() {
+            const e = Number(this.video.exposure) || 0;
+            return e < 1 ? (Math.round(e * 1000) + 'ms') : (e + 's');
+        },
+        // Cycle the capture ROI (full sensor -> square subframes), applied via the
+        // same helper the desktop ROI pills use.
+        basicCycleRoi() {
+            const p = [0, 1280, 800, 640, 480, 320];
+            const cur = Number(this.video.roiSize) || 0;
+            let i = p.indexOf(cur); if (i < 0) i = 0;
+            const nv = p[(i + 1) % p.length];
+            if (nv === 0) this.videoSetRoiRect(0, 0, 'square', 0);
+            else this.videoSetRoiRect(nv, nv, 'square', nv);
+        },
+        // PREVIEW: save the current view by capturing a fresh frame with disk-save
+        // forced on (there's no server endpoint to save the already-shown frame).
+        async basicSaveFrame() {
+            const prev = this.preview.saveToDisk;
+            this.preview.saveToDisk = true;
+            try { await this.previewTakeSnap(); this.toast && this.toast('Frame saved', 'ok'); }
+            catch (e) { this.toastFail ? this.toastFail('Save failed', e) : (this.toast && this.toast('Save failed', 'error')); }
+            finally { this.preview.saveToDisk = prev; }
         },
         // Nudge EXP / GAIN from the inline stepper (the input itself takes any
         // typed value). Exposure walks a sensible preset ladder; gain steps by 10

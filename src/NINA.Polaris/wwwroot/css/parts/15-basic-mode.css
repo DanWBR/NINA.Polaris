@@ -264,6 +264,25 @@
 .basic-shell .bs-lstate{display:inline-block; margin-top:7px; font-size:11px; font-weight:700; color:var(--bs-ok)}
 .basic-shell .bs-lstate.off{color:var(--bs-muted)}
 
+.basic-shell .bs-lreset.on{border-color:var(--bs-ok); color:var(--bs-ok)}
+
+/* mount speed slider (in the mount pad side column) */
+.basic-shell .bs-spd{background:var(--bs-panel); border:1px solid var(--bs-border); border-radius:10px; padding:5px 7px;
+    min-width:112px; backdrop-filter:blur(8px)}
+.basic-shell .bs-spdh{display:flex; justify-content:space-between; font-size:10px; color:var(--bs-muted)}
+.basic-shell .bs-spdh b{color:var(--bs-accent2)}
+.basic-shell .bs-spd input{width:100%; margin:3px 0 0; accent-color:var(--bs-accent)}
+.basic-shell .bs-nudgelbl{font-size:10px; color:var(--bs-muted); align-self:center; margin-right:2px}
+
+/* ---- Video screen ---- */
+.basic-shell .bs-recshutter{border-color:var(--bs-danger); background:rgba(255,93,93,.15)}
+.basic-shell .bs-recshutter .bs-core{background:var(--bs-danger)}
+.basic-shell .bs-vsh{display:flex; justify-content:space-between; font-size:11px; color:var(--bs-muted)}
+.basic-shell .bs-vsh b{color:var(--bs-ok)}
+.basic-shell .bs-vshbar{height:8px; border-radius:4px; background:#17203a; overflow:hidden; margin-top:4px}
+.basic-shell .bs-vshbar i{display:block; height:100%; background:linear-gradient(90deg,var(--bs-warn),var(--bs-ok))}
+.basic-shell .bs-lstate.rec{color:var(--bs-danger)}
+
 .basic-shell :focus-visible{outline:2px solid var(--bs-accent2); outline-offset:2px}
 
 /* return-to-field pill, shown on a phone that escaped to the full UI */
