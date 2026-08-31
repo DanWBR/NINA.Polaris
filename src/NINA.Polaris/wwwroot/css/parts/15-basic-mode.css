@@ -121,9 +121,6 @@
 .basic-shell .bs-auto.on{border-color:var(--bs-ok); color:var(--bs-ok)}
 .basic-shell .bs-full{height:32px; padding:0 12px; border-radius:16px; background:var(--bs-panel);
     border:1px solid var(--bs-border); color:var(--bs-muted); font-size:12px; backdrop-filter:blur(8px)}
-.basic-shell .bs-conn{height:32px; padding:0 14px; border-radius:16px; background:var(--bs-accent); border:0;
-    color:#fff; font-weight:700; font-size:13px; margin-left:auto}
-.basic-shell .bs-conn.warn{background:var(--bs-warn); color:#20160a}
 
 /* EXP/GAIN inline stepper: tap the box to expand it (grows left over the image
    so it doesn't reflow the rail); tap the label to collapse. */
@@ -233,12 +230,11 @@
 @media (max-width: 560px){
     .basic-shell .bs-bottom{gap:6px; padding:0 6px}
     /* collapse the connection chips to their status dot so the action buttons
-       (Full UI / Connect) stay fully on screen */
+       (Full Mode) stay fully on screen */
     .basic-shell .bs-bottom .bs-chip:not(.bs-num){font-size:0; padding:0 9px; gap:0}
     .basic-shell .bs-bottom .bs-chip.bs-num{font-size:11px; padding:0 8px}
     .basic-shell .bs-auto{padding:0 9px; font-size:11px}
     .basic-shell .bs-full{padding:0 10px; font-size:12px}
-    .basic-shell .bs-conn{padding:0 12px; font-size:12px}
     .basic-shell .bs-seqp{bottom:120px}
 }
 
@@ -338,6 +334,7 @@
 .basic-shell .bs-cbtn:disabled{opacity:.45}
 .basic-shell .bs-cbtns{display:flex; flex-wrap:wrap; gap:8px}
 .basic-shell .bs-crow{display:flex; align-items:center; gap:8px; font-size:13px; flex-wrap:wrap}
+.basic-shell .bs-indistat{display:inline-flex; align-items:center; gap:8px}
 .basic-shell .bs-clbl{color:var(--bs-muted)}
 .basic-shell .bs-cval{color:var(--text); font-weight:600}
 .basic-shell .bs-cval.bs-mono, .basic-shell .bs-mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px;
@@ -355,6 +352,9 @@
 .basic-shell .bs-cinput{width:100%; height:38px; border-radius:12px; border:1px solid var(--bs-border);
     background:#0e1422; color:var(--text); padding:0 12px; font-size:14px; font-family:inherit}
 .basic-shell select.bs-cinput{appearance:auto}
+.basic-shell .bs-cinrow{display:flex; gap:8px; align-items:center}
+.basic-shell .bs-cinrow .bs-cinput{flex:1; min-width:0}
+.basic-shell .bs-cinrow .bs-cbtn{flex:none}
 .basic-shell .bs-cfield{display:flex; flex-direction:column; gap:4px}
 .basic-shell .bs-cflbl{font-size:11px; color:var(--bs-muted)}
 .basic-shell .bs-ccheck{display:flex; align-items:center; gap:9px; font-size:13px; color:var(--text)}

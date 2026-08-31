@@ -64,7 +64,7 @@
          Inert unless a manifest URL is configured (assistant-config.json). -->
     <link rel="stylesheet" href="/css/parts/13-assistant.css?v=20260705-assist15">
     <link rel="stylesheet" href="/css/parts/14-uiscale-text.css?v=20260707-hintsize">
-    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260831-basic22">
+    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260831-basic23">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -20098,9 +20098,11 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     <button class="bs-cbtn" @click="basicDetectEquipment()" title="Auto-detect connected equipment">&#128269; Detect</button>
                 </div>
                 <div class="bs-crow">
-                    <span class="bs-dot" :class="indiConnected ? '' : 'off'"></span>
-                    <span class="bs-clbl">INDI</span>
-                    <span class="bs-cval bs-num" x-text="indiConnected ? 'Connected' : 'Connecting…'"></span>
+                    <span class="bs-indistat" x-show="basicUsesIndi()">
+                        <span class="bs-dot" :class="indiConnected ? '' : 'off'"></span>
+                        <span class="bs-clbl">INDI</span>
+                        <span class="bs-cval bs-num" x-text="indiConnected ? 'Connected' : 'Connecting…'"></span>
+                    </span>
                     <button class="bs-cbtn primary" style="margin-left:auto" :disabled="equipBulkBusy" @click="basicConnectAll()">Connect all</button>
                     <button class="bs-cbtn" :disabled="equipBulkBusy" @click="equipDisconnectAll()">Disconnect all</button>
                 </div>
@@ -20138,6 +20140,18 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     <button class="bs-clink" @click="basicSetPref('off')">Open full UI</button></div>
             </div>
 
+            <!-- Field-UI scale (basic mode only) -->
+            <div class="bs-card">
+                <div class="bs-cardt">Field UI scale</div>
+                <div class="bs-cnote">Sizes the field interface only. Does not affect the full UI.</div>
+                <div class="bs-scalerow">
+                    <button class="bs-cbtn xs" @click="basicStepUiScale(-1)">&minus;</button>
+                    <input class="bs-scaleslider" type="range" min="0.7" max="1.4" step="0.05" x-model.number="basicUiScale" @input="basicApplyUiScale()">
+                    <button class="bs-cbtn xs" @click="basicStepUiScale(1)">+</button>
+                    <span class="bs-cval bs-num" x-text="Math.round((basicUiScale||1)*100) + '%'"></span>
+                </div>
+            </div>
+
             <!-- 1. Home folder (studio home) -->
             <div class="bs-card">
                 <div class="bs-cardt">Studio home folder</div>
@@ -20148,8 +20162,10 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             <!-- 2. Display name -->
             <div class="bs-card">
                 <div class="bs-cardt">Display name</div>
-                <input class="bs-cinput" type="text" x-model="deviceFriendlyName" placeholder="Polaris" @keyup.enter="saveDeviceName()">
-                <div class="bs-cbtns"><button class="bs-cbtn primary" @click="saveDeviceName()">Save</button></div>
+                <div class="bs-cinrow">
+                    <input class="bs-cinput" type="text" x-model="deviceFriendlyName" placeholder="Polaris" @keyup.enter="saveDeviceName()">
+                    <button class="bs-cbtn primary" @click="saveDeviceName()">Save</button>
+                </div>
             </div>
 
             <!-- 3. Plate solving -->
@@ -20224,11 +20240,11 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             <!-- 6. Software update -->
             <div class="bs-card">
                 <div class="bs-cardt">Software update</div>
-                <div class="bs-cval bs-num" x-show="update.currentVersion">
-                    <span x-show="!update.available">Running v<span x-text="update.currentVersion"></span></span>
-                    <span x-show="update.available" style="color:var(--bs-accent2)">Update available: v<span x-text="update.latestVersion"></span></span>
-                </div>
-                <div class="bs-cbtns">
+                <div class="bs-cinrow">
+                    <div class="bs-cval bs-num" style="flex:1; min-width:0" x-show="update.currentVersion">
+                        <span x-show="!update.available">Running v<span x-text="update.currentVersion"></span></span>
+                        <span x-show="update.available" style="color:var(--bs-accent2)">Update available: v<span x-text="update.latestVersion"></span></span>
+                    </div>
                     <button class="bs-cbtn primary" :disabled="update.checking" @click="checkUpdateManual()" x-text="update.checking ? 'Checking…' : 'Check for updates'"></button>
                     <button class="bs-cbtn" x-show="update.available" x-cloak @click="openUpdateModal()">View &amp; install</button>
                 </div>
@@ -20245,17 +20261,6 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <label class="bs-ccheck" x-show="power.loaded && power.platform==='windows'" x-cloak><input type="checkbox" :checked="power.autoStartEnabled" :disabled="power.autoStartBusy" @change="toggleAutoStart()"><span>Start at Windows boot</span></label>
             </div>
 
-            <!-- 8. Field-UI scale (basic mode only) -->
-            <div class="bs-card">
-                <div class="bs-cardt">Field UI scale</div>
-                <div class="bs-cnote">Sizes the field interface only. Does not affect the full UI.</div>
-                <div class="bs-scalerow">
-                    <button class="bs-cbtn xs" @click="basicStepUiScale(-1)">&minus;</button>
-                    <input class="bs-scaleslider" type="range" min="0.7" max="1.4" step="0.05" x-model.number="basicUiScale" @input="basicApplyUiScale()">
-                    <button class="bs-cbtn xs" @click="basicStepUiScale(1)">+</button>
-                    <span class="bs-cval bs-num" x-text="Math.round((basicUiScale||1)*100) + '%'"></span>
-                </div>
-            </div>
 
         </div>
 
@@ -20480,8 +20485,6 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             <div class="bs-chip bs-num" x-show="basicScreen==='focus'" x-cloak>Step <b x-text="focusStepFast"></b></div>
             <div class="bs-chip bs-num" x-show="basicScreen==='focus' && autoFocus.lastHfr" x-cloak>HFR <b x-text="autoFocus.lastHfr?.toFixed(2)"></b></div>
             <div class="bs-chip" x-show="basicScreen==='guide'" x-cloak><span class="bs-dot" :class="guider.guideCameraConnected ? '' : 'off'"></span><span class="bs-name" x-text="guider.guideCameraName || 'Guide cam'"></span></div>
-            <button class="bs-conn" :class="basicAnyDisconnected() ? 'warn' : ''" @click="basicConnectAll()"
-                    x-text="basicAnyDisconnected() ? 'Connect' : 'Connected'"></button>
         </div>
 
         <!-- Autorun transport: overall progress + Start / Pause / Stop. -->
@@ -20498,8 +20501,6 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <button class="bs-tbtn bs-tstart" x-show="seqState==='idle'" :disabled="!sequence.length" @click="startSequence()">&#9654; Start</button>
                 <button class="bs-tbtn bs-tpause" x-show="seqState!=='idle'" @click="pauseSequence()" x-text="seqState==='paused' ? '▶ Resume' : '❙❙ Pause'"></button>
                 <button class="bs-tbtn bs-tstop" x-show="seqState!=='idle'" @click="stopSequence()">&#9632; Stop</button>
-                <button class="bs-conn" :class="basicAnyDisconnected() ? 'warn' : ''" @click="basicConnectAll()"
-                        x-text="basicAnyDisconnected() ? 'Connect' : 'Connected'"></button>
             </div>
         </div>
 

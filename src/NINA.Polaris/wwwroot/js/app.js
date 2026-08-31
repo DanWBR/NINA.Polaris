@@ -27807,7 +27807,7 @@ function ninaApp() {
             // A beginner shouldn't have to think about the INDI server link, so
             // bring it up first (a no-op when it's already connected), then run
             // the normal per-role bulk connect.
-            try { if (!this.indiConnected && this.connectIndi) await this.connectIndi(); }
+            try { if (this.basicUsesIndi && this.basicUsesIndi() && !this.indiConnected && this.connectIndi) await this.connectIndi(); }
             catch (e) { /* best-effort */ }
             try { await this.equipConnectAll(); }
             catch (e) { if (this.toast) this.toast('Connect failed', 'warn'); }
@@ -27826,7 +27826,7 @@ function ninaApp() {
             try { this.loadStorageConfig && this.loadStorageConfig(); } catch (e) { }
             try { this.loadPowerInfo && this.loadPowerInfo(); } catch (e) { }
             try {
-                if (!this.indiConnected && !this._basicIndiTried && this.connectIndi) {
+                if (this.basicUsesIndi() && !this.indiConnected && !this._basicIndiTried && this.connectIndi) {
                     this._basicIndiTried = true;
                     this.connectIndi();
                 }
@@ -27858,6 +27858,13 @@ function ninaApp() {
             const cfg = this._basicRoleMap[role];
             return (cfg && cfg.name && this[cfg.name]) || '';
         },
+        // True when any role is set to the INDI backend; on an ASCOM/Alpaca
+        // (typically Windows) rig this is false, so the field UI skips the INDI
+        // server line and its auto-connect entirely.
+        basicUsesIndi() {
+            return ['cameraDriver', 'mountDriver', 'focuserDriver', 'filterWheelDriver', 'guideCameraDriver']
+                .some(k => this[k] === 'indi');
+        },
         basicDevOptions(role) {
             const cfg = this._basicRoleMap[role];
             if (!cfg) return [];
@@ -27867,7 +27874,10 @@ function ninaApp() {
             } else {
                 list = (this[cfg.vendor] || []).map(d => ({ value: d.id, label: (d.model || d.name || d.id) + (d.detail ? ' (' + d.detail + ')' : '') }));
             }
-            const cur = this.basicRoleConnectedName(role);
+            // Always surface the current pick / connected device so the select
+            // shows it even before discovery runs (matters on ASCOM/Alpaca rigs
+            // where there is no always-on device list like INDI's).
+            const cur = (cfg.choice && this[cfg.choice]) || this.basicRoleConnectedName(role);
             if (cur && !list.some(o => o.value === cur)) list.unshift({ value: cur, label: cur });
             return list;
         },
