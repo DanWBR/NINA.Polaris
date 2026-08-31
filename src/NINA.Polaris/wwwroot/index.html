@@ -64,7 +64,7 @@
          Inert unless a manifest URL is configured (assistant-config.json). -->
     <link rel="stylesheet" href="/css/parts/13-assistant.css?v=20260705-assist15">
     <link rel="stylesheet" href="/css/parts/14-uiscale-text.css?v=20260707-hintsize">
-    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260831-basic23">
+    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260831-basic24">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -20111,30 +20111,35 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                         <option value="" x-text="basicDevOptions('camera').length ? 'Select device' : 'No devices'"></option>
                         <template x-for="o in basicDevOptions('camera')" :key="'cam-'+o.value"><option :value="o.value" :selected="basicDevSelected('camera', o.value)" x-text="o.label"></option></template>
                     </select>
+                    <button class="bs-cbtn xs bs-cfg" @click="basicOpenEquipConfig('camera')" title="Settings">&#9881;</button>
                     <button class="bs-cbtn xs" @click="selectedCamera ? equipDisconnectCamera() : equipConnectCamera()" x-text="selectedCamera ? 'Disconnect' : 'Connect'"></button></div>
                 <div class="bs-cdev"><span class="bs-dot" :class="mount.connected ? '' : 'off'"></span><span class="bs-cdlbl">Mount</span>
                     <select class="bs-cdsel" :disabled="mount.connected" @change="basicSetDevChoice('mount', $event.target.value)">
                         <option value="" x-text="basicDevOptions('mount').length ? 'Select device' : 'No devices'"></option>
                         <template x-for="o in basicDevOptions('mount')" :key="'mnt-'+o.value"><option :value="o.value" :selected="basicDevSelected('mount', o.value)" x-text="o.label"></option></template>
                     </select>
+                    <button class="bs-cbtn xs bs-cfg" @click="basicOpenEquipConfig('mount')" title="Settings">&#9881;</button>
                     <button class="bs-cbtn xs" @click="mount.connected ? equipDisconnectMount() : equipConnectMount()" x-text="mount.connected ? 'Disconnect' : 'Connect'"></button></div>
                 <div class="bs-cdev"><span class="bs-dot" :class="focusConnected ? '' : 'off'"></span><span class="bs-cdlbl">Focuser</span>
                     <select class="bs-cdsel" :disabled="focusConnected" @change="basicSetDevChoice('focuser', $event.target.value)">
                         <option value="" x-text="basicDevOptions('focuser').length ? 'Select device' : 'No devices'"></option>
                         <template x-for="o in basicDevOptions('focuser')" :key="'foc-'+o.value"><option :value="o.value" :selected="basicDevSelected('focuser', o.value)" x-text="o.label"></option></template>
                     </select>
+                    <button class="bs-cbtn xs bs-cfg" @click="basicOpenEquipConfig('focuser')" title="Settings">&#9881;</button>
                     <button class="bs-cbtn xs" @click="focusConnected ? equipDisconnectFocuser() : equipConnectFocuser()" x-text="focusConnected ? 'Disconnect' : 'Connect'"></button></div>
                 <div class="bs-cdev"><span class="bs-dot" :class="(filterWheel && filterWheel.connected) ? '' : 'off'"></span><span class="bs-cdlbl">Filter</span>
                     <select class="bs-cdsel" :disabled="filterWheel && filterWheel.connected" @change="basicSetDevChoice('filter', $event.target.value)">
                         <option value="" x-text="basicDevOptions('filter').length ? 'Select device' : 'No devices'"></option>
                         <template x-for="o in basicDevOptions('filter')" :key="'fw-'+o.value"><option :value="o.value" :selected="basicDevSelected('filter', o.value)" x-text="o.label"></option></template>
                     </select>
+                    <button class="bs-cbtn xs bs-cfg" @click="basicOpenEquipConfig('filter')" title="Settings">&#9881;</button>
                     <button class="bs-cbtn xs" @click="(filterWheel && filterWheel.connected) ? equipDisconnectFilter() : equipConnectFilter()" x-text="(filterWheel && filterWheel.connected) ? 'Disconnect' : 'Connect'"></button></div>
                 <div class="bs-cdev"><span class="bs-dot" :class="guider.guideCameraConnected ? '' : 'off'"></span><span class="bs-cdlbl">Guide cam</span>
                     <select class="bs-cdsel" :disabled="guider.guideCameraConnected" @change="basicSetDevChoice('guide', $event.target.value)">
                         <option value="" x-text="basicDevOptions('guide').length ? 'Select device' : 'No devices'"></option>
                         <template x-for="o in basicDevOptions('guide')" :key="'gcam-'+o.value"><option :value="o.value" :selected="basicDevSelected('guide', o.value)" x-text="o.label"></option></template>
                     </select>
+                    <button class="bs-cbtn xs bs-cfg" @click="basicOpenEquipConfig('guide')" title="Settings">&#9881;</button>
                     <button class="bs-cbtn xs" @click="guider.guideCameraConnected ? equipDisconnectGuideCamera() : equipConnectGuideCamera()" x-text="guider.guideCameraConnected ? 'Disconnect' : 'Connect'"></button></div>
                 <div class="bs-cnote">Editing the INDI profile or INDI settings is done in the full UI.
                     <button class="bs-clink" @click="basicSetPref('off')">Open full UI</button></div>
@@ -20501,6 +20506,17 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <button class="bs-tbtn bs-tstart" x-show="seqState==='idle'" :disabled="!sequence.length" @click="startSequence()">&#9654; Start</button>
                 <button class="bs-tbtn bs-tpause" x-show="seqState!=='idle'" @click="pauseSequence()" x-text="seqState==='paused' ? '▶ Resume' : '❙❙ Pause'"></button>
                 <button class="bs-tbtn bs-tstop" x-show="seqState!=='idle'" @click="stopSequence()">&#9632; Stop</button>
+            </div>
+        </div>
+
+        <!-- Per-device settings modal: hosts the RELOCATED full-UI equipment card. -->
+        <div class="bs-modal" x-show="basicEquipModal" x-cloak @click.self="basicCloseEquipConfig()">
+            <div class="bs-modalcard">
+                <div class="bs-modalhead">
+                    <span x-text="basicEquipModalTitle()"></span>
+                    <button class="bs-cbtn xs" @click="basicCloseEquipConfig()">&times;</button>
+                </div>
+                <div class="bs-modalbody" id="basicEquipModalBody"></div>
             </div>
         </div>
 

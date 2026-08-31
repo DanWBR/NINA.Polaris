@@ -345,7 +345,18 @@
 .basic-shell .bs-cdsel{flex:1; min-width:0; height:32px; border-radius:10px; border:1px solid var(--bs-border);
     background:#0e1422; color:var(--text); padding:0 8px; font-size:12px; font-family:inherit; appearance:auto}
 .basic-shell .bs-cdsel:disabled{opacity:.7}
-.basic-shell .bs-cdev .bs-cbtn{margin-left:auto; flex:none}
+.basic-shell .bs-cdev .bs-cbtn{flex:none}
+.basic-shell .bs-cdev .bs-cfg{margin-left:auto}
+
+/* per-device settings modal (hosts the relocated full-UI equipment card) */
+.basic-shell .bs-modal{position:fixed; inset:0; z-index:850; background:rgba(4,6,12,.72);
+    display:flex; align-items:center; justify-content:center; padding:10px; backdrop-filter:blur(4px)}
+.basic-shell .bs-modalcard{width:100%; max-width:min(760px,100%); max-height:100%; display:flex; flex-direction:column;
+    background:var(--bs-panel); border:1px solid var(--bs-border); border-radius:14px; overflow:hidden; backdrop-filter:blur(10px)}
+.basic-shell .bs-modalhead{display:flex; align-items:center; justify-content:space-between; gap:8px;
+    padding:12px 14px; border-bottom:1px solid var(--bs-border); font-size:15px; font-weight:800; color:var(--text)}
+.basic-shell .bs-modalbody{overflow:auto; -webkit-overflow-scrolling:touch; padding:12px}
+.basic-shell #basicEquipModalBody .equip-card{width:100% !important; max-width:100% !important; margin:0 !important}
 .basic-shell .bs-cnote{font-size:11px; color:var(--bs-muted); line-height:1.35}
 .basic-shell .bs-cnote.ok{color:var(--bs-ok)} .basic-shell .bs-cnote.warn{color:var(--bs-warn)}
 .basic-shell .bs-clink{background:none; border:0; color:var(--bs-accent2); font-size:11px; font-weight:700; font-family:inherit; padding:0; text-decoration:underline}

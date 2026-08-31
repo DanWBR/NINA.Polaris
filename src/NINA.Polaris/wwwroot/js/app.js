@@ -4526,6 +4526,8 @@ function ninaApp() {
         // is pinned to 1 in basic mode). Persisted, clamped to [0.7, 1.4].
         basicUiScale: (function () { try { const v = parseFloat(localStorage.getItem('polaris.basicUiScale')); return (v >= 0.7 && v <= 1.4) ? v : 1.0; } catch (e) { return 1.0; } })(),
         _basicIndiTried: false,   // one-shot guard for the config-screen INDI auto-connect
+        basicEquipModal: null,    // which device's settings modal is open ('camera'|'mount'|...)
+        _basicModalMoved: null,   // {el, home, next} full-UI card relocated into the settings modal
         _basicMoved: null,   // [{el, home, next}] surfaces relocated into the shell
 
         init() {
@@ -27891,6 +27893,39 @@ function ninaApp() {
             if (role === 'guide') { if (this.setGuideCamera) this.setGuideCamera(value); else this.guideCamera = value; return; }
             const cfg = this._basicRoleMap[role];
             if (cfg && cfg.choice) this[cfg.choice] = value;
+        },
+        // Per-device settings modal: relocate the REAL full-UI equipment card
+        // (found by its title) into a basic-mode modal so the field user gets
+        // the exact same settings, then restore it on close.
+        _basicEquipTitles: { camera: 'Main Camera', mount: 'Telescope Mount', focuser: 'Main Scope Focus Motor', filter: 'Filter Wheel', guide: 'Guiding System' },
+        _basicFindEquipCard(role) {
+            const want = this._basicEquipTitles[role];
+            if (!want) return null;
+            return [...document.querySelectorAll('.equip-card')].find(c => {
+                const t = c.querySelector('.equip-card-title');
+                return t && t.textContent.trim() === want;
+            }) || null;
+        },
+        basicOpenEquipConfig(role) {
+            const card = this._basicFindEquipCard(role);
+            if (!card) { this.basicSetPref('off'); return; }   // fall back to the full UI
+            this.basicEquipModal = role;
+            this.$nextTick(() => {
+                const slot = document.getElementById('basicEquipModalBody');
+                if (slot && card.parentNode !== slot) {
+                    this._basicModalMoved = { el: card, home: card.parentNode, next: card.nextSibling };
+                    slot.appendChild(card);
+                }
+            });
+        },
+        basicCloseEquipConfig() {
+            const m = this._basicModalMoved;
+            if (m && m.el && m.home) { try { m.home.insertBefore(m.el, m.next || null); } catch (e) { } }
+            this._basicModalMoved = null;
+            this.basicEquipModal = null;
+        },
+        basicEquipModalTitle() {
+            return ({ camera: 'Camera settings', mount: 'Mount settings', focuser: 'Focuser settings', filter: 'Filter wheel settings', guide: 'Guiding settings' })[this.basicEquipModal] || 'Settings';
         },
         // Open the equipment-detection wizard. It creates/edits an INDI profile,
         // which is a Full-UI concern, so drop to the full UI (the detect modal
