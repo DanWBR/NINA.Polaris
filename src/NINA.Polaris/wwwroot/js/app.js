@@ -27664,14 +27664,11 @@ function ninaApp() {
             item.imageType = types[(i + 1) % types.length];
             this.basicSeqSync();
         },
-        // Tap the exposure to step it along a sensible ladder.
-        basicSeqCycleExp(item) {
+        // FLAT auto-exposure toggle (the capture engine reads item.autoExposure
+        // when imageType is FLAT and measures the flat exposure itself).
+        basicSeqToggleAuto(item) {
             if (!item) return;
-            const p = [0.5, 1, 2, 4, 8, 16, 30, 60, 120, 180, 300, 600];
-            const cur = Number(item.exposure) || 1;
-            let i = p.findIndex(x => x >= cur - 1e-9);
-            if (i < 0 || Math.abs(p[i] - cur) < 1e-6) i = i + 1;
-            item.exposure = p[((i % p.length) + p.length) % p.length];
+            item.autoExposure = !item.autoExposure;
             this.basicSeqSync();
         },
         basicCycleBin() {
