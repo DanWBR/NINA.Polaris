@@ -317,6 +317,43 @@
     background:var(--bs-panel); color:var(--bs-muted); font-size:12px; font-weight:600}
 .basic-shell .bs-tgoto2:disabled{opacity:.45}
 
+/* ---- Config / Setup screen ---- */
+.basic-shell .bs-config{position:absolute; top:44px; left:0; right:0; bottom:48px; z-index:20;
+    overflow-y:auto; -webkit-overflow-scrolling:touch; padding:12px; display:flex; flex-direction:column; gap:12px;
+    background:radial-gradient(120% 90% at 60% 30%, #0b1424 0%, #05080f 70%)}
+.basic-shell .bs-card{background:var(--bs-panel); border:1px solid var(--bs-border); border-radius:14px;
+    padding:12px 13px; backdrop-filter:blur(8px); display:flex; flex-direction:column; gap:9px}
+.basic-shell .bs-cardh{display:flex; align-items:center; justify-content:space-between; gap:8px}
+.basic-shell .bs-cardt{font-size:14px; font-weight:800; color:var(--text)}
+.basic-shell .bs-cbtn{height:34px; padding:0 13px; border-radius:12px; background:var(--bs-chip);
+    border:1px solid var(--bs-border); color:var(--text); font-size:13px; font-weight:600; font-family:inherit; white-space:nowrap}
+.basic-shell .bs-cbtn.primary{background:var(--bs-accent); border-color:var(--bs-accent); color:#fff}
+.basic-shell .bs-cbtn.danger{border-color:var(--bs-danger); color:var(--bs-danger)}
+.basic-shell .bs-cbtn.xs{height:30px; padding:0 10px; font-size:12px}
+.basic-shell .bs-cbtn:disabled{opacity:.45}
+.basic-shell .bs-cbtns{display:flex; flex-wrap:wrap; gap:8px}
+.basic-shell .bs-crow{display:flex; align-items:center; gap:8px; font-size:13px}
+.basic-shell .bs-clbl{color:var(--bs-muted)}
+.basic-shell .bs-cval{color:var(--text); font-weight:600}
+.basic-shell .bs-cval.bs-mono, .basic-shell .bs-mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px;
+    color:var(--bs-muted); word-break:break-all}
+.basic-shell .bs-cdev{display:flex; align-items:center; gap:8px; font-size:13px; padding:2px 0}
+.basic-shell .bs-cdlbl{color:var(--bs-muted); min-width:66px}
+.basic-shell .bs-cdname{color:var(--text); font-weight:600; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:none}
+.basic-shell .bs-cdev .bs-cbtn{margin-left:auto}
+.basic-shell .bs-cnote{font-size:11px; color:var(--bs-muted); line-height:1.35}
+.basic-shell .bs-cnote.ok{color:var(--bs-ok)} .basic-shell .bs-cnote.warn{color:var(--bs-warn)}
+.basic-shell .bs-clink{background:none; border:0; color:var(--bs-accent2); font-size:11px; font-weight:700; font-family:inherit; padding:0; text-decoration:underline}
+.basic-shell .bs-cinput{width:100%; height:38px; border-radius:12px; border:1px solid var(--bs-border);
+    background:#0e1422; color:var(--text); padding:0 12px; font-size:14px; font-family:inherit}
+.basic-shell select.bs-cinput{appearance:auto}
+.basic-shell .bs-cfield{display:flex; flex-direction:column; gap:4px}
+.basic-shell .bs-cflbl{font-size:11px; color:var(--bs-muted)}
+.basic-shell .bs-ccheck{display:flex; align-items:center; gap:9px; font-size:13px; color:var(--text)}
+.basic-shell .bs-ccheck input{width:18px; height:18px; accent-color:var(--bs-accent)}
+.basic-shell .bs-scalerow{display:flex; align-items:center; gap:10px}
+.basic-shell .bs-scaleslider{flex:1; accent-color:var(--bs-accent)}
+
 .basic-shell :focus-visible{outline:2px solid var(--bs-accent2); outline-offset:2px}
 
 /* return-to-field pill, shown on a phone that escaped to the full UI */

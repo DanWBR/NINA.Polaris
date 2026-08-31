@@ -4522,6 +4522,10 @@ function ninaApp() {
         basicMode: false,
         basicModePref: (function () { try { return localStorage.getItem('polaris.basicMode') || 'auto'; } catch (e) { return 'auto'; } })(),
         basicScreen: 'preview',
+        // Basic-mode-only UI scale (independent of the Full-UI body zoom, which
+        // is pinned to 1 in basic mode). Persisted, clamped to [0.7, 1.4].
+        basicUiScale: (function () { try { const v = parseFloat(localStorage.getItem('polaris.basicUiScale')); return (v >= 0.7 && v <= 1.4) ? v : 1.0; } catch (e) { return 1.0; } })(),
+        _basicIndiTried: false,   // one-shot guard for the config-screen INDI auto-connect
         _basicMoved: null,   // [{el, home, next}] surfaces relocated into the shell
 
         init() {
@@ -7516,8 +7520,8 @@ function ninaApp() {
             this.uiZoom = z;
             this.uiZoomDraft = z;
             // Basic (phone) mode owns its own touch-sized layout; the small-screen
-            // body zoom would shrink its fixed shell, so pin the page to 1 there.
-            document.body.style.zoom = this.basicMode ? '1' : String(z);
+            // body zoom would shrink its fixed shell, so it uses its own scale.
+            document.body.style.zoom = this.basicMode ? String(this.basicUiScale || 1) : String(z);
             // Expose the zoom to CSS so prominent texts can scale at half rate
             // (see 14-uiscale-text.css: --text-rescale).
             document.documentElement.style.setProperty('--ui-zoom', String(z));
@@ -7765,7 +7769,7 @@ function ninaApp() {
             const z = this._defaultUiZoom();
             this.uiZoom = z;
             this.uiZoomDraft = z;
-            document.body.style.zoom = this.basicMode ? '1' : String(z);
+            document.body.style.zoom = this.basicMode ? String(this.basicUiScale || 1) : String(z);
             document.documentElement.style.setProperty('--ui-zoom', String(z));
             this._assistantPushUi();
         },
@@ -27550,7 +27554,7 @@ function ninaApp() {
         // pipeline active so frames keep arriving.
         _basicEnter() {
             try {
-                try { document.body.style.zoom = '1'; } catch (e) { }
+                try { document.body.style.zoom = String(this.basicUiScale || 1); } catch (e) { }
                 this._basicApplyScreen();
             } catch (e) { }
         },
@@ -27589,6 +27593,13 @@ function ninaApp() {
                     this._basicMove('#skyFrame', 'basicImageSlot');
                     this._basicClampGuideOverlay();
                 });
+                return;
+            }
+            // Config is a static, scrollable card list rendered by the shell
+            // itself (no pipeline, no relocation). _basicRestoreMoved above
+            // already put any previously relocated node back.
+            if (this.basicScreen === 'config') {
+                this.basicConfigEnter();
                 return;
             }
             // Per-screen: which tab owns the pipeline, which canvas to relocate,
@@ -27654,7 +27665,7 @@ function ninaApp() {
         // Mode menu: Preview and Focus are curated field screens; the others jump
         // to the full UI on that tab until their own field screens are built.
         basicGoMode(m) {
-            if (['preview', 'focus', 'autorun', 'guide', 'live', 'video', 'sky'].includes(m)) { this.basicSetScreen(m); return; }
+            if (['preview', 'focus', 'autorun', 'guide', 'live', 'video', 'sky', 'config'].includes(m)) { this.basicSetScreen(m); return; }
             const map = { plan: 'plan' };
             const tabId = map[m] || 'home';
             this.basicSetPref('off');
@@ -27788,12 +27799,70 @@ function ninaApp() {
                 this.preview.gain = Math.max(lo, Math.min(hi, Math.round(v)));
             }
         },
-        basicConnectAll() {
-            try { this.equipConnectAll(); }
+        async basicConnectAll() {
+            // A beginner shouldn't have to think about the INDI server link, so
+            // bring it up first (a no-op when it's already connected), then run
+            // the normal per-role bulk connect.
+            try { if (!this.indiConnected && this.connectIndi) await this.connectIndi(); }
+            catch (e) { /* best-effort */ }
+            try { await this.equipConnectAll(); }
             catch (e) { if (this.toast) this.toast('Connect failed', 'warn'); }
         },
         basicAnyDisconnected() {
             return !(this.mount && this.mount.connected) || !this.selectedCamera;
+        },
+
+        // ---- Basic CONFIG screen ----
+        // Fired when the Setup screen opens: refresh the cards' backing data and,
+        // per the field-UI assumption that Polaris always auto-connects to the
+        // INDI server, verify the link and bring it up once if it isn't already.
+        basicConfigEnter() {
+            try { this.loadDeviceName && this.loadDeviceName(); } catch (e) { }
+            try { this.loadPlateSolveConfig && this.loadPlateSolveConfig(); } catch (e) { }
+            try { this.loadStorageConfig && this.loadStorageConfig(); } catch (e) { }
+            try { this.loadPowerInfo && this.loadPowerInfo(); } catch (e) { }
+            try {
+                if (!this.indiConnected && !this._basicIndiTried && this.connectIndi) {
+                    this._basicIndiTried = true;
+                    this.connectIndi();
+                }
+            } catch (e) { }
+        },
+        // Open the equipment-detection wizard. It creates/edits an INDI profile,
+        // which is a Full-UI concern, so drop to the full UI (the detect modal
+        // floats above everything) and run the scan there.
+        basicDetectEquipment() {
+            this.basicSetPref('off');
+            this.$nextTick(() => { try { this.indiDetectScan && this.indiDetectScan(); } catch (e) { } });
+        },
+        // Studio home (image output root) via the host folder picker.
+        async basicPickStudioHome() {
+            try {
+                const path = await this._hostPickFolder({ title: 'Studio home folder' });
+                if (!path) return;
+                const r = await this.apiPostJson('/api/files/studio-root', null, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path })
+                });
+                this.settings.imageOutputDir = (r && r.imageOutputDir) || path;
+                this.toast('Studio home set to ' + this.settings.imageOutputDir, 'ok');
+                this.apiPost('/api/studio/rescan').catch(() => { });
+            } catch (e) { this.toastFail ? this.toastFail('Could not set studio home', e) : this.toast('Could not set studio home', 'error'); }
+        },
+        // Basic-mode-only UI scale. The Full-UI body zoom is deliberately pinned
+        // to 1 while in basic mode (its small-screen default would shrink the
+        // fixed touch shell), so basic mode drives body.zoom off ITS OWN factor.
+        basicApplyUiScale() {
+            const s = Math.max(0.7, Math.min(1.4, +this.basicUiScale || 1.0));
+            this.basicUiScale = s;
+            try { if (this.basicMode) document.body.style.zoom = String(s); } catch (e) { }
+            try { localStorage.setItem('polaris.basicUiScale', String(s)); } catch (e) { }
+        },
+        basicStepUiScale(dir) {
+            const s = Math.max(0.7, Math.min(1.4, (+this.basicUiScale || 1.0) + dir * 0.05));
+            this.basicUiScale = Math.round(s * 100) / 100;
+            this.basicApplyUiScale();
         },
 
         _panelResize(ev, varName, storeKey, def, min, max, dir) {
