@@ -156,6 +156,37 @@ one browser manage several Polaris hosts side by side, and dismissable
 health chips surface host problems such as Raspberry Pi under-voltage
 warnings.
 
+## On a phone: Field Mode
+
+Open Polaris on a phone and it changes shape. The full interface
+assumes a wide screen, so on a small one Polaris switches to **Field
+Mode**, a touch-first shell modelled on a handset controller like the
+ASIAIR. It turns on by itself when the shorter side of the screen is
+small enough, which catches a phone held either way and leaves tablets
+and desktops alone. Field Mode is not a separate app: it drives the
+same session as the full interface, so a change in one shows up in the
+other, and you can move between them mid-session without losing your
+place. A **Full Mode** button in the corner returns you to the full
+UI, and on a phone a **Field mode** pill brings you back here.
+
+The image fills the screen. A menu at the top moves between the
+screens you use at the scope: Preview, Focus, Sky, Autorun, Live, and
+Video. Two icons beside it jump straight to Guide and Setup. Each
+screen shows only its own controls: exposure, gain, and binning as
+tap-to-expand steppers, a large shutter to start and stop, and, when a
+mount is connected, a movement pad with a slew-speed slider and
+**Home**, **Park**, and **Sync** buttons, each behind a confirmation.
+
+**Setup** gets the rig online and covers the basics without leaving
+Field Mode. It lists your devices with a dropdown to choose each one
+and a single **Connect all**, a gear beside each device that opens
+that device's full settings, and cards for the studio folder, display
+name, plate solving, WiFi, network storage, software updates, and
+power, plus a scale control that sizes the field interface on its own.
+Anything deeper, such as editing an INDI profile, sends you to the
+full UI. See @sec-networking and @sec-administration for those
+settings.
+
 ## SETTINGS at a glance
 
 The **SETTINGS** panel gathers everything that is global rather than
@@ -238,6 +269,7 @@ When you know the task but not the panel, this table is the map.
 | Network, remote access, HTTPS, relay | **SETTINGS** | See @sec-networking |
 | AI and ONNX model settings | **SETTINGS** | See @sec-ai-cleanup |
 | Tutorials and troubleshooting | **HELP** | |
+| Use Polaris from my phone | Field Mode | Turns on by itself on a phone; a top menu switches screens, **Full Mode** returns to the full UI |
 
 ## If you are just lost
 
