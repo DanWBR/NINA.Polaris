@@ -120,19 +120,20 @@
     color:#fff; font-weight:700; font-size:13px; margin-left:auto}
 .basic-shell .bs-conn.warn{background:var(--bs-warn); color:#20160a}
 
-/* long-press EXP/GAIN keypad */
-.basic-shell .bs-numedit{position:absolute; inset:0; z-index:60; display:flex; align-items:center;
-    justify-content:center; background:rgba(2,4,8,.55); backdrop-filter:blur(2px)}
-.basic-shell .bs-numcard{background:#0e1422; border:1px solid var(--bs-border); border-radius:14px;
-    padding:16px; width:min(280px,82vw); box-shadow:0 16px 48px rgba(0,0,0,.6)}
-.basic-shell .bs-numlabel{font-size:13px; color:var(--bs-muted); margin-bottom:10px; text-align:center}
-.basic-shell .bs-numinput{width:100%; font-size:24px; font-weight:700; text-align:center; background:#070b14;
-    border:1px solid var(--bs-border); border-radius:10px; color:var(--text); padding:10px 8px}
-.basic-shell .bs-numhint{font-size:11px; color:var(--bs-muted); text-align:center; margin-top:6px}
-.basic-shell .bs-numrow{display:flex; gap:8px; margin-top:12px}
-.basic-shell .bs-numrow button{flex:1; height:42px; border-radius:10px; font-weight:700; font-size:14px; border:0}
-.basic-shell .bs-numcancel{background:var(--bs-chip); color:var(--text)}
-.basic-shell .bs-numok{background:var(--bs-accent); color:#fff}
+/* EXP/GAIN inline stepper: tap the box to expand it (grows left over the image
+   so it doesn't reflow the rail); tap the label to collapse. */
+.basic-shell .bs-expwrap{position:relative; width:56px}
+.basic-shell .bs-exp-open{position:absolute; top:0; right:0; width:210px; z-index:26; display:flex;
+    flex-direction:column; gap:6px; background:var(--bs-panel); border:1px solid var(--bs-accent);
+    border-radius:12px; padding:6px; backdrop-filter:blur(8px); box-shadow:0 8px 28px rgba(0,0,0,.5)}
+.basic-shell .bs-k-btn{background:none; border:0; color:var(--bs-accent2); font-size:11px;
+    letter-spacing:.06em; font-weight:700; padding:3px 2px; align-self:center}
+.basic-shell .bs-stepper{display:flex; align-items:center; gap:6px}
+.basic-shell .bs-stepbtn{width:42px; height:42px; border-radius:10px; background:var(--bs-chip); border:0;
+    color:var(--text); font-size:22px; font-weight:700; flex:none}
+.basic-shell .bs-stepbtn:active{background:var(--bs-accent); color:#fff}
+.basic-shell .bs-stepinput{flex:1; min-width:0; height:42px; text-align:center; font-size:18px; font-weight:700;
+    background:#070b14; border:1px solid var(--bs-border); border-radius:10px; color:var(--text)}
 
 .basic-shell :focus-visible{outline:2px solid var(--bs-accent2); outline-offset:2px}
 

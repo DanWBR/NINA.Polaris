@@ -4524,9 +4524,6 @@ function ninaApp() {
         basicScreen: 'preview',
         _basicGuideTimer: null,
         _basicPrevArea: null, _basicPrevHome: null, _basicPrevNext: null,
-        // Long-press numeric editor for EXP / GAIN in basic mode.
-        basicEdit: { open: false, field: '', label: '', value: 0, min: 0, max: 1000 },
-        _basicLongT: null, _basicLongFired: false,
 
         init() {
             this.updateClock();
@@ -27599,63 +27596,33 @@ function ninaApp() {
             this.basicSetPref('off');
             if (this.helpOpenTab) this.helpOpenTab(tabId); else this.tab = tabId;
         },
-        basicCycleExp() {
-            const p = [0.5, 1, 2, 4, 8, 16, 30, 60, 120, 300];
-            const cur = Number(this.preview.exposure) || 2;
-            const i = p.findIndex(x => x >= cur - 1e-6);
-            this.preview.exposure = p[(i + 1) % p.length];
-        },
-        basicCycleGain() {
-            const p = [0, 100, 200, 300, 400];
-            const cur = Number(this.preview.gain) || 0;
-            const i = p.findIndex(x => x >= cur);
-            this.preview.gain = p[(i < 0 ? p.length - 1 : i + 1) % p.length];
-        },
         basicCycleBin() {
             this.preview.binning = (Number(this.preview.binning) || 1) >= 2 ? 1 : 2;
         },
-        // EXP / GAIN: a tap cycles presets, a long-press opens a keypad to type
-        // an exact value.
-        basicNumDown(field) {
-            this._basicLongFired = false;
-            clearTimeout(this._basicLongT);
-            this._basicLongT = setTimeout(() => {
-                this._basicLongFired = true;
-                this.basicOpenNumEditor(field);
-            }, 450);
-        },
-        basicNumUp(field) {
-            clearTimeout(this._basicLongT);
-            if (this._basicLongFired) return;
-            if (field === 'exposure') this.basicCycleExp();
-            else if (field === 'gain') this.basicCycleGain();
-        },
-        basicNumCancel() { clearTimeout(this._basicLongT); },
-        basicOpenNumEditor(field) {
+        // Nudge EXP / GAIN from the inline stepper (the input itself takes any
+        // typed value). Exposure walks a sensible preset ladder; gain steps by 10
+        // within the camera's gain range.
+        basicStep(field, dir) {
             if (field === 'exposure') {
-                this.basicEdit = { open: true, field: 'exposure', label: 'Exposure (seconds)',
-                    value: Number(this.preview.exposure) || 1, min: 0.001, max: 3600 };
+                const p = [0.5, 1, 2, 4, 8, 16, 30, 60, 120, 180, 300, 600];
+                const cur = Number(this.preview.exposure) || 1;
+                let i = p.findIndex(x => x >= cur - 1e-9);
+                let ni;
+                if (i < 0) { ni = dir > 0 ? p.length - 1 : p.length - 1; }
+                else {
+                    const exact = Math.abs(p[i] - cur) < 1e-6;
+                    ni = dir > 0 ? (exact ? i + 1 : i) : (i - 1);
+                }
+                ni = Math.max(0, Math.min(p.length - 1, ni));
+                this.preview.exposure = p[ni];
             } else if (field === 'gain') {
                 const info = this.equipCameraInfo || {};
-                this.basicEdit = { open: true, field: 'gain', label: 'Gain',
-                    value: Number(this.preview.gain) || 0,
-                    min: Number.isFinite(info.gainMin) ? info.gainMin : 0,
-                    max: Number.isFinite(info.gainMax) ? info.gainMax : 1000 };
-            } else { return; }
-            this.$nextTick(() => {
-                const el = document.querySelector('.basic-shell .bs-numinput');
-                if (el) { el.focus(); try { el.select(); } catch (e) { } }
-            });
+                const lo = Number.isFinite(info.gainMin) ? info.gainMin : 0;
+                const hi = Number.isFinite(info.gainMax) ? info.gainMax : 1000;
+                const v = (Number(this.preview.gain) || 0) + dir * 10;
+                this.preview.gain = Math.max(lo, Math.min(hi, Math.round(v)));
+            }
         },
-        basicCommitNum() {
-            let v = Number(this.basicEdit.value);
-            if (!Number.isFinite(v)) { this.basicEdit.open = false; return; }
-            v = Math.max(this.basicEdit.min, Math.min(this.basicEdit.max, v));
-            if (this.basicEdit.field === 'exposure') this.preview.exposure = v;
-            else if (this.basicEdit.field === 'gain') this.preview.gain = Math.round(v);
-            this.basicEdit.open = false;
-        },
-        basicCancelNum() { this.basicEdit.open = false; },
         basicConnectAll() {
             try { this.equipConnectAll(); }
             catch (e) { if (this.toast) this.toast('Connect failed', 'warn'); }

@@ -64,7 +64,7 @@
          Inert unless a manifest URL is configured (assistant-config.json). -->
     <link rel="stylesheet" href="/css/parts/13-assistant.css?v=20260705-assist15">
     <link rel="stylesheet" href="/css/parts/14-uiscale-text.css?v=20260707-hintsize">
-    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260829-basic3">
+    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260829-basic4">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -19980,7 +19980,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          same Alpine state. Only rendered on phones (basicMode); the live image
          is the real .preview-area relocated into #basicImageSlot. -->
     <template x-if="basicMode">
-    <div class="basic-shell" x-data="{ modeMenu:false, mountOpen:true, basicGuideOpen:false }">
+    <div class="basic-shell" x-data="{ modeMenu:false, mountOpen:true, basicGuideOpen:false, expandedField:null }">
         <div id="basicImageSlot"></div>
 
         <div class="bs-temp">&#10052; <b class="bs-num" x-text="(cameraTemp!=null ? Number(cameraTemp).toFixed(1) : '--') + '&deg;C'"></b></div>
@@ -20015,12 +20015,30 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
 
         <div class="bs-rail right">
             <div class="bs-expcol">
-                <button class="bs-exp" title="Tap to cycle, hold to type a value"
-                        @pointerdown="basicNumDown('exposure')" @pointerup="basicNumUp('exposure')"
-                        @pointerleave="basicNumCancel()" @pointercancel="basicNumCancel()"><div class="bs-k">EXP</div><div class="bs-v bs-num" x-text="preview.exposure + 's'"></div></button>
-                <button class="bs-exp" title="Tap to cycle, hold to type a value"
-                        @pointerdown="basicNumDown('gain')" @pointerup="basicNumUp('gain')"
-                        @pointerleave="basicNumCancel()" @pointercancel="basicNumCancel()"><div class="bs-k">GAIN</div><div class="bs-v bs-num" x-text="preview.gain"></div></button>
+                <div class="bs-expwrap">
+                    <button class="bs-exp" x-show="expandedField!=='exp'" @click="expandedField='exp'">
+                        <div class="bs-k">EXP</div><div class="bs-v bs-num" x-text="preview.exposure + 's'"></div></button>
+                    <div class="bs-exp bs-exp-open" x-show="expandedField==='exp'" x-cloak>
+                        <button class="bs-k bs-k-btn" @click="expandedField=null" title="Collapse">EXP &#9652;</button>
+                        <div class="bs-stepper">
+                            <button class="bs-stepbtn" @click="basicStep('exposure',-1)">&minus;</button>
+                            <input class="bs-stepinput bs-num" type="number" inputmode="decimal" step="any" min="0.001" max="3600" x-model.number="preview.exposure">
+                            <button class="bs-stepbtn" @click="basicStep('exposure',1)">+</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="bs-expwrap">
+                    <button class="bs-exp" x-show="expandedField!=='gain'" @click="expandedField='gain'">
+                        <div class="bs-k">GAIN</div><div class="bs-v bs-num" x-text="preview.gain"></div></button>
+                    <div class="bs-exp bs-exp-open" x-show="expandedField==='gain'" x-cloak>
+                        <button class="bs-k bs-k-btn" @click="expandedField=null" title="Collapse">GAIN &#9652;</button>
+                        <div class="bs-stepper">
+                            <button class="bs-stepbtn" @click="basicStep('gain',-1)">&minus;</button>
+                            <input class="bs-stepinput bs-num" type="number" inputmode="numeric" step="1" min="0" x-model.number="preview.gain">
+                            <button class="bs-stepbtn" @click="basicStep('gain',1)">+</button>
+                        </div>
+                    </div>
+                </div>
                 <button class="bs-exp" @click="basicCycleBin()"><div class="bs-k">BIN</div><div class="bs-v bs-num" x-text="preview.binning + '&times;' + preview.binning"></div></button>
                 <div class="bs-shutter" role="button" :aria-label="(preview.busy||preview.looping) ? 'Abort' : 'Capture'"
                      :class="{ looping: preview.looping, busy: preview.busy }"
@@ -20061,20 +20079,6 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     x-text="basicAnyDisconnected() ? 'Connect' : 'Connected'"></button>
         </div>
 
-        <!-- Long-press keypad for an exact EXP / GAIN value. -->
-        <div class="bs-numedit" x-show="basicEdit.open" x-cloak @click.self="basicCancelNum()">
-            <div class="bs-numcard">
-                <div class="bs-numlabel" x-text="basicEdit.label"></div>
-                <input class="bs-numinput bs-num" type="number" inputmode="decimal"
-                       x-model="basicEdit.value" :min="basicEdit.min" :max="basicEdit.max" step="any"
-                       @keydown.enter="basicCommitNum()" @keydown.escape="basicCancelNum()">
-                <div class="bs-numhint bs-num" x-text="'Range ' + basicEdit.min + ' to ' + basicEdit.max"></div>
-                <div class="bs-numrow">
-                    <button class="bs-numcancel" @click="basicCancelNum()">Cancel</button>
-                    <button class="bs-numok" @click="basicCommitNum()">Set</button>
-                </div>
-            </div>
-        </div>
     </div>
     </template>
 
