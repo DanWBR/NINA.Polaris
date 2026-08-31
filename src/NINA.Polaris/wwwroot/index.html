@@ -64,6 +64,7 @@
          Inert unless a manifest URL is configured (assistant-config.json). -->
     <link rel="stylesheet" href="/css/parts/13-assistant.css?v=20260705-assist15">
     <link rel="stylesheet" href="/css/parts/14-uiscale-text.css?v=20260707-hintsize">
+    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260829-basic1">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -19974,6 +19975,93 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             </div>
         </div>
     </div>
+
+    <!-- Basic (phone-only) field mode: an ASIAIR-style curated shell over the
+         same Alpine state. Only rendered on phones (basicMode); the live image
+         is the real .preview-area relocated into #basicImageSlot. -->
+    <template x-if="basicMode">
+    <div class="basic-shell" x-data="{ modeMenu:false, mountOpen:true }">
+        <div id="basicImageSlot"></div>
+
+        <div class="bs-temp">&#10052; <b class="bs-num" x-text="(cameraTemp!=null ? Number(cameraTemp).toFixed(1) : '--') + '&deg;C'"></b></div>
+        <div class="bs-topbar">
+            <button class="bs-modepill" @click="modeMenu = !modeMenu">Preview <span class="bs-caret">&#9660;</span></button>
+        </div>
+        <div class="bs-status">&#9679; <b x-text="captureProgressActive() ? captureProgressLabel() : (preview.busy ? 'Exposing' : (preview.looping ? 'Looping' : 'Idle'))"></b></div>
+
+        <div class="bs-modemenu" x-show="modeMenu" @click.outside="modeMenu=false" x-cloak>
+            <button class="on" @click="basicGoMode('preview'); modeMenu=false"><span class="bs-em">&#128065;</span>Preview</button>
+            <button @click="basicGoMode('focus'); modeMenu=false"><span class="bs-em">&#127919;</span>Focus</button>
+            <button @click="basicGoMode('autorun'); modeMenu=false"><span class="bs-em">&#128247;</span>Autorun</button>
+            <button @click="basicGoMode('plan'); modeMenu=false"><span class="bs-em">&#128506;</span>Plan</button>
+            <button @click="basicGoMode('live'); modeMenu=false"><span class="bs-em">&#10024;</span>Live</button>
+            <button @click="basicGoMode('video'); modeMenu=false"><span class="bs-em">&#127916;</span>Video</button>
+        </div>
+
+        <div class="bs-rail left">
+            <button class="bs-icn" @click="_pzFit('previewCanvas')" title="Fit"><span class="bs-big">&#9635;</span>Fit</button>
+            <button class="bs-icn" :class="guideOverlay.on ? 'on' : ''" @click="toggleGuideOverlay()" title="Guiding"><span class="bs-big">&#128760;</span>Guide</button>
+            <button class="bs-icn" @click="_pzZoomButton('previewCanvas', 1.3)" title="Zoom in"><span class="bs-big">&#128269;</span>Zoom</button>
+        </div>
+
+        <div class="bs-guidebox" x-show="guider.connected" x-cloak>
+            <div class="bs-gh"><span>Guiding</span><b class="bs-num" x-text="'RMS ' + (Number(guider.rmsTotal||0)).toFixed(2) + '&Prime;'"></b></div>
+            <canvas x-ref="basicGuideGraph" width="360" height="128"></canvas>
+            <div class="bs-grms bs-num">
+                <span class="bs-ra" x-text="'RA ' + (Number(guider.rmsRA||0)).toFixed(2) + '&Prime;'"></span>
+                <span class="bs-dec" x-text="'DEC ' + (Number(guider.rmsDec||0)).toFixed(2) + '&Prime;'"></span>
+            </div>
+        </div>
+
+        <div class="bs-rail right">
+            <div class="bs-expcol">
+                <button class="bs-exp" @click="basicCycleExp()"><div class="bs-k">EXP</div><div class="bs-v bs-num" x-text="preview.exposure + 's'"></div></button>
+                <button class="bs-exp" @click="basicCycleGain()"><div class="bs-k">GAIN</div><div class="bs-v bs-num" x-text="preview.gain"></div></button>
+                <button class="bs-exp" @click="basicCycleBin()"><div class="bs-k">BIN</div><div class="bs-v bs-num" x-text="preview.binning + '&times;' + preview.binning"></div></button>
+                <div class="bs-shutter" role="button" :aria-label="(preview.busy||preview.looping) ? 'Abort' : 'Capture'"
+                     :class="{ looping: preview.looping, busy: preview.busy }"
+                     @pointerdown="shutterPointerDown($event, previewShutterCtx())"
+                     @pointerup="shutterPointerUp($event, previewShutterCtx())"
+                     @pointercancel="shutterPointerCancel()"
+                     @pointerleave="shutterPointerCancel()">
+                    <div class="bs-core"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bs-mount" :class="{ 'mp-collapsed': !mountOpen }">
+            <div class="bs-side">
+                <button class="bs-icn" style="width:38px;height:38px" @click="mountOpen=!mountOpen" title="Mount pad"><span class="bs-big">&#10530;</span></button>
+                <button class="bs-pill" :class="mount.tracking ? 'on' : ''" @click="toggleTracking()">Track</button>
+            </div>
+            <div class="bs-grid">
+                <button class="mid"></button>
+                <button aria-label="North" @pointerdown="mountMoveStart('north',$event)" @pointerup="mountMoveStop()" @pointerleave="mountMoveStop()">&#9650;</button>
+                <button class="mid"></button>
+                <button aria-label="West" @pointerdown="mountMoveStart('west',$event)" @pointerup="mountMoveStop()" @pointerleave="mountMoveStop()">&#9664;</button>
+                <button class="mid" @click="mountStop()">&#9632;</button>
+                <button aria-label="East" @pointerdown="mountMoveStart('east',$event)" @pointerup="mountMoveStop()" @pointerleave="mountMoveStop()">&#9654;</button>
+                <button class="mid"></button>
+                <button aria-label="South" @pointerdown="mountMoveStart('south',$event)" @pointerup="mountMoveStop()" @pointerleave="mountMoveStop()">&#9660;</button>
+                <button class="mid"></button>
+            </div>
+        </div>
+
+        <div class="bs-bottom">
+            <div class="bs-chip"><span class="bs-dot" :class="mount.connected ? '' : 'off'"></span>Mount</div>
+            <div class="bs-chip"><span class="bs-dot" :class="selectedCamera ? '' : 'off'"></span>Cam</div>
+            <div class="bs-chip"><span class="bs-dot" :class="focusConnected ? '' : 'off'"></span>Focus</div>
+            <button class="bs-auto" :class="stretchAuto ? 'on' : ''" @click="toggleAutoStretch()">Auto stretch</button>
+            <button class="bs-full" @click="basicSetPref('off')">Full UI</button>
+            <button class="bs-conn" :class="basicAnyDisconnected() ? 'warn' : ''" @click="basicConnectAll()"
+                    x-text="basicAnyDisconnected() ? 'Connect' : 'Connected'"></button>
+        </div>
+    </div>
+    </template>
+
+    <!-- Return to field mode from the full UI, phones only. -->
+    <button class="basic-return" x-show="deviceIsPhone && !basicMode" x-cloak
+            @click="basicSetPref('auto')">&#128241; Field mode</button>
 
     <!-- ASIAIR-style floating guiding overlay: translucent, read-only,
          always-on-top mini graph. Draggable by its header, corner-resizable,

@@ -1,0 +1,121 @@
+/* ============================================================
+   Basic (phone-only) field mode -- an ASIAIR-style curated shell.
+   Everything here is scoped under .basic-shell / .basic-return and
+   only renders when the app is in basic mode (phones only), so the
+   desktop and tablet layouts are untouched.
+   ============================================================ */
+
+.basic-shell{
+    position:fixed; inset:0; z-index:800; background:#04060c;
+    color:var(--text, #e8edf7);
+    font-family:-apple-system,Segoe UI,Roboto,system-ui,sans-serif;
+    -webkit-user-select:none; user-select:none;
+    --bs-panel:rgba(14,20,34,.82); --bs-border:#243049; --bs-muted:#8a97b0;
+    --bs-accent:#4c8dff; --bs-accent2:#6cc4ff; --bs-ok:#37c871;
+    --bs-warn:#f0b429; --bs-danger:#ff5d5d; --bs-chip:#1a2740;
+}
+.basic-shell .bs-num{font-variant-numeric:tabular-nums}
+
+/* live image: the relocated .preview-area fills this slot */
+.basic-shell #basicImageSlot{position:absolute; inset:0; overflow:hidden;
+    background:radial-gradient(120% 90% at 60% 40%, #0b1424 0%, #05080f 70%); z-index:1}
+.basic-shell #basicImageSlot .preview-area{position:absolute !important; inset:0 !important;
+    width:100% !important; height:100% !important; margin:0 !important}
+.basic-shell #basicImageSlot .pz-toolbar{display:none !important}
+
+/* top bar */
+.basic-shell .bs-topbar{position:absolute; top:0; left:0; right:0; height:44px; display:flex;
+    align-items:center; justify-content:center; z-index:30; pointer-events:none}
+.basic-shell .bs-modepill{pointer-events:auto; display:flex; align-items:center; gap:8px; height:32px;
+    padding:0 14px; background:var(--bs-panel); border:1px solid var(--bs-border); border-radius:16px;
+    backdrop-filter:blur(8px); font-weight:600; font-size:14px; color:var(--text)}
+.basic-shell .bs-modepill .bs-caret{color:var(--bs-muted); font-size:11px}
+.basic-shell .bs-temp{pointer-events:auto; position:absolute; left:8px; top:6px; height:28px; display:flex;
+    align-items:center; gap:6px; padding:0 10px; background:var(--bs-panel); border:1px solid var(--bs-border);
+    border-radius:14px; font-size:12px; color:var(--bs-accent2); backdrop-filter:blur(8px); z-index:31}
+.basic-shell .bs-status{pointer-events:auto; position:absolute; right:8px; top:6px; height:28px; display:flex;
+    align-items:center; gap:6px; padding:0 10px; background:var(--bs-panel); border:1px solid var(--bs-border);
+    border-radius:14px; font-size:12px; color:var(--bs-muted); backdrop-filter:blur(8px); z-index:31}
+.basic-shell .bs-status b{color:var(--text); font-weight:600}
+
+.basic-shell .bs-modemenu{position:absolute; top:44px; left:50%; transform:translateX(-50%); z-index:40;
+    background:#0e1422; border:1px solid var(--bs-border); border-radius:12px; overflow:hidden;
+    box-shadow:0 12px 40px rgba(0,0,0,.55); min-width:160px}
+.basic-shell .bs-modemenu button{display:flex; width:100%; align-items:center; gap:10px; background:none;
+    border:0; color:var(--text); padding:12px 14px; font-size:14px; text-align:left}
+.basic-shell .bs-modemenu button .bs-em{width:20px; text-align:center}
+.basic-shell .bs-modemenu button.on{background:rgba(76,141,255,.16); color:var(--bs-accent2)}
+.basic-shell .bs-modemenu button:active{background:rgba(255,255,255,.06)}
+
+/* rails */
+.basic-shell .bs-rail{position:absolute; top:52px; bottom:52px; display:flex; flex-direction:column;
+    gap:10px; z-index:25}
+.basic-shell .bs-rail.left{left:8px}
+.basic-shell .bs-rail.right{right:8px; align-items:center}
+.basic-shell .bs-icn{width:44px; height:44px; border-radius:12px; background:var(--bs-panel);
+    border:1px solid var(--bs-border); color:var(--text); display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:2px; backdrop-filter:blur(8px); font-size:10px; line-height:1}
+.basic-shell .bs-icn .bs-big{font-size:18px}
+.basic-shell .bs-icn.on{border-color:var(--bs-ok); color:var(--bs-ok)}
+.basic-shell .bs-icn:active{transform:scale(.94)}
+
+/* exposure stack + shutter */
+.basic-shell .bs-expcol{display:flex; flex-direction:column; gap:8px; align-items:center}
+.basic-shell .bs-exp{width:56px; border-radius:12px; background:var(--bs-panel); border:1px solid var(--bs-border);
+    padding:6px 4px; text-align:center; backdrop-filter:blur(8px); color:var(--text)}
+.basic-shell .bs-exp .bs-k{font-size:9px; color:var(--bs-muted); letter-spacing:.06em}
+.basic-shell .bs-exp .bs-v{font-size:14px; font-weight:700; margin-top:1px}
+.basic-shell .bs-shutter{width:66px; height:66px; border-radius:50%; border:4px solid #fff;
+    background:rgba(255,255,255,.14); display:flex; align-items:center; justify-content:center; margin-top:4px}
+.basic-shell .bs-shutter .bs-core{width:44px; height:44px; border-radius:50%; background:#fff; transition:.15s}
+.basic-shell .bs-shutter.looping .bs-core,.basic-shell .bs-shutter.busy .bs-core{border-radius:8px;
+    width:28px; height:28px; background:var(--bs-danger)}
+.basic-shell .bs-shutter:active{transform:scale(.95)}
+
+/* guide box */
+.basic-shell .bs-guidebox{position:absolute; left:60px; top:52px; width:190px; background:var(--bs-panel);
+    border:1px solid var(--bs-border); border-radius:12px; padding:8px; z-index:20; backdrop-filter:blur(8px)}
+.basic-shell .bs-guidebox .bs-gh{display:flex; justify-content:space-between; align-items:center;
+    font-size:11px; color:var(--bs-muted); margin-bottom:4px}
+.basic-shell .bs-guidebox .bs-gh b{color:var(--bs-ok)}
+.basic-shell .bs-guidebox canvas{width:100%; height:64px; display:block; background:#070b14; border-radius:6px}
+.basic-shell .bs-guidebox .bs-grms{display:flex; gap:10px; margin-top:5px; font-size:10px}
+.basic-shell .bs-guidebox .bs-grms .bs-ra{color:#59a9ff}
+.basic-shell .bs-guidebox .bs-grms .bs-dec{color:#ff5d5d}
+
+/* mount pad */
+.basic-shell .bs-mount{position:absolute; right:8px; bottom:56px; z-index:22; display:flex; align-items:flex-end; gap:6px}
+.basic-shell .bs-mount .bs-grid{display:grid; grid-template-columns:repeat(3,42px); grid-template-rows:repeat(3,42px);
+    gap:5px; background:var(--bs-panel); border:1px solid var(--bs-border); border-radius:14px; padding:8px; backdrop-filter:blur(8px)}
+.basic-shell .bs-mount .bs-grid button{border:0; border-radius:9px; background:var(--bs-chip); color:var(--text); font-size:16px}
+.basic-shell .bs-mount .bs-grid button.mid{background:transparent; font-size:10px; color:var(--bs-muted)}
+.basic-shell .bs-mount .bs-grid button:active{background:var(--bs-accent); color:#fff}
+.basic-shell .bs-mount .bs-side{display:flex; flex-direction:column; gap:6px; align-items:flex-end}
+.basic-shell .bs-mount .bs-pill{background:var(--bs-panel); border:1px solid var(--bs-border); border-radius:10px;
+    padding:6px 8px; font-size:11px; text-align:center; min-width:58px; backdrop-filter:blur(8px); color:var(--text)}
+.basic-shell .bs-mount .bs-pill.on{border-color:var(--bs-ok); color:var(--bs-ok)}
+.basic-shell .bs-mount.mp-collapsed .bs-grid{display:none}
+
+/* bottom bar */
+.basic-shell .bs-bottom{position:absolute; left:0; right:0; bottom:0; height:48px; display:flex; align-items:center;
+    gap:8px; padding:0 8px; z-index:28; pointer-events:none}
+.basic-shell .bs-bottom > *{pointer-events:auto}
+.basic-shell .bs-chip{height:30px; padding:0 10px; border-radius:15px; background:var(--bs-panel);
+    border:1px solid var(--bs-border); color:var(--bs-muted); font-size:12px; display:flex; align-items:center; gap:6px; backdrop-filter:blur(8px)}
+.basic-shell .bs-dot{width:8px; height:8px; border-radius:50%; background:var(--bs-ok); box-shadow:0 0 8px var(--bs-ok)}
+.basic-shell .bs-dot.off{background:#4a5673; box-shadow:none}
+.basic-shell .bs-auto{height:30px; padding:0 12px; border-radius:15px; background:var(--bs-panel);
+    border:1px solid var(--bs-border); color:var(--bs-muted); font-size:12px; font-weight:600; backdrop-filter:blur(8px)}
+.basic-shell .bs-auto.on{border-color:var(--bs-ok); color:var(--bs-ok)}
+.basic-shell .bs-full{height:32px; padding:0 12px; border-radius:16px; background:var(--bs-panel);
+    border:1px solid var(--bs-border); color:var(--bs-muted); font-size:12px; backdrop-filter:blur(8px)}
+.basic-shell .bs-conn{height:32px; padding:0 14px; border-radius:16px; background:var(--bs-accent); border:0;
+    color:#fff; font-weight:700; font-size:13px; margin-left:auto}
+.basic-shell .bs-conn.warn{background:var(--bs-warn); color:#20160a}
+
+.basic-shell :focus-visible{outline:2px solid var(--bs-accent2); outline-offset:2px}
+
+/* return-to-field pill, shown on a phone that escaped to the full UI */
+.basic-return{position:fixed; left:50%; bottom:10px; transform:translateX(-50%); z-index:790;
+    height:34px; padding:0 16px; border-radius:17px; background:rgba(76,141,255,.92); color:#fff;
+    border:0; font-weight:700; font-size:13px; box-shadow:0 6px 20px rgba(0,0,0,.4)}

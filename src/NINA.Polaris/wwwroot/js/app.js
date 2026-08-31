@@ -4514,6 +4514,17 @@ function ninaApp() {
         // brand badge in the status bar.
         appVersion: '',
 
+        // --- Basic (phone-only) field mode ---
+        // A curated ASIAIR-style shell that reuses this same state. Gated on the
+        // SHORTER viewport side so it triggers on a phone in any orientation but
+        // never on a tablet or desktop.
+        deviceIsPhone: false,
+        basicMode: false,
+        basicModePref: (function () { try { return localStorage.getItem('polaris.basicMode') || 'auto'; } catch (e) { return 'auto'; } })(),
+        basicScreen: 'preview',
+        _basicGuideTimer: null,
+        _basicPrevArea: null, _basicPrevHome: null, _basicPrevNext: null,
+
         init() {
             this.updateClock();
             setInterval(() => this.updateClock(), 1000);
@@ -4527,6 +4538,14 @@ function ninaApp() {
             // Restore all resizable side-panel / column widths.
             this._restorePanelWidths();
             this._restoreNavPad();
+
+            // Basic (phone-only) field mode. Recompute on every resize/rotate so
+            // it engages on a phone in any orientation and never on tablet/desktop.
+            this._recomputeBasicMode();
+            window.addEventListener('resize', () => this._recomputeBasicMode());
+            window.addEventListener('orientationchange', () => this._recomputeBasicMode());
+            this.$watch('basicMode', (v) => { if (v) this._basicEnter(); else this._basicExit(); });
+            if (this.basicMode) this.$nextTick(() => this._basicEnter());
 
             // Restore the guide-frame brightness/contrast slider prefs.
             try {
@@ -7486,7 +7505,9 @@ function ninaApp() {
             const z = Math.max(0.5, Math.min(1.5, +this.uiZoomDraft || 1.0));
             this.uiZoom = z;
             this.uiZoomDraft = z;
-            document.body.style.zoom = String(z);
+            // Basic (phone) mode owns its own touch-sized layout; the small-screen
+            // body zoom would shrink its fixed shell, so pin the page to 1 there.
+            document.body.style.zoom = this.basicMode ? '1' : String(z);
             // Expose the zoom to CSS so prominent texts can scale at half rate
             // (see 14-uiscale-text.css: --text-rescale).
             document.documentElement.style.setProperty('--ui-zoom', String(z));
@@ -7734,7 +7755,7 @@ function ninaApp() {
             const z = this._defaultUiZoom();
             this.uiZoom = z;
             this.uiZoomDraft = z;
-            document.body.style.zoom = String(z);
+            document.body.style.zoom = this.basicMode ? '1' : String(z);
             document.documentElement.style.setProperty('--ui-zoom', String(z));
             this._assistantPushUi();
         },
@@ -27500,6 +27521,100 @@ function ninaApp() {
         // column), so dragging the grip LEFT always grows the panel. The width
         // lives in a CSS var (consumed by the panel + any sibling margin/flex),
         // clamped to [min, min(max, 70vw)] and persisted to localStorage.
+        // ---- Basic (phone-only) field mode ----
+        _recomputeBasicMode() {
+            const shortSide = Math.min(window.innerWidth || 0, window.innerHeight || 0);
+            // Phones sit around 360-430px on the short side in any orientation;
+            // tablets are ~600px+. 540 cleanly separates them.
+            this.deviceIsPhone = shortSide > 0 && shortSide <= 540;
+            this.basicMode = this.deviceIsPhone && this.basicModePref !== 'off';
+        },
+        basicSetPref(pref) {
+            this.basicModePref = pref;
+            try { localStorage.setItem('polaris.basicMode', pref); } catch (e) { }
+            this._recomputeBasicMode();
+        },
+        // Relocate the live preview surface (canvas + pan/zoom) into the shell so
+        // there's a single WS paint path and gesture handler. Neutralise the body
+        // zoom (the shell has its own touch-sized layout) and keep the preview
+        // pipeline active so frames keep arriving.
+        _basicEnter() {
+            try {
+                this.tab = 'preview';
+                try { document.body.style.zoom = '1'; } catch (e) { }
+                this.$nextTick(() => {
+                    const slot = document.getElementById('basicImageSlot');
+                    const area = document.querySelector('.preview-tab-panel .preview-area')
+                        || document.querySelector('.preview-area');
+                    if (slot && area && area.parentNode !== slot) {
+                        this._basicPrevHome = area.parentNode;
+                        this._basicPrevNext = area.nextSibling;
+                        this._basicPrevArea = area;
+                        slot.appendChild(area);
+                    }
+                    this._basicStartGuideGraph();
+                    try { this._pzFit && this._pzFit('previewCanvas'); } catch (e) { }
+                });
+            } catch (e) { }
+        },
+        _basicExit() {
+            try {
+                if (this._basicGuideTimer) { clearInterval(this._basicGuideTimer); this._basicGuideTimer = null; }
+                const area = this._basicPrevArea;
+                if (area && this._basicPrevHome) {
+                    this._basicPrevHome.insertBefore(area, this._basicPrevNext || null);
+                }
+                this._basicPrevArea = this._basicPrevHome = this._basicPrevNext = null;
+                try { this.applyUiZoom && this.applyUiZoom(); } catch (e) { }
+            } catch (e) { }
+        },
+        // Redraw the shell's guide graph from live guider data, reusing the
+        // shared PHD2-style renderer (no edit to the WS handler needed).
+        _basicStartGuideGraph() {
+            if (this._basicGuideTimer) clearInterval(this._basicGuideTimer);
+            const tick = () => {
+                try {
+                    const c = this.$refs && this.$refs.basicGuideGraph;
+                    if (c && this.basicMode) {
+                        this._drawGuidePhdGraphTo(c, this.guidePhdScale, this.guider.recentSteps);
+                    }
+                } catch (e) { }
+            };
+            this._basicGuideTimer = setInterval(tick, 700);
+            tick();
+        },
+        // Mode menu: Preview is the curated field screen; the others jump to the
+        // full UI on that tab until their own field screens are built.
+        basicGoMode(m) {
+            if (m === 'preview') { this.basicScreen = 'preview'; return; }
+            const map = { focus: 'focus', autorun: 'sequence', plan: 'plan', live: 'live', video: 'video' };
+            const tabId = map[m] || 'home';
+            this.basicSetPref('off');
+            if (this.helpOpenTab) this.helpOpenTab(tabId); else this.tab = tabId;
+        },
+        basicCycleExp() {
+            const p = [0.5, 1, 2, 4, 8, 16, 30, 60, 120, 300];
+            const cur = Number(this.preview.exposure) || 2;
+            const i = p.findIndex(x => x >= cur - 1e-6);
+            this.preview.exposure = p[(i + 1) % p.length];
+        },
+        basicCycleGain() {
+            const p = [0, 100, 200, 300, 400];
+            const cur = Number(this.preview.gain) || 0;
+            const i = p.findIndex(x => x >= cur);
+            this.preview.gain = p[(i < 0 ? p.length - 1 : i + 1) % p.length];
+        },
+        basicCycleBin() {
+            this.preview.binning = (Number(this.preview.binning) || 1) >= 2 ? 1 : 2;
+        },
+        basicConnectAll() {
+            try { this.equipConnectAll(); }
+            catch (e) { if (this.toast) this.toast('Connect failed', 'warn'); }
+        },
+        basicAnyDisconnected() {
+            return !(this.mount && this.mount.connected) || !this.selectedCamera;
+        },
+
         _panelResize(ev, varName, storeKey, def, min, max, dir) {
             ev.preventDefault();
             const grip = ev.currentTarget;
