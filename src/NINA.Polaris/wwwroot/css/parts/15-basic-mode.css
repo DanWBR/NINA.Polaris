@@ -14,6 +14,9 @@
     --bs-accent:#4c8dff; --bs-accent2:#6cc4ff; --bs-ok:#37c871;
     --bs-warn:#f0b429; --bs-danger:#ff5d5d; --bs-chip:#1a2740;
 }
+/* Self-contained sizing so control heights are exact regardless of any global
+   reset (the standardized 32px pills / 44px squares stay pixel-consistent). */
+.basic-shell *, .basic-shell *::before, .basic-shell *::after{box-sizing:border-box}
 .basic-shell .bs-num{font-variant-numeric:tabular-nums}
 
 /* live image: the relocated .preview-area fills this slot */
@@ -41,12 +44,12 @@
     padding:0 14px; background:var(--bs-panel); border:1px solid var(--bs-border); border-radius:16px;
     backdrop-filter:blur(8px); font-weight:600; font-size:14px; color:var(--text)}
 .basic-shell .bs-modepill .bs-caret{color:var(--bs-muted); font-size:11px}
-.basic-shell .bs-temp{pointer-events:auto; position:absolute; left:8px; top:6px; height:28px; display:flex;
+.basic-shell .bs-temp{pointer-events:auto; position:absolute; left:8px; top:6px; height:32px; display:flex;
     align-items:center; gap:6px; padding:0 10px; background:var(--bs-panel); border:1px solid var(--bs-border);
-    border-radius:14px; font-size:12px; color:var(--bs-accent2); backdrop-filter:blur(8px); z-index:31}
-.basic-shell .bs-status{pointer-events:auto; position:absolute; right:8px; top:6px; height:28px; display:flex;
+    border-radius:16px; font-size:12px; color:var(--bs-accent2); backdrop-filter:blur(8px); z-index:31}
+.basic-shell .bs-status{pointer-events:auto; position:absolute; right:8px; top:6px; height:32px; display:flex;
     align-items:center; gap:6px; padding:0 10px; background:var(--bs-panel); border:1px solid var(--bs-border);
-    border-radius:14px; font-size:12px; color:var(--bs-muted); backdrop-filter:blur(8px); z-index:31}
+    border-radius:16px; font-size:12px; color:var(--bs-muted); backdrop-filter:blur(8px); z-index:31}
 .basic-shell .bs-status b{color:var(--text); font-weight:600}
 
 .basic-shell .bs-modemenu{position:absolute; top:44px; left:50%; transform:translateX(-50%); z-index:40;
@@ -104,11 +107,11 @@
 .basic-shell .bs-bottom{position:absolute; left:0; right:0; bottom:0; height:48px; display:flex; align-items:center;
     gap:8px; padding:0 8px; z-index:28; pointer-events:none}
 .basic-shell .bs-bottom > *{pointer-events:auto}
-.basic-shell .bs-chip{height:30px; padding:0 10px; border-radius:15px; background:var(--bs-panel);
+.basic-shell .bs-chip{height:32px; padding:0 10px; border-radius:16px; background:var(--bs-panel);
     border:1px solid var(--bs-border); color:var(--bs-muted); font-size:12px; display:flex; align-items:center; gap:6px; backdrop-filter:blur(8px)}
 .basic-shell .bs-dot{width:8px; height:8px; border-radius:50%; background:var(--bs-ok); box-shadow:0 0 8px var(--bs-ok)}
 .basic-shell .bs-dot.off{background:#4a5673; box-shadow:none}
-.basic-shell .bs-auto{height:30px; padding:0 12px; border-radius:15px; background:var(--bs-panel);
+.basic-shell .bs-auto{height:32px; padding:0 12px; border-radius:16px; background:var(--bs-panel);
     border:1px solid var(--bs-border); color:var(--bs-muted); font-size:12px; font-weight:600; backdrop-filter:blur(8px)}
 .basic-shell .bs-auto.on{border-color:var(--bs-ok); color:var(--bs-ok)}
 .basic-shell .bs-full{height:32px; padding:0 12px; border-radius:16px; background:var(--bs-panel);
@@ -165,7 +168,7 @@
 .basic-shell .bs-seqh{display:flex; align-items:center; justify-content:space-between; padding:9px 12px;
     border-bottom:1px solid var(--bs-border); font-size:12px; color:var(--bs-muted)}
 .basic-shell .bs-seqh b{color:var(--text)}
-.basic-shell .bs-seqadd{height:28px; padding:0 10px; border-radius:14px; background:var(--bs-accent); border:0; color:#fff; font-weight:700; font-size:12px}
+.basic-shell .bs-seqadd{height:32px; padding:0 12px; border-radius:16px; background:var(--bs-accent); border:0; color:#fff; font-weight:700; font-size:12px}
 .basic-shell .bs-seql{flex:1; overflow-y:auto; padding:6px}
 .basic-shell .bs-seqrow{display:flex; align-items:center; gap:8px; padding:8px; border-radius:10px; margin-bottom:6px;
     background:var(--bs-chip); position:relative; overflow:hidden}
@@ -183,12 +186,13 @@
 .basic-shell .bs-typ:active{border-color:var(--bs-accent2)}
 .basic-shell .bs-seqexp{background:none; border:0; padding:0; color:var(--bs-accent2); font:inherit;
     text-decoration:underline; text-decoration-style:dotted; text-underline-offset:2px}
-.basic-shell .bs-seqexpinput{width:66px; background:#070b14; border:1px solid var(--bs-accent); border-radius:6px;
-    color:var(--text); font-size:11px; font-weight:700; padding:1px 5px}
+.basic-shell .bs-seqexpinput, .basic-shell .bs-seqgaininput{width:66px; background:#070b14; border:1px solid var(--bs-accent);
+    border-radius:6px; color:var(--text); font-size:11px; font-weight:700; padding:1px 5px}
+.basic-shell .bs-seqgaininput{width:52px}
 .basic-shell .bs-seqauto{font-size:10px; padding:2px 6px; border-radius:8px; background:#0a1120; color:var(--bs-muted); border:1px solid transparent}
 .basic-shell .bs-seqauto.on{color:var(--bs-ok); border-color:var(--bs-ok)}
 .basic-shell .bs-seqhide{background:none; border:0; color:var(--bs-muted); font-size:15px; padding:0 6px 0 0; margin-right:2px}
-.basic-shell .bs-seqreopen{position:absolute; left:60px; top:52px; z-index:22; height:34px; padding:0 14px;
+.basic-shell .bs-seqreopen{position:absolute; left:60px; top:52px; z-index:22; height:32px; padding:0 14px;
     border-radius:17px; background:var(--bs-panel); border:1px solid var(--bs-border); color:var(--text);
     font-size:13px; font-weight:600; backdrop-filter:blur(8px)}
 .basic-shell .bs-seqcnt{display:flex; align-items:center; gap:4px; flex:none}
@@ -207,7 +211,8 @@
 .basic-shell .bs-pinfo{font-size:13px; color:var(--bs-muted)}
 .basic-shell .bs-pinfo b{color:var(--text); font-weight:700}
 .basic-shell .bs-spacer{flex:1}
-.basic-shell .bs-tbtn{height:42px; min-width:52px; padding:0 14px; border:0; border-radius:12px; font-weight:800; font-size:15px}
+/* transport buttons match the bottom-bar action pill (bs-conn / bs-full): 32px */
+.basic-shell .bs-tbtn{height:32px; padding:0 14px; border:0; border-radius:16px; font-weight:700; font-size:13px}
 .basic-shell .bs-tstart{background:var(--bs-ok); color:#05140b}
 .basic-shell .bs-tstart:disabled{opacity:.4}
 .basic-shell .bs-tpause{background:var(--bs-warn); color:#20160a}
@@ -234,5 +239,5 @@
 
 /* return-to-field pill, shown on a phone that escaped to the full UI */
 .basic-return{position:fixed; left:12px; bottom:10px; z-index:790;
-    height:34px; padding:0 16px; border-radius:17px; background:rgba(76,141,255,.92); color:#fff;
+    height:32px; padding:0 16px; border-radius:16px; background:rgba(76,141,255,.92); color:#fff;
     border:0; font-weight:700; font-size:13px; font-family:inherit; box-shadow:0 6px 20px rgba(0,0,0,.4)}

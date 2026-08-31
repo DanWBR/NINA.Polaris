@@ -64,7 +64,7 @@
          Inert unless a manifest URL is configured (assistant-config.json). -->
     <link rel="stylesheet" href="/css/parts/13-assistant.css?v=20260705-assist15">
     <link rel="stylesheet" href="/css/parts/14-uiscale-text.css?v=20260707-hintsize">
-    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260829-basic9">
+    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260829-basic11">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -19980,7 +19980,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          same Alpine state. Only rendered on phones (basicMode); the live image
          is the real .preview-area relocated into #basicImageSlot. -->
     <template x-if="basicMode">
-    <div class="basic-shell" x-data="{ modeMenu:false, mountOpen:true, expandedField:null, editName:null, editExp:null, seqOpen:true }">
+    <div class="basic-shell" x-data="{ modeMenu:false, mountOpen:true, expandedField:null, editName:null, editExp:null, editGain:null, seqOpen:true }">
         <div id="basicImageSlot"></div>
         <div id="basicCurveSlot" x-show="basicScreen==='focus'" x-cloak></div>
 
@@ -20010,6 +20010,12 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                                            x-model.number="item.exposure" @blur="editExp=null; basicSeqSync()" @keydown.enter="editExp=null; basicSeqSync()" @keydown.escape="editExp=null">
                                     <button x-show="editExp!==i" class="bs-seqexp" x-text="item.exposure + 's'"
                                             @click="editExp=i; $nextTick(() => { const e=$el.closest('.bs-seqsub').querySelector('.bs-seqexpinput'); if(e){e.focus(); e.select();} })"></button>
+                                </span>
+                                <span>
+                                    <input x-show="editGain===i" x-cloak class="bs-seqgaininput" type="number" inputmode="numeric" step="1" min="0"
+                                           x-model.number="item.gain" @blur="editGain=null; basicSeqSync()" @keydown.enter="editGain=null; basicSeqSync()" @keydown.escape="editGain=null">
+                                    <button x-show="editGain!==i" class="bs-seqexp" x-text="'gain ' + (item.gain ?? 0)"
+                                            @click="editGain=i; $nextTick(() => { const e=$el.closest('.bs-seqsub').querySelector('.bs-seqgaininput'); if(e){e.focus(); e.select();} })"></button>
                                 </span>
                                 <span x-show="item.filter" x-text="item.filter"></span>
                                 <span>&times;<span x-text="item.count"></span></span>
@@ -20056,7 +20062,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
 
         <div class="bs-rail right">
             <div class="bs-expcol">
-                <div class="bs-expwrap">
+                <div class="bs-expwrap" x-show="basicScreen!=='autorun'">
                     <button class="bs-exp" x-show="expandedField!=='exp'" @click="expandedField='exp'">
                         <div class="bs-k">EXP</div><div class="bs-v bs-num" x-text="preview.exposure + 's'"></div></button>
                     <div class="bs-exp bs-exp-open" x-show="expandedField==='exp'" x-cloak>
