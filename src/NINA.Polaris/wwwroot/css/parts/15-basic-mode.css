@@ -66,9 +66,11 @@
 .basic-shell .bs-modemenu button.on{background:rgba(76,141,255,.16); color:var(--bs-accent2)}
 .basic-shell .bs-modemenu button:active{background:rgba(255,255,255,.06)}
 
-/* rails */
+/* rails: the container spans full height but only holds buttons at the top, so
+   let its empty area pass clicks through to the mount pad flush beneath it. */
 .basic-shell .bs-rail{position:absolute; top:52px; bottom:52px; display:flex; flex-direction:column;
-    gap:10px; z-index:25}
+    gap:10px; z-index:25; pointer-events:none}
+.basic-shell .bs-rail > *{pointer-events:auto}
 .basic-shell .bs-rail.left{left:8px}
 .basic-shell .bs-rail.right{right:8px; align-items:center}
 .basic-shell .bs-icn{width:44px; height:44px; border-radius:12px; background:var(--bs-panel);
@@ -96,7 +98,7 @@
 
 /* mount pad -- bottom-left, just right of the icon rail (clear of the shutter
    on the right). The d-pad expands to the right when opened. */
-.basic-shell .bs-mount{position:absolute; left:60px; right:auto; bottom:56px; z-index:22; display:flex; align-items:flex-end; gap:6px}
+.basic-shell .bs-mount{position:absolute; left:8px; right:auto; bottom:56px; z-index:22; display:flex; align-items:flex-end; gap:6px}
 .basic-shell .bs-mount .bs-grid{display:grid; grid-template-columns:repeat(3,42px); grid-template-rows:repeat(3,42px);
     gap:5px; background:var(--bs-panel); border:1px solid var(--bs-border); border-radius:14px; padding:8px; backdrop-filter:blur(8px)}
 .basic-shell .bs-mount .bs-grid button{border:0; border-radius:9px; background:var(--bs-chip); color:var(--text); font-size:16px}
@@ -352,6 +354,8 @@
 .basic-shell .bs-cdsel:disabled{opacity:.7}
 .basic-shell .bs-cdev .bs-cbtn{flex:none}
 .basic-shell .bs-cdev .bs-cfg{margin-left:auto}
+/* connect/disconnect button: fixed width so Connect and Disconnect match */
+.basic-shell .bs-cdev .bs-cbtn:not(.bs-cfg){min-width:104px; text-align:center; justify-content:center}
 
 /* per-device settings modal (hosts the relocated full-UI equipment card) */
 .basic-shell .bs-modal{position:fixed; inset:0; z-index:850; background:rgba(4,6,12,.72);

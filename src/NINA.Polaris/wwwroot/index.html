@@ -64,7 +64,7 @@
          Inert unless a manifest URL is configured (assistant-config.json). -->
     <link rel="stylesheet" href="/css/parts/13-assistant.css?v=20260705-assist15">
     <link rel="stylesheet" href="/css/parts/14-uiscale-text.css?v=20260707-hintsize">
-    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260831-basic25">
+    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260831-basic26">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -20457,6 +20457,15 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         <button class="bs-focusreopen" x-show="(basicScreen==='focus' || basicScreen==='video') && !focusOpen" x-cloak @click="focusOpen=true">&#9737; focus</button>
 
         <div class="bs-mount" x-show="basicScreen==='preview' || basicScreen==='video'" :class="{ 'mp-collapsed': !mountOpen }">
+            <div class="bs-side">
+                <button class="bs-icn" style="width:38px;height:38px" @click="mountOpen=!mountOpen" title="Mount pad"><span class="bs-big">&#10530;</span></button>
+                <button class="bs-pill" :class="mount.tracking ? 'on' : ''" @click="toggleTracking()">Track</button>
+                <div class="bs-spd" x-show="mountOpen && (mount.slewRates || []).length" x-cloak>
+                    <div class="bs-spdh"><span>Speed</span><b x-text="(mount.slewRates && mount.slewRates[mountSlewRateIndex]) ? mount.slewRates[mountSlewRateIndex].name : '--'"></b></div>
+                    <input type="range" min="0" :max="Math.max(0, (mount.slewRates || []).length - 1)"
+                           :value="mountSlewRateIndex < 0 ? 0 : mountSlewRateIndex" @input="setMountSlewRate($event.target.value)">
+                </div>
+            </div>
             <div class="bs-grid">
                 <button class="mid"></button>
                 <button aria-label="North" @pointerdown="mountMoveStart('north',$event)" @pointerup="mountMoveStop()" @pointerleave="mountMoveStop()">&#9650;</button>
@@ -20467,15 +20476,6 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <button class="mid"></button>
                 <button aria-label="South" @pointerdown="mountMoveStart('south',$event)" @pointerup="mountMoveStop()" @pointerleave="mountMoveStop()">&#9660;</button>
                 <button class="mid"></button>
-            </div>
-            <div class="bs-side">
-                <button class="bs-icn" style="width:38px;height:38px" @click="mountOpen=!mountOpen" title="Mount pad"><span class="bs-big">&#10530;</span></button>
-                <button class="bs-pill" :class="mount.tracking ? 'on' : ''" @click="toggleTracking()">Track</button>
-                <div class="bs-spd" x-show="mountOpen && (mount.slewRates || []).length" x-cloak>
-                    <div class="bs-spdh"><span>Speed</span><b x-text="(mount.slewRates && mount.slewRates[mountSlewRateIndex]) ? mount.slewRates[mountSlewRateIndex].name : '--'"></b></div>
-                    <input type="range" min="0" :max="Math.max(0, (mount.slewRates || []).length - 1)"
-                           :value="mountSlewRateIndex < 0 ? 0 : mountSlewRateIndex" @input="setMountSlewRate($event.target.value)">
-                </div>
             </div>
         </div>
 
