@@ -27542,6 +27542,10 @@ function ninaApp() {
             // tablets are ~600px+. 540 cleanly separates them.
             this.deviceIsPhone = shortSide > 0 && shortSide <= 540;
             this.basicMode = this.deviceIsPhone && this.basicModePref !== 'off';
+            // Mark the body so the Full-UI modals reused inside basic mode
+            // (host file picker, detect wizard, update, wifi) can be pinned to
+            // the phone viewport — those elements live outside .basic-shell.
+            try { document.body.classList.toggle('basic-active', !!this.basicMode); } catch (e) { }
         },
         basicSetPref(pref) {
             this.basicModePref = pref;

@@ -39,25 +39,22 @@
 
 /* top bar */
 .basic-shell .bs-topbar{position:absolute; top:0; left:0; right:0; height:44px; display:flex;
-    align-items:center; justify-content:center; z-index:30; pointer-events:none}
+    align-items:center; justify-content:center; gap:8px; z-index:30; pointer-events:none}
 .basic-shell .bs-modepill{pointer-events:auto; display:flex; align-items:center; gap:8px; height:32px;
     padding:0 14px; background:var(--bs-panel); border:1px solid var(--bs-border); border-radius:16px;
     backdrop-filter:blur(8px); font-weight:600; font-size:14px; color:var(--text)}
 .basic-shell .bs-modepill .bs-caret{color:var(--bs-muted); font-size:11px}
-/* top-bar side clusters: temp + guide-icon (left), gear-icon + status (right) */
-.basic-shell .bs-topcluster{position:absolute; top:6px; display:flex; align-items:center; gap:6px;
-    z-index:31; pointer-events:none}
-.basic-shell .bs-topcluster.left{left:8px} .basic-shell .bs-topcluster.right{right:8px}
+/* guide (left) + setup gear (right) flank the centered mode pill */
 .basic-shell .bs-topicn{pointer-events:auto; width:32px; height:32px; border-radius:16px; background:var(--bs-panel);
     border:1px solid var(--bs-border); color:var(--text); font-size:15px; backdrop-filter:blur(8px);
     display:flex; align-items:center; justify-content:center; padding:0; line-height:1}
 .basic-shell .bs-topicn.on{border-color:var(--bs-accent2); color:var(--bs-accent2)}
-.basic-shell .bs-temp{pointer-events:auto; height:32px; display:flex;
+.basic-shell .bs-temp{pointer-events:auto; position:absolute; left:8px; top:6px; height:32px; display:flex;
     align-items:center; gap:6px; padding:0 10px; background:var(--bs-panel); border:1px solid var(--bs-border);
-    border-radius:16px; font-size:12px; color:var(--bs-accent2); backdrop-filter:blur(8px)}
-.basic-shell .bs-status{pointer-events:auto; height:32px; display:flex;
+    border-radius:16px; font-size:12px; color:var(--bs-accent2); backdrop-filter:blur(8px); z-index:31}
+.basic-shell .bs-status{pointer-events:auto; position:absolute; right:8px; top:6px; height:32px; display:flex;
     align-items:center; gap:6px; padding:0 10px; background:var(--bs-panel); border:1px solid var(--bs-border);
-    border-radius:16px; font-size:12px; color:var(--bs-muted); backdrop-filter:blur(8px)}
+    border-radius:16px; font-size:12px; color:var(--bs-muted); backdrop-filter:blur(8px); z-index:31}
 .basic-shell .bs-status b{color:var(--text); font-weight:600}
 
 .basic-shell .bs-modemenu{position:absolute; top:44px; left:50%; transform:translateX(-50%); z-index:40;
@@ -361,6 +358,15 @@
 .basic-shell .bs-ccheck input{width:18px; height:18px; accent-color:var(--bs-accent)}
 .basic-shell .bs-scalerow{display:flex; align-items:center; gap:10px}
 .basic-shell .bs-scaleslider{flex:1; accent-color:var(--bs-accent)}
+
+/* Full-UI modals reused inside basic mode assume the desktop status/activity
+   bars (their overlays inset by --statusbar-height/--activitybar-height) and
+   tall 84vh cards, so on a phone the card footer clips off-screen. Pin the
+   overlay to the whole viewport and let the card body scroll instead. */
+body.basic-active .confirm-modal-overlay,
+body.basic-active .editor-export-backdrop,
+body.basic-active .modal-overlay{top:0; bottom:0; left:0; right:0; padding:8px}
+body.basic-active .hostdlg-card{height:auto; max-height:100%}
 
 .basic-shell :focus-visible{outline:2px solid var(--bs-accent2); outline-offset:2px}
 
