@@ -64,7 +64,7 @@
          Inert unless a manifest URL is configured (assistant-config.json). -->
     <link rel="stylesheet" href="/css/parts/13-assistant.css?v=20260705-assist15">
     <link rel="stylesheet" href="/css/parts/14-uiscale-text.css?v=20260707-hintsize">
-    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260829-basic7">
+    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260829-basic8">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -19980,13 +19980,15 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          same Alpine state. Only rendered on phones (basicMode); the live image
          is the real .preview-area relocated into #basicImageSlot. -->
     <template x-if="basicMode">
-    <div class="basic-shell" x-data="{ modeMenu:false, mountOpen:true, expandedField:null }">
+    <div class="basic-shell" x-data="{ modeMenu:false, mountOpen:true, expandedField:null, editName:null, seqOpen:true }">
         <div id="basicImageSlot"></div>
         <div id="basicCurveSlot" x-show="basicScreen==='focus'" x-cloak></div>
 
-        <!-- Autorun: the sequence of frame sets (add / count / enable / remove). -->
-        <div class="bs-seqp" x-show="basicScreen==='autorun'" x-cloak>
+        <!-- Autorun: the sequence of frame sets. Tap the name to rename, the type
+             chip to cycle LIGHT/DARK/FLAT/BIAS, the exposure to step it. -->
+        <div class="bs-seqp" x-show="basicScreen==='autorun' && seqOpen" x-cloak>
             <div class="bs-seqh">
+                <button class="bs-seqhide" @click="seqOpen=false" title="Hide the list to see the frame">&#10096;</button>
                 <span><b x-text="sequence.length"></b> <span x-text="sequence.length===1 ? 'set' : 'sets'"></span></span>
                 <button class="bs-seqadd" @click="basicSeqAdd()">+ Add set</button>
             </div>
@@ -19995,8 +19997,15 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     <div class="bs-seqrow" :class="{ run: seqState==='running' && seqStatus && seqStatus.currentItemIndex===i }">
                         <button class="bs-seqen" :class="item.enabled ? '' : 'off'" @click="basicSeqToggle(item)" x-text="item.enabled ? '✓' : ''"></button>
                         <div class="bs-seqmeta">
-                            <div class="bs-seqnm" x-text="item.name || ('Target ' + (i+1))"></div>
-                            <div class="bs-seqsub bs-num"><span class="bs-typ" x-text="item.imageType || 'LIGHT'"></span> <span x-text="item.exposure + 's'"></span><span x-show="item.filter"> &middot; <span x-text="item.filter"></span></span> &middot; &times;<span x-text="item.count"></span></div>
+                            <input x-show="editName===i" x-cloak class="bs-seqnminput" type="text" x-model="item.name"
+                                   @blur="editName=null; basicSeqSync()" @keydown.enter="editName=null; basicSeqSync()" @keydown.escape="editName=null">
+                            <button x-show="editName!==i" class="bs-seqnm" @click="editName=i; $nextTick(() => { const e=$el.parentElement.querySelector('.bs-seqnminput'); if(e){e.focus(); e.select();} })"
+                                    x-text="item.name || ('Target ' + (i+1))"></button>
+                            <div class="bs-seqsub bs-num">
+                                <button class="bs-typ" @click="basicSeqCycleType(item)" x-text="item.imageType || 'LIGHT'"></button>
+                                <button class="bs-seqexp" @click="basicSeqCycleExp(item)" x-text="item.exposure + 's'"></button>
+                                <span x-show="item.filter"> &middot; <span x-text="item.filter"></span></span> &middot; &times;<span x-text="item.count"></span>
+                            </div>
                         </div>
                         <div class="bs-seqcnt">
                             <button @click="basicSeqCount(item,-1)" :disabled="seqState==='running'">&minus;</button>
@@ -20009,6 +20018,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <div class="bs-seqempty" x-show="!sequence.length">No sets yet. Tap "+ Add set".</div>
             </div>
         </div>
+        <!-- Collapsed: a small pill to bring the sequence list back. -->
+        <button class="bs-seqreopen" x-show="basicScreen==='autorun' && !seqOpen" x-cloak @click="seqOpen=true">&#9776; <span x-text="sequence.length"></span> <span x-text="sequence.length===1 ? 'set' : 'sets'"></span></button>
 
         <div class="bs-temp">&#10052; <b class="bs-num" x-text="(cameraTemp!=null ? Number(cameraTemp).toFixed(1) : '--') + '&deg;C'"></b></div>
         <div class="bs-topbar">

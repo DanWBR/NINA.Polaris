@@ -174,9 +174,19 @@
     flex:none; color:var(--bs-ok); font-size:12px; font-weight:700}
 .basic-shell .bs-seqen.off{color:transparent}
 .basic-shell .bs-seqmeta{flex:1; min-width:0}
-.basic-shell .bs-seqnm{font-size:13px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-.basic-shell .bs-seqsub{font-size:11px; color:var(--bs-muted)}
-.basic-shell .bs-typ{font-size:10px; padding:1px 6px; border-radius:8px; background:#0a1120; color:var(--bs-accent2)}
+.basic-shell .bs-seqnm{display:block; width:100%; text-align:left; background:none; border:0; padding:0;
+    color:var(--text); font-size:13px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.basic-shell .bs-seqnminput{width:100%; background:#070b14; border:1px solid var(--bs-accent); border-radius:6px;
+    color:var(--text); font-size:13px; font-weight:700; padding:2px 6px}
+.basic-shell .bs-seqsub{font-size:11px; color:var(--bs-muted); display:flex; align-items:center; gap:5px; flex-wrap:wrap}
+.basic-shell .bs-typ{font-size:10px; padding:2px 6px; border-radius:8px; background:#0a1120; color:var(--bs-accent2); border:1px solid transparent}
+.basic-shell .bs-typ:active{border-color:var(--bs-accent2)}
+.basic-shell .bs-seqexp{background:none; border:0; padding:0; color:var(--bs-accent2); font:inherit;
+    text-decoration:underline; text-decoration-style:dotted; text-underline-offset:2px}
+.basic-shell .bs-seqhide{background:none; border:0; color:var(--bs-muted); font-size:15px; padding:0 6px 0 0; margin-right:2px}
+.basic-shell .bs-seqreopen{position:absolute; left:60px; top:52px; z-index:22; height:34px; padding:0 14px;
+    border-radius:17px; background:var(--bs-panel); border:1px solid var(--bs-border); color:var(--text);
+    font-size:13px; font-weight:600; backdrop-filter:blur(8px)}
 .basic-shell .bs-seqcnt{display:flex; align-items:center; gap:4px; flex:none}
 .basic-shell .bs-seqcnt button{width:30px; height:30px; border:0; border-radius:8px; background:#0a1120; color:var(--text); font-size:16px; font-weight:700}
 .basic-shell .bs-seqcnt button:disabled{opacity:.4}
@@ -219,6 +229,6 @@
 .basic-shell :focus-visible{outline:2px solid var(--bs-accent2); outline-offset:2px}
 
 /* return-to-field pill, shown on a phone that escaped to the full UI */
-.basic-return{position:fixed; left:50%; bottom:10px; transform:translateX(-50%); z-index:790;
+.basic-return{position:fixed; right:12px; bottom:10px; z-index:790;
     height:34px; padding:0 16px; border-radius:17px; background:rgba(76,141,255,.92); color:#fff;
     border:0; font-weight:700; font-size:13px; font-family:inherit; box-shadow:0 6px 20px rgba(0,0,0,.4)}

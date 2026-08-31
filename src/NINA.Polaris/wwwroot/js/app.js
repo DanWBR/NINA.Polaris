@@ -5133,7 +5133,9 @@ function ninaApp() {
             // Control density (Settings → Appearance). Restore the saved % and
             // push it into --pad-scale before first paint.
             const padSaved = parseInt(localStorage.getItem('nina-pad-scale'), 10);
-            this.padScale = Number.isFinite(padSaved) ? padSaved : 100;
+            // Phones default the control density to 70% (tighter padding) so more
+            // of the desktop UI fits; desktop/tablet stay at 100%.
+            this.padScale = Number.isFinite(padSaved) ? padSaved : (this._isPhoneViewport() ? 70 : 100);
             this.applyPadScale();
             this.padScaleDraft = this.padScale;
 
@@ -7490,10 +7492,19 @@ function ninaApp() {
         // loaded AND as the value the Reset button restores to.
         _defaultUiZoom() {
             try {
+                // Phones (short viewport side) default the FULL UI to 80% so the
+                // desktop layout is usable without an immediate manual zoom.
+                const shortSide = Math.min(window.innerWidth || 0, window.innerHeight || 0);
+                if (shortSide > 0 && shortSide <= 540) return 0.80;
                 if (window.matchMedia('(max-width: 640px)').matches) return 0.75;
                 if (window.matchMedia('(max-width: 960px)').matches) return 0.85;
             } catch (_) { /* matchMedia missing in very old browsers */ }
             return 1.0;
+        },
+        // A phone (by the shorter viewport side), used for phone-only defaults.
+        _isPhoneViewport() {
+            const s = Math.min(window.innerWidth || 0, window.innerHeight || 0);
+            return s > 0 && s <= 540;
         },
 
         // Commit uiZoomDraft (slider position) → uiZoom (live page
@@ -27640,6 +27651,28 @@ function ninaApp() {
             if (this.seqState === 'running') { this.toast && this.toast('Stop the run first', 'warn'); return; }
             this.sequence.splice(i, 1);
             try { this.syncSequenceToServer && this.syncSequenceToServer(); } catch (e) { }
+        },
+        // Persist after an inline rename (bound with x-model).
+        basicSeqSync() {
+            try { this.syncSequenceToServer && this.syncSequenceToServer(); } catch (e) { }
+        },
+        // Tap the type chip to cycle the frame type.
+        basicSeqCycleType(item) {
+            if (!item) return;
+            const types = ['LIGHT', 'DARK', 'FLAT', 'BIAS'];
+            const i = types.indexOf(item.imageType || 'LIGHT');
+            item.imageType = types[(i + 1) % types.length];
+            this.basicSeqSync();
+        },
+        // Tap the exposure to step it along a sensible ladder.
+        basicSeqCycleExp(item) {
+            if (!item) return;
+            const p = [0.5, 1, 2, 4, 8, 16, 30, 60, 120, 180, 300, 600];
+            const cur = Number(item.exposure) || 1;
+            let i = p.findIndex(x => x >= cur - 1e-9);
+            if (i < 0 || Math.abs(p[i] - cur) < 1e-6) i = i + 1;
+            item.exposure = p[((i % p.length) + p.length) % p.length];
+            this.basicSeqSync();
         },
         basicCycleBin() {
             this.preview.binning = (Number(this.preview.binning) || 1) >= 2 ? 1 : 2;
