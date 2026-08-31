@@ -27927,6 +27927,23 @@ function ninaApp() {
         basicEquipModalTitle() {
             return ({ camera: 'Camera settings', mount: 'Mount settings', focuser: 'Focuser settings', filter: 'Filter wheel settings', guide: 'Guiding settings' })[this.basicEquipModal] || 'Settings';
         },
+        // Bottom-bar mount actions, each behind a confirm. Home reuses
+        // telescopeFindHome (which confirms on its own); Park and Sync add one.
+        async basicMountPark() {
+            if (!this.mount.connected) { this.toast('Connect a mount first', 'error'); return; }
+            if (!await this._confirmAsync(
+                'Park the mount? It slews to its park position and stops tracking.',
+                { title: 'Park mount', okLabel: 'Park', cancelLabel: 'Cancel', danger: true })) return;
+            return this.parkMount();
+        },
+        async basicMountSync() {
+            if (!this.mount.connected) { this.toast('Connect a mount first', 'error'); return; }
+            if (!await this._confirmAsync(
+                'Plate-solve the current view and sync the mount to it? The mount does not move; ' +
+                'this corrects where it thinks it is pointing. Needs a camera and clear sky.',
+                { title: 'Solve & sync mount', okLabel: 'Solve & sync', cancelLabel: 'Cancel' })) return;
+            return this.solveAndSyncHere();
+        },
         // Open the equipment-detection wizard. It creates/edits an INDI profile,
         // which is a Full-UI concern, so drop to the full UI (the detect modal
         // floats above everything) and run the scan there.

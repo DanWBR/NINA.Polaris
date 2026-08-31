@@ -64,7 +64,7 @@
          Inert unless a manifest URL is configured (assistant-config.json). -->
     <link rel="stylesheet" href="/css/parts/13-assistant.css?v=20260705-assist15">
     <link rel="stylesheet" href="/css/parts/14-uiscale-text.css?v=20260707-hintsize">
-    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260831-basic24">
+    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260831-basic25">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -20489,6 +20489,11 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             <div class="bs-chip bs-num" x-show="basicScreen==='focus'" x-cloak>Step <b x-text="focusStepFast"></b></div>
             <div class="bs-chip bs-num" x-show="basicScreen==='focus' && autoFocus.lastHfr" x-cloak>HFR <b x-text="autoFocus.lastHfr?.toFixed(2)"></b></div>
             <div class="bs-chip" x-show="basicScreen==='guide'" x-cloak><span class="bs-dot" :class="guider.guideCameraConnected ? '' : 'off'"></span><span class="bs-name" x-text="guider.guideCameraName || 'Guide cam'"></span></div>
+            <div class="bs-mountacts" x-show="mount.connected && (basicScreen==='preview' || basicScreen==='live' || basicScreen==='guide' || basicScreen==='video' || basicScreen==='sky')" x-cloak>
+                <button class="bs-mbtn" @click="telescopeFindHome()">&#8962; Home</button>
+                <button class="bs-mbtn" @click="basicMountPark()">&#9209; Park</button>
+                <button class="bs-mbtn" @click="basicMountSync()">&#8646; Sync</button>
+            </div>
         </div>
 
         <!-- Autorun transport: overall progress + Start / Pause / Stop. -->

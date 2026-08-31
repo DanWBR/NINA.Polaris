@@ -121,6 +121,11 @@
 .basic-shell .bs-auto.on{border-color:var(--bs-ok); color:var(--bs-ok)}
 .basic-shell .bs-full{height:32px; padding:0 12px; border-radius:16px; background:var(--bs-panel);
     border:1px solid var(--bs-border); color:var(--bs-muted); font-size:12px; backdrop-filter:blur(8px)}
+/* bottom-right mount actions (Home / Park / Sync) */
+.basic-shell .bs-mountacts{margin-left:auto; display:flex; gap:8px}
+.basic-shell .bs-mbtn{height:32px; padding:0 12px; border-radius:16px; background:var(--bs-panel);
+    border:1px solid var(--bs-border); color:var(--text); font-size:12px; font-weight:600; font-family:inherit;
+    backdrop-filter:blur(8px); white-space:nowrap}
 
 /* EXP/GAIN inline stepper: tap the box to expand it (grows left over the image
    so it doesn't reflow the rail); tap the label to collapse. */
