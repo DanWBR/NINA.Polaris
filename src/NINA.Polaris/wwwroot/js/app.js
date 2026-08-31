@@ -27547,27 +27547,29 @@ function ninaApp() {
         // path + one gesture handler), restoring whatever the previous screen
         // moved. Preview -> the preview .preview-area; Focus -> the AF
         // .af-preview-area (image + star ring + zoomed star) plus the V-curve.
+        // Which live canvas the active screen shows (Fit/Zoom target it too).
+        basicActiveCanvas() {
+            return this.basicScreen === 'focus' ? 'focusCanvas'
+                : this.basicScreen === 'autorun' ? 'autorunCanvas'
+                : 'previewCanvas';
+        },
         _basicApplyScreen() {
             this._basicRestoreMoved();
-            const focus = this.basicScreen === 'focus';
-            this.tab = focus ? 'focus' : 'preview';
+            // Per-screen: which tab owns the pipeline, which canvas to relocate,
+            // and a CSS fallback selector for its .preview-area wrapper.
+            const cfg = ({
+                preview: { tab: 'preview', canvas: 'previewCanvas', sel: '.preview-tab-panel .preview-area' },
+                focus: { tab: 'focus', canvas: 'focusCanvas', sel: '.af-preview-area', chart: true },
+                autorun: { tab: 'sequence', canvas: 'autorunCanvas', sel: '.autorun-preview' }
+            })[this.basicScreen] || null;
+            if (!cfg) { this.tab = 'preview'; return; }
+            this.tab = cfg.tab;
             this.$nextTick(() => {
-                if (focus) {
-                    const fc = document.getElementById('focusCanvas');
-                    const area = (fc && fc.closest('.af-preview-area'))
-                        || document.querySelector('.af-preview-area');
-                    if (area) this._basicMove(area, 'basicImageSlot');
-                    this._basicMove('.af-chart', 'basicCurveSlot');
-                    try { this._pzFit && this._pzFit('focusCanvas'); } catch (e) { }
-                } else {
-                    // Pin to THE preview canvas so we never grab the LIVE tab's
-                    // look-alike .preview-area.
-                    const pc = document.getElementById('previewCanvas');
-                    const area = (pc && pc.closest('.preview-area'))
-                        || document.querySelector('.preview-tab-panel .preview-area');
-                    if (area) this._basicMove(area, 'basicImageSlot');
-                    try { this._pzFit && this._pzFit('previewCanvas'); } catch (e) { }
-                }
+                const cv = document.getElementById(cfg.canvas);
+                const area = (cv && cv.closest('.preview-area')) || document.querySelector(cfg.sel);
+                if (area) this._basicMove(area, 'basicImageSlot');
+                if (cfg.chart) this._basicMove('.af-chart', 'basicCurveSlot');
+                try { this._pzFit && this._pzFit(cfg.canvas); } catch (e) { }
                 this._basicClampGuideOverlay();
             });
         },
@@ -27614,11 +27616,30 @@ function ninaApp() {
         // Mode menu: Preview and Focus are curated field screens; the others jump
         // to the full UI on that tab until their own field screens are built.
         basicGoMode(m) {
-            if (m === 'preview' || m === 'focus') { this.basicSetScreen(m); return; }
-            const map = { autorun: 'sequence', plan: 'plan', live: 'live', video: 'video' };
+            if (m === 'preview' || m === 'focus' || m === 'autorun') { this.basicSetScreen(m); return; }
+            const map = { plan: 'plan', live: 'live', video: 'video' };
             const tabId = map[m] || 'home';
             this.basicSetPref('off');
             if (this.helpOpenTab) this.helpOpenTab(tabId); else this.tab = tabId;
+        },
+        // --- Autorun (basic field screen) sequence edits ---
+        basicSeqAdd() {
+            try { this.addSequenceItem(); this.syncSequenceToServer && this.syncSequenceToServer(); } catch (e) { }
+        },
+        basicSeqCount(item, d) {
+            if (!item) return;
+            item.count = Math.max(1, (Number(item.count) || 1) + d);
+            try { this.syncSequenceToServer && this.syncSequenceToServer(); } catch (e) { }
+        },
+        basicSeqToggle(item) {
+            if (!item) return;
+            item.enabled = !item.enabled;
+            try { this.syncSequenceToServer && this.syncSequenceToServer(); } catch (e) { }
+        },
+        basicSeqRemove(i) {
+            if (this.seqState === 'running') { this.toast && this.toast('Stop the run first', 'warn'); return; }
+            this.sequence.splice(i, 1);
+            try { this.syncSequenceToServer && this.syncSequenceToServer(); } catch (e) { }
         },
         basicCycleBin() {
             this.preview.binning = (Number(this.preview.binning) || 1) >= 2 ? 1 : 2;

@@ -64,7 +64,7 @@
          Inert unless a manifest URL is configured (assistant-config.json). -->
     <link rel="stylesheet" href="/css/parts/13-assistant.css?v=20260705-assist15">
     <link rel="stylesheet" href="/css/parts/14-uiscale-text.css?v=20260707-hintsize">
-    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260829-basic6">
+    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260829-basic7">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -19984,27 +19984,55 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         <div id="basicImageSlot"></div>
         <div id="basicCurveSlot" x-show="basicScreen==='focus'" x-cloak></div>
 
+        <!-- Autorun: the sequence of frame sets (add / count / enable / remove). -->
+        <div class="bs-seqp" x-show="basicScreen==='autorun'" x-cloak>
+            <div class="bs-seqh">
+                <span><b x-text="sequence.length"></b> <span x-text="sequence.length===1 ? 'set' : 'sets'"></span></span>
+                <button class="bs-seqadd" @click="basicSeqAdd()">+ Add set</button>
+            </div>
+            <div class="bs-seql">
+                <template x-for="(item, i) in sequence" :key="i">
+                    <div class="bs-seqrow" :class="{ run: seqState==='running' && seqStatus && seqStatus.currentItemIndex===i }">
+                        <button class="bs-seqen" :class="item.enabled ? '' : 'off'" @click="basicSeqToggle(item)" x-text="item.enabled ? '✓' : ''"></button>
+                        <div class="bs-seqmeta">
+                            <div class="bs-seqnm" x-text="item.name || ('Target ' + (i+1))"></div>
+                            <div class="bs-seqsub bs-num"><span class="bs-typ" x-text="item.imageType || 'LIGHT'"></span> <span x-text="item.exposure + 's'"></span><span x-show="item.filter"> &middot; <span x-text="item.filter"></span></span> &middot; &times;<span x-text="item.count"></span></div>
+                        </div>
+                        <div class="bs-seqcnt">
+                            <button @click="basicSeqCount(item,-1)" :disabled="seqState==='running'">&minus;</button>
+                            <span class="bs-num" x-text="item.count"></span>
+                            <button @click="basicSeqCount(item,1)" :disabled="seqState==='running'">+</button>
+                        </div>
+                        <button class="bs-seqrm" @click="basicSeqRemove(i)" :disabled="seqState==='running'">&times;</button>
+                    </div>
+                </template>
+                <div class="bs-seqempty" x-show="!sequence.length">No sets yet. Tap "+ Add set".</div>
+            </div>
+        </div>
+
         <div class="bs-temp">&#10052; <b class="bs-num" x-text="(cameraTemp!=null ? Number(cameraTemp).toFixed(1) : '--') + '&deg;C'"></b></div>
         <div class="bs-topbar">
-            <button class="bs-modepill" @click="modeMenu = !modeMenu"><span x-text="basicScreen==='focus' ? 'Focus' : 'Preview'"></span> <span class="bs-caret">&#9660;</span></button>
+            <button class="bs-modepill" @click="modeMenu = !modeMenu"><span x-text="basicScreen==='focus' ? 'Focus' : (basicScreen==='autorun' ? 'Autorun' : 'Preview')"></span> <span class="bs-caret">&#9660;</span></button>
         </div>
-        <div class="bs-status" :class="{ run: basicScreen==='focus' && autoFocus.state==='running' }">&#9679; <b x-text="basicScreen==='focus'
+        <div class="bs-status" :class="{ run: (basicScreen==='focus' && autoFocus.state==='running') || (basicScreen==='autorun' && seqState==='running') }">&#9679; <b x-text="basicScreen==='focus'
                 ? (autoFocus.state==='running' ? ('AF ' + (autoFocus.phase || 'running')) : (autoFocus.success ? 'AF done' : 'Idle'))
+                : basicScreen==='autorun'
+                ? (seqState==='running' ? 'Running' : (seqState==='paused' ? 'Paused' : 'Idle'))
                 : (captureProgressActive() ? captureProgressLabel() : (preview.busy ? 'Exposing' : (preview.looping ? 'Looping' : 'Idle')))"></b></div>
 
         <div class="bs-modemenu" x-show="modeMenu" @click.outside="modeMenu=false" x-cloak>
             <button :class="basicScreen==='preview' ? 'on' : ''" @click="basicGoMode('preview'); modeMenu=false"><span class="bs-em">&#128065;</span>Preview</button>
             <button :class="basicScreen==='focus' ? 'on' : ''" @click="basicGoMode('focus'); modeMenu=false"><span class="bs-em">&#127919;</span>Focus</button>
-            <button @click="basicGoMode('autorun'); modeMenu=false"><span class="bs-em">&#128247;</span>Autorun</button>
+            <button :class="basicScreen==='autorun' ? 'on' : ''" @click="basicGoMode('autorun'); modeMenu=false"><span class="bs-em">&#128247;</span>Autorun</button>
             <button @click="basicGoMode('plan'); modeMenu=false"><span class="bs-em">&#128506;</span>Plan</button>
             <button @click="basicGoMode('live'); modeMenu=false"><span class="bs-em">&#10024;</span>Live</button>
             <button @click="basicGoMode('video'); modeMenu=false"><span class="bs-em">&#127916;</span>Video</button>
         </div>
 
         <div class="bs-rail left">
-            <button class="bs-icn" @click="_pzFit(basicScreen==='focus' ? 'focusCanvas' : 'previewCanvas')" title="Fit"><span class="bs-big">&#9635;</span>Fit</button>
+            <button class="bs-icn" @click="_pzFit(basicActiveCanvas())" title="Fit"><span class="bs-big">&#9635;</span>Fit</button>
             <button class="bs-icn" :class="guideOverlay.on ? 'on' : ''" @click="toggleGuideOverlay()" title="Guiding graph (drag + resize)"><span class="bs-big">&#128760;</span>Guide</button>
-            <button class="bs-icn" @click="_pzZoomButton(basicScreen==='focus' ? 'focusCanvas' : 'previewCanvas', 1.3)" title="Zoom in"><span class="bs-big">&#128269;</span>Zoom</button>
+            <button class="bs-icn" @click="_pzZoomButton(basicActiveCanvas(), 1.3)" title="Zoom in"><span class="bs-big">&#128269;</span>Zoom</button>
         </div>
 
         <div class="bs-rail right">
@@ -20079,7 +20107,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             </div>
         </div>
 
-        <div class="bs-bottom">
+        <div class="bs-bottom" x-show="basicScreen!=='autorun'">
             <div class="bs-chip" x-show="basicScreen==='preview'"><span class="bs-dot" :class="mount.connected ? '' : 'off'"></span>Mount</div>
             <div class="bs-chip" x-show="basicScreen==='preview'"><span class="bs-dot" :class="selectedCamera ? '' : 'off'"></span>Cam</div>
             <div class="bs-chip" x-show="basicScreen==='preview'"><span class="bs-dot" :class="focusConnected ? '' : 'off'"></span>Focus</div>
@@ -20090,6 +20118,25 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             <button class="bs-full" @click="basicSetPref('off')">Full UI</button>
             <button class="bs-conn" :class="basicAnyDisconnected() ? 'warn' : ''" @click="basicConnectAll()"
                     x-text="basicAnyDisconnected() ? 'Connect' : 'Connected'"></button>
+        </div>
+
+        <!-- Autorun transport: overall progress + Start / Pause / Stop. -->
+        <div class="bs-autobar" x-show="basicScreen==='autorun'" x-cloak>
+            <div class="bs-pbar"><i :style="'width:' + (seqProgress ? seqProgress() : 0) + '%'"></i></div>
+            <div class="bs-prow">
+                <div class="bs-pinfo bs-num" x-show="seqStatus && seqState!=='idle'">
+                    Frame <b x-text="(seqStatus && seqStatus.totalFramesCompleted) || 0"></b> / <b x-text="(seqStatus && seqStatus.totalFrames) || 0"></b>
+                    <span x-show="seqStatus && seqStatus.items && seqStatus.items.length"> &middot; set <b x-text="((seqStatus && seqStatus.currentItemIndex)||0)+1"></b>/<b x-text="(seqStatus && seqStatus.items ? seqStatus.items.length : sequence.length)"></b></span>
+                </div>
+                <div class="bs-pinfo" x-show="!(seqStatus && seqState!=='idle')" x-text="sequence.length ? (sequence.length + (sequence.length===1?' set queued':' sets queued')) : 'No sets'"></div>
+                <div class="bs-spacer"></div>
+                <button class="bs-tbtn bs-tstart" x-show="seqState==='idle'" :disabled="!sequence.length" @click="startSequence()">&#9654; Start</button>
+                <button class="bs-tbtn bs-tpause" x-show="seqState!=='idle'" @click="pauseSequence()" x-text="seqState==='paused' ? '▶ Resume' : '❙❙ Pause'"></button>
+                <button class="bs-tbtn bs-tstop" x-show="seqState!=='idle'" @click="stopSequence()">&#9632; Stop</button>
+                <button class="bs-full" @click="basicSetPref('off')">Full UI</button>
+                <button class="bs-conn" :class="basicAnyDisconnected() ? 'warn' : ''" @click="basicConnectAll()"
+                        x-text="basicAnyDisconnected() ? 'Connect' : 'Connected'"></button>
+            </div>
         </div>
 
     </div>
