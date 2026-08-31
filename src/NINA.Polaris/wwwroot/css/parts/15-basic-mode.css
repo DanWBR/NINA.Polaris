@@ -144,16 +144,22 @@
 .basic-shell .bs-afprog{position:absolute; right:8px; top:38px; width:120px; height:6px; border-radius:3px;
     background:#1a2740; overflow:hidden; z-index:31}
 .basic-shell .bs-afprog i{display:block; height:100%; background:var(--bs-accent2); transition:width .2s}
-.basic-shell .bs-nudge{position:absolute; left:50%; bottom:56px; transform:translateX(-50%); z-index:23;
-    display:flex; align-items:center; gap:6px; background:var(--bs-panel); border:1px solid var(--bs-border);
-    border-radius:14px; padding:8px 10px; backdrop-filter:blur(8px)}
-.basic-shell .bs-nudge button{min-width:44px; height:44px; border:0; border-radius:10px; background:var(--bs-chip);
-    color:var(--text); font-size:18px; font-weight:700}
+/* focus nudge: bottom-right, clear of the mount pad + right rail; compact */
+.basic-shell .bs-nudge{position:absolute; right:104px; bottom:56px; z-index:23;
+    display:flex; align-items:center; gap:5px; background:var(--bs-panel); border:1px solid var(--bs-border);
+    border-radius:14px; padding:6px 8px; backdrop-filter:blur(8px)}
+.basic-shell .bs-nudge button{min-width:36px; height:36px; border:0; border-radius:9px; background:var(--bs-chip);
+    color:var(--text); font-size:15px; font-weight:700}
 .basic-shell .bs-nudge button:active{background:var(--bs-accent); color:#fff}
 .basic-shell .bs-nudge button:disabled{opacity:.4}
-.basic-shell .bs-pos{min-width:74px; text-align:center}
+.basic-shell .bs-nudgehide{min-width:26px !important; height:26px !important; background:transparent !important;
+    color:var(--bs-muted) !important; font-size:15px !important; align-self:flex-start}
+.basic-shell .bs-focusreopen{position:absolute; right:104px; bottom:56px; z-index:23; height:32px; padding:0 14px;
+    border-radius:16px; background:var(--bs-panel); border:1px solid var(--bs-border); color:var(--text);
+    font-size:12px; font-weight:600; backdrop-filter:blur(8px)}
+.basic-shell .bs-pos{min-width:58px; text-align:center}
 .basic-shell .bs-pos .bs-pk{font-size:9px; color:var(--bs-muted)}
-.basic-shell .bs-pos .bs-pv{font-size:16px; font-weight:700}
+.basic-shell .bs-pos .bs-pv{font-size:14px; font-weight:700}
 .basic-shell #basicCurveSlot{position:absolute; left:60px; top:52px; width:200px; height:92px; z-index:22;
     background:var(--bs-panel); border:1px solid var(--bs-border); border-radius:12px; padding:6px; backdrop-filter:blur(8px)}
 .basic-shell #basicCurveSlot .af-chart{width:100%; height:100%; margin:0}

@@ -64,7 +64,7 @@
          Inert unless a manifest URL is configured (assistant-config.json). -->
     <link rel="stylesheet" href="/css/parts/13-assistant.css?v=20260705-assist15">
     <link rel="stylesheet" href="/css/parts/14-uiscale-text.css?v=20260707-hintsize">
-    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260829-basic15">
+    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260829-basic16">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -19980,7 +19980,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          same Alpine state. Only rendered on phones (basicMode); the live image
          is the real .preview-area relocated into #basicImageSlot. -->
     <template x-if="basicMode">
-    <div class="basic-shell" x-data="{ modeMenu:false, mountOpen:true, expandedField:null, editName:null, editExp:null, editGain:null, seqOpen:true }">
+    <div class="basic-shell" x-data="{ modeMenu:false, mountOpen:true, expandedField:null, editName:null, editExp:null, editGain:null, seqOpen:true, focusOpen:true }">
         <div id="basicImageSlot"></div>
         <div id="basicCurveSlot" x-show="basicScreen==='focus'" x-cloak></div>
         <div id="basicGuideGraphSlot" x-show="basicScreen==='guide'" x-cloak></div>
@@ -20229,14 +20229,16 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         <div class="bs-afprog" x-show="basicScreen==='focus' && autoFocus.state==='running'" x-cloak>
             <i :style="'width:' + Math.round(100 * Math.max(0, (autoFocus.currentSampleIndex + 1)) / Math.max(1, autoFocus.steps, autoFocus.currentSampleIndex + 1)) + '%'"></i>
         </div>
-        <div class="bs-nudge" x-show="basicScreen==='focus' || basicScreen==='video'" x-cloak>
-            <span class="bs-nudgelbl" x-show="basicScreen==='video'">focus</span>
+        <div class="bs-nudge" x-show="(basicScreen==='focus' || basicScreen==='video') && focusOpen" x-cloak>
+            <span class="bs-nudgelbl">focus</span>
             <button title="Out fast" :disabled="autoFocus.state==='running'" @pointerdown.prevent="startFocusNudgeRepeat(-focusStepFast)" @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()">&laquo;</button>
             <button title="Out slow" :disabled="autoFocus.state==='running'" @pointerdown.prevent="startFocusNudgeRepeat(-focusStepSlow)" @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()">&lsaquo;</button>
             <div class="bs-pos bs-num"><div class="bs-pk">POSITION</div><div class="bs-pv" x-text="focusPosition ?? '--'"></div></div>
             <button title="In slow" :disabled="autoFocus.state==='running'" @pointerdown.prevent="startFocusNudgeRepeat(focusStepSlow)" @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()">&rsaquo;</button>
             <button title="In fast" :disabled="autoFocus.state==='running'" @pointerdown.prevent="startFocusNudgeRepeat(focusStepFast)" @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()">&raquo;</button>
+            <button class="bs-nudgehide" @click="focusOpen=false" title="Hide focus">&times;</button>
         </div>
+        <button class="bs-focusreopen" x-show="(basicScreen==='focus' || basicScreen==='video') && !focusOpen" x-cloak @click="focusOpen=true">&#9737; focus</button>
 
         <div class="bs-mount" x-show="basicScreen==='preview' || basicScreen==='video'" :class="{ 'mp-collapsed': !mountOpen }">
             <div class="bs-side">
