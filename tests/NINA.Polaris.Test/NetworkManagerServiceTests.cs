@@ -254,4 +254,44 @@ public class NetworkManagerServiceTests {
             Now, lastRetry, RetryGrace, suppressUntil: suppressUntil),
             Is.False);
     }
+
+    // ----- HasAssociatedStation (iw station dump parsing) -----
+    // The reconnect watchdog must not scan or blip the radio while somebody
+    // is associated with the hotspot: the off-channel scan alone kicks every
+    // client (field reports: tablet and laptop dropping every ~30-60s).
+
+    [Test]
+    public void IwDump_WithAssociatedClient_IsDetected() {
+        // Real `iw dev wlan0 station dump` shape: one block per peer.
+        const string dump =
+            "Station aa:bb:cc:dd:ee:ff (on wlan0)\n" +
+            "\tinactive time:\t80 ms\n" +
+            "\trx bytes:\t180234\n" +
+            "\ttx bytes:\t922144\n" +
+            "\tsignal:  \t-44 dBm\n";
+        Assert.That(NetworkManagerService.HasAssociatedStation(dump), Is.True);
+    }
+
+    [Test]
+    public void IwDump_TwoClients_IsDetected() {
+        const string dump =
+            "Station aa:bb:cc:dd:ee:ff (on wlan0)\n\tsignal: -44 dBm\n" +
+            "Station 11:22:33:44:55:66 (on wlan0)\n\tsignal: -60 dBm\n";
+        Assert.That(NetworkManagerService.HasAssociatedStation(dump), Is.True);
+    }
+
+    [Test]
+    public void IwDump_IdleAp_NoClients() {
+        // An idle AP prints nothing at all.
+        Assert.That(NetworkManagerService.HasAssociatedStation(""), Is.False);
+        Assert.That(NetworkManagerService.HasAssociatedStation("   \n"), Is.False);
+    }
+
+    [Test]
+    public void IwDump_UnrelatedOutput_NoClients() {
+        // Defensive: an error message or unexpected text must not read as a
+        // client, or the watchdog would silently stop reconnecting forever.
+        Assert.That(NetworkManagerService.HasAssociatedStation(
+            "command failed: No such device (-19)\n"), Is.False);
+    }
 }

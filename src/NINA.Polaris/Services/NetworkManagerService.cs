@@ -314,8 +314,17 @@ public class NetworkManagerService : BackgroundService {
         // 3. SSID currently in use + signal. Even in AP mode nmcli
         // reports the SSID we hand it (via wifi-sec).
         // nmcli -t -f IN-USE,SSID,SIGNAL,MODE device wifi list ifname wlan0
+        //
+        // --rescan no is load-bearing: without it nmcli defaults to
+        // --rescan auto and triggers a REAL off-channel scan whenever NM's
+        // cache is older than ~30s. This snapshot runs every 5s, so the AP
+        // radio was leaving its channel roughly twice a minute and every
+        // hotspot client saw a stall + brief disconnect + reconnect (field
+        // reports on tablet and laptop). The in-use row never needs a scan:
+        // NM always knows its own AP, and in station mode the associated
+        // BSS stays in the cache with a live signal reading.
         var wifi = await RunCommandAsync("nmcli",
-            $"-t -f IN-USE,SSID,SIGNAL,MODE device wifi list ifname {Shell(WifiInterface!)}",
+            $"-t -f IN-USE,SSID,SIGNAL,MODE device wifi list ifname {Shell(WifiInterface!)} --rescan no",
             ct, timeoutMs: 8000);
         string? activeSsid = null;
         int signal = 0;
@@ -653,6 +662,32 @@ public class NetworkManagerService : BackgroundService {
         await RefreshSnapshotAsync(ct);
     }
 
+    /// <summary>True when at least one client is associated with our AP.
+    /// Uses <c>iw dev &lt;iface&gt; station dump</c>, which prints one
+    /// "Station &lt;mac&gt; (on wlanX)" block per associated peer and nothing
+    /// on an idle AP. Returns false when iw is unavailable or errors, so
+    /// hosts without iw keep the pre-guard behaviour.</summary>
+    private async Task<bool> ApHasAssociatedClientsAsync(CancellationToken ct) {
+        try {
+            var res = await RunCommandAsync("iw",
+                $"dev {Shell(WifiInterface!)} station dump", ct, timeoutMs: 4000);
+            if (res.exitCode != 0) return false;
+            return HasAssociatedStation(res.stdout);
+        } catch {
+            return false;
+        }
+    }
+
+    /// <summary>Pure parser for <c>iw ... station dump</c> output, factored
+    /// out so the client-detection rule is unit-testable without iw.</summary>
+    internal static bool HasAssociatedStation(string iwStationDump) {
+        if (string.IsNullOrWhiteSpace(iwStationDump)) return false;
+        foreach (var line in iwStationDump.Split('\n')) {
+            if (line.TrimStart().StartsWith("Station ", StringComparison.Ordinal)) return true;
+        }
+        return false;
+    }
+
     /// <summary>Pure gate for the station-reconnect watchdog, factored out so
     /// the timing/state decision is unit-testable without nmcli. Attempt a
     /// reconnect only when the feature is enabled, the AP is up as an auto
@@ -686,6 +721,17 @@ public class NetworkManagerService : BackgroundService {
         if (!ShouldAttemptStationReconnect(_stationAutoReconnect, HotspotFallbackEngaged,
                 CurrentMode, now, _lastStationRetryAt, _stationRetryGrace, _suppressFallbackUntil))
             return;
+
+        // Never yank the radio away from people actually using the hotspot.
+        // The forced scan below (and the station blind-probe) both take the
+        // AP off-channel or down, which kicks every associated client; that
+        // is fine on an idle AP and hostile on one somebody is browsing on.
+        // When iw is missing or errors we cannot tell, and keep the old
+        // behaviour so the auto-return still works on such hosts.
+        if (await ApHasAssociatedClientsAsync(ct)) {
+            _lastStationRetryAt = now;   // re-check a full retry window later
+            return;
+        }
         _lastStationRetryAt = now;
 
         // Networks we could return to: any saved wifi connection that is not
