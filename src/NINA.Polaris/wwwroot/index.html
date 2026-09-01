@@ -21477,17 +21477,21 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             Choose which device fills each role. Anything left as None is not
                             added to the profile.
                         </p>
+                        <!-- Label-above + full-width controls, spaced by a
+                             1-column grid with per-cell padding-bottom (the
+                             house form style). -->
+                        <div style="display:grid;grid-template-columns:1fr;">
                         <template x-for="role in [
                                 { key: 'camera', label: 'Camera' },
                                 { key: 'mount', label: 'Mount' },
                                 { key: 'focuser', label: 'Focuser' },
                                 { key: 'filterwheel', label: 'Filter wheel' },
                                 { key: 'guide', label: 'Guide camera' }]" :key="role.key">
-                            <div style="display:flex;align-items:center;gap:10px;margin:6px 0;"
+                            <div style="padding-bottom:10px;"
                                  x-show="wizardFoundFor(role.key === 'guide' ? 'camera' : role.key).length > 0">
-                                <label style="flex:0 0 110px;font-size:12px;color:var(--text-muted);"
+                                <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px;"
                                        x-text="role.label"></label>
-                                <select class="equip-select" style="flex:1 1 auto;min-width:0;"
+                                <select class="equip-select" style="width:100%;"
                                         @change="wizard.pick[role.key] = $event.target.value">
                                     <option value="" :selected="!wizard.pick[role.key]">None</option>
                                     <template x-for="d in wizardFoundFor(role.key === 'guide' ? 'camera' : role.key)"
@@ -21498,6 +21502,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                                 </select>
                             </div>
                         </template>
+                        </div>
 
                         <!-- Serial ports: mounts/focusers behind generic USB-serial
                              bridges. The driver publishes its device only after the
@@ -21509,11 +21514,13 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                                 Pick the driver for what is on each port (mount, focuser), or
                                 leave as Skip.
                             </div>
+                            <div style="display:grid;grid-template-columns:1fr;">
                             <template x-for="p in wizard.serialPorts" :key="p.device">
-                                <div style="display:flex;align-items:center;gap:10px;margin:6px 0;">
-                                    <code style="flex:0 0 110px;font-size:11px;overflow:hidden;text-overflow:ellipsis;"
-                                          x-text="p.device" :title="p.byId"></code>
-                                    <select class="equip-select" style="flex:1 1 auto;min-width:0;"
+                                <div style="padding-bottom:10px;">
+                                    <label style="display:block;margin-bottom:4px;">
+                                        <code style="font-size:11px;" x-text="p.device" :title="p.byId"></code>
+                                    </label>
+                                    <select class="equip-select" style="width:100%;"
                                             @change="wizard.serialChoice[p.device] = $event.target.value">
                                         <option value="" :selected="!wizard.serialChoice[p.device]">Skip</option>
                                         <template x-for="drv in wizardSerialDriverOptions()" :key="drv.label">
@@ -21524,15 +21531,16 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                                     </select>
                                 </div>
                             </template>
-                            <label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:6px;">
+                            </div>
+                            <label style="font-size:12px;color:var(--text-secondary);display:flex;align-items:center;gap:6px;">
                                 <input type="checkbox" x-model="wizard.showAllSerialDrivers">
                                 Show all installed drivers
                             </label>
                         </div>
 
-                        <div style="display:flex;align-items:center;gap:10px;margin-top:14px;">
-                            <label style="flex:0 0 110px;font-size:12px;color:var(--text-muted);">Profile name</label>
-                            <input type="text" class="equip-select" style="flex:1 1 auto;min-width:0;"
+                        <div style="margin-top:14px;">
+                            <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px;">Profile name</label>
+                            <input type="text" class="equip-select" style="width:100%;"
                                    x-model="wizard.profileName" placeholder="Polaris">
                         </div>
                     </div>
@@ -21545,15 +21553,16 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             Choose which device fills each role. Anything left as None is not
                             connected.
                         </p>
+                        <div style="display:grid;grid-template-columns:1fr;">
                         <template x-for="role in [
                                 { key: 'camera', label: 'Camera' },
                                 { key: 'mount', label: 'Mount' },
                                 { key: 'focuser', label: 'Focuser' },
                                 { key: 'filterwheel', label: 'Filter wheel' }]" :key="role.key">
-                            <div style="display:flex;align-items:center;gap:10px;margin:6px 0;">
-                                <label style="flex:0 0 110px;font-size:12px;color:var(--text-muted);"
+                            <div style="padding-bottom:10px;">
+                                <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px;"
                                        x-text="role.label"></label>
-                                <select class="equip-select" style="flex:1 1 auto;min-width:0;"
+                                <select class="equip-select" style="width:100%;"
                                         @change="wizard.winPick[role.key] = $event.target.value">
                                     <option value="" :selected="!wizard.winPick[role.key]">None</option>
                                     <template x-for="d in wizard.win[role.key]" :key="d.kind + '|' + d.id">
@@ -21564,6 +21573,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                                 </select>
                             </div>
                         </template>
+                        </div>
                         <p style="font-size:12px;color:var(--text-muted);"
                            x-show="!wizard.win.camera.length && !wizard.win.mount.length
                                    && !wizard.win.focuser.length && !wizard.win.filterwheel.length">
