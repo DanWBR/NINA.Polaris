@@ -22143,6 +22143,23 @@ function ninaApp() {
             this.guideView.panY = Math.max(-maxY, Math.min(maxY, this.guideView.panY));
         },
         guidePanStart(ev) {
+            // Track live pointers so two fingers turn into a pinch zoom (the
+            // basic-mode guide screen has no wheel and hides the zoom
+            // buttons, so pinch is the only natural gesture on touch).
+            this._guidePtrs = this._guidePtrs || new Map();
+            if (ev.pointerId !== undefined) {
+                this._guidePtrs.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+            }
+            if (this._guidePtrs.size === 2) {
+                const [a, b] = [...this._guidePtrs.values()];
+                this._guidePinch = {
+                    d0: Math.hypot(a.x - b.x, a.y - b.y),
+                    z0: this.guideView.zoom || 1,
+                };
+                this._guidePan = null;
+                this._guideDragged = true;   // a pinch is never a star pick
+                return;
+            }
             if ((this.guideView.zoom || 1) <= 1) return;
             this._guidePan = {
                 x: ev.clientX, y: ev.clientY,
@@ -22150,6 +22167,17 @@ function ninaApp() {
             };
         },
         guidePanMove(ev) {
+            if (this._guidePtrs && ev.pointerId !== undefined && this._guidePtrs.has(ev.pointerId)) {
+                this._guidePtrs.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+            }
+            if (this._guidePinch && this._guidePtrs && this._guidePtrs.size >= 2) {
+                const [a, b] = [...this._guidePtrs.values()];
+                const d = Math.hypot(a.x - b.x, a.y - b.y);
+                if (this._guidePinch.d0 > 1) {
+                    this._setGuideZoom(this._guidePinch.z0 * d / this._guidePinch.d0);
+                }
+                return;
+            }
             const p = this._guidePan;
             if (!p) return;
             const z = this.guideView.zoom || 1;
@@ -22160,7 +22188,9 @@ function ninaApp() {
             this.guideView.panY = p.py + dy / z;
             this._clampGuidePan();
         },
-        guidePanEnd() {
+        guidePanEnd(ev) {
+            if (this._guidePtrs && ev && ev.pointerId !== undefined) this._guidePtrs.delete(ev.pointerId);
+            if (!this._guidePtrs || this._guidePtrs.size < 2) this._guidePinch = null;
             if (this._guidePan && this._guidePan.moved) this._guideDragged = true;
             this._guidePan = null;
         },
@@ -27632,8 +27662,60 @@ function ninaApp() {
                 : this.basicScreen === 'video' ? 'videoCaptureCanvas'
                 : 'previewCanvas';   // guide uses an <img>, not a pz canvas
         },
+        // Scale the relocated guide frame to fill the basic image slot. The
+        // full-UI guide <img> renders small (server-side JPEG size, capped by
+        // CSS), so without this the phone/tablet guide screen shows a stamp in
+        // the middle of a black slot. Reuses the guide view's own zoom model
+        // (transform on .phd2-cam-view), so pan clamping and the star overlay
+        // stay consistent.
+        basicGuideFit() {
+            try {
+                const img = this.$refs.guidePhdCamImg;
+                const slot = document.getElementById('basicImageSlot');
+                if (!img || !slot || img.clientWidth < 2 || img.clientHeight < 2) {
+                    this.guideZoomReset();
+                    return;
+                }
+                const fit = Math.min(slot.clientWidth / img.clientWidth,
+                                     slot.clientHeight / img.clientHeight);
+                this.guideView.panX = 0; this.guideView.panY = 0;
+                this._setGuideZoom(Math.max(1, fit));
+            } catch (e) { }
+        },
+        // Auto-fit on frame load, but only while the operator has not zoomed:
+        // zoom <= 1 means untouched (or explicitly reset), anything else is a
+        // deliberate zoom that a new frame must not stomp.
+        basicGuideMaybeFit() {
+            if (this.basicMode && this.basicScreen === 'guide'
+                && (this.guideView.zoom || 1) <= 1) {
+                this.basicGuideFit();
+            }
+        },
+        // Browser fullscreen for the field UI. Hidden where the API does not
+        // exist (iPhone Safari); the mobile app shell is already chromeless.
+        basicFullscreenAvailable() {
+            const el = document.documentElement;
+            return !!(el.requestFullscreen || el.webkitRequestFullscreen);
+        },
+        async basicToggleFullscreen() {
+            try {
+                const el = document.documentElement;
+                if (document.fullscreenElement || document.webkitFullscreenElement) {
+                    await (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+                } else {
+                    await (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+                }
+            } catch (e) {
+                this.toast('Fullscreen is not available here', 'warn');
+            }
+        },
         _basicApplyScreen() {
             this._basicRestoreMoved();
+            // Leaving the guide screen drops its fit/zoom so the full-UI guide
+            // card gets its normal 1x view back.
+            if (this.basicScreen !== 'guide' && (this.guideView.zoom || 1) !== 1) {
+                this.guideZoomReset();
+            }
             // Guide relocates two pieces from the PHD2 view: the guide-cam image
             // to the image slot and the history graph (which carries its own RMS
             // + scale HUD) to a bottom strip.
@@ -27644,6 +27726,7 @@ function ninaApp() {
                     if (cam) this._basicMove(cam, 'basicImageSlot');
                     this._basicMove('.phd2-graph', 'basicGuideGraphSlot');
                     this._basicClampGuideOverlay();
+                    setTimeout(() => this.basicGuideMaybeFit(), 60);
                 });
                 return;
             }
@@ -27721,6 +27804,9 @@ function ninaApp() {
         _basicExit() {
             try {
                 this._basicRestoreMoved();
+                // The guide fit-zoom is a basic-mode concern; the full-UI
+                // guide card expects its normal 1x view.
+                try { this.guideZoomReset(); } catch (e) { }
                 try { this.applyUiZoom && this.applyUiZoom(); } catch (e) { }
             } catch (e) { }
         },

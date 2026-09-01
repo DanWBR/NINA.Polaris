@@ -4905,7 +4905,7 @@
                                 <img x-ref="guidePhdCamImg" class="phd2-cam-img" alt=""
                                      :style="'filter: brightness(' + guideView.brightness + ') contrast(' + guideView.contrast + ')'"
                                      title="Click a star to select it for guiding · scroll to zoom"
-                                     @load="drawGuideCamOverlay(); drawGuideStarZoom()"
+                                     @load="drawGuideCamOverlay(); drawGuideStarZoom(); basicGuideMaybeFit()"
                                      @click="guideSelectStarAt($event)">
                                 <canvas x-ref="guidePhdCamOverlay" class="phd2-cam-overlay"></canvas>
                             </div>
@@ -20123,6 +20123,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             <button class="bs-topicn" :class="basicScreen==='guide' ? 'on' : ''" @click="basicGoMode('guide')" title="Guide" aria-label="Guide">&#128760;</button>
             <button class="bs-modepill" @click="modeMenu = !modeMenu"><span x-text="basicScreen==='focus' ? 'Focus' : (basicScreen==='autorun' ? 'Autorun' : (basicScreen==='guide' ? 'Guide' : (basicScreen==='live' ? 'Live' : (basicScreen==='video' ? 'Video' : (basicScreen==='sky' ? 'Sky' : (basicScreen==='config' ? 'Setup' : 'Preview'))))))"></span> <span class="bs-caret">&#9660;</span></button>
             <button class="bs-topicn" :class="basicScreen==='config' ? 'on' : ''" @click="basicGoMode('config')" title="Setup" aria-label="Setup">&#9881;</button>
+            <button class="bs-topicn" x-show="basicFullscreenAvailable()" @click="basicToggleFullscreen()" title="Fullscreen" aria-label="Fullscreen">&#9974;</button>
         </div>
         <div class="bs-status" :class="{ run: (basicScreen==='focus' && autoFocus.state==='running') || (basicScreen==='autorun' && seqState==='running') || (basicScreen==='guide' && guider.guiding) || (basicScreen==='live' && liveStackEnabled) || (basicScreen==='video' && videoRecording.recording) || (basicScreen==='sky' && slewCenterJobId) }">&#9679; <b x-text="basicScreen==='focus'
                 ? (autoFocus.state==='running' ? ('AF ' + (autoFocus.phase || 'running')) : (autoFocus.success ? 'AF done' : 'Idle'))
@@ -20334,9 +20335,13 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
 
         <div class="bs-rail left" x-show="basicScreen!=='sky' && basicScreen!=='config'">
-            <button class="bs-icn" @click="_pzFit(basicActiveCanvas())" title="Fit"><span class="bs-big">&#9635;</span>Fit</button>
-            <button class="bs-icn" :class="guideOverlay.on ? 'on' : ''" @click="toggleGuideOverlay()" title="Guiding graph (drag + resize)"><span class="bs-big">&#128760;</span>Guide</button>
-            <button class="bs-icn" @click="_pzZoomButton(basicActiveCanvas(), 1.3)" title="Zoom in"><span class="bs-big">&#128269;</span>Zoom</button>
+            <!-- On the guide screen the image is the relocated guide-cam view,
+                 which has its own zoom model — route Fit/Zoom to it there. The
+                 graph-overlay toggle is pointless on guide (the graph is
+                 already pinned at the bottom), so it hides. -->
+            <button class="bs-icn" @click="basicScreen==='guide' ? basicGuideFit() : _pzFit(basicActiveCanvas())" title="Fit"><span class="bs-big">&#9635;</span>Fit</button>
+            <button class="bs-icn" x-show="basicScreen!=='guide'" :class="guideOverlay.on ? 'on' : ''" @click="toggleGuideOverlay()" title="Guiding graph (drag + resize)"><span class="bs-big">&#128760;</span>Guide</button>
+            <button class="bs-icn" @click="basicScreen==='guide' ? guideZoomBy(1.3) : _pzZoomButton(basicActiveCanvas(), 1.3)" title="Zoom in"><span class="bs-big">&#128269;</span>Zoom</button>
         </div>
 
         <!-- Sky: object search + results + selected-target card. The map
@@ -22791,7 +22796,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260901-wizard"></script>
+    <script src="/js/app.js?v=20260901-guidefit"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
