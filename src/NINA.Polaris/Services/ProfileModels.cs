@@ -86,6 +86,12 @@ public class UserProfile {
     /// powered up yet.</summary>
     public bool AutoConnectOnStartup { get; set; } = false;
 
+    /// <summary>When the first-run equipment setup wizard was completed or
+    /// explicitly skipped. Null = never offered/finished, so the wizard is
+    /// auto-offered again. Server-side (not localStorage) so a different
+    /// browser or device does not re-run onboarding on a configured host.</summary>
+    public DateTime? SetupWizardCompletedUtc { get; set; }
+
     /// <summary>Self-update channel: "stable" (default; GitHub's latest
     /// non-prerelease) or "preview" (opts into pre-releases — the Insider-style
     /// early-access channel for risky new features). Global, not per-rig.</summary>

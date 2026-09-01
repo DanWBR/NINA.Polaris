@@ -1987,6 +1987,33 @@ function ninaApp() {
                       existingProfiles: [], showUnknown: false,
                       choice: {}, profileName: 'Polaris',
                       autoOffered: false, offeredFingerprint: '' },
+        // First-run equipment connection wizard. Linux: probe hardware by
+        // starting a temporary indi-web profile with every installed
+        // camera-family driver, watch which devices actually publish, let the
+        // operator confirm, then swap in a final profile with only those
+        // drivers (autostart + autoconnect). Windows: fan out to the
+        // ASCOM/Alpaca discovery routes. Auto-offered once per host (server
+        // flag), after the location + WiFi first-run prompts.
+        wizard: {
+            open: false, manual: false, busy: false, error: '',
+            step: 'welcome',        // welcome | probe | pick | connect | done
+            platform: '',           // linux | windows | macos | other
+            // Linux probe results
+            probeStarted: false, probeDrivers: [], usbDevices: [], serialPorts: [],
+            suggestedSerialDrivers: [], installedDrivers: [],
+            showAllSerialDrivers: false,
+            pollLeft: 0,
+            found: [],              // live INDI devices [{name, driver, roles[]}]
+            serialChoice: {},       // '/dev/ttyUSB0' -> driver label ('' = skip)
+            pick: { camera: '', mount: '', focuser: '', filterwheel: '', guide: '' },
+            profileName: 'Polaris',
+            // Windows discovery: role -> [{id, model, detail, kind}] and
+            // picks encoded as 'kind|id' so one select carries both.
+            win: { camera: [], mount: [], focuser: [], filterwheel: [] },
+            winPick: { camera: '', mount: '', focuser: '', filterwheel: '' },
+            finalStarted: false,
+        },
+        _wizardOfferTries: 0,
         // INDI Control Panel sub-tab in RIGS. The launch button posts
         // /api/indi/cp/launch which uses `xpra control :100 start-child
         // indi_control_panel` to spawn the binary inside the same xpra
@@ -5225,7 +5252,7 @@ function ninaApp() {
             // operator go looking for the equipment assistant. Later than the
             // disk survey so the two never open over each other, and late
             // enough that indi-web has had time to come up.
-            setTimeout(() => this.indiDetectMaybeOffer(), 6000);
+            setTimeout(() => this.wizardMaybeOffer(), 6000);
             this.loadSettingsFromServer();
             this.loadDitherSettings();
             this.loadMfSettings();
@@ -27973,12 +28000,12 @@ function ninaApp() {
                 { title: 'Solve & sync mount', okLabel: 'Solve & sync', cancelLabel: 'Cancel' })) return;
             return this.solveAndSyncHere();
         },
-        // Open the equipment-detection wizard. It creates/edits an INDI profile,
-        // which is a Full-UI concern, so drop to the full UI (the detect modal
-        // floats above everything) and run the scan there.
+        // Open the equipment connection wizard. It creates/edits an INDI
+        // profile, which is a Full-UI concern, so drop to the full UI (the
+        // wizard modal floats above everything) and run it there.
         basicDetectEquipment() {
             this.basicSetPref('off');
-            this.$nextTick(() => { try { this.indiDetectScan && this.indiDetectScan(); } catch (e) { } });
+            this.$nextTick(() => { try { this.wizardOpen(null, true); } catch (e) { } });
         },
         // Studio home (image output root) via the host folder picker.
         async basicPickStudioHome() {
@@ -42001,6 +42028,341 @@ function ninaApp() {
                 this.indiDetect.error = 'Could not create the profile: ' + (e.message || e);
             } finally {
                 this.indiDetect.applying = false;
+            }
+        },
+
+        // ===== First-run equipment connection wizard =====
+
+        // Auto-offer at boot, AFTER the location and WiFi first-run prompts:
+        // while either of those (or any confirm dialog) is up, retry later
+        // instead of stacking a third modal on top.
+        async wizardMaybeOffer() {
+            if (this.wizard.open) return;
+            if (this.showLocationSetup || this.confirmModal?.open || this.networkStation?.open) {
+                if (this._wizardOfferTries++ < 40) setTimeout(() => this.wizardMaybeOffer(), 5000);
+                return;
+            }
+            try { if (localStorage.getItem('polaris-wizard-dismissed') === '1') return; } catch (_) { }
+            try {
+                const info = await this.apiGet('/api/setup-wizard/info');
+                if (!info || info.wizardCompletedUtc) return;
+                if (info.rigConfigured || info.indiConfigured) return;
+                if (info.platform === 'linux' && !info.indiWebInstalled) return;
+                this.wizardOpen(info, false);
+            } catch (_) { /* endpoint unavailable: never block boot */ }
+        },
+
+        wizardOpen(info = null, manual = true) {
+            const w = this.wizard;
+            w.open = true; w.manual = manual; w.step = 'welcome';
+            w.busy = false; w.error = ''; w.finalStarted = false;
+            w.probeStarted = false; w.probeDrivers = []; w.usbDevices = [];
+            w.serialPorts = []; w.suggestedSerialDrivers = []; w.installedDrivers = [];
+            w.showAllSerialDrivers = false; w.pollLeft = 0; w.found = [];
+            w.serialChoice = {};
+            w.pick = { camera: '', mount: '', focuser: '', filterwheel: '', guide: '' };
+            w.win = { camera: [], mount: [], focuser: [], filterwheel: [] };
+            w.winPick = { camera: '', mount: '', focuser: '', filterwheel: '' };
+            if (info && info.platform) {
+                w.platform = info.platform;
+            } else if (!w.platform) {
+                this.apiGet('/api/setup-wizard/info')
+                    .then(i => { w.platform = i.platform || 'other'; })
+                    .catch(() => { w.platform = 'other'; });
+            }
+        },
+
+        // Close without finishing. An auto-offered wizard remembers the "not
+        // now" in this browser so it stops nagging every boot; the RIGS
+        // button reopens it any time. A Linux probe in flight is torn down.
+        wizardClose() {
+            const w = this.wizard;
+            if (!w.open) return;
+            if (w.platform === 'linux' && w.probeStarted && w.step !== 'done') {
+                this.apiPostJson('/api/setup-wizard/indi/abort').catch(() => { });
+                w.probeStarted = false;
+            }
+            if (!w.manual && w.step !== 'done') {
+                try { localStorage.setItem('polaris-wizard-dismissed', '1'); } catch (_) { }
+            }
+            w.open = false;
+        },
+
+        // "Skip": onboarding is done for this HOST (server flag), so no
+        // browser or device ever auto-offers it again.
+        async wizardSkip() {
+            try { await this.apiPost('/api/setup-wizard/complete'); } catch (_) { }
+            try { localStorage.setItem('polaris-wizard-dismissed', '1'); } catch (_) { }
+            this.wizard.manual = true;   // flag already set; skip the local dismissal path
+            this.wizardClose();
+        },
+
+        async wizardStart() {
+            const w = this.wizard;
+            if (w.platform === 'windows') {
+                w.step = 'probe';
+                await this.wizardWinDiscover();
+            } else {
+                w.step = 'probe';
+                await this.wizardProbe();
+            }
+        },
+
+        // ----- Linux: temp-profile probe -----
+
+        async wizardProbe() {
+            const w = this.wizard;
+            w.busy = true; w.error = '';
+            try {
+                const r = await this.apiPostJson('/api/setup-wizard/indi/probe');
+                w.probeStarted = !!r.started;
+                w.probeDrivers = r.probeDrivers || [];
+                w.usbDevices = r.devices || [];
+                w.serialPorts = r.serialPorts || [];
+                w.suggestedSerialDrivers = r.suggestedSerialDrivers || [];
+                w.installedDrivers = r.installedDrivers || [];
+                for (const p of w.serialPorts) {
+                    if (!(p.device in w.serialChoice)) w.serialChoice[p.device] = '';
+                }
+                if (r.startError) w.error = r.startError;
+                if (!this.indiConnected) { try { await this.connectIndi(); } catch (_) { } }
+                // Drivers enumerate their hardware asynchronously after the
+                // server starts; keep polling while the probe/pick steps are
+                // visible so late devices still show up.
+                w.pollLeft = 15;
+                this._wizardPoll();
+            } catch (e) {
+                let msg = (e && e.message) || 'Probe failed';
+                try { const b = JSON.parse(e.body || '{}'); if (b.error) msg = b.error; } catch (_) { }
+                w.error = msg;
+            } finally {
+                w.busy = false;
+            }
+        },
+
+        async _wizardPoll() {
+            const w = this.wizard;
+            if (!w.open || (w.step !== 'probe' && w.step !== 'pick')) return;
+            try { await this.refreshDevices(); } catch (_) { }
+            w.found = (this.devices || []).map(d => ({
+                name: d.name, driver: d.driver || '', roles: d.roles || [],
+            }));
+            this._wizardAutoPick();
+            if (w.pollLeft-- > 0) setTimeout(() => this._wizardPoll(), 2000);
+        },
+
+        // Preselect a role when exactly one live device carries it; the
+        // operator can still change or clear it on the pick step.
+        _wizardAutoPick() {
+            const w = this.wizard;
+            for (const role of ['camera', 'mount', 'focuser', 'filterwheel']) {
+                if (w.pick[role]) continue;
+                const c = this.wizardFoundFor(role);
+                if (c.length === 1) w.pick[role] = c[0].name;
+            }
+        },
+
+        wizardFoundFor(role) {
+            return (this.wizard.found || []).filter(d => (d.roles || []).includes(role));
+        },
+
+        // Serial-driver picker options: the manufacturer shortlist by
+        // default, the full ~420-entry installed list on demand.
+        wizardSerialDriverOptions() {
+            const w = this.wizard;
+            return w.showAllSerialDrivers ? w.installedDrivers : w.suggestedSerialDrivers;
+        },
+
+        // Map a live device back to the indi-web driver LABEL the final
+        // profile needs. DRIVER_NAME and the label agree for nearly every
+        // driver; fall back to substring matching against what the probe
+        // started, then against the installed list.
+        _wizardDriverLabelFor(deviceName) {
+            const w = this.wizard;
+            const dev = (w.found || []).find(d => d.name === deviceName);
+            if (!dev || !dev.driver) return null;
+            const drv = dev.driver;
+            const eq = (a, b) => a.toLowerCase() === b.toLowerCase();
+            const all = [...w.probeDrivers.map(l => ({ label: l })), ...(w.installedDrivers || [])];
+            let hit = all.find(d => eq(d.label, drv));
+            if (!hit) hit = all.find(d =>
+                d.label.toLowerCase().includes(drv.toLowerCase()) ||
+                drv.toLowerCase().includes(d.label.toLowerCase()));
+            return hit ? hit.label : null;
+        },
+
+        // The driver labels the FINAL profile gets: one per picked device
+        // plus every serial-port assignment.
+        wizardSelectedDrivers() {
+            const w = this.wizard;
+            const out = [];
+            const add = (l) => { if (l && !out.some(x => x.toLowerCase() === l.toLowerCase())) out.push(l); };
+            for (const role of ['camera', 'mount', 'focuser', 'filterwheel', 'guide']) {
+                if (w.pick[role]) add(this._wizardDriverLabelFor(w.pick[role]));
+            }
+            for (const dev of Object.keys(w.serialChoice)) add(w.serialChoice[dev]);
+            return out;
+        },
+
+        wizardSelectedCount() {
+            const w = this.wizard;
+            let n = 0;
+            for (const role of ['camera', 'mount', 'focuser', 'filterwheel', 'guide']) {
+                if (w.pick[role]) n++;
+            }
+            for (const dev of Object.keys(w.serialChoice)) { if (w.serialChoice[dev]) n++; }
+            return n;
+        },
+
+        async wizardFinalize() {
+            const w = this.wizard;
+            const drivers = this.wizardSelectedDrivers();
+            if (drivers.length === 0) {
+                w.error = 'Pick at least one device or assign a serial port first';
+                return;
+            }
+            const name = (w.profileName || 'Polaris').trim();
+            w.busy = true; w.error = ''; w.step = 'connect';
+            try {
+                const r = await this.apiPostJson('/api/setup-wizard/indi/finalize', { name, drivers });
+                w.probeStarted = false;   // temp profile is gone either way
+                w.finalStarted = !!r.started;
+                if (r.startError) w.error = r.startError;
+                // indi-web's own panel reads its profile dropdown from this
+                // cookie; keep it in step with what we just started.
+                try { document.cookie = 'indiserver_profile=' + encodeURIComponent(name) + '; path=/; max-age=3600000'; } catch (_) { }
+                await this._wizardWaitDevices(12);
+                this._wizardResolveSerialPicks();
+                await this._wizardAssignAndConnect();
+                w.step = 'done';
+                try { localStorage.setItem('polaris-wizard-dismissed', '1'); } catch (_) { }
+                try { await this.indiWebStatusRefresh(); } catch (_) { }
+            } catch (e) {
+                let msg = (e && e.message) || 'Could not create the profile';
+                try { const b = JSON.parse(e.body || '{}'); if (b.error) msg = b.error; } catch (_) { }
+                w.error = msg;
+                w.step = 'pick';
+                w.pollLeft = 5;
+                this._wizardPoll();
+            } finally {
+                w.busy = false;
+            }
+        },
+
+        // After the final profile starts, wait for its devices to publish so
+        // the rig assignment below has real names to point at.
+        async _wizardWaitDevices(tries) {
+            const w = this.wizard;
+            const expected = this.wizardSelectedDrivers().length;
+            for (let i = 0; i < tries; i++) {
+                await new Promise(res => setTimeout(res, 2000));
+                if (!this.indiConnected) { try { await this.connectIndi(); } catch (_) { } }
+                try { await this.refreshDevices(); } catch (_) { }
+                w.found = (this.devices || []).map(d => ({
+                    name: d.name, driver: d.driver || '', roles: d.roles || [],
+                }));
+                if (w.found.length >= expected && w.found.length > 0) return;
+            }
+        },
+
+        // A serial-port assignment names a DRIVER, not a device: the device
+        // name only exists once the final profile is running. Match each
+        // assigned driver to the device it published and slot it into the
+        // first fitting empty role.
+        _wizardResolveSerialPicks() {
+            const w = this.wizard;
+            for (const dev of Object.keys(w.serialChoice)) {
+                const label = w.serialChoice[dev];
+                if (!label) continue;
+                const match = (w.found || []).find(d =>
+                    d.driver && (d.driver.toLowerCase() === label.toLowerCase() ||
+                                 d.driver.toLowerCase().includes(label.toLowerCase()) ||
+                                 label.toLowerCase().includes(d.driver.toLowerCase())));
+                if (!match) continue;
+                const roles = match.roles || [];
+                if (roles.includes('mount') && !w.pick.mount) w.pick.mount = match.name;
+                else if (roles.includes('focuser') && !w.pick.focuser) w.pick.focuser = match.name;
+                else if (roles.includes('filterwheel') && !w.pick.filterwheel) w.pick.filterwheel = match.name;
+            }
+        },
+
+        // Write the picks onto the rig (INDI driver for every role) and run
+        // the ordered bulk connect, which persists each selection.
+        async _wizardAssignAndConnect() {
+            const w = this.wizard;
+            if (w.pick.camera) { this.cameraDriver = 'indi'; this.equipCameraChoice = w.pick.camera; }
+            if (w.pick.mount) { this.mountDriver = 'indi'; this.equipMountChoice = w.pick.mount; }
+            if (w.pick.focuser) { this.focuserDriver = 'indi'; this.equipFocuserChoice = w.pick.focuser; }
+            if (w.pick.filterwheel) { this.filterWheelDriver = 'indi'; this.equipFilterChoice = w.pick.filterwheel; }
+            if (w.pick.guide) { this.guideCameraDriver = 'indi'; this.guideCamera = w.pick.guide; }
+            await this.equipConnectAll();
+        },
+
+        // ----- Windows: ASCOM + Alpaca discovery -----
+
+        async wizardWinDiscover() {
+            const w = this.wizard;
+            w.busy = true; w.error = '';
+            try {
+                // Fill the Alpaca cache first: the per-role alpaca branches
+                // only read the cache and come back empty otherwise.
+                try { await this.apiGet('/api/alpaca/discover?timeoutMs=3000&autoConnect=false'); } catch (_) { }
+                const roles = [
+                    { key: 'camera', ep: 'camera' },
+                    { key: 'mount', ep: 'telescope' },
+                    { key: 'focuser', ep: 'focuser' },
+                    { key: 'filterwheel', ep: 'filterwheel' },
+                ];
+                for (const r of roles) {
+                    const opts = [];
+                    for (const kind of ['ascom-com', 'alpaca']) {
+                        try {
+                            const list = await this.apiGet(`/api/${r.ep}/discover?driver=${encodeURIComponent(kind)}`);
+                            for (const d of (list || [])) {
+                                opts.push({ id: d.id, model: d.model || d.id, detail: d.detail || '', kind });
+                            }
+                        } catch (_) { /* driver kind unavailable on this host */ }
+                    }
+                    w.win[r.key] = opts;
+                    if (opts.length === 1 && !w.winPick[r.key]) {
+                        w.winPick[r.key] = opts[0].kind + '|' + opts[0].id;
+                    }
+                }
+                w.step = 'pick';
+            } finally {
+                w.busy = false;
+            }
+        },
+
+        wizardWinSelectedCount() {
+            const p = this.wizard.winPick;
+            return ['camera', 'mount', 'focuser', 'filterwheel'].filter(k => !!p[k]).length;
+        },
+
+        async wizardWinFinish() {
+            const w = this.wizard;
+            if (this.wizardWinSelectedCount() === 0) {
+                w.error = 'Pick at least one device first';
+                return;
+            }
+            w.busy = true; w.error = ''; w.step = 'connect';
+            try {
+                const set = (val, driverProp, choiceProp) => {
+                    if (!val) return;
+                    const i = val.indexOf('|');
+                    this[driverProp] = val.slice(0, i);
+                    this[choiceProp] = val.slice(i + 1);
+                };
+                set(w.winPick.camera, 'cameraDriver', 'equipCameraChoice');
+                set(w.winPick.mount, 'mountDriver', 'equipMountChoice');
+                set(w.winPick.focuser, 'focuserDriver', 'equipFocuserChoice');
+                set(w.winPick.filterwheel, 'filterWheelDriver', 'equipFilterChoice');
+                await this.equipConnectAll();
+                try { await this.apiPost('/api/setup-wizard/complete'); } catch (_) { }
+                try { localStorage.setItem('polaris-wizard-dismissed', '1'); } catch (_) { }
+                w.step = 'done';
+            } finally {
+                w.busy = false;
             }
         },
 

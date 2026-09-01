@@ -8334,6 +8334,25 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                              hence the "add it manually below" wording. Nothing
                              is written until the operator confirms in the
                              modal. -->
+                        <!-- Guided first-run wizard. Not gated on indi-web: on
+                             Windows it runs the ASCOM/Alpaca path instead. -->
+                        <div style="margin:10px 0;padding:10px;
+                             background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;">
+                            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                                <div style="flex:1 1 320px;min-width:0;">
+                                    <strong style="font-size:13px;">Equipment setup wizard</strong>
+                                    <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">
+                                        Find your equipment, build the driver profile and connect
+                                        everything in a few guided steps.
+                                    </div>
+                                </div>
+                                <button class="btn btn-sm btn-primary" style="margin-left:auto;flex:0 0 auto;"
+                                        @click="wizardOpen(null, true)">
+                                    Setup wizard
+                                </button>
+                            </div>
+                        </div>
+
                         <div x-show="indiWeb.status?.running" style="margin:10px 0;padding:10px;
                              background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;">
                             <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
@@ -8345,7 +8364,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         indi-web panel below.
                                     </div>
                                 </div>
-                                <button class="btn btn-sm btn-primary" style="margin-left:auto;flex:0 0 auto;"
+                                <button class="btn btn-sm" style="margin-left:auto;flex:0 0 auto;"
                                         :disabled="indiDetect.busy" @click="indiDetectScan()">
                                     <span x-text="indiDetect.busy ? 'Detecting…' : 'Detect equipment'"></span>
                                 </button>
@@ -21375,6 +21394,276 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
+    <!-- First-run equipment connection wizard. Linux probes hardware through
+         a temporary indi-web profile; Windows fans out to the ASCOM/Alpaca
+         discovery routes. Auto-offered once per host after the location and
+         WiFi prompts; reopenable from RIGS and from the basic-mode Setup. -->
+    <div class="modal-overlay" x-show="wizard.open" x-cloak
+         @click.self="if(!wizard.busy) wizardClose()"
+         @keydown.escape.window="if(wizard.open && !wizard.busy) wizardClose()">
+        <div class="modal-card" style="max-width:640px;max-height:calc(100vh - 40px);
+                                       display:flex;flex-direction:column;">
+            <div class="modal-head" style="flex:0 0 auto;">
+                <span class="modal-icon">🧭</span>
+                <h3>Equipment setup</h3>
+            </div>
+            <div style="flex:1 1 auto;min-height:0;overflow-y:auto;margin:0 -4px;padding:0 4px;">
+
+                <!-- STEP: welcome -->
+                <template x-if="wizard.step === 'welcome'">
+                    <div>
+                        <p class="indi-auto-note" x-show="!wizard.manual" x-cloak>
+                            Looks like this host has no equipment configured yet. Polaris can
+                            find and connect it for you now, or you can do this later from RIGS.
+                        </p>
+                        <p style="font-size:13px;" x-show="wizard.platform !== 'windows'">
+                            Power up and plug in your equipment, then press Start. Polaris will
+                            start the INDI drivers for the major manufacturers, watch which
+                            devices answer, and build a clean profile with just your gear. The
+                            profile is set to start and connect automatically from then on.
+                        </p>
+                        <p style="font-size:13px;" x-show="wizard.platform === 'windows'">
+                            Power up and plug in your equipment, then press Start. Polaris will
+                            search the ASCOM drivers installed on this machine and discover
+                            Alpaca devices on your network, then connect what you pick.
+                        </p>
+                    </div>
+                </template>
+
+                <!-- STEP: probe -->
+                <template x-if="wizard.step === 'probe'">
+                    <div>
+                        <p style="font-size:13px;" x-show="wizard.platform !== 'windows'">
+                            <span x-show="wizard.busy">Starting the drivers…</span>
+                            <span x-show="!wizard.busy">Watching for devices. Cameras, filter
+                            wheels and focusers show up here on their own; mounts on serial
+                            adapters are assigned on the next step.</span>
+                        </p>
+                        <p style="font-size:13px;" x-show="wizard.platform === 'windows'">
+                            Searching for ASCOM and Alpaca devices…
+                        </p>
+                        <div x-show="wizard.platform !== 'windows'">
+                            <div style="font-size:12px;color:var(--text-muted);margin:8px 0 4px;">
+                                <strong>Found so far</strong>
+                                <span x-text="'(' + wizard.found.length + ')'"></span>
+                            </div>
+                            <div x-show="!wizard.found.length" style="font-size:12px;color:var(--text-muted);">
+                                Nothing yet. Drivers can take a few seconds to find their hardware.
+                            </div>
+                            <template x-for="d in wizard.found" :key="d.name">
+                                <div style="display:flex;align-items:center;gap:8px;font-size:13px;padding:3px 0;">
+                                    <span>✅</span>
+                                    <span x-text="d.name"></span>
+                                    <span style="font-size:11px;color:var(--text-muted);"
+                                          x-text="(d.roles || []).join(', ')"></span>
+                                </div>
+                            </template>
+                            <div x-show="wizard.serialPorts.length"
+                                 style="font-size:12px;color:var(--text-muted);margin-top:8px;">
+                                <span x-text="wizard.serialPorts.length"></span>
+                                serial port(s) detected. Mounts and focusers on serial adapters
+                                are assigned on the next step.
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- STEP: pick (Linux). Selects use :selected + @change rather
+                     than x-model for the same x-for timing reason as the
+                     indiDetect modal above. -->
+                <template x-if="wizard.step === 'pick' && wizard.platform !== 'windows'">
+                    <div>
+                        <p style="font-size:13px;">
+                            Choose which device fills each role. Anything left as None is not
+                            added to the profile.
+                        </p>
+                        <template x-for="role in [
+                                { key: 'camera', label: 'Camera' },
+                                { key: 'mount', label: 'Mount' },
+                                { key: 'focuser', label: 'Focuser' },
+                                { key: 'filterwheel', label: 'Filter wheel' },
+                                { key: 'guide', label: 'Guide camera' }]" :key="role.key">
+                            <div style="display:flex;align-items:center;gap:10px;margin:6px 0;"
+                                 x-show="wizardFoundFor(role.key === 'guide' ? 'camera' : role.key).length > 0">
+                                <label style="flex:0 0 110px;font-size:12px;color:var(--text-muted);"
+                                       x-text="role.label"></label>
+                                <select class="equip-select" style="flex:1 1 auto;min-width:0;"
+                                        @change="wizard.pick[role.key] = $event.target.value">
+                                    <option value="" :selected="!wizard.pick[role.key]">None</option>
+                                    <template x-for="d in wizardFoundFor(role.key === 'guide' ? 'camera' : role.key)"
+                                              :key="d.name">
+                                        <option :value="d.name" :selected="wizard.pick[role.key] === d.name"
+                                                x-text="d.name"></option>
+                                    </template>
+                                </select>
+                            </div>
+                        </template>
+
+                        <!-- Serial ports: mounts/focusers behind generic USB-serial
+                             bridges. The driver publishes its device only after the
+                             final profile starts, so the assignment here names a
+                             DRIVER and Polaris matches it to the device afterwards. -->
+                        <div x-show="wizard.serialPorts.length" style="margin-top:12px;">
+                            <div style="font-size:12px;margin-bottom:2px;"><strong>Serial ports</strong></div>
+                            <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">
+                                Pick the driver for what is on each port (mount, focuser), or
+                                leave as Skip.
+                            </div>
+                            <template x-for="p in wizard.serialPorts" :key="p.device">
+                                <div style="display:flex;align-items:center;gap:10px;margin:6px 0;">
+                                    <code style="flex:0 0 110px;font-size:11px;overflow:hidden;text-overflow:ellipsis;"
+                                          x-text="p.device" :title="p.byId"></code>
+                                    <select class="equip-select" style="flex:1 1 auto;min-width:0;"
+                                            @change="wizard.serialChoice[p.device] = $event.target.value">
+                                        <option value="" :selected="!wizard.serialChoice[p.device]">Skip</option>
+                                        <template x-for="drv in wizardSerialDriverOptions()" :key="drv.label">
+                                            <option :value="drv.label"
+                                                    :selected="wizard.serialChoice[p.device] === drv.label"
+                                                    x-text="drv.label + (drv.family ? ' (' + drv.family + ')' : '')"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                            </template>
+                            <label style="font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:6px;">
+                                <input type="checkbox" x-model="wizard.showAllSerialDrivers">
+                                Show all installed drivers
+                            </label>
+                        </div>
+
+                        <div style="display:flex;align-items:center;gap:10px;margin-top:14px;">
+                            <label style="flex:0 0 110px;font-size:12px;color:var(--text-muted);">Profile name</label>
+                            <input type="text" class="equip-select" style="flex:1 1 auto;min-width:0;"
+                                   x-model="wizard.profileName" placeholder="Polaris">
+                        </div>
+                    </div>
+                </template>
+
+                <!-- STEP: pick (Windows) -->
+                <template x-if="wizard.step === 'pick' && wizard.platform === 'windows'">
+                    <div>
+                        <p style="font-size:13px;">
+                            Choose which device fills each role. Anything left as None is not
+                            connected.
+                        </p>
+                        <template x-for="role in [
+                                { key: 'camera', label: 'Camera' },
+                                { key: 'mount', label: 'Mount' },
+                                { key: 'focuser', label: 'Focuser' },
+                                { key: 'filterwheel', label: 'Filter wheel' }]" :key="role.key">
+                            <div style="display:flex;align-items:center;gap:10px;margin:6px 0;">
+                                <label style="flex:0 0 110px;font-size:12px;color:var(--text-muted);"
+                                       x-text="role.label"></label>
+                                <select class="equip-select" style="flex:1 1 auto;min-width:0;"
+                                        @change="wizard.winPick[role.key] = $event.target.value">
+                                    <option value="" :selected="!wizard.winPick[role.key]">None</option>
+                                    <template x-for="d in wizard.win[role.key]" :key="d.kind + '|' + d.id">
+                                        <option :value="d.kind + '|' + d.id"
+                                                :selected="wizard.winPick[role.key] === d.kind + '|' + d.id"
+                                                x-text="d.model + (d.kind === 'alpaca' ? ' (Alpaca)' : ' (ASCOM)')"></option>
+                                    </template>
+                                </select>
+                            </div>
+                        </template>
+                        <p style="font-size:12px;color:var(--text-muted);"
+                           x-show="!wizard.win.camera.length && !wizard.win.mount.length
+                                   && !wizard.win.focuser.length && !wizard.win.filterwheel.length">
+                            Nothing was found. Check that your ASCOM drivers are installed and
+                            Alpaca devices are on this network, then try again from RIGS.
+                        </p>
+                    </div>
+                </template>
+
+                <!-- STEP: connect -->
+                <template x-if="wizard.step === 'connect'">
+                    <div>
+                        <p style="font-size:13px;" x-show="wizard.platform !== 'windows'">
+                            Creating the profile and connecting your equipment… The temporary
+                            probe profile is removed, the final one starts, and each device
+                            connects in turn.
+                        </p>
+                        <p style="font-size:13px;" x-show="wizard.platform === 'windows'">
+                            Connecting your equipment…
+                        </p>
+                    </div>
+                </template>
+
+                <!-- STEP: done -->
+                <template x-if="wizard.step === 'done'">
+                    <div>
+                        <p style="font-size:13px;">
+                            <strong>All set.</strong> Your equipment is connected and saved to
+                            the rig, and it will reconnect automatically from now on. You can
+                            fine-tune every device in RIGS.
+                        </p>
+                        <template x-for="role in [
+                                { key: 'camera', label: 'Camera' },
+                                { key: 'mount', label: 'Mount' },
+                                { key: 'focuser', label: 'Focuser' },
+                                { key: 'filterwheel', label: 'Filter wheel' },
+                                { key: 'guide', label: 'Guide camera' }]" :key="role.key">
+                            <div style="display:flex;gap:8px;font-size:13px;padding:2px 0;"
+                                 x-show="wizard.platform === 'windows' ? !!wizard.winPick[role.key] : !!wizard.pick[role.key]">
+                                <span style="flex:0 0 110px;color:var(--text-muted);" x-text="role.label"></span>
+                                <span x-text="wizard.platform === 'windows'
+                                    ? (wizard.winPick[role.key] || '').split('|').slice(1).join('|')
+                                    : wizard.pick[role.key]"></span>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <div x-show="wizard.error" x-cloak
+                     style="font-size:12px;color:var(--danger,#e66);margin-top:8px;"
+                     x-text="wizard.error"></div>
+            </div>
+
+            <!-- Actions -->
+            <div class="modal-actions" style="flex:0 0 auto;">
+                <template x-if="wizard.step === 'welcome'">
+                    <div style="display:flex;gap:8px;justify-content:flex-end;width:100%;">
+                        <button class="btn btn-sm" @click="wizardSkip()">Skip setup</button>
+                        <button class="btn btn-sm" @click="wizardClose()">Not now</button>
+                        <button class="btn btn-sm btn-primary" @click="wizardStart()">Start</button>
+                    </div>
+                </template>
+                <template x-if="wizard.step === 'probe'">
+                    <div style="display:flex;gap:8px;justify-content:flex-end;width:100%;">
+                        <button class="btn btn-sm" :disabled="wizard.busy" @click="wizardClose()">Cancel</button>
+                        <button class="btn btn-sm btn-primary" x-show="wizard.platform !== 'windows'"
+                                :disabled="wizard.busy" @click="wizard.step = 'pick'">Continue</button>
+                    </div>
+                </template>
+                <template x-if="wizard.step === 'pick'">
+                    <div style="display:flex;gap:8px;justify-content:flex-end;width:100%;">
+                        <button class="btn btn-sm" :disabled="wizard.busy" @click="wizardClose()">Cancel</button>
+                        <button class="btn btn-sm btn-primary" x-show="wizard.platform !== 'windows'"
+                                :disabled="wizard.busy || wizardSelectedCount() === 0"
+                                @click="wizardFinalize()">
+                            <span>Create profile and connect</span>
+                            <span x-text="' (' + wizardSelectedCount() + ')'"></span>
+                        </button>
+                        <button class="btn btn-sm btn-primary" x-show="wizard.platform === 'windows'"
+                                :disabled="wizard.busy || wizardWinSelectedCount() === 0"
+                                @click="wizardWinFinish()">
+                            <span>Connect</span>
+                            <span x-text="' (' + wizardWinSelectedCount() + ')'"></span>
+                        </button>
+                    </div>
+                </template>
+                <template x-if="wizard.step === 'connect'">
+                    <div style="display:flex;gap:8px;justify-content:flex-end;width:100%;">
+                        <button class="btn btn-sm" disabled>Working…</button>
+                    </div>
+                </template>
+                <template x-if="wizard.step === 'done'">
+                    <div style="display:flex;gap:8px;justify-content:flex-end;width:100%;">
+                        <button class="btn btn-sm btn-primary" @click="wizardClose()">Close</button>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+
     <!-- PCC (Photometric Color Calibration) modal -->
     <div class="modal-overlay" x-show="pcc.modalOpen" x-cloak
          @click.self="if(!pcc.busy) pcc.modalOpen=false"
@@ -22492,7 +22781,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260831-relaycard"></script>
+    <script src="/js/app.js?v=20260901-wizard"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

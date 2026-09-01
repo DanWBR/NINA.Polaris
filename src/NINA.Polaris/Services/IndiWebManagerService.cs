@@ -524,6 +524,61 @@ public class IndiWebManagerService : BackgroundService {
         }
     }
 
+    /// <summary>Stop whatever indiserver profile is running (no-op payload when
+    /// none is). The setup wizard uses this to tear its temporary probe profile
+    /// down before creating the final one.</summary>
+    public async Task<bool> StopServerAsync(CancellationToken ct = default) {
+        if (!IsSupportedOs) { LastError = "OS not supported"; return false; }
+        if (!Running && !await ProbeHealthAsync(ct)) {
+            LastError = "indi-web is not running";
+            return false;
+        }
+        try {
+            using var stop = await Http.PostAsync("/api/server/stop", content: null, ct);
+            if (!stop.IsSuccessStatusCode) {
+                LastError = $"indi-web server stop returned HTTP {(int)stop.StatusCode}";
+                _logger.LogWarning("{Error}", LastError);
+                return false;
+            }
+            // Give indiserver a moment to release port 7624, same reason as
+            // the stop inside StartServerAsync.
+            await Task.Delay(1500, ct);
+            LastError = null;
+            return true;
+        } catch (Exception ex) {
+            LastError = $"indi-web server stop failed: {ex.Message}";
+            _logger.LogWarning(ex, "indi-web server stop failed");
+            return false;
+        }
+    }
+
+    /// <summary>Delete a profile (<c>DELETE /api/profiles/{name}</c>). Deleting
+    /// the profile whose server is running does not stop the server; call
+    /// <see cref="StopServerAsync"/> first when that matters.</summary>
+    public async Task<bool> DeleteProfileAsync(string name, CancellationToken ct = default) {
+        if (!IsSupportedOs) { LastError = "OS not supported"; return false; }
+        if (string.IsNullOrWhiteSpace(name)) { LastError = "profile name required"; return false; }
+        if (!Running && !await ProbeHealthAsync(ct)) {
+            LastError = "indi-web is not running";
+            return false;
+        }
+        try {
+            using var del = await Http.DeleteAsync($"/api/profiles/{Uri.EscapeDataString(name)}", ct);
+            if (!del.IsSuccessStatusCode) {
+                LastError = $"indi-web could not delete profile '{name}' (HTTP {(int)del.StatusCode})";
+                _logger.LogWarning("{Error}", LastError);
+                return false;
+            }
+            _logger.LogInformation("Deleted indi-web profile '{Name}'", name);
+            LastError = null;
+            return true;
+        } catch (Exception ex) {
+            LastError = $"indi-web profile delete failed: {ex.Message}";
+            _logger.LogWarning(ex, "indi-web profile delete failed for '{Name}'", name);
+            return false;
+        }
+    }
+
     public Task<bool> RestartDriverAsync(string label, CancellationToken ct = default)
         => DriverActionAsync("restart", label, ct);
     public Task<bool> StartDriverAsync(string label, CancellationToken ct = default)
