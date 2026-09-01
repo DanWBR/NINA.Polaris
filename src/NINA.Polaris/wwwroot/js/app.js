@@ -27691,8 +27691,11 @@ function ninaApp() {
                 this.basicGuideFit();
             }
         },
-        // Browser fullscreen for the field UI. Hidden where the API does not
-        // exist (iPhone Safari); the mobile app shell is already chromeless.
+        // Browser fullscreen for the field UI. Feature-detected, not
+        // platform-gated: the mobile app's WKWebView exposes the API (and the
+        // shell grants allowfullscreen on the instance iframe), so the button
+        // shows there too; it only hides where no fullscreen API exists at
+        // all (e.g. iPhone Safari in the browser).
         basicFullscreenAvailable() {
             const el = document.documentElement;
             return !!(el.requestFullscreen || el.webkitRequestFullscreen);
