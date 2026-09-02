@@ -1495,6 +1495,9 @@ app.MapIndiPropertiesEndpoints();
 // indi-web profile, so a new rig doesn't start with picking drivers by hand
 // out of ~420 installed entries.
 app.MapIndiDetectEndpoints();
+// First-run equipment connection wizard: temp INDI probe profile on Linux,
+// completion flag + host info for the ASCOM/Alpaca path on Windows.
+app.MapSetupWizardEndpoints();
 
 // WebSocket streams
 app.Map("/ws/image-stream", ImageStreamHandler.Handle);

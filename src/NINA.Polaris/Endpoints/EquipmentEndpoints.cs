@@ -45,6 +45,7 @@ public static class EquipmentEndpoints {
                         name = deviceName,
                         driver = driverName,
                         @interface = driverInterface,
+                        roles = IndiInterfaceRoles.Decode(driverInterface),
                         propertyCount = props.Count,
                         groups
                     });

@@ -575,6 +575,10 @@ function addInstance(origin, name, { activate = false } = {}) {
     frame.setAttribute('allow',
       'fullscreen; accelerometer; gyroscope; magnetometer; ' +
       'geolocation; camera; microphone; clipboard-read; clipboard-write');
+    // WebKit honors the legacy boolean attribute rather than (or in addition
+    // to) the allow list; without it requestFullscreen from the cross-origin
+    // Polaris frame is rejected on iOS.
+    frame.allowFullscreen = true;
     els.frames.appendChild(frame);
     const inst = { origin, name: name || hostLabel(origin), frame };
     instances.set(origin, inst);

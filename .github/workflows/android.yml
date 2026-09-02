@@ -80,6 +80,7 @@ jobs:
           name: Polaris-android-debug-apk
           path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+          retention-days: 7
 
   # ---- Signed release APK: opt-in, needs a keystore in secrets ----
   #
@@ -168,3 +169,4 @@ jobs:
           name: Polaris-android-release-apk
           path: ${{ runner.temp }}/app-release.apk
           if-no-files-found: error
+          retention-days: 7

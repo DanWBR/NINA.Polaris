@@ -1986,6 +1986,39 @@ function ninaApp() {
                       existingProfiles: [], showUnknown: false,
                       choice: {}, profileName: 'Polaris',
                       autoOffered: false, offeredFingerprint: '' },
+        // First-run equipment connection wizard. Linux: probe hardware by
+        // starting a temporary indi-web profile with every installed
+        // camera-family driver, watch which devices actually publish, let the
+        // operator confirm, then swap in a final profile with only those
+        // drivers (autostart + autoconnect). Windows: fan out to the
+        // ASCOM/Alpaca discovery routes. Auto-offered once per host (server
+        // flag), after the location + WiFi first-run prompts.
+        wizard: {
+            open: false, manual: false, busy: false, error: '',
+            step: 'welcome',        // welcome | probe | pick | connect | done
+            platform: '',           // linux | windows | macos | other
+            // Linux probe results
+            probeStarted: false, probeDrivers: [], usbDevices: [], serialPorts: [],
+            suggestedSerialDrivers: [], installedDrivers: [],
+            showAllSerialDrivers: false,
+            pollLeft: 0,
+            found: [],              // live INDI devices [{name, driver, roles[]}]
+            // Devices the operator UNCHECKED on the found list. Several INDI
+            // drivers publish stub devices with no hardware behind them
+            // (PlayerOne Camera 1..3, QHYCFW1..3, the four ZWO AM variants,
+            // V4L2 CCD), so "published" does not mean "present" — the person
+            // in front of the rig curates the list.
+            exclude: {},            // device name -> true (excluded)
+            serialChoice: {},       // '/dev/ttyUSB0' -> driver label ('' = skip)
+            pick: { camera: '', mount: '', focuser: '', filterwheel: '', guide: '' },
+            profileName: 'Polaris',
+            // Windows discovery: role -> [{id, model, detail, kind}] and
+            // picks encoded as 'kind|id' so one select carries both.
+            win: { camera: [], mount: [], focuser: [], filterwheel: [] },
+            winPick: { camera: '', mount: '', focuser: '', filterwheel: '' },
+            finalStarted: false,
+        },
+        _wizardOfferTries: 0,
         // INDI Control Panel sub-tab in RIGS. The launch button posts
         // /api/indi/cp/launch which uses `xpra control :100 start-child
         // indi_control_panel` to spawn the binary inside the same xpra
@@ -5236,7 +5269,7 @@ function ninaApp() {
             // operator go looking for the equipment assistant. Later than the
             // disk survey so the two never open over each other, and late
             // enough that indi-web has had time to come up.
-            setTimeout(() => this.indiDetectMaybeOffer(), 6000);
+            setTimeout(() => this.wizardMaybeOffer(), 6000);
             this.loadSettingsFromServer();
             this.loadDitherSettings();
             this.loadDither();          // unified global dither (panel + summaries)
@@ -5452,7 +5485,13 @@ function ninaApp() {
                 // DBGLOG-6: log the network failure (timeout, DNS, refused).
                 // Skip /api/logs/client to prevent the same recursion loop
                 // as the success branch.
-                if (!url.startsWith('/api/logs')) {
+                // An ApiError already produced a status-leveled log line in the
+                // response branch above; logging it AGAIN here at error level
+                // turned every expected pre-login 401 into a scary [ERROR]
+                // duplicate in the session log (field report 2026-09-02). Only
+                // genuine transport failures (timeout, refused, DNS) reach the
+                // error level from here.
+                if (!url.startsWith('/api/logs') && !(err instanceof ApiError)) {
                     const dur = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0;
                     const msg = err && err.message ? err.message : String(err);
                     this._logFromClient('error', `${method} ${url} failed: ${msg}`, {
@@ -22079,6 +22118,23 @@ function ninaApp() {
             this.guideView.panY = Math.max(-maxY, Math.min(maxY, this.guideView.panY));
         },
         guidePanStart(ev) {
+            // Track live pointers so two fingers turn into a pinch zoom (the
+            // basic-mode guide screen has no wheel and hides the zoom
+            // buttons, so pinch is the only natural gesture on touch).
+            this._guidePtrs = this._guidePtrs || new Map();
+            if (ev.pointerId !== undefined) {
+                this._guidePtrs.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+            }
+            if (this._guidePtrs.size === 2) {
+                const [a, b] = [...this._guidePtrs.values()];
+                this._guidePinch = {
+                    d0: Math.hypot(a.x - b.x, a.y - b.y),
+                    z0: this.guideView.zoom || 1,
+                };
+                this._guidePan = null;
+                this._guideDragged = true;   // a pinch is never a star pick
+                return;
+            }
             if ((this.guideView.zoom || 1) <= 1) return;
             this._guidePan = {
                 x: ev.clientX, y: ev.clientY,
@@ -22086,6 +22142,17 @@ function ninaApp() {
             };
         },
         guidePanMove(ev) {
+            if (this._guidePtrs && ev.pointerId !== undefined && this._guidePtrs.has(ev.pointerId)) {
+                this._guidePtrs.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+            }
+            if (this._guidePinch && this._guidePtrs && this._guidePtrs.size >= 2) {
+                const [a, b] = [...this._guidePtrs.values()];
+                const d = Math.hypot(a.x - b.x, a.y - b.y);
+                if (this._guidePinch.d0 > 1) {
+                    this._setGuideZoom(this._guidePinch.z0 * d / this._guidePinch.d0);
+                }
+                return;
+            }
             const p = this._guidePan;
             if (!p) return;
             const z = this.guideView.zoom || 1;
@@ -22096,7 +22163,9 @@ function ninaApp() {
             this.guideView.panY = p.py + dy / z;
             this._clampGuidePan();
         },
-        guidePanEnd() {
+        guidePanEnd(ev) {
+            if (this._guidePtrs && ev && ev.pointerId !== undefined) this._guidePtrs.delete(ev.pointerId);
+            if (!this._guidePtrs || this._guidePtrs.size < 2) this._guidePinch = null;
             if (this._guidePan && this._guidePan.moved) this._guideDragged = true;
             this._guidePan = null;
         },
@@ -27599,8 +27668,63 @@ function ninaApp() {
                 : this.basicScreen === 'video' ? 'videoCaptureCanvas'
                 : 'previewCanvas';   // guide uses an <img>, not a pz canvas
         },
+        // Scale the relocated guide frame to fill the basic image slot. The
+        // full-UI guide <img> renders small (server-side JPEG size, capped by
+        // CSS), so without this the phone/tablet guide screen shows a stamp in
+        // the middle of a black slot. Reuses the guide view's own zoom model
+        // (transform on .phd2-cam-view), so pan clamping and the star overlay
+        // stay consistent.
+        basicGuideFit() {
+            try {
+                const img = this.$refs.guidePhdCamImg;
+                const slot = document.getElementById('basicImageSlot');
+                if (!img || !slot || img.clientWidth < 2 || img.clientHeight < 2) {
+                    this.guideZoomReset();
+                    return;
+                }
+                const fit = Math.min(slot.clientWidth / img.clientWidth,
+                                     slot.clientHeight / img.clientHeight);
+                this.guideView.panX = 0; this.guideView.panY = 0;
+                this._setGuideZoom(Math.max(1, fit));
+            } catch (e) { }
+        },
+        // Auto-fit on frame load, but only while the operator has not zoomed:
+        // zoom <= 1 means untouched (or explicitly reset), anything else is a
+        // deliberate zoom that a new frame must not stomp.
+        basicGuideMaybeFit() {
+            if (this.basicMode && this.basicScreen === 'guide'
+                && (this.guideView.zoom || 1) <= 1) {
+                this.basicGuideFit();
+            }
+        },
+        // Browser fullscreen for the field UI. Feature-detected, not
+        // platform-gated: the mobile app's WKWebView exposes the API (and the
+        // shell grants allowfullscreen on the instance iframe), so the button
+        // shows there too; it only hides where no fullscreen API exists at
+        // all (e.g. iPhone Safari in the browser).
+        basicFullscreenAvailable() {
+            const el = document.documentElement;
+            return !!(el.requestFullscreen || el.webkitRequestFullscreen);
+        },
+        async basicToggleFullscreen() {
+            try {
+                const el = document.documentElement;
+                if (document.fullscreenElement || document.webkitFullscreenElement) {
+                    await (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+                } else {
+                    await (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+                }
+            } catch (e) {
+                this.toast('Fullscreen is not available here', 'warn');
+            }
+        },
         _basicApplyScreen() {
             this._basicRestoreMoved();
+            // Leaving the guide screen drops its fit/zoom so the full-UI guide
+            // card gets its normal 1x view back.
+            if (this.basicScreen !== 'guide' && (this.guideView.zoom || 1) !== 1) {
+                this.guideZoomReset();
+            }
             // Guide relocates two pieces from the PHD2 view: the guide-cam image
             // to the image slot and the history graph (which carries its own RMS
             // + scale HUD) to a bottom strip.
@@ -27611,6 +27735,7 @@ function ninaApp() {
                     if (cam) this._basicMove(cam, 'basicImageSlot');
                     this._basicMove('.phd2-graph', 'basicGuideGraphSlot');
                     this._basicClampGuideOverlay();
+                    setTimeout(() => this.basicGuideMaybeFit(), 60);
                 });
                 return;
             }
@@ -27688,6 +27813,9 @@ function ninaApp() {
         _basicExit() {
             try {
                 this._basicRestoreMoved();
+                // The guide fit-zoom is a basic-mode concern; the full-UI
+                // guide card expects its normal 1x view.
+                try { this.guideZoomReset(); } catch (e) { }
                 try { this.applyUiZoom && this.applyUiZoom(); } catch (e) { }
             } catch (e) { }
         },
@@ -27967,12 +28095,12 @@ function ninaApp() {
                 { title: 'Solve & sync mount', okLabel: 'Solve & sync', cancelLabel: 'Cancel' })) return;
             return this.solveAndSyncHere();
         },
-        // Open the equipment-detection wizard. It creates/edits an INDI profile,
-        // which is a Full-UI concern, so drop to the full UI (the detect modal
-        // floats above everything) and run the scan there.
+        // Open the equipment connection wizard. It creates/edits an INDI
+        // profile, which is a Full-UI concern, so drop to the full UI (the
+        // wizard modal floats above everything) and run it there.
         basicDetectEquipment() {
             this.basicSetPref('off');
-            this.$nextTick(() => { try { this.indiDetectScan && this.indiDetectScan(); } catch (e) { } });
+            this.$nextTick(() => { try { this.wizardOpen(null, true); } catch (e) { } });
         },
         // Studio home (image output root) via the host folder picker.
         async basicPickStudioHome() {
@@ -42377,6 +42505,412 @@ function ninaApp() {
                 this.indiDetect.error = 'Could not create the profile: ' + (e.message || e);
             } finally {
                 this.indiDetect.applying = false;
+            }
+        },
+
+        // ===== First-run equipment connection wizard =====
+
+        // Auto-offer at boot, AFTER the location and WiFi first-run prompts:
+        // while either of those (or any confirm dialog) is up, retry later
+        // instead of stacking a third modal on top.
+        async wizardMaybeOffer() {
+            if (this.wizard.open) return;
+            if (this.showLocationSetup || this.confirmModal?.open || this.networkStation?.open) {
+                if (this._wizardOfferTries++ < 40) setTimeout(() => this.wizardMaybeOffer(), 5000);
+                return;
+            }
+            try {
+                const info = await this.apiGet('/api/setup-wizard/info');
+                if (!info || info.wizardCompletedUtc) return;
+                if (info.rigConfigured || info.indiConfigured) return;
+                if (info.platform === 'linux' && !info.indiWebInstalled) return;
+                this.wizardOpen(info, false);
+            } catch (_) { /* endpoint unavailable: never block boot */ }
+        },
+
+        wizardOpen(info = null, manual = true) {
+            const w = this.wizard;
+            w.open = true; w.manual = manual; w.step = 'welcome';
+            w.busy = false; w.error = ''; w.finalStarted = false;
+            w.probeStarted = false; w.probeDrivers = []; w.usbDevices = [];
+            w.serialPorts = []; w.suggestedSerialDrivers = []; w.installedDrivers = [];
+            w.showAllSerialDrivers = false; w.pollLeft = 0; w.found = [];
+            w.exclude = {};
+            w.serialChoice = {};
+            w.pick = { camera: '', mount: '', focuser: '', filterwheel: '', guide: '' };
+            w.win = { camera: [], mount: [], focuser: [], filterwheel: [] };
+            w.winPick = { camera: '', mount: '', focuser: '', filterwheel: '' };
+            if (info && info.platform) {
+                w.platform = info.platform;
+            } else if (!w.platform) {
+                this.apiGet('/api/setup-wizard/info')
+                    .then(i => { w.platform = i.platform || 'other'; })
+                    .catch(() => { w.platform = 'other'; });
+            }
+        },
+
+        // Close without finishing. Deliberately NOT remembered anywhere: the
+        // only durable gates are the server-side flag (Skip setup / a
+        // finished run) and "this host has equipment configured". A person
+        // who closes to go plug something in gets offered again next boot —
+        // a field test showed a browser-side dismissal made one Cancel
+        // permanent and the wizard "never appeared again".
+        // A Linux probe in flight is torn down.
+        wizardClose() {
+            const w = this.wizard;
+            if (!w.open) return;
+            if (w.platform === 'linux' && w.probeStarted && w.step !== 'done') {
+                this.apiPostJson('/api/setup-wizard/indi/abort').catch(() => { });
+                w.probeStarted = false;
+            }
+            w.open = false;
+        },
+
+        // "Skip": onboarding is done for this HOST (server flag), so no
+        // browser or device ever auto-offers it again.
+        async wizardSkip() {
+            try { await this.apiPost('/api/setup-wizard/complete'); } catch (_) { }
+            this.wizardClose();
+        },
+
+        async wizardStart() {
+            const w = this.wizard;
+            if (w.platform === 'windows') {
+                w.step = 'probe';
+                await this.wizardWinDiscover();
+            } else {
+                w.step = 'probe';
+                await this.wizardProbe();
+            }
+        },
+
+        // ----- Linux: temp-profile probe -----
+
+        async wizardProbe() {
+            const w = this.wizard;
+            w.busy = true; w.error = '';
+            try {
+                const r = await this.apiPostJson('/api/setup-wizard/indi/probe');
+                w.probeStarted = !!r.started;
+                w.probeDrivers = r.probeDrivers || [];
+                w.usbDevices = r.devices || [];
+                w.serialPorts = r.serialPorts || [];
+                w.suggestedSerialDrivers = r.suggestedSerialDrivers || [];
+                w.installedDrivers = r.installedDrivers || [];
+                for (const p of w.serialPorts) {
+                    if (!(p.device in w.serialChoice)) w.serialChoice[p.device] = '';
+                }
+                if (r.startError) w.error = r.startError;
+                await this._wizardReconnectIndi();
+                // Drivers enumerate their hardware asynchronously after the
+                // server starts; keep polling while the probe/pick steps are
+                // visible so late devices still show up.
+                w.pollLeft = 15;
+                this._wizardPoll();
+            } catch (e) {
+                let msg = (e && e.message) || 'Probe failed';
+                try { const b = JSON.parse(e.body || '{}'); if (b.error) msg = b.error; } catch (_) { }
+                w.error = msg;
+            } finally {
+                w.busy = false;
+            }
+        },
+
+        async _wizardPoll() {
+            const w = this.wizard;
+            if (!w.open || (w.step !== 'probe' && w.step !== 'pick')) return;
+            try { await this.refreshDevices(); } catch (_) { }
+            w.found = (this.devices || [])
+                .filter(d => d.name && String(d.name).trim())
+                .map(d => ({ name: d.name, driver: d.driver || '', roles: d.roles || [] }));
+            this._wizardAutoPick();
+            if (w.pollLeft-- > 0) setTimeout(() => this._wizardPoll(), 2000);
+        },
+
+        // Preselect a role when exactly one live device carries it; the
+        // operator can still change or clear it on the pick step.
+        _wizardAutoPick() {
+            const w = this.wizard;
+            for (const role of ['camera', 'mount', 'focuser', 'filterwheel']) {
+                if (w.pick[role]) continue;
+                const c = this.wizardFoundFor(role);
+                if (c.length === 1) w.pick[role] = c[0].name;
+            }
+        },
+
+        wizardFoundFor(role) {
+            // Excluded devices (unchecked on the found list) never reach the
+            // role dropdowns: the operator said they are not really there.
+            return (this.wizard.found || []).filter(d =>
+                !this.wizard.exclude[d.name] && (d.roles || []).includes(role));
+        },
+
+        // Serial-driver picker options: the manufacturer shortlist by
+        // default, the full ~420-entry installed list on demand.
+        wizardSerialDriverOptions() {
+            const w = this.wizard;
+            return w.showAllSerialDrivers ? w.installedDrivers : w.suggestedSerialDrivers;
+        },
+
+        // Human-ish identity for a serial port, from its /dev/serial/by-id
+        // name — the only identification a generic USB-serial bridge offers
+        // (e.g. "usb-1a86_USB_Serial-if00-port0" -> "1a86 USB Serial").
+        // Better than nothing: the operator at least sees WHICH adapter chip
+        // or product sits on each port when there is more than one.
+        wizardSerialPortLabel(p) {
+            let s = (p && p.byId) || '';
+            s = s.replace(/^usb-/, '').replace(/-if\d+.*$/, '').replace(/_/g, ' ').trim();
+            return s;
+        },
+
+        // Map a live device back to the indi-web driver LABEL the final
+        // profile needs. DRIVER_NAME and the label agree for nearly every
+        // driver; fall back to substring matching against what the probe
+        // started, then against the installed list.
+        _wizardDriverLabelFor(deviceName) {
+            const w = this.wizard;
+            const dev = (w.found || []).find(d => d.name === deviceName);
+            if (!dev) return null;
+            const eq = (a, b) => a.toLowerCase() === b.toLowerCase();
+            const all = [...w.probeDrivers.map(l => ({ label: l })), ...(w.installedDrivers || [])];
+            // Try the driver name first, then the device name: a custom
+            // indi-web label matches the NAME it gave the device, not the
+            // binary's own driver name.
+            for (const key of [dev.driver, dev.name]) {
+                if (!key) continue;
+                let hit = all.find(d => eq(d.label, key));
+                if (!hit) hit = all.find(d =>
+                    d.label.toLowerCase().includes(key.toLowerCase()) ||
+                    key.toLowerCase().includes(d.label.toLowerCase()));
+                if (hit) return hit.label;
+            }
+            return null;
+        },
+
+        // The driver labels the FINAL profile gets: one per picked device
+        // plus every serial-port assignment.
+        wizardSelectedDrivers() {
+            const w = this.wizard;
+            const out = [];
+            const add = (l) => { if (l && !out.some(x => x.toLowerCase() === l.toLowerCase())) out.push(l); };
+            for (const role of ['camera', 'mount', 'focuser', 'filterwheel', 'guide']) {
+                if (w.pick[role]) add(this._wizardDriverLabelFor(w.pick[role]));
+            }
+            for (const dev of Object.keys(w.serialChoice)) add(w.serialChoice[dev]);
+            return out;
+        },
+
+        wizardSelectedCount() {
+            const w = this.wizard;
+            let n = 0;
+            for (const role of ['camera', 'mount', 'focuser', 'filterwheel', 'guide']) {
+                if (w.pick[role]) n++;
+            }
+            for (const dev of Object.keys(w.serialChoice)) { if (w.serialChoice[dev]) n++; }
+            return n;
+        },
+
+        async wizardFinalize() {
+            const w = this.wizard;
+            const drivers = this.wizardSelectedDrivers();
+            if (drivers.length === 0) {
+                w.error = 'Pick at least one device or assign a serial port first';
+                return;
+            }
+            const name = (w.profileName || 'Polaris').trim();
+            w.busy = true; w.error = ''; w.step = 'connect';
+            try {
+                const r = await this.apiPostJson('/api/setup-wizard/indi/finalize', { name, drivers });
+                w.probeStarted = false;   // temp profile is gone either way
+                w.finalStarted = !!r.started;
+                if (r.startError) w.error = r.startError;
+                // indi-web's own panel reads its profile dropdown from this
+                // cookie; keep it in step with what we just started.
+                try { document.cookie = 'indiserver_profile=' + encodeURIComponent(name) + '; path=/; max-age=3600000'; } catch (_) { }
+                await this._wizardReconnectIndi();
+                await this._wizardWaitDevices(15);
+                this._wizardResolveSerialPicks();
+                await this._wizardAssignAndConnect();
+                // Finishing touches: optics + cooling, on the same rig state
+                // the RIGS cards use (the catalogue picker handlers autosave).
+                w.step = 'details';
+                this.loadOpticsCatalogue && this.loadOpticsCatalogue().catch(() => { });
+                    try { await this.indiWebStatusRefresh(); } catch (_) { }
+            } catch (e) {
+                let msg = (e && e.message) || 'Could not create the profile';
+                try { const b = JSON.parse(e.body || '{}'); if (b.error) msg = b.error; } catch (_) { }
+                w.error = msg;
+                w.step = 'pick';
+                w.pollLeft = 5;
+                this._wizardPoll();
+            } finally {
+                w.busy = false;
+            }
+        },
+
+        // The probe and the finalize both swap indiservers under the
+        // backend's INDI client. Its socket still LOOKS connected (TCP half-
+        // open) so ConnectAsync no-ops, and the auto-reconnect backoff can
+        // outlast the wait window — which is how a serial focuser's device
+        // never showed up in time (field report: Gemini focuser). Force a
+        // clean drop + connect against the NEW server, quietly (no toasts).
+        async _wizardReconnectIndi() {
+            try { await this.apiPost('/api/indi/disconnect'); } catch (_) { }
+            try {
+                const r = await this.apiPost('/api/indi/connect', {
+                    host: this.settings.indiHost, port: this.settings.indiPort
+                });
+                if (r.ok) this.indiConnected = true;
+            } catch (_) { this.indiConnected = false; }
+        },
+
+        // After the final profile starts, wait for its devices to publish so
+        // the rig assignment below has real names to point at.
+        //
+        // Coverage per DRIVER, not a device count: one driver can publish
+        // several devices (ZWO CCD lists every camera, the AM driver lists
+        // four variants), so a count is satisfied while a slower driver —
+        // a serial focuser, in the field report — has not published yet, and
+        // its rig assignment silently never happens.
+        async _wizardWaitDevices(tries) {
+            const w = this.wizard;
+            const want = this.wizardSelectedDrivers().map(l => l.toLowerCase());
+            // A custom indi-web driver label RENAMES the published device
+            // (field case: label "Gemini EAF" over the MyFocuserPro2 binary),
+            // so a selected label can show up as either the device's driver
+            // name or the device name itself.
+            const ids = () => (w.found || []).flatMap(d =>
+                [(d.driver || '').toLowerCase(), (d.name || '').toLowerCase()]).filter(Boolean);
+            const covered = () => {
+                const known = ids();
+                return want.every(l => known.some(dn =>
+                    dn === l || dn.includes(l) || l.includes(dn)));
+            };
+            for (let i = 0; i < tries; i++) {
+                await new Promise(res => setTimeout(res, 2000));
+                // Halfway through with no coverage: kick the connection once
+                // more in case the first reconnect raced the server start.
+                if (i === Math.floor(tries / 2)) await this._wizardReconnectIndi();
+                try { await this.refreshDevices(); } catch (_) { }
+                w.found = (this.devices || [])
+                    .filter(d => d.name && String(d.name).trim())
+                    .map(d => ({ name: d.name, driver: d.driver || '', roles: d.roles || [] }));
+                if (w.found.length > 0 && covered()) return;
+            }
+        },
+
+        // A serial-port assignment names a DRIVER, not a device: the device
+        // name only exists once the final profile is running. Match each
+        // assigned driver to the device it published and slot it into the
+        // first fitting empty role.
+        _wizardResolveSerialPicks() {
+            const w = this.wizard;
+            for (const dev of Object.keys(w.serialChoice)) {
+                const label = w.serialChoice[dev];
+                if (!label) continue;
+                const ll = label.toLowerCase();
+                const near = (v) => !!v && (v.toLowerCase() === ll ||
+                    v.toLowerCase().includes(ll) || ll.includes(v.toLowerCase()));
+                // Match on the driver name OR the device name: a custom
+                // indi-web label renames the device it starts.
+                const match = (w.found || []).find(d => near(d.driver) || near(d.name));
+                if (!match) continue;
+                const roles = match.roles || [];
+                if (roles.includes('mount') && !w.pick.mount) w.pick.mount = match.name;
+                else if (roles.includes('focuser') && !w.pick.focuser) w.pick.focuser = match.name;
+                else if (roles.includes('filterwheel') && !w.pick.filterwheel) w.pick.filterwheel = match.name;
+            }
+        },
+
+        // Write the picks onto the rig (INDI driver for every role) and run
+        // the ordered bulk connect, which persists each selection.
+        async _wizardAssignAndConnect() {
+            const w = this.wizard;
+            if (w.pick.camera) { this.cameraDriver = 'indi'; this.equipCameraChoice = w.pick.camera; }
+            if (w.pick.mount) { this.mountDriver = 'indi'; this.equipMountChoice = w.pick.mount; }
+            if (w.pick.focuser) { this.focuserDriver = 'indi'; this.equipFocuserChoice = w.pick.focuser; }
+            if (w.pick.filterwheel) { this.filterWheelDriver = 'indi'; this.equipFilterChoice = w.pick.filterwheel; }
+            if (w.pick.guide) { this.guideCameraDriver = 'indi'; this.guideCamera = w.pick.guide; }
+            await this.equipConnectAll();
+            // Second pass: a serial device can still be finishing its
+            // handshake on the first try (a 4800-baud focuser takes several
+            // seconds to come up), so its connect times out once. Connected
+            // devices are skipped by the per-step gates, so this only
+            // retries what refused.
+            await new Promise(r => setTimeout(r, 5000));
+            const missed = (this.equipFocuserChoice && !this.focusConnected)
+                || (this.equipMountChoice && !this.mount?.connected)
+                || (this.equipCameraChoice && !this.selectedCamera)
+                || (this.equipFilterChoice && !this.filterWheel?.connected)
+                || (this.guideCamera && !this.guider?.guideCameraConnected);
+            if (missed) await this.equipConnectAll();
+        },
+
+        // ----- Windows: ASCOM + Alpaca discovery -----
+
+        async wizardWinDiscover() {
+            const w = this.wizard;
+            w.busy = true; w.error = '';
+            try {
+                // Fill the Alpaca cache first: the per-role alpaca branches
+                // only read the cache and come back empty otherwise.
+                try { await this.apiGet('/api/alpaca/discover?timeoutMs=3000&autoConnect=false'); } catch (_) { }
+                const roles = [
+                    { key: 'camera', ep: 'camera' },
+                    { key: 'mount', ep: 'telescope' },
+                    { key: 'focuser', ep: 'focuser' },
+                    { key: 'filterwheel', ep: 'filterwheel' },
+                ];
+                for (const r of roles) {
+                    const opts = [];
+                    for (const kind of ['ascom-com', 'alpaca']) {
+                        try {
+                            const list = await this.apiGet(`/api/${r.ep}/discover?driver=${encodeURIComponent(kind)}`);
+                            for (const d of (list || [])) {
+                                opts.push({ id: d.id, model: d.model || d.id, detail: d.detail || '', kind });
+                            }
+                        } catch (_) { /* driver kind unavailable on this host */ }
+                    }
+                    w.win[r.key] = opts;
+                    if (opts.length === 1 && !w.winPick[r.key]) {
+                        w.winPick[r.key] = opts[0].kind + '|' + opts[0].id;
+                    }
+                }
+                w.step = 'pick';
+            } finally {
+                w.busy = false;
+            }
+        },
+
+        wizardWinSelectedCount() {
+            const p = this.wizard.winPick;
+            return ['camera', 'mount', 'focuser', 'filterwheel'].filter(k => !!p[k]).length;
+        },
+
+        async wizardWinFinish() {
+            const w = this.wizard;
+            if (this.wizardWinSelectedCount() === 0) {
+                w.error = 'Pick at least one device first';
+                return;
+            }
+            w.busy = true; w.error = ''; w.step = 'connect';
+            try {
+                const set = (val, driverProp, choiceProp) => {
+                    if (!val) return;
+                    const i = val.indexOf('|');
+                    this[driverProp] = val.slice(0, i);
+                    this[choiceProp] = val.slice(i + 1);
+                };
+                set(w.winPick.camera, 'cameraDriver', 'equipCameraChoice');
+                set(w.winPick.mount, 'mountDriver', 'equipMountChoice');
+                set(w.winPick.focuser, 'focuserDriver', 'equipFocuserChoice');
+                set(w.winPick.filterwheel, 'filterWheelDriver', 'equipFilterChoice');
+                await this.equipConnectAll();
+                try { await this.apiPost('/api/setup-wizard/complete'); } catch (_) { }
+                    w.step = 'details';
+                this.loadOpticsCatalogue && this.loadOpticsCatalogue().catch(() => { });
+            } finally {
+                w.busy = false;
             }
         },
 

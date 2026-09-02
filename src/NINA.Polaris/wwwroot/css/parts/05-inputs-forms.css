@@ -1475,6 +1475,24 @@ body.link-offline .preview-pane::after {
     margin-top: 2px;
 }
 
+/* Labeled control rows for cards with many buttons (mount card): a small
+   uppercase group label over a wrapping button row, instead of one long
+   flex-wrap line that broke unevenly. */
+.equip-ctrl-grouplabel {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: var(--text-secondary, #a0a0b0);
+    margin: 8px 0 4px;
+}
+.equip-ctrl-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
 /* FOCUSER-SPEC v2 + FILTERWHEEL-SPEC v2: collapsible driver
    settings block that lives below the standard equip-detail
    props. Stays out of the way (small button, body hidden by

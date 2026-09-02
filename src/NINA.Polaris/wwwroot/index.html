@@ -46,7 +46,7 @@
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260801-inputwidth">
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260801-hscroll">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260731-videonudge">
-    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260731-edpan">
+    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260902-ctrlrows">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260807-hostnet">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260726-framefit">
     <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260818-dithersplit">
@@ -5089,7 +5089,7 @@
                                 <img x-ref="guidePhdCamImg" class="phd2-cam-img" alt=""
                                      :style="'filter: brightness(' + guideView.brightness + ') contrast(' + guideView.contrast + ')'"
                                      title="Click a star to select it for guiding · scroll to zoom"
-                                     @load="drawGuideCamOverlay(); drawGuideStarZoom()"
+                                     @load="drawGuideCamOverlay(); drawGuideStarZoom(); basicGuideMaybeFit()"
                                      @click="guideSelectStarAt($event)">
                                 <canvas x-ref="guidePhdCamOverlay" class="phd2-cam-overlay"></canvas>
                             </div>
@@ -6326,6 +6326,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         </template>
                     </select>
                     <button class="btn btn-sm" @click="rigModalOpen = true; loadOpticsCatalogue(); loadCameraQuirks()">Manage rigs…</button>
+                    <button class="btn btn-sm btn-primary" @click="wizardOpen(null, true)"
+                            title="Find your equipment, build the driver profile and connect everything in a few guided steps">🧭 Setup wizard</button>
                     <button class="btn btn-sm" @click="saveCurrentSelectionsToRig()"
                             :disabled="!indiConnected"
                             title="Save current device selections into this rig">💾 Save selections</button>
@@ -7081,7 +7083,13 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     <span x-show="mount.slewing" class="text-warn">SLEWING</span>
                                     <span x-show="mount.parked" class="text-warn">PARKED</span>
                                 </div>
-                                <div class="equip-inline-controls">
+                                <!-- Controls in two labeled rows (motion vs
+                                     sync/read-only) instead of one long
+                                     flex-wrap soup: eight buttons in a single
+                                     row wrapped unevenly and read as clutter
+                                     (field report 2026-09-02). -->
+                                <div class="equip-ctrl-grouplabel">Motion</div>
+                                <div class="equip-ctrl-row">
                                     <label class="equip-toggle"
                                            :title="mount.tracking ? 'Stop tracking' : 'Start tracking'">
                                         <input type="checkbox"
@@ -7126,6 +7134,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                             title="Park -> Unpark -> Home. Use this if plain Home does nothing after powering the mount on (strain-wave mounts like ZWO AM3 need a park/unpark cycle to re-establish the position reference before Home works).">
                                         Reset &amp; Home
                                     </button>
+                                </div>
+                                <div class="equip-ctrl-grouplabel">Sync</div>
+                                <div class="equip-ctrl-row">
                                     <!-- Recover real RA/Dec after an INDI driver
                                          reset. The ZWO AM3 (EQ mode) and similar
                                          drivers can come back reporting 0h/0deg
@@ -7173,22 +7184,24 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                      Shown so the operator can confirm both are
                                      right before syncing. -->
                                 <div class="hint mount-site-preview" x-show="mount.connected" x-cloak
-                                     style="margin-top:6px; display:flex; gap:14px; flex-wrap:wrap; align-items:center">
-                                    <span :class="(settings.latitude || settings.longitude) ? '' : 'text-warn'">
-                                        📍 <span x-text="mountSiteLocationText()"></span>
-                                    </span>
-                                    <!-- Same client-GPS handler as Settings / Observatory:
-                                         writes settings.lat/lon/alt, saves, and the location
-                                         line above re-renders from settings. Sync Site then
-                                         pushes the new coordinates to the mount. -->
-                                    <button type="button" class="btn btn-xs"
-                                            @click="useBrowserLocation()"
-                                            :disabled="obsGpsLoading"
-                                            :title="$t('Set the observatory location from GPS on this device')">
-                                        <span x-show="!obsGpsLoading">📍 <span x-text="$t('Use my location')"></span></span>
-                                        <span x-show="obsGpsLoading">…</span>
-                                    </button>
-                                    <span>🕐 <span x-text="mountSiteClockText()"></span></span>
+                                     style="margin-top:6px; display:grid; grid-template-columns:1fr; gap:4px">
+                                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+                                        <span :class="(settings.latitude || settings.longitude) ? '' : 'text-warn'">
+                                            📍 <span x-text="mountSiteLocationText()"></span>
+                                        </span>
+                                        <!-- Same client-GPS handler as Settings / Observatory:
+                                             writes settings.lat/lon/alt, saves, and the location
+                                             line re-renders from settings. Sync Site then
+                                             pushes the new coordinates to the mount. -->
+                                        <button type="button" class="btn btn-xs"
+                                                @click="useBrowserLocation()"
+                                                :disabled="obsGpsLoading"
+                                                :title="$t('Set the observatory location from GPS on this device')">
+                                            <span x-show="!obsGpsLoading">📍 <span x-text="$t('Use my location')"></span></span>
+                                            <span x-show="obsGpsLoading">…</span>
+                                        </button>
+                                    </div>
+                                    <div>🕐 <span x-text="mountSiteClockText()"></span></div>
                                 </div>
                                 <div class="obs-location-error" x-show="obsAddressError" x-text="obsAddressError"
                                      style="margin-top:4px"></div>
@@ -8619,6 +8632,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                              hence the "add it manually below" wording. Nothing
                              is written until the operator confirms in the
                              modal. -->
+                        <!-- The guided setup wizard lives in the rig bar on the
+                             Equipment tab now (it is not INDI-only: on Windows
+                             it runs the ASCOM/Alpaca path). -->
                         <div x-show="indiWeb.status?.running" style="margin:10px 0;padding:10px;
                              background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;">
                             <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
@@ -8630,7 +8646,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         indi-web panel below.
                                     </div>
                                 </div>
-                                <button class="btn btn-sm btn-primary" style="margin-left:auto;flex:0 0 auto;"
+                                <button class="btn btn-sm" style="margin-left:auto;flex:0 0 auto;"
                                         :disabled="indiDetect.busy" @click="indiDetectScan()">
                                     <span x-text="indiDetect.busy ? 'Detecting…' : 'Detect equipment'"></span>
                                 </button>
@@ -20351,6 +20367,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             <button class="bs-topicn" :class="basicScreen==='guide' ? 'on' : ''" @click="basicGoMode('guide')" title="Guide" aria-label="Guide">&#128760;</button>
             <button class="bs-modepill" @click="modeMenu = !modeMenu"><span x-text="basicScreen==='focus' ? 'Focus' : (basicScreen==='autorun' ? 'Autorun' : (basicScreen==='guide' ? 'Guide' : (basicScreen==='live' ? 'Live' : (basicScreen==='video' ? 'Video' : (basicScreen==='sky' ? 'Sky' : (basicScreen==='config' ? 'Setup' : 'Preview'))))))"></span> <span class="bs-caret">&#9660;</span></button>
             <button class="bs-topicn" :class="basicScreen==='config' ? 'on' : ''" @click="basicGoMode('config')" title="Setup" aria-label="Setup">&#9881;</button>
+            <button class="bs-topicn" x-show="basicFullscreenAvailable()" @click="basicToggleFullscreen()" title="Fullscreen" aria-label="Fullscreen">&#9974;</button>
         </div>
         <div class="bs-status" :class="{ run: (basicScreen==='focus' && autoFocus.state==='running') || (basicScreen==='autorun' && seqState==='running') || (basicScreen==='guide' && guider.guiding) || (basicScreen==='live' && liveStackEnabled) || (basicScreen==='video' && videoRecording.recording) || (basicScreen==='sky' && slewCenterJobId) }">&#9679; <b x-text="basicScreen==='focus'
                 ? (autoFocus.state==='running' ? ('AF ' + (autoFocus.phase || 'running')) : (autoFocus.success ? 'AF done' : 'Idle'))
@@ -20562,9 +20579,13 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
 
         <div class="bs-rail left" x-show="basicScreen!=='sky' && basicScreen!=='config'">
-            <button class="bs-icn" @click="_pzFit(basicActiveCanvas())" title="Fit"><span class="bs-big">&#9635;</span>Fit</button>
-            <button class="bs-icn" :class="guideOverlay.on ? 'on' : ''" @click="toggleGuideOverlay()" title="Guiding graph (drag + resize)"><span class="bs-big">&#128760;</span>Guide</button>
-            <button class="bs-icn" @click="_pzZoomButton(basicActiveCanvas(), 1.3)" title="Zoom in"><span class="bs-big">&#128269;</span>Zoom</button>
+            <!-- On the guide screen the image is the relocated guide-cam view,
+                 which has its own zoom model — route Fit/Zoom to it there. The
+                 graph-overlay toggle is pointless on guide (the graph is
+                 already pinned at the bottom), so it hides. -->
+            <button class="bs-icn" @click="basicScreen==='guide' ? basicGuideFit() : _pzFit(basicActiveCanvas())" title="Fit"><span class="bs-big">&#9635;</span>Fit</button>
+            <button class="bs-icn" x-show="basicScreen!=='guide'" :class="guideOverlay.on ? 'on' : ''" @click="toggleGuideOverlay()" title="Guiding graph (drag + resize)"><span class="bs-big">&#128760;</span>Guide</button>
+            <button class="bs-icn" @click="basicScreen==='guide' ? guideZoomBy(1.3) : _pzZoomButton(basicActiveCanvas(), 1.3)" title="Zoom in"><span class="bs-big">&#128269;</span>Zoom</button>
         </div>
 
         <!-- Sky: object search + results + selected-target card. The map
@@ -21618,6 +21639,412 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     <span x-show="!indiDetect.applying"
                           x-text="' (' + indiDetectSelectedCount() + ')'"></span>
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- First-run equipment connection wizard. Linux probes hardware through
+         a temporary indi-web profile; Windows fans out to the ASCOM/Alpaca
+         discovery routes. Auto-offered once per host after the location and
+         WiFi prompts; reopenable from RIGS and from the basic-mode Setup. -->
+    <div class="modal-overlay" x-show="wizard.open" x-cloak
+         @click.self="if(!wizard.busy) wizardClose()"
+         @keydown.escape.window="if(wizard.open && !wizard.busy) wizardClose()">
+        <div class="modal-card" style="max-width:640px;max-height:calc(100vh - 40px);
+                                       display:flex;flex-direction:column;">
+            <div class="modal-head" style="flex:0 0 auto;">
+                <span class="modal-icon">🧭</span>
+                <h3>Equipment setup</h3>
+            </div>
+            <div style="flex:1 1 auto;min-height:0;overflow-y:auto;margin:0 -4px;padding:0 4px;">
+
+                <!-- STEP: welcome -->
+                <template x-if="wizard.step === 'welcome'">
+                    <div>
+                        <p class="indi-auto-note" x-show="!wizard.manual" x-cloak>
+                            Looks like nothing is set up here yet. Polaris can find and connect your equipment now, or you can do it later from RIGS.
+                        </p>
+                        <p style="font-size:13px;" x-show="wizard.platform !== 'windows'">
+                            Power up and plug in your equipment, then press Start. Polaris looks for gear from the major brands, shows you what it finds, and sets everything up to connect on its own from then on.
+                        </p>
+                        <p style="font-size:13px;" x-show="wizard.platform === 'windows'">
+                            Power up and plug in your equipment, then press Start. Polaris searches the ASCOM drivers on this machine and Alpaca devices on your network, then connects what you pick.
+                        </p>
+                    </div>
+                </template>
+
+                <!-- STEP: probe -->
+                <template x-if="wizard.step === 'probe'">
+                    <div>
+                        <p style="font-size:13px;" x-show="wizard.platform !== 'windows'">
+                            <span x-show="wizard.busy">Getting things ready…</span>
+                            <span x-show="!wizard.busy">Looking for your equipment. Cameras, filter wheels and focusers appear here on their own; anything on a serial cable is assigned on the next step.</span>
+                        </p>
+                        <p style="font-size:13px;" x-show="wizard.platform === 'windows'">
+                            Searching for ASCOM and Alpaca devices…
+                        </p>
+                        <div x-show="wizard.platform !== 'windows'">
+                            <div style="font-size:12px;color:var(--text-muted);margin:8px 0 4px;">
+                                <strong>Found so far</strong>
+                                <span x-text="'(' + wizard.found.length + ')'"></span>
+                            </div>
+                            <div x-show="wizard.found.length" style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">
+                                The list can include devices that are not really here. Uncheck anything that is not plugged in right now.
+                            </div>
+                            <div x-show="!wizard.found.length" style="font-size:12px;color:var(--text-muted);">
+                                Nothing yet. Give it a few seconds.
+                            </div>
+                            <template x-for="d in wizard.found" :key="d.name">
+                                <label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:3px 0;cursor:pointer;">
+                                    <input type="checkbox" :checked="!wizard.exclude[d.name]"
+                                           @change="wizard.exclude[d.name] = !$event.target.checked">
+                                    <span x-text="d.name"></span>
+                                    <span style="font-size:11px;color:var(--text-muted);"
+                                          x-text="(d.roles || []).join(', ')"></span>
+                                </label>
+                            </template>
+                            <div x-show="wizard.serialPorts.length"
+                                 style="font-size:12px;color:var(--text-muted);margin-top:8px;">
+                                <span x-text="wizard.serialPorts.length"></span>
+                                serial port(s) found. What is on them (mount, focus motor) is assigned on the next step.
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- STEP: pick (Linux). Selects use :selected + @change rather
+                     than x-model for the same x-for timing reason as the
+                     indiDetect modal above. -->
+                <template x-if="wizard.step === 'pick' && wizard.platform !== 'windows'">
+                    <div>
+                        <p style="font-size:13px;">
+                            Choose which device does what. Anything left as None stays out of the setup.
+                        </p>
+                        <!-- Label-above + full-width controls, spaced by a
+                             1-column grid with per-cell padding-bottom (the
+                             house form style). -->
+                        <div style="display:grid;grid-template-columns:1fr;">
+                        <template x-for="role in [
+                                { key: 'camera', label: 'Camera' },
+                                { key: 'mount', label: 'Mount' },
+                                { key: 'focuser', label: 'Focuser' },
+                                { key: 'filterwheel', label: 'Filter wheel' },
+                                { key: 'guide', label: 'Guide camera' }]" :key="role.key">
+                            <div style="padding-bottom:10px;"
+                                 x-show="wizardFoundFor(role.key === 'guide' ? 'camera' : role.key).length > 0">
+                                <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px;"
+                                       x-text="role.label"></label>
+                                <select class="equip-select" style="width:100%;"
+                                        @change="wizard.pick[role.key] = $event.target.value">
+                                    <option value="" :selected="!wizard.pick[role.key]">None</option>
+                                    <template x-for="d in wizardFoundFor(role.key === 'guide' ? 'camera' : role.key)"
+                                              :key="d.name">
+                                        <option :value="d.name" :selected="wizard.pick[role.key] === d.name"
+                                                x-text="d.name"></option>
+                                    </template>
+                                </select>
+                            </div>
+                        </template>
+                        </div>
+
+                        <!-- Serial ports: mounts/focusers behind generic USB-serial
+                             bridges. The driver publishes its device only after the
+                             final profile starts, so the assignment here names a
+                             DRIVER and Polaris matches it to the device afterwards. -->
+                        <div x-show="wizard.serialPorts.length" style="margin-top:12px;">
+                            <div style="font-size:12px;margin-bottom:2px;"><strong>Serial ports</strong></div>
+                            <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">
+                                Tell Polaris what is plugged into each port (mount, focus motor), or leave it on Skip.
+                            </div>
+                            <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">
+                                If something found above already uses one of these ports (a USB mount, for example), leave that port on Skip.
+                            </div>
+                            <div style="display:grid;grid-template-columns:1fr;">
+                            <template x-for="p in wizard.serialPorts" :key="p.device">
+                                <div style="padding-bottom:10px;">
+                                    <label style="display:block;margin-bottom:4px;">
+                                        <code style="font-size:11px;" x-text="p.device" :title="p.byId"></code>
+                                        <span style="font-size:11px;color:var(--text-muted);margin-left:8px;"
+                                              x-text="wizardSerialPortLabel(p)"></span>
+                                    </label>
+                                    <select class="equip-select" style="width:100%;"
+                                            @change="wizard.serialChoice[p.device] = $event.target.value">
+                                        <option value="" :selected="!wizard.serialChoice[p.device]">Skip</option>
+                                        <template x-for="drv in wizardSerialDriverOptions()" :key="drv.label">
+                                            <option :value="drv.label"
+                                                    :selected="wizard.serialChoice[p.device] === drv.label"
+                                                    x-text="drv.label + (drv.family ? ' (' + drv.family + ')' : '')"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                            </template>
+                            </div>
+                            <label style="font-size:12px;color:var(--text-secondary);display:flex;align-items:center;gap:6px;">
+                                <input type="checkbox" x-model="wizard.showAllSerialDrivers">
+                                Show all installed drivers
+                            </label>
+                        </div>
+
+                        <div style="margin-top:14px;">
+                            <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px;">Profile name</label>
+                            <input type="text" class="equip-select" style="width:100%;"
+                                   x-model="wizard.profileName" placeholder="Polaris">
+                        </div>
+                    </div>
+                </template>
+
+                <!-- STEP: pick (Windows) -->
+                <template x-if="wizard.step === 'pick' && wizard.platform === 'windows'">
+                    <div>
+                        <p style="font-size:13px;">
+                            Choose which device does what. Anything left as None is not connected.
+                        </p>
+                        <div style="display:grid;grid-template-columns:1fr;">
+                        <template x-for="role in [
+                                { key: 'camera', label: 'Camera' },
+                                { key: 'mount', label: 'Mount' },
+                                { key: 'focuser', label: 'Focuser' },
+                                { key: 'filterwheel', label: 'Filter wheel' }]" :key="role.key">
+                            <div style="padding-bottom:10px;">
+                                <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px;"
+                                       x-text="role.label"></label>
+                                <select class="equip-select" style="width:100%;"
+                                        @change="wizard.winPick[role.key] = $event.target.value">
+                                    <option value="" :selected="!wizard.winPick[role.key]">None</option>
+                                    <template x-for="d in wizard.win[role.key]" :key="d.kind + '|' + d.id">
+                                        <option :value="d.kind + '|' + d.id"
+                                                :selected="wizard.winPick[role.key] === d.kind + '|' + d.id"
+                                                x-text="d.model + (d.kind === 'alpaca' ? ' (Alpaca)' : ' (ASCOM)')"></option>
+                                    </template>
+                                </select>
+                            </div>
+                        </template>
+                        </div>
+                        <p style="font-size:12px;color:var(--text-muted);"
+                           x-show="!wizard.win.camera.length && !wizard.win.mount.length
+                                   && !wizard.win.focuser.length && !wizard.win.filterwheel.length">
+                            Nothing was found. Check that your ASCOM drivers are installed and
+                            Alpaca devices are on this network, then try again from RIGS.
+                        </p>
+                    </div>
+                </template>
+
+                <!-- STEP: connect -->
+                <template x-if="wizard.step === 'connect'">
+                    <div>
+                        <p style="font-size:13px;" x-show="wizard.platform !== 'windows'">
+                            Connecting your equipment… This takes a minute while everything restarts and each device comes online.
+                        </p>
+                        <p style="font-size:13px;" x-show="wizard.platform === 'windows'">
+                            Connecting your equipment…
+                        </p>
+                    </div>
+                </template>
+
+                <!-- STEP: details — optics + cooling. Bound to the SAME
+                     settings.* fields and handlers the RIGS optics cards use,
+                     so the catalogue autofill and the debounced rig save all
+                     come for free and stay in sync with the full UI. -->
+                <template x-if="wizard.step === 'details'">
+                    <div>
+                        <p style="font-size:13px;">
+                            Almost done. Set up your optics so field of view, plate solving
+                            and guiding scales come out right.
+                        </p>
+
+                        <div style="font-size:12px;margin-bottom:4px;"><strong>Main scope</strong></div>
+                        <div style="display:grid;grid-template-columns:1fr;">
+                            <div style="padding-bottom:10px;">
+                                <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px;">Brand (catalog)</label>
+                                <select class="equip-select" style="width:100%;" x-model="settings.telescopeBrand"
+                                        @change="onTelescopeBrandPick()">
+                                    <option value="">Manual entry</option>
+                                    <template x-for="b in opticsBrands" :key="b">
+                                        <option :value="b" x-text="b"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div style="padding-bottom:10px;">
+                                <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px;">Model</label>
+                                <select class="equip-select" style="width:100%;" x-model="settings.telescopeModel"
+                                        @change="onTelescopeModelPick()" :disabled="!settings.telescopeBrand">
+                                    <option value="">Pick a model</option>
+                                    <template x-for="t in opticsModelsForRig({telescopeBrand: settings.telescopeBrand})"
+                                              :key="t.brand + t.model">
+                                        <option :value="t.model"
+                                            x-text="t.model + ' (' + t.apertureMm + 'mm f/' + (t.focalLengthMm/t.apertureMm).toFixed(1) + ')'"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div style="padding-bottom:10px;">
+                                <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px;">Accessory (catalog)</label>
+                                <select class="equip-select" style="width:100%;" x-model="settings.accessoryPick"
+                                        @change="onAccessoryPick()">
+                                    <option value="">None</option>
+                                    <template x-for="a in opticsAccessoriesForRig({telescopeModel: settings.telescopeModel})"
+                                              :key="a.brand + a.model">
+                                        <option :value="a.brand + ' ' + a.model"
+                                            x-text="'[' + a.type + '] ' + a.brand + ' ' + a.model + ' (' + a.factor + '×)'"></option>
+                                    </template>
+                                    <option value="__custom__">Custom (set the multiplier)</option>
+                                </select>
+                            </div>
+                            <div style="padding-bottom:10px;display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;">
+                                <label style="font-size:12px;color:var(--text-secondary);">Focal length (mm)
+                                    <input type="number" x-model.number="settings.focalLength"
+                                           @change="saveOpticsDebounced(); updateFov()"
+                                           step="10" min="0" class="equip-select" style="width:110px;display:block;margin-top:4px;">
+                                </label>
+                                <label style="font-size:12px;color:var(--text-secondary);">Aperture (mm)
+                                    <input type="number" x-model.number="settings.aperture"
+                                           @change="saveOpticsDebounced()"
+                                           step="5" min="0" class="equip-select" style="width:110px;display:block;margin-top:4px;">
+                                </label>
+                                <span style="font-size:13px;padding-bottom:6px;"
+                                      x-show="settings.focalLength > 0 && settings.aperture > 0">
+                                    f/<strong x-text="(settings.focalLength / settings.aperture).toFixed(1)"></strong>
+                                </span>
+                            </div>
+                        </div>
+
+                        <div style="font-size:12px;margin:6px 0 4px;"><strong>Guide scope</strong></div>
+                        <div style="display:grid;grid-template-columns:1fr;">
+                            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding-bottom:10px;">
+                                <input type="checkbox" x-model="settings.guiderIsOag" @change="saveOpticsDebounced()">
+                                <span>Off-axis guider (uses main scope focal length)</span>
+                            </label>
+                            <div style="padding-bottom:10px;" x-show="!settings.guiderIsOag">
+                                <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px;">Brand (catalog)</label>
+                                <select class="equip-select" style="width:100%;" x-model="settings.guideTelescopeBrand"
+                                        @change="onGuideScopeBrandPick()">
+                                    <option value="">Manual entry</option>
+                                    <template x-for="b in guidescopeBrands" :key="b">
+                                        <option :value="b" x-text="b"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div style="padding-bottom:10px;" x-show="!settings.guiderIsOag">
+                                <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px;">Model</label>
+                                <select class="equip-select" style="width:100%;" x-model="settings.guideTelescopeModel"
+                                        @change="onGuideScopeModelPick()" :disabled="!settings.guideTelescopeBrand">
+                                    <option value="">Manual entry</option>
+                                    <template x-for="g in guidescopeModelsForRig({guideTelescopeBrand: settings.guideTelescopeBrand})"
+                                              :key="g.model">
+                                        <option :value="g.model"
+                                                x-text="g.model + ' (' + g.apertureMm + 'mm f/' + (g.focalLengthMm / g.apertureMm).toFixed(1) + ')'"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div style="padding-bottom:10px;display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;"
+                                 x-show="!settings.guiderIsOag">
+                                <label style="font-size:12px;color:var(--text-secondary);">Focal length (mm)
+                                    <input type="number" x-model.number="settings.guiderFocalLengthMm"
+                                           @change="saveOpticsDebounced()"
+                                           step="10" min="0" class="equip-select" style="width:110px;display:block;margin-top:4px;">
+                                </label>
+                                <label style="font-size:12px;color:var(--text-secondary);">Aperture (mm)
+                                    <input type="number" x-model.number="settings.guiderApertureMm"
+                                           @change="saveOpticsDebounced()"
+                                           step="5" min="0" class="equip-select" style="width:110px;display:block;margin-top:4px;">
+                                </label>
+                            </div>
+                        </div>
+
+                        <div x-show="equipCameraInfo?.supportsCooler" style="margin-top:6px;">
+                            <div style="font-size:12px;margin-bottom:4px;"><strong>Camera cooling</strong></div>
+                            <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+                                <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+                                    <input type="checkbox" :checked="equipCameraInfo?.coolerOn"
+                                           @change="setCooler($event.target.checked, equipCoolerTarget)">
+                                    <span>Cool the camera now</span>
+                                </label>
+                                <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary);">
+                                    <span>Target</span>
+                                    <input type="number" x-model.number="equipCoolerTarget"
+                                           step="1" min="-40" max="30" class="equip-select" style="width:80px;">
+                                    <span>&deg;C</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- STEP: done -->
+                <template x-if="wizard.step === 'done'">
+                    <div>
+                        <p style="font-size:13px;">
+                            <strong>All set.</strong> Your equipment is connected and will reconnect on its own from now on. You can fine-tune everything in RIGS.
+                        </p>
+                        <template x-for="role in [
+                                { key: 'camera', label: 'Camera' },
+                                { key: 'mount', label: 'Mount' },
+                                { key: 'focuser', label: 'Focuser' },
+                                { key: 'filterwheel', label: 'Filter wheel' },
+                                { key: 'guide', label: 'Guide camera' }]" :key="role.key">
+                            <div style="display:flex;gap:8px;font-size:13px;padding:2px 0;"
+                                 x-show="wizard.platform === 'windows' ? !!wizard.winPick[role.key] : !!wizard.pick[role.key]">
+                                <span style="flex:0 0 110px;color:var(--text-muted);" x-text="role.label"></span>
+                                <span x-text="wizard.platform === 'windows'
+                                    ? (wizard.winPick[role.key] || '').split('|').slice(1).join('|')
+                                    : wizard.pick[role.key]"></span>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+
+                <div x-show="wizard.error" x-cloak
+                     style="font-size:12px;color:var(--danger,#e66);margin-top:8px;"
+                     x-text="wizard.error"></div>
+            </div>
+
+            <!-- Actions -->
+            <div class="modal-actions" style="flex:0 0 auto;">
+                <template x-if="wizard.step === 'welcome'">
+                    <div style="display:flex;gap:8px;justify-content:flex-end;width:100%;">
+                        <button class="btn btn-sm" @click="wizardSkip()">Skip setup</button>
+                        <button class="btn btn-sm" @click="wizardClose()">Not now</button>
+                        <button class="btn btn-sm btn-primary" @click="wizardStart()">Start</button>
+                    </div>
+                </template>
+                <template x-if="wizard.step === 'probe'">
+                    <div style="display:flex;gap:8px;justify-content:flex-end;width:100%;">
+                        <button class="btn btn-sm" :disabled="wizard.busy" @click="wizardClose()">Cancel</button>
+                        <button class="btn btn-sm btn-primary" x-show="wizard.platform !== 'windows'"
+                                :disabled="wizard.busy" @click="wizard.step = 'pick'">Continue</button>
+                    </div>
+                </template>
+                <template x-if="wizard.step === 'pick'">
+                    <div style="display:flex;gap:8px;justify-content:flex-end;width:100%;">
+                        <button class="btn btn-sm" :disabled="wizard.busy" @click="wizardClose()">Cancel</button>
+                        <button class="btn btn-sm btn-primary" x-show="wizard.platform !== 'windows'"
+                                :disabled="wizard.busy || wizardSelectedCount() === 0"
+                                @click="wizardFinalize()">
+                            <span>Save and connect</span>
+                            <span x-text="' (' + wizardSelectedCount() + ')'"></span>
+                        </button>
+                        <button class="btn btn-sm btn-primary" x-show="wizard.platform === 'windows'"
+                                :disabled="wizard.busy || wizardWinSelectedCount() === 0"
+                                @click="wizardWinFinish()">
+                            <span>Connect</span>
+                            <span x-text="' (' + wizardWinSelectedCount() + ')'"></span>
+                        </button>
+                    </div>
+                </template>
+                <template x-if="wizard.step === 'connect'">
+                    <div style="display:flex;gap:8px;justify-content:flex-end;width:100%;">
+                        <button class="btn btn-sm" disabled>Working…</button>
+                    </div>
+                </template>
+                <template x-if="wizard.step === 'details'">
+                    <div style="display:flex;gap:8px;justify-content:flex-end;width:100%;">
+                        <button class="btn btn-sm btn-primary" @click="wizard.step = 'done'">Finish</button>
+                    </div>
+                </template>
+                <template x-if="wizard.step === 'done'">
+                    <div style="display:flex;gap:8px;justify-content:flex-end;width:100%;">
+                        <button class="btn btn-sm btn-primary" @click="wizardClose()">Close</button>
+                    </div>
+                </template>
             </div>
         </div>
     </div>
@@ -22739,7 +23166,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260831-relaycard"></script>
+    <script src="/js/app.js?v=20260902-retry"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

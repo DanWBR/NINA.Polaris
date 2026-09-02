@@ -265,6 +265,7 @@ jobs:
           name: Polaris-ios-ipa
           path: ${{ runner.temp }}/export/*.ipa
           if-no-files-found: error
+          retention-days: 7
 
       # Only for app-store exports: push the .ipa to TestFlight so it
       # installs over-the-air (no cables, no device UDIDs). Needs the
