@@ -147,6 +147,35 @@ app.MapGet("/_health", (TenantRegistry reg) => Results.Ok(new {
     uptime = DateTime.UtcNow
 }));
 
+// On-demand TLS gate for Caddy. Caddy calls this (on_demand_tls { ask ... })
+// with ?domain=<host> before issuing a certificate for an unknown hostname,
+// so a stranger can't make the relay mint certs for arbitrary names. Answer
+// 200 only for the base host and for a subdomain that maps to a real,
+// enabled tenant; 404 otherwise. Unauthenticated by design (Caddy is the
+// caller); it reveals only whether a tenant hostname exists.
+app.MapGet("/_internal/tls-ask", (HttpContext ctx, JsonTenantStore store, IConfiguration config) => {
+    var domain = (ctx.Request.Query["domain"].ToString() ?? "").Trim().ToLowerInvariant();
+    if (string.IsNullOrEmpty(domain)) return Results.NotFound();
+
+    var suffix = (config["Proxy:HostnameSuffix"] ?? "").ToLowerInvariant();   // ".relay.example.com"
+    // Base host (relay.example.com == suffix without the leading dot): the
+    // landing page + admin live here, always allowed.
+    if (!string.IsNullOrEmpty(suffix) &&
+        domain == suffix.TrimStart('.')) {
+        return Results.Ok();
+    }
+    // Tenant host: strip the suffix, require a single-label enabled tenant.
+    if (!string.IsNullOrEmpty(suffix) && domain.EndsWith(suffix, StringComparison.Ordinal)) {
+        var sub = domain[..^suffix.Length];
+        if (!string.IsNullOrEmpty(sub) && !sub.Contains('.') &&
+            store.All.Any(t => t.Enabled &&
+                               string.Equals(t.Hostname, sub, StringComparison.OrdinalIgnoreCase))) {
+            return Results.Ok();
+        }
+    }
+    return Results.NotFound();
+});
+
 // List active tunnels (admin-ish; lock down in real deployments)
 app.MapGet("/_tunnels", (TenantRegistry reg) => Results.Ok(
     reg.ActiveTunnels.Select(t => new {

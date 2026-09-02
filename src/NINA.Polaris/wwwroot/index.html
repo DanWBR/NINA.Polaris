@@ -3851,8 +3851,6 @@
                             @click="videoTab = 'process'; loadVideoSerList(); timelapseProbeFfmpeg(); $nextTick(() => drawVideoQualityChart())">Process</button>
                     <button class="video-tab" :class="{ active: videoTab === 'timelapse' }"
                             @click="videoTab = 'timelapse'; timelapseInit()">Time-lapse</button>
-                    <button class="video-tab" :class="{ active: videoTab === 'startrails' }"
-                            @click="videoTab = 'startrails'; starTrailInit()"><span x-text="$t('Star trails')"></span></button>
                 </div>
 
                 <!-- ===== Tab 1: Capture ===== -->
@@ -4646,72 +4644,6 @@
                     </div>
                 </div>
 
-                <!-- ===== Tab 4: Star trails ===== -->
-                <div x-show="videoTab === 'startrails'" class="video-process-pane">
-                    <p class="hint" x-text="$t('Fix the camera and turn tracking off: the sky drifts and each star paints an arc. Frames are combined by keeping the brightest pixel (lighten). Longer sessions make longer trails; aim near the celestial pole for circular ones.')"></p>
-
-                    <div class="preview-area startrail-preview" style="min-height:220px; margin:8px 0">
-                        <canvas id="starTrailCanvas" class="preview-canvas"></canvas>
-                        <div class="preview-overlay text-muted"
-                             x-show="!starTrail || starTrail?.framesCaptured === 0"
-                             x-text="$t('The growing trail composite will appear here.')"></div>
-                    </div>
-
-                    <div class="af-row" style="display:flex; gap:12px; align-items:center; flex-wrap:wrap">
-                        <label x-text="$t('Exposure (s)')"></label>
-                        <input type="number" min="1" max="120" step="1" x-model.number="starTrails.exposure" class="input-sm" style="width:70px">
-                        <label>Gain</label>
-                        <input type="number" min="0" max="1000" step="1" x-model.number="starTrails.gain" class="input-sm" style="width:70px">
-                        <label>Bin</label>
-                        <input type="number" min="1" max="4" step="1" x-model.number="starTrails.binning" class="input-sm" style="width:52px">
-                        <label x-text="$t('Interval (s)')"></label>
-                        <input type="number" min="0" max="60" step="1" x-model.number="starTrails.interval" class="input-sm" style="width:56px">
-                        <label x-text="$t('Max frames')"></label>
-                        <input type="number" min="0" max="100000" step="1" x-model.number="starTrails.maxFrames" class="input-sm" style="width:70px" :placeholder="$t('∞')">
-                    </div>
-
-                    <div class="af-row" style="display:flex; gap:14px; align-items:center; flex-wrap:wrap; margin-top:8px">
-                        <label><input type="checkbox" x-model="starTrails.turnTrackingOff"> <span x-text="$t('Turn mount tracking off')"></span></label>
-                        <label><input type="checkbox" x-model="starTrails.cosmetic"> <span x-text="$t('Remove hot pixels')"></span></label>
-                        <label><input type="checkbox" x-model="starTrails.saveSubs"> <span x-text="$t('Keep individual frames')"></span></label>
-                        <label><input type="checkbox" x-model="starTrails.alsoTimelapse"> <span x-text="$t('Also build a time-lapse')"></span></label>
-                    </div>
-
-                    <div class="af-row" style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-top:8px">
-                        <label x-text="$t('Name')"></label>
-                        <input type="text" x-model="starTrails.outputName" class="input-sm" style="width:140px">
-                    </div>
-
-                    <div class="af-row" style="display:flex; gap:8px; align-items:center; margin-top:12px">
-                        <button class="btn btn-primary" @click="starTrailStart()"
-                                x-show="!starTrail || starTrail?.done"
-                                x-text="'▶ ' + $t('Start star trails')"></button>
-                        <button class="btn btn-warning" @click="starTrailStop()"
-                                x-show="starTrail && !starTrail?.done"
-                                x-text="'■ ' + $t('Stop and save')"></button>
-                        <button class="btn btn-danger" @click="starTrailAbort()"
-                                x-show="starTrail && !starTrail?.done">Abort</button>
-                    </div>
-
-                    <div class="af-progress" x-show="starTrail && !starTrail?.done" style="margin-top:10px">
-                        <div class="af-progress-info">
-                            <span>Phase: <strong x-text="starTrail?.phase"></strong></span>
-                            <span><strong x-text="starTrail?.framesCaptured || 0"></strong> <span x-text="$t('frames')"></span></span>
-                            <span x-show="starTrail?.trackingOff" class="text-muted" x-text="$t('tracking off')"></span>
-                            <span x-show="starTrail?.elapsedSec" class="text-muted"
-                                  x-text="Math.round(starTrail?.elapsedSec || 0) + 's'"></span>
-                        </div>
-                    </div>
-
-                    <div class="stats-bar" x-show="starTrail?.phase === 'Ok'"
-                         style="margin-top:10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
-                        <span class="text-ok">✓ <span x-text="$t('Saved')"></span> (<strong x-text="starTrail?.framesCaptured"></strong> <span x-text="$t('frames')"></span>)</span>
-                        <button class="btn btn-sm" x-show="starTrail?.outputPathJpg" @click="openMediaViewer(starTrail.outputPathJpg)" x-text="'🖼 ' + $t('Open')"></button>
-                    </div>
-                    <div class="stats-bar" x-show="starTrail?.phase === 'Fail'" style="margin-top:10px">
-                        <span class="text-err">✗ <span x-text="starTrail?.error"></span></span>
-                    </div>
-                </div>
             </div>
 
             <!-- GUIDER (PHD2) -->
@@ -10928,6 +10860,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <div class="video-tabstrip">
                     <button class="video-tab" :class="{ active: autorunTab === 'sequence' }"
                             @click="autorunTab = 'sequence'">Sequence</button>
+                    <button class="video-tab" :class="{ active: autorunTab === 'startrails' }"
+                            @click="autorunTab = 'startrails'; starTrailInit()"><span x-text="$t('Star trails')"></span></button>
+                    <button class="video-tab" :class="{ active: autorunTab === 'nightscape' }"
+                            @click="autorunTab = 'nightscape'">Nightscape</button>
                     <button class="video-tab" :class="{ active: autorunTab === 'flat' }"
                             @click="autorunTab = 'flat'; flatWizardOpenTab()">Flat Wizard</button>
                 </div>
@@ -11511,6 +11447,99 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      flatWizardShutterCtx(). Form fields write back to
                      the active rig's FlatWizard settings via debounced
                      PUT /api/equipment/rigs/{id} (saveRig). -->
+                <!-- AUTORUN: Star trails (moved here from Video). Capture job
+                     with a live-growing max-blend preview. -->
+                <div x-show="autorunTab === 'startrails'" class="video-process-pane">
+                    <p class="hint" x-text="$t('Fix the camera and turn tracking off: the sky drifts and each star paints an arc. Frames are combined by keeping the brightest pixel (lighten). Longer sessions make longer trails; aim near the celestial pole for circular ones.')"></p>
+
+                    <div class="preview-area startrail-preview" style="min-height:220px; margin:8px 0">
+                        <canvas id="starTrailCanvas" class="preview-canvas"></canvas>
+                        <div class="preview-overlay text-muted"
+                             x-show="!starTrail || starTrail?.framesCaptured === 0"
+                             x-text="$t('The growing trail composite will appear here.')"></div>
+                    </div>
+
+                    <div class="af-row" style="display:flex; gap:12px; align-items:center; flex-wrap:wrap">
+                        <label x-text="$t('Exposure (s)')"></label>
+                        <input type="number" min="1" max="120" step="1" x-model.number="starTrails.exposure" class="input-sm" style="width:70px">
+                        <label>Gain</label>
+                        <input type="number" min="0" max="1000" step="1" x-model.number="starTrails.gain" class="input-sm" style="width:70px">
+                        <label>Bin</label>
+                        <input type="number" min="1" max="4" step="1" x-model.number="starTrails.binning" class="input-sm" style="width:52px">
+                        <label x-text="$t('Interval (s)')"></label>
+                        <input type="number" min="0" max="60" step="1" x-model.number="starTrails.interval" class="input-sm" style="width:56px">
+                        <label x-text="$t('Max frames')"></label>
+                        <input type="number" min="0" max="100000" step="1" x-model.number="starTrails.maxFrames" class="input-sm" style="width:70px" :placeholder="$t('∞')">
+                    </div>
+
+                    <div class="af-row" style="display:flex; gap:14px; align-items:center; flex-wrap:wrap; margin-top:8px">
+                        <label><input type="checkbox" x-model="starTrails.turnTrackingOff"> <span x-text="$t('Turn mount tracking off')"></span></label>
+                        <label><input type="checkbox" x-model="starTrails.cosmetic"> <span x-text="$t('Remove hot pixels')"></span></label>
+                        <label><input type="checkbox" x-model="starTrails.saveSubs"> <span x-text="$t('Keep individual frames')"></span></label>
+                        <label><input type="checkbox" x-model="starTrails.alsoTimelapse"> <span x-text="$t('Also build a time-lapse')"></span></label>
+                    </div>
+
+                    <div class="af-row" style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-top:8px">
+                        <label x-text="$t('Name')"></label>
+                        <input type="text" x-model="starTrails.outputName" class="input-sm" style="width:140px">
+                    </div>
+
+                    <div class="af-row" style="display:flex; gap:8px; align-items:center; margin-top:12px">
+                        <button class="btn btn-primary" @click="starTrailStart()"
+                                x-show="!starTrail || starTrail?.done"
+                                x-text="'▶ ' + $t('Start star trails')"></button>
+                        <button class="btn btn-warning" @click="starTrailStop()"
+                                x-show="starTrail && !starTrail?.done"
+                                x-text="'■ ' + $t('Stop and save')"></button>
+                        <button class="btn btn-danger" @click="starTrailAbort()"
+                                x-show="starTrail && !starTrail?.done">Abort</button>
+                    </div>
+
+                    <div class="af-progress" x-show="starTrail && !starTrail?.done" style="margin-top:10px">
+                        <div class="af-progress-info">
+                            <span>Phase: <strong x-text="starTrail?.phase"></strong></span>
+                            <span><strong x-text="starTrail?.framesCaptured || 0"></strong> <span x-text="$t('frames')"></span></span>
+                            <span x-show="starTrail?.trackingOff" class="text-muted" x-text="$t('tracking off')"></span>
+                            <span x-show="starTrail?.elapsedSec" class="text-muted"
+                                  x-text="Math.round(starTrail?.elapsedSec || 0) + 's'"></span>
+                        </div>
+                    </div>
+
+                    <div class="stats-bar" x-show="starTrail?.phase === 'Ok'"
+                         style="margin-top:10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+                        <span class="text-ok">✓ <span x-text="$t('Saved')"></span> (<strong x-text="starTrail?.framesCaptured"></strong> <span x-text="$t('frames')"></span>)</span>
+                        <button class="btn btn-sm" x-show="starTrail?.outputPathJpg" @click="openMediaViewer(starTrail.outputPathJpg)" x-text="'🖼 ' + $t('Open')"></button>
+                    </div>
+                    <div class="stats-bar" x-show="starTrail?.phase === 'Fail'" style="margin-top:10px">
+                        <span class="text-err">✗ <span x-text="starTrail?.error"></span></span>
+                    </div>
+                </div>
+
+                <!-- AUTORUN: Nightscape capture. A nightscape is a plain
+                     light sequence with tracking off; the sky/foreground
+                     stacking lives in Studio, so this tab guides the shoot. -->
+                <div class="autorun-pane" x-show="autorunTab === 'nightscape'">
+                    <div style="max-width:640px;padding:8px 4px;">
+                        <p style="font-size:13px;color:var(--text-secondary,#a0a0b0);line-height:1.6;">
+                            A nightscape is a fixed-tripod Milky Way landscape: a series of
+                            identical light frames with tracking off. Shoot them with the
+                            sequence, then blend the sky and the foreground in Studio.
+                        </p>
+                        <ol style="font-size:13px;color:var(--text-secondary,#a0a0b0);line-height:1.75;padding-left:18px;margin:10px 0;">
+                            <li>Put the camera on a fixed tripod and turn mount tracking off.</li>
+                            <li>Keep each exposure short enough that the stars stay points:
+                                about <strong x-text="Math.max(1, Math.round(500 / (settings.focalLength || 50)))"></strong> s
+                                for your <strong x-text="(settings.focalLength || 50) + ' mm'"></strong> lens (the 500 rule).</li>
+                            <li>Shoot 15 to 30 identical light frames, same exposure and gain.</li>
+                            <li>Stack them in Studio, Nightscape Stack, and draw the horizon.</li>
+                        </ol>
+                        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+                            <button class="btn btn-primary" @click="autorunTab = 'sequence'">Set up the sequence</button>
+                            <button class="btn" @click="tab = 'files'; filesInit(); setStudioTab('nightscape')">Open Nightscape Stack</button>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="autorun-pane flatwiz-pane" x-show="autorunTab === 'flat'">
                     <div class="autorun-list-col">
 
@@ -11922,6 +11951,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             @click="setStudioTab('files')">Files</button>
                     <button class="studio-subtab" :class="{ active: studioTab === 'stacking' }"
                             @click="setStudioTab('stacking')">Stacking</button>
+                    <button class="studio-subtab" :class="{ active: studioTab === 'nightscape' }"
+                            @click="setStudioTab('nightscape')">Nightscape Stack</button>
                     <button class="studio-subtab" :class="{ active: studioTab === 'autoworkflow' }"
                             @click="setStudioTab('autoworkflow')">Auto Workflow</button>
                 </div>
@@ -12789,6 +12820,134 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                          Loads the script list because the step menu offers the
                          installed Siril scripts, and this pane can be the first
                          thing opened in STUDIO. -->
+                    <!-- Nightscape Stack: fixed-tripod Milky Way landscape.
+                         The sky is stacked aligned on the stars, the foreground
+                         stays put, and they meet at a hand-drawn horizon line.
+                         Capture is done in Autorun/Live; this is the editing. -->
+                    <div class="files-right-pane stack-pane" x-show="studioTab === 'nightscape'">
+                        <div class="stack-header">
+                            <h3 class="stack-title">Nightscape Stack</h3>
+                            <button class="btn btn-sm" @click="nightscapeClear()"
+                                    :disabled="!nightscape.frames.length">Clear frames</button>
+                        </div>
+
+                        <p class="stack-intro" style="font-size:12.5px;color:var(--text-muted);margin:0 0 12px;padding:0 2px;">
+                            Bring in a fixed-tripod Milky Way sequence, draw where the land meets
+                            the sky, and Polaris stacks the sky on the stars while keeping the
+                            landscape sharp and still. Shoot the frames in Autorun or Live with
+                            tracking off.
+                        </p>
+
+                        <!-- Frames -->
+                        <div class="stack-frame-pane" style="padding:0 2px;">
+                            <div class="stack-slot-actions" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+                                <button class="btn btn-sm" @click="nightscapeAddFiles()">+ Add frames…</button>
+                                <button class="btn btn-sm" @click="nightscapeAddFolder()">+ Add folder…</button>
+                                <button class="btn btn-sm" @click="nightscapeAddFromBrowser()">From browser</button>
+                                <span style="margin-left:auto;font-size:12px;color:var(--text-muted);align-self:center;"
+                                      x-text="nightscape.frames.length + ' frame(s)'"></span>
+                            </div>
+                            <div x-show="!nightscape.frames.length" style="font-size:12px;color:var(--text-muted);padding:8px 0;">
+                                Add your nightscape subs with Add frames or Add folder.
+                            </div>
+                            <ul class="stack-slot-list" x-show="nightscape.frames.length"
+                                style="max-height:120px;overflow:auto;list-style:none;padding:0;margin:0;">
+                                <template x-for="p in nightscape.frames" :key="p">
+                                    <li style="display:flex;align-items:center;gap:8px;font-size:12px;padding:2px 0;">
+                                        <span style="flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+                                              x-text="stackBasename(p)" :title="p"></span>
+                                        <button class="btn-icon-only" @click="nightscapeRemove(p)" title="Remove">&times;</button>
+                                    </li>
+                                </template>
+                            </ul>
+                        </div>
+
+                        <!-- Horizon -->
+                        <div style="margin-top:16px;padding:0 2px;">
+                            <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+                                <strong style="font-size:13px;">Horizon</strong>
+                                <button class="btn btn-sm" @click="nightscapeLoadPreview()"
+                                        :disabled="!nightscape.frames.length || nightscape.previewLoading">
+                                    <span x-text="nightscape.previewLoading ? 'Loading…' : (nightscape.previewUrl ? 'Reload preview' : 'Load preview')"></span>
+                                </button>
+                                <button class="btn btn-sm" @click="nightscapeHorizonClear()"
+                                        :disabled="!nightscape.horizon.length">Clear line</button>
+                                <span style="font-size:11px;color:var(--text-muted);"
+                                      x-text="nightscape.horizon.length + ' point(s)'"></span>
+                            </div>
+                            <p style="font-size:11.5px;color:var(--text-muted);margin:0 0 8px;">
+                                Click on the preview to drop points along the horizon, drag to move,
+                                right-click a point to delete. Everything below the line is kept from
+                                the fixed foreground; above it comes from the star-aligned sky.
+                            </p>
+                            <div x-show="!nightscape.previewUrl" style="font-size:12px;color:var(--text-muted);
+                                 border:1px dashed var(--border);border-radius:8px;padding:22px;text-align:center;">
+                                Load a preview to draw the horizon.
+                            </div>
+                            <div x-show="nightscape.previewUrl" x-cloak
+                                 style="position:relative;display:inline-block;max-width:100%;line-height:0;
+                                        border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+                                <img x-ref="nightscapePreviewImg" :src="nightscape.previewUrl" alt="Nightscape preview"
+                                     style="display:block;max-width:100%;height:auto;"
+                                     @load="_nightscapeSyncCanvas()">
+                                <canvas x-ref="nightscapeCanvas"
+                                        style="position:absolute;inset:0;width:100%;height:100%;cursor:crosshair;"
+                                        @mousedown="nightscapeMouseDown($event)"
+                                        @mousemove="nightscapeMouseMove($event)"
+                                        @mouseup="nightscapeMouseUp()"
+                                        @mouseleave="nightscapeMouseUp()"
+                                        @contextmenu.prevent="nightscapeRightClick($event)"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Process -->
+                        <div style="margin-top:18px;padding:0 2px;display:grid;grid-template-columns:1fr;gap:12px;">
+                            <div>
+                                <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px;">Feather (px)</label>
+                                <input type="number" class="input" style="width:120px;" min="0" max="400" step="5"
+                                       x-model.number="nightscape.featherPx" @change="_nightscapePersist()">
+                                <span style="font-size:11px;color:var(--text-muted);margin-left:8px;">Softness of the horizon blend.</span>
+                            </div>
+                            <div>
+                                <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px;">Output name</label>
+                                <input type="text" class="input" style="width:220px;" x-model="nightscape.outputName" @change="_nightscapePersist()">
+                            </div>
+                            <div>
+                                <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px;">Working folder</label>
+                                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                                    <button class="btn btn-sm" @click="nightscapePickFolder()">Choose folder…</button>
+                                    <code style="font-size:11px;color:var(--accent-lit,#7cc0ff);" x-text="nightscape.outputDir || '(same folder as the frames)'"></code>
+                                </div>
+                            </div>
+                            <div style="display:flex;gap:10px;align-items:center;margin-top:4px;">
+                                <button class="btn btn-primary" @click="nightscapeRun()"
+                                        :disabled="nightscape.job?.inProgress || nightscape.frames.length < 2 || nightscape.horizon.length < 2">
+                                    Run nightscape stack
+                                </button>
+                                <button class="btn btn-sm" x-show="nightscape.job?.inProgress" @click="nightscapeAbort()">Abort</button>
+                            </div>
+
+                            <!-- Progress + result -->
+                            <div x-show="nightscape.job" x-cloak style="margin-top:2px;">
+                                <div style="font-size:12px;color:var(--text-muted);"
+                                     x-text="(nightscape.job?.phase || '') + (nightscape.job?.stage ? ' — ' + nightscape.job.stage : '')"></div>
+                                <div class="af-progress" x-show="nightscape.job?.inProgress" style="margin-top:6px;">
+                                    <div class="af-progress-fill"
+                                         :style="'width:' + Math.round(100 * (nightscape.job?.done || 0) / Math.max(1, nightscape.job?.total || 1)) + '%'"></div>
+                                </div>
+                                <div x-show="nightscape.job && !nightscape.job.inProgress && nightscape.job.phase === 'Done'"
+                                     style="font-size:12.5px;margin-top:6px;">
+                                    Done: <span x-text="nightscape.job?.skyAligned"></span> frame(s) aligned for the sky.
+                                    <a href="#" @click.prevent="stackRevealOutput(nightscape.job.outputPath)"
+                                       x-text="stackBasename(nightscape.job?.outputPath || '')"></a>
+                                </div>
+                                <div x-show="nightscape.job && !nightscape.job.inProgress && nightscape.job.phase === 'Failed'"
+                                     style="font-size:12.5px;color:var(--danger,#e66);margin-top:6px;"
+                                     x-text="'Failed: ' + (nightscape.job?.error || '')"></div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="files-right-pane auto-workflow-pane"
                          x-init="if (!scripts.loaded) loadScripts()"
                          x-show="studioTab === 'autoworkflow'">
@@ -22919,7 +23078,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260902-serialport"></script>
+    <script src="/js/app.js?v=20260903-nightscape"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

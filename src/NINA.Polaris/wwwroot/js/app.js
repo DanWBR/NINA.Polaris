@@ -2823,6 +2823,27 @@ function ninaApp() {
             } catch (e) { /* quota / private mode */ }
         },
 
+        // ---- Nightscape stack (Studio sub-tab) --------------------------
+        // Fixed-tripod Milky Way landscape: the sky is stacked aligned on the
+        // stars, the foreground stays put, and they meet at a hand-drawn
+        // horizon line. Frames + horizon points + settings persist; the job,
+        // preview object URL and drag index do not.
+        nightscape: (() => {
+            const d = { frames: [], featherPx: 40, outputName: 'nightscape', outputDir: '',
+                        horizon: [], dragIdx: -1, previewUrl: null, previewLoading: false, job: null };
+            try { const raw = localStorage.getItem('polaris-nightscape');
+                  if (raw) Object.assign(d, JSON.parse(raw),
+                      { dragIdx: -1, previewUrl: null, previewLoading: false, job: null }); } catch (_) { }
+            return d;
+        })(),
+        _nightscapePersist() {
+            try {
+                const { frames, featherPx, outputName, outputDir, horizon } = this.nightscape;
+                localStorage.setItem('polaris-nightscape',
+                    JSON.stringify({ frames, featherPx, outputName, outputDir, horizon }));
+            } catch (_) { /* quota / private mode */ }
+        },
+
         _stackPersist() {
             try {
                 if (typeof localStorage === 'undefined') return;
@@ -2969,6 +2990,219 @@ function ninaApp() {
             const id = this.preprocess.job?.jobId;
             if (!id) return;
             try { await this.apiPost('/api/studio/preprocess/' + id + '/abort'); this.toast('Aborting…', 'warn'); }
+            catch (e) { this.toastFail('Abort failed', e, 'warn'); }
+        },
+
+        // ---- Nightscape stack methods -----------------------------------
+        async nightscapeAddFiles() {
+            const paths = await this._hostPickFiles({
+                title: 'Choose nightscape frames', accept: ['.fits', '.fit', '.fts', '.xisf'] });
+            if (!paths || !paths.length) return;
+            this._nightscapeMerge(paths);
+        },
+        async nightscapeAddFolder() {
+            const dir = await this._hostPickFolder({ title: 'Choose a folder of frames' });
+            if (!dir) return;
+            try {
+                const r = await this.apiGet('/api/files/list?path=' + encodeURIComponent(dir) + '&hidden=false');
+                const paths = (r.entries || []).filter(e => !e.isDirectory)
+                    .map(e => this._hostEntryPath(e)).filter(p => this._stackIsStackable(p));
+                if (!paths.length) { this.toast('No FITS/XISF files in that folder', 'warn'); return; }
+                this._nightscapeMerge(paths);
+            } catch (e) { this.toastFail('Could not list folder', e); }
+        },
+        nightscapeAddFromBrowser() {
+            const sel = (this.files.selectedPaths || []).filter(p => this._stackIsStackable(p));
+            if (!sel.length) { this.toast('Select FITS files in the browser first', 'warn'); return; }
+            this._nightscapeMerge(sel);
+            this.files.selectedPaths = [];
+        },
+        _nightscapeMerge(incoming) {
+            const seen = new Set(this.nightscape.frames);
+            let added = 0;
+            for (const p of incoming) if (!seen.has(p)) { this.nightscape.frames.push(p); seen.add(p); added++; }
+            this._nightscapePersist();
+            this.toast(`${added} frame(s) added`, added > 0 ? 'ok' : 'info', 2000);
+        },
+        nightscapeRemove(path) {
+            this.nightscape.frames = this.nightscape.frames.filter(p => p !== path);
+            this._nightscapePersist();
+        },
+        nightscapeClear() { this.nightscape.frames = []; this._nightscapePersist(); },
+        async nightscapePickFolder() {
+            const dir = await this._hostPickFolder({ title: 'Working folder for the result' });
+            if (!dir) return;
+            this.nightscape.outputDir = dir;
+            this._nightscapePersist();
+        },
+
+        // Render one frame to draw the horizon on. Any sub works (fixed tripod).
+        async nightscapeLoadPreview() {
+            if (!this.nightscape.frames.length) { this.toast('Add frames first', 'warn'); return; }
+            this.nightscape.previewLoading = true;
+            try {
+                const resp = await this.apiPost('/api/studio/nightscape/preview',
+                    { frame: this.nightscape.frames[0] });
+                const blob = await resp.blob();
+                if (this.nightscape.previewUrl) URL.revokeObjectURL(this.nightscape.previewUrl);
+                this.nightscape.previewUrl = URL.createObjectURL(blob);
+                this.$nextTick(() => this._nightscapeSyncCanvas());
+            } catch (e) { this.toastFail('Preview failed', e); }
+            finally { this.nightscape.previewLoading = false; }
+        },
+
+        // ---- horizon canvas over the preview (frame space, 0..1) ----
+        _nightscapeSyncCanvas() {
+            const img = this.$refs.nightscapePreviewImg, cv = this.$refs.nightscapeCanvas;
+            if (!img || !cv) return;
+            cv.width = img.clientWidth || 1;
+            cv.height = img.clientHeight || 1;
+            this.nightscapeRedraw();
+        },
+        _nightscapeYAt(xn) {
+            const pts = [...this.nightscape.horizon].sort((a, b) => a.x - b.x);
+            if (!pts.length) return 1;
+            if (xn <= pts[0].x) return pts[0].y;
+            const last = pts[pts.length - 1];
+            if (xn >= last.x) return last.y;
+            for (let i = 1; i < pts.length; i++) {
+                if (xn <= pts[i].x) {
+                    const a = pts[i - 1], b = pts[i];
+                    const f = (xn - a.x) / ((b.x - a.x) || 1);
+                    return a.y + (b.y - a.y) * f;
+                }
+            }
+            return last.y;
+        },
+        nightscapeRedraw() {
+            const cv = this.$refs.nightscapeCanvas;
+            if (!cv) return;
+            const ctx = cv.getContext('2d');
+            const W = cv.width, H = cv.height;
+            ctx.clearRect(0, 0, W, H);
+            const pts = this.nightscape.horizon;
+            if (!pts.length) return;
+            // Shade the foreground region below the interpolated line.
+            ctx.beginPath();
+            for (let x = 0; x <= W; x += 2) {
+                const y = this._nightscapeYAt(x / W) * H;
+                if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            }
+            ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath();
+            ctx.fillStyle = 'rgba(74,163,255,0.14)'; ctx.fill();
+            ctx.strokeStyle = 'rgba(74,163,255,0.9)'; ctx.lineWidth = 1.5; ctx.stroke();
+            pts.forEach((p, i) => {
+                const x = p.x * W, y = p.y * H;
+                ctx.beginPath();
+                ctx.arc(x, y, i === this.nightscape.dragIdx ? 6 : 4, 0, 2 * Math.PI);
+                ctx.fillStyle = '#4aa3ff'; ctx.fill();
+                ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke();
+            });
+        },
+        _nightscapeXY(evt) {
+            const cv = this.$refs.nightscapeCanvas;
+            const r = cv.getBoundingClientRect();
+            const xn = (evt.clientX - r.left) / r.width;
+            const yn = (evt.clientY - r.top) / r.height;
+            return { xn, yn, x: xn * cv.width, y: yn * cv.height };
+        },
+        _nightscapeHit(x, y) {
+            const cv = this.$refs.nightscapeCanvas;
+            const W = cv.width, H = cv.height;
+            for (let i = 0; i < this.nightscape.horizon.length; i++) {
+                const p = this.nightscape.horizon[i];
+                if (Math.hypot(p.x * W - x, p.y * H - y) <= 9) return i;
+            }
+            return -1;
+        },
+        _nightscapeSort() { this.nightscape.horizon.sort((a, b) => a.x - b.x); },
+        nightscapeMouseDown(evt) {
+            if (evt.button !== 0) return;
+            const { xn, yn, x, y } = this._nightscapeXY(evt);
+            const hit = this._nightscapeHit(x, y);
+            if (hit >= 0) { this.nightscape.dragIdx = hit; }
+            else {
+                this.nightscape.horizon.push({ x: +xn.toFixed(4), y: +yn.toFixed(4) });
+                this._nightscapeSort();
+                this.nightscape.dragIdx = this.nightscape.horizon.findIndex(p => Math.abs(p.x - xn) < 0.002);
+                this._nightscapePersist();
+            }
+            this.nightscapeRedraw();
+        },
+        nightscapeMouseMove(evt) {
+            if (this.nightscape.dragIdx < 0) return;
+            const { xn, yn } = this._nightscapeXY(evt);
+            const p = this.nightscape.horizon[this.nightscape.dragIdx];
+            p.x = Math.max(0, Math.min(1, +xn.toFixed(4)));
+            p.y = Math.max(0, Math.min(1, +yn.toFixed(4)));
+            this.nightscapeRedraw();
+        },
+        nightscapeMouseUp() {
+            if (this.nightscape.dragIdx < 0) return;
+            this.nightscape.dragIdx = -1;
+            this._nightscapeSort();
+            this.nightscapeRedraw();
+            this._nightscapePersist();
+        },
+        nightscapeRightClick(evt) {
+            const { x, y } = this._nightscapeXY(evt);
+            const hit = this._nightscapeHit(x, y);
+            if (hit >= 0) {
+                this.nightscape.horizon.splice(hit, 1);
+                this.nightscapeRedraw();
+                this._nightscapePersist();
+            }
+        },
+        nightscapeHorizonClear() {
+            this.nightscape.horizon = [];
+            this.nightscapeRedraw();
+            this._nightscapePersist();
+        },
+
+        // ---- run + poll ----
+        async nightscapeRun() {
+            const n = this.nightscape;
+            if (n.frames.length < 2) { this.toast('Add at least two frames', 'warn'); return; }
+            if (n.horizon.length < 2) { this.toast('Draw the horizon line first (click to add points)', 'warn'); return; }
+            this._nightscapePersist();
+            try {
+                const r = await this.apiPostJson('/api/studio/nightscape', {
+                    frames: n.frames,
+                    horizon: n.horizon.map(p => ({ x: p.x, y: p.y })),
+                    featherPx: Number(n.featherPx) || 0,
+                    outputDir: n.outputDir || null,
+                    outputName: n.outputName || 'nightscape'
+                });
+                const jobId = r && r.jobId;
+                if (!jobId) throw new Error('No job id returned');
+                n.job = { jobId, inProgress: true, phase: 'Preparing', stage: 'queued', done: 0, total: n.frames.length };
+                this._nightscapePoll(jobId);
+                this.toast('Nightscape stack started', 'ok');
+            } catch (e) { this.toastFail('Could not start the nightscape stack', e); }
+        },
+        async _nightscapePoll(jobId) {
+            const started = Date.now();
+            while (true) {
+                await new Promise(res => setTimeout(res, 800));
+                if (!this.nightscape.job || this.nightscape.job.jobId !== jobId) return;
+                let s;
+                try { s = await this.apiGet('/api/studio/nightscape/' + jobId + '/status'); }
+                catch { continue; }
+                this.nightscape.job = { jobId, inProgress: s.inProgress, phase: s.phase, stage: s.stage,
+                    done: s.done, total: s.total, skyAligned: s.skyAligned,
+                    outputPath: s.outputPath, fitsPath: s.fitsPath, error: s.error };
+                if (!s.inProgress) {
+                    if (s.phase === 'Done') this.toast('Nightscape stack complete', 'ok');
+                    else if (s.phase === 'Failed') this.toast('Failed: ' + (s.error || ''), 'error');
+                    return;
+                }
+                if (Date.now() - started > 2 * 3600 * 1000) return;
+            }
+        },
+        async nightscapeAbort() {
+            const id = this.nightscape.job?.jobId;
+            if (!id) return;
+            try { await this.apiPost('/api/studio/nightscape/' + id + '/abort'); this.toast('Aborting…', 'warn'); }
             catch (e) { this.toastFail('Abort failed', e, 'warn'); }
         },
         // Jump the Files browser to the folder holding a produced output.
@@ -11272,9 +11506,9 @@ function ninaApp() {
                 // Live, but while a server stack runs the client drops kind-0
                 // frames so ONLY the stack can paint the LIVE view.
                 case 6:  return ['liveCanvas'];                            // LiveStack
-                // Star-trails growing MAX composite (VIDEO → Star trails) goes
-                // to its own canvas so the building trail doesn't leak onto the
-                // LIVE or video-capture views.
+                // Star-trails growing MAX composite (Autorun → Star trails)
+                // goes to its own canvas so the building trail doesn't leak
+                // onto the LIVE or video-capture views.
                 case 7:  return ['starTrailCanvas'];                        // StarTrail
                 // Live frames (LIVE-tab capture + live-stack output) go to
                 // liveCanvas only.
