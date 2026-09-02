@@ -5467,7 +5467,13 @@ function ninaApp() {
                 // DBGLOG-6: log the network failure (timeout, DNS, refused).
                 // Skip /api/logs/client to prevent the same recursion loop
                 // as the success branch.
-                if (!url.startsWith('/api/logs')) {
+                // An ApiError already produced a status-leveled log line in the
+                // response branch above; logging it AGAIN here at error level
+                // turned every expected pre-login 401 into a scary [ERROR]
+                // duplicate in the session log (field report 2026-09-02). Only
+                // genuine transport failures (timeout, refused, DNS) reach the
+                // error level from here.
+                if (!url.startsWith('/api/logs') && !(err instanceof ApiError)) {
                     const dur = ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) - t0;
                     const msg = err && err.message ? err.message : String(err);
                     this._logFromClient('error', `${method} ${url} failed: ${msg}`, {
