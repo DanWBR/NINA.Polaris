@@ -2004,6 +2004,12 @@ function ninaApp() {
             showAllSerialDrivers: false,
             pollLeft: 0,
             found: [],              // live INDI devices [{name, driver, roles[]}]
+            // Devices the operator UNCHECKED on the found list. Several INDI
+            // drivers publish stub devices with no hardware behind them
+            // (PlayerOne Camera 1..3, QHYCFW1..3, the four ZWO AM variants,
+            // V4L2 CCD), so "published" does not mean "present" — the person
+            // in front of the rig curates the list.
+            exclude: {},            // device name -> true (excluded)
             serialChoice: {},       // '/dev/ttyUSB0' -> driver label ('' = skip)
             pick: { camera: '', mount: '', focuser: '', filterwheel: '', guide: '' },
             profileName: 'Polaris',
@@ -42154,6 +42160,7 @@ function ninaApp() {
             w.probeStarted = false; w.probeDrivers = []; w.usbDevices = [];
             w.serialPorts = []; w.suggestedSerialDrivers = []; w.installedDrivers = [];
             w.showAllSerialDrivers = false; w.pollLeft = 0; w.found = [];
+            w.exclude = {};
             w.serialChoice = {};
             w.pick = { camera: '', mount: '', focuser: '', filterwheel: '', guide: '' };
             w.win = { camera: [], mount: [], focuser: [], filterwheel: [] };
@@ -42239,9 +42246,9 @@ function ninaApp() {
             const w = this.wizard;
             if (!w.open || (w.step !== 'probe' && w.step !== 'pick')) return;
             try { await this.refreshDevices(); } catch (_) { }
-            w.found = (this.devices || []).map(d => ({
-                name: d.name, driver: d.driver || '', roles: d.roles || [],
-            }));
+            w.found = (this.devices || [])
+                .filter(d => d.name && String(d.name).trim())
+                .map(d => ({ name: d.name, driver: d.driver || '', roles: d.roles || [] }));
             this._wizardAutoPick();
             if (w.pollLeft-- > 0) setTimeout(() => this._wizardPoll(), 2000);
         },
@@ -42258,7 +42265,10 @@ function ninaApp() {
         },
 
         wizardFoundFor(role) {
-            return (this.wizard.found || []).filter(d => (d.roles || []).includes(role));
+            // Excluded devices (unchecked on the found list) never reach the
+            // role dropdowns: the operator said they are not really there.
+            return (this.wizard.found || []).filter(d =>
+                !this.wizard.exclude[d.name] && (d.roles || []).includes(role));
         },
 
         // Serial-driver picker options: the manufacturer shortlist by
@@ -42337,7 +42347,7 @@ function ninaApp() {
                 // indi-web's own panel reads its profile dropdown from this
                 // cookie; keep it in step with what we just started.
                 try { document.cookie = 'indiserver_profile=' + encodeURIComponent(name) + '; path=/; max-age=3600000'; } catch (_) { }
-                await this._wizardWaitDevices(12);
+                await this._wizardWaitDevices(15);
                 this._wizardResolveSerialPicks();
                 await this._wizardAssignAndConnect();
                 w.step = 'done';
@@ -42357,17 +42367,28 @@ function ninaApp() {
 
         // After the final profile starts, wait for its devices to publish so
         // the rig assignment below has real names to point at.
+        //
+        // Coverage per DRIVER, not a device count: one driver can publish
+        // several devices (ZWO CCD lists every camera, the AM driver lists
+        // four variants), so a count is satisfied while a slower driver —
+        // a serial focuser, in the field report — has not published yet, and
+        // its rig assignment silently never happens.
         async _wizardWaitDevices(tries) {
             const w = this.wizard;
-            const expected = this.wizardSelectedDrivers().length;
+            const want = this.wizardSelectedDrivers().map(l => l.toLowerCase());
+            const covered = () => {
+                const drvs = (w.found || []).map(d => (d.driver || '').toLowerCase()).filter(Boolean);
+                return want.every(l => drvs.some(dn =>
+                    dn === l || dn.includes(l) || l.includes(dn)));
+            };
             for (let i = 0; i < tries; i++) {
                 await new Promise(res => setTimeout(res, 2000));
                 if (!this.indiConnected) { try { await this.connectIndi(); } catch (_) { } }
                 try { await this.refreshDevices(); } catch (_) { }
-                w.found = (this.devices || []).map(d => ({
-                    name: d.name, driver: d.driver || '', roles: d.roles || [],
-                }));
-                if (w.found.length >= expected && w.found.length > 0) return;
+                w.found = (this.devices || [])
+                    .filter(d => d.name && String(d.name).trim())
+                    .map(d => ({ name: d.name, driver: d.driver || '', roles: d.roles || [] }));
+                if (w.found.length > 0 && covered()) return;
             }
         },
 

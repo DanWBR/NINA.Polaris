@@ -4675,5 +4675,6 @@
   "Create profile and connect": "Créer le profil et connecter",
   "Pick at least one device or assign a serial port first": "Choisissez au moins un appareil ou attribuez un port série d'abord",
   "Pick at least one device first": "Choisissez d'abord au moins un appareil",
-  "If a device found above already uses one of these ports (a USB mount, for example), leave that port as Skip.": "Si un appareil trouvé plus haut utilise déjà l'un de ces ports (une monture USB, par exemple), laissez ce port sur Ignorer."
+  "If a device found above already uses one of these ports (a USB mount, for example), leave that port as Skip.": "Si un appareil trouvé plus haut utilise déjà l'un de ces ports (une monture USB, par exemple), laissez ce port sur Ignorer.",
+  "Some drivers also list devices that are not really attached. Uncheck anything that is not connected right now.": "Certains pilotes listent aussi des appareils qui ne sont pas réellement branchés. Décochez ce qui n'est pas connecté en ce moment."
 }

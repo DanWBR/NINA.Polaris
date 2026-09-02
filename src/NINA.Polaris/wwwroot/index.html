@@ -21452,16 +21452,21 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                                 <strong>Found so far</strong>
                                 <span x-text="'(' + wizard.found.length + ')'"></span>
                             </div>
+                            <div x-show="wizard.found.length" style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">
+                                Some drivers also list devices that are not really attached.
+                                Uncheck anything that is not connected right now.
+                            </div>
                             <div x-show="!wizard.found.length" style="font-size:12px;color:var(--text-muted);">
                                 Nothing yet. Drivers can take a few seconds to find their hardware.
                             </div>
                             <template x-for="d in wizard.found" :key="d.name">
-                                <div style="display:flex;align-items:center;gap:8px;font-size:13px;padding:3px 0;">
-                                    <span>✅</span>
+                                <label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:3px 0;cursor:pointer;">
+                                    <input type="checkbox" :checked="!wizard.exclude[d.name]"
+                                           @change="wizard.exclude[d.name] = !$event.target.checked">
                                     <span x-text="d.name"></span>
                                     <span style="font-size:11px;color:var(--text-muted);"
                                           x-text="(d.roles || []).join(', ')"></span>
-                                </div>
+                                </label>
                             </template>
                             <div x-show="wizard.serialPorts.length"
                                  style="font-size:12px;color:var(--text-muted);margin-top:8px;">
@@ -22802,7 +22807,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260902-log401"></script>
+    <script src="/js/app.js?v=20260902-curate"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
