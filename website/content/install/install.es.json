@@ -165,8 +165,8 @@
     }
   },
   "download": {
-    "title": "Descargar",
-    "sub": "Elige la versión de servidor para la máquina que estará junto al telescopio y sigue los pasos de abajo. ¿Prefieres cero configuración? Coge una imagen ya preparada de más arriba.",
+    "title": "Instala en un sistema que ya tienes",
+    "sub": "El mismo Polaris que traen las imágenes, como un paquete normal. Descarga el build para la máquina que estará junto al telescopio y sigue los pasos de tu plataforma justo abajo.",
     "groups": [
       {
         "name": "Servidor (se ejecuta en el equipo)",
@@ -500,5 +500,41 @@
         }
       ]
     }
-  ]
+  ],
+  "paths": {
+    "tocTitle": "En esta página",
+    "a": {
+      "title": "Tengo una placa y una tarjeta vacía",
+      "body": "Elige la imagen de tu placa, grábala en la tarjeta y enciende. Polaris ya viene instalado y arranca solo.",
+      "cta": "Elegir la imagen"
+    },
+    "b": {
+      "title": "Ya uso Linux o Windows",
+      "body": "No necesitas nuestra imagen. Polaris se instala en el sistema que ya tienes, como cualquier otro programa: un .deb en una Pi o en cualquier Linux, un zip en Windows. Todo lo demás en la máquina queda como está.",
+      "cta": "Descargar el paquete"
+    },
+    "toc": [
+      {
+        "label": "Imágenes listas para grabar"
+      },
+      {
+        "label": "Paquetes para un sistema existente"
+      },
+      {
+        "label": "Pasos de instalación"
+      },
+      {
+        "label": "Actualización"
+      },
+      {
+        "label": "Requisitos del sistema"
+      },
+      {
+        "label": "Firewall"
+      },
+      {
+        "label": "Componentes opcionales"
+      }
+    ]
+  }
 }

@@ -59,6 +59,36 @@ const statusClass = (s: string) => {
       </div>
     </header>
 
+    <!-- Which path: a blank card, or an existing system. Users kept assuming
+         the ready-made images were the ONLY way in and never found the
+         packages, so the fork in the road comes before anything else. -->
+    {g.paths && (
+      <section id="paths" class="section">
+        <div class="container">
+          <div class="path-grid">
+            {[g.paths.a, g.paths.b].map((p) => (
+              <a class="path-card" href={p.href}>
+                <span class="path-ico" aria-hidden="true">{p.icon}</span>
+                <div>
+                  <h2 class="path-title">{p.title}</h2>
+                  <p class="path-body">{p.body}</p>
+                  <span class="path-cta">{p.cta} ↓</span>
+                </div>
+              </a>
+            ))}
+          </div>
+          {g.paths.toc && (
+            <nav class="page-toc" aria-label={g.paths.tocTitle}>
+              <span class="page-toc-title">{g.paths.tocTitle}</span>
+              {g.paths.toc.map((t) => (
+                <a href={t.href}>{t.label}</a>
+              ))}
+            </nav>
+          )}
+        </div>
+      </section>
+    )}
+
     <!-- Ready-to-flash images -->
     <section id="sd-images" class="section section-alt">
       <div class="container">
@@ -135,29 +165,10 @@ const statusClass = (s: string) => {
             </article>
           ))}
         </div>
-        {g.images.update && (
-          <div class="img-update">
-            <h3 class="img-update-title">{g.images.update.title}</h3>
-
-            {g.images.update.selfBody && (
-              <div class="self-update">
-                <div class="self-update-head">
-                  <span class="sq-icon" style="--ic: #4caf50"><Icon name="update" /></span>
-                  <h4>{g.images.update.selfTitle}</h4>
-                  {g.images.update.selfBadge && <span class="self-badge">{g.images.update.selfBadge}</span>}
-                </div>
-                <p class="img-update-intro">{g.images.update.selfBody}</p>
-                {g.images.update.selfImage && (
-                  <img class="self-shot" src={g.images.update.selfImage} alt="The in-app software update modal with release notes and a Download & install button" loading="lazy" />
-                )}
-              </div>
-            )}
-          </div>
-        )}
       </div>
     </section>
 
-    <!-- Download -->
+    <!-- Packages for an existing system -->
     <section id="download" class="section">
       <div class="container">
         <h2 class="block-title">{g.download.title}</h2>
@@ -210,8 +221,32 @@ const statusClass = (s: string) => {
       </div>
     </section>
 
+    <!-- Keeping Polaris up to date: applies to BOTH paths (the images are
+         .deb installs too), so it lives after them rather than nested
+         inside the images section where package users never saw it. -->
+    {g.images.update && (
+      <section id="updates" class="section">
+        <div class="container">
+          <h2 class="block-title">{g.images.update.title}</h2>
+          {g.images.update.selfBody && (
+            <div class="self-update">
+              <div class="self-update-head">
+                <span class="sq-icon" style="--ic: #4caf50"><Icon name="update" /></span>
+                <h4>{g.images.update.selfTitle}</h4>
+                {g.images.update.selfBadge && <span class="self-badge">{g.images.update.selfBadge}</span>}
+              </div>
+              <p class="img-update-intro">{g.images.update.selfBody}</p>
+              {g.images.update.selfImage && (
+                <img class="self-shot" src={g.images.update.selfImage} alt="The in-app software update modal with release notes and a Download & install button" loading="lazy" />
+              )}
+            </div>
+          )}
+        </div>
+      </section>
+    )}
+
     <!-- System requirements -->
-    <section id="requirements" class="section">
+    <section id="requirements" class="section section-alt">
       <div class="container">
         <h2 class="block-title">{g.requirements.title}</h2>
         <p class="block-sub">{g.requirements.sub}</p>
@@ -262,7 +297,7 @@ const statusClass = (s: string) => {
     </section>
 
     <!-- TL;DR -->
-    <section class="section section-alt">
+    <section id="tldr" class="section">
       <div class="container narrow">
         <h2 class="block-title">{g.tldr.title}</h2>
         <div class="table-wrap">
@@ -286,7 +321,7 @@ const statusClass = (s: string) => {
     </section>
 
     <!-- Firewall -->
-    <section class="section">
+    <section id="firewall" class="section section-alt">
       <div class="container narrow">
         <h2 class="block-title">{g.firewall.title}</h2>
         <p class="block-sub">{g.firewall.sub}</p>
@@ -305,7 +340,7 @@ const statusClass = (s: string) => {
     </section>
 
     <!-- Optional components -->
-    <section id="optional" class="section section-alt">
+    <section id="optional" class="section">
       <div class="container">
         <h2 class="block-title">{g.optionalSection.title}</h2>
         <p class="block-sub">{g.optionalSection.sub}</p>
@@ -376,6 +411,53 @@ const statusClass = (s: string) => {
 
   .container.narrow { max-width: 880px; }
   .section { padding: 56px 0; }
+
+  /* Path chooser: the fork between "flash a card" and "install a package". */
+  #paths { padding: 36px 0 28px; }
+  .path-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 16px;
+  }
+  .path-card {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    padding: 20px 22px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface, rgba(255,255,255,0.02));
+    color: inherit;
+    text-decoration: none;
+    transition: border-color .15s ease, transform .15s ease;
+  }
+  .path-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    text-decoration: none;
+  }
+  .path-ico { font-size: 28px; line-height: 1; margin-top: 2px; }
+  .path-title { font-size: 18px; font-weight: 700; margin: 0 0 6px; }
+  .path-body { font-size: 14px; color: var(--text-muted); line-height: 1.55; margin: 0 0 10px; }
+  .path-cta { font-size: 14px; font-weight: 600; color: var(--accent); }
+
+  .page-toc {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 14px;
+    margin-top: 18px;
+    font-size: 13px;
+  }
+  .page-toc-title {
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .page-toc a { color: var(--text-muted); }
+  .page-toc a:hover { color: var(--accent); text-decoration: none; }
 
   .block-title {
     font-size: clamp(22px, 3vw, 30px);

@@ -165,8 +165,8 @@
     }
   },
   "download": {
-    "title": "Télécharger",
-    "sub": "Choisissez la version serveur pour la machine qui sera à côté du télescope, puis suivez les étapes ci-dessous. Vous préférez zéro réglage ? Prenez plutôt une image toute prête plus haut.",
+    "title": "Installer sur un système que vous avez déjà",
+    "sub": "Le même Polaris que dans les images, sous forme de simple paquet. Téléchargez le build pour la machine qui restera près du télescope, puis suivez les étapes de votre plateforme juste en dessous.",
     "groups": [
       {
         "name": "Serveur (fonctionnant sur la plate-forme)",
@@ -500,5 +500,41 @@
         }
       ]
     }
-  ]
+  ],
+  "paths": {
+    "tocTitle": "Sur cette page",
+    "a": {
+      "title": "J'ai une carte mère et une carte SD vierge",
+      "body": "Choisissez l'image de votre carte, écrivez-la sur la carte SD et allumez. Polaris est déjà installé et démarre tout seul.",
+      "cta": "Choisir l'image"
+    },
+    "b": {
+      "title": "J'utilise déjà Linux ou Windows",
+      "body": "Vous n'avez pas besoin de notre image. Polaris s'installe sur le système que vous avez, comme n'importe quel programme : un .deb sur un Pi ou tout Linux, un zip sous Windows. Tout le reste de la machine reste tel quel.",
+      "cta": "Télécharger le paquet"
+    },
+    "toc": [
+      {
+        "label": "Images prêtes à écrire"
+      },
+      {
+        "label": "Paquets pour un système existant"
+      },
+      {
+        "label": "Étapes d'installation"
+      },
+      {
+        "label": "Mise à jour"
+      },
+      {
+        "label": "Prérequis système"
+      },
+      {
+        "label": "Pare-feu"
+      },
+      {
+        "label": "Composants optionnels"
+      }
+    ]
+  }
 }

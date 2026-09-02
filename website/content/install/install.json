@@ -165,8 +165,8 @@
     }
   },
   "download": {
-    "title": "Download",
-    "sub": "Pick the server build for the machine that will sit next to the telescope, then follow the steps below. Want zero setup? Take a ready-to-flash image above instead.",
+    "title": "Install on a system you already have",
+    "sub": "The same Polaris the images ship, as a plain package. Download the build for the machine that sits next to the telescope, then follow the steps for your platform just below.",
     "groups": [
       {
         "name": "Server (runs on the rig)",
@@ -500,5 +500,52 @@
         }
       ]
     }
-  ]
+  ],
+  "paths": {
+    "tocTitle": "On this page",
+    "a": {
+      "icon": "💾",
+      "title": "I have a board and a blank card",
+      "body": "Pick the image for your board, write it to the card, power on. Polaris comes installed and starts by itself.",
+      "cta": "Pick your image",
+      "href": "#sd-images"
+    },
+    "b": {
+      "icon": "📦",
+      "title": "I already run Linux or Windows",
+      "body": "You do not need our image. Polaris installs on the system you have, like any other program: a .deb on a Pi or any Linux, a zip on Windows. Everything else on the machine stays as it is.",
+      "cta": "Get the package",
+      "href": "#download"
+    },
+    "toc": [
+      {
+        "label": "Ready-to-flash images",
+        "href": "#sd-images"
+      },
+      {
+        "label": "Packages for an existing system",
+        "href": "#download"
+      },
+      {
+        "label": "Install steps",
+        "href": "#install"
+      },
+      {
+        "label": "Updating",
+        "href": "#updates"
+      },
+      {
+        "label": "System requirements",
+        "href": "#requirements"
+      },
+      {
+        "label": "Firewall",
+        "href": "#firewall"
+      },
+      {
+        "label": "Optional components",
+        "href": "#optional"
+      }
+    ]
+  }
 }

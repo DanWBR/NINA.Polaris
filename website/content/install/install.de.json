@@ -165,8 +165,8 @@
     }
   },
   "download": {
-    "title": "Herunterladen",
-    "sub": "Nehmen Sie den Server-Build für den Rechner, der neben dem Teleskop stehen wird, und folgen Sie den Schritten unten. Lieber ohne jede Einrichtung? Dann nehmen Sie oben ein fertiges Image.",
+    "title": "Auf einem vorhandenen System installieren",
+    "sub": "Dasselbe Polaris wie in den Images, als ganz normales Paket. Laden Sie den Build für den Rechner neben dem Teleskop herunter und folgen Sie direkt darunter den Schritten für Ihre Plattform.",
     "groups": [
       {
         "name": "Server (läuft auf dem Rechner)",
@@ -500,5 +500,41 @@
         }
       ]
     }
-  ]
+  ],
+  "paths": {
+    "tocTitle": "Auf dieser Seite",
+    "a": {
+      "title": "Ich habe ein Board und eine leere Karte",
+      "body": "Wählen Sie das Image für Ihr Board, schreiben Sie es auf die Karte und schalten Sie ein. Polaris ist schon installiert und startet von selbst.",
+      "cta": "Image auswählen"
+    },
+    "b": {
+      "title": "Ich nutze schon Linux oder Windows",
+      "body": "Sie brauchen unser Image nicht. Polaris installiert sich auf dem System, das Sie haben, wie jedes andere Programm: ein .deb auf einem Pi oder jedem Linux, ein Zip unter Windows. Alles andere auf dem Rechner bleibt, wie es ist.",
+      "cta": "Paket herunterladen"
+    },
+    "toc": [
+      {
+        "label": "Fertige Images zum Schreiben"
+      },
+      {
+        "label": "Pakete für ein vorhandenes System"
+      },
+      {
+        "label": "Installationsschritte"
+      },
+      {
+        "label": "Aktualisierung"
+      },
+      {
+        "label": "Systemvoraussetzungen"
+      },
+      {
+        "label": "Firewall"
+      },
+      {
+        "label": "Optionale Komponenten"
+      }
+    ]
+  }
 }
