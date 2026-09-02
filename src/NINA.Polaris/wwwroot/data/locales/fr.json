@@ -4680,5 +4680,6 @@
   "Tell Polaris what is plugged into each port (mount, focus motor), or leave it on Skip.": "Indiquez à Polaris ce qui est branché sur chaque port (monture, moteur de mise au point), ou laissez sur Ignorer.",
   "If something found above already uses one of these ports (a USB mount, for example), leave that port on Skip.": "Si un élément trouvé plus haut utilise déjà l'un de ces ports (une monture USB, par exemple), laissez ce port sur Ignorer.",
   "Connecting your equipment… This takes a minute while everything restarts and each device comes online.": "Connexion de votre matériel… Cela prend une minute, le temps que tout redémarre et que chaque appareil se mette en ligne.",
-  "Your equipment is connected and will reconnect on its own from now on. You can fine-tune everything in RIGS.": "Votre matériel est connecté et se reconnectera seul désormais. Vous pouvez tout régler dans RIGS."
+  "Your equipment is connected and will reconnect on its own from now on. You can fine-tune everything in RIGS.": "Votre matériel est connecté et se reconnectera seul désormais. Vous pouvez tout régler dans RIGS.",
+  "Motion": "Mouvement"
 }

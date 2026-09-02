@@ -42456,6 +42456,18 @@ function ninaApp() {
             if (w.pick.filterwheel) { this.filterWheelDriver = 'indi'; this.equipFilterChoice = w.pick.filterwheel; }
             if (w.pick.guide) { this.guideCameraDriver = 'indi'; this.guideCamera = w.pick.guide; }
             await this.equipConnectAll();
+            // Second pass: a serial device can still be finishing its
+            // handshake on the first try (a 4800-baud focuser takes several
+            // seconds to come up), so its connect times out once. Connected
+            // devices are skipped by the per-step gates, so this only
+            // retries what refused.
+            await new Promise(r => setTimeout(r, 5000));
+            const missed = (this.equipFocuserChoice && !this.focusConnected)
+                || (this.equipMountChoice && !this.mount?.connected)
+                || (this.equipCameraChoice && !this.selectedCamera)
+                || (this.equipFilterChoice && !this.filterWheel?.connected)
+                || (this.guideCamera && !this.guider?.guideCameraConnected);
+            if (missed) await this.equipConnectAll();
         },
 
         // ----- Windows: ASCOM + Alpaca discovery -----

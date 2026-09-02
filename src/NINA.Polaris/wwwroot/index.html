@@ -46,7 +46,7 @@
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260801-inputwidth">
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20260801-hscroll">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260731-videonudge">
-    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260731-edpan">
+    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260902-ctrlrows">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260807-hostnet">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260726-framefit">
     <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260801-selectwidth">
@@ -6899,7 +6899,13 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     <span x-show="mount.slewing" class="text-warn">SLEWING</span>
                                     <span x-show="mount.parked" class="text-warn">PARKED</span>
                                 </div>
-                                <div class="equip-inline-controls">
+                                <!-- Controls in two labeled rows (motion vs
+                                     sync/read-only) instead of one long
+                                     flex-wrap soup: eight buttons in a single
+                                     row wrapped unevenly and read as clutter
+                                     (field report 2026-09-02). -->
+                                <div class="equip-ctrl-grouplabel">Motion</div>
+                                <div class="equip-ctrl-row">
                                     <label class="equip-toggle"
                                            :title="mount.tracking ? 'Stop tracking' : 'Start tracking'">
                                         <input type="checkbox"
@@ -6944,6 +6950,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                             title="Park -> Unpark -> Home. Use this if plain Home does nothing after powering the mount on (strain-wave mounts like ZWO AM3 need a park/unpark cycle to re-establish the position reference before Home works).">
                                         Reset &amp; Home
                                     </button>
+                                </div>
+                                <div class="equip-ctrl-grouplabel">Sync</div>
+                                <div class="equip-ctrl-row">
                                     <!-- Recover real RA/Dec after an INDI driver
                                          reset. The ZWO AM3 (EQ mode) and similar
                                          drivers can come back reporting 0h/0deg
@@ -6991,22 +7000,24 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                      Shown so the operator can confirm both are
                                      right before syncing. -->
                                 <div class="hint mount-site-preview" x-show="mount.connected" x-cloak
-                                     style="margin-top:6px; display:flex; gap:14px; flex-wrap:wrap; align-items:center">
-                                    <span :class="(settings.latitude || settings.longitude) ? '' : 'text-warn'">
-                                        📍 <span x-text="mountSiteLocationText()"></span>
-                                    </span>
-                                    <!-- Same client-GPS handler as Settings / Observatory:
-                                         writes settings.lat/lon/alt, saves, and the location
-                                         line above re-renders from settings. Sync Site then
-                                         pushes the new coordinates to the mount. -->
-                                    <button type="button" class="btn btn-xs"
-                                            @click="useBrowserLocation()"
-                                            :disabled="obsGpsLoading"
-                                            :title="$t('Set the observatory location from GPS on this device')">
-                                        <span x-show="!obsGpsLoading">📍 <span x-text="$t('Use my location')"></span></span>
-                                        <span x-show="obsGpsLoading">…</span>
-                                    </button>
-                                    <span>🕐 <span x-text="mountSiteClockText()"></span></span>
+                                     style="margin-top:6px; display:grid; grid-template-columns:1fr; gap:4px">
+                                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+                                        <span :class="(settings.latitude || settings.longitude) ? '' : 'text-warn'">
+                                            📍 <span x-text="mountSiteLocationText()"></span>
+                                        </span>
+                                        <!-- Same client-GPS handler as Settings / Observatory:
+                                             writes settings.lat/lon/alt, saves, and the location
+                                             line re-renders from settings. Sync Site then
+                                             pushes the new coordinates to the mount. -->
+                                        <button type="button" class="btn btn-xs"
+                                                @click="useBrowserLocation()"
+                                                :disabled="obsGpsLoading"
+                                                :title="$t('Set the observatory location from GPS on this device')">
+                                            <span x-show="!obsGpsLoading">📍 <span x-text="$t('Use my location')"></span></span>
+                                            <span x-show="obsGpsLoading">…</span>
+                                        </button>
+                                    </div>
+                                    <div>🕐 <span x-text="mountSiteClockText()"></span></div>
                                 </div>
                                 <div class="obs-location-error" x-show="obsAddressError" x-text="obsAddressError"
                                      style="margin-top:4px"></div>
@@ -22908,7 +22919,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260902-labels"></script>
+    <script src="/js/app.js?v=20260902-retry"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

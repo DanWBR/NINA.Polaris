@@ -4061,5 +4061,6 @@
   "Tell Polaris what is plugged into each port (mount, focus motor), or leave it on Skip.": "Tell Polaris what is plugged into each port (mount, focus motor), or leave it on Skip.",
   "If something found above already uses one of these ports (a USB mount, for example), leave that port on Skip.": "If something found above already uses one of these ports (a USB mount, for example), leave that port on Skip.",
   "Connecting your equipment… This takes a minute while everything restarts and each device comes online.": "Connecting your equipment… This takes a minute while everything restarts and each device comes online.",
-  "Your equipment is connected and will reconnect on its own from now on. You can fine-tune everything in RIGS.": "Your equipment is connected and will reconnect on its own from now on. You can fine-tune everything in RIGS."
+  "Your equipment is connected and will reconnect on its own from now on. You can fine-tune everything in RIGS.": "Your equipment is connected and will reconnect on its own from now on. You can fine-tune everything in RIGS.",
+  "Motion": "Motion"
 }
