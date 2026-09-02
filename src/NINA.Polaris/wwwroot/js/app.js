@@ -42143,7 +42143,6 @@ function ninaApp() {
                 if (this._wizardOfferTries++ < 40) setTimeout(() => this.wizardMaybeOffer(), 5000);
                 return;
             }
-            try { if (localStorage.getItem('polaris-wizard-dismissed') === '1') return; } catch (_) { }
             try {
                 const info = await this.apiGet('/api/setup-wizard/info');
                 if (!info || info.wizardCompletedUtc) return;
@@ -42174,18 +42173,19 @@ function ninaApp() {
             }
         },
 
-        // Close without finishing. An auto-offered wizard remembers the "not
-        // now" in this browser so it stops nagging every boot; the RIGS
-        // button reopens it any time. A Linux probe in flight is torn down.
+        // Close without finishing. Deliberately NOT remembered anywhere: the
+        // only durable gates are the server-side flag (Skip setup / a
+        // finished run) and "this host has equipment configured". A person
+        // who closes to go plug something in gets offered again next boot —
+        // a field test showed a browser-side dismissal made one Cancel
+        // permanent and the wizard "never appeared again".
+        // A Linux probe in flight is torn down.
         wizardClose() {
             const w = this.wizard;
             if (!w.open) return;
             if (w.platform === 'linux' && w.probeStarted && w.step !== 'done') {
                 this.apiPostJson('/api/setup-wizard/indi/abort').catch(() => { });
                 w.probeStarted = false;
-            }
-            if (!w.manual && w.step !== 'done') {
-                try { localStorage.setItem('polaris-wizard-dismissed', '1'); } catch (_) { }
             }
             w.open = false;
         },
@@ -42194,8 +42194,6 @@ function ninaApp() {
         // browser or device ever auto-offers it again.
         async wizardSkip() {
             try { await this.apiPost('/api/setup-wizard/complete'); } catch (_) { }
-            try { localStorage.setItem('polaris-wizard-dismissed', '1'); } catch (_) { }
-            this.wizard.manual = true;   // flag already set; skip the local dismissal path
             this.wizardClose();
         },
 
@@ -42355,8 +42353,7 @@ function ninaApp() {
                 // the RIGS cards use (the catalogue picker handlers autosave).
                 w.step = 'details';
                 this.loadOpticsCatalogue && this.loadOpticsCatalogue().catch(() => { });
-                try { localStorage.setItem('polaris-wizard-dismissed', '1'); } catch (_) { }
-                try { await this.indiWebStatusRefresh(); } catch (_) { }
+                    try { await this.indiWebStatusRefresh(); } catch (_) { }
             } catch (e) {
                 let msg = (e && e.message) || 'Could not create the profile';
                 try { const b = JSON.parse(e.body || '{}'); if (b.error) msg = b.error; } catch (_) { }
@@ -42508,8 +42505,7 @@ function ninaApp() {
                 set(w.winPick.filterwheel, 'filterWheelDriver', 'equipFilterChoice');
                 await this.equipConnectAll();
                 try { await this.apiPost('/api/setup-wizard/complete'); } catch (_) { }
-                try { localStorage.setItem('polaris-wizard-dismissed', '1'); } catch (_) { }
-                w.step = 'details';
+                    w.step = 'details';
                 this.loadOpticsCatalogue && this.loadOpticsCatalogue().catch(() => { });
             } finally {
                 w.busy = false;
