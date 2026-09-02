@@ -42227,7 +42227,7 @@ function ninaApp() {
                     if (!(p.device in w.serialChoice)) w.serialChoice[p.device] = '';
                 }
                 if (r.startError) w.error = r.startError;
-                if (!this.indiConnected) { try { await this.connectIndi(); } catch (_) { } }
+                await this._wizardReconnectIndi();
                 // Drivers enumerate their hardware asynchronously after the
                 // server starts; keep polling while the probe/pick steps are
                 // visible so late devices still show up.
@@ -42347,6 +42347,7 @@ function ninaApp() {
                 // indi-web's own panel reads its profile dropdown from this
                 // cookie; keep it in step with what we just started.
                 try { document.cookie = 'indiserver_profile=' + encodeURIComponent(name) + '; path=/; max-age=3600000'; } catch (_) { }
+                await this._wizardReconnectIndi();
                 await this._wizardWaitDevices(15);
                 this._wizardResolveSerialPicks();
                 await this._wizardAssignAndConnect();
@@ -42368,6 +42369,22 @@ function ninaApp() {
             }
         },
 
+        // The probe and the finalize both swap indiservers under the
+        // backend's INDI client. Its socket still LOOKS connected (TCP half-
+        // open) so ConnectAsync no-ops, and the auto-reconnect backoff can
+        // outlast the wait window — which is how a serial focuser's device
+        // never showed up in time (field report: Gemini focuser). Force a
+        // clean drop + connect against the NEW server, quietly (no toasts).
+        async _wizardReconnectIndi() {
+            try { await this.apiPost('/api/indi/disconnect'); } catch (_) { }
+            try {
+                const r = await this.apiPost('/api/indi/connect', {
+                    host: this.settings.indiHost, port: this.settings.indiPort
+                });
+                if (r.ok) this.indiConnected = true;
+            } catch (_) { this.indiConnected = false; }
+        },
+
         // After the final profile starts, wait for its devices to publish so
         // the rig assignment below has real names to point at.
         //
@@ -42386,7 +42403,9 @@ function ninaApp() {
             };
             for (let i = 0; i < tries; i++) {
                 await new Promise(res => setTimeout(res, 2000));
-                if (!this.indiConnected) { try { await this.connectIndi(); } catch (_) { } }
+                // Halfway through with no coverage: kick the connection once
+                // more in case the first reconnect raced the server start.
+                if (i === Math.floor(tries / 2)) await this._wizardReconnectIndi();
                 try { await this.refreshDevices(); } catch (_) { }
                 w.found = (this.devices || [])
                     .filter(d => d.name && String(d.name).trim())

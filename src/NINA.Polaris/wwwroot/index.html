@@ -6142,6 +6142,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         </template>
                     </select>
                     <button class="btn btn-sm" @click="rigModalOpen = true; loadOpticsCatalogue(); loadCameraQuirks()">Manage rigs…</button>
+                    <button class="btn btn-sm btn-primary" @click="wizardOpen(null, true)"
+                            title="Find your equipment, build the driver profile and connect everything in a few guided steps">🧭 Setup wizard</button>
                     <button class="btn btn-sm" @click="saveCurrentSelectionsToRig()"
                             :disabled="!indiConnected"
                             title="Save current device selections into this rig">💾 Save selections</button>
@@ -8334,25 +8336,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                              hence the "add it manually below" wording. Nothing
                              is written until the operator confirms in the
                              modal. -->
-                        <!-- Guided first-run wizard. Not gated on indi-web: on
-                             Windows it runs the ASCOM/Alpaca path instead. -->
-                        <div style="margin:10px 0;padding:10px;
-                             background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;">
-                            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-                                <div style="flex:1 1 320px;min-width:0;">
-                                    <strong style="font-size:13px;">Equipment setup wizard</strong>
-                                    <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">
-                                        Find your equipment, build the driver profile and connect
-                                        everything in a few guided steps.
-                                    </div>
-                                </div>
-                                <button class="btn btn-sm btn-primary" style="margin-left:auto;flex:0 0 auto;"
-                                        @click="wizardOpen(null, true)">
-                                    Setup wizard
-                                </button>
-                            </div>
-                        </div>
-
+                        <!-- The guided setup wizard lives in the rig bar on the
+                             Equipment tab now (it is not INDI-only: on Windows
+                             it runs the ASCOM/Alpaca path). -->
                         <div x-show="indiWeb.status?.running" style="margin:10px 0;padding:10px;
                              background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;">
                             <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
@@ -22940,7 +22926,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260902-optics"></script>
+    <script src="/js/app.js?v=20260902-reconnect"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
