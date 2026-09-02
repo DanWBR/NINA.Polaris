@@ -42354,6 +42354,7 @@ function ninaApp() {
                 await this._wizardReconnectIndi();
                 await this._wizardWaitDevices(15);
                 this._wizardResolveSerialPicks();
+                await this._wizardApplySerialPorts();
                 await this._wizardAssignAndConnect();
                 // Finishing touches: optics + cooling, on the same rig state
                 // the RIGS cards use (the catalogue picker handlers autosave).
@@ -42443,6 +42444,34 @@ function ninaApp() {
                 if (roles.includes('mount') && !w.pick.mount) w.pick.mount = match.name;
                 else if (roles.includes('focuser') && !w.pick.focuser) w.pick.focuser = match.name;
                 else if (roles.includes('filterwheel') && !w.pick.filterwheel) w.pick.filterwheel = match.name;
+            }
+        },
+
+        // Point each serial driver at the PORT the operator assigned, BEFORE
+        // anything connects. Serial drivers default to /dev/ttyUSB0, so two
+        // of them contend for the same node and you can connect either
+        // device but never both (field report: OnStep mount + Gemini
+        // focuser). The by-id path is used when available so the assignment
+        // survives ttyUSB renumbering across reboots; /set persists it via
+        // the driver's debounced CONFIG_SAVE.
+        async _wizardApplySerialPorts() {
+            const w = this.wizard;
+            for (const dev of Object.keys(w.serialChoice)) {
+                const label = w.serialChoice[dev];
+                if (!label) continue;
+                const ll = label.toLowerCase();
+                const near = (v) => !!v && (v.toLowerCase() === ll ||
+                    v.toLowerCase().includes(ll) || ll.includes(v.toLowerCase()));
+                const match = (w.found || []).find(d => near(d.driver) || near(d.name));
+                if (!match) continue;
+                const sp = (w.serialPorts || []).find(x => x.device === dev);
+                const port = sp && sp.byId ? ('/dev/serial/by-id/' + sp.byId) : dev;
+                try {
+                    await this.apiPostJson('/api/indi/properties/set', {
+                        device: match.name, property: 'DEVICE_PORT', type: 'text',
+                        texts: { PORT: port },
+                    });
+                } catch (_) { /* no DEVICE_PORT (network device) or already connected */ }
             }
         },
 
