@@ -21613,6 +21613,134 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     </div>
                 </template>
 
+                <!-- STEP: details — optics + cooling. Bound to the SAME
+                     settings.* fields and handlers the RIGS optics cards use,
+                     so the catalogue autofill and the debounced rig save all
+                     come for free and stay in sync with the full UI. -->
+                <template x-if="wizard.step === 'details'">
+                    <div>
+                        <p style="font-size:13px;">
+                            Almost done. Set up your optics so field of view, plate solving
+                            and guiding scales come out right.
+                        </p>
+
+                        <div style="font-size:12px;margin-bottom:4px;"><strong>Main scope</strong></div>
+                        <div style="display:grid;grid-template-columns:1fr;">
+                            <div style="padding-bottom:10px;">
+                                <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px;">Brand (catalog)</label>
+                                <select class="equip-select" style="width:100%;" x-model="settings.telescopeBrand"
+                                        @change="onTelescopeBrandPick()">
+                                    <option value="">Manual entry</option>
+                                    <template x-for="b in opticsBrands" :key="b">
+                                        <option :value="b" x-text="b"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div style="padding-bottom:10px;">
+                                <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px;">Model</label>
+                                <select class="equip-select" style="width:100%;" x-model="settings.telescopeModel"
+                                        @change="onTelescopeModelPick()" :disabled="!settings.telescopeBrand">
+                                    <option value="">Pick a model</option>
+                                    <template x-for="t in opticsModelsForRig({telescopeBrand: settings.telescopeBrand})"
+                                              :key="t.brand + t.model">
+                                        <option :value="t.model"
+                                            x-text="t.model + ' (' + t.apertureMm + 'mm f/' + (t.focalLengthMm/t.apertureMm).toFixed(1) + ')'"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div style="padding-bottom:10px;">
+                                <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px;">Accessory (catalog)</label>
+                                <select class="equip-select" style="width:100%;" x-model="settings.accessoryPick"
+                                        @change="onAccessoryPick()">
+                                    <option value="">None</option>
+                                    <template x-for="a in opticsAccessoriesForRig({telescopeModel: settings.telescopeModel})"
+                                              :key="a.brand + a.model">
+                                        <option :value="a.brand + ' ' + a.model"
+                                            x-text="'[' + a.type + '] ' + a.brand + ' ' + a.model + ' (' + a.factor + '×)'"></option>
+                                    </template>
+                                    <option value="__custom__">Custom (set the multiplier)</option>
+                                </select>
+                            </div>
+                            <div style="padding-bottom:10px;display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;">
+                                <label style="font-size:12px;color:var(--text-secondary);">Focal length (mm)
+                                    <input type="number" x-model.number="settings.focalLength"
+                                           @change="saveOpticsDebounced(); updateFov()"
+                                           step="10" min="0" class="equip-select" style="width:110px;display:block;margin-top:4px;">
+                                </label>
+                                <label style="font-size:12px;color:var(--text-secondary);">Aperture (mm)
+                                    <input type="number" x-model.number="settings.aperture"
+                                           @change="saveOpticsDebounced()"
+                                           step="5" min="0" class="equip-select" style="width:110px;display:block;margin-top:4px;">
+                                </label>
+                                <span style="font-size:13px;padding-bottom:6px;"
+                                      x-show="settings.focalLength > 0 && settings.aperture > 0">
+                                    f/<strong x-text="(settings.focalLength / settings.aperture).toFixed(1)"></strong>
+                                </span>
+                            </div>
+                        </div>
+
+                        <div style="font-size:12px;margin:6px 0 4px;"><strong>Guide scope</strong></div>
+                        <div style="display:grid;grid-template-columns:1fr;">
+                            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding-bottom:10px;">
+                                <input type="checkbox" x-model="settings.guiderIsOag" @change="saveOpticsDebounced()">
+                                <span>Off-axis guider (uses main scope focal length)</span>
+                            </label>
+                            <div style="padding-bottom:10px;" x-show="!settings.guiderIsOag">
+                                <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px;">Brand (catalog)</label>
+                                <select class="equip-select" style="width:100%;" x-model="settings.guideTelescopeBrand"
+                                        @change="onGuideScopeBrandPick()">
+                                    <option value="">Manual entry</option>
+                                    <template x-for="b in guidescopeBrands" :key="b">
+                                        <option :value="b" x-text="b"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div style="padding-bottom:10px;" x-show="!settings.guiderIsOag">
+                                <label style="display:block;font-size:12px;color:var(--text-secondary);margin-bottom:4px;">Model</label>
+                                <select class="equip-select" style="width:100%;" x-model="settings.guideTelescopeModel"
+                                        @change="onGuideScopeModelPick()" :disabled="!settings.guideTelescopeBrand">
+                                    <option value="">Manual entry</option>
+                                    <template x-for="g in guidescopeModelsForRig({guideTelescopeBrand: settings.guideTelescopeBrand})"
+                                              :key="g.model">
+                                        <option :value="g.model"
+                                                x-text="g.model + ' (' + g.apertureMm + 'mm f/' + (g.focalLengthMm / g.apertureMm).toFixed(1) + ')'"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            <div style="padding-bottom:10px;display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap;"
+                                 x-show="!settings.guiderIsOag">
+                                <label style="font-size:12px;color:var(--text-secondary);">Focal length (mm)
+                                    <input type="number" x-model.number="settings.guiderFocalLengthMm"
+                                           @change="saveOpticsDebounced()"
+                                           step="10" min="0" class="equip-select" style="width:110px;display:block;margin-top:4px;">
+                                </label>
+                                <label style="font-size:12px;color:var(--text-secondary);">Aperture (mm)
+                                    <input type="number" x-model.number="settings.guiderApertureMm"
+                                           @change="saveOpticsDebounced()"
+                                           step="5" min="0" class="equip-select" style="width:110px;display:block;margin-top:4px;">
+                                </label>
+                            </div>
+                        </div>
+
+                        <div x-show="equipCameraInfo?.supportsCooler" style="margin-top:6px;">
+                            <div style="font-size:12px;margin-bottom:4px;"><strong>Camera cooling</strong></div>
+                            <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+                                <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;">
+                                    <input type="checkbox" :checked="equipCameraInfo?.coolerOn"
+                                           @change="setCooler($event.target.checked, equipCoolerTarget)">
+                                    <span>Cool the camera now</span>
+                                </label>
+                                <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary);">
+                                    <span>Target</span>
+                                    <input type="number" x-model.number="equipCoolerTarget"
+                                           step="1" min="-40" max="30" class="equip-select" style="width:80px;">
+                                    <span>&deg;C</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
                 <!-- STEP: done -->
                 <template x-if="wizard.step === 'done'">
                     <div>
@@ -21679,6 +21807,11 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <template x-if="wizard.step === 'connect'">
                     <div style="display:flex;gap:8px;justify-content:flex-end;width:100%;">
                         <button class="btn btn-sm" disabled>Working…</button>
+                    </div>
+                </template>
+                <template x-if="wizard.step === 'details'">
+                    <div style="display:flex;gap:8px;justify-content:flex-end;width:100%;">
+                        <button class="btn btn-sm btn-primary" @click="wizard.step = 'done'">Finish</button>
                     </div>
                 </template>
                 <template x-if="wizard.step === 'done'">
@@ -22807,7 +22940,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260902-curate"></script>
+    <script src="/js/app.js?v=20260902-optics"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

@@ -4676,5 +4676,10 @@
   "Pick at least one device or assign a serial port first": "Elige al menos un dispositivo o asigna un puerto serie primero",
   "Pick at least one device first": "Elige al menos un dispositivo primero",
   "If a device found above already uses one of these ports (a USB mount, for example), leave that port as Skip.": "Si un dispositivo encontrado arriba ya usa uno de estos puertos (una montura USB, por ejemplo), deja ese puerto como Omitir.",
-  "Some drivers also list devices that are not really attached. Uncheck anything that is not connected right now.": "Algunos drivers también listan dispositivos que no están realmente conectados. Desmarca lo que no esté conectado ahora."
+  "Some drivers also list devices that are not really attached. Uncheck anything that is not connected right now.": "Algunos drivers también listan dispositivos que no están realmente conectados. Desmarca lo que no esté conectado ahora.",
+  "Almost done. Set up your optics so field of view, plate solving and guiding scales come out right.": "Casi listo. Configura tu óptica para que el campo de visión, el plate solving y las escalas de guiado salgan correctos.",
+  "Main scope": "Tubo principal",
+  "Guide scope": "Tubo guía",
+  "Camera cooling": "Refrigeración de la cámara",
+  "Cool the camera now": "Enfriar la cámara ahora"
 }

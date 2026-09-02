@@ -42350,7 +42350,10 @@ function ninaApp() {
                 await this._wizardWaitDevices(15);
                 this._wizardResolveSerialPicks();
                 await this._wizardAssignAndConnect();
-                w.step = 'done';
+                // Finishing touches: optics + cooling, on the same rig state
+                // the RIGS cards use (the catalogue picker handlers autosave).
+                w.step = 'details';
+                this.loadOpticsCatalogue && this.loadOpticsCatalogue().catch(() => { });
                 try { localStorage.setItem('polaris-wizard-dismissed', '1'); } catch (_) { }
                 try { await this.indiWebStatusRefresh(); } catch (_) { }
             } catch (e) {
@@ -42487,7 +42490,8 @@ function ninaApp() {
                 await this.equipConnectAll();
                 try { await this.apiPost('/api/setup-wizard/complete'); } catch (_) { }
                 try { localStorage.setItem('polaris-wizard-dismissed', '1'); } catch (_) { }
-                w.step = 'done';
+                w.step = 'details';
+                this.loadOpticsCatalogue && this.loadOpticsCatalogue().catch(() => { });
             } finally {
                 w.busy = false;
             }
