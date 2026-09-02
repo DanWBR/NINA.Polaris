@@ -68,6 +68,7 @@ jobs:
           name: canopus-llama-${{ matrix.rid }}
           path: canopus-llama-${{ matrix.rid }}.tar.gz
           if-no-files-found: error
+          retention-days: 7
 
   # ---- Windows x64 ----
   windows:
@@ -95,6 +96,7 @@ jobs:
           name: canopus-llama-win-x64
           path: canopus-llama-win-x64.zip
           if-no-files-found: error
+          retention-days: 7
 
   # ---- macOS arm64 ----
   macos:
@@ -121,6 +123,7 @@ jobs:
           name: canopus-llama-osx-arm64
           path: canopus-llama-osx-arm64.tar.gz
           if-no-files-found: error
+          retention-days: 7
 
   # ---- Publish all four to the data-pack release in one shot (no race) ----
   publish:
