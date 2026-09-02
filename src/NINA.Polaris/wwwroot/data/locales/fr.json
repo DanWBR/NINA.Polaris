@@ -4674,5 +4674,6 @@
   "Skip setup": "Ignorer la configuration",
   "Create profile and connect": "Créer le profil et connecter",
   "Pick at least one device or assign a serial port first": "Choisissez au moins un appareil ou attribuez un port série d'abord",
-  "Pick at least one device first": "Choisissez d'abord au moins un appareil"
+  "Pick at least one device first": "Choisissez d'abord au moins un appareil",
+  "If a device found above already uses one of these ports (a USB mount, for example), leave that port as Skip.": "Si un appareil trouvé plus haut utilise déjà l'un de ces ports (une monture USB, par exemple), laissez ce port sur Ignorer."
 }

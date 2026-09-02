@@ -42262,6 +42262,17 @@ function ninaApp() {
             return w.showAllSerialDrivers ? w.installedDrivers : w.suggestedSerialDrivers;
         },
 
+        // Human-ish identity for a serial port, from its /dev/serial/by-id
+        // name — the only identification a generic USB-serial bridge offers
+        // (e.g. "usb-1a86_USB_Serial-if00-port0" -> "1a86 USB Serial").
+        // Better than nothing: the operator at least sees WHICH adapter chip
+        // or product sits on each port when there is more than one.
+        wizardSerialPortLabel(p) {
+            let s = (p && p.byId) || '';
+            s = s.replace(/^usb-/, '').replace(/-if\d+.*$/, '').replace(/_/g, ' ').trim();
+            return s;
+        },
+
         // Map a live device back to the indi-web driver LABEL the final
         // profile needs. DRIVER_NAME and the label agree for nearly every
         // driver; fall back to substring matching against what the probe

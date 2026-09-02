@@ -4674,5 +4674,6 @@
   "Skip setup": "Einrichtung überspringen",
   "Create profile and connect": "Profil erstellen und verbinden",
   "Pick at least one device or assign a serial port first": "Wählen Sie zuerst mindestens ein Gerät oder weisen Sie einen seriellen Port zu",
-  "Pick at least one device first": "Wählen Sie zuerst mindestens ein Gerät"
+  "Pick at least one device first": "Wählen Sie zuerst mindestens ein Gerät",
+  "If a device found above already uses one of these ports (a USB mount, for example), leave that port as Skip.": "Wenn ein oben gefundenes Gerät bereits einen dieser Ports nutzt (etwa eine USB-Montierung), lassen Sie diesen Port auf Überspringen."
 }

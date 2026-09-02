@@ -21519,11 +21519,17 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                                 Pick the driver for what is on each port (mount, focuser), or
                                 leave as Skip.
                             </div>
+                            <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">
+                                If a device found above already uses one of these ports (a USB
+                                mount, for example), leave that port as Skip.
+                            </div>
                             <div style="display:grid;grid-template-columns:1fr;">
                             <template x-for="p in wizard.serialPorts" :key="p.device">
                                 <div style="padding-bottom:10px;">
                                     <label style="display:block;margin-bottom:4px;">
                                         <code style="font-size:11px;" x-text="p.device" :title="p.byId"></code>
+                                        <span style="font-size:11px;color:var(--text-muted);margin-left:8px;"
+                                              x-text="wizardSerialPortLabel(p)"></span>
                                     </label>
                                     <select class="equip-select" style="width:100%;"
                                             @change="wizard.serialChoice[p.device] = $event.target.value">
@@ -22796,7 +22802,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260901-guidefit"></script>
+    <script src="/js/app.js?v=20260902-serialid"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
