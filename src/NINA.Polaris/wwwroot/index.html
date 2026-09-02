@@ -21404,19 +21404,13 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <template x-if="wizard.step === 'welcome'">
                     <div>
                         <p class="indi-auto-note" x-show="!wizard.manual" x-cloak>
-                            Looks like this host has no equipment configured yet. Polaris can
-                            find and connect it for you now, or you can do this later from RIGS.
+                            Looks like nothing is set up here yet. Polaris can find and connect your equipment now, or you can do it later from RIGS.
                         </p>
                         <p style="font-size:13px;" x-show="wizard.platform !== 'windows'">
-                            Power up and plug in your equipment, then press Start. Polaris will
-                            start the INDI drivers for the major manufacturers, watch which
-                            devices answer, and build a clean profile with just your gear. The
-                            profile is set to start and connect automatically from then on.
+                            Power up and plug in your equipment, then press Start. Polaris looks for gear from the major brands, shows you what it finds, and sets everything up to connect on its own from then on.
                         </p>
                         <p style="font-size:13px;" x-show="wizard.platform === 'windows'">
-                            Power up and plug in your equipment, then press Start. Polaris will
-                            search the ASCOM drivers installed on this machine and discover
-                            Alpaca devices on your network, then connect what you pick.
+                            Power up and plug in your equipment, then press Start. Polaris searches the ASCOM drivers on this machine and Alpaca devices on your network, then connects what you pick.
                         </p>
                     </div>
                 </template>
@@ -21425,10 +21419,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <template x-if="wizard.step === 'probe'">
                     <div>
                         <p style="font-size:13px;" x-show="wizard.platform !== 'windows'">
-                            <span x-show="wizard.busy">Starting the drivers…</span>
-                            <span x-show="!wizard.busy">Watching for devices. Cameras, filter
-                            wheels and focusers show up here on their own; mounts on serial
-                            adapters are assigned on the next step.</span>
+                            <span x-show="wizard.busy">Getting things ready…</span>
+                            <span x-show="!wizard.busy">Looking for your equipment. Cameras, filter wheels and focusers appear here on their own; anything on a serial cable is assigned on the next step.</span>
                         </p>
                         <p style="font-size:13px;" x-show="wizard.platform === 'windows'">
                             Searching for ASCOM and Alpaca devices…
@@ -21439,11 +21431,10 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                                 <span x-text="'(' + wizard.found.length + ')'"></span>
                             </div>
                             <div x-show="wizard.found.length" style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">
-                                Some drivers also list devices that are not really attached.
-                                Uncheck anything that is not connected right now.
+                                The list can include devices that are not really here. Uncheck anything that is not plugged in right now.
                             </div>
                             <div x-show="!wizard.found.length" style="font-size:12px;color:var(--text-muted);">
-                                Nothing yet. Drivers can take a few seconds to find their hardware.
+                                Nothing yet. Give it a few seconds.
                             </div>
                             <template x-for="d in wizard.found" :key="d.name">
                                 <label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:3px 0;cursor:pointer;">
@@ -21457,8 +21448,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             <div x-show="wizard.serialPorts.length"
                                  style="font-size:12px;color:var(--text-muted);margin-top:8px;">
                                 <span x-text="wizard.serialPorts.length"></span>
-                                serial port(s) detected. Mounts and focusers on serial adapters
-                                are assigned on the next step.
+                                serial port(s) found. What is on them (mount, focus motor) is assigned on the next step.
                             </div>
                         </div>
                     </div>
@@ -21470,8 +21460,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <template x-if="wizard.step === 'pick' && wizard.platform !== 'windows'">
                     <div>
                         <p style="font-size:13px;">
-                            Choose which device fills each role. Anything left as None is not
-                            added to the profile.
+                            Choose which device does what. Anything left as None stays out of the setup.
                         </p>
                         <!-- Label-above + full-width controls, spaced by a
                              1-column grid with per-cell padding-bottom (the
@@ -21507,12 +21496,10 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                         <div x-show="wizard.serialPorts.length" style="margin-top:12px;">
                             <div style="font-size:12px;margin-bottom:2px;"><strong>Serial ports</strong></div>
                             <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">
-                                Pick the driver for what is on each port (mount, focuser), or
-                                leave as Skip.
+                                Tell Polaris what is plugged into each port (mount, focus motor), or leave it on Skip.
                             </div>
                             <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px;">
-                                If a device found above already uses one of these ports (a USB
-                                mount, for example), leave that port as Skip.
+                                If something found above already uses one of these ports (a USB mount, for example), leave that port on Skip.
                             </div>
                             <div style="display:grid;grid-template-columns:1fr;">
                             <template x-for="p in wizard.serialPorts" :key="p.device">
@@ -21552,8 +21539,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <template x-if="wizard.step === 'pick' && wizard.platform === 'windows'">
                     <div>
                         <p style="font-size:13px;">
-                            Choose which device fills each role. Anything left as None is not
-                            connected.
+                            Choose which device does what. Anything left as None is not connected.
                         </p>
                         <div style="display:grid;grid-template-columns:1fr;">
                         <template x-for="role in [
@@ -21589,9 +21575,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <template x-if="wizard.step === 'connect'">
                     <div>
                         <p style="font-size:13px;" x-show="wizard.platform !== 'windows'">
-                            Creating the profile and connecting your equipment… The temporary
-                            probe profile is removed, the final one starts, and each device
-                            connects in turn.
+                            Connecting your equipment… This takes a minute while everything restarts and each device comes online.
                         </p>
                         <p style="font-size:13px;" x-show="wizard.platform === 'windows'">
                             Connecting your equipment…
@@ -21731,9 +21715,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <template x-if="wizard.step === 'done'">
                     <div>
                         <p style="font-size:13px;">
-                            <strong>All set.</strong> Your equipment is connected and saved to
-                            the rig, and it will reconnect automatically from now on. You can
-                            fine-tune every device in RIGS.
+                            <strong>All set.</strong> Your equipment is connected and will reconnect on its own from now on. You can fine-tune everything in RIGS.
                         </p>
                         <template x-for="role in [
                                 { key: 'camera', label: 'Camera' },
@@ -21779,7 +21761,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                         <button class="btn btn-sm btn-primary" x-show="wizard.platform !== 'windows'"
                                 :disabled="wizard.busy || wizardSelectedCount() === 0"
                                 @click="wizardFinalize()">
-                            <span>Create profile and connect</span>
+                            <span>Save and connect</span>
                             <span x-text="' (' + wizardSelectedCount() + ')'"></span>
                         </button>
                         <button class="btn btn-sm btn-primary" x-show="wizard.platform === 'windows'"
@@ -22926,7 +22908,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260902-reoffer"></script>
+    <script src="/js/app.js?v=20260902-labels"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

@@ -42294,15 +42294,21 @@ function ninaApp() {
         _wizardDriverLabelFor(deviceName) {
             const w = this.wizard;
             const dev = (w.found || []).find(d => d.name === deviceName);
-            if (!dev || !dev.driver) return null;
-            const drv = dev.driver;
+            if (!dev) return null;
             const eq = (a, b) => a.toLowerCase() === b.toLowerCase();
             const all = [...w.probeDrivers.map(l => ({ label: l })), ...(w.installedDrivers || [])];
-            let hit = all.find(d => eq(d.label, drv));
-            if (!hit) hit = all.find(d =>
-                d.label.toLowerCase().includes(drv.toLowerCase()) ||
-                drv.toLowerCase().includes(d.label.toLowerCase()));
-            return hit ? hit.label : null;
+            // Try the driver name first, then the device name: a custom
+            // indi-web label matches the NAME it gave the device, not the
+            // binary's own driver name.
+            for (const key of [dev.driver, dev.name]) {
+                if (!key) continue;
+                let hit = all.find(d => eq(d.label, key));
+                if (!hit) hit = all.find(d =>
+                    d.label.toLowerCase().includes(key.toLowerCase()) ||
+                    key.toLowerCase().includes(d.label.toLowerCase()));
+                if (hit) return hit.label;
+            }
+            return null;
         },
 
         // The driver labels the FINAL profile gets: one per picked device
@@ -42393,9 +42399,15 @@ function ninaApp() {
         async _wizardWaitDevices(tries) {
             const w = this.wizard;
             const want = this.wizardSelectedDrivers().map(l => l.toLowerCase());
+            // A custom indi-web driver label RENAMES the published device
+            // (field case: label "Gemini EAF" over the MyFocuserPro2 binary),
+            // so a selected label can show up as either the device's driver
+            // name or the device name itself.
+            const ids = () => (w.found || []).flatMap(d =>
+                [(d.driver || '').toLowerCase(), (d.name || '').toLowerCase()]).filter(Boolean);
             const covered = () => {
-                const drvs = (w.found || []).map(d => (d.driver || '').toLowerCase()).filter(Boolean);
-                return want.every(l => drvs.some(dn =>
+                const known = ids();
+                return want.every(l => known.some(dn =>
                     dn === l || dn.includes(l) || l.includes(dn)));
             };
             for (let i = 0; i < tries; i++) {
@@ -42420,10 +42432,12 @@ function ninaApp() {
             for (const dev of Object.keys(w.serialChoice)) {
                 const label = w.serialChoice[dev];
                 if (!label) continue;
-                const match = (w.found || []).find(d =>
-                    d.driver && (d.driver.toLowerCase() === label.toLowerCase() ||
-                                 d.driver.toLowerCase().includes(label.toLowerCase()) ||
-                                 label.toLowerCase().includes(d.driver.toLowerCase())));
+                const ll = label.toLowerCase();
+                const near = (v) => !!v && (v.toLowerCase() === ll ||
+                    v.toLowerCase().includes(ll) || ll.includes(v.toLowerCase()));
+                // Match on the driver name OR the device name: a custom
+                // indi-web label renames the device it starts.
+                const match = (w.found || []).find(d => near(d.driver) || near(d.name));
                 if (!match) continue;
                 const roles = match.roles || [];
                 if (roles.includes('mount') && !w.pick.mount) w.pick.mount = match.name;
