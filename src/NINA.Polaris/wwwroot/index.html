@@ -10863,7 +10863,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <button class="video-tab" :class="{ active: autorunTab === 'startrails' }"
                             @click="autorunTab = 'startrails'; starTrailInit()"><span x-text="$t('Star trails')"></span></button>
                     <button class="video-tab" :class="{ active: autorunTab === 'nightscape' }"
-                            @click="autorunTab = 'nightscape'">Nightscape</button>
+                            @click="autorunTab = 'nightscape'"><span x-text="$t('Nightscape')"></span></button>
                     <button class="video-tab" :class="{ active: autorunTab === 'flat' }"
                             @click="autorunTab = 'flat'; flatWizardOpenTab()">Flat Wizard</button>
                 </div>
@@ -11527,9 +11527,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         </p>
                         <ol style="font-size:13px;color:var(--text-secondary,#a0a0b0);line-height:1.75;padding-left:18px;margin:10px 0;">
                             <li>Put the camera on a fixed tripod and turn mount tracking off.</li>
-                            <li>Keep each exposure short enough that the stars stay points:
-                                about <strong x-text="Math.max(1, Math.round(500 / (settings.focalLength || 50)))"></strong> s
-                                for your <strong x-text="(settings.focalLength || 50) + ' mm'"></strong> lens (the 500 rule).</li>
+                            <li x-text="$t('Keep each exposure short enough that the stars stay points: about {s} s for your {mm} mm lens (the 500 rule).', { s: Math.max(1, Math.round(500 / (settings.focalLength || 50))), mm: (settings.focalLength || 50) })"></li>
                             <li>Shoot 15 to 30 identical light frames, same exposure and gain.</li>
                             <li>Stack them in Studio, Nightscape Stack, and draw the horizon.</li>
                         </ol>
@@ -12845,7 +12843,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <button class="btn btn-sm" @click="nightscapeAddFolder()">+ Add folder…</button>
                                 <button class="btn btn-sm" @click="nightscapeAddFromBrowser()">From browser</button>
                                 <span style="margin-left:auto;font-size:12px;color:var(--text-muted);align-self:center;"
-                                      x-text="nightscape.frames.length + ' frame(s)'"></span>
+                                      x-text="$t('{n} frame(s)', { n: nightscape.frames.length })"></span>
                             </div>
                             <div x-show="!nightscape.frames.length" style="font-size:12px;color:var(--text-muted);padding:8px 0;">
                                 Add your nightscape subs with Add frames or Add folder.
@@ -12873,7 +12871,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <button class="btn btn-sm" @click="nightscapeHorizonClear()"
                                         :disabled="!nightscape.horizon.length">Clear line</button>
                                 <span style="font-size:11px;color:var(--text-muted);"
-                                      x-text="nightscape.horizon.length + ' point(s)'"></span>
+                                      x-text="$t('{n} point(s)', { n: nightscape.horizon.length })"></span>
                             </div>
                             <p style="font-size:11.5px;color:var(--text-muted);margin:0 0 8px;">
                                 Click on the preview to drop points along the horizon, drag to move,
@@ -12930,20 +12928,20 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <!-- Progress + result -->
                             <div x-show="nightscape.job" x-cloak style="margin-top:2px;">
                                 <div style="font-size:12px;color:var(--text-muted);"
-                                     x-text="(nightscape.job?.phase || '') + (nightscape.job?.stage ? ' — ' + nightscape.job.stage : '')"></div>
+                                     x-text="$t(nightscape.job?.phase || '') + (nightscape.job?.stage ? ' · ' + nightscape.job.stage : '')"></div>
                                 <div class="af-progress" x-show="nightscape.job?.inProgress" style="margin-top:6px;">
                                     <div class="af-progress-fill"
                                          :style="'width:' + Math.round(100 * (nightscape.job?.done || 0) / Math.max(1, nightscape.job?.total || 1)) + '%'"></div>
                                 </div>
                                 <div x-show="nightscape.job && !nightscape.job.inProgress && nightscape.job.phase === 'Done'"
                                      style="font-size:12.5px;margin-top:6px;">
-                                    Done: <span x-text="nightscape.job?.skyAligned"></span> frame(s) aligned for the sky.
+                                    <span x-text="$t('Done: {n} frame(s) aligned for the sky.', { n: nightscape.job?.skyAligned })"></span>
                                     <a href="#" @click.prevent="stackRevealOutput(nightscape.job.outputPath)"
                                        x-text="stackBasename(nightscape.job?.outputPath || '')"></a>
                                 </div>
                                 <div x-show="nightscape.job && !nightscape.job.inProgress && nightscape.job.phase === 'Failed'"
                                      style="font-size:12.5px;color:var(--danger,#e66);margin-top:6px;"
-                                     x-text="'Failed: ' + (nightscape.job?.error || '')"></div>
+                                     x-text="$t('Failed: {e}', { e: nightscape.job?.error || '' })"></div>
                             </div>
                         </div>
                     </div>
@@ -23078,7 +23076,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260903-nightscape"></script>
+    <script src="/js/app.js?v=20260903-nightscape-i18n"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

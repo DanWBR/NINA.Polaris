@@ -2996,24 +2996,24 @@ function ninaApp() {
         // ---- Nightscape stack methods -----------------------------------
         async nightscapeAddFiles() {
             const paths = await this._hostPickFiles({
-                title: 'Choose nightscape frames', accept: ['.fits', '.fit', '.fts', '.xisf'] });
+                title: this._t('Choose nightscape frames'), accept: ['.fits', '.fit', '.fts', '.xisf'] });
             if (!paths || !paths.length) return;
             this._nightscapeMerge(paths);
         },
         async nightscapeAddFolder() {
-            const dir = await this._hostPickFolder({ title: 'Choose a folder of frames' });
+            const dir = await this._hostPickFolder({ title: this._t('Choose a folder of frames') });
             if (!dir) return;
             try {
                 const r = await this.apiGet('/api/files/list?path=' + encodeURIComponent(dir) + '&hidden=false');
                 const paths = (r.entries || []).filter(e => !e.isDirectory)
                     .map(e => this._hostEntryPath(e)).filter(p => this._stackIsStackable(p));
-                if (!paths.length) { this.toast('No FITS/XISF files in that folder', 'warn'); return; }
+                if (!paths.length) { this.toast(this._t('No FITS/XISF files in that folder'), 'warn'); return; }
                 this._nightscapeMerge(paths);
-            } catch (e) { this.toastFail('Could not list folder', e); }
+            } catch (e) { this.toastFail(this._t('Could not list folder'), e); }
         },
         nightscapeAddFromBrowser() {
             const sel = (this.files.selectedPaths || []).filter(p => this._stackIsStackable(p));
-            if (!sel.length) { this.toast('Select FITS files in the browser first', 'warn'); return; }
+            if (!sel.length) { this.toast(this._t('Select FITS files in the browser first'), 'warn'); return; }
             this._nightscapeMerge(sel);
             this.files.selectedPaths = [];
         },
@@ -3022,7 +3022,7 @@ function ninaApp() {
             let added = 0;
             for (const p of incoming) if (!seen.has(p)) { this.nightscape.frames.push(p); seen.add(p); added++; }
             this._nightscapePersist();
-            this.toast(`${added} frame(s) added`, added > 0 ? 'ok' : 'info', 2000);
+            this.toast(this._t('{n} frame(s) added', { n: added }), added > 0 ? 'ok' : 'info', 2000);
         },
         nightscapeRemove(path) {
             this.nightscape.frames = this.nightscape.frames.filter(p => p !== path);
@@ -3030,7 +3030,7 @@ function ninaApp() {
         },
         nightscapeClear() { this.nightscape.frames = []; this._nightscapePersist(); },
         async nightscapePickFolder() {
-            const dir = await this._hostPickFolder({ title: 'Working folder for the result' });
+            const dir = await this._hostPickFolder({ title: this._t('Working folder for the result') });
             if (!dir) return;
             this.nightscape.outputDir = dir;
             this._nightscapePersist();
@@ -3038,7 +3038,7 @@ function ninaApp() {
 
         // Render one frame to draw the horizon on. Any sub works (fixed tripod).
         async nightscapeLoadPreview() {
-            if (!this.nightscape.frames.length) { this.toast('Add frames first', 'warn'); return; }
+            if (!this.nightscape.frames.length) { this.toast(this._t('Add frames first'), 'warn'); return; }
             this.nightscape.previewLoading = true;
             try {
                 const resp = await this.apiPost('/api/studio/nightscape/preview',
@@ -3047,7 +3047,7 @@ function ninaApp() {
                 if (this.nightscape.previewUrl) URL.revokeObjectURL(this.nightscape.previewUrl);
                 this.nightscape.previewUrl = URL.createObjectURL(blob);
                 this.$nextTick(() => this._nightscapeSyncCanvas());
-            } catch (e) { this.toastFail('Preview failed', e); }
+            } catch (e) { this.toastFail(this._t('Preview failed'), e); }
             finally { this.nightscape.previewLoading = false; }
         },
 
@@ -3162,8 +3162,8 @@ function ninaApp() {
         // ---- run + poll ----
         async nightscapeRun() {
             const n = this.nightscape;
-            if (n.frames.length < 2) { this.toast('Add at least two frames', 'warn'); return; }
-            if (n.horizon.length < 2) { this.toast('Draw the horizon line first (click to add points)', 'warn'); return; }
+            if (n.frames.length < 2) { this.toast(this._t('Add at least two frames'), 'warn'); return; }
+            if (n.horizon.length < 2) { this.toast(this._t('Draw the horizon line first (click to add points)'), 'warn'); return; }
             this._nightscapePersist();
             try {
                 const r = await this.apiPostJson('/api/studio/nightscape', {
@@ -3177,8 +3177,8 @@ function ninaApp() {
                 if (!jobId) throw new Error('No job id returned');
                 n.job = { jobId, inProgress: true, phase: 'Preparing', stage: 'queued', done: 0, total: n.frames.length };
                 this._nightscapePoll(jobId);
-                this.toast('Nightscape stack started', 'ok');
-            } catch (e) { this.toastFail('Could not start the nightscape stack', e); }
+                this.toast(this._t('Nightscape stack started'), 'ok');
+            } catch (e) { this.toastFail(this._t('Could not start the nightscape stack'), e); }
         },
         async _nightscapePoll(jobId) {
             const started = Date.now();
@@ -3192,8 +3192,8 @@ function ninaApp() {
                     done: s.done, total: s.total, skyAligned: s.skyAligned,
                     outputPath: s.outputPath, fitsPath: s.fitsPath, error: s.error };
                 if (!s.inProgress) {
-                    if (s.phase === 'Done') this.toast('Nightscape stack complete', 'ok');
-                    else if (s.phase === 'Failed') this.toast('Failed: ' + (s.error || ''), 'error');
+                    if (s.phase === 'Done') this.toast(this._t('Nightscape stack complete'), 'ok');
+                    else if (s.phase === 'Failed') this.toast(this._t('Failed: {e}', { e: s.error || '' }), 'error');
                     return;
                 }
                 if (Date.now() - started > 2 * 3600 * 1000) return;
@@ -3202,8 +3202,8 @@ function ninaApp() {
         async nightscapeAbort() {
             const id = this.nightscape.job?.jobId;
             if (!id) return;
-            try { await this.apiPost('/api/studio/nightscape/' + id + '/abort'); this.toast('Aborting…', 'warn'); }
-            catch (e) { this.toastFail('Abort failed', e, 'warn'); }
+            try { await this.apiPost('/api/studio/nightscape/' + id + '/abort'); this.toast(this._t('Aborting…'), 'warn'); }
+            catch (e) { this.toastFail(this._t('Abort failed'), e, 'warn'); }
         },
         // Jump the Files browser to the folder holding a produced output.
         stackRevealOutput(path) {
