@@ -206,7 +206,7 @@
       },
       {
         "name": "Applications client (connexion depuis un appareil)",
-        "note": "Application native facultative permettant d'accéder au serveur. N'importe quel navigateur fonctionne également ; aucune application n'est donc nécessaire.",
+        "note": "La façon recommandée d'accéder à Polaris depuis un téléphone ou une tablette. N'importe quel navigateur fonctionne aussi, si vous préférez ne pas installer d'appli.",
         "items": [
           {
             "label": "Application Android (.apk)",
@@ -521,6 +521,9 @@
         "label": "Paquets pour un système existant"
       },
       {
+        "label": "Applis mobiles"
+      },
+      {
         "label": "Étapes d'installation"
       },
       {
@@ -534,6 +537,19 @@
       },
       {
         "label": "Composants optionnels"
+      }
+    ]
+  },
+  "apps": {
+    "title": "Installez l'appli mobile",
+    "badge": "Recommandé",
+    "body": "Quel que soit votre chemin, l'appli est la meilleure façon d'utiliser Polaris au télescope : elle trouve toute seule chaque Polaris sur votre réseau et garde l'écran allumé pendant la session. Un navigateur fonctionne aussi, si vous préférez ne rien installer.",
+    "items": [
+      {
+        "label": "Appli Android (.apk)"
+      },
+      {
+        "label": "Appli iOS (TestFlight)"
       }
     ]
   }

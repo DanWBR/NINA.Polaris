@@ -77,6 +77,24 @@ const statusClass = (s: string) => {
               </a>
             ))}
           </div>
+          {g.apps && (
+            <div id="apps" class="apps-callout">
+              <span class="apps-ico" aria-hidden="true">📱</span>
+              <div class="apps-text">
+                <h2 class="apps-title">{g.apps.title}
+                  {g.apps.badge && <span class="apps-badge">{g.apps.badge}</span>}
+                </h2>
+                <p class="apps-body">{g.apps.body}</p>
+              </div>
+              <div class="apps-btns">
+                {g.apps.items.map((d) => (
+                  <a class="btn btn-primary apps-btn" href={d.url} target="_blank" rel="noopener">
+                    {d.label}
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
           {g.paths.toc && (
             <nav class="page-toc" aria-label={g.paths.tocTitle}>
               <span class="page-toc-title">{g.paths.tocTitle}</span>
@@ -458,6 +476,41 @@ const statusClass = (s: string) => {
   }
   .page-toc a { color: var(--text-muted); }
   .page-toc a:hover { color: var(--accent); text-decoration: none; }
+
+  /* Mobile apps callout: common to both paths, so it sits between the
+     chooser cards and the index. */
+  .apps-callout {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 16px;
+    padding: 16px 20px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface, rgba(255,255,255,0.02));
+  }
+  .apps-ico { font-size: 26px; line-height: 1; }
+  .apps-text { flex: 1 1 320px; min-width: 0; }
+  .apps-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0 0 4px;
+  }
+  .apps-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 9px;
+    border-radius: 999px;
+    background: rgba(76, 175, 80, .16);
+    color: #4caf50;
+  }
+  .apps-body { font-size: 13.5px; color: var(--text-muted); line-height: 1.55; margin: 0; }
+  .apps-btns { display: flex; gap: 10px; flex-wrap: wrap; }
+  .apps-btn { white-space: nowrap; }
 
   .block-title {
     font-size: clamp(22px, 3vw, 30px);

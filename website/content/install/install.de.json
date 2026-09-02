@@ -206,7 +206,7 @@
       },
       {
         "name": "Client-Apps (Verbindung von einem Gerät aus)",
-        "note": "Optionale native App für den Zugriff auf den Server. Es funktioniert aber auch jeder Browser, sodass keine App erforderlich ist.",
+        "note": "Der empfohlene Weg, Polaris vom Handy oder Tablet zu erreichen. Jeder Browser funktioniert auch, wenn Sie lieber keine App installieren.",
         "items": [
           {
             "label": "Android-App (.apk)",
@@ -521,6 +521,9 @@
         "label": "Pakete für ein vorhandenes System"
       },
       {
+        "label": "Mobile Apps"
+      },
+      {
         "label": "Installationsschritte"
       },
       {
@@ -534,6 +537,19 @@
       },
       {
         "label": "Optionale Komponenten"
+      }
+    ]
+  },
+  "apps": {
+    "title": "Holen Sie sich die App",
+    "badge": "Empfohlen",
+    "body": "Egal welchen Weg Sie nehmen, die App ist die beste Art, Polaris am Teleskop zu nutzen: Sie findet jedes Polaris in Ihrem Netzwerk von selbst und hält den Bildschirm während der Session wach. Ein Browser funktioniert auch, wenn Sie lieber nichts installieren.",
+    "items": [
+      {
+        "label": "Android-App (.apk)"
+      },
+      {
+        "label": "iOS-App (TestFlight)"
       }
     ]
   }
