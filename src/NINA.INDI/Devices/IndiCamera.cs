@@ -1042,6 +1042,19 @@ public class IndiCamera : ICamera, IDisposable {
                         },
                         imageData.MetaData);
                 }
+                // SERSCALE-2: a driver that reports a SPECIFIC depth (8..15,
+                // e.g. CCD_BITSPERPIXEL=12) is passed through so the SER
+                // recorder left-aligns exactly. A reported 16 is deliberately
+                // NOT trusted: indi_asi_ccd says 16 for a RAW16 stream whose
+                // samples are the raw 12-bit ADC counts, so 0 (unknown) is
+                // kept and the recorder infers the depth from the data.
+                var driverBits = BitDepth;
+                if (driverBits is >= 8 and < 16 && imageData.Properties.SignificantBitDepth == 0) {
+                    imageData = new BaseImageData(
+                        imageData.Data,
+                        imageData.Properties with { SignificantBitDepth = driverBits },
+                        imageData.MetaData);
+                }
                 // Also propagate into MetaData so FITSWriter emits
                 // the BAYERPAT keyword when saving frames to disk. Use the
                 // EFFECTIVE pattern: prefer the driver-advertised CFA, but

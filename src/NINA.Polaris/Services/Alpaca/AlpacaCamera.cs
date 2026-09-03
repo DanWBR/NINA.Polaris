@@ -364,6 +364,10 @@ public sealed class AlpacaCamera : ICamera, IDisposable {
             Width = width,
             Height = height,
             BitDepth = _bitDepth,
+            // SERSCALE-2: a specific maxadu-derived depth (<16) lets the SER
+            // recorder left-align exactly; a 16 is not trusted (many drivers
+            // report 65535 for raw 12-bit counts), so the recorder infers it.
+            SignificantBitDepth = _bitDepth is >= 8 and < 16 ? _bitDepth : 0,
             IsBayered = bayer != BayerPatternEnum.None,
             BayerPattern = bayer,
             Channels = channels
