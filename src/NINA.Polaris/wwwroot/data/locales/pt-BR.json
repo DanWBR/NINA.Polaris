@@ -4727,5 +4727,13 @@
   "Nightscape stack started": "Stack de paisagem noturna iniciado",
   "Could not start the nightscape stack": "Não foi possível iniciar o stack de paisagem noturna",
   "Nightscape stack complete": "Stack de paisagem noturna concluído",
-  "Nightscape series added: {n} frames of {s} s. Turn tracking off before you start.": "Série de paisagem noturna adicionada: {n} quadros de {s} s. Desligue o rastreamento antes de iniciar."
+  "Nightscape series added: {n} frames of {s} s. Turn tracking off before you start.": "Série de paisagem noturna adicionada: {n} quadros de {s} s. Desligue o rastreamento antes de iniciar.",
+  "Alignment": "Alinhamento",
+  "Auto (recommended)": "Automático (recomendado)",
+  "Off (as recorded)": "Desligado (como gravado)",
+  "8-bit": "8 bits",
+  "10-bit": "10 bits",
+  "12-bit": "12 bits",
+  "14-bit": "14 bits",
+  "How the samples fill the 16-bit range in the file. Auto follows the camera, or the first frame when the driver does not say. Off keeps the raw values. A fixed depth is safer when the scene may get brighter later in the clip.": "Como as amostras preenchem a faixa de 16 bits no arquivo. Automático segue a câmera, ou o primeiro quadro quando o driver não informa. Desligado mantém os valores brutos. Uma profundidade fixa é mais segura quando a cena pode clarear mais adiante no clipe."
 }

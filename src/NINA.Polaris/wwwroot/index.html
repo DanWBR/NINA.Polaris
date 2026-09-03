@@ -4256,6 +4256,28 @@
                                     <option :value="16">16-bit (full)</option>
                                 </select>
                             </label>
+                            <!-- SERSCALE-3: how the samples sit in the SER.
+                                 Auto = the driver's depth, else inferred from
+                                 the first frame, so a 12-bit stream (or a deep
+                                 camera at a short exposure) fills the 16-bit
+                                 range that ASIVideoStack, AutoStakkert and
+                                 FireCapture expect. Off writes the samples as
+                                 they come; a fixed depth pins the gain when the
+                                 scene may brighten after the first frame. -->
+                            <label>
+                                Alignment
+                                <select x-model="video.serDepth" class="input-sm"
+                                        style="width:160px"
+                                        :disabled="videoRecording.recording"
+                                        :title="$t('How the samples fill the 16-bit range in the file. Auto follows the camera, or the first frame when the driver does not say. Off keeps the raw values. A fixed depth is safer when the scene may get brighter later in the clip.')">
+                                    <option value="auto">Auto (recommended)</option>
+                                    <option value="off">Off (as recorded)</option>
+                                    <option value="8">8-bit</option>
+                                    <option value="10">10-bit</option>
+                                    <option value="12">12-bit</option>
+                                    <option value="14">14-bit</option>
+                                </select>
+                            </label>
                         </div>
                         <!-- The byte rate is the number that decides whether a
                              recording survives the disk it lands on. -->
@@ -23323,7 +23345,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260903-nightscape-seq"></script>
+    <script src="/js/app.js?v=20260903-seralign"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

@@ -38,7 +38,8 @@ public static class VideoEndpoints {
                     ColorMode: req.ColorMode,
                     // PLAN8: anything but an explicit 8 means 16, so a client
                     // that does not send the field keeps today's behaviour.
-                    BitDepth: req.BitDepth == 8 ? 8 : 16));
+                    BitDepth: req.BitDepth == 8 ? 8 : 16,
+                    SerDepth: req.SerDepth));
                 return Results.Ok(new {
                     recording = true,
                     path = rec.OutputPath
@@ -410,7 +411,10 @@ public static class VideoEndpoints {
         double? MaxDurationSeconds = null,
         SerColorMode? ColorMode = null,
         /// <summary>PLAN8: 8 or 16 bits per sample on disk. Omitted = 16.</summary>
-        int? BitDepth = null);
+        int? BitDepth = null,
+        /// <summary>SERSCALE-3: sample alignment. Omitted = Auto; 16 = Off;
+        /// 8..15 = treat the stream as that many significant bits.</summary>
+        int? SerDepth = null);
 
     public record StackStartRequest(
         string SerPath,

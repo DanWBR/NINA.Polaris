@@ -4108,5 +4108,13 @@
   "Nightscape stack started": "Nightscape stack started",
   "Could not start the nightscape stack": "Could not start the nightscape stack",
   "Nightscape stack complete": "Nightscape stack complete",
-  "Nightscape series added: {n} frames of {s} s. Turn tracking off before you start.": "Nightscape series added: {n} frames of {s} s. Turn tracking off before you start."
+  "Nightscape series added: {n} frames of {s} s. Turn tracking off before you start.": "Nightscape series added: {n} frames of {s} s. Turn tracking off before you start.",
+  "Alignment": "Alignment",
+  "Auto (recommended)": "Auto (recommended)",
+  "Off (as recorded)": "Off (as recorded)",
+  "8-bit": "8-bit",
+  "10-bit": "10-bit",
+  "12-bit": "12-bit",
+  "14-bit": "14-bit",
+  "How the samples fill the 16-bit range in the file. Auto follows the camera, or the first frame when the driver does not say. Off keeps the raw values. A fixed depth is safer when the scene may get brighter later in the clip.": "How the samples fill the 16-bit range in the file. Auto follows the camera, or the first frame when the driver does not say. Off keeps the raw values. A fixed depth is safer when the scene may get brighter later in the clip."
 }
