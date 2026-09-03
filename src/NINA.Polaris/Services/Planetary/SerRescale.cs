@@ -33,11 +33,6 @@ public static class SerRescale {
         bool Done, string? OutputPath, int SignificantBits, int Shift,
         int FrameCount, string Message);
 
-    /// <summary>Common astro-camera ADC depths, used to round a detected bit
-    /// length up so a faint clip (whose brightest pixel never reached the ADC
-    /// ceiling) is still recognised as e.g. 12-bit rather than 11-bit.</summary>
-    private static readonly int[] CommonDepths = { 8, 10, 12, 14, 16 };
-
     /// <param name="srcPath">Existing SER to salvage.</param>
     /// <param name="bitsOverride">Significant ADC depth (8..16). Null =
     /// auto-detect.</param>
@@ -104,11 +99,9 @@ public static class SerRescale {
             for (int j = 0; j < px.Length; j++) if (px[j] > max) max = px[j];
             if (max >= 0xF000) break;   // clearly already fills the range, stop early
         }
-        if (max == 0) return 16;        // black file: no shift, treated as no-op upstream
-        int bitLen = 0;
-        for (int v = max; v > 0; v >>= 1) bitLen++;
-        foreach (var d in CommonDepths) if (d >= bitLen) return d;
-        return 16;
+        // Same rounding the recorder uses (SerBitDepth): a black file maps to
+        // 16, i.e. no shift, treated as a no-op upstream.
+        return SerBitDepth.RoundUpDepth(max);
     }
 
     private static string DefaultOutputPath(string srcPath) {

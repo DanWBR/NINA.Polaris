@@ -308,6 +308,11 @@ public class VideoRecordingService : IDisposable {
         byte[]? scratch = null;
         int sinceSpaceCheck = 0;
         int outBits = 16;
+        // SERSCALE-2: depth inferred from the data when the source did not
+        // say (INDI / Alpaca deliver raw ADC counts but advertise 16 bits).
+        // Decided once, on the first frame, so the whole clip shares one
+        // alignment; 0 = unknown → no shift, the pre-fix behaviour.
+        int autoBits = 0;
         try {
             foreach (var item in queue.GetConsumingEnumerable()) {
                 // Item has left the queue → release its bytes from the budget.
@@ -332,6 +337,18 @@ public class VideoRecordingService : IDisposable {
                         lock (_lock) { _writer = writer; }
                         _logger.LogInformation("Recording geometry locked → {W}×{H}×{Bits} ({Color})",
                             item.Width, item.Height, outBits, colorMode);
+                        if (item.SignificantBits == 0) {
+                            autoBits = SerBitDepth.AutoDetect(item.Pixels);
+                            if (autoBits == 0)
+                                _logger.LogInformation(
+                                    "SER depth: source did not report it and the first frame is too dark "
+                                    + "to infer (max < {Min}); samples written unshifted",
+                                    SerBitDepth.MinDetectableMax);
+                            else
+                                _logger.LogInformation(
+                                    "SER depth: source did not report it; inferred {Bits}-bit from the first "
+                                    + "frame, left-aligning by {Shift}", autoBits, SerBitDepth.ShiftFor(autoBits));
+                        }
                     }
                     // Header geometry is now fixed; a frame whose size changed
                     // mid-recording (e.g. ROI edit) can't be appended. The
@@ -350,7 +367,7 @@ public class VideoRecordingService : IDisposable {
                     // Unset (0) or already-16-bit → shift 0, i.e. the old path.
                     // The RAW8-widened stream (px << 8) never sets it, so it is
                     // untouched here and its top-byte recovery below still holds.
-                    int sh = item.SignificantBits is >= 8 and < 16 ? 16 - item.SignificantBits : 0;
+                    int sh = SerBitDepth.ShiftFor(item.SignificantBits != 0 ? item.SignificantBits : autoBits);
                     if (outBits == 8) {
                         // Take the top byte of the LEFT-ALIGNED value. For the
                         // RAW8 path (sh = 0) this is the plain `px >> 8` that
