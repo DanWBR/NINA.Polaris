@@ -525,6 +525,8 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Studio.BatchStackingService>
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.FrameGradingService>();
 // WBPP-style one-click orchestrator: chains masters -> calibrate -> grade -> integrate.
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.PreprocessOrchestrator>();
+// Nightscape stack: sky-aligned + fixed-foreground stacks joined by a horizon mask.
+builder.Services.AddSingleton<NINA.Polaris.Services.Studio.NightscapeStackService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.SpccDatabase>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.SpccService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.ChannelCombineService>();

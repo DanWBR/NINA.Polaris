@@ -217,6 +217,36 @@ public static class StudioEndpoints {
             return Results.Ok(new { aborted = true });
         });
 
+        // --- nightscape stack (sky-aligned + fixed foreground + horizon mask) ---
+        // A fixed-tripod Milky Way landscape: one pass stacks the sky on the
+        // stars and the foreground without alignment, then blends them through
+        // the drawn horizon line. Same start/status/abort shape as preprocess.
+        g.MapPost("/nightscape/preview", (NightscapeStackService svc, NightscapePreviewRequest req) => {
+            if (string.IsNullOrWhiteSpace(req?.Frame))
+                return Results.BadRequest(new { error = "frame path required" });
+            var jpg = svc.RenderPreview(req.Frame);
+            return jpg == null
+                ? Results.NotFound(new { error = "could not read that frame" })
+                : Results.File(jpg, "image/jpeg");
+        });
+
+        g.MapPost("/nightscape", (NightscapeStackService svc, NightscapeRequest req) => {
+            if (req?.Frames == null || req.Frames.Count < 2)
+                return Results.BadRequest(new { error = "Add at least 2 frames." });
+            var jobId = svc.StartJob(req);
+            return Results.Accepted(value: new { jobId });
+        });
+
+        g.MapGet("/nightscape/{jobId}/status", (NightscapeStackService svc, string jobId) => {
+            var p = svc.GetStatus(jobId);
+            return p == null ? Results.NotFound() : Results.Ok(p);
+        });
+
+        g.MapPost("/nightscape/{jobId}/abort", (NightscapeStackService svc, string jobId) => {
+            svc.Abort(jobId);
+            return Results.Ok(new { aborted = true });
+        });
+
         // --- subframe grading (rank subs by quality, pick keepers) -----
         // Measure each light's star count + median HFR and rank them, then
         // select the best for stacking. Runs in the background (star-detecting
@@ -491,6 +521,10 @@ public static class StudioEndpoints {
     public record GradeReselectRequest(int? KeepBest, double? HfrTolerancePct);
 
     public record DrizzleAdviceRequest(List<string> FramePaths);
+
+    /// <summary>Body of POST /api/studio/nightscape/preview: one frame to
+    /// render (auto-stretched) so the operator can draw the horizon on it.</summary>
+    public record NightscapePreviewRequest(string Frame);
 
     /// <summary>Thrown from the preview RenderCache lambda when the
     /// frame renderer returns null (corrupt / unreadable source), so the
