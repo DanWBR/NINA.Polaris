@@ -4109,5 +4109,6 @@
   "Draw the horizon line first (click to add points)": "Draw the horizon line first (click to add points)",
   "Nightscape stack started": "Nightscape stack started",
   "Could not start the nightscape stack": "Could not start the nightscape stack",
-  "Nightscape stack complete": "Nightscape stack complete"
+  "Nightscape stack complete": "Nightscape stack complete",
+  "Nightscape series added: {n} frames of {s} s. Turn tracking off before you start.": "Nightscape series added: {n} frames of {s} s. Turn tracking off before you start."
 }

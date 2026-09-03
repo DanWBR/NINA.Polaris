@@ -4728,5 +4728,6 @@
   "Draw the horizon line first (click to add points)": "Zeichnen Sie zuerst die Horizontlinie (klicken zum Hinzufügen von Punkten)",
   "Nightscape stack started": "Nachtlandschafts-Stack gestartet",
   "Could not start the nightscape stack": "Nachtlandschafts-Stack konnte nicht gestartet werden",
-  "Nightscape stack complete": "Nachtlandschafts-Stack abgeschlossen"
+  "Nightscape stack complete": "Nachtlandschafts-Stack abgeschlossen",
+  "Nightscape series added: {n} frames of {s} s. Turn tracking off before you start.": "Nachtlandschafts-Serie hinzugefügt: {n} Aufnahmen zu je {s} s. Schalten Sie die Nachführung vor dem Start aus."
 }

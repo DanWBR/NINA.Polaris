@@ -11532,7 +11532,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <li>Stack them in Studio, Nightscape Stack, and draw the horizon.</li>
                         </ol>
                         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
-                            <button class="btn btn-primary" @click="autorunTab = 'sequence'">Set up the sequence</button>
+                            <button class="btn btn-primary" @click="nightscapeSetupSequence()">Set up the sequence</button>
                             <button class="btn" @click="tab = 'files'; filesInit(); setStudioTab('nightscape')">Open Nightscape Stack</button>
                         </div>
                     </div>
@@ -23076,7 +23076,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260903-nightscape-i18n"></script>
+    <script src="/js/app.js?v=20260903-nightscape-seq"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

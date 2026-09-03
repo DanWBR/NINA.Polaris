@@ -3205,6 +3205,33 @@ function ninaApp() {
             try { await this.apiPost('/api/studio/nightscape/' + id + '/abort'); this.toast(this._t('Aborting…'), 'warn'); }
             catch (e) { this.toastFail(this._t('Abort failed'), e, 'warn'); }
         },
+        // "Set up the sequence" on the Autorun Nightscape tab. Adds a ready
+        // nightscape LIGHT series (500-rule exposure for the profile focal
+        // length, 20 frames) and opens the Sequence tab, so the user lands on
+        // a filled-in schedule instead of an empty one. Same push + sync as
+        // basicSeqAdd; the mount tracking is left to the user (the guidance
+        // says to turn it off), since a nightscape is a fixed-tripod shot.
+        nightscapeSetupSequence() {
+            if (this.seqState === 'running') { this.toast(this._t('Cannot modify while running'), 'warn'); return; }
+            const fl = Number(this.settings.focalLength) || 50;
+            const exposure = Math.max(1, Math.round(500 / fl));
+            const count = 20;
+            this.sequence.push({
+                name: 'Nightscape',
+                exposure,
+                gain: this.gain,
+                binning: parseInt(this.binning),
+                count,
+                filter: null,
+                ra: null, dec: null,
+                imageType: 'LIGHT',
+                enabled: true,
+                autoExposure: false
+            });
+            try { this.syncSequenceToServer && this.syncSequenceToServer(); } catch (e) { }
+            this.autorunTab = 'sequence';
+            this.toast(this._t('Nightscape series added: {n} frames of {s} s. Turn tracking off before you start.', { n: count, s: exposure }), 'ok', 6000);
+        },
         // Jump the Files browser to the folder holding a produced output.
         stackRevealOutput(path) {
             if (!path) return;
