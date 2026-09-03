@@ -70,4 +70,44 @@ public class SerBitDepthTests {
     [Test]
     public void AutoDetect_BlackFrame_ReturnsUnknown() =>
         Assert.That(SerBitDepth.AutoDetect(new ushort[16 * 16]), Is.EqualTo(0));
+
+    // ---- ResolveShift: the one per-clip decision the recorder makes ----
+
+    private static ushort[] Frame(int max) { var f = new ushort[64]; f[3] = (ushort)max; return f; }
+
+    [Test]
+    public void ResolveShift_Off_NeverShifts_EvenWhenDriverReportsAndDataIsDim() {
+        var r = SerBitDepth.ResolveShift(policyDepth: 16, reportedBits: 12, Frame(3415));
+        Assert.That((r.Shift, r.Source), Is.EqualTo((0, SerBitDepth.ShiftSource.Off)));
+    }
+
+    [Test]
+    public void ResolveShift_Explicit12_ShiftsBy4_RegardlessOfDriverOrData() {
+        var r = SerBitDepth.ResolveShift(policyDepth: 12, reportedBits: 16, Frame(60000));
+        Assert.That((r.Bits, r.Shift, r.Source), Is.EqualTo((12, 4, SerBitDepth.ShiftSource.Explicit)));
+    }
+
+    [Test]
+    public void ResolveShift_Auto_DriverReportedDepthWins() {
+        var r = SerBitDepth.ResolveShift(policyDepth: null, reportedBits: 14, Frame(300));
+        Assert.That((r.Bits, r.Shift, r.Source), Is.EqualTo((14, 2, SerBitDepth.ShiftSource.Reported)));
+    }
+
+    [Test]
+    public void ResolveShift_Auto_Unreported_InfersFromFirstFrame() {
+        var r = SerBitDepth.ResolveShift(policyDepth: null, reportedBits: 0, Frame(3415));
+        Assert.That((r.Bits, r.Shift, r.Source), Is.EqualTo((12, 4, SerBitDepth.ShiftSource.Inferred)));
+    }
+
+    [Test]
+    public void ResolveShift_Auto_Unreported_DarkFrame_LeavesSamplesAlone() {
+        var r = SerBitDepth.ResolveShift(policyDepth: null, reportedBits: 0, Frame(900));
+        Assert.That((r.Shift, r.Source), Is.EqualTo((0, SerBitDepth.ShiftSource.Undetermined)));
+    }
+
+    [Test]
+    public void ResolveShift_ExplicitOutOfRange_IsTreatedAsOff() {
+        Assert.That(SerBitDepth.ResolveShift(7, 0, Frame(3415)).Source, Is.EqualTo(SerBitDepth.ShiftSource.Off));
+        Assert.That(SerBitDepth.ResolveShift(32, 0, Frame(3415)).Source, Is.EqualTo(SerBitDepth.ShiftSource.Off));
+    }
 }

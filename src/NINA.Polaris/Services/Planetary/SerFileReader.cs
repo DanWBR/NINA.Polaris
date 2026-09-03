@@ -39,10 +39,10 @@ public sealed class SerFileReader : IDisposable {
     public int HeaderLittleEndianFlag { get; }
     public int FrameCount { get; private set; }
 
-    /// <summary>True when the header said zero frames and the count was
-    /// rebuilt from the file length: an interrupted recording, readable
-    /// anyway. Callers may want to say so rather than pretend it was
-    /// normal.</summary>
+    /// <summary>True when the header said zero frames, or FEWER frames than
+    /// the file demonstrably holds, and the count was rebuilt from the file
+    /// length: an interrupted recording, readable anyway. Callers may want to
+    /// say so rather than pretend it was normal.</summary>
     public bool RecoveredFrameCount { get; }
 
     /// <summary>Set to the header's claim when the file is SHORTER than that
@@ -100,6 +100,15 @@ public sealed class SerFileReader : IDisposable {
         if (FrameCount <= 0 && capacity > 0) {
             RecoveredFrameCount = true;
             FrameCount = (int)Math.Min(int.MaxValue, capacity);
+        } else if (FrameCount > 0 && FrameCount < capacity && HasConsistentTail(capacity)) {
+            // SERCOUNT-2: the header count is refreshed only every 100 frames
+            // and on close, so a clip cut short claims FEWER frames than it
+            // holds (a field clip said 1 and carried 2 plus their timestamps).
+            // Trust the length when the bytes past the last whole frame are
+            // exactly a timestamp trailer for that many frames, or nothing at
+            // all; a partial frame or an odd tail keeps the header's claim.
+            RecoveredFrameCount = true;
+            FrameCount = (int)Math.Min(int.MaxValue, capacity);
         } else if (FrameCount > capacity) {
             TruncatedFrameCount = FrameCount;
             FrameCount = (int)Math.Min(int.MaxValue, capacity);
@@ -119,6 +128,13 @@ public sealed class SerFileReader : IDisposable {
             // StartUtc just so callers always get something.
             for (int i = 0; i < FrameCount; i++) _timestamps[i] = StartUtc;
         }
+    }
+
+    /// <summary>True when everything after <paramref name="frames"/> whole
+    /// frames is either empty or exactly one 8-byte timestamp per frame.</summary>
+    private bool HasConsistentTail(long frames) {
+        long tail = _fs.Length - _frameDataStart - _bytesPerFrame * frames;
+        return tail == 0 || tail == frames * 8;
     }
 
     private string ReadAscii(int len) =>

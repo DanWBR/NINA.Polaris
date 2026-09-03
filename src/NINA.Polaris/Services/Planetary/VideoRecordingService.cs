@@ -308,11 +308,10 @@ public class VideoRecordingService : IDisposable {
         byte[]? scratch = null;
         int sinceSpaceCheck = 0;
         int outBits = 16;
-        // SERSCALE-2: depth inferred from the data when the source did not
-        // say (INDI / Alpaca deliver raw ADC counts but advertise 16 bits).
-        // Decided once, on the first frame, so the whole clip shares one
-        // alignment; 0 = unknown → no shift, the pre-fix behaviour.
-        int autoBits = 0;
+        // SERSCALE-2/3: one alignment decision per clip, taken on the first
+        // frame by SerBitDepth.ResolveShift from the operator's policy, the
+        // driver-reported depth and the data. 0 = write samples as they come.
+        int clipShift = 0;
         try {
             foreach (var item in queue.GetConsumingEnumerable()) {
                 // Item has left the queue → release its bytes from the budget.
@@ -337,18 +336,12 @@ public class VideoRecordingService : IDisposable {
                         lock (_lock) { _writer = writer; }
                         _logger.LogInformation("Recording geometry locked → {W}×{H}×{Bits} ({Color})",
                             item.Width, item.Height, outBits, colorMode);
-                        if (item.SignificantBits == 0) {
-                            autoBits = SerBitDepth.AutoDetect(item.Pixels);
-                            if (autoBits == 0)
-                                _logger.LogInformation(
-                                    "SER depth: source did not report it and the first frame is too dark "
-                                    + "to infer (max < {Min}); samples written unshifted",
-                                    SerBitDepth.MinDetectableMax);
-                            else
-                                _logger.LogInformation(
-                                    "SER depth: source did not report it; inferred {Bits}-bit from the first "
-                                    + "frame, left-aligning by {Shift}", autoBits, SerBitDepth.ShiftFor(autoBits));
-                        }
+                        var (bits, shift, source) = SerBitDepth.ResolveShift(
+                            _activeConfig?.SerDepth, item.SignificantBits, item.Pixels);
+                        clipShift = shift;
+                        _logger.LogInformation(
+                            "SER alignment: {Source}, {Bits}-bit samples, left shift {Shift}",
+                            source, bits, shift);
                     }
                     // Header geometry is now fixed; a frame whose size changed
                     // mid-recording (e.g. ROI edit) can't be appended. The
@@ -367,7 +360,7 @@ public class VideoRecordingService : IDisposable {
                     // Unset (0) or already-16-bit → shift 0, i.e. the old path.
                     // The RAW8-widened stream (px << 8) never sets it, so it is
                     // untouched here and its top-byte recovery below still holds.
-                    int sh = SerBitDepth.ShiftFor(item.SignificantBits != 0 ? item.SignificantBits : autoBits);
+                    int sh = clipShift;
                     if (outBits == 8) {
                         // Take the top byte of the LEFT-ALIGNED value. For the
                         // RAW8 path (sh = 0) this is the plain `px >> 8` that
@@ -544,4 +537,9 @@ public record RecordingConfig(
     /// This is a DISK format choice, not a sensor mode: the USB traffic and
     /// the frame rate ceiling are unchanged, since those are set when the
     /// camera's readout format is chosen at connect.</summary>
-    int BitDepth = 16);
+    int BitDepth = 16,
+    /// <summary>SERSCALE-3: how samples are aligned in the SER. null = Auto
+    /// (driver-reported depth, else inferred from the first frame), 16 = Off
+    /// (samples written as they come), 8..15 = treat the stream as that many
+    /// significant bits. See <see cref="SerBitDepth.ResolveShift"/>.</summary>
+    int? SerDepth = null);

@@ -70,4 +70,31 @@ public static class SerBitDepth {
     /// sub-8-bit, or already-16-bit input.</summary>
     public static int ShiftFor(int significantBits) =>
         significantBits is >= 8 and < 16 ? 16 - significantBits : 0;
+
+    /// <summary>How the recorder decided to align a clip, for the log.</summary>
+    public enum ShiftSource { Off, Explicit, Reported, Inferred, Undetermined }
+
+    /// <summary>The one decision the recorder makes per clip, taken on its
+    /// first frame.
+    /// <paramref name="policyDepth"/> is the operator's choice from the Video
+    /// tab: null = Auto, 16 = Off (write the samples as they come), 8..15 =
+    /// treat the stream as that many significant bits regardless of what the
+    /// driver or the data say. Under Auto a depth reported by a native driver
+    /// wins; otherwise the depth is inferred from the first frame, and a frame
+    /// too dark to judge leaves the samples unshifted.
+    /// The shift is really a lossless gain for a camera whose ADC is deeper
+    /// than the exposure used (an ASI2600 at 16 bits peaking near 3400 gets
+    /// x16); it saturates only if the scene later exceeds the chosen ceiling.</summary>
+    public static (int Bits, int Shift, ShiftSource Source) ResolveShift(
+            int? policyDepth, int reportedBits, ReadOnlySpan<ushort> firstFrame) {
+        if (policyDepth is int p) {
+            if (p >= 16 || p < 8) return (16, 0, ShiftSource.Off);
+            return (p, ShiftFor(p), ShiftSource.Explicit);
+        }
+        if (reportedBits != 0) return (reportedBits, ShiftFor(reportedBits), ShiftSource.Reported);
+        int inferred = AutoDetect(firstFrame);
+        return inferred == 0
+            ? (0, 0, ShiftSource.Undetermined)
+            : (inferred, ShiftFor(inferred), ShiftSource.Inferred);
+    }
 }

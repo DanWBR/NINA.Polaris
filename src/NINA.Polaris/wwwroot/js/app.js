@@ -1703,6 +1703,8 @@ function ninaApp() {
             // default here stays 16 so nobody's existing workflow changes
             // depth without being asked.
             bitDepth: 16,
+            // SERSCALE-3: sample alignment in the SER. 'auto' | 'off' | '8'..'14'.
+            serDepth: 'auto',
             wbR: 50,
             wbB: 50,
             // Hardware WB slider range, refreshed from the camera's
@@ -27196,7 +27198,10 @@ function ninaApp() {
                 const resp = await this.apiPost('/api/video/record/start', {
                     targetName: this.video.targetName || 'planet',
                     maxDurationSeconds: this.video.maxDurationSec > 0 ? this.video.maxDurationSec : null,
-                    bitDepth: this.video.bitDepth === 8 ? 8 : 16
+                    bitDepth: this.video.bitDepth === 8 ? 8 : 16,
+                    // null = Auto, 16 = Off, 8..14 = fixed depth
+                    serDepth: this.video.serDepth === 'off' ? 16
+                        : (/^\d+$/.test(String(this.video.serDepth)) ? parseInt(this.video.serDepth, 10) : null)
                 });
                 // apiPost returns the Response — parse it. Previously `r.path`
                 // was read off the Response object, always toasting
