@@ -33,6 +33,10 @@ public sealed class SerFileReader : IDisposable {
     public int Height { get; }
     public int BitDepth { get; }
     public SerColorMode ColorMode { get; }
+    /// <summary>Raw LittleEndian header field. Under the inverted de-facto
+    /// convention 0 = little-endian, 1 = big-endian; Polaris clips written
+    /// before the SERENDIAN fix carry 1 with little-endian samples.</summary>
+    public int HeaderLittleEndianFlag { get; }
     public int FrameCount { get; private set; }
 
     /// <summary>True when the header said zero frames and the count was
@@ -61,7 +65,10 @@ public sealed class SerFileReader : IDisposable {
             throw new InvalidDataException($"Not a SER file: id='{fileId}'");
         _br.ReadUInt32();                                // LuID
         ColorMode = (SerColorMode)_br.ReadUInt32();
-        _ = _br.ReadUInt32();                            // LittleEndian flag (we assume LE)
+        // SERENDIAN: kept only so tools can tell a legacy Polaris clip (1)
+        // from a fixed one (0). Every SER Polaris ever wrote is little-endian
+        // regardless of this field, so the sample decoding below stays LE.
+        HeaderLittleEndianFlag = (int)_br.ReadUInt32();
         Width = (int)_br.ReadUInt32();
         Height = (int)_br.ReadUInt32();
         BitDepth = (int)_br.ReadUInt32();

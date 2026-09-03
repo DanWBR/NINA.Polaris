@@ -24,7 +24,8 @@ namespace NINA.Polaris.Services.Planetary;
 ///   [0..14)   FileID = "LUCAM-RECORDER" (14 ASCII)
 ///   [14..18)  LuID = 0 (uint32 LE, unused)
 ///   [18..22)  ColorID (uint32 LE), Mono / BayerRGGB / RGB / etc.
-///   [22..26)  LittleEndian flag (uint32 LE, 1 = LE, 0 = BE)
+///   [22..26)  LittleEndian flag (uint32 LE). Written as 0 = little-endian,
+///             the INVERTED de-facto convention (see WriteHeader).
 ///   [26..30)  Width (uint32 LE)
 ///   [30..34)  Height (uint32 LE)
 ///   [34..38)  PixelDepthPerPlane (uint32 LE, 8 or 16)
@@ -162,7 +163,15 @@ public sealed class SerFileWriter : IDisposable {
             w.Write(Encoding.ASCII.GetBytes(FileId.PadRight(14)));
             w.Write((uint)0);                          // LuID
             w.Write((uint)ColorMode);
-            w.Write((uint)1);                          // LittleEndian flag
+            // SERENDIAN: the spec says 1 = little-endian, but the first SER
+            // implementations used the field the other way round (0 = LE,
+            // 1 = BE) and later readers (Siril, GoQat, ser-player, ZWO
+            // ASIVideoStack) deliberately follow that inverted convention.
+            // Our samples are little-endian; with a 1 here those tools
+            // byte-swapped every frame, which showed as colour noise in
+            // the textured parts of a Moon clip. 0 is what SharpCap and
+            // FireCapture write for little-endian data.
+            w.Write((uint)0);                          // LittleEndian flag (inverted convention)
             w.Write((uint)Width);
             w.Write((uint)Height);
             w.Write((uint)BitDepth);

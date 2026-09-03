@@ -62,9 +62,16 @@ public static class SerRescale {
         }
 
         int shift = Math.Max(0, 16 - significantBits);
-        if (shift == 0)
+        // SERENDIAN: a clip written before the endian-flag fix carries 1 in
+        // the LittleEndian field, which the inverted de-facto convention
+        // reads as big-endian; third-party tools byte-swap its frames. Such a
+        // clip must be rewritten (the writer now emits 0) even when its
+        // samples already fill the 16-bit range.
+        bool legacyFlag = reader.HeaderLittleEndianFlag != 0;
+        if (shift == 0 && !legacyFlag)
             return new Result(false, null, significantBits, 0, reader.FrameCount,
-                "The samples already fill the 16-bit range; nothing to rescale.");
+                "The samples already fill the 16-bit range and the header is already "
+                + "in the convention planetary tools expect; nothing to rescale.");
 
         var dst = string.IsNullOrWhiteSpace(outPath)
             ? DefaultOutputPath(srcPath)
@@ -84,8 +91,11 @@ public static class SerRescale {
             }
         }
 
-        return new Result(true, dst, significantBits, shift, reader.FrameCount,
-            $"Rescaled {reader.FrameCount} frames from {significantBits}-bit to full 16-bit range.");
+        var what = shift > 0
+            ? $"Rescaled {reader.FrameCount} frames from {significantBits}-bit to full 16-bit range"
+            : $"Rewrote {reader.FrameCount} frames unchanged";
+        if (legacyFlag) what += " and fixed the endian header flag";
+        return new Result(true, dst, significantBits, shift, reader.FrameCount, what + ".");
     }
 
     /// <summary>Brightest sample across an even sampling of frames, rounded up
