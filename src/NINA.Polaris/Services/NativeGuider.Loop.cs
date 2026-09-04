@@ -588,12 +588,31 @@ public sealed partial class NativeGuider {
                 return (x, y, true);
             }
             if (a < attempts) {
-                _logger.LogWarning("Calibration capture attempt {A}/{N} found no star (dropped frame?); retrying", a, attempts);
-                _calProgress = $"Recovering dropped frame ({a}/{attempts})...";
+                int region = searchRegion ?? SearchRegion;
+                var reason = CalibrationRetryReason(_lastFindStatus, _lastFindSnr, _lastFindHfd, region);
+                _logger.LogWarning("Calibration capture attempt {A}/{N}: {Reason} (search +/-{Region} px around {X:F0},{Y:F0}); retrying",
+                    a, attempts, reason, region, _lockX, _lockY);
+                _calProgress = $"{reason}, retrying ({a}/{attempts})...";
                 try { await Task.Delay(500, ct); } catch (OperationCanceledException) { }
             }
         }
         return (_lockX, _lockY, false);
+    }
+
+    /// <summary>Why a calibration capture did not yield a usable star. A null
+    /// status means no frame arrived (capture budget elapsed, dropped BLOB or a
+    /// capture error); any other status is the detector's verdict on a frame
+    /// that DID arrive, which is a star/window problem, not a camera one.</summary>
+    internal static string CalibrationRetryReason(GuideStarStatus? status, double snr, double hfd, int searchRegion) {
+        return status switch {
+            null => "No frame from the guide camera",
+            GuideStarStatus.LowMass or GuideStarStatus.LowSnr =>
+                $"Star too faint in the search window (SNR {snr:F1})",
+            GuideStarStatus.HighHfd => $"Star too bloated (HFD {hfd:F1} px), out of focus or trailing",
+            GuideStarStatus.LowHfd => $"Only a hot pixel found (HFD {hfd:F1} px)",
+            GuideStarStatus.Error => $"Search window of {searchRegion} px left the frame",
+            _ => $"Star not usable ({status})",
+        };
     }
 
     /// <summary>How wide to search for the guide star, given how many consecutive
@@ -706,12 +725,13 @@ public sealed partial class NativeGuider {
         // INDI device's frame state, which leaked into the imaging camera.
         try { await cam.SetSubframeAsync(0, 0, 0, 0, ct); } catch { }
         var img = await CaptureFullAsync(cam, ct);
-        if (img == null) return (_lockX, _lockY, false, 0, 0);
+        if (img == null) { _lastFindStatus = null; _lastFindSnr = 0; _lastFindHfd = 0; return (_lockX, _lockY, false, 0, 0); }
         _lastFrame = img; _lastFrameOriginX = 0; _lastFrameOriginY = 0;
 
         int w = img.Properties.Width, h = img.Properties.Height;
         int sr = searchRegion ?? SearchRegion;
         var result = GuideStar.Find(img.Data, w, h, _lockX, _lockY, sr);
+        _lastFindStatus = result.Status; _lastFindSnr = result.Snr; _lastFindHfd = result.Hfd;
         if (!result.Found) {
             return (_lockX, _lockY, false, result.Snr, result.Hfd);
         }

@@ -36,9 +36,7 @@ public static class AltairRegistry {
         // The binding imports "libaltaircam.so" (Linux) / "altaircam.dll" (Windows).
         if (libraryName.IndexOf("altaircam", StringComparison.OrdinalIgnoreCase) < 0)
             return IntPtr.Zero;
-        string[] candidates = OperatingSystem.IsWindows()
-            ? new[] { "altaircam.dll" }
-            : new[] { "libaltaircam.so" };
+        string[] candidates = NativeSdkProbe.Candidates("altaircam.dll", "libaltaircam.dylib", "libaltaircam.so");
         foreach (var dir in NativeSdkProbe.Dirs()) {
             foreach (var name in candidates) {
                 var path = Path.Combine(dir, name);

@@ -113,6 +113,12 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     // plus the star/lock overlay so the WS payload (ViewState) and the JPEG
     // endpoint (EncodeViewJpeg) can surface them without re-capturing.
     private IImageData? _lastFrame;
+    // What the last FindStarDetailedAsync saw: null when no frame arrived at
+    // all (budget / dropped BLOB / capture error), otherwise the detector's
+    // verdict plus its numbers. Lets the calibration retry say WHY it retries
+    // instead of blaming every miss on a dropped frame.
+    private GuideStarStatus? _lastFindStatus;
+    private double _lastFindSnr, _lastFindHfd;
     private int _lastFrameOriginX, _lastFrameOriginY;
     private volatile ViewFrame? _view;
     private long _viewSeq;
