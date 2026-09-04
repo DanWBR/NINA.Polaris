@@ -44,11 +44,45 @@ public class PlanetaryFramesTests {
         Assert.That((x, y), Is.EqualTo((W / 2.0, H / 2.0)));
     }
 
+    private static double SharpOf(float[] lum) =>
+        PlanetaryFrames.Sharpness(PlanetaryFrames.Blur7(lum, W, H), W, H, 48, 48, 48);
+
     [Test]
     public void Sharpness_RanksSharpAboveBlurred_RegardlessOfExposure() {
-        double sharp = PlanetaryFrames.Sharpness(Disc(48, 48, 3.0, peak: 8000f), W, H, 48, 48, 48);
-        double blurred = PlanetaryFrames.Sharpness(Disc(48, 48, 6.0, peak: 30000f), W, H, 48, 48, 48);
+        double sharp = SharpOf(Disc(48, 48, 3.0, peak: 8000f));
+        double blurred = SharpOf(Disc(48, 48, 6.0, peak: 30000f));
         Assert.That(sharp, Is.GreaterThan(blurred));
+    }
+
+    [Test]
+    public void Sharpness_DoesNotRewardNoise() {
+        // PSS lesson: a blurred frame drowned in noise must not outrank a
+        // clean sharp one just because noise has a big Laplacian.
+        var clean = Disc(48, 48, 3.0);
+        var noisyBlurred = Disc(48, 48, 6.0);
+        var rnd = new Random(7);
+        for (int i = 0; i < noisyBlurred.Length; i++) noisyBlurred[i] += (float)(rnd.NextDouble() * 4000 - 2000);
+        Assert.That(SharpOf(clean), Is.GreaterThan(SharpOf(noisyBlurred)));
+    }
+
+    [Test]
+    public void NormalisationGain_ScalesToReference_AndIsClamped() {
+        Assert.That(PlanetaryFrames.NormalisationGain(1000, 800), Is.EqualTo(1.25f).Within(1e-5f));
+        Assert.That(PlanetaryFrames.NormalisationGain(1000, 100), Is.EqualTo(2f));
+        Assert.That(PlanetaryFrames.NormalisationGain(1000, 9000), Is.EqualTo(0.5f));
+        Assert.That(PlanetaryFrames.NormalisationGain(0, 500), Is.EqualTo(1f));
+        var plane = new float[] { 0, 10, 20, 30 };
+        Assert.That(PlanetaryFrames.MeanAbove(plane, 15f), Is.EqualTo(25.0));
+    }
+
+    [Test]
+    public void Blur7_PreservesAFlatField_AndSmoothsAnImpulse() {
+        var flat = new float[W * H]; Array.Fill(flat, 1000f);
+        Assert.That(PlanetaryFrames.Blur7(flat, W, H)[50 * W + 50], Is.EqualTo(1000f).Within(0.5f));
+        var impulse = new float[W * H]; impulse[48 * W + 48] = 1000f;
+        var b = PlanetaryFrames.Blur7(impulse, W, H);
+        Assert.That(b[48 * W + 48], Is.LessThan(200f));
+        Assert.That(b[48 * W + 49], Is.GreaterThan(50f));
     }
 
     [Test]
@@ -60,13 +94,14 @@ public class PlanetaryFramesTests {
         PlanetaryFrames.AccumulateShifted(moved, W, H, 48.0 - mx, 48.0 - my, acc, wgt);
         var stacked = new float[W * H];
         for (int i = 0; i < stacked.Length; i++) stacked[i] = wgt[i] > 0 ? acc[i] / wgt[i] : 0;
+        // both are measured through the same blur, so this stays a fair comparison
 
         var (sx, sy, _) = PlanetaryFrames.Centroid(stacked, W, H);
         Assert.That(sx, Is.EqualTo(48.0).Within(0.1));
         Assert.That(sy, Is.EqualTo(48.0).Within(0.1));
         // bilinear resampling of a sigma-3 disc costs almost nothing in sharpness
-        double s0 = PlanetaryFrames.Sharpness(reference, W, H, 48, 48, 48);
-        double s1 = PlanetaryFrames.Sharpness(stacked, W, H, 48, 48, 48);
+        double s0 = SharpOf(reference);
+        double s1 = SharpOf(stacked);
         Assert.That(s1, Is.GreaterThan(0.85 * s0));
     }
 

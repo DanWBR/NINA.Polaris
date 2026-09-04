@@ -123,9 +123,12 @@ public class PlanetaryStackerService {
             for (int i = 0; i < reader.FrameCount; i++) {
                 ct.ThrowIfCancellationRequested();
                 var planes = PlanetaryFrames.Split(reader.ReadFrameAsUshort(i), reader.Width, reader.Height, bayer);
-                var (cx, cy, _) = PlanetaryFrames.Centroid(planes.Lum, reader.Width, reader.Height);
+                // PSS lesson: rank and centroid on the Gaussian-blurred
+                // luminance, so noise is not mistaken for structure.
+                var lumB = PlanetaryFrames.Blur7(planes.Lum, reader.Width, reader.Height);
+                var (cx, cy, _) = PlanetaryFrames.Centroid(lumB, reader.Width, reader.Height);
                 cxs[i] = cx; cys[i] = cy;
-                qualities[i] = PlanetaryFrames.Sharpness(planes.Lum, reader.Width, reader.Height, cx, cy, window);
+                qualities[i] = PlanetaryFrames.Sharpness(lumB, reader.Width, reader.Height, cx, cy, window);
                 analysed++;
                 if (analysed % 25 == 0 || analysed == reader.FrameCount) {
                     job.FramesAnalyzed = analysed;
@@ -177,6 +180,12 @@ public class PlanetaryStackerService {
 
             SetPhase(job, StackPhase.Stacking);
             int npx = reader.Width * reader.Height;
+            // PSS lesson (frames_normalization): scale every frame's object
+            // brightness to the reference's before it is added, so seeing
+            // transparency and thin cloud do not modulate the stack.
+            var (refBg, refPeak) = PlanetaryFrames.Levels(refPlanes.Lum);
+            float normThreshold = (float)(refBg + 0.25 * (refPeak - refBg));
+            double refMean = PlanetaryFrames.MeanAbove(refPlanes.Lum, normThreshold);
             bool cfa = bayer != BayerPatternEnum.None;
             var accR = new float[npx]; var accG = cfa ? new float[npx] : accR; var accB = cfa ? new float[npx] : accR;
             var wgt = new float[npx];
@@ -186,13 +195,15 @@ public class PlanetaryStackerService {
                 var planes = k == 0 ? refPlanes
                     : PlanetaryFrames.Split(reader.ReadFrameAsUshort(picked[k]), reader.Width, reader.Height, bayer);
                 var (dx, dy) = shifts[k];
+                float gain = k == 0 ? 1f
+                    : PlanetaryFrames.NormalisationGain(refMean, PlanetaryFrames.MeanAbove(planes.Lum, normThreshold));
                 if (cfa) {
-                    PlanetaryFrames.AccumulateShifted(planes.R, reader.Width, reader.Height, dx, dy, accR, wgt);
+                    PlanetaryFrames.AccumulateShifted(planes.R, reader.Width, reader.Height, dx, dy, accR, wgt, gain);
                     var w2 = new float[npx];   // same coverage for every plane; count once
-                    PlanetaryFrames.AccumulateShifted(planes.G, reader.Width, reader.Height, dx, dy, accG, w2);
-                    PlanetaryFrames.AccumulateShifted(planes.B, reader.Width, reader.Height, dx, dy, accB, w2);
+                    PlanetaryFrames.AccumulateShifted(planes.G, reader.Width, reader.Height, dx, dy, accG, w2, gain);
+                    PlanetaryFrames.AccumulateShifted(planes.B, reader.Width, reader.Height, dx, dy, accB, w2, gain);
                 } else {
-                    PlanetaryFrames.AccumulateShifted(planes.Lum, reader.Width, reader.Height, dx, dy, accR, wgt);
+                    PlanetaryFrames.AccumulateShifted(planes.Lum, reader.Width, reader.Height, dx, dy, accR, wgt, gain);
                 }
                 stacked++;
                 if (stacked % 25 == 0 || stacked == picked.Length) {

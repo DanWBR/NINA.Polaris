@@ -91,29 +91,83 @@ public static class PlanetaryFrames {
         return (sx / sw, sy / sw, above);
     }
 
-    /// <summary>Laplacian variance of the luminance inside a window of
-    /// <paramref name="size"/> pixels centred on (cx, cy), normalised by the
-    /// squared dynamic range so it ranks seeing, not exposure.</summary>
-    public static double Sharpness(float[] lum, int width, int height, double cx, double cy, int size) {
+    /// <summary>7-tap Gaussian (sigma 1.1, what OpenCV picks for a 7×7
+    /// kernel), separable. PlanetarySystemStacker blurs the mono frame this
+    /// way before every quality measure and every correlation, so noise does
+    /// not masquerade as structure; we do the same on the luminance used for
+    /// ranking and centroiding (never on the planes that get stacked).</summary>
+    public static float[] Blur7(float[] plane, int width, int height) {
+        float[] k = { 0.0071f, 0.0722f, 0.2394f, 0.3626f, 0.2394f, 0.0722f, 0.0071f };
+        var tmp = new float[plane.Length]; var o = new float[plane.Length];
+        for (int y = 0; y < height; y++) {
+            int row = y * width;
+            for (int x = 0; x < width; x++) {
+                float acc = 0;
+                for (int t = -3; t <= 3; t++) {
+                    int xx = Math.Clamp(x + t, 0, width - 1);
+                    acc += k[t + 3] * plane[row + xx];
+                }
+                tmp[row + x] = acc;
+            }
+        }
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                float acc = 0;
+                for (int t = -3; t <= 3; t++) {
+                    int yy = Math.Clamp(y + t, 0, height - 1);
+                    acc += k[t + 3] * tmp[yy * width + x];
+                }
+                o[y * width + x] = acc;
+            }
+        }
+        return o;
+    }
+
+    /// <summary>Sharpness the way PlanetarySystemStacker ranks frames
+    /// ("Laplace"): the standard deviation of the discrete Laplacian of the
+    /// BLURRED luminance, sampled on a stride-2 grid, inside a window of
+    /// <paramref name="size"/> pixels centred on (cx, cy). Normalised by the
+    /// window's dynamic range so it ranks seeing, not exposure. Pass the
+    /// output of <see cref="Blur7"/>; an unblurred plane rewards noise.</summary>
+    public static double Sharpness(float[] lumBlurred, int width, int height, double cx, double cy, int size) {
+        const int stride = 2;
         int half = Math.Max(4, size / 2);
-        int x0 = Math.Max(1, (int)cx - half), x1 = Math.Min(width - 1, (int)cx + half);
-        int y0 = Math.Max(1, (int)cy - half), y1 = Math.Min(height - 1, (int)cy + half);
-        if (x1 - x0 < 3 || y1 - y0 < 3) return 0;
+        int x0 = Math.Max(stride, (int)cx - half), x1 = Math.Min(width - stride, (int)cx + half);
+        int y0 = Math.Max(stride, (int)cy - half), y1 = Math.Min(height - stride, (int)cy + half);
+        if (x1 - x0 < 3 * stride || y1 - y0 < 3 * stride) return 0;
         double sum = 0, sumSq = 0; long count = 0;
         float lo = float.MaxValue, hi = float.MinValue;
-        for (int y = y0; y < y1; y++) {
+        for (int y = y0; y < y1; y += stride) {
             int row = y * width;
-            for (int x = x0; x < x1; x++) {
-                float c = lum[row + x];
+            for (int x = x0; x < x1; x += stride) {
+                float c = lumBlurred[row + x];
                 if (c < lo) lo = c; if (c > hi) hi = c;
-                double l = 4.0 * c - lum[row + x - 1] - lum[row + x + 1] - lum[row - width + x] - lum[row + width + x];
+                double l = 4.0 * c - lumBlurred[row + x - stride] - lumBlurred[row + x + stride]
+                                   - lumBlurred[row - stride * width + x] - lumBlurred[row + stride * width + x];
                 sum += l; sumSq += l * l; count++;
             }
         }
         if (count == 0) return 0;
         double mean = sum / count, var = sumSq / count - mean * mean;
         double range = Math.Max(1.0, hi - lo);
-        return var / (range * range);
+        return Math.Sqrt(Math.Max(0, var)) / range;
+    }
+
+    /// <summary>Mean of the samples above <paramref name="threshold"/>: the
+    /// brightness a frame is normalised by (PlanetarySystemStacker's
+    /// frames_normalization, threshold on the object, not the sky).</summary>
+    public static double MeanAbove(float[] plane, float threshold) {
+        double sum = 0; long n = 0;
+        foreach (var v in plane) if (v > threshold) { sum += v; n++; }
+        return n == 0 ? 0 : sum / n;
+    }
+
+    /// <summary>Gain that brings a frame's object brightness to the
+    /// reference's, clamped to [0.5, 2] so a cloud or a dropped frame cannot
+    /// be amplified into the stack; 1 when either mean is unknown.</summary>
+    public static float NormalisationGain(double referenceMean, double frameMean) {
+        if (referenceMean <= 0 || frameMean <= 0) return 1f;
+        return (float)Math.Clamp(referenceMean / frameMean, 0.5, 2.0);
     }
 
     /// <summary>Adds <paramref name="plane"/> shifted by (dx, dy) (sub-pixel,
@@ -121,7 +175,7 @@ public static class PlanetaryFrames {
     /// <paramref name="weight"/>. A destination pixel (x, y) reads the source
     /// at (x - dx, y - dy); pixels whose source falls outside are skipped.</summary>
     public static void AccumulateShifted(float[] plane, int width, int height, double dx, double dy,
-                                         float[] accum, float[] weight) {
+                                         float[] accum, float[] weight, float gain = 1f) {
         for (int y = 0; y < height; y++) {
             double sy = y - dy;
             int y0 = (int)Math.Floor(sy); double fy = sy - y0;
@@ -133,7 +187,7 @@ public static class PlanetaryFrames {
                 if (x0 < 0 || x0 + 1 >= width) continue;
                 double v = (1 - fy) * ((1 - fx) * plane[r0 + x0] + fx * plane[r0 + x0 + 1])
                          + fy * ((1 - fx) * plane[r1 + x0] + fx * plane[r1 + x0 + 1]);
-                accum[dstRow + x] += (float)v;
+                accum[dstRow + x] += (float)v * gain;
                 weight[dstRow + x] += 1f;
             }
         }
