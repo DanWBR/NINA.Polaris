@@ -178,6 +178,11 @@ public class PlanetaryStackerService {
                 Notify(job);
             }
 
+            if (job.Config.AlignmentPoints && !surface
+                    && await TryStackWithAlignmentPointsAsync(job, reader, bayer, cxs, cys, ranked, refPlanes, ct)) {
+                return;
+            }
+
             SetPhase(job, StackPhase.Stacking);
             int npx = reader.Width * reader.Height;
             // PSS lesson (frames_normalization): scale every frame's object
@@ -283,6 +288,148 @@ public class PlanetaryStackerService {
           catch (Exception ex) { _logger.LogError(ex, "Planetary stack failed"); Fail(job, ex.Message); }
     }
 
+    /// <summary>PLANETAP: local registration on a mesh of alignment points.
+    /// Returns false (nothing written) when the target is too small for a
+    /// mesh, so the caller falls back to the global stack.</summary>
+    private async Task<bool> TryStackWithAlignmentPointsAsync(
+            StackJob job, SerFileReader reader, BayerPatternEnum bayer,
+            double[] cxs, double[] cys, int[] ranked, PlanetaryFrames.Planes bestPlanes, CancellationToken ct) {
+        int w = reader.Width, h = reader.Height, npx = w * h, n = reader.FrameCount;
+        bool cfa = bayer != BayerPatternEnum.None;
+        var cfg = job.Config;
+        double rx = cxs[ranked[0]], ry = cys[ranked[0]];
+        (double dx, double dy) Global(int i) => (rx - cxs[i], ry - cys[i]);
+
+        // 1. reference = mean of the best ReferencePercent frames, globally aligned
+        int refCount = Math.Clamp((int)Math.Round(n * cfg.ReferencePercent / 100.0), 1, n);
+        var accR = new float[npx]; var accG = cfa ? new float[npx] : accR; var accB = cfa ? new float[npx] : accR;
+        var wgt = new float[npx];
+        for (int k = 0; k < refCount; k++) {
+            ct.ThrowIfCancellationRequested();
+            var planes = k == 0 ? bestPlanes : PlanetaryFrames.Split(reader.ReadFrameAsUshort(ranked[k]), w, h, bayer);
+            var (dx, dy) = Global(ranked[k]);
+            if (cfa) {
+                PlanetaryFrames.AccumulateShifted(planes.R, w, h, dx, dy, accR, wgt);
+                var w2 = new float[npx];
+                PlanetaryFrames.AccumulateShifted(planes.G, w, h, dx, dy, accG, w2);
+                PlanetaryFrames.AccumulateShifted(planes.B, w, h, dx, dy, accB, w2);
+            } else PlanetaryFrames.AccumulateShifted(planes.Lum, w, h, dx, dy, accR, wgt);
+        }
+        var refR = Mean(accR, wgt); var refG = cfa ? Mean(accG, wgt) : refR; var refB = cfa ? Mean(accB, wgt) : refR;
+        var refLum = new float[npx];
+        for (int i = 0; i < npx; i++) refLum[i] = cfa ? (refR[i] + 2f * refG[i] + refB[i]) * 0.25f : refR[i];
+        var refLumB = PlanetaryFrames.Blur7(refLum, w, h);
+
+        // 2. mesh on the reference
+        var mesh = AlignmentPoints.BuildMesh(refLumB, w, h,
+            new AlignmentPoints.MeshOptions(cfg.ApHalfBox, cfg.ApSearchWidth, cfg.ApStructureThreshold));
+        if (mesh.Count < 2) {
+            _logger.LogInformation("Planetary align: target too small for an alignment-point mesh ({N} points); global registration", mesh.Count);
+            return false;
+        }
+        job.AlignmentPointCount = mesh.Count;
+        var (rbg, rpeak) = PlanetaryFrames.Levels(refLum);
+        double range = Math.Max(1.0, rpeak - rbg);
+        float normThreshold = (float)(rbg + 0.25 * range);
+        double refMean = PlanetaryFrames.MeanAbove(refLum, normThreshold);
+        _logger.LogInformation("Planetary align: {N} alignment points (half box {HB}, search {SW})", mesh.Count, cfg.ApHalfBox, cfg.ApSearchWidth);
+
+        // 3. local ranking: every frame, every point
+        SetPhase(job, StackPhase.Analyzing);
+        var local = new double[mesh.Count][];
+        for (int a = 0; a < mesh.Count; a++) local[a] = new double[n];
+        for (int i = 0; i < n; i++) {
+            ct.ThrowIfCancellationRequested();
+            var lumB = PlanetaryFrames.Blur7(PlanetaryFrames.Split(reader.ReadFrameAsUshort(i), w, h, bayer).Lum, w, h);
+            var (gdx, gdy) = Global(i);
+            for (int a = 0; a < mesh.Count; a++)
+                local[a][i] = AlignmentPoints.LocalSharpness(lumB, w, h, mesh[a], gdx, gdy, range);
+            if (i % 25 == 0 || i == n - 1) { job.FramesAnalyzed = i + 1; Notify(job); }
+        }
+        int stackSize = Math.Clamp((int)Math.Ceiling(n * cfg.ApFramePercent / 100.0), 1, n);
+        var usedBy = new List<int>[n];
+        for (int a = 0; a < mesh.Count; a++) {
+            var q = local[a];
+            mesh[a].BestFrames = Enumerable.Range(0, n).OrderByDescending(i => q[i]).Take(stackSize).ToArray();
+            foreach (var i in mesh[a].BestFrames) (usedBy[i] ??= new List<int>()).Add(a);
+        }
+        job.FramesPicked = usedBy.Count(u => u != null);
+
+        // 4. local registration + ramp-weighted accumulation
+        SetPhase(job, StackPhase.Stacking);
+        var apR = new float[npx]; var apG = cfa ? new float[npx] : apR; var apB = cfa ? new float[npx] : apR;
+        var apW = new float[npx];
+        int stacked = 0, rejected = 0;
+        for (int i = 0; i < n; i++) {
+            if (usedBy[i] == null) continue;
+            ct.ThrowIfCancellationRequested();
+            var planes = PlanetaryFrames.Split(reader.ReadFrameAsUshort(i), w, h, bayer);
+            var lumB = PlanetaryFrames.Blur7(planes.Lum, w, h);
+            var (gdx, gdy) = Global(i);
+            float gain = PlanetaryFrames.NormalisationGain(refMean, PlanetaryFrames.MeanAbove(planes.Lum, normThreshold));
+            foreach (var a in usedBy[i]) {
+                // LocalShift returns the TOTAL shift (global + local) that puts
+                // this frame's box onto the reference box.
+                var shift = AlignmentPoints.LocalShift(refLumB, lumB, w, h, mesh[a], gdx, gdy, cfg.ApSearchWidth);
+                if (shift == null) { rejected++; continue; }
+                var (dx, dy) = shift.Value;
+                if (cfa) {
+                    AlignmentPoints.AccumulatePatch(planes.R, w, h, mesh[a], dx, dy, gain, apR, apW);
+                    var w2 = new float[npx];
+                    AlignmentPoints.AccumulatePatch(planes.G, w, h, mesh[a], dx, dy, gain, apG, w2);
+                    AlignmentPoints.AccumulatePatch(planes.B, w, h, mesh[a], dx, dy, gain, apB, w2);
+                } else AlignmentPoints.AccumulatePatch(planes.Lum, w, h, mesh[a], dx, dy, gain, apR, apW);
+            }
+            stacked++;
+            if (stacked % 25 == 0) { job.FramesStacked = stacked; job.FramesAligned = stacked; Notify(job); }
+        }
+        job.FramesStacked = stacked; job.FramesAligned = stacked;
+        if (rejected > 0)
+            _logger.LogInformation("Planetary align: {R} local matches rejected (optimum on the search border)", rejected);
+
+        // 5. merge with the reference where the mesh did not reach
+        SetPhase(job, StackPhase.Writing);
+        ushort[] pixels; int channels;
+        const double blend = 0.2;
+        if (cfa) {
+            var r = AlignmentPoints.Merge(apR, apW, refR, stackSize, blend);
+            var g = AlignmentPoints.Merge(apG, apW, refG, stackSize, blend);
+            var b = AlignmentPoints.Merge(apB, apW, refB, stackSize, blend);
+            pixels = new ushort[npx * 3];
+            Array.Copy(r, 0, pixels, 0, npx); Array.Copy(g, 0, pixels, npx, npx); Array.Copy(b, 0, pixels, npx * 2, npx);
+            channels = 3;
+        } else { pixels = AlignmentPoints.Merge(apR, apW, refR, stackSize, blend); channels = 1; }
+        await WriteStackAsync(job, reader, pixels, channels, ct);
+        _logger.LogInformation("Planetary stack OK ({AP} alignment points, {S} frames used) → {Path}",
+            mesh.Count, stacked, job.OutputPath);
+        return true;
+    }
+
+    private static float[] Mean(float[] acc, float[] wgt) {
+        var o = new float[acc.Length];
+        for (int i = 0; i < o.Length; i++) o[i] = wgt[i] > 0 ? acc[i] / wgt[i] : 0f;
+        return o;
+    }
+
+    private async Task WriteStackAsync(StackJob job, SerFileReader reader, ushort[] pixels, int channels, CancellationToken ct) {
+        Directory.CreateDirectory(job.Config.OutputDir);
+        var outName = $"{job.Config.OutputName}_{DateTime.UtcNow:yyyy-MM-ddTHH-mm-ss}.fits";
+        var outPath = Path.Combine(job.Config.OutputDir, outName);
+        var imageData = new BaseImageData(pixels,
+            new ImageProperties {
+                Width = reader.Width, Height = reader.Height, BitDepth = 16, Channels = channels,
+                IsBayered = false, BayerPattern = BayerPatternEnum.None
+            },
+            new ImageMetaData());
+        imageData.MetaData.Camera.Name = reader.Instrument;
+        imageData.MetaData.Telescope.Name = reader.Telescope;
+        await Task.Run(() => FITSWriter.Write(imageData, outPath), ct);
+        job.OutputPath = outPath;
+        SetPhase(job, StackPhase.Ok);
+        job.CompletedAt = DateTime.UtcNow;
+        Notify(job);
+    }
+
     private void SetPhase(StackJob job, StackPhase p) {
         job.Phase = p;
         Notify(job);
@@ -319,7 +466,19 @@ public record StackConfig(
     string SerPath,
     string OutputDir,
     double KeepPercent = 50,
-    string OutputName = "stack");
+    string OutputName = "stack",
+    /// <summary>PLANETAP: register locally on a mesh of alignment points
+    /// (PlanetarySystemStacker style) when the target is large enough for a
+    /// mesh; otherwise the single global registration is used.</summary>
+    bool AlignmentPoints = true,
+    int ApHalfBox = 24,
+    int ApSearchWidth = 14,
+    /// <summary>Best frames kept PER alignment point, percent of all frames.</summary>
+    double ApFramePercent = 10,
+    double ApStructureThreshold = 0.04,
+    /// <summary>Globally aligned best frames averaged into the reference the
+    /// mesh is built on and that fills what the mesh does not cover.</summary>
+    double ReferencePercent = 5);
 
 public class StackJob {
     public string Id { get; set; } = "";
@@ -330,6 +489,8 @@ public class StackJob {
     public int FramesPicked { get; set; }
     public int FramesAligned { get; set; }
     public int FramesStacked { get; set; }
+    /// <summary>PLANETAP: alignment points used (0 = global registration only).</summary>
+    public int AlignmentPointCount { get; set; }
     public int Width { get; set; }
     public int Height { get; set; }
     public double[]? QualityScores { get; set; }
