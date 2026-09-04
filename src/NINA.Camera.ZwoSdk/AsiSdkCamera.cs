@@ -31,6 +31,14 @@ namespace NINA.Camera.ZwoSdk;
 /// where 100 fps becomes attainable.
 /// </summary>
 public sealed class AsiSdkCamera : ICamera {
+    /// <summary>STREAMSTALL: why the last native stream gave up, or null.
+    /// Set by the pull loop when the SDK stayed silent through
+    /// <see cref="NINA.Image.Portable.Streaming.StreamStallPolicy.MaxRestarts"/>
+    /// capture restarts; CameraStreamService reads it for the operator.</summary>
+    public string? LastStreamError { get; private set; }
+    /// <summary>Capture restarts the pull loop performed on the current
+    /// stream because the SDK went silent.</summary>
+    public int StreamRestarts { get; private set; }
     private readonly int _cameraId;
     private bool _connected;
 
@@ -438,15 +446,66 @@ public sealed class AsiSdkCamera : ICamera {
     private void PullLoop(CancellationToken ct) {
         GetRoi(out var w, out var h);
         var buf = new byte[(long)w * h * BytesPerPixel()];
-        int waitMs = (int)(_exposureSec * 1000 * 2 + 500);
+        LastStreamError = null;
+        StreamRestarts = 0;
+        int restarts = 0;
+        var lastFrame = DateTime.UtcNow;
         while (!ct.IsCancellationRequested && _streaming) {
+            // STREAMSTALL: the poll wait follows the CURRENT exposure (it used
+            // to be computed once, so an exposure raised live could never be
+            // waited for) and is capped short: a timeout is "not yet", the
+            // frame is not lost, and the SDK lock is released between polls
+            // so a live gain/exposure write never queues behind an exposure.
+            double exp = _exposureSec;
+            int waitMs = NINA.Image.Portable.Streaming.StreamStallPolicy.PollWaitMs(exp);
             ASI_ERROR_CODE err;
             lock (_sdk) err = ASIGetVideoData(_cameraId, buf, new CLong(buf.Length), waitMs);
-            if (err == ASI_ERROR_CODE.ASI_ERROR_TIMEOUT) continue;
-            if (err != ASI_ERROR_CODE.ASI_SUCCESS) continue;
-            IImageData frame;
-            try { frame = WrapFrame(buf, w, h); } catch { continue; }
-            foreach (var s in _streamSubs.Values) { try { s(frame); } catch { } }
+            if (err == ASI_ERROR_CODE.ASI_SUCCESS) {
+                lastFrame = DateTime.UtcNow;
+                restarts = 0;
+                IImageData frame;
+                try { frame = WrapFrame(buf, w, h); } catch { continue; }
+                foreach (var s in _streamSubs.Values) { try { s(frame); } catch { } }
+                continue;
+            }
+            // Timeout or error: decide by wall clock, not by the error code.
+            if (!NINA.Image.Portable.Streaming.StreamStallPolicy.IsStalled(lastFrame, DateTime.UtcNow, exp))
+                continue;
+            if (restarts >= NINA.Image.Portable.Streaming.StreamStallPolicy.MaxRestarts) {
+                // The SDK stayed silent through every restart: stop pretending
+                // the stream is alive so the service can surface it and fall
+                // back, instead of a preview that silently froze.
+                LastStreamError = $"ASI video stream stalled: no frame for "
+                    + $"{NINA.Image.Portable.Streaming.StreamStallPolicy.StallAfter(exp).TotalSeconds:0}s "
+                    + $"after {restarts} capture restarts (last SDK result {err}).";
+                lock (_gate) { _streaming = false; }
+                lock (_sdk) { try { ASIStopVideoCapture(_cameraId); } catch { } }
+                State = CameraStates.Idle;
+                return;
+            }
+            // ZWO's own advice for a silent capture: stop and start it again.
+            // The lock keeps the restart from racing a control write.
+            restarts++;
+            StreamRestarts = restarts;
+            lock (_sdk) {
+                try { ASIStopVideoCapture(_cameraId); } catch { }
+                try { ASIStartVideoCapture(_cameraId); } catch { }
+            }
+            lastFrame = DateTime.UtcNow;   // give the restarted capture a full window
+        }
+    }
+
+    /// <summary>STREAMSTALL: apply exposure/gain to the running capture in
+    /// place. The ASI SDK accepts control writes during video capture, so no
+    /// stop/start churn (which is what wedged the ASI585 on an Orange Pi when
+    /// the operator tuned gain mid-stream). A binning change still needs the
+    /// capture restarted, so that case returns false.</summary>
+    public Task<bool> UpdateVideoStreamAsync(VideoStreamOptions opts, CancellationToken ct = default) {
+        lock (_gate) {
+            if (!_streaming) return Task.FromResult(false);
+            if (opts.BinX is int b && b != _bin) return Task.FromResult(false);
+            ApplyExposureGain(opts.ExposureSeconds ?? _exposureSec, opts.Gain);
+            return Task.FromResult(true);
         }
     }
 

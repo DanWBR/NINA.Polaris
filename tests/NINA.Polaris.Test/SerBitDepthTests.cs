@@ -105,6 +105,55 @@ public class SerBitDepthTests {
         Assert.That((r.Shift, r.Source), Is.EqualTo((0, SerBitDepth.ShiftSource.Undetermined)));
     }
 
+    // ---- already-aligned data must never be shifted again (Saturn 2026-09-03) ----
+
+    private static ushort[] LeftAligned12(int rawMax) { var f = new ushort[256]; for (int i = 0; i < f.Length; i++) f[i] = (ushort)((i % (rawMax + 1)) << 4); return f; }
+
+    [Test]
+    public void IsLeftAlignedBy_DetectsSdkPaddedTwelveBit() {
+        Assert.That(SerBitDepth.IsLeftAlignedBy(LeftAligned12(200), 4), Is.True);
+        var raw = Frame(3415); raw[9] = 3;                       // an odd sample: not aligned
+        Assert.That(SerBitDepth.IsLeftAlignedBy(raw, 4), Is.False);
+        Assert.That(SerBitDepth.IsLeftAlignedBy(new ushort[64], 4), Is.False);   // black: unknown
+    }
+
+    [Test]
+    public void IsLeftAlignedBy_NeedsEnoughSamplesToBeEvidence() {
+        var few = new ushort[256]; few[1] = 16 << 4; few[2] = 20 << 4; few[3] = 300;   // 3 aligned samples only
+        Assert.That(SerBitDepth.IsLeftAlignedBy(few, 2), Is.False);
+        var many = new ushort[256]; for (int i = 0; i < SerBitDepth.MinAlignedSamples; i++) many[i] = (ushort)((i + 1) << 2);
+        Assert.That(SerBitDepth.IsLeftAlignedBy(many, 2), Is.True);
+    }
+
+    [Test]
+    public void IsEightBitWidened_DetectsIndiRaw8Stream() {
+        var f = new ushort[128]; for (int i = 0; i < f.Length; i++) f[i] = (ushort)((i % 256) << 8);
+        Assert.That(SerBitDepth.IsEightBitWidened(f), Is.True);
+        f[5] = 0x1234;
+        Assert.That(SerBitDepth.IsEightBitWidened(f), Is.False);
+    }
+
+    [Test]
+    public void ResolveShift_ReportedTwelve_ButSamplesAlreadyPadded_DoesNotShift() {
+        // ASI SDK: reports a 12-bit ADC and hands out samples << 4 already.
+        var r = SerBitDepth.ResolveShift(policyDepth: null, reportedBits: 12, LeftAligned12(200));
+        Assert.That((r.Shift, r.Source), Is.EqualTo((0, SerBitDepth.ShiftSource.AlreadyAligned)));
+    }
+
+    [Test]
+    public void ResolveShift_Inferred_ButSamplesAlreadyPadded_DoesNotShift() {
+        // Dim frame whose brightest sample is 3200 = 200 << 4: looks 12-bit by
+        // its maximum, but every low nibble is zero, so it is padded data.
+        var r = SerBitDepth.ResolveShift(policyDepth: null, reportedBits: 0, LeftAligned12(200));
+        Assert.That((r.Shift, r.Source), Is.EqualTo((0, SerBitDepth.ShiftSource.AlreadyAligned)));
+    }
+
+    [Test]
+    public void ResolveShift_Explicit_IsHonouredEvenOnPaddedData() {
+        var r = SerBitDepth.ResolveShift(policyDepth: 12, reportedBits: 0, LeftAligned12(200));
+        Assert.That((r.Shift, r.Source), Is.EqualTo((4, SerBitDepth.ShiftSource.Explicit)));
+    }
+
     [Test]
     public void ResolveShift_ExplicitOutOfRange_IsTreatedAsOff() {
         Assert.That(SerBitDepth.ResolveShift(7, 0, Frame(3415)).Source, Is.EqualTo(SerBitDepth.ShiftSource.Off));

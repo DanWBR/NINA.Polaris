@@ -1,1 +1,2 @@
 /opt/polaris/appsettings.json
+/etc/systemd/journald.conf.d/polaris-persistent.conf
