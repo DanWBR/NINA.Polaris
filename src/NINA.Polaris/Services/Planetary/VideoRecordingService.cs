@@ -368,7 +368,7 @@ public class VideoRecordingService : IDisposable {
                         // RAW16 it is `px >> (8 - sh)` folded into one expression.
                         var src = item.Pixels;
                         for (int i = 0; i < scratch.Length; i++)
-                            scratch[i] = (byte)(((src[i] << sh) >> 8) & 0xFF);
+                            scratch[i] = SerBitDepth.To8Bit(src[i], sh);   // saturates before the top byte
                         writer.WriteFrame(scratch, scratch.Length, item.Utc);
                     } else if (sh == 0) {
                         Buffer.BlockCopy(item.Pixels, 0, scratch, 0, item.ByteLen);

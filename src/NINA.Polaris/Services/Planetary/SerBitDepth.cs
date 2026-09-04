@@ -99,7 +99,25 @@ public static class SerBitDepth {
     public static bool IsEightBitWidened(ReadOnlySpan<ushort> pixels) => IsLeftAlignedBy(pixels, 8);
 
     /// <summary>How the recorder decided to align a clip, for the log.</summary>
-    public enum ShiftSource { Off, Explicit, Reported, Inferred, Undetermined, AlreadyAligned }
+    public enum ShiftSource { Off, Explicit, Reported, Inferred, Undetermined, AlreadyAligned, ReportedExceeded }
+
+    /// <summary>Brightest sample of a frame (0 for an empty span).</summary>
+    public static int MaxOf(ReadOnlySpan<ushort> pixels) {
+        int max = 0;
+        foreach (var p in pixels) if (p > max) max = p;
+        return max;
+    }
+
+    /// <summary>The 8-bit sample for a raw value under a given left shift:
+    /// the top byte of the aligned value, SATURATED first. Without the
+    /// saturation a sample above the assumed ceiling wrapped to a dark byte
+    /// (an ASI585 blue channel came out at 17% where it was really clipped),
+    /// which is worse than clipping because it lies in the other direction.</summary>
+    public static byte To8Bit(ushort raw, int shift) {
+        int x = raw << shift;
+        if (x > 0xFFFF) x = 0xFFFF;
+        return (byte)(x >> 8);
+    }
 
     /// <summary>The one decision the recorder makes per clip, taken on its
     /// first frame.
@@ -123,6 +141,17 @@ public static class SerBitDepth {
             // A driver may report the ADC depth while its SDK already hands
             // out left-aligned samples: never shift what is aligned already.
             if (sh > 0 && IsLeftAlignedBy(firstFrame, sh)) return (16, 0, ShiftSource.AlreadyAligned);
+            // A reported depth the data contradicts is no ceiling at all: the
+            // ASI585 reports 12 bits and delivers samples past 4095 at modest
+            // gain, so a shift of 4 clipped its blue channel to white in every
+            // 16-bit clip. Shifting would destroy data; leave it as recorded.
+            int max = MaxOf(firstFrame);
+            if (sh > 0 && max > (1 << reportedBits) - 1) {
+                // Size the shift from the data instead, rounded UP so frame 0
+                // can never clip (5424 on a "12-bit" ASI585 → 14 bits → x4).
+                int bits = RoundUpDepth(max);
+                return (bits, ShiftFor(bits), ShiftSource.ReportedExceeded);
+            }
             return (reportedBits, sh, ShiftSource.Reported);
         }
         int inferred = AutoDetect(firstFrame);

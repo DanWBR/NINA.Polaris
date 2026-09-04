@@ -39,6 +39,8 @@ public sealed class AsiSdkCamera : ICamera {
     /// <summary>Capture restarts the pull loop performed on the current
     /// stream because the SDK went silent.</summary>
     public int StreamRestarts { get; private set; }
+    /// <summary>Full close/reopen recoveries performed on the current stream.</summary>
+    public int StreamReopens { get; private set; }
     private readonly int _cameraId;
     private bool _connected;
 
@@ -184,10 +186,12 @@ public sealed class AsiSdkCamera : ICamera {
         _supportedBins = ParseSupportedBins(info.SupportedBins);
 
         _minExpSec = null; _maxExpSec = null;
+        _controls.Clear();
         if (ASIGetNumOfControls(_cameraId, out var nCtrl) == ASI_ERROR_CODE.ASI_SUCCESS) {
             for (int i = 0; i < nCtrl; i++) {
                 var caps = new ASI_CONTROL_CAPS();
                 if (ASIGetControlCaps(_cameraId, i, ref caps) != ASI_ERROR_CODE.ASI_SUCCESS) continue;
+                _controls.Add(caps.ControlType);
                 switch ((ASI_CONTROL_TYPE)caps.ControlType) {
                     case ASI_CONTROL_TYPE.ASI_GAIN:
                         _gainMin = (int)caps.MinValue.Value;
@@ -217,9 +221,47 @@ public sealed class AsiSdkCamera : ICamera {
         _roiApplied = true;
         _gain = ReadControl(ASI_CONTROL_TYPE.ASI_GAIN);
         _offset = ReadControl(ASI_CONTROL_TYPE.ASI_OFFSET);
+        ApplyUsbConservative();
         _connected = true;
         State = CameraStates.Idle;
     }, ct);
+
+    private readonly HashSet<int> _controls = new();
+
+    /// <summary>STREAMSTALL: the same USB posture indi_asi_ccd uses and that
+    /// streamed all night on the same board: 40% bandwidth, no high-speed
+    /// (10-bit) mode. Left at the SDK default, a full-frame RAW16 stream on
+    /// an ARM xhci runs near the bus limit and the capture wedges after a
+    /// live exposure change (ASI585MC, Orange Pi 5 Pro, 2026-09-03).</summary>
+    private void ApplyUsbConservative() {
+        lock (_sdk) {
+            if (_controls.Contains((int)ASI_CONTROL_TYPE.ASI_BANDWIDTHOVERLOAD))
+                ASISetControlValue(_cameraId, ASI_CONTROL_TYPE.ASI_BANDWIDTHOVERLOAD, new CLong(40), 0);
+            if (_controls.Contains((int)ASI_CONTROL_TYPE.ASI_HIGH_SPEED_MODE))
+                ASISetControlValue(_cameraId, ASI_CONTROL_TYPE.ASI_HIGH_SPEED_MODE, new CLong(0), 0);
+        }
+    }
+
+    /// <summary>Reopens the SDK handle in place: the automated form of the
+    /// "disconnect and reconnect" that was the only thing that revived a
+    /// wedged ASI585 in the field. Called by the pull loop with the capture
+    /// already stopped. Returns false if the SDK refused to reopen.</summary>
+    private bool ReopenCamera() {
+        lock (_sdk) {
+            try { ASIStopVideoCapture(_cameraId); } catch { }
+            try { ASICloseCamera(_cameraId); } catch { }
+            Thread.Sleep(500);
+            if (ASIOpenCamera(_cameraId) != ASI_ERROR_CODE.ASI_SUCCESS) return false;
+            if (ASIInitCamera(_cameraId) != ASI_ERROR_CODE.ASI_SUCCESS) return false;
+            _roiApplied = false;               // force the ROI/format write below
+        }
+        ApplyUsbConservative();
+        ApplyExposureGain(_exposureSec, _gain, _offset);
+        bool wasStreaming = _streaming;
+        lock (_gate) { _streaming = false; }   // ApplyRoi skips writes while streaming
+        try { ApplyRoi(); } finally { lock (_gate) { _streaming = wasStreaming; } }
+        lock (_sdk) { return ASIStartVideoCapture(_cameraId) == ASI_ERROR_CODE.ASI_SUCCESS; }
+    }
 
     public Task DisconnectAsync(CancellationToken ct = default) => Task.Run(() => {
         try { StopStreamCore(); } catch { }
@@ -449,6 +491,7 @@ public sealed class AsiSdkCamera : ICamera {
         LastStreamError = null;
         StreamRestarts = 0;
         int restarts = 0;
+        bool reopened = false;
         var lastFrame = DateTime.UtcNow;
         while (!ct.IsCancellationRequested && _streaming) {
             // STREAMSTALL: the poll wait follows the CURRENT exposure (it used
@@ -463,6 +506,7 @@ public sealed class AsiSdkCamera : ICamera {
             if (err == ASI_ERROR_CODE.ASI_SUCCESS) {
                 lastFrame = DateTime.UtcNow;
                 restarts = 0;
+                reopened = false;
                 IImageData frame;
                 try { frame = WrapFrame(buf, w, h); } catch { continue; }
                 foreach (var s in _streamSubs.Values) { try { s(frame); } catch { } }
@@ -472,12 +516,20 @@ public sealed class AsiSdkCamera : ICamera {
             if (!NINA.Image.Portable.Streaming.StreamStallPolicy.IsStalled(lastFrame, DateTime.UtcNow, exp))
                 continue;
             if (restarts >= NINA.Image.Portable.Streaming.StreamStallPolicy.MaxRestarts) {
-                // The SDK stayed silent through every restart: stop pretending
-                // the stream is alive so the service can surface it and fall
-                // back, instead of a preview that silently froze.
+                if (!reopened) {
+                    // Capture restarts did not revive it (they did not in the
+                    // field either): escalate to closing and reopening the
+                    // camera, which is what a manual reconnect does.
+                    reopened = true;
+                    StreamReopens++;
+                    if (ReopenCamera()) { lastFrame = DateTime.UtcNow; restarts = 0; continue; }
+                }
+                // The SDK stayed silent through every restart and a reopen:
+                // stop pretending the stream is alive so the service can
+                // surface it and fall back, instead of a preview that froze.
                 LastStreamError = $"ASI video stream stalled: no frame for "
                     + $"{NINA.Image.Portable.Streaming.StreamStallPolicy.StallAfter(exp).TotalSeconds:0}s "
-                    + $"after {restarts} capture restarts (last SDK result {err}).";
+                    + $"after {restarts} capture restarts and a camera reopen (last SDK result {err}).";
                 lock (_gate) { _streaming = false; }
                 lock (_sdk) { try { ASIStopVideoCapture(_cameraId); } catch { } }
                 State = CameraStates.Idle;
@@ -504,7 +556,21 @@ public sealed class AsiSdkCamera : ICamera {
         lock (_gate) {
             if (!_streaming) return Task.FromResult(false);
             if (opts.BinX is int b && b != _bin) return Task.FromResult(false);
-            ApplyExposureGain(opts.ExposureSeconds ?? _exposureSec, opts.Gain);
+            // Writing the exposure into a RUNNING capture wedged the ASI585 on
+            // an ARM host (field test 2026-09-04: one live exposure write, then
+            // silence that capture restarts could not clear). Pause the capture
+            // around the control writes instead, under the SDK lock so the pull
+            // thread cannot be inside ASIGetVideoData meanwhile; the thread
+            // itself keeps running and just sees a timeout during the pause.
+            lock (_sdk) {
+                try { ASIStopVideoCapture(_cameraId); } catch { }
+                _exposureSec = opts.ExposureSeconds is > 0 ? opts.ExposureSeconds.Value : _exposureSec;
+                if (opts.Gain is int g) _gain = g;
+                ASISetControlValue(_cameraId, ASI_CONTROL_TYPE.ASI_EXPOSURE,
+                    new CLong((nint)Math.Round(_exposureSec * 1_000_000)), 0);
+                ASISetControlValue(_cameraId, ASI_CONTROL_TYPE.ASI_GAIN, new CLong(_gain), 0);
+                try { ASIStartVideoCapture(_cameraId); } catch { }
+            }
             return Task.FromResult(true);
         }
     }

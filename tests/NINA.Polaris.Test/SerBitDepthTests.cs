@@ -155,6 +155,30 @@ public class SerBitDepthTests {
     }
 
     [Test]
+    public void ResolveShift_ReportedTwelve_ButSamplesExceedFourThousand_DoesNotShift() {
+        // ASI585MC: reports 12 bits, delivers 3088..5400 at gain 100.
+        var f = new ushort[256]; for (int i = 0; i < f.Length; i++) f[i] = (ushort)(3088 + i * 9); f[7] = 5400;
+        var r = SerBitDepth.ResolveShift(policyDepth: null, reportedBits: 12, f);
+        // sized from the data: 5400 → 14 bits → shift 2, never the reported 4
+        Assert.That((r.Bits, r.Shift, r.Source), Is.EqualTo((14, 2, SerBitDepth.ShiftSource.ReportedExceeded)));
+    }
+
+    [Test]
+    public void ResolveShift_ReportedTwelve_SamplesWithinCeiling_Shifts() {
+        var f = new ushort[256]; for (int i = 0; i < f.Length; i++) f[i] = (ushort)(100 + i * 15); f[3] = 4095;
+        var r = SerBitDepth.ResolveShift(policyDepth: null, reportedBits: 12, f);
+        Assert.That((r.Shift, r.Source), Is.EqualTo((4, SerBitDepth.ShiftSource.Reported)));
+    }
+
+    [TestCase((ushort)3500, 4, 218)]    // 3500 << 4 = 56000 → top byte 218
+    [TestCase((ushort)5400, 4, 255)]    // past the 12-bit ceiling: saturates, never wraps to 81
+    [TestCase((ushort)4095, 4, 255)]
+    [TestCase((ushort)200, 8, 200)]     // 8-bit widened back to its byte
+    [TestCase((ushort)60000, 0, 234)]   // unshifted 16-bit: plain top byte
+    public void To8Bit_TakesTheSaturatedTopByte(ushort raw, int shift, int expected) =>
+        Assert.That(SerBitDepth.To8Bit(raw, shift), Is.EqualTo((byte)expected));
+
+    [Test]
     public void ResolveShift_ExplicitOutOfRange_IsTreatedAsOff() {
         Assert.That(SerBitDepth.ResolveShift(7, 0, Frame(3415)).Source, Is.EqualTo(SerBitDepth.ShiftSource.Off));
         Assert.That(SerBitDepth.ResolveShift(32, 0, Frame(3415)).Source, Is.EqualTo(SerBitDepth.ShiftSource.Off));

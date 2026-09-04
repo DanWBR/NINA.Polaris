@@ -57,7 +57,9 @@ internal static class AsiNative {
         ASI_GAIN = 0,
         ASI_EXPOSURE = 1,
         ASI_OFFSET = 5,             // sensor bias pedestal (a.k.a. brightness)
+        ASI_BANDWIDTHOVERLOAD = 6,  // USB traffic, percent (ASICamera2.h)
         ASI_TEMPERATURE = 8,        // returns 10 * temperature (C)
+        ASI_HIGH_SPEED_MODE = 14,   // 1 = 10-bit fast readout; 0 = full depth
         ASI_COOLER_POWER_PERC = 15, // 0..100
         ASI_TARGET_TEMP = 16,       // C (not *10)
         ASI_COOLER_ON = 17,
