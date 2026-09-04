@@ -4749,5 +4749,7 @@
   "How far a point may move between frames.": "Cuánto puede moverse un punto entre fotogramas.",
   "Best frames kept at each point, chosen by local sharpness. Lower is sharper, higher is smoother.": "Mejores fotogramas conservados en cada punto, elegidos por nitidez local. Menos es más nítido; más es más suave.",
   "Points with less structure than this fraction of the best point are dropped.": "Los puntos con menos estructura que esta fracción del mejor punto se descartan.",
-  "Best frames averaged into the reference the mesh is built on.": "Mejores fotogramas promediados en la referencia sobre la que se construye la malla."
+  "Best frames averaged into the reference the mesh is built on.": "Mejores fotogramas promediados en la referencia sobre la que se construye la malla.",
+  "Local shifts": "Desplazamientos locales",
+  "Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only.": "Sigue el seeing en cada punto con su propio desplazamiento. Desactivado conserva la selección de fotogramas por punto, pero apila solo con el desplazamiento global."
 }

@@ -34,14 +34,15 @@ public class PlanetaryStackerFieldRunTests {
         bool ap = Environment.GetEnvironmentVariable("POLARIS_AP") != "0";
         int box = int.TryParse(Environment.GetEnvironmentVariable("POLARIS_AP_BOX"), out var bx) ? bx : 48;
         double apPct = double.TryParse(Environment.GetEnvironmentVariable("POLARIS_AP_PERCENT"), out var ap2) ? ap2 : 10;
+        bool dewarp = Environment.GetEnvironmentVariable("POLARIS_AP_DEWARP") != "0";
         var job = svc.StartJob(new StackConfig(ser!, outDir, keep, name,
-            AlignmentPoints: ap, ApHalfBox: Math.Max(8, box / 2), ApFramePercent: apPct));
+            AlignmentPoints: ap, ApHalfBox: Math.Max(8, box / 2), ApFramePercent: apPct, ApDeWarp: dewarp));
         await job.Task!;
         sw.Stop();
 
         TestContext.Out.WriteLine($"phase={job.Phase} error={job.Error}");
         TestContext.Out.WriteLine($"frames total={job.TotalFrames} picked={job.FramesPicked} aligned={job.FramesAligned} stacked={job.FramesStacked}");
-        TestContext.Out.WriteLine($"alignmentPoints={job.AlignmentPointCount}");
+        TestContext.Out.WriteLine($"alignmentPoints={job.AlignmentPointCount} accepted={job.ApMatchesAccepted} rejected={job.ApMatchesRejected} meanLocalShiftPx={job.ApMeanLocalShiftPx:0.00}");
         TestContext.Out.WriteLine($"output={job.OutputPath}");
         TestContext.Out.WriteLine($"elapsed={sw.Elapsed.TotalSeconds:0}s");
         Assert.That(job.Phase, Is.EqualTo(StackPhase.Ok), job.Error);

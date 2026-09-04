@@ -4130,5 +4130,7 @@
   "How far a point may move between frames.": "How far a point may move between frames.",
   "Best frames kept at each point, chosen by local sharpness. Lower is sharper, higher is smoother.": "Best frames kept at each point, chosen by local sharpness. Lower is sharper, higher is smoother.",
   "Points with less structure than this fraction of the best point are dropped.": "Points with less structure than this fraction of the best point are dropped.",
-  "Best frames averaged into the reference the mesh is built on.": "Best frames averaged into the reference the mesh is built on."
+  "Best frames averaged into the reference the mesh is built on.": "Best frames averaged into the reference the mesh is built on.",
+  "Local shifts": "Local shifts",
+  "Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only.": "Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only."
 }

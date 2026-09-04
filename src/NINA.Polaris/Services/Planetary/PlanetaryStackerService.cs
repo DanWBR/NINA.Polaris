@@ -366,7 +366,7 @@ public class PlanetaryStackerService {
         SetPhase(job, StackPhase.Stacking);
         var apR = new float[npx]; var apG = cfa ? new float[npx] : apR; var apB = cfa ? new float[npx] : apR;
         var apW = new float[npx];
-        int stacked = 0, rejected = 0;
+        int stacked = 0, rejected = 0, accepted = 0; double localSum = 0;
         for (int i = 0; i < n; i++) {
             if (usedBy[i] == null) continue;
             ct.ThrowIfCancellationRequested();
@@ -377,9 +377,12 @@ public class PlanetaryStackerService {
             foreach (var a in usedBy[i]) {
                 // LocalShift returns the TOTAL shift (global + local) that puts
                 // this frame's box onto the reference box.
-                var shift = AlignmentPoints.LocalShift(refLumB, lumB, w, h, mesh[a], gdx, gdy, cfg.ApSearchWidth);
+                var shift = cfg.ApDeWarp
+                    ? AlignmentPoints.LocalShift(refLumB, lumB, w, h, mesh[a], gdx, gdy, cfg.ApSearchWidth)
+                    : (gdx, gdy);
                 if (shift == null) { rejected++; continue; }
                 var (dx, dy) = shift.Value;
+                accepted++; localSum += Math.Sqrt((dx - gdx) * (dx - gdx) + (dy - gdy) * (dy - gdy));
                 if (cfa) {
                     AlignmentPoints.AccumulatePatch(planes.R, w, h, mesh[a], dx, dy, gain, apR, apW);
                     var w2 = new float[npx];
@@ -391,6 +394,8 @@ public class PlanetaryStackerService {
             if (stacked % 25 == 0) { job.FramesStacked = stacked; job.FramesAligned = stacked; Notify(job); }
         }
         job.FramesStacked = stacked; job.FramesAligned = stacked;
+        job.ApMatchesAccepted = accepted; job.ApMatchesRejected = rejected;
+        job.ApMeanLocalShiftPx = accepted > 0 ? localSum / accepted : 0;
         if (rejected > 0)
             _logger.LogInformation("Planetary align: {R} local matches rejected (optimum on the search border)", rejected);
 
@@ -485,7 +490,11 @@ public record StackConfig(
     double ApStructureThreshold = 0.04,
     /// <summary>Globally aligned best frames averaged into the reference the
     /// mesh is built on and that fills what the mesh does not cover.</summary>
-    double ReferencePercent = 5);
+    double ReferencePercent = 5,
+    /// <summary>PSS de_warp: search a local shift at every point (true) or
+    /// stack the point's patches with the global shift only (false), which
+    /// still gives per-point frame selection.</summary>
+    bool ApDeWarp = true);
 
 public class StackJob {
     public string Id { get; set; } = "";
@@ -498,6 +507,11 @@ public class StackJob {
     public int FramesStacked { get; set; }
     /// <summary>PLANETAP: alignment points used (0 = global registration only).</summary>
     public int AlignmentPointCount { get; set; }
+    /// <summary>PLANETAP diagnostics: local matches accepted / rejected, and the
+    /// mean magnitude of the local correction on top of the global shift.</summary>
+    public int ApMatchesAccepted { get; set; }
+    public int ApMatchesRejected { get; set; }
+    public double ApMeanLocalShiftPx { get; set; }
     public int Width { get; set; }
     public int Height { get; set; }
     public double[]? QualityScores { get; set; }

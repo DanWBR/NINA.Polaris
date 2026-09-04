@@ -4562,6 +4562,11 @@
                             <input type="number" x-model.number="video.ap.reference" min="1" max="100" step="1" class="input-sm" style="width:58px"
                                    :disabled="!video.ap.enabled || (videoStack && !videoStack?.done)"> %
                         </label>
+                        <label style="display:flex; align-items:center; gap:6px"
+                               :title="$t('Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only.')">
+                            <input type="checkbox" x-model="video.ap.dewarp" :disabled="!video.ap.enabled || (videoStack && !videoStack?.done)">
+                            Local shifts
+                        </label>
                         <button class="btn btn-sm" @click="serToMp4(video.processSerPath)"
                                 :disabled="!video.processSerPath || (mediaEncode && !mediaEncode?.done) || !timelapse.ffmpegAvailable"
                                 :title="timelapse.ffmpegAvailable ? 'Convert this SER clip to a playable MP4' : 'MP4 needs ffmpeg installed on the host'">
@@ -23131,7 +23136,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260904-planetap"></script>
+    <script src="/js/app.js?v=20260904-planetap2"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

@@ -4749,5 +4749,7 @@
   "How far a point may move between frames.": "De combien un point peut se déplacer entre les images.",
   "Best frames kept at each point, chosen by local sharpness. Lower is sharper, higher is smoother.": "Meilleures images conservées à chaque point, choisies par la netteté locale. Moins est plus net, plus est plus lisse.",
   "Points with less structure than this fraction of the best point are dropped.": "Les points ayant moins de structure que cette fraction du meilleur point sont écartés.",
-  "Best frames averaged into the reference the mesh is built on.": "Meilleures images moyennées dans la référence sur laquelle le maillage est construit."
+  "Best frames averaged into the reference the mesh is built on.": "Meilleures images moyennées dans la référence sur laquelle le maillage est construit.",
+  "Local shifts": "Décalages locaux",
+  "Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only.": "Suit le seeing en chaque point avec son propre décalage. Désactivé conserve la sélection des images par point mais empile uniquement avec le décalage global."
 }

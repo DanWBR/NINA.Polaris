@@ -4749,5 +4749,7 @@
   "How far a point may move between frames.": "Wie weit sich ein Punkt zwischen Bildern bewegen darf.",
   "Best frames kept at each point, chosen by local sharpness. Lower is sharper, higher is smoother.": "Beste Bilder je Punkt, nach lokaler Schärfe gewählt. Weniger ist schärfer, mehr ist glatter.",
   "Points with less structure than this fraction of the best point are dropped.": "Punkte mit weniger Struktur als dieser Anteil des besten Punkts werden verworfen.",
-  "Best frames averaged into the reference the mesh is built on.": "Beste Bilder, die zur Referenz gemittelt werden, auf der das Raster aufgebaut wird."
+  "Best frames averaged into the reference the mesh is built on.": "Beste Bilder, die zur Referenz gemittelt werden, auf der das Raster aufgebaut wird.",
+  "Local shifts": "Lokale Verschiebungen",
+  "Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only.": "Folgt dem Seeing an jedem Punkt mit einer eigenen Verschiebung. Aus behält die Bildauswahl pro Punkt bei, stapelt aber nur mit der globalen Verschiebung."
 }
