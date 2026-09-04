@@ -36,9 +36,7 @@ public static class ToupTekRegistry {
         // The binding imports "libtoupcam.so" (Linux) / "toupcam.dll" (Windows).
         if (libraryName.IndexOf("toupcam", StringComparison.OrdinalIgnoreCase) < 0)
             return IntPtr.Zero;
-        string[] candidates = OperatingSystem.IsWindows()
-            ? new[] { "toupcam.dll" }
-            : new[] { "libtoupcam.so" };
+        string[] candidates = NativeSdkProbe.Candidates("toupcam.dll", "libtoupcam.dylib", "libtoupcam.so");
         foreach (var dir in NativeSdkProbe.Dirs()) {
             foreach (var name in candidates) {
                 var path = Path.Combine(dir, name);

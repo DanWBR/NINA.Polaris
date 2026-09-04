@@ -36,9 +36,7 @@ public static class PlayerOneRegistry {
     private static IntPtr Resolve(string libraryName, Assembly assembly, DllImportSearchPath? searchPath) {
         if (!string.Equals(libraryName, LibName, StringComparison.OrdinalIgnoreCase))
             return IntPtr.Zero;
-        string[] candidates = OperatingSystem.IsWindows()
-            ? new[] { "PlayerOneCamera.dll" }
-            : new[] { "libPlayerOneCamera.so", "libPlayerOneCamera.so.3" };
+        string[] candidates = NativeSdkProbe.Candidates("PlayerOneCamera.dll", "libPlayerOneCamera.dylib", "libPlayerOneCamera.so", "libPlayerOneCamera.so.3");
         foreach (var dir in NativeSdkProbe.Dirs()) {
             foreach (var name in candidates) {
                 var path = Path.Combine(dir, name);

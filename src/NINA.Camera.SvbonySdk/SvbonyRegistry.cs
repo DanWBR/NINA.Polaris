@@ -44,9 +44,7 @@ public static class SvbonyRegistry {
         if (!string.Equals(libraryName, LibName, StringComparison.OrdinalIgnoreCase))
             return IntPtr.Zero; // not ours; let the default resolver handle it
 
-        string[] candidates = OperatingSystem.IsWindows()
-            ? new[] { "SVBCameraSDK.dll" }
-            : new[] { "libSVBCameraSDK.so" };
+        string[] candidates = NativeSdkProbe.Candidates("SVBCameraSDK.dll", "libSVBCameraSDK.dylib", "libSVBCameraSDK.so");
         // Probe the app base dir (bundled per-RID Content, Windows) and the
         // writable native-SDK pack dir the host exports for the downloadable
         // camera-SDK pack (Linux, where /opt/polaris isn't writable).

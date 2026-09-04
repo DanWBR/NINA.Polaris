@@ -40,4 +40,20 @@ public static class NativeSdkProbe {
         var extra = Environment.GetEnvironmentVariable(EnvVar);
         if (!string.IsNullOrWhiteSpace(extra)) yield return extra;
     }
+
+    /// <summary>Vendor library file names to try on the running OS. macOS was
+    /// missing: every resolver listed the Windows .dll and then fell through to
+    /// the Linux .so, so a vendor .dylib sitting next to the app (ZWO ships one
+    /// in its "linux_mac" SDK) was never matched by name and only the OS
+    /// loader's own search could find it.</summary>
+    public static string[] Candidates(string windows, string mac, params string[] linux) =>
+        CandidatesFor(OperatingSystem.IsWindows(), OperatingSystem.IsMacOS(), windows, mac, linux);
+
+    /// <summary>Platform-agnostic core of <see cref="Candidates"/>, so all three
+    /// branches are testable from any host.</summary>
+    public static string[] CandidatesFor(bool isWindows, bool isMac, string windows, string mac, params string[] linux) {
+        if (isWindows) return new[] { windows };
+        if (isMac) return new[] { mac };
+        return linux;
+    }
 }

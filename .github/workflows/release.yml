@@ -4,7 +4,7 @@ name: Build and release Polaris packages
 #   - push of a tag matching v*  → build all targets + attach to GitHub Release
 #   - workflow_dispatch          → build only, no release upload (manual testing)
 #
-# Matrix produces six artifacts per release:
+# Matrix produces eight artifacts per release:
 #
 #   polaris_VERSION_arm64.deb           Pi 4 / 5 (apt install ./polaris_arm64.deb)
 #   polaris_VERSION_amd64.deb           x64 Debian / Ubuntu desktops + servers
@@ -12,6 +12,8 @@ name: Build and release Polaris packages
 #   polaris-linux-x64.tar.gz            Portable Linux x64 (manual systemd setup)
 #   polaris-win-x64.zip                 Portable Windows x64 (.exe + assets)
 #   polaris-win-arm64.zip               Portable Windows ARM64 (Surface Pro X etc)
+#   polaris-osx-arm64.tar.gz            Portable macOS Apple Silicon
+#   polaris-osx-x64.tar.gz              Portable macOS Intel
 #
 # Each is self-contained: bundles the .NET 10 runtime, no separate
 # dotnet install needed on the target machine. Size: ~120-160 MB each.
@@ -51,6 +53,13 @@ jobs:
           # task, or just runs interactively).
           - { target: win-x64,     os: windows-latest, rid: win-x64,     kind: zip }
           - { target: win-arm64,   os: windows-latest, rid: win-arm64,   kind: zip }
+
+          # Portable macOS tarballs: same layout as the Linux ones, user
+          # runs ./NINA.Polaris or wires their own launchd job. Equipment
+          # on macOS is Alpaca, INDI and the native camera SDKs; ASCOM COM
+          # is Windows-only.
+          - { target: osx-arm64,   os: macos-latest,   rid: osx-arm64,   kind: tar }
+          - { target: osx-x64,     os: macos-latest,   rid: osx-x64,     kind: tar }
 
     steps:
       - name: Checkout
@@ -433,6 +442,21 @@ jobs:
             For unattended Windows installs see the optional NSSM /
             scheduled-task recipes in
             [docs/user-guide/installation.md](https://github.com/${{ github.repository }}/blob/master/docs/user-guide/installation.md).
+
+            ### macOS (Apple Silicon / Intel)
+
+            ```bash
+            tar xzf polaris-osx-arm64.tar.gz   # or polaris-osx-x64.tar.gz
+            cd polaris-osx-arm64
+            xattr -dr com.apple.quarantine .   # the download is unsigned
+            ./NINA.Polaris
+            ```
+
+            Equipment on macOS is Alpaca, INDI (local `indiserver` from
+            Homebrew, or a remote one on a Pi) and the native camera SDKs;
+            ASCOM COM stays Windows-only. Drop a vendor `.dylib` next to the
+            binary, or point `POLARIS_NATIVE_SDK_DIR` at it, and the native
+            camera drivers appear in RIGS.
 
             ### Android companion app (controller for your rig)
 

@@ -36,9 +36,7 @@ public static class ZwoRegistry {
     private static IntPtr Resolve(string libraryName, Assembly assembly, DllImportSearchPath? searchPath) {
         if (!string.Equals(libraryName, LibName, StringComparison.OrdinalIgnoreCase))
             return IntPtr.Zero;
-        string[] candidates = OperatingSystem.IsWindows()
-            ? new[] { "ASICamera2.dll" }
-            : new[] { "libASICamera2.so" };
+        string[] candidates = NativeSdkProbe.Candidates("ASICamera2.dll", "libASICamera2.dylib", "libASICamera2.so");
         foreach (var dir in NativeSdkProbe.Dirs()) {
             foreach (var name in candidates) {
                 var path = Path.Combine(dir, name);
