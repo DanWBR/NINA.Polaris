@@ -114,6 +114,7 @@ public sealed class CaptureStatusContributor : IStatusContributor {
                 framesPicked = videoStacker.CurrentJob.FramesPicked,
                 framesAligned = videoStacker.CurrentJob.FramesAligned,
                 framesStacked = videoStacker.CurrentJob.FramesStacked,
+                alignmentPoints = videoStacker.CurrentJob.AlignmentPointCount,
                 outputPath = videoStacker.CurrentJob.OutputPath,
                 error = videoStacker.CurrentJob.Error,
                 done = videoStacker.CurrentJob.Phase
