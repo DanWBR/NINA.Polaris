@@ -23,9 +23,23 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 # --allow-downgrades so a user can also pin to an older release if needed.
-apt-get install -y --allow-downgrades "$DEB" >> "$LOG" 2>&1
+# --fix-missing: the SBC is often offline while updating (the .deb arrives
+# through the browser relay), so a Recommends that cannot be fetched, such as
+# ffmpeg, must not abort the Polaris install itself.
+apt-get install -y --allow-downgrades --fix-missing "$DEB" >> "$LOG" 2>&1
 RC=$?
 echo "apt exit=$RC" >> "$LOG"
+
+# ffmpeg is what MP4 output (time-lapse, SER to MP4) needs. Best effort: the
+# published images were installed with dpkg, which never pulls Recommends, so
+# pick it up here whenever the SBC happens to be online.
+if [ "$RC" -eq 0 ] && ! command -v ffmpeg >/dev/null 2>&1; then
+    if apt-get install -y ffmpeg >> "$LOG" 2>&1; then
+        echo "ffmpeg installed" >> "$LOG"
+    else
+        echo "ffmpeg not installed (no network?), MP4 output stays unavailable until it is" >> "$LOG"
+    fi
+fi
 
 rm -f "$DEB"
 exit $RC
