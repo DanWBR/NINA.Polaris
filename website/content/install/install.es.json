@@ -534,8 +534,8 @@
       "cta": "Elegir la imagen"
     },
     "b": {
-      "title": "Ya uso Linux o Windows",
-      "body": "No necesitas nuestra imagen. Polaris se instala en el sistema que ya tienes, como cualquier otro programa: un .deb en una Pi o en cualquier Linux, un zip en Windows. Todo lo demás en la máquina queda como está.",
+      "title": "Ya uso Linux, Windows o macOS",
+      "body": "No necesitas nuestra imagen. Polaris se instala en el sistema que ya tienes, como cualquier otro programa: un .deb en una Pi o en cualquier Linux, un zip en Windows, un tarball en un Mac. Todo lo demás en la máquina queda como está.",
       "cta": "Descargar el paquete"
     },
     "toc": [

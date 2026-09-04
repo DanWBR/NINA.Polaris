@@ -537,8 +537,8 @@
     },
     "b": {
       "icon": "📦",
-      "title": "I already run Linux or Windows",
-      "body": "You do not need our image. Polaris installs on the system you have, like any other program: a .deb on a Pi or any Linux, a zip on Windows. Everything else on the machine stays as it is.",
+      "title": "I already run Linux, Windows or macOS",
+      "body": "You do not need our image. Polaris installs on the system you have, like any other program: a .deb on a Pi or any Linux, a zip on Windows, a tarball on a Mac. Everything else on the machine stays as it is.",
       "cta": "Get the package",
       "href": "#download"
     },
