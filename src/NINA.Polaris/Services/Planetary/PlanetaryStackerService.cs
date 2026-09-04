@@ -109,16 +109,23 @@ public class PlanetaryStackerService {
             job.Height = reader.Height;
 
             // Phase 2: Analyze -------------------------------------------------
+            // PLANETSTACK-2: each frame is debayered, and its centroid and
+            // sharpness are measured on the LUMINANCE in a window around the
+            // planet. On the mosaic the Laplacian ranked the Bayer
+            // checkerboard, not the seeing, and the centroid drifted with it.
             SetPhase(job, StackPhase.Analyzing);
+            var bayer = SerColorToBayer(reader.ColorMode);
             var qualities = new double[reader.FrameCount];
+            var cxs = new double[reader.FrameCount];
+            var cys = new double[reader.FrameCount];
+            int window = Math.Clamp(Math.Min(reader.Width, reader.Height) / 3, 32, 256);
             int analysed = 0;
-            // Sequential read (random access via FileStream isn't
-            // thread-safe), parallel compute.
             for (int i = 0; i < reader.FrameCount; i++) {
                 ct.ThrowIfCancellationRequested();
-                var frame = reader.ReadFrameAsUshort(i);
-                qualities[i] = FrameQualityAnalyzer.LaplacianVariance(frame, reader.Width, reader.Height,
-                    roiSize: Math.Min(reader.Width, reader.Height) / 2);
+                var planes = PlanetaryFrames.Split(reader.ReadFrameAsUshort(i), reader.Width, reader.Height, bayer);
+                var (cx, cy, _) = PlanetaryFrames.Centroid(planes.Lum, reader.Width, reader.Height);
+                cxs[i] = cx; cys[i] = cy;
+                qualities[i] = PlanetaryFrames.Sharpness(planes.Lum, reader.Width, reader.Height, cx, cy, window);
                 analysed++;
                 if (analysed % 25 == 0 || analysed == reader.FrameCount) {
                     job.FramesAnalyzed = analysed;
@@ -140,77 +147,52 @@ public class PlanetaryStackerService {
 
             // Phase 4: Align ---------------------------------------------------
             SetPhase(job, StackPhase.Aligning);
-            // Per-frame integer shift (dst = src + (dx,dy)) aligning each kept
-            // frame to the first. Sub-pixel refinement would need resampling
-            // (bilinear / lanczos), deferred to follow-up.
-            var shifts = new (int dx, int dy)[picked.Length];
-            var refFrame = reader.ReadFrameAsUshort(picked[0]);
-            // A target that FILLS the frame — a lunar/solar close-up, all surface
-            // with no sky and no limb — has no centroid to track: ~every pixel
-            // clears the threshold, the intensity-weighted centre never moves, and
-            // the stack gets no alignment (soft/doubled). Switch to phase
-            // correlation there; it keys on surface detail (craters, terminator).
-            // A bounded disc or a planet on black sky stays on the centroid (its
-            // fill fraction is well below the switch-over).
+            // Reference = the sharpest frame; every picked frame is moved so its
+            // luminance centroid lands on the reference's, with sub-pixel
+            // precision. A frame-filling target (Moon/Sun surface) has no
+            // centroid to speak of: keep phase correlation on its luminance.
+            var refPlanes = PlanetaryFrames.Split(reader.ReadFrameAsUshort(picked[0]), reader.Width, reader.Height, bayer);
             bool surface = Math.Min(reader.Width, reader.Height) >= 128
-                && CentroidAligner.FillFraction(refFrame, reader.Width, reader.Height) >= 0.6;
+                && CentroidAligner.FillFraction(ToUshort(refPlanes.Lum), reader.Width, reader.Height) >= 0.6;
+            var shifts = new (double dx, double dy)[picked.Length];
             if (surface) {
                 _logger.LogInformation(
                     "Planetary align: frame-filling target -> phase correlation ({N} frames)", picked.Length);
-                var pc = new PhaseCorrelationAligner(refFrame, reader.Width, reader.Height);
+                var pc = new PhaseCorrelationAligner(ToUshort(refPlanes.Lum), reader.Width, reader.Height);
                 for (int k = 0; k < picked.Length; k++) {
                     ct.ThrowIfCancellationRequested();
-                    shifts[k] = k == 0 ? (0, 0) : pc.Align(reader.ReadFrameAsUshort(picked[k]));
+                    if (k == 0) { shifts[k] = (0, 0); continue; }
+                    var lum = PlanetaryFrames.Split(reader.ReadFrameAsUshort(picked[k]), reader.Width, reader.Height, bayer).Lum;
+                    var (dx, dy) = pc.Align(ToUshort(lum));
+                    shifts[k] = (dx, dy);
                     if (k % 25 == 0) { job.FramesAligned = k + 1; Notify(job); }
                 }
             } else {
-                var centroids = new CentroidAligner.Centroid[picked.Length];
-                for (int k = 0; k < picked.Length; k++) {
-                    ct.ThrowIfCancellationRequested();
-                    var frame = k == 0 ? refFrame : reader.ReadFrameAsUshort(picked[k]);
-                    centroids[k] = CentroidAligner.Find(frame, reader.Width, reader.Height);
-                    if (k % 25 == 0) { job.FramesAligned = k + 1; Notify(job); }
-                }
-                var refC = centroids[0];
+                double rx = cxs[picked[0]], ry = cys[picked[0]];
                 for (int k = 0; k < picked.Length; k++)
-                    shifts[k] = ((int)Math.Round(refC.X - centroids[k].X),
-                                 (int)Math.Round(refC.Y - centroids[k].Y));
+                    shifts[k] = (rx - cxs[picked[k]], ry - cys[picked[k]]);
+                job.FramesAligned = picked.Length;
+                Notify(job);
             }
 
-            // Phase 5: Stack ---------------------------------------------------
             SetPhase(job, StackPhase.Stacking);
-            // Accumulator: uint accumulator + count per pixel so we can mean
-            // at the end. For up to 65535 frames of uint16 this fits in uint32.
-            var accum = new uint[reader.Width * reader.Height];
-            var counts = new ushort[reader.Width * reader.Height];
+            int npx = reader.Width * reader.Height;
+            bool cfa = bayer != BayerPatternEnum.None;
+            var accR = new float[npx]; var accG = cfa ? new float[npx] : accR; var accB = cfa ? new float[npx] : accR;
+            var wgt = new float[npx];
             int stacked = 0;
-            // Bayer SERs are stacked as the raw CFA mosaic (no debayer), so the
-            // per-frame shift MUST preserve the CFA phase: an odd dx/dy lands R
-            // pixels on G positions and the mean of mis-phased mosaics scrambles
-            // the colour after debayer. Round Bayer offsets to the nearest EVEN
-            // pixel (≤1 px extra alignment error, invisible next to seeing).
-            bool cfa = reader.ColorMode != SerColorMode.Mono;
             for (int k = 0; k < picked.Length; k++) {
                 ct.ThrowIfCancellationRequested();
-                var frame = reader.ReadFrameAsUshort(picked[k]);
-                int dx = shifts[k].dx, dy = shifts[k].dy;
+                var planes = k == 0 ? refPlanes
+                    : PlanetaryFrames.Split(reader.ReadFrameAsUshort(picked[k]), reader.Width, reader.Height, bayer);
+                var (dx, dy) = shifts[k];
                 if (cfa) {
-                    // Preserve the CFA phase: round to the nearest EVEN pixel so
-                    // R/G/B samples don't land on each other's positions.
-                    dx = (int)Math.Round(dx / 2.0) * 2;
-                    dy = (int)Math.Round(dy / 2.0) * 2;
-                }
-                for (int y = 0; y < reader.Height; y++) {
-                    int sy = y - dy;
-                    if (sy < 0 || sy >= reader.Height) continue;
-                    int dstRow = y * reader.Width;
-                    int srcRow = sy * reader.Width;
-                    for (int x = 0; x < reader.Width; x++) {
-                        int sx = x - dx;
-                        if (sx < 0 || sx >= reader.Width) continue;
-                        accum[dstRow + x] += frame[srcRow + sx];
-                        counts[dstRow + x]++;
-                    }
+                    PlanetaryFrames.AccumulateShifted(planes.R, reader.Width, reader.Height, dx, dy, accR, wgt);
+                    var w2 = new float[npx];   // same coverage for every plane; count once
+                    PlanetaryFrames.AccumulateShifted(planes.G, reader.Width, reader.Height, dx, dy, accG, w2);
+                    PlanetaryFrames.AccumulateShifted(planes.B, reader.Width, reader.Height, dx, dy, accB, w2);
+                } else {
+                    PlanetaryFrames.AccumulateShifted(planes.Lum, reader.Width, reader.Height, dx, dy, accR, wgt);
                 }
                 stacked++;
                 if (stacked % 25 == 0 || stacked == picked.Length) {
@@ -218,13 +200,7 @@ public class PlanetaryStackerService {
                     Notify(job);
                 }
             }
-            var stacked16 = new ushort[reader.Width * reader.Height];
-            for (int i = 0; i < accum.Length; i++) {
-                stacked16[i] = counts[i] == 0 ? (ushort)0
-                    : (ushort)Math.Min(ushort.MaxValue, accum[i] / counts[i]);
-            }
 
-            // Phase 6: Write ---------------------------------------------------
             SetPhase(job, StackPhase.Writing);
             Directory.CreateDirectory(job.Config.OutputDir);
             var outName = $"{job.Config.OutputName}_{DateTime.UtcNow:yyyy-MM-ddTHH-mm-ss}.fits";
@@ -245,19 +221,20 @@ public class PlanetaryStackerService {
             // exists to make valid: the CFA phase is preserved through the
             // whole stack, so a single debayer at the end sees a clean mosaic
             // with the noise already averaged down.
-            var bayer = SerColorToBayer(reader.ColorMode);
-            ushort[] pixels = stacked16;
-            int channels = 1;
-            if (bayer != BayerPatternEnum.None) {
-                var ch = NINA.Image.ImageAnalysis.BayerDebayer.Bilinear(
-                    stacked16, reader.Width, reader.Height, bayer);
-                // FITS colour is PLANAR: the whole R plane, then G, then B.
-                int n = reader.Width * reader.Height;
-                pixels = new ushort[n * 3];
-                Array.Copy(ch.R, 0, pixels, 0, n);
-                Array.Copy(ch.G, 0, pixels, n, n);
-                Array.Copy(ch.B, 0, pixels, n * 2, n);
+            ushort[] pixels;
+            int channels;
+            if (cfa) {
+                var r = PlanetaryFrames.Finish(accR, wgt);
+                var g = PlanetaryFrames.Finish(accG, wgt);
+                var b = PlanetaryFrames.Finish(accB, wgt);
+                pixels = new ushort[npx * 3];
+                Array.Copy(r, 0, pixels, 0, npx);
+                Array.Copy(g, 0, pixels, npx, npx);
+                Array.Copy(b, 0, pixels, npx * 2, npx);
                 channels = 3;
+            } else {
+                pixels = PlanetaryFrames.Finish(accR, wgt);
+                channels = 1;
             }
 
             var imageData = new BaseImageData(pixels,
@@ -310,6 +287,12 @@ public class PlanetaryStackerService {
 
     private void Notify(StackJob job) {
         try { JobUpdated?.Invoke(job); } catch { }
+    }
+
+    private static ushort[] ToUshort(float[] plane) {
+        var o = new ushort[plane.Length];
+        for (int i = 0; i < o.Length; i++) o[i] = (ushort)Math.Clamp(Math.Round(plane[i]), 0, 65535);
+        return o;
     }
 
     private static BayerPatternEnum SerColorToBayer(SerColorMode m) => m switch {
