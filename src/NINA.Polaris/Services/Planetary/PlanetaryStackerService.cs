@@ -157,29 +157,37 @@ public class PlanetaryStackerService {
             var refPlanes = PlanetaryFrames.Split(reader.ReadFrameAsUshort(picked[0]), reader.Width, reader.Height, bayer);
             bool surface = Math.Min(reader.Width, reader.Height) >= 128
                 && CentroidAligner.FillFraction(ToUshort(refPlanes.Lum), reader.Width, reader.Height) >= 0.6;
-            var shifts = new (double dx, double dy)[picked.Length];
+            // Global shift of EVERY frame onto the best frame: centroid offsets
+            // for a bounded planet, phase correlation on the blurred luminance
+            // for a frame-filling surface (PLANETAP-SURFACE: computed for all
+            // frames, not only the picked ones, so the alignment-point mesh can
+            // rank and register locally on the Moon and the Sun too).
+            var gdxs = new double[reader.FrameCount];
+            var gdys = new double[reader.FrameCount];
             if (surface) {
                 _logger.LogInformation(
-                    "Planetary align: frame-filling target -> phase correlation ({N} frames)", picked.Length);
-                var pc = new PhaseCorrelationAligner(ToUshort(refPlanes.Lum), reader.Width, reader.Height);
-                for (int k = 0; k < picked.Length; k++) {
+                    "Planetary align: frame-filling target -> phase correlation ({N} frames)", reader.FrameCount);
+                var refB = ToUshort(PlanetaryFrames.Blur7(refPlanes.Lum, reader.Width, reader.Height));
+                var pc = new PhaseCorrelationAligner(refB, reader.Width, reader.Height);
+                for (int i = 0; i < reader.FrameCount; i++) {
                     ct.ThrowIfCancellationRequested();
-                    if (k == 0) { shifts[k] = (0, 0); continue; }
-                    var lum = PlanetaryFrames.Split(reader.ReadFrameAsUshort(picked[k]), reader.Width, reader.Height, bayer).Lum;
-                    var (dx, dy) = pc.Align(ToUshort(lum));
-                    shifts[k] = (dx, dy);
-                    if (k % 25 == 0) { job.FramesAligned = k + 1; Notify(job); }
+                    if (i == picked[0]) continue;
+                    var lum = PlanetaryFrames.Split(reader.ReadFrameAsUshort(i), reader.Width, reader.Height, bayer).Lum;
+                    var (dx, dy) = pc.Align(ToUshort(PlanetaryFrames.Blur7(lum, reader.Width, reader.Height)));
+                    gdxs[i] = dx; gdys[i] = dy;
+                    if (i % 25 == 0) { job.FramesAligned = i + 1; Notify(job); }
                 }
             } else {
                 double rx = cxs[picked[0]], ry = cys[picked[0]];
-                for (int k = 0; k < picked.Length; k++)
-                    shifts[k] = (rx - cxs[picked[k]], ry - cys[picked[k]]);
-                job.FramesAligned = picked.Length;
-                Notify(job);
+                for (int i = 0; i < reader.FrameCount; i++) { gdxs[i] = rx - cxs[i]; gdys[i] = ry - cys[i]; }
             }
+            var shifts = new (double dx, double dy)[picked.Length];
+            for (int k = 0; k < picked.Length; k++) shifts[k] = (gdxs[picked[k]], gdys[picked[k]]);
+            job.FramesAligned = picked.Length;
+            Notify(job);
 
-            if (job.Config.AlignmentPoints && !surface
-                    && await TryStackWithAlignmentPointsAsync(job, reader, bayer, cxs, cys, ranked, refPlanes, ct)) {
+            if (job.Config.AlignmentPoints
+                    && await TryStackWithAlignmentPointsAsync(job, reader, bayer, gdxs, gdys, ranked, refPlanes, ct)) {
                 return;
             }
 
@@ -293,12 +301,11 @@ public class PlanetaryStackerService {
     /// mesh, so the caller falls back to the global stack.</summary>
     private async Task<bool> TryStackWithAlignmentPointsAsync(
             StackJob job, SerFileReader reader, BayerPatternEnum bayer,
-            double[] cxs, double[] cys, int[] ranked, PlanetaryFrames.Planes bestPlanes, CancellationToken ct) {
+            double[] gdxs, double[] gdys, int[] ranked, PlanetaryFrames.Planes bestPlanes, CancellationToken ct) {
         int w = reader.Width, h = reader.Height, npx = w * h, n = reader.FrameCount;
         bool cfa = bayer != BayerPatternEnum.None;
         var cfg = job.Config;
-        double rx = cxs[ranked[0]], ry = cys[ranked[0]];
-        (double dx, double dy) Global(int i) => (rx - cxs[i], ry - cys[i]);
+        (double dx, double dy) Global(int i) => (gdxs[i], gdys[i]);
 
         // 1. reference = mean of the best ReferencePercent frames, globally aligned
         int refCount = Math.Clamp((int)Math.Round(n * cfg.ReferencePercent / 100.0), 1, n);

@@ -31,12 +31,17 @@ public class PlanetaryStackerFieldRunTests {
         var profiles = new ProfileService(new ConfigurationBuilder().Build(), NullLogger<ProfileService>.Instance);
         var svc = new PlanetaryStackerService(profiles, NullLogger<PlanetaryStackerService>.Instance);
         var sw = Stopwatch.StartNew();
-        var job = svc.StartJob(new StackConfig(ser!, outDir, keep, name));
+        bool ap = Environment.GetEnvironmentVariable("POLARIS_AP") != "0";
+        int box = int.TryParse(Environment.GetEnvironmentVariable("POLARIS_AP_BOX"), out var bx) ? bx : 48;
+        double apPct = double.TryParse(Environment.GetEnvironmentVariable("POLARIS_AP_PERCENT"), out var ap2) ? ap2 : 10;
+        var job = svc.StartJob(new StackConfig(ser!, outDir, keep, name,
+            AlignmentPoints: ap, ApHalfBox: Math.Max(8, box / 2), ApFramePercent: apPct));
         await job.Task!;
         sw.Stop();
 
         TestContext.Out.WriteLine($"phase={job.Phase} error={job.Error}");
         TestContext.Out.WriteLine($"frames total={job.TotalFrames} picked={job.FramesPicked} aligned={job.FramesAligned} stacked={job.FramesStacked}");
+        TestContext.Out.WriteLine($"alignmentPoints={job.AlignmentPointCount}");
         TestContext.Out.WriteLine($"output={job.OutputPath}");
         TestContext.Out.WriteLine($"elapsed={sw.Elapsed.TotalSeconds:0}s");
         Assert.That(job.Phase, Is.EqualTo(StackPhase.Ok), job.Error);
