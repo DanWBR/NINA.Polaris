@@ -589,6 +589,26 @@ public class IndiCamera : ICamera, IDisposable {
             new Dictionary<string, bool> { ["STREAM_ON"] = true, ["STREAM_OFF"] = false }, ct);
     }
 
+    /// <summary>STREAMSTALL: retune a running INDI stream in place. Exposure
+    /// goes through <c>STREAMING_EXPOSURE</c> and gain through
+    /// <c>CCD_CONTROLS</c>, both of which INDI drivers accept while
+    /// CCD_VIDEO_STREAM is on, so the stream is not toggled off and on (the
+    /// toggle is what indi_asi_ccd choked on when gain was changed live).
+    /// A binning change still needs a restart, so that returns false.</summary>
+    public async Task<bool> UpdateVideoStreamAsync(VideoStreamOptions opts, CancellationToken ct = default) {
+        if (!_isStreaming) return false;
+        if (opts.BinX is int bx && bx != BinX) return false;
+        if (opts.BinY is int by && by != BinY) return false;
+        if (opts.ExposureSeconds is double exp && exp > 0) {
+            try {
+                await _client.SetNumberAsync(DeviceName, "STREAMING_EXPOSURE",
+                    new Dictionary<string, double> { ["STREAMING_EXPOSURE_VALUE"] = exp }, ct);
+            } catch { /* property may not exist on this driver */ }
+        }
+        if (opts.Gain is int g) await TrySetGainAsync(g, ct);
+        return true;
+    }
+
     public async Task StopVideoStreamAsync(CancellationToken ct = default) {
         if (!_isStreaming) return;
         _isStreaming = false;

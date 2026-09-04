@@ -1732,6 +1732,8 @@ function ninaApp() {
             rescaleBits: '',      // '' = auto-detect; else 12 / 14
             rescaling: false,
             keepPercent: 50,
+            // PLANETAP: alignment-point registration (PlanetarySystemStacker style)
+            ap: { enabled: true, box: 48, search: 14, percent: 10, structure: 4, reference: 5, dewarp: true },
             outputName: 'stack',
             // Per-frame quality scores for the current/last stack job, fetched
             // once from /api/video/stack/{id}/qualities after analysis. Drives
@@ -27468,7 +27470,14 @@ function ninaApp() {
                 const r = await this.apiPostJson('/api/video/stack/start', {
                     serPath: this.video.processSerPath,
                     keepPercent: this.video.keepPercent,
-                    outputName: this.video.outputName
+                    outputName: this.video.outputName,
+                    alignmentPoints: !!this.video.ap.enabled,
+                    apBoxSize: Number(this.video.ap.box) || 48,
+                    apSearchWidth: Number(this.video.ap.search) || 14,
+                    apFramePercent: Number(this.video.ap.percent) || 10,
+                    apStructureThreshold: (Number(this.video.ap.structure) || 4) / 100,
+                    referencePercent: Number(this.video.ap.reference) || 5,
+                    apDeWarp: this.video.ap.dewarp !== false
                 });
                 this.toast(`Stack started (job ${r.jobId?.slice?.(0, 8) || ''}…)`, 'info');
             } catch (e) { this.toastFail('Stack failed', e); }

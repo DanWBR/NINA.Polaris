@@ -192,7 +192,14 @@ public static class VideoEndpoints {
                 SerPath: req.SerPath,
                 OutputDir: outDir,
                 KeepPercent: req.KeepPercent ?? 50,
-                OutputName: req.OutputName ?? "stack"));
+                OutputName: req.OutputName ?? "stack",
+                AlignmentPoints: req.AlignmentPoints ?? true,
+                ApHalfBox: Math.Clamp((req.ApBoxSize ?? 48) / 2, 8, 128),
+                ApSearchWidth: Math.Clamp(req.ApSearchWidth ?? 14, 6, 60),
+                ApFramePercent: Math.Clamp(req.ApFramePercent ?? 10, 1, 100),
+                ApStructureThreshold: Math.Clamp(req.ApStructureThreshold ?? 0.04, 0, 1),
+                ReferencePercent: Math.Clamp(req.ReferencePercent ?? 5, 1, 100),
+                ApDeWarp: req.ApDeWarp ?? true));
             return Results.Accepted($"/api/video/stack/{job.Id}", new { jobId = job.Id });
         });
 
@@ -207,6 +214,7 @@ public static class VideoEndpoints {
                 framesPicked = job.FramesPicked,
                 framesAligned = job.FramesAligned,
                 framesStacked = job.FramesStacked,
+                alignmentPoints = job.AlignmentPointCount,
                 outputPath = job.OutputPath,
                 error = job.Error,
                 startedAt = job.StartedAt,
@@ -420,7 +428,21 @@ public static class VideoEndpoints {
         string SerPath,
         string? OutputDir = null,
         double? KeepPercent = null,
-        string? OutputName = null);
+        string? OutputName = null,
+        /// <summary>PLANETAP: local registration on an alignment-point mesh.
+        /// Omitted = on. Box/search in pixels, percent of frames kept per
+        /// point, structure threshold as a fraction of the best point (0..1),
+        /// percent of best frames averaged into the reference.</summary>
+        bool? AlignmentPoints = null,
+        int? ApBoxSize = null,
+        int? ApSearchWidth = null,
+        double? ApFramePercent = null,
+        double? ApStructureThreshold = null,
+        double? ReferencePercent = null,
+        /// <summary>Search a local shift at every point (omitted = on); off
+        /// keeps the per-point frame selection but stacks with the global
+        /// shift only.</summary>
+        bool? ApDeWarp = null);
 
     public record RescaleRequest(
         string SerPath,

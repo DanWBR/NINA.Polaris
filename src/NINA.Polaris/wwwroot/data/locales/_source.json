@@ -4116,5 +4116,19 @@
   "10-bit": "10-bit",
   "12-bit": "12-bit",
   "14-bit": "14-bit",
-  "How the samples fill the 16-bit range in the file. Auto follows the camera, or the first frame when the driver does not say. Off keeps the raw values. A fixed depth is safer when the scene may get brighter later in the clip.": "How the samples fill the 16-bit range in the file. Auto follows the camera, or the first frame when the driver does not say. Off keeps the raw values. A fixed depth is safer when the scene may get brighter later in the clip."
+  "How the samples fill the 16-bit range in the file. Auto follows the camera, or the first frame when the driver does not say. Off keeps the raw values. A fixed depth is safer when the scene may get brighter later in the clip.": "How the samples fill the 16-bit range in the file. Auto follows the camera, or the first frame when the driver does not say. Off keeps the raw values. A fixed depth is safer when the scene may get brighter later in the clip.",
+  "Alignment points": "Alignment points",
+  "Box": "Box",
+  "Per point": "Per point",
+  "Structure": "Structure",
+  "Reference": "Reference",
+  "{n} alignment points": "{n} alignment points",
+  "global registration": "global registration",
+  "Size of the square each point is matched in, in pixels. Larger boxes are steadier, smaller ones follow the seeing more closely.": "Size of the square each point is matched in, in pixels. Larger boxes are steadier, smaller ones follow the seeing more closely.",
+  "How far a point may move between frames.": "How far a point may move between frames.",
+  "Best frames kept at each point, chosen by local sharpness. Lower is sharper, higher is smoother.": "Best frames kept at each point, chosen by local sharpness. Lower is sharper, higher is smoother.",
+  "Points with less structure than this fraction of the best point are dropped.": "Points with less structure than this fraction of the best point are dropped.",
+  "Best frames averaged into the reference the mesh is built on.": "Best frames averaged into the reference the mesh is built on.",
+  "Local shifts": "Local shifts",
+  "Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only.": "Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only."
 }

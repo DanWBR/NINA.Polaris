@@ -4519,6 +4519,41 @@
                         </button>
                         <button class="btn btn-danger" @click="videoAbortStack()"
                                 :disabled="!videoStack || videoStack?.done">Abort</button>
+                    </div>
+                    <!-- PLANETAP: local registration on a mesh of alignment points,
+                         after PlanetarySystemStacker. The mesh needs a target a few
+                         boxes wide; a tiny disc falls back to the single global
+                         registration on its own. -->
+                    <div class="control-row" style="flex-wrap:wrap; gap:10px 14px; align-items:center">
+                        <label style="display:flex; align-items:center; gap:6px">
+                            <input type="checkbox" x-model="video.ap.enabled" :disabled="videoStack && !videoStack?.done">
+                            Alignment points
+                        </label>
+                        <label :title="$t('Size of the square each point is matched in, in pixels. Larger boxes are steadier, smaller ones follow the seeing more closely.')">Box
+                            <input type="number" x-model.number="video.ap.box" min="16" max="256" step="8" class="input-sm" style="width:64px"
+                                   :disabled="!video.ap.enabled || (videoStack && !videoStack?.done)"> px
+                        </label>
+                        <label :title="$t('How far a point may move between frames.')">Search
+                            <input type="number" x-model.number="video.ap.search" min="6" max="60" step="2" class="input-sm" style="width:58px"
+                                   :disabled="!video.ap.enabled || (videoStack && !videoStack?.done)"> px
+                        </label>
+                        <label :title="$t('Best frames kept at each point, chosen by local sharpness. Lower is sharper, higher is smoother.')">Per point
+                            <input type="number" x-model.number="video.ap.percent" min="1" max="100" step="5" class="input-sm" style="width:58px"
+                                   :disabled="!video.ap.enabled || (videoStack && !videoStack?.done)"> %
+                        </label>
+                        <label :title="$t('Points with less structure than this fraction of the best point are dropped.')">Structure
+                            <input type="number" x-model.number="video.ap.structure" min="0" max="100" step="1" class="input-sm" style="width:58px"
+                                   :disabled="!video.ap.enabled || (videoStack && !videoStack?.done)"> %
+                        </label>
+                        <label :title="$t('Best frames averaged into the reference the mesh is built on.')">Reference
+                            <input type="number" x-model.number="video.ap.reference" min="1" max="100" step="1" class="input-sm" style="width:58px"
+                                   :disabled="!video.ap.enabled || (videoStack && !videoStack?.done)"> %
+                        </label>
+                        <label style="display:flex; align-items:center; gap:6px"
+                               :title="$t('Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only.')">
+                            <input type="checkbox" x-model="video.ap.dewarp" :disabled="!video.ap.enabled || (videoStack && !videoStack?.done)">
+                            Local shifts
+                        </label>
                         <button class="btn btn-sm" @click="serToMp4(video.processSerPath)"
                                 :disabled="!video.processSerPath || (mediaEncode && !mediaEncode?.done) || !timelapse.ffmpegAvailable"
                                 :title="timelapse.ffmpegAvailable ? 'Convert this SER clip to a playable MP4' : 'MP4 needs ffmpeg installed on the host'">
@@ -4576,6 +4611,9 @@
 
                     <div class="stats-bar" x-show="videoStack?.phase === 'Ok'" style="margin-top:10px">
                         <span class="text-ok">✓ Stack complete</span>
+                        <span x-show="videoStack?.alignmentPoints > 0"
+                              x-text="$t('{n} alignment points', { n: videoStack?.alignmentPoints })"></span>
+                        <span x-show="!(videoStack?.alignmentPoints > 0)" x-text="$t('global registration')"></span>
                         <span>→ <code x-text="videoStack?.outputPath"></code></span>
                     </div>
                     <div class="stats-bar" x-show="videoStack?.phase === 'Fail'" style="margin-top:10px">
@@ -23345,7 +23383,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260903-seralign"></script>
+    <script src="/js/app.js?v=20260904-planetap2"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

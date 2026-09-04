@@ -144,7 +144,12 @@ builder.WebHost.ConfigureKestrel(options =>
     }
     if (httpsEnabled) {
         var cert = certService.GetOrCreate();
-        options.ListenAnyIP(httpsPort, listen => listen.UseHttps(cert));
+        options.ListenAnyIP(httpsPort, listen => {
+            // Issue #14: a plaintext http:// request on the HTTPS port used to
+            // get an empty reply; answer it with a redirect to https instead.
+            NINA.Polaris.Middleware.PlaintextHttpOnTlsPort.Register(listen, httpsPort);
+            listen.UseHttps(cert);
+        });
     }
     // GX-9: the /api/onnx/save endpoint round-trips raw uint16 pixel
     // bytes for the post-inference image, RGB masters from a modern

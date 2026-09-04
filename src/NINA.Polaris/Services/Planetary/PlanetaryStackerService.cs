@@ -109,16 +109,26 @@ public class PlanetaryStackerService {
             job.Height = reader.Height;
 
             // Phase 2: Analyze -------------------------------------------------
+            // PLANETSTACK-2: each frame is debayered, and its centroid and
+            // sharpness are measured on the LUMINANCE in a window around the
+            // planet. On the mosaic the Laplacian ranked the Bayer
+            // checkerboard, not the seeing, and the centroid drifted with it.
             SetPhase(job, StackPhase.Analyzing);
+            var bayer = SerColorToBayer(reader.ColorMode);
             var qualities = new double[reader.FrameCount];
+            var cxs = new double[reader.FrameCount];
+            var cys = new double[reader.FrameCount];
+            int window = Math.Clamp(Math.Min(reader.Width, reader.Height) / 3, 32, 256);
             int analysed = 0;
-            // Sequential read (random access via FileStream isn't
-            // thread-safe), parallel compute.
             for (int i = 0; i < reader.FrameCount; i++) {
                 ct.ThrowIfCancellationRequested();
-                var frame = reader.ReadFrameAsUshort(i);
-                qualities[i] = FrameQualityAnalyzer.LaplacianVariance(frame, reader.Width, reader.Height,
-                    roiSize: Math.Min(reader.Width, reader.Height) / 2);
+                var planes = PlanetaryFrames.Split(reader.ReadFrameAsUshort(i), reader.Width, reader.Height, bayer);
+                // PSS lesson: rank and centroid on the Gaussian-blurred
+                // luminance, so noise is not mistaken for structure.
+                var lumB = PlanetaryFrames.Blur7(planes.Lum, reader.Width, reader.Height);
+                var (cx, cy, _) = PlanetaryFrames.Centroid(lumB, reader.Width, reader.Height);
+                cxs[i] = cx; cys[i] = cy;
+                qualities[i] = PlanetaryFrames.Sharpness(lumB, reader.Width, reader.Height, cx, cy, window);
                 analysed++;
                 if (analysed % 25 == 0 || analysed == reader.FrameCount) {
                     job.FramesAnalyzed = analysed;
@@ -140,77 +150,73 @@ public class PlanetaryStackerService {
 
             // Phase 4: Align ---------------------------------------------------
             SetPhase(job, StackPhase.Aligning);
-            // Per-frame integer shift (dst = src + (dx,dy)) aligning each kept
-            // frame to the first. Sub-pixel refinement would need resampling
-            // (bilinear / lanczos), deferred to follow-up.
-            var shifts = new (int dx, int dy)[picked.Length];
-            var refFrame = reader.ReadFrameAsUshort(picked[0]);
-            // A target that FILLS the frame — a lunar/solar close-up, all surface
-            // with no sky and no limb — has no centroid to track: ~every pixel
-            // clears the threshold, the intensity-weighted centre never moves, and
-            // the stack gets no alignment (soft/doubled). Switch to phase
-            // correlation there; it keys on surface detail (craters, terminator).
-            // A bounded disc or a planet on black sky stays on the centroid (its
-            // fill fraction is well below the switch-over).
+            // Reference = the sharpest frame; every picked frame is moved so its
+            // luminance centroid lands on the reference's, with sub-pixel
+            // precision. A frame-filling target (Moon/Sun surface) has no
+            // centroid to speak of: keep phase correlation on its luminance.
+            var refPlanes = PlanetaryFrames.Split(reader.ReadFrameAsUshort(picked[0]), reader.Width, reader.Height, bayer);
             bool surface = Math.Min(reader.Width, reader.Height) >= 128
-                && CentroidAligner.FillFraction(refFrame, reader.Width, reader.Height) >= 0.6;
+                && CentroidAligner.FillFraction(ToUshort(refPlanes.Lum), reader.Width, reader.Height) >= 0.6;
+            // Global shift of EVERY frame onto the best frame: centroid offsets
+            // for a bounded planet, phase correlation on the blurred luminance
+            // for a frame-filling surface (PLANETAP-SURFACE: computed for all
+            // frames, not only the picked ones, so the alignment-point mesh can
+            // rank and register locally on the Moon and the Sun too).
+            var gdxs = new double[reader.FrameCount];
+            var gdys = new double[reader.FrameCount];
             if (surface) {
                 _logger.LogInformation(
-                    "Planetary align: frame-filling target -> phase correlation ({N} frames)", picked.Length);
-                var pc = new PhaseCorrelationAligner(refFrame, reader.Width, reader.Height);
-                for (int k = 0; k < picked.Length; k++) {
+                    "Planetary align: frame-filling target -> phase correlation ({N} frames)", reader.FrameCount);
+                var refB = ToUshort(PlanetaryFrames.Blur7(refPlanes.Lum, reader.Width, reader.Height));
+                var pc = new PhaseCorrelationAligner(refB, reader.Width, reader.Height);
+                for (int i = 0; i < reader.FrameCount; i++) {
                     ct.ThrowIfCancellationRequested();
-                    shifts[k] = k == 0 ? (0, 0) : pc.Align(reader.ReadFrameAsUshort(picked[k]));
-                    if (k % 25 == 0) { job.FramesAligned = k + 1; Notify(job); }
+                    if (i == picked[0]) continue;
+                    var lum = PlanetaryFrames.Split(reader.ReadFrameAsUshort(i), reader.Width, reader.Height, bayer).Lum;
+                    var (dx, dy) = pc.Align(ToUshort(PlanetaryFrames.Blur7(lum, reader.Width, reader.Height)));
+                    gdxs[i] = dx; gdys[i] = dy;
+                    if (i % 25 == 0) { job.FramesAligned = i + 1; Notify(job); }
                 }
             } else {
-                var centroids = new CentroidAligner.Centroid[picked.Length];
-                for (int k = 0; k < picked.Length; k++) {
-                    ct.ThrowIfCancellationRequested();
-                    var frame = k == 0 ? refFrame : reader.ReadFrameAsUshort(picked[k]);
-                    centroids[k] = CentroidAligner.Find(frame, reader.Width, reader.Height);
-                    if (k % 25 == 0) { job.FramesAligned = k + 1; Notify(job); }
-                }
-                var refC = centroids[0];
-                for (int k = 0; k < picked.Length; k++)
-                    shifts[k] = ((int)Math.Round(refC.X - centroids[k].X),
-                                 (int)Math.Round(refC.Y - centroids[k].Y));
+                double rx = cxs[picked[0]], ry = cys[picked[0]];
+                for (int i = 0; i < reader.FrameCount; i++) { gdxs[i] = rx - cxs[i]; gdys[i] = ry - cys[i]; }
+            }
+            var shifts = new (double dx, double dy)[picked.Length];
+            for (int k = 0; k < picked.Length; k++) shifts[k] = (gdxs[picked[k]], gdys[picked[k]]);
+            job.FramesAligned = picked.Length;
+            Notify(job);
+
+            if (job.Config.AlignmentPoints
+                    && await TryStackWithAlignmentPointsAsync(job, reader, bayer, gdxs, gdys, ranked, refPlanes, ct)) {
+                return;
             }
 
-            // Phase 5: Stack ---------------------------------------------------
             SetPhase(job, StackPhase.Stacking);
-            // Accumulator: uint accumulator + count per pixel so we can mean
-            // at the end. For up to 65535 frames of uint16 this fits in uint32.
-            var accum = new uint[reader.Width * reader.Height];
-            var counts = new ushort[reader.Width * reader.Height];
+            int npx = reader.Width * reader.Height;
+            // PSS lesson (frames_normalization): scale every frame's object
+            // brightness to the reference's before it is added, so seeing
+            // transparency and thin cloud do not modulate the stack.
+            var (refBg, refPeak) = PlanetaryFrames.Levels(refPlanes.Lum);
+            float normThreshold = (float)(refBg + 0.25 * (refPeak - refBg));
+            double refMean = PlanetaryFrames.MeanAbove(refPlanes.Lum, normThreshold);
+            bool cfa = bayer != BayerPatternEnum.None;
+            var accR = new float[npx]; var accG = cfa ? new float[npx] : accR; var accB = cfa ? new float[npx] : accR;
+            var wgt = new float[npx];
             int stacked = 0;
-            // Bayer SERs are stacked as the raw CFA mosaic (no debayer), so the
-            // per-frame shift MUST preserve the CFA phase: an odd dx/dy lands R
-            // pixels on G positions and the mean of mis-phased mosaics scrambles
-            // the colour after debayer. Round Bayer offsets to the nearest EVEN
-            // pixel (≤1 px extra alignment error, invisible next to seeing).
-            bool cfa = reader.ColorMode != SerColorMode.Mono;
             for (int k = 0; k < picked.Length; k++) {
                 ct.ThrowIfCancellationRequested();
-                var frame = reader.ReadFrameAsUshort(picked[k]);
-                int dx = shifts[k].dx, dy = shifts[k].dy;
+                var planes = k == 0 ? refPlanes
+                    : PlanetaryFrames.Split(reader.ReadFrameAsUshort(picked[k]), reader.Width, reader.Height, bayer);
+                var (dx, dy) = shifts[k];
+                float gain = k == 0 ? 1f
+                    : PlanetaryFrames.NormalisationGain(refMean, PlanetaryFrames.MeanAbove(planes.Lum, normThreshold));
                 if (cfa) {
-                    // Preserve the CFA phase: round to the nearest EVEN pixel so
-                    // R/G/B samples don't land on each other's positions.
-                    dx = (int)Math.Round(dx / 2.0) * 2;
-                    dy = (int)Math.Round(dy / 2.0) * 2;
-                }
-                for (int y = 0; y < reader.Height; y++) {
-                    int sy = y - dy;
-                    if (sy < 0 || sy >= reader.Height) continue;
-                    int dstRow = y * reader.Width;
-                    int srcRow = sy * reader.Width;
-                    for (int x = 0; x < reader.Width; x++) {
-                        int sx = x - dx;
-                        if (sx < 0 || sx >= reader.Width) continue;
-                        accum[dstRow + x] += frame[srcRow + sx];
-                        counts[dstRow + x]++;
-                    }
+                    PlanetaryFrames.AccumulateShifted(planes.R, reader.Width, reader.Height, dx, dy, accR, wgt, gain);
+                    var w2 = new float[npx];   // same coverage for every plane; count once
+                    PlanetaryFrames.AccumulateShifted(planes.G, reader.Width, reader.Height, dx, dy, accG, w2, gain);
+                    PlanetaryFrames.AccumulateShifted(planes.B, reader.Width, reader.Height, dx, dy, accB, w2, gain);
+                } else {
+                    PlanetaryFrames.AccumulateShifted(planes.Lum, reader.Width, reader.Height, dx, dy, accR, wgt, gain);
                 }
                 stacked++;
                 if (stacked % 25 == 0 || stacked == picked.Length) {
@@ -218,13 +224,7 @@ public class PlanetaryStackerService {
                     Notify(job);
                 }
             }
-            var stacked16 = new ushort[reader.Width * reader.Height];
-            for (int i = 0; i < accum.Length; i++) {
-                stacked16[i] = counts[i] == 0 ? (ushort)0
-                    : (ushort)Math.Min(ushort.MaxValue, accum[i] / counts[i]);
-            }
 
-            // Phase 6: Write ---------------------------------------------------
             SetPhase(job, StackPhase.Writing);
             Directory.CreateDirectory(job.Config.OutputDir);
             var outName = $"{job.Config.OutputName}_{DateTime.UtcNow:yyyy-MM-ddTHH-mm-ss}.fits";
@@ -245,19 +245,20 @@ public class PlanetaryStackerService {
             // exists to make valid: the CFA phase is preserved through the
             // whole stack, so a single debayer at the end sees a clean mosaic
             // with the noise already averaged down.
-            var bayer = SerColorToBayer(reader.ColorMode);
-            ushort[] pixels = stacked16;
-            int channels = 1;
-            if (bayer != BayerPatternEnum.None) {
-                var ch = NINA.Image.ImageAnalysis.BayerDebayer.Bilinear(
-                    stacked16, reader.Width, reader.Height, bayer);
-                // FITS colour is PLANAR: the whole R plane, then G, then B.
-                int n = reader.Width * reader.Height;
-                pixels = new ushort[n * 3];
-                Array.Copy(ch.R, 0, pixels, 0, n);
-                Array.Copy(ch.G, 0, pixels, n, n);
-                Array.Copy(ch.B, 0, pixels, n * 2, n);
+            ushort[] pixels;
+            int channels;
+            if (cfa) {
+                var r = PlanetaryFrames.Finish(accR, wgt);
+                var g = PlanetaryFrames.Finish(accG, wgt);
+                var b = PlanetaryFrames.Finish(accB, wgt);
+                pixels = new ushort[npx * 3];
+                Array.Copy(r, 0, pixels, 0, npx);
+                Array.Copy(g, 0, pixels, npx, npx);
+                Array.Copy(b, 0, pixels, npx * 2, npx);
                 channels = 3;
+            } else {
+                pixels = PlanetaryFrames.Finish(accR, wgt);
+                channels = 1;
             }
 
             var imageData = new BaseImageData(pixels,
@@ -295,6 +296,152 @@ public class PlanetaryStackerService {
           catch (Exception ex) { _logger.LogError(ex, "Planetary stack failed"); Fail(job, ex.Message); }
     }
 
+    /// <summary>PLANETAP: local registration on a mesh of alignment points.
+    /// Returns false (nothing written) when the target is too small for a
+    /// mesh, so the caller falls back to the global stack.</summary>
+    private async Task<bool> TryStackWithAlignmentPointsAsync(
+            StackJob job, SerFileReader reader, BayerPatternEnum bayer,
+            double[] gdxs, double[] gdys, int[] ranked, PlanetaryFrames.Planes bestPlanes, CancellationToken ct) {
+        int w = reader.Width, h = reader.Height, npx = w * h, n = reader.FrameCount;
+        bool cfa = bayer != BayerPatternEnum.None;
+        var cfg = job.Config;
+        (double dx, double dy) Global(int i) => (gdxs[i], gdys[i]);
+
+        // 1. reference = mean of the best ReferencePercent frames, globally aligned
+        int refCount = Math.Clamp((int)Math.Round(n * cfg.ReferencePercent / 100.0), 1, n);
+        var accR = new float[npx]; var accG = cfa ? new float[npx] : accR; var accB = cfa ? new float[npx] : accR;
+        var wgt = new float[npx];
+        for (int k = 0; k < refCount; k++) {
+            ct.ThrowIfCancellationRequested();
+            var planes = k == 0 ? bestPlanes : PlanetaryFrames.Split(reader.ReadFrameAsUshort(ranked[k]), w, h, bayer);
+            var (dx, dy) = Global(ranked[k]);
+            if (cfa) {
+                PlanetaryFrames.AccumulateShifted(planes.R, w, h, dx, dy, accR, wgt);
+                var w2 = new float[npx];
+                PlanetaryFrames.AccumulateShifted(planes.G, w, h, dx, dy, accG, w2);
+                PlanetaryFrames.AccumulateShifted(planes.B, w, h, dx, dy, accB, w2);
+            } else PlanetaryFrames.AccumulateShifted(planes.Lum, w, h, dx, dy, accR, wgt);
+        }
+        var refR = Mean(accR, wgt); var refG = cfa ? Mean(accG, wgt) : refR; var refB = cfa ? Mean(accB, wgt) : refR;
+        var refLum = new float[npx];
+        for (int i = 0; i < npx; i++) refLum[i] = cfa ? (refR[i] + 2f * refG[i] + refB[i]) * 0.25f : refR[i];
+        var refLumB = PlanetaryFrames.Blur7(refLum, w, h);
+
+        // 2. mesh on the reference
+        var mesh = AlignmentPoints.BuildMesh(refLumB, w, h,
+            new AlignmentPoints.MeshOptions(cfg.ApHalfBox, cfg.ApSearchWidth, cfg.ApStructureThreshold));
+        if (mesh.Count < 2) {
+            _logger.LogInformation("Planetary align: target too small for an alignment-point mesh ({N} points); global registration", mesh.Count);
+            return false;
+        }
+        job.AlignmentPointCount = mesh.Count;
+        var (rbg, rpeak) = PlanetaryFrames.Levels(refLum);
+        double range = Math.Max(1.0, rpeak - rbg);
+        float normThreshold = (float)(rbg + 0.25 * range);
+        double refMean = PlanetaryFrames.MeanAbove(refLum, normThreshold);
+        _logger.LogInformation("Planetary align: {N} alignment points (half box {HB}, search {SW})", mesh.Count, cfg.ApHalfBox, cfg.ApSearchWidth);
+
+        // 3. local ranking: every frame, every point
+        SetPhase(job, StackPhase.Analyzing);
+        var local = new double[mesh.Count][];
+        for (int a = 0; a < mesh.Count; a++) local[a] = new double[n];
+        for (int i = 0; i < n; i++) {
+            ct.ThrowIfCancellationRequested();
+            var lumB = PlanetaryFrames.Blur7(PlanetaryFrames.Split(reader.ReadFrameAsUshort(i), w, h, bayer).Lum, w, h);
+            var (gdx, gdy) = Global(i);
+            for (int a = 0; a < mesh.Count; a++)
+                local[a][i] = AlignmentPoints.LocalSharpness(lumB, w, h, mesh[a], gdx, gdy, range);
+            if (i % 25 == 0 || i == n - 1) { job.FramesAnalyzed = i + 1; Notify(job); }
+        }
+        int stackSize = Math.Clamp((int)Math.Ceiling(n * cfg.ApFramePercent / 100.0), 1, n);
+        var usedBy = new List<int>[n];
+        for (int a = 0; a < mesh.Count; a++) {
+            var q = local[a];
+            mesh[a].BestFrames = Enumerable.Range(0, n).OrderByDescending(i => q[i]).Take(stackSize).ToArray();
+            foreach (var i in mesh[a].BestFrames) (usedBy[i] ??= new List<int>()).Add(a);
+        }
+        job.FramesPicked = usedBy.Count(u => u != null);
+
+        // 4. local registration + ramp-weighted accumulation
+        SetPhase(job, StackPhase.Stacking);
+        var apR = new float[npx]; var apG = cfa ? new float[npx] : apR; var apB = cfa ? new float[npx] : apR;
+        var apW = new float[npx];
+        int stacked = 0, rejected = 0, accepted = 0; double localSum = 0;
+        for (int i = 0; i < n; i++) {
+            if (usedBy[i] == null) continue;
+            ct.ThrowIfCancellationRequested();
+            var planes = PlanetaryFrames.Split(reader.ReadFrameAsUshort(i), w, h, bayer);
+            var lumB = PlanetaryFrames.Blur7(planes.Lum, w, h);
+            var (gdx, gdy) = Global(i);
+            float gain = PlanetaryFrames.NormalisationGain(refMean, PlanetaryFrames.MeanAbove(planes.Lum, normThreshold));
+            foreach (var a in usedBy[i]) {
+                // LocalShift returns the TOTAL shift (global + local) that puts
+                // this frame's box onto the reference box.
+                var shift = cfg.ApDeWarp
+                    ? AlignmentPoints.LocalShift(refLumB, lumB, w, h, mesh[a], gdx, gdy, cfg.ApSearchWidth)
+                    : (gdx, gdy);
+                if (shift == null) { rejected++; continue; }
+                var (dx, dy) = shift.Value;
+                accepted++; localSum += Math.Sqrt((dx - gdx) * (dx - gdx) + (dy - gdy) * (dy - gdy));
+                if (cfa) {
+                    AlignmentPoints.AccumulatePatch(planes.R, w, h, mesh[a], dx, dy, gain, apR, apW);
+                    var w2 = new float[npx];
+                    AlignmentPoints.AccumulatePatch(planes.G, w, h, mesh[a], dx, dy, gain, apG, w2);
+                    AlignmentPoints.AccumulatePatch(planes.B, w, h, mesh[a], dx, dy, gain, apB, w2);
+                } else AlignmentPoints.AccumulatePatch(planes.Lum, w, h, mesh[a], dx, dy, gain, apR, apW);
+            }
+            stacked++;
+            if (stacked % 25 == 0) { job.FramesStacked = stacked; job.FramesAligned = stacked; Notify(job); }
+        }
+        job.FramesStacked = stacked; job.FramesAligned = stacked;
+        job.ApMatchesAccepted = accepted; job.ApMatchesRejected = rejected;
+        job.ApMeanLocalShiftPx = accepted > 0 ? localSum / accepted : 0;
+        if (rejected > 0)
+            _logger.LogInformation("Planetary align: {R} local matches rejected (optimum on the search border)", rejected);
+
+        // 5. merge with the reference where the mesh did not reach
+        SetPhase(job, StackPhase.Writing);
+        ushort[] pixels; int channels;
+        const double blend = 0.2;
+        if (cfa) {
+            var r = AlignmentPoints.Merge(apR, apW, refR, stackSize, blend);
+            var g = AlignmentPoints.Merge(apG, apW, refG, stackSize, blend);
+            var b = AlignmentPoints.Merge(apB, apW, refB, stackSize, blend);
+            pixels = new ushort[npx * 3];
+            Array.Copy(r, 0, pixels, 0, npx); Array.Copy(g, 0, pixels, npx, npx); Array.Copy(b, 0, pixels, npx * 2, npx);
+            channels = 3;
+        } else { pixels = AlignmentPoints.Merge(apR, apW, refR, stackSize, blend); channels = 1; }
+        await WriteStackAsync(job, reader, pixels, channels, ct);
+        _logger.LogInformation("Planetary stack OK ({AP} alignment points, {S} frames used) → {Path}",
+            mesh.Count, stacked, job.OutputPath);
+        return true;
+    }
+
+    private static float[] Mean(float[] acc, float[] wgt) {
+        var o = new float[acc.Length];
+        for (int i = 0; i < o.Length; i++) o[i] = wgt[i] > 0 ? acc[i] / wgt[i] : 0f;
+        return o;
+    }
+
+    private async Task WriteStackAsync(StackJob job, SerFileReader reader, ushort[] pixels, int channels, CancellationToken ct) {
+        Directory.CreateDirectory(job.Config.OutputDir);
+        var outName = $"{job.Config.OutputName}_{DateTime.UtcNow:yyyy-MM-ddTHH-mm-ss}.fits";
+        var outPath = Path.Combine(job.Config.OutputDir, outName);
+        var imageData = new BaseImageData(pixels,
+            new ImageProperties {
+                Width = reader.Width, Height = reader.Height, BitDepth = 16, Channels = channels,
+                IsBayered = false, BayerPattern = BayerPatternEnum.None
+            },
+            new ImageMetaData());
+        imageData.MetaData.Camera.Name = reader.Instrument;
+        imageData.MetaData.Telescope.Name = reader.Telescope;
+        await Task.Run(() => FITSWriter.Write(imageData, outPath), ct);
+        job.OutputPath = outPath;
+        SetPhase(job, StackPhase.Ok);
+        job.CompletedAt = DateTime.UtcNow;
+        Notify(job);
+    }
+
     private void SetPhase(StackJob job, StackPhase p) {
         job.Phase = p;
         Notify(job);
@@ -312,6 +459,12 @@ public class PlanetaryStackerService {
         try { JobUpdated?.Invoke(job); } catch { }
     }
 
+    private static ushort[] ToUshort(float[] plane) {
+        var o = new ushort[plane.Length];
+        for (int i = 0; i < o.Length; i++) o[i] = (ushort)Math.Clamp(Math.Round(plane[i]), 0, 65535);
+        return o;
+    }
+
     private static BayerPatternEnum SerColorToBayer(SerColorMode m) => m switch {
         SerColorMode.BayerRGGB => BayerPatternEnum.RGGB,
         SerColorMode.BayerGRBG => BayerPatternEnum.GRBG,
@@ -325,7 +478,23 @@ public record StackConfig(
     string SerPath,
     string OutputDir,
     double KeepPercent = 50,
-    string OutputName = "stack");
+    string OutputName = "stack",
+    /// <summary>PLANETAP: register locally on a mesh of alignment points
+    /// (PlanetarySystemStacker style) when the target is large enough for a
+    /// mesh; otherwise the single global registration is used.</summary>
+    bool AlignmentPoints = true,
+    int ApHalfBox = 24,
+    int ApSearchWidth = 14,
+    /// <summary>Best frames kept PER alignment point, percent of all frames.</summary>
+    double ApFramePercent = 10,
+    double ApStructureThreshold = 0.04,
+    /// <summary>Globally aligned best frames averaged into the reference the
+    /// mesh is built on and that fills what the mesh does not cover.</summary>
+    double ReferencePercent = 5,
+    /// <summary>PSS de_warp: search a local shift at every point (true) or
+    /// stack the point's patches with the global shift only (false), which
+    /// still gives per-point frame selection.</summary>
+    bool ApDeWarp = true);
 
 public class StackJob {
     public string Id { get; set; } = "";
@@ -336,6 +505,13 @@ public class StackJob {
     public int FramesPicked { get; set; }
     public int FramesAligned { get; set; }
     public int FramesStacked { get; set; }
+    /// <summary>PLANETAP: alignment points used (0 = global registration only).</summary>
+    public int AlignmentPointCount { get; set; }
+    /// <summary>PLANETAP diagnostics: local matches accepted / rejected, and the
+    /// mean magnitude of the local correction on top of the global shift.</summary>
+    public int ApMatchesAccepted { get; set; }
+    public int ApMatchesRejected { get; set; }
+    public double ApMeanLocalShiftPx { get; set; }
     public int Width { get; set; }
     public int Height { get; set; }
     public double[]? QualityScores { get; set; }

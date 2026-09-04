@@ -58,6 +58,13 @@ public sealed class SvbonySdkCamera : ICamera {
     private readonly ConcurrentDictionary<int, Action<IImageData>> _streamSubs = new();
     private int _nextSubId;
     private volatile bool _streaming;
+    /// <summary>STREAMSTALL: why the last native stream gave up, or null.</summary>
+    public string? LastStreamError { get; private set; }
+    /// <summary>Capture restarts performed on the current stream because the SDK went silent.</summary>
+    public int StreamRestarts { get; private set; }
+    /// <summary>Full close/reopen recoveries performed on the current stream.</summary>
+    public int StreamReopens { get; private set; }
+
     private Thread? _streamThread;
     private CancellationTokenSource? _streamCts;
     private readonly object _gate = new();
@@ -467,20 +474,66 @@ public sealed class SvbonySdkCamera : ICamera {
     private void PullLoop(CancellationToken ct) {
         GetRoi(out var w, out var h);
         var buf = new byte[(long)w * h * BytesPerPixel()];
+        LastStreamError = null; StreamRestarts = 0; StreamReopens = 0;
+        int restarts = 0; bool reopened = false;
+        var lastFrame = DateTime.UtcNow;
         while (!ct.IsCancellationRequested && _streaming) {
-            // Recompute the wait each iteration so a live exposure change
-            // (UpdateVideoStreamAsync) doesn't leave the timeout stale and
-            // starve longer exposures into perpetual timeouts.
-            int waitMs = (int)(_exposureSec * 1000 * 2 + 500);
+            // STREAMSTALL (ported from the ASI backend): the poll follows the
+            // CURRENT exposure and is capped short, so a timeout is "not yet"
+            // (the frame is not lost) and the SDK lock is free between polls
+            // for status reads and live control writes.
+            double exp = _exposureSec;
+            int waitMs = NINA.Image.Portable.Streaming.StreamStallPolicy.PollWaitMs(exp);
             SVB_ERROR_CODE err;
             lock (_sdk) err = SVBGetVideoData(_cameraId, buf, new CLong(buf.Length), waitMs);
-            if (err == SVB_ERROR_CODE.SVB_ERROR_TIMEOUT) continue;
-            if (err != SVB_ERROR_CODE.SVB_SUCCESS) continue;
-            IImageData frame;
-            try { frame = WrapFrame(buf, w, h, _exposureSec); } catch { continue; }
-            foreach (var s in _streamSubs.Values) {
-                try { s(frame); } catch { }
+            if (err == SVB_ERROR_CODE.SVB_SUCCESS) {
+                lastFrame = DateTime.UtcNow; restarts = 0; reopened = false;
+                IImageData frame;
+                try { frame = WrapFrame(buf, w, h, exp); } catch { continue; }
+                foreach (var s in _streamSubs.Values) { try { s(frame); } catch { } }
+                continue;
             }
+            if (!NINA.Image.Portable.Streaming.StreamStallPolicy.IsStalled(lastFrame, DateTime.UtcNow, exp)) continue;
+            if (restarts >= NINA.Image.Portable.Streaming.StreamStallPolicy.MaxRestarts) {
+                if (!reopened) {
+                    reopened = true; StreamReopens++;
+                    if (ReopenCamera()) { lastFrame = DateTime.UtcNow; restarts = 0; continue; }
+                }
+                LastStreamError = $"SVBony video stream stalled: no frame for "
+                    + $"{NINA.Image.Portable.Streaming.StreamStallPolicy.StallAfter(exp).TotalSeconds:0}s after {restarts} capture restarts "
+                    + $"and a camera reopen (last SDK result {err}).";
+                lock (_gate) { _streaming = false; }
+                lock (_sdk) { try { SVBStopVideoCapture(_cameraId); } catch { } }
+                State = CameraStates.Idle;
+                return;
+            }
+            restarts++; StreamRestarts = restarts;
+            lock (_sdk) {
+                try { SVBStopVideoCapture(_cameraId); } catch { }
+                try { SVBStartVideoCapture(_cameraId); } catch { }
+            }
+            lastFrame = DateTime.UtcNow;
+        }
+    }
+
+    /// <summary>STREAMSTALL: the automated form of "disconnect and reconnect":
+    /// close and reopen the SDK handle, re-apply format, ROI, exposure and
+    /// gain, and start the capture again. False if the SDK refused.</summary>
+    private bool ReopenCamera() {
+        lock (_sdk) {
+            try { SVBStopVideoCapture(_cameraId); } catch { }
+            try { SVBCloseCamera(_cameraId); } catch { }
+            Thread.Sleep(500);
+            if (SVBOpenCamera(_cameraId) != SVB_ERROR_CODE.SVB_SUCCESS) return false;
+            _roiApplied = false;
+        }
+        ApplyExposureGain(_exposureSec, _gain, _offset);
+        bool wasStreaming = _streaming;
+        lock (_gate) { _streaming = false; }   // ApplyRoi skips writes while streaming
+        try { ApplyRoi(); } finally { lock (_gate) { _streaming = wasStreaming; } }
+        lock (_sdk) {
+            SVBSetOutputImageType(_cameraId, _imgType);
+            return SVBStartVideoCapture(_cameraId) == SVB_ERROR_CODE.SVB_SUCCESS;
         }
     }
 

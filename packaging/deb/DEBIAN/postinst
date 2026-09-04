@@ -19,6 +19,14 @@ INDIWEB_VENV=/opt/polaris-indiweb-venv
 
 case "$1" in
     configure)
+        # JOURNAL: the persistent-journal drop-in shipped in /etc only takes
+        # effect once journald re-reads it. Only under a running systemd (not
+        # in a chroot while an image is being built); the drop-in itself is
+        # what makes the next boot persistent either way.
+        if [ -d /run/systemd/system ]; then
+            mkdir -p /var/log/journal 2>/dev/null || true
+            systemctl restart systemd-journald 2>/dev/null || true
+        fi
         # ---- 1. System user ----
         if ! getent passwd $POLARIS_USER >/dev/null; then
             adduser --system --group --home $POLARIS_HOME \

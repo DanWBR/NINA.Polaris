@@ -12,6 +12,7 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using NINA.Image.Portable.Streaming;
 using NINA.Image.Interfaces;
 
 namespace NINA.Polaris.Services;
@@ -50,6 +51,8 @@ public class CameraStreamService : IDisposable {
     private long _transmittedFrames;
     private DateTime _startedAt;
     private DateTime _lastFrameAt;
+    // STREAMSTALL: one restart at a time, shared by the watchdog and UpdateLiveAsync.
+    private readonly SemaphoreSlim _restartGate = new(1, 1);
     // External listeners (VideoRecordingService, SlewPreviewService, etc.)
     // Fan-out is keyed by an integer handle so callers can Dispose safely
     // even after concurrent Stop / Restart.
@@ -223,8 +226,11 @@ public class CameraStreamService : IDisposable {
             }
         }
 
-        await StopAsync();
-        Start(new StreamConfig(exp, g, bx, by, ForceLoop: false, Kind: kind));
+        await _restartGate.WaitAsync();
+        try {
+            await StopAsync();
+            Start(new StreamConfig(exp, g, bx, by, ForceLoop: false, Kind: kind));
+        } finally { _restartGate.Release(); }
     }
 
     private void StartNative(ICamera cam, CancellationToken ct) {
@@ -269,6 +275,60 @@ public class CameraStreamService : IDisposable {
                 _nativeSubscription = null;
                 Mode = "loop";
                 _loopTask = Task.Run(() => RunLoop(cam, ct));
+                return;
+            }
+
+            // STREAMSTALL: watch the frame clock for the life of the native
+            // stream. A driver that crashed and was restarted by indiserver
+            // (indi_asi_ccd did this four times in one night) comes back with
+            // CCD_VIDEO_STREAM off, and a native SDK can go silent after a
+            // live control write; either way the frames just stop and the
+            // preview froze until the operator reconnected. Restart the
+            // stream ourselves; after MaxRestarts silent restarts hand over
+            // to loop mode with a message instead of a frozen canvas.
+            int restarts = 0;
+            long framesAtLastRestart = -1;
+            while (!ct.IsCancellationRequested && IsRunning && Mode == "native") {
+                try { await Task.Delay(500, ct); } catch (OperationCanceledException) { return; }
+                double exp; long frames;
+                lock (_lock) { exp = ExposureSeconds; frames = Interlocked.Read(ref _frameCount); }
+                // Only a frame that actually arrived clears the restart count;
+                // a restart resets the clock, not the evidence.
+                if (framesAtLastRestart >= 0 && frames > framesAtLastRestart) { restarts = 0; framesAtLastRestart = -1; }
+                if (!StreamStallPolicy.IsStalled(_lastFrameAt, DateTime.UtcNow, exp)) continue;
+                // A native SDK backend runs its own recovery (capture restarts,
+                // then a camera reopen) and still reports IsStreaming while it
+                // does; stepping in on top of it only resets its progress. Act
+                // when the driver has given up, or when it never noticed (INDI
+                // keeps IsStreaming after its driver crashed): four windows.
+                if (cam.IsStreaming && DateTime.UtcNow - _lastFrameAt < StreamStallPolicy.StallAfter(exp) * 4) continue;
+                if (restarts >= StreamStallPolicy.MaxRestarts) {
+                    _logger.LogWarning(
+                        "Native stream silent through {N} restarts (no frame for {S:0}s); falling back to loop mode",
+                        restarts, StreamStallPolicy.StallAfter(exp).TotalSeconds);
+                    LastError = $"Camera stream stalled and did not recover after {restarts} restarts; using loop fallback.";
+                    try { await cam.StopVideoStreamAsync(CancellationToken.None); }
+                    catch (Exception ex) { _logger.LogDebug(ex, "Stopping stalled native stream failed (continuing)"); }
+                    lock (_lock) { _nativeSubscription?.Dispose(); _nativeSubscription = null; Mode = "loop"; }
+                    _loopTask = Task.Run(() => RunLoop(cam, ct));
+                    return;
+                }
+                restarts++;
+                framesAtLastRestart = frames;
+                _logger.LogWarning(
+                    "Native stream stalled (no frame for {S:0}s at exp={Exp}s, {Frames} frames so far); restart {R}/{Max}",
+                    StreamStallPolicy.StallAfter(exp).TotalSeconds, exp, frames, restarts, StreamStallPolicy.MaxRestarts);
+                if (!await _restartGate.WaitAsync(0)) continue;   // UpdateLiveAsync is already restarting
+                try {
+                    double e; int g, bx, by;
+                    lock (_lock) { e = ExposureSeconds; g = Gain; bx = BinX; by = BinY; }
+                    try { await cam.StopVideoStreamAsync(CancellationToken.None); } catch { }
+                    await cam.StartVideoStreamAsync(new VideoStreamOptions(
+                        ExposureSeconds: e, Gain: g, BinX: bx, BinY: by), ct);
+                    _lastFrameAt = DateTime.UtcNow;   // a full stall window for the restarted stream
+                } catch (Exception ex) {
+                    _logger.LogWarning(ex, "Native stream restart {R} failed", restarts);
+                } finally { _restartGate.Release(); }
             }
         }, ct);
     }

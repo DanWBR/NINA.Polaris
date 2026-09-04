@@ -381,6 +381,17 @@ public sealed class ToupTekSdkCamera : ICamera {
             }
         }, ct);
 
+    /// <summary>STREAMSTALL: the SDK accepts exposure/gain writes while pull
+    /// mode runs, so retune in place instead of stopping and restarting the
+    /// pull (a restart is what wedged the ASI585 on an ARM host).</summary>
+    public Task<bool> UpdateVideoStreamAsync(VideoStreamOptions opts, CancellationToken ct = default) {
+        lock (_gate) {
+            if (!_streaming) return Task.FromResult(false);
+            ApplyExposureGain(opts.ExposureSeconds ?? _exposureSec, opts.Gain);
+            return Task.FromResult(true);
+        }
+    }
+
     public Task StopVideoStreamAsync(CancellationToken ct = default) => Task.Run(() => {
         lock (_gate) {
             if (!_streaming) return;

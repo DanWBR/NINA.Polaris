@@ -4735,5 +4735,19 @@
   "10-bit": "10 bits",
   "12-bit": "12 bits",
   "14-bit": "14 bits",
-  "How the samples fill the 16-bit range in the file. Auto follows the camera, or the first frame when the driver does not say. Off keeps the raw values. A fixed depth is safer when the scene may get brighter later in the clip.": "Como as amostras preenchem a faixa de 16 bits no arquivo. Automático segue a câmera, ou o primeiro quadro quando o driver não informa. Desligado mantém os valores brutos. Uma profundidade fixa é mais segura quando a cena pode clarear mais adiante no clipe."
+  "How the samples fill the 16-bit range in the file. Auto follows the camera, or the first frame when the driver does not say. Off keeps the raw values. A fixed depth is safer when the scene may get brighter later in the clip.": "Como as amostras preenchem a faixa de 16 bits no arquivo. Automático segue a câmera, ou o primeiro quadro quando o driver não informa. Desligado mantém os valores brutos. Uma profundidade fixa é mais segura quando a cena pode clarear mais adiante no clipe.",
+  "Alignment points": "Pontos de alinhamento",
+  "Box": "Caixa",
+  "Per point": "Por ponto",
+  "Structure": "Estrutura",
+  "Reference": "Referência",
+  "{n} alignment points": "{n} pontos de alinhamento",
+  "global registration": "registro global",
+  "Size of the square each point is matched in, in pixels. Larger boxes are steadier, smaller ones follow the seeing more closely.": "Tamanho do quadrado em que cada ponto é casado, em pixels. Caixas maiores são mais estáveis; menores seguem melhor o seeing.",
+  "How far a point may move between frames.": "Quanto um ponto pode se mover entre frames.",
+  "Best frames kept at each point, chosen by local sharpness. Lower is sharper, higher is smoother.": "Melhores frames mantidos em cada ponto, escolhidos pela nitidez local. Menos é mais nítido; mais é mais suave.",
+  "Points with less structure than this fraction of the best point are dropped.": "Pontos com menos estrutura que esta fração do melhor ponto são descartados.",
+  "Best frames averaged into the reference the mesh is built on.": "Melhores frames promediados na referência sobre a qual a malha é construída.",
+  "Local shifts": "Deslocamentos locais",
+  "Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only.": "Segue o seeing em cada ponto com um deslocamento próprio. Desligado mantém a seleção de frames por ponto, mas empilha apenas com o deslocamento global."
 }

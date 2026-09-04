@@ -53,6 +53,13 @@ public sealed class PlayerOneSdkCamera : ICamera {
     private readonly ConcurrentDictionary<int, Action<IImageData>> _streamSubs = new();
     private int _nextSubId;
     private volatile bool _streaming;
+    /// <summary>STREAMSTALL: why the last native stream gave up, or null.</summary>
+    public string? LastStreamError { get; private set; }
+    /// <summary>Capture restarts performed on the current stream because the SDK went silent.</summary>
+    public int StreamRestarts { get; private set; }
+    /// <summary>Full close/reopen recoveries performed on the current stream.</summary>
+    public int StreamReopens { get; private set; }
+
     private Thread? _streamThread;
     private CancellationTokenSource? _streamCts;
     private readonly object _gate = new();
@@ -348,15 +355,85 @@ public sealed class PlayerOneSdkCamera : ICamera {
     private void PullLoop(CancellationToken ct) {
         GetRoi(out var w, out var h);
         var buf = new byte[(long)w * h * BytesPerPixel()];
-        int waitMs = (int)(_exposureSec * 1000 * 2 + 500);
+        LastStreamError = null; StreamRestarts = 0; StreamReopens = 0;
+        int restarts = 0; bool reopened = false;
+        var lastFrame = DateTime.UtcNow;
         while (!ct.IsCancellationRequested && _streaming) {
+            // STREAMSTALL (ported from the ASI backend): the poll follows the
+            // CURRENT exposure (it was computed once, so an exposure raised
+            // live could never be waited for) and is capped short; a stall is
+            // decided by wall clock, then capture restart, then camera reopen.
+            double exp = _exposureSec;
+            int waitMs = NINA.Image.Portable.Streaming.StreamStallPolicy.PollWaitMs(exp);
             POAErrors err;
             lock (_sdk) err = POAGetImageData(_cameraId, buf, new CLong(buf.Length), waitMs);
-            if (err == POAErrors.POA_ERROR_TIMEOUT) continue;
-            if (err != POAErrors.POA_OK) continue;
-            IImageData frame;
-            try { frame = WrapFrame(buf, w, h); } catch { continue; }
-            foreach (var s in _streamSubs.Values) { try { s(frame); } catch { } }
+            if (err == POAErrors.POA_OK) {
+                lastFrame = DateTime.UtcNow; restarts = 0; reopened = false;
+                IImageData frame;
+                try { frame = WrapFrame(buf, w, h); } catch { continue; }
+                foreach (var s in _streamSubs.Values) { try { s(frame); } catch { } }
+                continue;
+            }
+            if (!NINA.Image.Portable.Streaming.StreamStallPolicy.IsStalled(lastFrame, DateTime.UtcNow, exp)) continue;
+            if (restarts >= NINA.Image.Portable.Streaming.StreamStallPolicy.MaxRestarts) {
+                if (!reopened) {
+                    reopened = true; StreamReopens++;
+                    if (ReopenCamera()) { lastFrame = DateTime.UtcNow; restarts = 0; continue; }
+                }
+                LastStreamError = $"PlayerOne video stream stalled: no frame for "
+                    + $"{NINA.Image.Portable.Streaming.StreamStallPolicy.StallAfter(exp).TotalSeconds:0}s after {restarts} capture restarts "
+                    + $"and a camera reopen (last SDK result {err}).";
+                lock (_gate) { _streaming = false; }
+                lock (_sdk) { try { POAStopExposure(_cameraId); } catch { } }
+                State = CameraStates.Idle;
+                return;
+            }
+            restarts++; StreamRestarts = restarts;
+            lock (_sdk) {
+                try { POAStopExposure(_cameraId); } catch { }
+                try { POAStartExposure(_cameraId, POABool.POA_FALSE); } catch { }
+            }
+            lastFrame = DateTime.UtcNow;
+        }
+    }
+
+    /// <summary>STREAMSTALL: retune the running continuous exposure in place.
+    /// The capture is paused around the control writes (writing an exposure
+    /// into a running capture is what wedged the ASI585 on an ARM host), so
+    /// no stop/start of the whole stream and no pull-thread tear-down. A
+    /// binning change still needs the restart, so that returns false.</summary>
+    public Task<bool> UpdateVideoStreamAsync(VideoStreamOptions opts, CancellationToken ct = default) {
+        lock (_gate) {
+            if (!_streaming) return Task.FromResult(false);
+            if (opts.BinX is int b && b != _bin) return Task.FromResult(false);
+            lock (_sdk) {
+                try { POAStopExposure(_cameraId); } catch { }
+                ApplyExposureGain(opts.ExposureSeconds ?? _exposureSec, opts.Gain);
+                try { POAStartExposure(_cameraId, POABool.POA_FALSE); } catch { }
+            }
+            return Task.FromResult(true);
+        }
+    }
+
+    /// <summary>STREAMSTALL: the automated form of "disconnect and reconnect":
+    /// close, reopen and re-init the SDK handle, re-apply format, ROI,
+    /// exposure and gain, and start the continuous exposure again.</summary>
+    private bool ReopenCamera() {
+        lock (_sdk) {
+            try { POAStopExposure(_cameraId); } catch { }
+            try { POACloseCamera(_cameraId); } catch { }
+            Thread.Sleep(500);
+            if (POAOpenCamera(_cameraId) != POAErrors.POA_OK) return false;
+            if (POAInitCamera(_cameraId) != POAErrors.POA_OK) return false;
+            _roiApplied = false;
+        }
+        ApplyExposureGain(_exposureSec, _gain, _offset);
+        bool wasStreaming = _streaming;
+        lock (_gate) { _streaming = false; }   // ApplyRoi skips writes while streaming
+        try { ApplyRoi(); } finally { lock (_gate) { _streaming = wasStreaming; } }
+        lock (_sdk) {
+            POASetImageFormat(_cameraId, _imgFormat);
+            return POAStartExposure(_cameraId, POABool.POA_FALSE) == POAErrors.POA_OK;
         }
     }
 
