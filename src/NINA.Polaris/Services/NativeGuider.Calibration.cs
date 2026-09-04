@@ -105,6 +105,8 @@ public sealed partial class NativeGuider {
                     SetAppState("Stopped");
                     return;
                 }
+                _logger.LogInformation("Calibration {Phase} step {Step}: star at ({X:F1},{Y:F1}), {Dist:F1} px from phase start, SNR {Snr:F1}",
+                    step.Phase, phaseStep, curX, curY, Math.Sqrt((curX - phStartX) * (curX - phStartX) + (curY - phStartY) * (curY - phStartY)), _lastFindSnr);
                 // Re-centre the (wide) search window on the new position so the
                 // next step keeps following the star as it sweeps.
                 _lockX = curX; _lockY = curY;
