@@ -54,6 +54,12 @@
         "ram": "4+ GB",
         "status": "Recursos completos",
         "notes": "Tudo o que o Linux faz, mais os drivers de fabricante para DSLR. Câmeras com driver USB próprio precisam do driver do fabricante para Windows instalado; câmeras ASCOM e INDI não precisam."
+      },
+      {
+        "host": "Mac (Apple Silicon / Intel)",
+        "ram": "4+ GB",
+        "status": "Falta testar",
+        "notes": "Compilações self-contained desde a 0.98.66. O equipamento é Alpaca, INDI e as SDKs nativas de câmera; ASCOM é só Windows, e os extras de Linux (WiFi, energia, relógio do host) não existem. Ninguém rodou num Mac ainda."
       }
     ]
   },
@@ -198,6 +204,16 @@
             "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-win-arm64.zip"
           },
           {
+            "label": "macOS Apple Silicon (.tar.gz)",
+            "badge": "arm64",
+            "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-osx-arm64.tar.gz"
+          },
+          {
+            "label": "macOS Intel (.tar.gz)",
+            "badge": "x64",
+            "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-osx-x64.tar.gz"
+          },
+          {
             "label": "Todos os comunicados",
             "badge": "GitHub",
             "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest"
@@ -292,6 +308,15 @@
       "summary": "Portátil, sem instalador. Também está disponível uma versão para ARM64 (polaris-win-arm64.zip) para o Surface Pro X e alguns PCs com Copilot+.",
       "steps": "Invoke-WebRequest -Uri \"https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-win-x64.zip\" -OutFile polaris.zip\nExpand-Archive polaris.zip\ncd polaris-win-x64\n.\\NINA.Polaris.exe",
       "notes": "Abra https://localhost:5000 e aceite o certificado autoassinado uma vez. Lembre de liberar o firewall (veja abaixo). Para câmera com driver USB próprio (ZWO ASI, ToupTek, Altair, SVBony, Player One), instale o driver do fabricante para Windows e o Polaris encontra; câmeras ASCOM e INDI não precisam de nada disso."
+    },
+    {
+      "name": "Mac (Apple Silicon / Intel)",
+      "badge": ".tar.gz",
+      "icon": "apple",
+      "color": "#a1a1aa",
+      "summary": "Novidade da 0.98.66, e sendo honesto: a compilação e o empacotamento estão verificados nos runners da Apple, rodar o app num Mac não. Trate como primeira versão e conte o que encontrar.",
+      "steps": "curl -LO https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-osx-arm64.tar.gz\ntar -xzf polaris-osx-arm64.tar.gz\ncd polaris-osx-arm64\nxattr -dr com.apple.quarantine .\n./NINA.Polaris",
+      "notes": "Abra https://localhost:5000 e aceite o certificado autoassinado uma vez. A linha do xattr existe porque o download não é assinado. No macOS o equipamento é Alpaca, INDI (um indiserver local do Homebrew, ou um remoto num Pi) e as SDKs nativas de câmera; ASCOM segue só no Windows. Coloque a .dylib do fabricante ao lado do binário, ou aponte POLARIS_NATIVE_SDK_DIR para ela, e os drivers nativos aparecem em RIGS. Num Mac Intel troque osx-arm64 por osx-x64."
     },
     {
       "name": "Docker",

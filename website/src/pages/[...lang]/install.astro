@@ -37,10 +37,13 @@ const emojiFor = (name: string): string | null => {
 // status text is translated, so match the stem in every locale we ship or the
 // recommended board loses its badge everywhere except English.
 const RECOMMENDED = ['recommend', 'recomend', 'recommand', 'empfohlen'];
+// Same idea for "needs testing" (the macOS row): match the stem in every
+// locale, or the dashed badge only shows in English.
+const PENDING = ['testing', 'tbd', 'testar', 'probar', 'tester', 'testen'];
 const statusClass = (s: string) => {
   const t = (s || '').toLowerCase();
   if (RECOMMENDED.some((r) => t.includes(r)) || t.includes('full') || t === 'good') return 'ok';
-  if (t.includes('testing') || t.includes('tbd')) return 'pending';
+  if (PENDING.some((r) => t.includes(r))) return 'pending';
   if (t.includes('below') || t.includes('limit')) return 'warn';
   return '';
 };

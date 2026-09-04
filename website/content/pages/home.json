@@ -185,7 +185,7 @@
     "legend": "✓ yes · ~ partial or limited · ✗ no",
     "note": "Polaris is free and open source. The only money you spend is on an inexpensive single-board computer (4 GB is comfortable, and it runs on as little as 1.5 GB), plus a power box like the SVBony SV241 or the Gemini Power Box if you want one, both often on sale. No proprietary controller to buy, no paid app, no OS licence, no subscription.",
     "rows": [
-      { "feature": "Hardware options", "cells": ["RPi · Orange Pi · x86 · Windows", "own box", "own box", "RPi (OS or box)", "Linux · Win · Mac · RPi", "Windows", "Raspberry Pi"] },
+      { "feature": "Hardware options", "cells": ["RPi · Orange Pi · x86 · Windows · Mac", "own box", "own box", "RPi (OS or box)", "Linux · Win · Mac · RPi", "Windows", "Raspberry Pi"] },
       { "feature": "Full web UI (any browser / device)", "star": true, "cells": ["yes", "no:app", "no:app", "partial:EkosLive / VNC", "partial:EkosLive", "no:desktop", "no:VNC"] },
       { "feature": "Control multiple hosts from one client", "star": true, "cells": ["yes", "no", "no", "no", "no", "no", "no"] },
       { "feature": "Open source", "cells": ["yes:AGPL", "no", "no", "partial:core only", "yes:GPL", "yes", "yes:MPL"] },
