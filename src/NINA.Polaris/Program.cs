@@ -18,6 +18,7 @@ using NINA.Polaris.Middleware;
 using NINA.Polaris.Services;
 using NINA.Polaris.WebSocket;
 using NINA.INDI.Client;
+using Microsoft.Extensions.Diagnostics.ResourceMonitoring;
 using Yarp.ReverseProxy.Forwarder;
 
 // Force English exception messages + invariant number/date formatting
@@ -612,8 +613,17 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Tls.DuckDnsClient>();
 // Linux). HostMetricsService loops in the background, exposes the
 // latest snapshot via the Latest property which StatusStreamHandler
 // folds into the per-second WS broadcast.
-builder.Services.AddResourceMonitoring();
+#pragma warning disable EXTOBS0001
+if (!OperatingSystem.IsMacOS())
+{
+    builder.Services.AddResourceMonitoring();
+}
+else
+{
+    builder.Services.AddSingleton<IResourceMonitor, MacResourceMonitor>();
+}
 builder.Services.AddSingleton<HostMetricsService>();
+#pragma warning restore EXTOBS0001
 // BENCH: on-demand hardware benchmark (Settings -> Hardware Benchmark).
 // Not a hosted service; runs only when the user clicks Run. The results
 // store persists run history under {ProfileService.DataDir}/benchmarks/.

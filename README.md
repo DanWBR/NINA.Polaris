@@ -211,6 +211,35 @@ dotnet run --project src/NINA.Polaris
 
 Open `http://localhost:5000` in your browser.
 
+### macOS Development
+
+Polaris can be built and run on macOS for development and UI/API testing.
+Install the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0),
+install the WebAssembly workload, then run from the repository root:
+
+```bash
+sudo dotnet workload install wasm-tools
+dotnet build src/NINA.Polaris/NINA.Polaris.csproj
+dotnet run --project src/NINA.Polaris
+```
+
+The macOS development host listens on HTTPS at `https://localhost:5000` and
+HTTP at `http://127.0.0.1:5080`. The HTTPS certificate is generated
+automatically under the macOS application data directory on first run; accept
+the browser warning for this self-signed development certificate.
+
+If port 5000 is already in use, choose alternate ports with configuration
+environment variables:
+
+```bash
+Server__Https__Port=5001 Server__Http__Port=5081 \
+  dotnet run --project src/NINA.Polaris
+```
+
+Then open `https://localhost:5001`. The macOS host uses a no-op system resource
+monitor because the .NET resource-monitoring provider does not support macOS;
+process and application functionality remain available for development.
+
 ### Run Tests
 
 ```bash
