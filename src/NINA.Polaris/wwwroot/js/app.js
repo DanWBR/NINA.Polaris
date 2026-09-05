@@ -4472,6 +4472,11 @@ function ninaApp() {
         // Dismiss flag for the LIVE quality HUD. The HUD auto-opens while a
         // stack runs (see the WS handler); the overlay's close button sets this
         // until the next stack starts, so it is dismissable without staying gone.
+        // Read and written through liveHudShown() / toggleLiveHud() only: the
+        // two flags used to be set independently, and closing the panel with its
+        // X left liveHudDismissed true while the toolbar button only flipped
+        // liveOverlayVisible, so the button looked dead and the panel could not
+        // be brought back for the rest of the session (field report 2026-09-05).
         liveHudDismissed: false,
         showCrosshair: false,
         showGrid: false,
@@ -40921,6 +40926,24 @@ function ninaApp() {
                 return { ra: t.ra, dec: t.dec };
             }
             return null;
+        },
+
+        // Is the LIVE overlay (image history, SNR/HFR chart, stack quality)
+        // actually on screen? Two flags gate it: liveOverlayVisible is the
+        // toolbar toggle, liveHudDismissed is the panel's own close button, and
+        // the panel also opens by itself while a stack is running.
+        liveHudShown() {
+            return !this.liveHudDismissed
+                && ((this.liveOverlayVisible && this.imageHistory.length > 0)
+                    || !!this.liveStackStatus?.isRunning);
+        },
+
+        // One switch for the toolbar button, so it always does the opposite of
+        // what is on screen: opening clears the dismissal, closing sets it.
+        toggleLiveHud() {
+            const show = !this.liveHudShown();
+            this.liveHudDismissed = !show;
+            this.liveOverlayVisible = show;
         },
 
         startSlewCenterPolling() {
