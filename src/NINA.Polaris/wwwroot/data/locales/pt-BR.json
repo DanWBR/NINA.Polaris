@@ -4749,5 +4749,14 @@
   "Points with less structure than this fraction of the best point are dropped.": "Pontos com menos estrutura que esta fração do melhor ponto são descartados.",
   "Best frames averaged into the reference the mesh is built on.": "Melhores frames promediados na referência sobre a qual a malha é construída.",
   "Local shifts": "Deslocamentos locais",
-  "Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only.": "Segue o seeing em cada ponto com um deslocamento próprio. Desligado mantém a seleção de frames por ponto, mas empilha apenas com o deslocamento global."
+  "Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only.": "Segue o seeing em cada ponto com um deslocamento próprio. Desligado mantém a seleção de frames por ponto, mas empilha apenas com o deslocamento global.",
+  "Normalize levels": "Normalizar níveis",
+  "Subtract the camera black level and rescale the stack to the full range. Off writes the raw stacked levels, which usually look blown once stretched.": "Subtrai o nível de preto da câmera e reescala o stack para a faixa inteira. Desligado grava os níveis crus do stack, que costumam parecer estourados depois do stretch.",
+  "White balance": "Balanço de branco",
+  "R gain": "Ganho R",
+  "B gain": "Ganho B",
+  "Channel balance for a colour stack. Auto measures the object and pulls it toward neutral; manual applies the gains you set, with green fixed at 1.": "Balanço de canais para um stack colorido. Auto mede o objeto e puxa para o neutro; manual aplica os ganhos que você definir, com o verde fixo em 1.",
+  "Camera black level. Lower it until the sky is just above zero: every count of offset is range the planet cannot use.": "Nível de preto da câmera. Abaixe até o céu ficar logo acima de zero: cada contagem de offset é faixa que o planeta não pode usar.",
+  "Offset -1 (hold to repeat)": "Offset -1 (segure para repetir)",
+  "Offset +1 (hold to repeat)": "Offset +1 (segure para repetir)"
 }

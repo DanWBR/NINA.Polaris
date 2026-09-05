@@ -3953,6 +3953,33 @@
                                         @pointercancel="stopWheelRepeat()"
                                         title="Gain +1 (hold to repeat)">+</button>
                             </div>
+                            <!-- Offset (the camera's black level), same wheel as
+                                 Gain. Native-SDK cameras only: the value is read
+                                 from and written to the control list the config
+                                 panel drives, so it persists across reconnects,
+                                 and the column hides on a driver that publishes
+                                 no controls. Field session 2026-09-05: an offset
+                                 near 20% of full scale left Saturn only 2% of the
+                                 range to live in. -->
+                            <div class="wheel-col" x-show="video.offsetCtl.available">
+                                <button class="btn btn-sm wheel-nudge" style="touch-action:none"
+                                        :disabled="videoRecording.recording"
+                                        @pointerdown.prevent="startWheelRepeat('offset', -1)"
+                                        @pointerup="stopWheelRepeat()" @pointerleave="stopWheelRepeat()"
+                                        @pointercancel="stopWheelRepeat()"
+                                        title="Offset -1 (hold to repeat)">&minus;</button>
+                                <div data-wheel-picker
+                                     data-label="Offset"
+                                     data-min="0" data-max="100" data-step="1"
+                                     data-bind="video.offset" data-scale="1"
+                                     :data-disabled="videoRecording.recording"></div>
+                                <button class="btn btn-sm wheel-nudge" style="touch-action:none"
+                                        :disabled="videoRecording.recording"
+                                        @pointerdown.prevent="startWheelRepeat('offset', 1)"
+                                        @pointerup="stopWheelRepeat()" @pointerleave="stopWheelRepeat()"
+                                        @pointercancel="stopWheelRepeat()"
+                                        title="Offset +1 (hold to repeat)">+</button>
+                            </div>
                         </div>
 
                         <!-- Focus motor: its own collapsible group instead of
@@ -4548,6 +4575,29 @@
                         <label :title="$t('Best frames averaged into the reference the mesh is built on.')">Reference
                             <input type="number" x-model.number="video.ap.reference" min="1" max="100" step="1" class="input-sm" style="width:58px"
                                    :disabled="!video.ap.enabled || (videoStack && !videoStack?.done)"> %
+                        </label>
+                        <label :title="$t('Channel balance for a colour stack. Auto measures the object and pulls it toward neutral; manual applies the gains you set, with green fixed at 1.')">White balance
+                            <select x-model="video.stackWb" class="input-sm" style="width:96px"
+                                    :disabled="videoStack && !videoStack?.done">
+                                <option value="off">Off</option>
+                                <option value="auto">Auto</option>
+                                <option value="manual">Manual</option>
+                            </select>
+                        </label>
+                        <label x-show="video.stackWb === 'manual'">R gain
+                            <input type="number" x-model.number="video.stackWbR" min="0.1" max="10" step="0.05"
+                                   class="input-sm" style="width:64px"
+                                   :disabled="videoStack && !videoStack?.done">
+                        </label>
+                        <label x-show="video.stackWb === 'manual'">B gain
+                            <input type="number" x-model.number="video.stackWbB" min="0.1" max="10" step="0.05"
+                                   class="input-sm" style="width:64px"
+                                   :disabled="videoStack && !videoStack?.done">
+                        </label>
+                        <label style="display:flex; align-items:center; gap:6px"
+                               :title="$t('Subtract the camera black level and rescale the stack to the full range. Off writes the raw stacked levels, which usually look blown once stretched.')">
+                            <input type="checkbox" x-model="video.normalizeLevels" :disabled="videoStack && !videoStack?.done">
+                            Normalize levels
                         </label>
                         <label style="display:flex; align-items:center; gap:6px"
                                :title="$t('Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only.')">
@@ -6808,7 +6858,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     <span class="text-muted" style="font-size:11px">Cooler</span>
                                     <label class="equip-temp-label">
                                         Target
-                                        <input type="number" x-model.number="equipCoolerTarget" step="1" min="-40" max="30" class="input-sm">
+                                        <input type="number" x-model.number="equipCoolerTarget" step="1" min="-40" max="30" class="input-sm"
+                                               @change="persistCoolerTarget()">
                                         <span>&deg;C</span>
                                     </label>
                                     <button class="btn btn-sm" @click="setCooler(true, equipCoolerTarget)">Set</button>
@@ -22178,7 +22229,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                                 <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary);">
                                     <span>Target</span>
                                     <input type="number" x-model.number="equipCoolerTarget"
-                                           step="1" min="-40" max="30" class="equip-select" style="width:80px;">
+                                           step="1" min="-40" max="30" class="equip-select" style="width:80px;"
+                                           @change="persistCoolerTarget()">
                                     <span>&deg;C</span>
                                 </label>
                             </div>
@@ -23383,7 +23435,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260904-planetap2"></script>
+    <script src="/js/app.js?v=20260905-offset"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

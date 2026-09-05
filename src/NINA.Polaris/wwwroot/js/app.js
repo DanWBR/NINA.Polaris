@@ -1734,6 +1734,17 @@ function ninaApp() {
             keepPercent: 50,
             // PLANETAP: alignment-point registration (PlanetarySystemStacker style)
             ap: { enabled: true, box: 48, search: 14, percent: 10, structure: 4, reference: 5, dewarp: true },
+            normalizeLevels: true,
+            // Channel balance applied to the finished colour stack:
+            // 'off' | 'auto' (grey world on the object) | 'manual'.
+            stackWb: 'off',
+            stackWbR: 1.0,
+            stackWbB: 1.0,
+            // VIDEO tab Offset: the camera's black level, read from the
+            // native-SDK control list. Raising it lifts the whole frame off
+            // zero; leaving it high eats the range the planet needs.
+            offset: 0,
+            offsetCtl: { id: null, min: 0, max: 0, value: null, available: false },
             outputName: 'stack',
             // Per-frame quality scores for the current/last stack job, fetched
             // once from /api/video/stack/{id}/qualities after analysis. Drives
@@ -4907,6 +4918,10 @@ function ninaApp() {
             // wheel doesn't flood the driver. No-op when not streaming.
             this.$watch('video.exposure', () => { if (this.cameraStream.running) this._pushVideoLiveParams(); });
             this.$watch('video.gain', () => { if (this.cameraStream.running) this._pushVideoLiveParams(); });
+            // Offset is a camera-side control, not a stream parameter: write it
+            // straight through so the wheel, the nudge buttons and the inline
+            // edit all land on the driver.
+            this.$watch('video.offset', () => this.videoSetOffset());
             // Clear the sticky DSLR/cooler classification when the selected
             // camera (driver or device) changes, so a gphoto→astro swap doesn't
             // keep stale ISO/temperature controls until the next connect.
@@ -27240,6 +27255,7 @@ function ninaApp() {
                 if (r && typeof r.whiteBalanceMin === 'number') this.video.wbMin = r.whiteBalanceMin;
                 if (r && typeof r.whiteBalanceMax === 'number' && r.whiteBalanceMax > this.video.wbMin)
                     this.video.wbMax = r.whiteBalanceMax;
+                this.videoLoadOffsetControl();
                 if (r && typeof r.whiteBalanceR === 'number') this.video.wbR = r.whiteBalanceR;
                 if (r && typeof r.whiteBalanceB === 'number') this.video.wbB = r.whiteBalanceB;
                 // DSLR ISO: when the active camera (indi_gphoto) publishes a
@@ -27375,6 +27391,46 @@ function ninaApp() {
                     });
             } catch (e) { /* non-fatal; ROI still applied on the device */ }
         },
+        // The camera's Offset (black level) lives in the native-SDK control
+        // list, the same one the config panel drives, so setting it here also
+        // persists through NativeCameraControlStore and survives a reconnect.
+        // INDI / Alpaca cameras publish no control list: the field hides.
+        async videoLoadOffsetControl() {
+            try {
+                const r = await this.apiGet('/api/camera/controls');
+                const ctl = (r?.controls || []).find(c =>
+                    /offset/i.test(c.id || '') || /offset/i.test(c.name || ''));
+                if (!ctl || !ctl.writable) {
+                    this.video.offsetCtl = { id: null, min: 0, max: 0, value: null, available: false };
+                    return;
+                }
+                this.video.offsetCtl = {
+                    id: ctl.id, min: Number(ctl.min) || 0, max: Number(ctl.max) || 0,
+                    value: null, available: true
+                };
+                this.video.offsetCtl.value = Number(ctl.value) || 0;
+                this.video.offset = this.video.offsetCtl.value;
+            } catch (e) {
+                this.video.offsetCtl = { id: null, min: 0, max: 0, value: null, available: false };
+            }
+        },
+
+        async videoSetOffset() {
+            const c = this.video.offsetCtl;
+            if (!c?.available || !c.id) return;
+            const v = Math.min(c.max, Math.max(c.min, Number(this.video.offset) || 0));
+            this.video.offset = v;
+            // Nothing to do when this is the value the camera just reported:
+            // the load path assigns video.offset, which fires the watcher.
+            if (v === c.value) return;
+            try {
+                await this.apiPost(`/api/camera/controls/${encodeURIComponent(c.id)}`, { value: v });
+                c.value = v;
+            } catch (e) {
+                this.toast('Offset write failed: ' + (e.message || 'driver rejected'), 'warn');
+            }
+        },
+
         async videoSetWhiteBalance() {
             try {
                 await this.apiPost('/api/camera/white-balance', {
@@ -27477,7 +27533,11 @@ function ninaApp() {
                     apFramePercent: Number(this.video.ap.percent) || 10,
                     apStructureThreshold: (Number(this.video.ap.structure) || 4) / 100,
                     referencePercent: Number(this.video.ap.reference) || 5,
-                    apDeWarp: this.video.ap.dewarp !== false
+                    apDeWarp: this.video.ap.dewarp !== false,
+                    normalizeLevels: this.video.normalizeLevels !== false,
+                    whiteBalance: this.video.stackWb || 'off',
+                    wbRed: Number(this.video.stackWbR) || 1,
+                    wbBlue: Number(this.video.stackWbB) || 1
                 });
                 this.toast(`Stack started (job ${r.jobId?.slice?.(0, 8) || ''}…)`, 'info');
             } catch (e) { this.toastFail('Stack failed', e); }
@@ -29880,6 +29940,14 @@ function ninaApp() {
                 if (this.videoRecording.recording) return;
                 let g = (this.video.gain | 0) + dir;
                 this.video.gain = Math.min(600, Math.max(0, g));
+            } else if (which === 'offset') {
+                if (this.videoRecording.recording) return;
+                const c = this.video.offsetCtl;
+                if (!c?.available) return;
+                // The wheel spans 0..100 like the camera's own offset scale;
+                // clamp to what the driver actually reports as well.
+                const lo = Math.max(0, c.min), hi = Math.min(100, c.max || 100);
+                this.video.offset = Math.min(hi, Math.max(lo, (this.video.offset | 0) + dir));
             } else if (which === 'focus') {
                 if (this.focusMoving || !(this.focusMaxPosition > 0)) return;
                 const base = this.focusSliderDirty ? this.focusSliderTarget : this.focusPosition;
@@ -31878,6 +31946,17 @@ function ninaApp() {
         // connect handlers so the (deviceName, driver) pair sticks
         // across browser reloads without forcing the user to remember
         // hitting "💾 Save selections".
+        // The RIGS cooler Target box only ever fed setCooler(); nothing wrote it
+        // back to the rig, so a reload re-read the stored value and the field
+        // looked like it "always goes back to -10". Persist on change, the same
+        // surgical patch every other per-rig control uses.
+        persistCoolerTarget() {
+            const v = Number(this.equipCoolerTarget);
+            if (!Number.isFinite(v)) return;
+            this.equipCoolerTarget = Math.min(30, Math.max(-40, v));
+            this._persistRigSelection({ coolerTargetTemperature: this.equipCoolerTarget });
+        },
+
         _persistRigSelection(patch) {
             // NB: `activeRig` is a getter that returns the rig *name* (string)
             // for display. Persisting needs the rig *object*, so look it up by

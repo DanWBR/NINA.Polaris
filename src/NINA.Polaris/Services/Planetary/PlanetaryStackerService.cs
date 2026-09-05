@@ -261,6 +261,9 @@ public class PlanetaryStackerService {
                 channels = 1;
             }
 
+            WhiteBalanceIfAsked(job, pixels, channels, npx);
+            NormaliseIfAsked(job, pixels, channels, npx);
+
             var imageData = new BaseImageData(pixels,
                 new ImageProperties {
                     Width = reader.Width,
@@ -423,8 +426,37 @@ public class PlanetaryStackerService {
         return o;
     }
 
+    /// <summary>Apply the output level normalisation when the job asks for it,
+    /// and record what it did: a stack that comes out flat is nearly always the
+    /// black level, not the alignment.</summary>
+    /// <summary>Channel balance, before the level normalisation so the common
+    /// scale is picked on the balanced data and nothing clips twice.</summary>
+    private void WhiteBalanceIfAsked(StackJob job, ushort[] pixels, int channels, int npx) {
+        var mode = (job.Config.WhiteBalance ?? "off").Trim().ToLowerInvariant();
+        if (channels < 3 || mode is "off" or "") return;
+        double gr, gg = 1.0, gb;
+        if (mode == "auto") {
+            (gr, gg, gb) = PlanetaryFrames.WhiteBalanceGains(pixels, npx);
+        } else {
+            gr = Math.Clamp(job.Config.WbRed, 0.1, 10);
+            gb = Math.Clamp(job.Config.WbBlue, 0.1, 10);
+        }
+        PlanetaryFrames.ApplyWhiteBalance(pixels, channels, npx, gr, gg, gb);
+        job.WhiteBalanceApplied = new[] { gr, gg, gb };
+        _logger.LogInformation("Stack white balance ({Mode}): R {R:F2} G {G:F2} B {B:F2}", mode, gr, gg, gb);
+    }
+
+    private void NormaliseIfAsked(StackJob job, ushort[] pixels, int channels, int npx) {
+        if (!job.Config.NormalizeLevels) return;
+        var (floor, gain) = PlanetaryFrames.NormaliseLevels(pixels, channels, npx);
+        _logger.LogInformation("Stack levels: floor [{Floor}] gain {Gain:F2}",
+            string.Join(", ", floor.Select(f => f.ToString("F0"))), gain);
+    }
+
     private async Task WriteStackAsync(StackJob job, SerFileReader reader, ushort[] pixels, int channels, CancellationToken ct) {
         Directory.CreateDirectory(job.Config.OutputDir);
+        WhiteBalanceIfAsked(job, pixels, channels, reader.Width * reader.Height);
+        NormaliseIfAsked(job, pixels, channels, reader.Width * reader.Height);
         var outName = $"{job.Config.OutputName}_{DateTime.UtcNow:yyyy-MM-ddTHH-mm-ss}.fits";
         var outPath = Path.Combine(job.Config.OutputDir, outName);
         var imageData = new BaseImageData(pixels,
@@ -494,7 +526,15 @@ public record StackConfig(
     /// <summary>PSS de_warp: search a local shift at every point (true) or
     /// stack the point's patches with the global shift only (false), which
     /// still gives per-point frame selection.</summary>
-    bool ApDeWarp = true);
+    bool ApDeWarp = true,
+    /// <summary>Subtract the per-channel black level and rescale the result to
+    /// the 16-bit range before writing. Off writes the raw stacked levels.</summary>
+    bool NormalizeLevels = true,
+    /// <summary>"off" (default), "auto" (grey world on the object) or "manual"
+    /// (<see cref="WbRed"/> / <see cref="WbBlue"/>, green fixed at 1).</summary>
+    string WhiteBalance = "off",
+    double WbRed = 1.0,
+    double WbBlue = 1.0);
 
 public class StackJob {
     public string Id { get; set; } = "";
@@ -512,6 +552,8 @@ public class StackJob {
     public int ApMatchesAccepted { get; set; }
     public int ApMatchesRejected { get; set; }
     public double ApMeanLocalShiftPx { get; set; }
+    /// <summary>Channel gains the white balance actually applied, null when off.</summary>
+    public double[]? WhiteBalanceApplied { get; set; }
     public int Width { get; set; }
     public int Height { get; set; }
     public double[]? QualityScores { get; set; }
