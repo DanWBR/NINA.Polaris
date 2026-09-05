@@ -40983,11 +40983,11 @@ function ninaApp() {
         guideCanAutoSelect() {
             return this.guideCanStart();
         },
-        // Stop ends a guiding session or aborts a calibration. Calibration is
-        // included on purpose: it moves the mount for minutes, so it must stay
-        // abortable even though the spec only named guiding.
+        // Stop ends whatever is running: a guiding session, a calibration, or a
+        // bare loop. Gating it on guiding alone left the loop unstoppable, since
+        // Loop is disabled while it runs and Stop was the only other way out.
         guideCanStop() {
-            return this.guideSessionUp() || !!this.guider?.calibrating;
+            return this.guideLive();
         },
         // The floating graph has nothing to draw until a session is running.
         guideCanOverlay() {

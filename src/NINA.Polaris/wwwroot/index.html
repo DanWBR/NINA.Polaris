@@ -20685,10 +20685,13 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <template x-if="basicScreen==='guide'">
                     <div class="bs-gcol">
                         <button class="bs-gbtn" @click="guiderLoop()" :disabled="!guideCanLoop()"><span class="bs-big">&#8635;</span>Loop</button>
-                        <button class="bs-gmain" :class="guideCanStop() ? 'stop' : ''"
-                                :disabled="!guideCanStop() && !guideCanStart()"
-                                @click="guideCanStop() ? guiderStop() : guiderStart()"
-                                x-text="guideCanStop() ? 'Stop' : 'Guide'"></button>
+                        <!-- One big button: Guide when there is a frame to start
+                             on, Stop for anything already running (a session, a
+                             calibration, or a bare loop with no frame yet). -->
+                        <button class="bs-gmain" :class="!guideCanStart() && guideCanStop() ? 'stop' : ''"
+                                :disabled="!guideCanStart() && !guideCanStop()"
+                                @click="guideCanStart() ? guiderStart() : guiderStop()"
+                                x-text="guideCanStart() ? 'Guide' : 'Stop'"></button>
                         <button class="bs-gbtn" @click="guiderFindStar()" :disabled="!guideCanAutoSelect()"><span class="bs-big">&#9737;</span>Auto star</button>
                         <button class="bs-gbtn" @click="guiderDither()" :disabled="!guider.guiding"><span class="bs-big">&#8942;</span>Dither</button>
                         <button class="bs-gbtn" @click="phd2SmartCalibrate()" :disabled="guider.calibrating"><span class="bs-big">&#8853;</span>Calibrate</button>
