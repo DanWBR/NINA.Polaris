@@ -4428,6 +4428,25 @@
                                         + ' on ' + cameraCaps.maxX + ' × ' + cameraCaps.maxY)"></div>
                         </div>
 
+                        <!-- Offset (black level). Native-SDK cameras only: it is
+                             read from the same control list the config panel uses,
+                             so a change here persists across reconnects. Field
+                             session 2026-09-05: an offset near 20% of full scale
+                             left Saturn only 2% of the range to live in. -->
+                        <div class="control-row" x-show="video.offsetCtl.available">
+                            <label style="flex:1"
+                                   :title="$t('Camera black level. Lower it until the sky is just above zero: every count of offset is range the planet cannot use.')">
+                                Offset
+                                <input type="range" :min="video.offsetCtl.min" :max="video.offsetCtl.max" step="1"
+                                       x-model.number="video.offset"
+                                       @change="videoSetOffset()" class="slider">
+                                <span x-text="video.offset" class="text-muted" style="margin-left:6px"></span>
+                            </label>
+                            <input type="number" :min="video.offsetCtl.min" :max="video.offsetCtl.max" step="1"
+                                   x-model.number="video.offset" @change="videoSetOffset()"
+                                   class="input-sm" style="width:70px">
+                        </div>
+
                         <!-- White-balance row, only visible for OSC color
          cameras that expose WB_R + WB_B (ZWO ASI224MC,
          QHY5III678C, etc.). Hidden on mono cams. -->
@@ -4561,6 +4580,24 @@
                         <label :title="$t('Best frames averaged into the reference the mesh is built on.')">Reference
                             <input type="number" x-model.number="video.ap.reference" min="1" max="100" step="1" class="input-sm" style="width:58px"
                                    :disabled="!video.ap.enabled || (videoStack && !videoStack?.done)"> %
+                        </label>
+                        <label :title="$t('Channel balance for a colour stack. Auto measures the object and pulls it toward neutral; manual applies the gains you set, with green fixed at 1.')">White balance
+                            <select x-model="video.stackWb" class="input-sm" style="width:96px"
+                                    :disabled="videoStack && !videoStack?.done">
+                                <option value="off">Off</option>
+                                <option value="auto">Auto</option>
+                                <option value="manual">Manual</option>
+                            </select>
+                        </label>
+                        <label x-show="video.stackWb === 'manual'">R gain
+                            <input type="number" x-model.number="video.stackWbR" min="0.1" max="10" step="0.05"
+                                   class="input-sm" style="width:64px"
+                                   :disabled="videoStack && !videoStack?.done">
+                        </label>
+                        <label x-show="video.stackWb === 'manual'">B gain
+                            <input type="number" x-model.number="video.stackWbB" min="0.1" max="10" step="0.05"
+                                   class="input-sm" style="width:64px"
+                                   :disabled="videoStack && !videoStack?.done">
                         </label>
                         <label style="display:flex; align-items:center; gap:6px"
                                :title="$t('Subtract the camera black level and rescale the stack to the full range. Off writes the raw stacked levels, which usually look blown once stretched.')">
@@ -23143,7 +23180,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260905-levels"></script>
+    <script src="/js/app.js?v=20260905-wb"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

@@ -72,6 +72,50 @@ public class PlanetaryLevelsTests {
     }
 
     [Test]
+    public void GreyWorldGainsAreMeasuredOnTheObject_NotTheSky() {
+        // the field ratio: the planet carries 1600 / 1400 / 800 counts of signal
+        var pixels = Cube(Plane(13900, 15500), Plane(12800, 14200), Plane(19200, 20000));
+        var (r, g, b) = PlanetaryFrames.WhiteBalanceGains(pixels, N);
+
+        Assert.That(g, Is.EqualTo(1.0), "green is the reference");
+        Assert.That(r, Is.EqualTo(1400.0 / 1600.0).Within(0.02));
+        Assert.That(b, Is.EqualTo(1400.0 / 800.0).Within(0.02));
+    }
+
+    [Test]
+    public void WhiteBalanceThenNormalisationLeavesTheObjectNeutral() {
+        var pixels = Cube(Plane(13900, 15500), Plane(12800, 14200), Plane(19200, 20000));
+        var (r, g, b) = PlanetaryFrames.WhiteBalanceGains(pixels, N);
+        PlanetaryFrames.ApplyWhiteBalance(pixels, 3, N, r, g, b);
+        PlanetaryFrames.NormaliseLevels(pixels, 3, N);
+
+        int mid = 15 * W + 15;
+        double pr = pixels[mid], pg = pixels[N + mid], pb = pixels[2 * N + mid];
+        Assert.That(pg / pr, Is.EqualTo(1.0).Within(0.02));
+        Assert.That(pb / pr, Is.EqualTo(1.0).Within(0.02));
+        for (int c = 0; c < 3; c++) Assert.That(pixels[c * N], Is.EqualTo(0), $"channel {c} sky stays at black");
+    }
+
+    [Test]
+    public void ManualGainsAreAppliedAsGiven() {
+        var pixels = Cube(Plane(1000, 3000), Plane(1000, 3000), Plane(1000, 3000));
+        PlanetaryFrames.ApplyWhiteBalance(pixels, 3, N, 0.5, 1.0, 2.0);
+
+        int mid = 15 * W + 15;
+        Assert.That(pixels[mid], Is.EqualTo(1000));          // (3000-1000) * 0.5
+        Assert.That(pixels[N + mid], Is.EqualTo(2000));      // unchanged
+        Assert.That(pixels[2 * N + mid], Is.EqualTo(4000));  // doubled
+    }
+
+    [Test]
+    public void AMonoStackIsNeverWhiteBalanced() {
+        var pixels = Cube(Plane(1000, 3000));
+        var before = (ushort[])pixels.Clone();
+        PlanetaryFrames.ApplyWhiteBalance(pixels, 1, N, 0.5, 1.0, 2.0);
+        Assert.That(pixels, Is.EqualTo(before));
+    }
+
+    [Test]
     public void AFlatFrameIsNotAmplifiedIntoNoise() {
         var pixels = Cube(Plane(4000, 4000));
         var before = (ushort[])pixels.Clone();

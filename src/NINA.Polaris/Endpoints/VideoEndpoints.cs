@@ -200,7 +200,10 @@ public static class VideoEndpoints {
                 ApStructureThreshold: Math.Clamp(req.ApStructureThreshold ?? 0.04, 0, 1),
                 ReferencePercent: Math.Clamp(req.ReferencePercent ?? 5, 1, 100),
                 ApDeWarp: req.ApDeWarp ?? true,
-                NormalizeLevels: req.NormalizeLevels ?? true));
+                NormalizeLevels: req.NormalizeLevels ?? true,
+                WhiteBalance: req.WhiteBalance ?? "off",
+                WbRed: req.WbRed ?? 1.0,
+                WbBlue: req.WbBlue ?? 1.0));
             return Results.Accepted($"/api/video/stack/{job.Id}", new { jobId = job.Id });
         });
 
@@ -446,7 +449,11 @@ public static class VideoEndpoints {
         bool? ApDeWarp = null,
         /// <summary>Subtract the black level and rescale the stack to the
         /// 16-bit range (omitted = on).</summary>
-        bool? NormalizeLevels = null);
+        bool? NormalizeLevels = null,
+        /// <summary>"off" | "auto" | "manual" channel balance for a colour stack.</summary>
+        string? WhiteBalance = null,
+        double? WbRed = null,
+        double? WbBlue = null);
 
     public record RescaleRequest(
         string SerPath,

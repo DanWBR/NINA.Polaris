@@ -4753,5 +4753,10 @@
   "Local shifts": "Décalages locaux",
   "Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only.": "Suit le seeing en chaque point avec son propre décalage. Désactivé conserve la sélection des images par point mais empile uniquement avec le décalage global.",
   "Normalize levels": "Normaliser les niveaux",
-  "Subtract the camera black level and rescale the stack to the full range. Off writes the raw stacked levels, which usually look blown once stretched.": "Soustrait le niveau de noir de la caméra et remet l'empilement à l'échelle de toute la plage. Désactivé, les niveaux bruts sont écrits et paraissent souvent brûlés après étirement."
+  "Subtract the camera black level and rescale the stack to the full range. Off writes the raw stacked levels, which usually look blown once stretched.": "Soustrait le niveau de noir de la caméra et remet l'empilement à l'échelle de toute la plage. Désactivé, les niveaux bruts sont écrits et paraissent souvent brûlés après étirement.",
+  "White balance": "Balance des blancs",
+  "R gain": "Gain R",
+  "B gain": "Gain B",
+  "Channel balance for a colour stack. Auto measures the object and pulls it toward neutral; manual applies the gains you set, with green fixed at 1.": "Balance des canaux pour un empilement couleur. Auto mesure l'objet et le ramène vers le neutre ; manuel applique les gains que vous fixez, le vert restant à 1.",
+  "Camera black level. Lower it until the sky is just above zero: every count of offset is range the planet cannot use.": "Niveau de noir de la caméra. Baissez-le jusqu'à ce que le ciel soit juste au-dessus de zéro : chaque unité d'offset est de la dynamique que la planète ne peut pas utiliser."
 }

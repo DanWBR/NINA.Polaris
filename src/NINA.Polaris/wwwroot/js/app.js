@@ -1736,6 +1736,16 @@ function ninaApp() {
             // PLANETAP: alignment-point registration (PlanetarySystemStacker style)
             ap: { enabled: true, box: 48, search: 14, percent: 10, structure: 4, reference: 5, dewarp: true },
             normalizeLevels: true,
+            // Channel balance applied to the finished colour stack:
+            // 'off' | 'auto' (grey world on the object) | 'manual'.
+            stackWb: 'off',
+            stackWbR: 1.0,
+            stackWbB: 1.0,
+            // VIDEO tab Offset: the camera's black level, read from the
+            // native-SDK control list. Raising it lifts the whole frame off
+            // zero; leaving it high eats the range the planet needs.
+            offset: 0,
+            offsetCtl: { id: null, min: 0, max: 0, available: false },
             outputName: 'stack',
             // Per-frame quality scores for the current/last stack job, fetched
             // once from /api/video/stack/{id}/qualities after analysis. Drives
@@ -27247,6 +27257,7 @@ function ninaApp() {
                 if (r && typeof r.whiteBalanceMin === 'number') this.video.wbMin = r.whiteBalanceMin;
                 if (r && typeof r.whiteBalanceMax === 'number' && r.whiteBalanceMax > this.video.wbMin)
                     this.video.wbMax = r.whiteBalanceMax;
+                this.videoLoadOffsetControl();
                 if (r && typeof r.whiteBalanceR === 'number') this.video.wbR = r.whiteBalanceR;
                 if (r && typeof r.whiteBalanceB === 'number') this.video.wbB = r.whiteBalanceB;
                 // DSLR ISO: when the active camera (indi_gphoto) publishes a
@@ -27382,6 +27393,40 @@ function ninaApp() {
                     });
             } catch (e) { /* non-fatal; ROI still applied on the device */ }
         },
+        // The camera's Offset (black level) lives in the native-SDK control
+        // list, the same one the config panel drives, so setting it here also
+        // persists through NativeCameraControlStore and survives a reconnect.
+        // INDI / Alpaca cameras publish no control list: the field hides.
+        async videoLoadOffsetControl() {
+            try {
+                const r = await this.apiGet('/api/camera/controls');
+                const ctl = (r?.controls || []).find(c =>
+                    /offset/i.test(c.id || '') || /offset/i.test(c.name || ''));
+                if (!ctl || !ctl.writable) {
+                    this.video.offsetCtl = { id: null, min: 0, max: 0, available: false };
+                    return;
+                }
+                this.video.offsetCtl = {
+                    id: ctl.id, min: Number(ctl.min) || 0, max: Number(ctl.max) || 0, available: true
+                };
+                this.video.offset = Number(ctl.value) || 0;
+            } catch (e) {
+                this.video.offsetCtl = { id: null, min: 0, max: 0, available: false };
+            }
+        },
+
+        async videoSetOffset() {
+            const c = this.video.offsetCtl;
+            if (!c?.available || !c.id) return;
+            const v = Math.min(c.max, Math.max(c.min, Number(this.video.offset) || 0));
+            this.video.offset = v;
+            try {
+                await this.apiPost(`/api/camera/controls/${encodeURIComponent(c.id)}`, { value: v });
+            } catch (e) {
+                this.toast('Offset write failed: ' + (e.message || 'driver rejected'), 'warn');
+            }
+        },
+
         async videoSetWhiteBalance() {
             try {
                 await this.apiPost('/api/camera/white-balance', {
@@ -27485,7 +27530,10 @@ function ninaApp() {
                     apStructureThreshold: (Number(this.video.ap.structure) || 4) / 100,
                     referencePercent: Number(this.video.ap.reference) || 5,
                     apDeWarp: this.video.ap.dewarp !== false,
-                    normalizeLevels: this.video.normalizeLevels !== false
+                    normalizeLevels: this.video.normalizeLevels !== false,
+                    whiteBalance: this.video.stackWb || 'off',
+                    wbRed: Number(this.video.stackWbR) || 1,
+                    wbBlue: Number(this.video.stackWbB) || 1
                 });
                 this.toast(`Stack started (job ${r.jobId?.slice?.(0, 8) || ''}…)`, 'info');
             } catch (e) { this.toastFail('Stack failed', e); }

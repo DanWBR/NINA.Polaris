@@ -4134,5 +4134,10 @@
   "Local shifts": "Local shifts",
   "Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only.": "Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only.",
   "Normalize levels": "Normalize levels",
-  "Subtract the camera black level and rescale the stack to the full range. Off writes the raw stacked levels, which usually look blown once stretched.": "Subtract the camera black level and rescale the stack to the full range. Off writes the raw stacked levels, which usually look blown once stretched."
+  "Subtract the camera black level and rescale the stack to the full range. Off writes the raw stacked levels, which usually look blown once stretched.": "Subtract the camera black level and rescale the stack to the full range. Off writes the raw stacked levels, which usually look blown once stretched.",
+  "White balance": "White balance",
+  "R gain": "R gain",
+  "B gain": "B gain",
+  "Channel balance for a colour stack. Auto measures the object and pulls it toward neutral; manual applies the gains you set, with green fixed at 1.": "Channel balance for a colour stack. Auto measures the object and pulls it toward neutral; manual applies the gains you set, with green fixed at 1.",
+  "Camera black level. Lower it until the sky is just above zero: every count of offset is range the planet cannot use.": "Camera black level. Lower it until the sky is just above zero: every count of offset is range the planet cannot use."
 }

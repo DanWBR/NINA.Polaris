@@ -231,6 +231,57 @@ public static class PlanetaryFrames {
         return (floor, gain);
     }
 
+    /// <summary>Grey-world gains measured on the OBJECT, not on the frame: the
+    /// sky is already near the floor and would drag every gain toward it.
+    /// Pixels above 20% of the brightest channel's range count as object, the
+    /// per-channel floor is removed first, and green is the reference (gain 1)
+    /// because it carries most of the luminance on a Bayer sensor.
+    ///
+    /// Grey-world is a starting point, not the truth: it assumes the object
+    /// averages neutral, which is close enough for the Moon and for Jupiter,
+    /// and slightly cold for Saturn. Manual gains exist for that reason.</summary>
+    public static (double R, double G, double B) WhiteBalanceGains(ushort[] pixels, int npx) {
+        var floor = new double[3];
+        var planes = new ushort[3][];
+        for (int c = 0; c < 3; c++) {
+            planes[c] = new ushort[npx];
+            Array.Copy(pixels, c * npx, planes[c], 0, npx);
+            floor[c] = Percentile(planes[c], 0.005);
+        }
+        double top = 0;
+        for (int c = 0; c < 3; c++) top = Math.Max(top, Percentile(planes[c], 0.9999) - floor[c]);
+        if (top <= 1) return (1, 1, 1);
+        double cut = 0.2 * top;
+        var sum = new double[3];
+        long n = 0;
+        for (int i = 0; i < npx; i++) {
+            double r = planes[0][i] - floor[0], g = planes[1][i] - floor[1], b = planes[2][i] - floor[2];
+            if (Math.Max(r, Math.Max(g, b)) < cut) continue;
+            sum[0] += r; sum[1] += g; sum[2] += b; n++;
+        }
+        if (n < 16 || sum[0] <= 0 || sum[1] <= 0 || sum[2] <= 0) return (1, 1, 1);
+        double gr = sum[1] / sum[0], gb = sum[1] / sum[2];
+        return (Math.Clamp(gr, 0.1, 10), 1.0, Math.Clamp(gb, 0.1, 10));
+    }
+
+    /// <summary>Remove the per-channel floor and apply the channel gains. Runs
+    /// BEFORE <see cref="NormaliseLevels"/>, which then finds a floor of zero
+    /// and only has to pick the common scale.</summary>
+    public static void ApplyWhiteBalance(ushort[] pixels, int channels, int npx,
+                                         double gainR, double gainG, double gainB) {
+        if (channels < 3) return;
+        var gains = new[] { gainR, gainG, gainB };
+        for (int c = 0; c < 3; c++) {
+            var plane = new ushort[npx];
+            Array.Copy(pixels, c * npx, plane, 0, npx);
+            double f = Percentile(plane, 0.005), g = gains[c];
+            int off = c * npx;
+            for (int i = 0; i < npx; i++) {
+                pixels[off + i] = (ushort)Math.Clamp(Math.Round((plane[i] - f) * g), 0, 65535);
+            }
+        }
+    }
+
     /// <summary>Value at <paramref name="q"/> (0..1) of a copy of the samples.</summary>
     private static double Percentile(ushort[] samples, double q) {
         var sorted = (ushort[])samples.Clone();
