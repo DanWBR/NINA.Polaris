@@ -147,6 +147,18 @@ public class IndiDriverWatchdogService : IHostedService {
     /// </summary>
     private void OnDeviceConnectionLost(string device) {
         if (!Enabled || string.IsNullOrWhiteSpace(device)) return;
+        // A camera Polaris drives through a vendor SDK must STAY disconnected in
+        // INDI: NativeCameraIndiGuard put it that way on purpose, and reconnecting
+        // it here would restore the double claim on the USB device that made the
+        // ASI585 fail exposures (field session 2026-09-05).
+        try {
+            if (_services.GetService<NativeCameraIndiGuard>()?.IsNativelyDriven(device) == true) {
+                _logger.LogInformation(
+                    "INDI '{Device}' disconnected: leaving it that way, Polaris drives that camera " +
+                    "through its vendor SDK", device);
+                return;
+            }
+        } catch { /* guard unavailable: fall through to the normal policy */ }
         var st = _byDevice.GetOrAdd(device, _ => new DeviceState());
         var now = DateTime.UtcNow;
         lock (st.Gate) {
