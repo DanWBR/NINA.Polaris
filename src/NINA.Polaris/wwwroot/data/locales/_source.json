@@ -4132,5 +4132,7 @@
   "Points with less structure than this fraction of the best point are dropped.": "Points with less structure than this fraction of the best point are dropped.",
   "Best frames averaged into the reference the mesh is built on.": "Best frames averaged into the reference the mesh is built on.",
   "Local shifts": "Local shifts",
-  "Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only.": "Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only."
+  "Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only.": "Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only.",
+  "Normalize levels": "Normalize levels",
+  "Subtract the camera black level and rescale the stack to the full range. Off writes the raw stacked levels, which usually look blown once stretched.": "Subtract the camera black level and rescale the stack to the full range. Off writes the raw stacked levels, which usually look blown once stretched."
 }

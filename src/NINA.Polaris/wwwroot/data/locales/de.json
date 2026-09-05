@@ -4751,5 +4751,7 @@
   "Points with less structure than this fraction of the best point are dropped.": "Punkte mit weniger Struktur als dieser Anteil des besten Punkts werden verworfen.",
   "Best frames averaged into the reference the mesh is built on.": "Beste Bilder, die zur Referenz gemittelt werden, auf der das Raster aufgebaut wird.",
   "Local shifts": "Lokale Verschiebungen",
-  "Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only.": "Folgt dem Seeing an jedem Punkt mit einer eigenen Verschiebung. Aus behält die Bildauswahl pro Punkt bei, stapelt aber nur mit der globalen Verschiebung."
+  "Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only.": "Folgt dem Seeing an jedem Punkt mit einer eigenen Verschiebung. Aus behält die Bildauswahl pro Punkt bei, stapelt aber nur mit der globalen Verschiebung.",
+  "Normalize levels": "Pegel normalisieren",
+  "Subtract the camera black level and rescale the stack to the full range. Off writes the raw stacked levels, which usually look blown once stretched.": "Zieht den Schwarzwert der Kamera ab und skaliert das Stack auf den vollen Bereich. Aus schreibt die rohen Stack-Pegel, die nach dem Strecken meist ausgebrannt wirken."
 }

@@ -1735,6 +1735,7 @@ function ninaApp() {
             keepPercent: 50,
             // PLANETAP: alignment-point registration (PlanetarySystemStacker style)
             ap: { enabled: true, box: 48, search: 14, percent: 10, structure: 4, reference: 5, dewarp: true },
+            normalizeLevels: true,
             outputName: 'stack',
             // Per-frame quality scores for the current/last stack job, fetched
             // once from /api/video/stack/{id}/qualities after analysis. Drives
@@ -27483,7 +27484,8 @@ function ninaApp() {
                     apFramePercent: Number(this.video.ap.percent) || 10,
                     apStructureThreshold: (Number(this.video.ap.structure) || 4) / 100,
                     referencePercent: Number(this.video.ap.reference) || 5,
-                    apDeWarp: this.video.ap.dewarp !== false
+                    apDeWarp: this.video.ap.dewarp !== false,
+                    normalizeLevels: this.video.normalizeLevels !== false
                 });
                 this.toast(`Stack started (job ${r.jobId?.slice?.(0, 8) || ''}…)`, 'info');
             } catch (e) { this.toastFail('Stack failed', e); }
@@ -31869,6 +31871,17 @@ function ninaApp() {
         // connect handlers so the (deviceName, driver) pair sticks
         // across browser reloads without forcing the user to remember
         // hitting "💾 Save selections".
+        // The RIGS cooler Target box only ever fed setCooler(); nothing wrote it
+        // back to the rig, so a reload re-read the stored value and the field
+        // looked like it "always goes back to -10". Persist on change, the same
+        // surgical patch every other per-rig control uses.
+        persistCoolerTarget() {
+            const v = Number(this.equipCoolerTarget);
+            if (!Number.isFinite(v)) return;
+            this.equipCoolerTarget = Math.min(30, Math.max(-40, v));
+            this._persistRigSelection({ coolerTargetTemperature: this.equipCoolerTarget });
+        },
+
         _persistRigSelection(patch) {
             // NB: `activeRig` is a getter that returns the rig *name* (string)
             // for display. Persisting needs the rig *object*, so look it up by

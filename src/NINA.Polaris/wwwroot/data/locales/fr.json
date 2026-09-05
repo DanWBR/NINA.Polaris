@@ -4751,5 +4751,7 @@
   "Points with less structure than this fraction of the best point are dropped.": "Les points ayant moins de structure que cette fraction du meilleur point sont écartés.",
   "Best frames averaged into the reference the mesh is built on.": "Meilleures images moyennées dans la référence sur laquelle le maillage est construit.",
   "Local shifts": "Décalages locaux",
-  "Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only.": "Suit le seeing en chaque point avec son propre décalage. Désactivé conserve la sélection des images par point mais empile uniquement avec le décalage global."
+  "Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only.": "Suit le seeing en chaque point avec son propre décalage. Désactivé conserve la sélection des images par point mais empile uniquement avec le décalage global.",
+  "Normalize levels": "Normaliser les niveaux",
+  "Subtract the camera black level and rescale the stack to the full range. Off writes the raw stacked levels, which usually look blown once stretched.": "Soustrait le niveau de noir de la caméra et remet l'empilement à l'échelle de toute la plage. Désactivé, les niveaux bruts sont écrits et paraissent souvent brûlés après étirement."
 }

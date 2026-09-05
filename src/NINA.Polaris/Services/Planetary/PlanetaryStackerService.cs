@@ -261,6 +261,8 @@ public class PlanetaryStackerService {
                 channels = 1;
             }
 
+            NormaliseIfAsked(job, pixels, channels, npx);
+
             var imageData = new BaseImageData(pixels,
                 new ImageProperties {
                     Width = reader.Width,
@@ -423,8 +425,19 @@ public class PlanetaryStackerService {
         return o;
     }
 
+    /// <summary>Apply the output level normalisation when the job asks for it,
+    /// and record what it did: a stack that comes out flat is nearly always the
+    /// black level, not the alignment.</summary>
+    private void NormaliseIfAsked(StackJob job, ushort[] pixels, int channels, int npx) {
+        if (!job.Config.NormalizeLevels) return;
+        var (floor, gain) = PlanetaryFrames.NormaliseLevels(pixels, channels, npx);
+        _logger.LogInformation("Stack levels: floor [{Floor}] gain {Gain:F2}",
+            string.Join(", ", floor.Select(f => f.ToString("F0"))), gain);
+    }
+
     private async Task WriteStackAsync(StackJob job, SerFileReader reader, ushort[] pixels, int channels, CancellationToken ct) {
         Directory.CreateDirectory(job.Config.OutputDir);
+        NormaliseIfAsked(job, pixels, channels, reader.Width * reader.Height);
         var outName = $"{job.Config.OutputName}_{DateTime.UtcNow:yyyy-MM-ddTHH-mm-ss}.fits";
         var outPath = Path.Combine(job.Config.OutputDir, outName);
         var imageData = new BaseImageData(pixels,
@@ -494,7 +507,10 @@ public record StackConfig(
     /// <summary>PSS de_warp: search a local shift at every point (true) or
     /// stack the point's patches with the global shift only (false), which
     /// still gives per-point frame selection.</summary>
-    bool ApDeWarp = true);
+    bool ApDeWarp = true,
+    /// <summary>Subtract the per-channel black level and rescale the result to
+    /// the 16-bit range before writing. Off writes the raw stacked levels.</summary>
+    bool NormalizeLevels = true);
 
 public class StackJob {
     public string Id { get; set; } = "";

@@ -4563,6 +4563,11 @@
                                    :disabled="!video.ap.enabled || (videoStack && !videoStack?.done)"> %
                         </label>
                         <label style="display:flex; align-items:center; gap:6px"
+                               :title="$t('Subtract the camera black level and rescale the stack to the full range. Off writes the raw stacked levels, which usually look blown once stretched.')">
+                            <input type="checkbox" x-model="video.normalizeLevels" :disabled="videoStack && !videoStack?.done">
+                            Normalize levels
+                        </label>
+                        <label style="display:flex; align-items:center; gap:6px"
                                :title="$t('Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only.')">
                             <input type="checkbox" x-model="video.ap.dewarp" :disabled="!video.ap.enabled || (videoStack && !videoStack?.done)">
                             Local shifts
@@ -6624,7 +6629,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     <span class="text-muted" style="font-size:11px">Cooler</span>
                                     <label class="equip-temp-label">
                                         Target
-                                        <input type="number" x-model.number="equipCoolerTarget" step="1" min="-40" max="30" class="input-sm">
+                                        <input type="number" x-model.number="equipCoolerTarget" step="1" min="-40" max="30" class="input-sm"
+                                               @change="persistCoolerTarget()">
                                         <span>&deg;C</span>
                                     </label>
                                     <button class="btn btn-sm" @click="setCooler(true, equipCoolerTarget)">Set</button>
@@ -21931,7 +21937,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                                 <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary);">
                                     <span>Target</span>
                                     <input type="number" x-model.number="equipCoolerTarget"
-                                           step="1" min="-40" max="30" class="equip-select" style="width:80px;">
+                                           step="1" min="-40" max="30" class="equip-select" style="width:80px;"
+                                           @change="persistCoolerTarget()">
                                     <span>&deg;C</span>
                                 </label>
                             </div>
@@ -23136,7 +23143,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260904-planetap2"></script>
+    <script src="/js/app.js?v=20260905-levels"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
