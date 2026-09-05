@@ -399,6 +399,12 @@ builder.Services.AddSingleton<UsbScanService>();
 // registration so the hosted StartAsync subscribes to IndiClient.BlobTimeout.
 builder.Services.AddSingleton<IndiDriverWatchdogService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<IndiDriverWatchdogService>());
+// Disconnects the INDI copy of a camera Polaris drives through a vendor SDK.
+// indi_asi_ccd publishes every ASI camera on the bus, so an INDI guide camera
+// drags the natively driven imaging camera in with it, and the two owners then
+// fight over the USB device (field session 2026-09-05).
+builder.Services.AddSingleton<NativeCameraIndiGuard>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<NativeCameraIndiGuard>());
 // WIFI-1: NetworkManager-based WiFi mode switch (Hotspot ↔ Station).
 // Same dual-registration shape as Phd2Gui / IndiWeb. Linux-only;
 // gracefully short-circuits on Windows / macOS via IsSupportedOs.
