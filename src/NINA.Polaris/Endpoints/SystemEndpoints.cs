@@ -196,8 +196,8 @@ public static class SystemEndpoints {
              SelfSignedCertService certSvc,
              HttpRequest req) => {
             var httpsEnabled = cfg.GetValue("Server:Https:Enabled", true);
-            var httpPort  = cfg.GetValue("Server:Http:Port",  5000);
-            var httpsPort = cfg.GetValue("Server:Https:Port", 5001);
+            var httpPort  = cfg.GetValue("Server:Http:Port",  5080);
+            var httpsPort = cfg.GetValue("Server:Https:Port", 5000);
             // Suggest concrete URLs the client can click on by mixing
             // the SAN-list names with the configured ports. We surface
             // the host the request came in on first (most relevant),
@@ -568,6 +568,13 @@ public static class SystemEndpoints {
 
         group.MapPost("/restart-app", (PowerService power) => {
             var r = power.ScheduleRestart();
+            return r.Ok
+                ? Results.Ok(new { ok = true, message = r.Message })
+                : Results.Json(new { ok = false, error = r.Message }, statusCode: r.StatusCode);
+        });
+
+        group.MapPost("/stop-app", (PowerService power) => {
+            var r = power.ScheduleStop();
             return r.Ok
                 ? Results.Ok(new { ok = true, message = r.Message })
                 : Results.Json(new { ok = false, error = r.Message }, statusCode: r.StatusCode);
