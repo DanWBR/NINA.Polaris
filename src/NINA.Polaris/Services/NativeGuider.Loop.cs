@@ -122,6 +122,8 @@ public sealed partial class NativeGuider {
 
         // React to a German-equatorial meridian flip (pier-side change) before
         // measuring, so this frame's correction uses the adjusted calibration.
+        if (await HandleMountSlewAsync(cam, mount, ct)) return;
+
         await HandlePierSideChangeAsync(cam, mount, ct);
 
         var (curX, curY, found, snr, hfd) = await MeasureGuideStarAsync(cam, ct);
@@ -672,6 +674,66 @@ public sealed partial class NativeGuider {
             // so the widened search keeps trying on later frames.
             _logger.LogWarning(ex, "Native guide: re-acquire attempt failed");
         }
+    }
+
+    /// <summary>A slew under a running guiding session is not a lost star, it is
+    /// a new field. Corrections stop while the mount moves (pulsing at a moving
+    /// mount is worse than doing nothing), and when it stops we settle, pick a
+    /// star on the fresh field and start a NEW guiding session: chart cleared,
+    /// RMS and peaks zeroed, the algorithms' history dropped.
+    ///
+    /// Before this the loop just started losing the star, sat in LostLock, and
+    /// eventually re-locked on whatever happened to be near the old lock
+    /// position, carrying the previous target's RMS into the new one, while the
+    /// badge kept reading as if nothing had happened (field report 2026-09-05).
+    ///
+    /// Dithering does not trip this: a dither is a pulse guide, and IsSlewing
+    /// reports slews only. Returns true when the caller must skip this frame.</summary>
+    private async Task<bool> HandleMountSlewAsync(ICamera cam, ITelescope? mount, CancellationToken ct) {
+        if (mount == null || !mount.IsConnected) return false;
+
+        if (mount.IsSlewing) {
+            if (!_slewSeen) {
+                _slewSeen = true;
+                SetAppState("Slewing");
+                RaiseAlert("Mount is slewing; guiding paused until it stops.");
+                _logger.LogInformation("Native guide: mount slew detected, corrections paused");
+            }
+            // Keep the view alive so the operator still sees the guide camera.
+            var moving = await CaptureFullAsync(cam, ct, "Exposing");
+            if (moving != null) {
+                _lastFrame = moving; _lastFrameOriginX = 0; _lastFrameOriginY = 0;
+                BuildView(double.NaN, double.NaN, 0, false);
+            }
+            return true;
+        }
+
+        if (!_slewSeen) return false;
+        _slewSeen = false;
+
+        _logger.LogInformation("Native guide: slew finished, settling {Ms} ms before re-acquiring", SlewSettleMs);
+        try { await Task.Delay(SlewSettleMs, ct); } catch (OperationCanceledException) { return true; }
+
+        // A new session: nothing measured on the old field may leak into it.
+        ClearStepHistory();
+        _raAlgo.Reset();
+        _decAlgo.Reset();
+        _backlashComp.Reset();
+        _starLostCount = 0;
+        _haveLock = false;
+        _multiStar.Clear();
+
+        await AutoSelectStarAsync(ct);
+        if (!_haveLock) {
+            SetAppState("LostLock");
+            RaiseAlert("Slew finished but no guide star was found; still searching.");
+            return true;
+        }
+        await BuildMultiStarAsync(ct);
+        SetAppState("Guiding");
+        RaiseAlert("Slew finished; guiding restarted on a new star.");
+        _logger.LogInformation("Native guide: guiding restarted at ({X:F1},{Y:F1}) after the slew", _lockX, _lockY);
+        return true;
     }
 
     private async Task<(double x, double y, bool found, double snr, double hfd)>

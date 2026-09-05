@@ -22543,6 +22543,10 @@ function ninaApp() {
             // below already reflects the zoom/pan transform, so the coordinate
             // mapping itself stays correct at any zoom.
             if (this._guideDragged) { this._guideDragged = false; return; }
+            // Picking a star needs a live frame to pick it from: after Stop the
+            // last frame is still on screen, and a click there used to fire a
+            // select-star the server could only answer with a fresh capture.
+            if (!this.guideHasFrame()) return;
             const v = this.guider.view;
             const img = this.$refs.guidePhdCamImg;
             if (!v || !img) return;
@@ -40944,6 +40948,50 @@ function ninaApp() {
             const show = !this.liveHudShown();
             this.liveHudDismissed = !show;
             this.liveOverlayVisible = show;
+        },
+
+        // GUIDE tab button gating. Two facts drive all of it: is a loop live
+        // on the server, and has a guide frame actually arrived. guider.view is
+        // the last rendered frame and it SURVIVES a stop, so "has a frame" has
+        // to be qualified by the loop still running, otherwise Start Guiding
+        // stays enabled after Stop.
+        guideLive() {
+            const g = this.guider || {};
+            return !!(g.looping || g.guiding || g.paused || g.calibrating
+                      || g.appState === 'LostLock' || g.appState === 'Slewing'
+                      || g.appState === 'Selected');
+        },
+        // A frame is on screen AND the loop that produced it is still running.
+        guideHasFrame() {
+            return !!(this.guider?.view) && this.guideLive();
+        },
+        // A guiding session is up: the steady state plus the transients it
+        // passes through. Mirrors IsGuidingSession on the server.
+        guideSessionUp() {
+            const g = this.guider || {};
+            return !!(g.guiding || g.paused
+                      || g.appState === 'LostLock' || g.appState === 'Slewing');
+        },
+        guideCanLoop() {
+            const g = this.guider || {};
+            return !!g.connected && !this.guideLive();
+        },
+        // Needs a frame to pick a star from, and nothing already guiding.
+        guideCanStart() {
+            return this.guideHasFrame() && !this.guideSessionUp() && !this.guider?.calibrating;
+        },
+        guideCanAutoSelect() {
+            return this.guideCanStart();
+        },
+        // Stop ends a guiding session or aborts a calibration. Calibration is
+        // included on purpose: it moves the mount for minutes, so it must stay
+        // abortable even though the spec only named guiding.
+        guideCanStop() {
+            return this.guideSessionUp() || !!this.guider?.calibrating;
+        },
+        // The floating graph has nothing to draw until a session is running.
+        guideCanOverlay() {
+            return this.guideSessionUp() || !!this.guideOverlay?.on;
         },
 
         startSlewCenterPolling() {

@@ -89,6 +89,12 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     // freshly measured calibration, which is already ground truth for the
     // current side, just because the side stamped at calibration time is stale.
     private PierSide _loopPierBaseline = PierSide.pierUnknown;
+    /// <summary>True while the mount is slewing under a guiding session, so the
+    /// end of the slew can be detected on the frame after it stops.</summary>
+    private bool _slewSeen;
+    /// <summary>Settle dwell after the mount reports the slew finished, before
+    /// a star is picked: the mount is still ringing down at that moment.</summary>
+    private const int SlewSettleMs = 2000;
     // Human-readable calibration step, surfaced to the GUIDE UI so the user
     // sees what's happening (ASIAIR-style "Dec (south) step 4, dist 12.3 px").
     private volatile string? _calProgress;
@@ -165,6 +171,16 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
 
     public bool IsConnected { get; private set; }
     public string AppState { get; private set; } = "Stopped";
+    /// <summary>A guiding session is running: the steady state, plus the
+    /// transients it passes through (star lost, mount slewing) that must not
+    /// read as "stopped" to the UI or to a caller waiting on the guider.</summary>
+    public bool IsGuidingSession => IsSessionState(AppState);
+
+    /// <summary>The session-state list itself, as a pure function so the UI
+    /// gating contract can be tested without standing up a guider.</summary>
+    public static bool IsSessionState(string? appState) =>
+        appState is "Guiding" or "LostLock" or "Slewing" or "Paused";
+
     public bool IsGuiding => AppState == "Guiding";
     public bool IsCalibrating => AppState == "Calibrating";
     public string? CalibrationProgress => _calProgress;

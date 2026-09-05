@@ -5694,9 +5694,12 @@
                         <span class="text-muted" x-show="guideFrameMB() >= 4"
                               x-text="'~' + guideFrameMB() + ' MB/frame'"></span>
                     </label>
-                    <button class="btn btn-sm" @click="guiderLoop()" :disabled="guider.looping || guider.calibrating">Loop</button>
-                    <button class="btn btn-sm btn-primary" @click="guiderStart()" :disabled="guider.guiding || guider.calibrating">Start Guiding</button>
-                    <button class="btn btn-sm" @click="guiderFindStar()" :disabled="guider.guiding || guider.calibrating">Auto-select Star</button>
+                    <!-- Button order is the workflow: Loop first, and the rest
+                         only light up once there is something to act on. See
+                         guideCanLoop/guideCanStart/guideCanStop in app.js. -->
+                    <button class="btn btn-sm" @click="guiderLoop()" :disabled="!guideCanLoop()">Loop</button>
+                    <button class="btn btn-sm btn-primary" @click="guiderStart()" :disabled="!guideCanStart()">Start Guiding</button>
+                    <button class="btn btn-sm" @click="guiderFindStar()" :disabled="!guideCanAutoSelect()">Auto-select Star</button>
                     <!-- Activity phase: what the guider is doing right now, so
                          Loop / Auto-select aren't a silent wait on the guide
                          frame. Only shows while a phase is set (native backend). -->
@@ -5709,8 +5712,9 @@
                     </span>
                     <button class="btn btn-sm" @click="guiderPause()" x-show="guider.guiding && !guider.paused">Pause</button>
                     <button class="btn btn-sm" @click="guiderResume()" x-show="guider.paused">Resume</button>
-                    <button class="btn btn-sm btn-danger" @click="guiderStop()">Stop</button>
+                    <button class="btn btn-sm btn-danger" @click="guiderStop()" :disabled="!guideCanStop()">Stop</button>
                     <button class="btn btn-sm" :class="guideOverlay.on ? 'btn-active' : ''"
+                            :disabled="!guideCanOverlay()"
                             @click="toggleGuideOverlay()"
                             title="Floating always-on guiding graph: draggable &amp; resizable, visible from any tab">Overlay</button>
                     <!-- Dither/settle knobs moved to the side panel's Status
@@ -20680,11 +20684,12 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <!-- Guide controls -->
                 <template x-if="basicScreen==='guide'">
                     <div class="bs-gcol">
-                        <button class="bs-gbtn" @click="guiderLoop()" :disabled="guider.looping || guider.calibrating"><span class="bs-big">&#8635;</span>Loop</button>
-                        <button class="bs-gmain" :class="(guider.guiding||guider.calibrating) ? 'stop' : ''"
-                                @click="(guider.guiding||guider.calibrating) ? guiderStop() : guiderStart()"
-                                x-text="(guider.guiding||guider.calibrating) ? 'Stop' : 'Guide'"></button>
-                        <button class="bs-gbtn" @click="guiderFindStar()" :disabled="guider.guiding || guider.calibrating"><span class="bs-big">&#9737;</span>Auto star</button>
+                        <button class="bs-gbtn" @click="guiderLoop()" :disabled="!guideCanLoop()"><span class="bs-big">&#8635;</span>Loop</button>
+                        <button class="bs-gmain" :class="guideCanStop() ? 'stop' : ''"
+                                :disabled="!guideCanStop() && !guideCanStart()"
+                                @click="guideCanStop() ? guiderStop() : guiderStart()"
+                                x-text="guideCanStop() ? 'Stop' : 'Guide'"></button>
+                        <button class="bs-gbtn" @click="guiderFindStar()" :disabled="!guideCanAutoSelect()"><span class="bs-big">&#9737;</span>Auto star</button>
                         <button class="bs-gbtn" @click="guiderDither()" :disabled="!guider.guiding"><span class="bs-big">&#8942;</span>Dither</button>
                         <button class="bs-gbtn" @click="phd2SmartCalibrate()" :disabled="guider.calibrating"><span class="bs-big">&#8853;</span>Calibrate</button>
                     </div>
@@ -23188,7 +23193,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260905-hud"></script>
+    <script src="/js/app.js?v=20260905-guiderux"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
