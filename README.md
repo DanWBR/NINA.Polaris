@@ -211,6 +211,78 @@ dotnet run --project src/NINA.Polaris
 
 Open `http://localhost:5000` in your browser.
 
+### macOS Development
+
+Polaris can be built and run on macOS for development and UI/API testing.
+Install the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0),
+install the WebAssembly workload, then run from the repository root:
+
+```bash
+sudo dotnet workload install wasm-tools
+dotnet clean
+dotnet build src/NINA.Polaris/NINA.Polaris.csproj
+```
+
+For subsequent local rebuilds, use this single command. It assumes the
+dependencies have already been restored:
+
+```bash
+dotnet build src/NINA.Polaris/NINA.Polaris.csproj --no-restore -v:minimal && \
+  dotnet run --project src/NINA.Polaris --no-build
+```
+
+The macOS development configuration in
+`src/NINA.Polaris/appsettings.Development.json` listens on HTTPS at
+`https://localhost:5001` and HTTP at `http://127.0.0.1:5081`. The HTTPS
+certificate is generated
+automatically under the macOS application data directory on first run; accept
+the browser warning for this self-signed development certificate.
+
+Before starting Polaris, check whether either development port is already in
+use:
+
+```bash
+lsof -nP -iTCP:5001 -sTCP:LISTEN
+lsof -nP -iTCP:5081 -sTCP:LISTEN
+```
+
+An existing Polaris process should be stopped before starting another one. If
+the ports are occupied by another application, choose alternate ports with
+configuration environment variables. The port settings belong on the run
+command, not the build command:
+
+```bash
+Server__Https__Port=5001 Server__Http__Port=5081 \
+  dotnet run --project src/NINA.Polaris
+```
+
+Then open `https://localhost:5001`. If using the configured development ports,
+start Polaris with `dotnet run --project src/NINA.Polaris` after the `lsof`
+checks. The macOS host uses a no-op system resource monitor because the .NET
+resource-monitoring provider does not support macOS; process and application
+functionality remain available for development.
+
+For a macOS production publish, the deployed
+`src/NINA.Polaris/appsettings.MacOS.json` override selects HTTPS `5001` and
+HTTP `5081`, because macOS may reserve port `5000`. HTTP redirects to HTTPS.
+Edit that file to choose different macOS ports. `appsettings.Development.json`
+is used only for local development; the general `appsettings.json` defaults
+remain HTTPS `5000` and HTTP `5080` for other platforms.
+
+### Power Controls
+
+The web interface's **Settings → Power** card includes **Stop Polaris**, which
+stops only the Polaris process and leaves the host operating system running.
+After an intentional stop, the browser does not retry connections and tells
+the user to start Polaris again from the terminal. An unexpected disconnect
+continues to use automatic reconnect and reports when Polaris may be down.
+
+On Linux and Raspberry Pi deployments, the existing **Reboot device** and
+**Shut down device** controls remain available. They reboot or power off the
+host through the service manager; use **Stop Polaris** when only the server
+process should be stopped. macOS does not expose host reboot or shutdown
+controls.
+
 ### Run Tests
 
 ```bash

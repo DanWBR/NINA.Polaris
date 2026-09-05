@@ -14,9 +14,12 @@ dotnet test tests/NINA.Polaris.Test/NINA.Polaris.Test.csproj
 dotnet run --project src/NINA.Polaris/NINA.Polaris.csproj
 ```
 
-Server listens on `http://localhost:5000`. Edit + rebuild + refresh
-the browser to see changes (static assets in `wwwroot/` reload without
-rebuild).
+On Linux/Windows development the server uses the configured ports in
+`appsettings.json`; macOS development uses `appsettings.Development.json`
+and typically listens on HTTPS `5001` / HTTP `5081`. For macOS production,
+`appsettings.MacOS.json` keeps those ports because macOS may reserve 5000.
+Edit + rebuild + refresh the browser to see changes (static assets in
+`wwwroot/` reload without rebuild).
 
 ## Stack
 
