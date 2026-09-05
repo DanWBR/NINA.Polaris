@@ -4471,6 +4471,11 @@ function ninaApp() {
         // Dismiss flag for the LIVE quality HUD. The HUD auto-opens while a
         // stack runs (see the WS handler); the overlay's close button sets this
         // until the next stack starts, so it is dismissable without staying gone.
+        // Read and written through liveHudShown() / toggleLiveHud() only: the
+        // two flags used to be set independently, and closing the panel with its
+        // X left liveHudDismissed true while the toolbar button only flipped
+        // liveOverlayVisible, so the button looked dead and the panel could not
+        // be brought back for the rest of the session (field report 2026-09-05).
         liveHudDismissed: false,
         showCrosshair: false,
         showGrid: false,
@@ -22501,6 +22506,10 @@ function ninaApp() {
             // below already reflects the zoom/pan transform, so the coordinate
             // mapping itself stays correct at any zoom.
             if (this._guideDragged) { this._guideDragged = false; return; }
+            // Picking a star needs a live frame to pick it from: after Stop the
+            // last frame is still on screen, and a click there used to fire a
+            // select-star the server could only answer with a fresh capture.
+            if (!this.guideHasFrame()) return;
             const v = this.guider.view;
             const img = this.$refs.guidePhdCamImg;
             if (!v || !img) return;
@@ -41297,6 +41306,68 @@ function ninaApp() {
                 return { ra: t.ra, dec: t.dec };
             }
             return null;
+        },
+
+        // Is the LIVE overlay (image history, SNR/HFR chart, stack quality)
+        // actually on screen? Two flags gate it: liveOverlayVisible is the
+        // toolbar toggle, liveHudDismissed is the panel's own close button, and
+        // the panel also opens by itself while a stack is running.
+        liveHudShown() {
+            return !this.liveHudDismissed
+                && ((this.liveOverlayVisible && this.imageHistory.length > 0)
+                    || !!this.liveStackStatus?.isRunning);
+        },
+
+        // One switch for the toolbar button, so it always does the opposite of
+        // what is on screen: opening clears the dismissal, closing sets it.
+        toggleLiveHud() {
+            const show = !this.liveHudShown();
+            this.liveHudDismissed = !show;
+            this.liveOverlayVisible = show;
+        },
+
+        // GUIDE tab button gating. Two facts drive all of it: is a loop live
+        // on the server, and has a guide frame actually arrived. guider.view is
+        // the last rendered frame and it SURVIVES a stop, so "has a frame" has
+        // to be qualified by the loop still running, otherwise Start Guiding
+        // stays enabled after Stop.
+        guideLive() {
+            const g = this.guider || {};
+            return !!(g.looping || g.guiding || g.paused || g.calibrating
+                      || g.appState === 'LostLock' || g.appState === 'Slewing'
+                      || g.appState === 'Selected');
+        },
+        // A frame is on screen AND the loop that produced it is still running.
+        guideHasFrame() {
+            return !!(this.guider?.view) && this.guideLive();
+        },
+        // A guiding session is up: the steady state plus the transients it
+        // passes through. Mirrors IsGuidingSession on the server.
+        guideSessionUp() {
+            const g = this.guider || {};
+            return !!(g.guiding || g.paused
+                      || g.appState === 'LostLock' || g.appState === 'Slewing');
+        },
+        guideCanLoop() {
+            const g = this.guider || {};
+            return !!g.connected && !this.guideLive();
+        },
+        // Needs a frame to pick a star from, and nothing already guiding.
+        guideCanStart() {
+            return this.guideHasFrame() && !this.guideSessionUp() && !this.guider?.calibrating;
+        },
+        guideCanAutoSelect() {
+            return this.guideCanStart();
+        },
+        // Stop ends whatever is running: a guiding session, a calibration, or a
+        // bare loop. Gating it on guiding alone left the loop unstoppable, since
+        // Loop is disabled while it runs and Stop was the only other way out.
+        guideCanStop() {
+            return this.guideLive();
+        },
+        // The floating graph has nothing to draw until a session is running.
+        guideCanOverlay() {
+            return this.guideSessionUp() || !!this.guideOverlay?.on;
         },
 
         startSlewCenterPolling() {

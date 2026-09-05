@@ -1146,8 +1146,8 @@
                              image as a semi-transparent panel instead of
                              chopping the canvas in half. Default off so
                              the stacked image gets the full pane. -->
-                        <button class="btn btn-sm" @click="liveOverlayVisible = !liveOverlayVisible"
-                                :class="liveOverlayVisible ? 'btn-active' : ''"
+                        <button class="btn btn-sm" @click="toggleLiveHud()"
+                                :class="liveHudShown() ? 'btn-active' : ''"
                                 title="Toggle image history + HFR chart overlay">⊟</button>
                         <!-- PANZOOM: zoom level indicator + reset.
                              Only visible when zoomed > 1x. Tap the chip
@@ -1177,14 +1177,14 @@
                          estate. Hidden by default; toggled via the ⊟
                          button in preview-overlay-controls above. -->
                     <div class="live-history-overlay"
-                         x-show="!liveHudDismissed && ((liveOverlayVisible && imageHistory.length > 0) || liveStackStatus?.isRunning)"
+                         x-show="liveHudShown()"
                          x-cloak>
                         <div class="live-history-overlay-header">
                             <span x-show="imageHistory.length > 0">Image history (<span x-text="imageHistory.length"></span>)</span>
                             <span x-show="imageHistory.length === 0">Live stack quality</span>
                             <button class="btn btn-sm" x-show="imageHistory.length > 0" @click="clearImageHistory()">Clear</button>
-                            <button class="btn btn-sm" @click="liveOverlayVisible = false; liveHudDismissed = true"
-                                    title="Hide overlay">✕</button>
+                            <button class="btn btn-sm" @click="toggleLiveHud()"
+                                    title="Hide overlay (the ⊟ button in the toolbar brings it back)">✕</button>
                         </div>
 
                         <!-- SNR-7: stack quality + ETA-to-target widget.
@@ -5878,9 +5878,12 @@
                         <span class="text-muted" x-show="guideFrameMB() >= 4"
                               x-text="'~' + guideFrameMB() + ' MB/frame'"></span>
                     </label>
-                    <button class="btn btn-sm" @click="guiderLoop()" :disabled="guider.looping || guider.calibrating">Loop</button>
-                    <button class="btn btn-sm btn-primary" @click="guiderStart()" :disabled="guider.guiding || guider.calibrating">Start Guiding</button>
-                    <button class="btn btn-sm" @click="guiderFindStar()" :disabled="guider.guiding || guider.calibrating">Auto-select Star</button>
+                    <!-- Button order is the workflow: Loop first, and the rest
+                         only light up once there is something to act on. See
+                         guideCanLoop/guideCanStart/guideCanStop in app.js. -->
+                    <button class="btn btn-sm" @click="guiderLoop()" :disabled="!guideCanLoop()">Loop</button>
+                    <button class="btn btn-sm btn-primary" @click="guiderStart()" :disabled="!guideCanStart()">Start Guiding</button>
+                    <button class="btn btn-sm" @click="guiderFindStar()" :disabled="!guideCanAutoSelect()">Auto-select Star</button>
                     <!-- Activity phase: what the guider is doing right now, so
                          Loop / Auto-select aren't a silent wait on the guide
                          frame. Only shows while a phase is set (native backend). -->
@@ -5893,8 +5896,9 @@
                     </span>
                     <button class="btn btn-sm" @click="guiderPause()" x-show="guider.guiding && !guider.paused">Pause</button>
                     <button class="btn btn-sm" @click="guiderResume()" x-show="guider.paused">Resume</button>
-                    <button class="btn btn-sm btn-danger" @click="guiderStop()">Stop</button>
+                    <button class="btn btn-sm btn-danger" @click="guiderStop()" :disabled="!guideCanStop()">Stop</button>
                     <button class="btn btn-sm" :class="guideOverlay.on ? 'btn-active' : ''"
+                            :disabled="!guideCanOverlay()"
                             @click="toggleGuideOverlay()"
                             title="Floating always-on guiding graph: draggable &amp; resizable, visible from any tab">Overlay</button>
                     <!-- Dither/settle knobs moved to the side panel's Status
@@ -20927,11 +20931,15 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <!-- Guide controls -->
                 <template x-if="basicScreen==='guide'">
                     <div class="bs-gcol">
-                        <button class="bs-gbtn" @click="guiderLoop()" :disabled="guider.looping || guider.calibrating"><span class="bs-big">&#8635;</span>Loop</button>
-                        <button class="bs-gmain" :class="(guider.guiding||guider.calibrating) ? 'stop' : ''"
-                                @click="(guider.guiding||guider.calibrating) ? guiderStop() : guiderStart()"
-                                x-text="(guider.guiding||guider.calibrating) ? 'Stop' : 'Guide'"></button>
-                        <button class="bs-gbtn" @click="guiderFindStar()" :disabled="guider.guiding || guider.calibrating"><span class="bs-big">&#9737;</span>Auto star</button>
+                        <button class="bs-gbtn" @click="guiderLoop()" :disabled="!guideCanLoop()"><span class="bs-big">&#8635;</span>Loop</button>
+                        <!-- One big button: Guide when there is a frame to start
+                             on, Stop for anything already running (a session, a
+                             calibration, or a bare loop with no frame yet). -->
+                        <button class="bs-gmain" :class="!guideCanStart() && guideCanStop() ? 'stop' : ''"
+                                :disabled="!guideCanStart() && !guideCanStop()"
+                                @click="guideCanStart() ? guiderStart() : guiderStop()"
+                                x-text="guideCanStart() ? 'Guide' : 'Stop'"></button>
+                        <button class="bs-gbtn" @click="guiderFindStar()" :disabled="!guideCanAutoSelect()"><span class="bs-big">&#9737;</span>Auto star</button>
                         <button class="bs-gbtn" @click="guiderDither()" :disabled="!guider.guiding"><span class="bs-big">&#8942;</span>Dither</button>
                         <button class="bs-gbtn" @click="phd2SmartCalibrate()" :disabled="guider.calibrating"><span class="bs-big">&#8853;</span>Calibrate</button>
                     </div>
@@ -21518,7 +21526,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     <p class="hint" style="margin-top:6px;font-size:11px">
                         RA (red) and Dec (blue) raw error in <span x-text="phd2Viewer.unit"></span>; the shaded
                         bands are dither/settle frames (excluded from the RMS). Pixel scale
-                        <span x-text="phd2Viewer.pixelScale ? phd2Viewer.pixelScale.toFixed(2)+'\"/px' : 'unknown (shown in px)'"></span>.
+                        <span x-text="phd2Viewer.pixelScale ? phd2Viewer.pixelScale.toFixed(2)+'&quot;/px' : 'unknown (shown in px)'"></span>.
                     </p>
                 </div>
             </template>
@@ -23435,7 +23443,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260905-slewfix"></script>
+    <script src="/js/app.js?v=20260905-guiderux"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
