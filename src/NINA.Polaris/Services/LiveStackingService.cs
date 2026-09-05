@@ -406,6 +406,29 @@ public class LiveStackingService {
         return 4;
     }
 
+    /// <summary>Mosaic-free view of a CFA frame, at FULL resolution, for star
+    /// detection only. Every output pixel is the mean of the 2x2 block starting
+    /// at it, so it carries one R, two G and one B: the per-channel pedestals
+    /// average out, a robust noise estimate over the result measures noise
+    /// instead of the channel gap, and star positions and sizes stay exactly
+    /// where they were. Cheaper and blunter than a debayer, which is all the
+    /// detector needs; the pixels that get stacked are still the untouched
+    /// mosaic.</summary>
+    internal static ushort[] CfaPseudoLuminance(ushort[] src, int w, int h) {
+        if (src == null || w < 2 || h < 2) return src!;
+        var dst = new ushort[src.Length];
+        for (int y = 0; y < h; y++) {
+            int y1 = y + 1 < h ? y + 1 : y;
+            int r0 = y * w, r1 = y1 * w;
+            for (int x = 0; x < w; x++) {
+                int x1 = x + 1 < w ? x + 1 : x;
+                dst[r0 + x] = (ushort)((src[r0 + x] + src[r0 + x1]
+                                        + src[r1 + x] + src[r1 + x1]) >> 2);
+            }
+        }
+        return dst;
+    }
+
     /// <summary>
     /// Box-average the frame down by <paramref name="bin"/>. For a CFA frame the
     /// reduction works on whole 2x2 Bayer cells and averages the pixels sharing a
@@ -1231,7 +1254,24 @@ public class LiveStackingService {
 
         // StarDetector feeds StarMatcher for alignment and provides the HFR +
         // star count the trigger orchestrator (LSTR-3) runs on.
-        var stars = _detector.Detect(data, props.Width, props.Height);
+        //
+        // CFA: detect on a pseudo-luminance, never on the raw mosaic. The
+        // detector sets its threshold at median + 5 * MAD * 1.4826, and on a
+        // mosaic the MAD does not measure noise at all: it measures the gap
+        // between the R, G and B pedestals, which on an OSC sensor is thousands
+        // of counts. Measured on a real 60 s light (ASI585MC, RGGB, gain 200,
+        // 2026-09-05): mosaic MAD 3215, so the threshold landed at 37705 while
+        // the frame's 99.99th percentile was 23221 — nothing but saturated
+        // pixels could clear it, and the detector reported 2 to 3 stars in a
+        // whole 8 MP frame while live stacking rejected perfectly good frames
+        // for "alignment failed". The same frame through the 2x2 mean: MAD 162,
+        // threshold 15423, 85 stars. BinFrame does not help here, it keeps the
+        // mosaic by design so debayer still works downstream.
+        var detectSrc = (props.BayerPattern != BayerPatternEnum.None
+                         && props.BayerPattern != BayerPatternEnum.Auto)
+            ? CfaPseudoLuminance(data, props.Width, props.Height)
+            : data;
+        var stars = _detector.Detect(detectSrc, props.Width, props.Height);
         _logger.LogDebug("Detected {Count} stars in frame", stars.Count);
 
         // Integration. A plain block: this was the server arm of an if/else
