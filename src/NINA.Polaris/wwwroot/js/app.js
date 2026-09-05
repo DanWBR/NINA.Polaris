@@ -26731,9 +26731,19 @@ function ninaApp() {
                     centerOnly: !!centerOnly
                 });
                 if (data && data.jobId) {
+                    // Same start-up as the SKY tab's own slew & center: reset the
+                    // status and the leftover console from a previous run, then
+                    // START THE POLLER. This called a this._pollSlewCenter() that
+                    // never existed (the method is pollSlewCenter, and the poller
+                    // is started by startSlewCenterPolling), so both buttons on the
+                    // Studio solve card died with "is not a function" before any
+                    // progress could be shown. scripts/check-missing-methods.mjs
+                    // now catches that class of typo.
                     this.slewCenterJobId = data.jobId;
+                    this.slewCenterStatus = { state: 'pending', iteration: 0 };
+                    this.slewCenterFailedLog = '';
                     this.skySolverHidden = false;
-                    this._pollSlewCenter();
+                    this.startSlewCenterPolling();
                     this.toast((centerOnly ? 'Centering' : 'Slew & Center')
                         + ' started -- check SKY tab for progress', 'ok');
                 }
