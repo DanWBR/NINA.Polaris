@@ -1745,7 +1745,7 @@ function ninaApp() {
             // native-SDK control list. Raising it lifts the whole frame off
             // zero; leaving it high eats the range the planet needs.
             offset: 0,
-            offsetCtl: { id: null, min: 0, max: 0, available: false },
+            offsetCtl: { id: null, min: 0, max: 0, value: null, available: false },
             outputName: 'stack',
             // Per-frame quality scores for the current/last stack job, fetched
             // once from /api/video/stack/{id}/qualities after analysis. Drives
@@ -4907,6 +4907,10 @@ function ninaApp() {
             // wheel doesn't flood the driver. No-op when not streaming.
             this.$watch('video.exposure', () => { if (this.cameraStream.running) this._pushVideoLiveParams(); });
             this.$watch('video.gain', () => { if (this.cameraStream.running) this._pushVideoLiveParams(); });
+            // Offset is a camera-side control, not a stream parameter: write it
+            // straight through so the wheel, the nudge buttons and the inline
+            // edit all land on the driver.
+            this.$watch('video.offset', () => this.videoSetOffset());
             // Clear the sticky DSLR/cooler classification when the selected
             // camera (driver or device) changes, so a gphoto→astro swap doesn't
             // keep stale ISO/temperature controls until the next connect.
@@ -27403,15 +27407,17 @@ function ninaApp() {
                 const ctl = (r?.controls || []).find(c =>
                     /offset/i.test(c.id || '') || /offset/i.test(c.name || ''));
                 if (!ctl || !ctl.writable) {
-                    this.video.offsetCtl = { id: null, min: 0, max: 0, available: false };
+                    this.video.offsetCtl = { id: null, min: 0, max: 0, value: null, available: false };
                     return;
                 }
                 this.video.offsetCtl = {
-                    id: ctl.id, min: Number(ctl.min) || 0, max: Number(ctl.max) || 0, available: true
+                    id: ctl.id, min: Number(ctl.min) || 0, max: Number(ctl.max) || 0,
+                    value: null, available: true
                 };
-                this.video.offset = Number(ctl.value) || 0;
+                this.video.offsetCtl.value = Number(ctl.value) || 0;
+                this.video.offset = this.video.offsetCtl.value;
             } catch (e) {
-                this.video.offsetCtl = { id: null, min: 0, max: 0, available: false };
+                this.video.offsetCtl = { id: null, min: 0, max: 0, value: null, available: false };
             }
         },
 
@@ -27420,8 +27426,12 @@ function ninaApp() {
             if (!c?.available || !c.id) return;
             const v = Math.min(c.max, Math.max(c.min, Number(this.video.offset) || 0));
             this.video.offset = v;
+            // Nothing to do when this is the value the camera just reported:
+            // the load path assigns video.offset, which fires the watcher.
+            if (v === c.value) return;
             try {
                 await this.apiPost(`/api/camera/controls/${encodeURIComponent(c.id)}`, { value: v });
+                c.value = v;
             } catch (e) {
                 this.toast('Offset write failed: ' + (e.message || 'driver rejected'), 'warn');
             }
@@ -29936,6 +29946,14 @@ function ninaApp() {
                 if (this.videoRecording.recording) return;
                 let g = (this.video.gain | 0) + dir;
                 this.video.gain = Math.min(600, Math.max(0, g));
+            } else if (which === 'offset') {
+                if (this.videoRecording.recording) return;
+                const c = this.video.offsetCtl;
+                if (!c?.available) return;
+                // The wheel spans 0..100 like the camera's own offset scale;
+                // clamp to what the driver actually reports as well.
+                const lo = Math.max(0, c.min), hi = Math.min(100, c.max || 100);
+                this.video.offset = Math.min(hi, Math.max(lo, (this.video.offset | 0) + dir));
             } else if (which === 'focus') {
                 if (this.focusMoving || !(this.focusMaxPosition > 0)) return;
                 const base = this.focusSliderDirty ? this.focusSliderTarget : this.focusPosition;

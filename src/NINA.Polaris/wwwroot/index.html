@@ -3966,6 +3966,33 @@
                                         @pointercancel="stopWheelRepeat()"
                                         title="Gain +1 (hold to repeat)">+</button>
                             </div>
+                            <!-- Offset (the camera's black level), same wheel as
+                                 Gain. Native-SDK cameras only: the value is read
+                                 from and written to the control list the config
+                                 panel drives, so it persists across reconnects,
+                                 and the column hides on a driver that publishes
+                                 no controls. Field session 2026-09-05: an offset
+                                 near 20% of full scale left Saturn only 2% of the
+                                 range to live in. -->
+                            <div class="wheel-col" x-show="video.offsetCtl.available">
+                                <button class="btn btn-sm wheel-nudge" style="touch-action:none"
+                                        :disabled="videoRecording.recording"
+                                        @pointerdown.prevent="startWheelRepeat('offset', -1)"
+                                        @pointerup="stopWheelRepeat()" @pointerleave="stopWheelRepeat()"
+                                        @pointercancel="stopWheelRepeat()"
+                                        title="Offset -1 (hold to repeat)">&minus;</button>
+                                <div data-wheel-picker
+                                     data-label="Offset"
+                                     data-min="0" data-max="100" data-step="1"
+                                     data-bind="video.offset" data-scale="1"
+                                     :data-disabled="videoRecording.recording"></div>
+                                <button class="btn btn-sm wheel-nudge" style="touch-action:none"
+                                        :disabled="videoRecording.recording"
+                                        @pointerdown.prevent="startWheelRepeat('offset', 1)"
+                                        @pointerup="stopWheelRepeat()" @pointerleave="stopWheelRepeat()"
+                                        @pointercancel="stopWheelRepeat()"
+                                        title="Offset +1 (hold to repeat)">+</button>
+                            </div>
                         </div>
 
                         <!-- Focus motor: its own collapsible group instead of
@@ -4426,25 +4453,6 @@
                                      : (video.roiW + ' × ' + video.roiH
                                         + ' @ (' + video.roiX + ', ' + video.roiY + ')'
                                         + ' on ' + cameraCaps.maxX + ' × ' + cameraCaps.maxY)"></div>
-                        </div>
-
-                        <!-- Offset (black level). Native-SDK cameras only: it is
-                             read from the same control list the config panel uses,
-                             so a change here persists across reconnects. Field
-                             session 2026-09-05: an offset near 20% of full scale
-                             left Saturn only 2% of the range to live in. -->
-                        <div class="control-row" x-show="video.offsetCtl.available">
-                            <label style="flex:1"
-                                   :title="$t('Camera black level. Lower it until the sky is just above zero: every count of offset is range the planet cannot use.')">
-                                Offset
-                                <input type="range" :min="video.offsetCtl.min" :max="video.offsetCtl.max" step="1"
-                                       x-model.number="video.offset"
-                                       @change="videoSetOffset()" class="slider">
-                                <span x-text="video.offset" class="text-muted" style="margin-left:6px"></span>
-                            </label>
-                            <input type="number" :min="video.offsetCtl.min" :max="video.offsetCtl.max" step="1"
-                                   x-model.number="video.offset" @change="videoSetOffset()"
-                                   class="input-sm" style="width:70px">
                         </div>
 
                         <!-- White-balance row, only visible for OSC color
@@ -23180,7 +23188,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260905-wb"></script>
+    <script src="/js/app.js?v=20260905-offset"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

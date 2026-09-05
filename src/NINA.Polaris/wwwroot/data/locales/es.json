@@ -4758,5 +4758,7 @@
   "R gain": "Ganancia R",
   "B gain": "Ganancia B",
   "Channel balance for a colour stack. Auto measures the object and pulls it toward neutral; manual applies the gains you set, with green fixed at 1.": "Balance de canales para un apilado en color. Auto mide el objeto y lo lleva hacia el neutro; manual aplica las ganancias que definas, con el verde fijo en 1.",
-  "Camera black level. Lower it until the sky is just above zero: every count of offset is range the planet cannot use.": "Nivel de negro de la cámara. Bájalo hasta que el cielo quede justo por encima de cero: cada cuenta de offset es rango que el planeta no puede usar."
+  "Camera black level. Lower it until the sky is just above zero: every count of offset is range the planet cannot use.": "Nivel de negro de la cámara. Bájalo hasta que el cielo quede justo por encima de cero: cada cuenta de offset es rango que el planeta no puede usar.",
+  "Offset -1 (hold to repeat)": "Offset -1 (mantén para repetir)",
+  "Offset +1 (hold to repeat)": "Offset +1 (mantén para repetir)"
 }
