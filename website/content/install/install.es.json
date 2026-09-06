@@ -59,7 +59,7 @@
         "host": "Mac (Apple Silicon / Intel)",
         "ram": "4+ GB",
         "status": "Falta probar",
-        "notes": "Compilaciones self-contained desde la 0.98.66. El equipo es Alpaca, INDI y los SDK nativos de cámara; ASCOM es solo de Windows, y los extras de Linux (WiFi, energía, reloj del host) no están. Nadie lo ha ejecutado en un Mac todavía."
+        "notes": "Compilaciones self-contained desde la 0.98.66. El equipo es Alpaca, INDI y los SDK nativos de cámara; ASCOM es solo de Windows, y los extras de Linux (WiFi, energía, reloj del host) no están. Un colaborador ya lo ejecuta en un Mac con un indiserver local, con cámara ZWO, montura, enfocador y cámara guía conectados."
       }
     ]
   },
@@ -314,7 +314,7 @@
       "badge": ".tar.gz",
       "icon": "apple",
       "color": "#a1a1aa",
-      "summary": "Novedad de la 0.98.66, y con franqueza: la compilación y el empaquetado están verificados en los runners de Apple, ejecutar la app en un Mac no. Tómalo como una primera versión y cuéntanos qué encuentras.",
+      "summary": "Novedad de la 0.98.66, y desde entonces un colaborador la ha ejecutado en un Mac con un indiserver local: cámara ZWO refrigerada, montura AM5, enfocador EAF y cámara guía, todo conectado y funcionando. Sigue siendo reciente, y los extras exclusivos de Linux no están, así que cuéntanos qué encuentras.",
       "steps": "curl -LO https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-osx-arm64.tar.gz\ntar -xzf polaris-osx-arm64.tar.gz\ncd polaris-osx-arm64\nxattr -dr com.apple.quarantine .\n./NINA.Polaris",
       "notes": "Abre https://localhost:5000 y acepta el certificado autofirmado una vez. La línea de xattr está porque la descarga no está firmada. En macOS el equipo es Alpaca, INDI (un indiserver local de Homebrew, o uno remoto en una Pi) y los SDK nativos de cámara; ASCOM sigue siendo solo de Windows. Deja la .dylib del fabricante junto al binario, o apunta POLARIS_NATIVE_SDK_DIR a ella, y los controladores nativos aparecen en RIGS. En un Mac Intel cambia osx-arm64 por osx-x64."
     },
