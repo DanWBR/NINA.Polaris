@@ -151,6 +151,45 @@ Polaris uses the `IPlateSolver` strategy pattern.
 
 Reference: `Services/PlateSolving/AstapSolver.cs` and `AstrometryNetLocalSolver.cs`.
 
+## Scope and design
+
+Polaris is opinionated on purpose. That is what keeps forty-odd panels
+looking like one program instead of forty. Two rules protect it:
+
+- **Propose a feature before you build it.** Open a discussion or an
+  issue saying what you want and why. A pull request is a perfectly good
+  way to show an idea, but a large one that arrives unannounced is
+  likely to get feedback on direction rather than on code, and that
+  wastes your evening more than ours.
+- **Match what is already there.** New interface work reuses the
+  existing design system instead of introducing a second one. If the
+  pattern you need does not exist yet, say so in the proposal and we
+  will design it once, in one place.
+
+Neither rule is about trust. They exist so that nobody builds something
+good and then hears no.
+
+### Interface rules
+
+These are checked in review every time, so they are cheaper to follow
+than to retrofit:
+
+- Every new card, modal and panel gets both horizontal and vertical
+  padding. Mirror the sibling sections rather than inventing spacing.
+- Label above the field, field full width. Grids stay single column
+  unless the content genuinely pairs.
+- Every user-visible string is translated in the **same** change, in all
+  five files under `src/NINA.Polaris/wwwroot/data/locales/`
+  (`_source`, `pt-BR`, `es`, `fr`, `de`). The English text is the key.
+  A half-translated dialog is worse than an untranslated one.
+- No em dashes or en dashes in user-facing text, in the keys or in the
+  translations. A comma, a colon or a full stop reads better and
+  survives every font on every board.
+- Do not put a `max-width` on dropdowns.
+- When you touch `wwwroot/js/app.js`, run
+  `node scripts/check-missing-methods.mjs`. A `this.something()` with no
+  definition is silent until a user clicks the button.
+
 ## Coding conventions
 
 - **C#**: stick to the existing style. Records for DTOs, classes for
@@ -198,11 +237,20 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 
 ## Branches + PRs
 
-- `master` is the trunk. Direct commits are accepted from maintainers
-  with build + tests green.
-- Feature branches `feat/short-name` → PR back to `master`.
+- `master` is the stable trunk. `preview` carries the 0.99.x preview
+  releases. **Both branches are protected**: changes land through a pull
+  request carrying an approving review from a code owner
+  (see [`.github/CODEOWNERS`](.github/CODEOWNERS)). Force pushes and
+  branch deletion are refused, and review threads have to be resolved
+  before merge.
+- Feature branches `feat/short-name` -> PR back to `master`.
 - Bug fix branches `fix/short-name`.
 - Squash + merge is the default, keeps the trunk tidy.
+- A fix that belongs in both branches lands on `master` first and is
+  ported to `preview` afterwards. Do not develop the same change twice.
+- Releases are cut by pushing an annotated tag (`v0.98.x` from `master`,
+  `v0.99.x-preview1` from `preview`); the workflow builds every target
+  from the tag, so no version number lives in the tree.
 
 ## Tests
 
@@ -211,6 +259,9 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
   get golden-value tests
 - WebSocket / endpoint integration tests are not yet in place, only
   manual smoke testing on the dev box. Contributions welcome.
+- Adding a block or a field to the `/ws/status` payload means pinning
+  it in `tests/NINA.Polaris.Test/status-contract.txt` in the same
+  commit, or the contract test fails for everyone else.
 - `dotnet test tests/NINA.Polaris.Test/NINA.Polaris.Test.csproj` runs
   the full suite (~450 tests, ~5 seconds on RPi 5).
 
