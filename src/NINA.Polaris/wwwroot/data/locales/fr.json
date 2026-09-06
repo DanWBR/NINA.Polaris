@@ -4760,5 +4760,7 @@
   "Channel balance for a colour stack. Auto measures the object and pulls it toward neutral; manual applies the gains you set, with green fixed at 1.": "Balance des canaux pour un empilement couleur. Auto mesure l'objet et le ramène vers le neutre ; manuel applique les gains que vous fixez, le vert restant à 1.",
   "Camera black level. Lower it until the sky is just above zero: every count of offset is range the planet cannot use.": "Niveau de noir de la caméra. Baissez-le jusqu'à ce que le ciel soit juste au-dessus de zéro : chaque unité d'offset est de la dynamique que la planète ne peut pas utiliser.",
   "Offset -1 (hold to repeat)": "Offset -1 (maintenir pour répéter)",
-  "Offset +1 (hold to repeat)": "Offset +1 (maintenir pour répéter)"
+  "Offset +1 (hold to repeat)": "Offset +1 (maintenir pour répéter)",
+  "No calibration for the gear fitted now.": "Aucune calibration pour le matériel monté actuellement.",
+  "Run a calibration, or use Load file above to bring one back from a saved file.": "Lancez une calibration, ou utilisez Load file ci-dessus pour en recharger une depuis un fichier."
 }
