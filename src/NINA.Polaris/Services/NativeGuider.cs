@@ -347,7 +347,9 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
         // Auto-restore the last saved calibration for this rig so a fresh session
         // can guide without recalibrating (PHD2-style restore).
         if (!_calibration.IsValid && TryRestoreCalibration())
-            RaiseAlert("Restored last calibration for this rig. Recalibrate if the setup changed.");
+            // Information, not a fault: it reads as an error in the GUIDE tab
+            // otherwise, which is what the operator sees first on connect.
+            RaiseAlert("Restored last calibration for this rig. Recalibrate if the setup changed.", "info");
         _logger.LogInformation(
             "Native guider connected: cam={Cam}, pixelScale={Scale:F2} arcsec/px",
             cam.DeviceName, PixelScale);

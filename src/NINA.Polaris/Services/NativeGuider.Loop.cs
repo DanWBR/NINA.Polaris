@@ -666,7 +666,7 @@ public sealed partial class NativeGuider {
             _logger.LogInformation(
                 "Native guide: re-acquired at ({X:F1},{Y:F1}), {D:F1}px from the old lock",
                 _lockX, _lockY, moved);
-            RaiseAlert($"Guide star re-acquired ({moved:F0}px away); guiding resumed.");
+            RaiseAlert($"Guide star re-acquired ({moved:F0}px away); guiding resumed.", "info");
         } catch (OperationCanceledException) {
             throw;
         } catch (Exception ex) {
@@ -696,7 +696,7 @@ public sealed partial class NativeGuider {
             if (!_slewSeen) {
                 _slewSeen = true;
                 SetAppState("Slewing");
-                RaiseAlert("Mount is slewing; guiding paused until it stops.");
+                RaiseAlert("Mount is slewing; guiding paused until it stops.", "info");
                 _logger.LogInformation("Native guide: mount slew detected, corrections paused");
             }
             // Keep the view alive so the operator still sees the guide camera.
@@ -731,7 +731,7 @@ public sealed partial class NativeGuider {
         }
         await BuildMultiStarAsync(ct);
         SetAppState("Guiding");
-        RaiseAlert("Slew finished; guiding restarted on a new star.");
+        RaiseAlert("Slew finished; guiding restarted on a new star.", "info");
         _logger.LogInformation("Native guide: guiding restarted at ({X:F1},{Y:F1}) after the slew", _lockX, _lockY);
         return true;
     }

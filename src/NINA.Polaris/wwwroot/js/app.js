@@ -10132,8 +10132,14 @@ function ninaApp() {
             if (this._histoDrag) return;
             const maxV = this.histo._maxVal || 65535;
             if (this.histoZoom) {
-                let lo = (this.histo.min / maxV) - 0.01;
-                let hi = (this.histo.avg + 8 * this.histo.std) / maxV + 0.02;
+                // Frame the window on where the pixels ACTUALLY are. The old
+                // rule was avg + 8*std, which assumes one Gaussian: on a
+                // stacked sky (a narrow peak with a long faint tail) and on a
+                // CFA mosaic (one peak per channel pedestal, thousands of
+                // counts apart) the sigma is not the width of anything, so the
+                // window opened far wider than the data and the curve drew as
+                // a hairline until the operator hit Auto a couple of times.
+                let [lo, hi] = this.histoDataWindow();
                 // Expand the window so a handle the user placed stays
                 // visible — but ONLY for handles meaningfully inside the
                 // range. In the OSC/JPEG flow the auto handles sit at
@@ -10158,6 +10164,33 @@ function ninaApp() {
                 this.histo.dispLo = 0;
                 this.histo.dispHi = maxV > 0 ? Math.max(1, full / maxV) : 1;
             }
+        },
+
+        // The [lo, hi] fraction of the axis the zoomed histogram should show:
+        // the 0.1th to 99.9th percentile of the bins, with a small margin, so
+        // the drawn curve fills the panel whatever the distribution looks like.
+        // Falls back to the old spread estimate when there are no bins yet.
+        histoDataWindow() {
+            const bins = this.histo.bins;
+            const maxV = this.histo._maxVal || 65535;
+            if (!bins || bins.length < 2) {
+                return [(this.histo.min / maxV) - 0.01,
+                        (this.histo.avg + 8 * this.histo.std) / maxV + 0.02];
+            }
+            let total = 0;
+            for (let i = 0; i < bins.length; i++) total += bins[i];
+            if (!(total > 0)) return [0, 1];
+            const span = bins.length - 1;
+            const at = (q) => {
+                const want = total * q;
+                let acc = 0;
+                for (let i = 0; i < bins.length; i++) {
+                    acc += bins[i];
+                    if (acc >= want) return i / span;
+                }
+                return 1;
+            };
+            return [at(0.001) - 0.01, at(0.999) + 0.02];
         },
 
         // Draw the histogram bars + black/white marker lines onto the active
