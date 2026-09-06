@@ -4751,5 +4751,14 @@
   "Points with less structure than this fraction of the best point are dropped.": "Les points ayant moins de structure que cette fraction du meilleur point sont écartés.",
   "Best frames averaged into the reference the mesh is built on.": "Meilleures images moyennées dans la référence sur laquelle le maillage est construit.",
   "Local shifts": "Décalages locaux",
-  "Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only.": "Suit le seeing en chaque point avec son propre décalage. Désactivé conserve la sélection des images par point mais empile uniquement avec le décalage global."
+  "Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only.": "Suit le seeing en chaque point avec son propre décalage. Désactivé conserve la sélection des images par point mais empile uniquement avec le décalage global.",
+  "Stop Polaris": "Arrêter Polaris",
+  "Stopping…": "Arrêt…",
+  "Stop server": "Arrêter le serveur",
+  "Polaris is stopping…": "Polaris s'arrête…",
+  "Could not reach the server to stop it.": "Impossible de joindre le serveur pour l'arrêter.",
+  "Stop the Polaris server now? The host keeps running, but the web interface will be unavailable until Polaris is started again on the host.": "Arrêter le serveur Polaris maintenant ? L'hôte continue de fonctionner, mais l'interface web sera indisponible jusqu'à ce que Polaris soit relancé sur l'hôte.",
+  "Polaris server stopped. Start it again on the host to reconnect.": "Serveur Polaris arrêté. Relancez-le sur l'hôte pour vous reconnecter.",
+  "Polaris was stopped from the web interface. Start it again on the host when you want to reconnect.": "Polaris a été arrêté depuis l'interface web. Relancez-le sur l'hôte quand vous voudrez vous reconnecter.",
+  "Polaris may be down. If it does not come back on its own, start it again on the host.": "Polaris est peut-être arrêté. S'il ne revient pas de lui-même, relancez-le sur l'hôte."
 }
