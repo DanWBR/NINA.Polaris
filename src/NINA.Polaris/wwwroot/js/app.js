@@ -10028,6 +10028,9 @@ function ninaApp() {
             // the operator never asked for. A JPEG-derived luminance really is
             // 0..255 display space, so there full scale IS maxVal.
             this.histo._fullScale = hasRaw ? ((1 << (f.bitDepth || 16)) - 1) : maxVal;
+            // Bins computed here always span the whole scale.
+            this.histo._binLo = 0;
+            this.histo._binHi = 1;
             if (hasRaw) {
                 this.histo._autoBlack = Math.max(0, Math.min(1, ap.shadow / maxVal));
                 this.histo._autoWhite = Math.max(0, Math.min(1, aWhite / maxVal));
@@ -10098,7 +10101,15 @@ function ninaApp() {
             this.histo.avg = Math.round(ls.colorHistMean || 0);
             this.histo.std = Math.round(ls.colorHistStd || 0);
             this.histo._maxVal = maxVal;
-            this.histo._fullScale = maxVal;   // server bins already span 0..65535
+            this.histo._fullScale = maxVal;
+            // The server bins over the band it found populated, not over
+            // 0..65535: on a stacked sky the whole distribution used to land in
+            // two buckets of 256, which no window can draw as anything but a
+            // hairline. Place them where the server says they sit.
+            const bandLo = Number(ls.colorHistLo), bandHi = Number(ls.colorHistHi);
+            const haveBand = isFinite(bandLo) && isFinite(bandHi) && bandHi > bandLo;
+            this.histo._binLo = haveBand ? bandLo / maxVal : 0;
+            this.histo._binHi = haveBand ? bandHi / maxVal : 1;
             // Server already stretched the JPEG → keep the handles at identity.
             this.histo._autoBlack = 0;
             this.histo._autoWhite = 1;
@@ -10186,11 +10197,26 @@ function ninaApp() {
                 let acc = 0;
                 for (let i = 0; i < bins.length; i++) {
                     acc += bins[i];
-                    if (acc >= want) return i / span;
+                    if (acc >= want) return this._histoBinFrac(i / span);
                 }
-                return 1;
+                return this._histoBinFrac(1);
             };
-            return [at(0.001) - 0.01, at(0.999) + 0.02];
+            const lo = at(0.001), hi = at(0.999);
+            // Pad relative to the data, not to full scale: 0.01/0.02 of
+            // 0..65535 is 655/1310 ADU, wider than a stacked sky's entire
+            // distribution, so the padding owned the axis and the curve drew
+            // as a hairline in the middle of it.
+            const wide = Math.max(1e-4, hi - lo);
+            return [lo - Math.max(0.0015, wide * 0.10),
+                    hi + Math.max(0.0030, wide * 0.20)];
+        },
+
+        // Position within the bin array (0..1) to a fraction of full scale.
+        // Identity for locally computed histograms; the server's colour-stack
+        // bins cover only the populated band and carry its ADU bounds.
+        _histoBinFrac(t) {
+            const lo = this.histo._binLo ?? 0, hi = this.histo._binHi ?? 1;
+            return lo + t * (hi - lo);
         },
 
         // Draw the histogram bars + black/white marker lines onto the active
@@ -10210,7 +10236,7 @@ function ninaApp() {
             for (let b = 0; b < NB; b++) {
                 const c = bins[b];
                 if (c <= 0) continue;
-                const frac = (b + 0.5) / NB;
+                const frac = this._histoBinFrac((b + 0.5) / NB);
                 if (frac < lo || frac > hi) continue;
                 const x = ((frac - lo) / span) * w;
                 const y = h - (Math.log1p(c) / pk) * (h - 1);

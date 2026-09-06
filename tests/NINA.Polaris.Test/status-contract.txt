@@ -168,6 +168,8 @@ liveCapture.lastError
 liveCapture.running
 liveStack
 liveStack.colorActive
+liveStack.colorHistHi
+liveStack.colorHistLo
 liveStack.colorHistMax
 liveStack.colorHistMean
 liveStack.colorHistMin
