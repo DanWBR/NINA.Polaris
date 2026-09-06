@@ -4,11 +4,33 @@ This file is for **developers** who want to fix a bug, add a feature,
 or just understand how Polaris is put together well enough to read
 the source. End-user docs live in [docs/user-guide/](docs/user-guide/).
 
+## The name, and why the code says NINA
+
+The product is **Polaris**, in full **Polaris Astro Controller**. That
+is the name in the interface, the documentation, the website, the
+release notes and anything else a user reads.
+
+The source tree says `NINA.*` everywhere because Polaris is a fork of
+[N.I.N.A.](https://nighttime-imaging.eu/) (MPL-2.0) and keeps upstream's
+assembly and namespace names on purpose: it is what makes upstream code
+readable side by side with ours and portable into the fork. So
+`NINA.Polaris`, `NINA.INDI`, `NINA.Core.Portable` and their siblings are
+correct and stay as they are. Do not rename them, and do not rename the
+folders either.
+
+The rule is simply which side of the line you are on:
+
+- code, namespaces, assemblies, project files, repository paths -> `NINA.*`
+- anything a user sees or reads -> Polaris
+
+Polaris is **not** affiliated with or supported by the official N.I.N.A.
+team. Support questions belong in this repository, never in theirs.
+
 ## TL;DR
 
 ```bash
-git clone https://github.com/DanWBR/nina-polaris.git
-cd nina-polaris
+git clone https://github.com/DanWBR/NINA.Polaris.git
+cd NINA.Polaris
 dotnet build src/NINA.Polaris/NINA.Polaris.csproj
 dotnet test tests/NINA.Polaris.Test/NINA.Polaris.Test.csproj
 dotnet run --project src/NINA.Polaris/NINA.Polaris.csproj
