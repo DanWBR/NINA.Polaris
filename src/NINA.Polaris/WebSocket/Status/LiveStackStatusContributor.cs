@@ -123,6 +123,11 @@ public sealed class LiveStackStatusContributor : IStatusContributor {
                 colorHistogramR = liveStack.ColorActive ? liveStack.ColorHistogramR : null,
                 colorHistogramG = liveStack.ColorActive ? liveStack.ColorHistogramG : null,
                 colorHistogramB = liveStack.ColorActive ? liveStack.ColorHistogramB : null,
+                // ADU of the first and last bucket: the bins cover the
+                // populated band, not a fixed 0..65535, so the panel needs
+                // these to place them on its axis.
+                colorHistLo = liveStack.ColorHistLo,
+                colorHistHi = liveStack.ColorHistHi,
                 colorHistMin = liveStack.ColorHistMin,
                 colorHistMax = liveStack.ColorHistMax,
                 colorHistMean = liveStack.ColorHistMean,

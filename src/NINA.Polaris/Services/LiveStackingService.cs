@@ -648,9 +648,19 @@ public class LiveStackingService {
     public int[]? ColorHistogramG { get; private set; }
     public int[]? ColorHistogramB { get; private set; }
 
+    // ADU value of the first and last bucket. The bins used to span the whole
+    // 0..65535 unconditionally, which on a stacked sky is far coarser than the
+    // data: measured on a 74-frame OSC stack, 301k samples with std 124 ADU,
+    // every pixel but 236 of them landed in buckets 4 and 5 of 256. Two points
+    // draw as a hairline whatever window the panel picks, so bin over the band
+    // the pixels occupy and tell the client where that band sits.
+    public int ColorHistLo { get; private set; }
+    public int ColorHistHi { get; private set; } = 65535;
+
     /// <summary>Build the 256-bin 16-bit luminance histogram + min/max/mean/std
     /// of a planar RGB stack (subsampled on big sensors). Cheap; runs once per
-    /// integrated colour frame, off the relay's broadcast.</summary>
+    /// integrated colour frame, off the relay's broadcast. Two passes: the
+    /// first finds the band the pixels occupy, the second bins over it.</summary>
     private void ComputeColorHistogram(ushort[] rgb, int w, int h) {
         int plane = w * h;
         if (rgb.Length < plane * 3 || plane == 0) {
@@ -659,17 +669,18 @@ public class LiveStackingService {
             return;
         }
         const int NB = 256;
-        var bins = new int[NB];
-        var binsR = new int[NB];
-        var binsG = new int[NB];
-        var binsB = new int[NB];
-        int mn = 65535, mx = 0; double sum = 0, sumSq = 0; long cnt = 0;
+        const int COARSE = 1024;   // 64 ADU a bucket, enough to place the band
         int step = Math.Max(1, plane / 300_000);
+
+        // Pass 1: luminance stats, plus a coarse histogram of all three
+        // channels together, used only to locate the populated band.
+        var coarse = new int[COARSE];
+        int mn = 65535, mx = 0; double sum = 0, sumSq = 0; long cnt = 0;
         for (int i = 0; i < plane; i += step) {
             int r = rgb[i], g = rgb[plane + i], b = rgb[2 * plane + i];
-            binsR[r * (NB - 1) / 65535]++;
-            binsG[g * (NB - 1) / 65535]++;
-            binsB[b * (NB - 1) / 65535]++;
+            coarse[r * (COARSE - 1) / 65535]++;
+            coarse[g * (COARSE - 1) / 65535]++;
+            coarse[b * (COARSE - 1) / 65535]++;
             // Stats stay on luminance: they feed the MAX/AVG/MIN/STD readout,
             // which is a single number per label, not three.
             int lum = (int)(r * 0.299 + g * 0.587 + b * 0.114);
@@ -677,17 +688,78 @@ public class LiveStackingService {
             if (lum < mn) mn = lum;
             if (lum > mx) mx = lum;
             sum += lum; sumSq += (double)lum * lum; cnt++;
-            bins[lum * (NB - 1) / 65535]++;
         }
-        var mean = cnt > 0 ? sum / cnt : 0;
+        if (cnt == 0) {
+            ColorHistogram = null;
+            ColorHistogramR = ColorHistogramG = ColorHistogramB = null;
+            return;
+        }
+        var (lo, hi) = HistogramBand(coarse, 3 * cnt);
+
+        // Pass 2: the bins the panel draws, over [lo, hi]. Samples outside the
+        // band are dropped rather than clamped into the end buckets: clamping
+        // piles the star tail onto the last bin, and on a log axis that draws
+        // as a tall spike at the edge that is not structure in the image.
+        var bins = new int[NB];
+        var binsR = new int[NB];
+        var binsG = new int[NB];
+        var binsB = new int[NB];
+        int span = hi - lo;
+        for (int i = 0; i < plane; i += step) {
+            int r = rgb[i], g = rgb[plane + i], b = rgb[2 * plane + i];
+            Bin(binsR, r, lo, span, NB);
+            Bin(binsG, g, lo, span, NB);
+            Bin(binsB, b, lo, span, NB);
+            int lum = (int)(r * 0.299 + g * 0.587 + b * 0.114);
+            Bin(bins, lum, lo, span, NB);
+        }
+        var mean = sum / cnt;
         ColorHistogram = bins;
         ColorHistogramR = binsR;
         ColorHistogramG = binsG;
         ColorHistogramB = binsB;
-        ColorHistMin = cnt > 0 ? mn : 0;
+        ColorHistLo = lo;
+        ColorHistHi = hi;
+        ColorHistMin = mn;
         ColorHistMax = mx;
         ColorHistMean = mean;
-        ColorHistStd = cnt > 0 ? Math.Sqrt(Math.Max(0, sumSq / cnt - mean * mean)) : 0;
+        ColorHistStd = Math.Sqrt(Math.Max(0, sumSq / cnt - mean * mean));
+    }
+
+    /// <summary>ADU band worth drawing, from a coarse full-scale histogram:
+    /// the 0.05 to 99.95 percentile of the samples, padded, and never narrower
+    /// than one ADU per bin.</summary>
+    internal static (int Lo, int Hi) HistogramBand(int[] coarse, long total) {
+        int lo = CoarseQuantile(coarse, total, 0.0005);
+        int hi = CoarseQuantile(coarse, total, 0.9995);
+        if (hi < lo) (lo, hi) = (hi, lo);
+        int pad = Math.Max(64, (hi - lo) / 8);
+        lo = Math.Max(0, lo - pad);
+        hi = Math.Min(65535, hi + pad);
+        if (hi - lo < 255) {
+            // A flat or near-flat frame: give it a nominal width so the bins
+            // stay meaningful and nothing downstream divides by zero.
+            int mid = (lo + hi) / 2;
+            lo = Math.Max(0, Math.Min(65535 - 255, mid - 128));
+            hi = lo + 255;
+        }
+        return (lo, hi);
+    }
+
+    private static int CoarseQuantile(int[] coarse, long total, double q) {
+        long want = (long)(total * q);
+        long acc = 0;
+        for (int k = 0; k < coarse.Length; k++) {
+            acc += coarse[k];
+            if (acc >= want) return (int)((long)k * 65535 / (coarse.Length - 1));
+        }
+        return 65535;
+    }
+
+    private static void Bin(int[] bins, int v, int lo, int span, int nb) {
+        if (v < lo || v > lo + span) return;
+        int k = (int)((long)(v - lo) * (nb - 1) / span);
+        bins[k < 0 ? 0 : (k >= nb ? nb - 1 : k)]++;
     }
     /// <summary>One point on the LIVE quality timeline: the stack state
     /// right after integrating a frame. The (frame, CumulativeSnr) pair
