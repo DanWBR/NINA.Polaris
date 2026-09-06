@@ -10163,8 +10163,18 @@ function ninaApp() {
                     lo = Math.min(lo, this.histo.blackFrac - 0.02);
                 if (this.histo.whiteFrac < 0.999)
                     hi = Math.max(hi, this.histo.whiteFrac + 0.02);
+                // Degeneracy guard only. This used to demand 0.05 of full
+                // scale, 3277 ADU, which is wider than an entire stacked sky:
+                // it overrode the window above and left the curve in a corner
+                // of its own panel (measured on a 74-frame OSC stack: window
+                // 1002..1852 ADU asked for, 1002..4279 drawn). Four buckets of
+                // whatever axis the bins are on is enough to keep the maths
+                // well behaved without framing anything the data did not ask
+                // for.
+                const axis = (this.histo._binHi ?? 1) - (this.histo._binLo ?? 0);
+                const minSpan = Math.max(0.004, 4 * axis / 256);
                 this.histo.dispLo = Math.max(0, lo);
-                this.histo.dispHi = Math.min(1, Math.max(this.histo.dispLo + 0.05, hi));
+                this.histo.dispHi = Math.min(1, Math.max(this.histo.dispLo + minSpan, hi));
             } else {
                 // Zoom off means STATIC and FULL RANGE. dispHi is expressed in
                 // bin-fraction space, so when maxVal was clamped below the real
@@ -45635,7 +45645,23 @@ function ninaApp() {
                 // read .triggers + per-frame HFR / star count without
                 // a second source of truth.
                 const _wasLiveRunning = this.liveStackStatus?.isRunning;
+                // The histogram panel is repainted when a JPEG frame lands, but
+                // the bins and their ADU band ride THIS tick, so a stack update
+                // kept drawing the previous stack's window until something else
+                // forced a redraw. Pressing Auto was that something: it toggles
+                // stretchAuto and calls applyManualStretch, and twice put the
+                // toggle back where it started, so what fixed the panel was the
+                // redraw, not the auto-stretch (field report, 2026-09-06).
+                const _histoSig = (h) => h
+                    ? `${h.frameCount}|${h.colorHistLo}|${h.colorHistHi}|${h.colorHistMean}`
+                    : '';
+                const _histoChanged =
+                    _histoSig(msg.liveStack) !== _histoSig(this.liveStackStatus);
                 this.liveStackStatus = msg.liveStack;
+                if (_histoChanged && Array.isArray(msg.liveStack.colorHistogram)) {
+                    this._histoToken++;
+                    this.drawHistogram();
+                }
                 // Auto-open the quality HUD when a stack starts, so SNR / ETA /
                 // sub-exposure advice + the SNR-HFR chart are visible without
                 // hunting for the overlay toggle (they used to be gated behind
