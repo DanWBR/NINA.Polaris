@@ -10192,15 +10192,52 @@ function ninaApp() {
         // the drawn curve fills the panel whatever the distribution looks like.
         // Falls back to the old spread estimate when there are no bins yet.
         histoDataWindow() {
-            const bins = this.histo.bins;
-            const maxV = this.histo._maxVal || 65535;
-            if (!bins || bins.length < 2) {
-                return [(this.histo.min / maxV) - 0.01,
-                        (this.histo.avg + 8 * this.histo.std) / maxV + 0.02];
+            const h = this.histo;
+            const maxV = h._maxVal || 65535;
+            // Frame every curve the panel actually DRAWS. On an OSC stack that
+            // is the three per-channel arrays, and the window used to be taken
+            // from the luminance array instead. The channels of a colour stack
+            // sit on very different pedestals, so the two are not
+            // interchangeable: measured on a live NGC 7173 stack, R peaked at
+            // 4531 ADU, G at 7507 and B at 11208 while luminance sat at 7049.
+            // The window came out 6369..8045, which framed green nicely and
+            // left red's bulk off the left edge and blue off the right edge
+            // altogether, so the panel showed one green hump and a flat red
+            // line (field, 2026-09-06).
+            const sets = (h.color && h.binsR && h.binsG && h.binsB)
+                ? [h.binsR, h.binsG, h.binsB]
+                : (h.bins ? [h.bins] : []);
+            if (!sets.length || sets[0].length < 2) {
+                return [(h.min / maxV) - 0.01,
+                        (h.avg + 8 * h.std) / maxV + 0.02];
             }
+            let lo = Infinity, hi = -Infinity;
+            for (const bins of sets) {
+                const [a, b] = this._histoBulkOf(bins);
+                if (a === null) continue;
+                if (a < lo) lo = a;
+                if (b > hi) hi = b;
+            }
+            if (!(hi > lo)) return [0, 1];
+            // Pad relative to the data, not to full scale: 0.01/0.02 of
+            // 0..65535 is 655/1310 ADU, wider than a stacked sky's entire
+            // distribution, so the padding owned the axis and the curve drew
+            // as a hairline in the middle of it.
+            const wide = Math.max(1e-4, hi - lo);
+            return [lo - Math.max(0.0015, wide * 0.10),
+                    hi + Math.max(0.0030, wide * 0.20)];
+        },
+
+        // Where one bin array's bulk sits, as a fraction of full scale. The
+        // upper edge is the 99.5th percentile, not the 99.9th: a sky histogram
+        // is steep on the left with a long sparse tail on the right, and the
+        // last 0.1% of the pixels sits so far up that tail that framing on it
+        // pushed the peak into the left third of the panel. Returns
+        // [null, null] for an empty array.
+        _histoBulkOf(bins) {
             let total = 0;
             for (let i = 0; i < bins.length; i++) total += bins[i];
-            if (!(total > 0)) return [0, 1];
+            if (!(total > 0)) return [null, null];
             const span = bins.length - 1;
             const at = (q) => {
                 const want = total * q;
@@ -10211,22 +10248,7 @@ function ninaApp() {
                 }
                 return this._histoBinFrac(1);
             };
-            // The right edge is the 99.5th percentile, not the 99.9th. A sky
-            // histogram is steep on the left and has a long sparse tail on the
-            // right, and the last 0.1% of the pixels sits so far up that tail
-            // that framing on it pushed the peak into the left third of the
-            // panel and left the rest empty. Measured on a live NGC 7582 stack
-            // with the tail weighted x8, which is what a two-frame stack looks
-            // like: P99.9 leaves the bulk covering 11 to 51% of the width,
-            // P99.5 covers 13 to 82%, and on a settled stack the two agree.
-            const lo = at(0.001), hi = at(0.995);
-            // Pad relative to the data, not to full scale: 0.01/0.02 of
-            // 0..65535 is 655/1310 ADU, wider than a stacked sky's entire
-            // distribution, so the padding owned the axis and the curve drew
-            // as a hairline in the middle of it.
-            const wide = Math.max(1e-4, hi - lo);
-            return [lo - Math.max(0.0015, wide * 0.10),
-                    hi + Math.max(0.0030, wide * 0.20)];
+            return [at(0.001), at(0.995)];
         },
 
         // Position within the bin array (0..1) to a fraction of full scale.
