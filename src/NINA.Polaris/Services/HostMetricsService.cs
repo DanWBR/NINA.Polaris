@@ -27,6 +27,20 @@ using Microsoft.Extensions.Hosting;
 
 namespace NINA.Polaris.Services;
 
+// macOS is not supported by the package provider; HostMetricsService still
+// needs a monitor so the shared service graph can start for development.
+internal sealed class MacResourceMonitor : IResourceMonitor {
+    public ResourceUtilization GetUtilization(TimeSpan window) =>
+        new(
+            cpuUsedPercentage: 0,
+            memoryUsedInBytes: 0,
+            systemResources: new SystemResources(
+                guaranteedCpuUnits: 0,
+                maximumCpuUnits: 0,
+                guaranteedMemoryInBytes: 0,
+                maximumMemoryInBytes: 0));
+}
+
 /// <summary>
 /// Background sampler for host-level CPU + memory metrics. Powers the
 /// activity bar at the bottom of the UI. Samples every 2 seconds

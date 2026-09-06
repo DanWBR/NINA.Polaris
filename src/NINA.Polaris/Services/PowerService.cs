@@ -106,6 +106,16 @@ public class PowerService {
             : "Restarting Polaris…");
     }
 
+    /// <summary>Stop only the Polaris process after the response is sent.</summary>
+    public PowerActionResult ScheduleStop() {
+        _ = Task.Run(async () => {
+            await Task.Delay(700);
+            _logger.LogInformation("Stopping Polaris from the web interface");
+            _lifetime.StopApplication();
+        });
+        return PowerActionResult.Okay("Stopping Polaris…");
+    }
+
     private async Task DoRestartAsync() {
         if (UnderSystemd) {
             // On success systemctl SIGTERMs us before this returns; if we

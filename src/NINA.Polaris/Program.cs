@@ -13,11 +13,13 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using System.Globalization;
+using System.Net.Sockets;
 using NINA.Polaris.Endpoints;
 using NINA.Polaris.Middleware;
 using NINA.Polaris.Services;
 using NINA.Polaris.WebSocket;
 using NINA.INDI.Client;
+using Microsoft.Extensions.Diagnostics.ResourceMonitoring;
 using Yarp.ReverseProxy.Forwarder;
 
 // Force English exception messages + invariant number/date formatting
@@ -86,6 +88,16 @@ if (args.Length >= 1
 }
 
 var builder = WebApplication.CreateBuilder(args);
+
+// macOS commonly reserves port 5000 for AirPlay Receiver. Load the OS-specific
+// override before reading listener settings so published macOS builds use the
+// safe ports from appsettings.MacOS.json without changing Linux/Windows.
+if (OperatingSystem.IsMacOS()) {
+    builder.Configuration.AddJsonFile(
+        "appsettings.MacOS.json",
+        optional: true,
+        reloadOnChange: true);
+}
 
 // GX-10: HTTPS self-signed cert. Constructed eagerly here (not via DI)
 // because Kestrel's ConfigureKestrel callback needs the cert *before*
@@ -618,8 +630,17 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Tls.DuckDnsClient>();
 // Linux). HostMetricsService loops in the background, exposes the
 // latest snapshot via the Latest property which StatusStreamHandler
 // folds into the per-second WS broadcast.
-builder.Services.AddResourceMonitoring();
+#pragma warning disable EXTOBS0001
+if (!OperatingSystem.IsMacOS())
+{
+    builder.Services.AddResourceMonitoring();
+}
+else
+{
+    builder.Services.AddSingleton<IResourceMonitor, MacResourceMonitor>();
+}
 builder.Services.AddSingleton<HostMetricsService>();
+#pragma warning restore EXTOBS0001
 // BENCH: on-demand hardware benchmark (Settings -> Hardware Benchmark).
 // Not a hosted service; runs only when the user clicks Run. The results
 // store persists run history under {ProfileService.DataDir}/benchmarks/.
@@ -1542,7 +1563,29 @@ if (!httpsEnabled && !httpEnabled) {
     startupLogger.LogWarning("Both HTTP and HTTPS are disabled, Polaris will not accept any requests.");
 }
 
-app.Run();
+static bool IsAddressInUse(Exception exception) {
+    for (var current = exception; current is not null; current = current.InnerException) {
+        if (current is SocketException { SocketErrorCode: SocketError.AddressAlreadyInUse }) {
+            return true;
+        }
+    }
+
+    return exception.Message.Contains("address already in use", StringComparison.OrdinalIgnoreCase);
+}
+
+try {
+    app.Run();
+} catch (Exception ex) when (IsAddressInUse(ex)) {
+    Console.Error.WriteLine("[STARTUP] Polaris could not start because a configured server port is already in use.");
+    if (httpsEnabled) {
+        Console.Error.WriteLine($"[STARTUP] HTTPS port: {httpsPort} | check: lsof -nP -iTCP:{httpsPort} -sTCP:LISTEN");
+    }
+    if (httpEnabled) {
+        Console.Error.WriteLine($"[STARTUP] HTTP port: {httpPort} | check: lsof -nP -iTCP:{httpPort} -sTCP:LISTEN");
+    }
+    Console.Error.WriteLine("[STARTUP] Stop the existing process or change Server:Https:Port / Server:Http:Port in the active appsettings file.");
+    return 2;
+}
 
 // Reached when the host shuts down cleanly (Ctrl-C, SIGTERM,
 // IHostApplicationLifetime.StopApplication). Returning 0 here is

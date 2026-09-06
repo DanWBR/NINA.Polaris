@@ -15301,23 +15301,26 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <span x-show="power.restarting">Restarting…</span>
                         </button>
                         <button class="btn btn-sm btn-danger"
+                            @click="stopPolaris()"
+                            :disabled="power.stopping">
+                            <span x-show="!power.stopping">Stop Polaris</span>
+                            <span x-show="power.stopping">Stopping…</span>
+                        </button>
+                        <button class="btn btn-sm btn-danger"
+                            x-show="power.canReboot" x-cloak
                                 @click="rebootDevice()"
                                 :disabled="!power.canReboot || power.rebooting">
                             <span x-show="!power.rebooting">⟳ Reboot device</span>
                             <span x-show="power.rebooting">Rebooting…</span>
                         </button>
                         <button class="btn btn-sm btn-danger"
+                            x-show="power.canShutdown" x-cloak
                                 @click="shutdownDevice()"
                                 :disabled="!power.canShutdown || power.shuttingDown">
                             <span x-show="!power.shuttingDown"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-0.14em"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg> Shut down device</span>
                             <span x-show="power.shuttingDown">Shutting down…</span>
                         </button>
                     </div>
-                    <p class="text-muted" x-show="!power.canReboot && power.loaded"
-                       style="font-size:11px; margin-top:8px">
-                        ⚠ Device reboot is not available on this platform.
-                    </p>
-
                     <!-- Windows boot auto-start. On Linux/SBC this is handled
                          by the systemd unit the installer enables, so we only
                          show the toggle on Windows. -->
@@ -18006,13 +18009,24 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
     <div class="connection-banner"
          :class="{ 'is-slow': !connectionLost && link.state !== 'offline' }"
          x-show="connectionLost || link.alarm" x-transition x-cloak>
-        <span x-show="connectionLost || link.state === 'offline'">
+        <span x-show="power.stopping">
+            Polaris server stopped. Start Polaris again from the terminal to reconnect.
+        </span>
+        <span x-show="!power.stopping && (connectionLost || link.state === 'offline')">
             Connection to server lost. Reconnecting...
         </span>
         <span x-show="!connectionLost && link.state === 'slow'">
             The network to the host is slow right now.
         </span>
-        <span class="connection-banner-why">
+        <span class="connection-banner-why" x-show="power.stopping">
+            Polaris was stopped from the web interface. Start it again from the
+            terminal when you want to reconnect.
+        </span>
+        <span class="connection-banner-why" x-show="connectionLost && !power.stopping">
+            Polaris may be down. If it does not reconnect, start the server again
+            from the terminal.
+        </span>
+        <span class="connection-banner-why" x-show="!connectionLost && !power.stopping">
             The host keeps running the session on its own. This is the link
             between this browser and the host, not your equipment.
         </span>
@@ -20603,8 +20617,9 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <div class="bs-cardt">Power</div>
                 <div class="bs-cbtns">
                     <button class="bs-cbtn" :disabled="power.restarting" @click="restartPolaris()" x-text="power.restarting ? 'Restarting…' : '🔄 Restart Polaris'"></button>
-                    <button class="bs-cbtn danger" :disabled="!power.canReboot || power.rebooting" @click="rebootDevice()" x-text="power.rebooting ? 'Rebooting…' : '⟳ Reboot'"></button>
-                    <button class="bs-cbtn danger" :disabled="!power.canShutdown || power.shuttingDown" @click="shutdownDevice()" x-text="power.shuttingDown ? 'Shutting down…' : '⏻ Shut down'"></button>
+                    <button class="bs-cbtn danger" :disabled="power.stopping" @click="stopPolaris()" x-text="power.stopping ? 'Stopping…' : 'Stop Polaris'"></button>
+                    <button class="bs-cbtn danger" x-show="power.canReboot" x-cloak :disabled="power.rebooting" @click="rebootDevice()" x-text="power.rebooting ? 'Rebooting…' : '⟳ Reboot'"></button>
+                    <button class="bs-cbtn danger" x-show="power.canShutdown" x-cloak :disabled="power.shuttingDown" @click="shutdownDevice()" x-text="power.shuttingDown ? 'Shutting down…' : '⏻ Shut down'"></button>
                 </div>
                 <label class="bs-ccheck" x-show="power.loaded && power.platform==='windows'" x-cloak><input type="checkbox" :checked="power.autoStartEnabled" :disabled="power.autoStartBusy" @change="toggleAutoStart()"><span>Start at Windows boot</span></label>
             </div>
