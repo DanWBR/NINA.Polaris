@@ -4139,5 +4139,7 @@
   "Channel balance for a colour stack. Auto measures the object and pulls it toward neutral; manual applies the gains you set, with green fixed at 1.": "Channel balance for a colour stack. Auto measures the object and pulls it toward neutral; manual applies the gains you set, with green fixed at 1.",
   "Camera black level. Lower it until the sky is just above zero: every count of offset is range the planet cannot use.": "Camera black level. Lower it until the sky is just above zero: every count of offset is range the planet cannot use.",
   "Offset -1 (hold to repeat)": "Offset -1 (hold to repeat)",
-  "Offset +1 (hold to repeat)": "Offset +1 (hold to repeat)"
+  "Offset +1 (hold to repeat)": "Offset +1 (hold to repeat)",
+  "No calibration for the gear fitted now.": "No calibration for the gear fitted now.",
+  "Run a calibration, or use Load file above to bring one back from a saved file.": "Run a calibration, or use Load file above to bring one back from a saved file."
 }

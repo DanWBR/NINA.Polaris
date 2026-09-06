@@ -5470,8 +5470,8 @@
                     </button>
                     <button class="btn btn-sm" style="width:100%;margin-bottom:10px"
                             @click="showCalReview = true; $nextTick(() => drawCalReviewPlot())"
-                            :disabled="!guider.calDetails"
-                            title="Review the last calibration (rates, angles, plot)">
+                            :disabled="!guider.connected"
+                            title="Review the last calibration (rates, angles, plot), or load one from a file when there is none">
                         ⊹ Calibration details
                     </button>
                     <div class="cal-corr-grid" style="margin-top:10px">
@@ -5657,7 +5657,7 @@
                                             title="Forget the saved calibration for this rig">Clear</button>
                                     <button class="btn btn-sm" x-show="guider.backend === 'native'"
                                             @click="exportGuideCalibration()"
-                                            :disabled="guider.calibrating"
+                                            :disabled="!guider.calDetails || guider.calibrating"
                                             title="Save this calibration to a file, so you can reload it instead of recalibrating when it is lost">Save file</button>
                                     <button class="btn btn-sm" x-show="guider.backend === 'native'"
                                             @click="importGuideCalibration()"
@@ -5665,6 +5665,15 @@
                                             title="Load a calibration from a saved file and use it for the gear fitted now">Load file</button>
                                     <button class="btn btn-sm" @click="showCalReview = false">✕</button>
                                 </span>
+                            </div>
+                            <!-- No calibration: the panel still opens, because
+                                 Load file lives in here and that is exactly what
+                                 recovers one. -->
+                            <div class="cal-review-body" x-show="!guider.calDetails" x-cloak>
+                                <p class="text-muted" style="padding:14px 4px; line-height:1.5">
+                                    <span x-text="$t('No calibration for the gear fitted now.')"></span>
+                                    <span x-text="$t('Run a calibration, or use Load file above to bring one back from a saved file.')"></span>
+                                </p>
                             </div>
                             <div class="cal-review-body" x-show="guider.calDetails">
                                 <canvas x-ref="calReviewPlot" class="cal-review-plot"></canvas>
@@ -23443,7 +23452,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260906-histo"></script>
+    <script src="/js/app.js?v=20260906-cal"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
