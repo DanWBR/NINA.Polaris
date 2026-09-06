@@ -10241,7 +10241,15 @@ function ninaApp() {
                 }
                 return this._histoBinFrac(1);
             };
-            const lo = at(0.001), hi = at(0.999);
+            // The right edge is the 99.5th percentile, not the 99.9th. A sky
+            // histogram is steep on the left and has a long sparse tail on the
+            // right, and the last 0.1% of the pixels sits so far up that tail
+            // that framing on it pushed the peak into the left third of the
+            // panel and left the rest empty. Measured on a live NGC 7582 stack
+            // with the tail weighted x8, which is what a two-frame stack looks
+            // like: P99.9 leaves the bulk covering 11 to 51% of the width,
+            // P99.5 covers 13 to 82%, and on a settled stack the two agree.
+            const lo = at(0.001), hi = at(0.995);
             // Pad relative to the data, not to full scale: 0.01/0.02 of
             // 0..65535 is 655/1310 ADU, wider than a stacked sky's entire
             // distribution, so the padding owned the axis and the curve drew
