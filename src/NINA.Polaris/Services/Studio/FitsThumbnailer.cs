@@ -356,13 +356,17 @@ public static class FitsThumbnailer {
         // backing storage, then resize. JPEG encoders are flaky with
         // Gray8 input, so the final step is a round-trip via Rgba8888.
         using var gray = new SKBitmap(width, height, SKColorType.Gray8, SKAlphaType.Opaque);
+        // The copy runs inside the pin: SetPixels keeps the bare pointer, so a
+        // collection between the end of fixed{} and Copy leaves Skia reading
+        // freed address space (SIGSEGV, 2026-09-07).
+        SKBitmap grayCopyTmp;
         unsafe {
             fixed (byte* p = stretched) {
                 gray.SetPixels((IntPtr)p);
+                grayCopyTmp = gray.Copy();
             }
         }
-
-        using var grayCopy = gray.Copy();
+        using var grayCopy = grayCopyTmp;
         double scale = (double)maxDim / Math.Max(grayCopy.Width, grayCopy.Height);
         // Caller passes maxDim=int.MaxValue (or any larger-than-the-source
         // value) to skip downsampling, useful for full-res preview.
@@ -400,10 +404,16 @@ public static class FitsThumbnailer {
     /// independently so a stacked OSC integration looks natural
     /// (per-channel MTF is what most viewers do for FITS RGB cubes).
     /// </summary>
+    /// <param name="captured">Optional sink for the per-channel parameters
+    /// this render actually used. The LIVE histogram needs them: it draws the
+    /// 16-bit data while its handles drive a LUT over this 8-bit JPEG, and
+    /// without the mapping between the two a handle cannot be placed on the
+    /// axis it is drawn against.</param>
     public static byte[] RenderJpegFromRgbPlanes(ushort[] pixels, int width, int height,
                                                  int bitDepth, int maxDim = 256, int quality = 85,
                                                  NINA.Image.ImageAnalysis.AutoStretch.StretchParams[]? overrideParams = null,
-                                                 bool asinh = false) {
+                                                 bool asinh = false,
+                                                 List<NINA.Image.ImageAnalysis.AutoStretch.StretchParams>? captured = null) {
         int planeSize = width * height;
         if (pixels.Length < planeSize * 3)
             // Defensive, caller mis-claimed colour. Fall back to mono
@@ -448,9 +458,19 @@ public static class FitsThumbnailer {
             bs = NINA.Image.ImageAnalysis.AutoStretch.ApplyManual(b, width, height,
                 ps[2].Black, ps[2].Mid, ps[2].White, bitDepth);
         } else {
-            rs = NINA.Image.ImageAnalysis.AutoStretch.Apply(r, width, height, bitDepth);
-            gs = NINA.Image.ImageAnalysis.AutoStretch.Apply(g, width, height, bitDepth);
-            bs = NINA.Image.ImageAnalysis.AutoStretch.Apply(b, width, height, bitDepth);
+            // Compute then apply, rather than AutoStretch.Apply, so the three
+            // parameter sets can be handed back: the client needs them to put
+            // its handles on the ADU axis.
+            var pr = NINA.Image.ImageAnalysis.AutoStretch.ComputeAutoStretchParams(r, width, height, bitDepth);
+            var pg = NINA.Image.ImageAnalysis.AutoStretch.ComputeAutoStretchParams(g, width, height, bitDepth);
+            var pb = NINA.Image.ImageAnalysis.AutoStretch.ComputeAutoStretchParams(b, width, height, bitDepth);
+            rs = NINA.Image.ImageAnalysis.AutoStretch.ApplyManual(r, width, height, pr.Black, pr.Mid, pr.White, bitDepth);
+            gs = NINA.Image.ImageAnalysis.AutoStretch.ApplyManual(g, width, height, pg.Black, pg.Mid, pg.White, bitDepth);
+            bs = NINA.Image.ImageAnalysis.AutoStretch.ApplyManual(b, width, height, pb.Black, pb.Mid, pb.White, bitDepth);
+            captured?.AddRange(new[] { pr, pg, pb });
+        }
+        if (captured != null && captured.Count == 0 && overrideParams is { Length: >= 3 }) {
+            captured.AddRange(overrideParams[..3]);
         }
 
         // Interleave into RGBA8888 for Skia. Alpha is opaque.
@@ -464,12 +484,14 @@ public static class FitsThumbnailer {
         }
 
         using var color = new SKBitmap(width, height, SKColorType.Rgba8888, SKAlphaType.Opaque);
+        SKBitmap colorCopyTmp;
         unsafe {
             fixed (byte* p = rgba) {
                 color.SetPixels((IntPtr)p);
+                colorCopyTmp = color.Copy();   // own the storage, still pinned
             }
         }
-        using var colorCopy = color.Copy();   // own the backing storage
+        using var colorCopy = colorCopyTmp;
 
         double scale = (double)maxDim / Math.Max(colorCopy.Width, colorCopy.Height);
         if (scale > 1) scale = 1;

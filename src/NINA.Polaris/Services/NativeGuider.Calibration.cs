@@ -235,8 +235,19 @@ public sealed partial class NativeGuider {
             d = list.LastOrDefault(c =>
                 string.Equals(c.Key, key, StringComparison.OrdinalIgnoreCase));
             // Keyed entries exist but none match the current equipment -> the
-            // gear changed; do NOT restore a stale calibration.
-            if (d == null) return false;
+            // gear changed; do NOT restore a stale calibration. Say so instead of
+            // leaving the operator to discover an empty calibration on their own:
+            // the saved one is still there, it just does not belong to this gear
+            // (field report 2026-09-05, "I lost the calibration").
+            if (d == null) {
+                LastRestoreMismatch =
+                    $"{list.Count} saved calibration(s) for this rig, none for the gear fitted now. "
+                    + "Recalibrate, or load one from a file in Calibration details.";
+                _logger.LogInformation(
+                    "Native guide: no stored calibration matches. Wanted key '{Key}'; stored: {Stored}",
+                    key, string.Join(" | ", list.Select(c => c.Key)));
+                return false;
+            }
         } else {
             // No keyed entries (pre-migration rig): fall back to the legacy slot.
             d = Rig.NativeCalibration;

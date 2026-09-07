@@ -1141,8 +1141,8 @@
                              image as a semi-transparent panel instead of
                              chopping the canvas in half. Default off so
                              the stacked image gets the full pane. -->
-                        <button class="btn btn-sm" @click="liveOverlayVisible = !liveOverlayVisible"
-                                :class="liveOverlayVisible ? 'btn-active' : ''"
+                        <button class="btn btn-sm" @click="toggleLiveHud()"
+                                :class="liveHudShown() ? 'btn-active' : ''"
                                 title="Toggle image history + HFR chart overlay">⊟</button>
                         <!-- PANZOOM: zoom level indicator + reset.
                              Only visible when zoomed > 1x. Tap the chip
@@ -1172,14 +1172,14 @@
                          estate. Hidden by default; toggled via the ⊟
                          button in preview-overlay-controls above. -->
                     <div class="live-history-overlay"
-                         x-show="!liveHudDismissed && ((liveOverlayVisible && imageHistory.length > 0) || liveStackStatus?.isRunning)"
+                         x-show="liveHudShown()"
                          x-cloak>
                         <div class="live-history-overlay-header">
                             <span x-show="imageHistory.length > 0">Image history (<span x-text="imageHistory.length"></span>)</span>
                             <span x-show="imageHistory.length === 0">Live stack quality</span>
                             <button class="btn btn-sm" x-show="imageHistory.length > 0" @click="clearImageHistory()">Clear</button>
-                            <button class="btn btn-sm" @click="liveOverlayVisible = false; liveHudDismissed = true"
-                                    title="Hide overlay">✕</button>
+                            <button class="btn btn-sm" @click="toggleLiveHud()"
+                                    title="Hide overlay (the ⊟ button in the toolbar brings it back)">✕</button>
                         </div>
 
                         <!-- SNR-7: stack quality + ETA-to-target widget.
@@ -3966,6 +3966,33 @@
                                         @pointercancel="stopWheelRepeat()"
                                         title="Gain +1 (hold to repeat)">+</button>
                             </div>
+                            <!-- Offset (the camera's black level), same wheel as
+                                 Gain. Native-SDK cameras only: the value is read
+                                 from and written to the control list the config
+                                 panel drives, so it persists across reconnects,
+                                 and the column hides on a driver that publishes
+                                 no controls. Field session 2026-09-05: an offset
+                                 near 20% of full scale left Saturn only 2% of the
+                                 range to live in. -->
+                            <div class="wheel-col" x-show="video.offsetCtl.available">
+                                <button class="btn btn-sm wheel-nudge" style="touch-action:none"
+                                        :disabled="videoRecording.recording"
+                                        @pointerdown.prevent="startWheelRepeat('offset', -1)"
+                                        @pointerup="stopWheelRepeat()" @pointerleave="stopWheelRepeat()"
+                                        @pointercancel="stopWheelRepeat()"
+                                        title="Offset -1 (hold to repeat)">&minus;</button>
+                                <div data-wheel-picker
+                                     data-label="Offset"
+                                     data-min="0" data-max="100" data-step="1"
+                                     data-bind="video.offset" data-scale="1"
+                                     :data-disabled="videoRecording.recording"></div>
+                                <button class="btn btn-sm wheel-nudge" style="touch-action:none"
+                                        :disabled="videoRecording.recording"
+                                        @pointerdown.prevent="startWheelRepeat('offset', 1)"
+                                        @pointerup="stopWheelRepeat()" @pointerleave="stopWheelRepeat()"
+                                        @pointercancel="stopWheelRepeat()"
+                                        title="Offset +1 (hold to repeat)">+</button>
+                            </div>
                         </div>
 
                         <!-- Focus motor: its own collapsible group instead of
@@ -4561,6 +4588,29 @@
                         <label :title="$t('Best frames averaged into the reference the mesh is built on.')">Reference
                             <input type="number" x-model.number="video.ap.reference" min="1" max="100" step="1" class="input-sm" style="width:58px"
                                    :disabled="!video.ap.enabled || (videoStack && !videoStack?.done)"> %
+                        </label>
+                        <label :title="$t('Channel balance for a colour stack. Auto measures the object and pulls it toward neutral; manual applies the gains you set, with green fixed at 1.')">White balance
+                            <select x-model="video.stackWb" class="input-sm" style="width:96px"
+                                    :disabled="videoStack && !videoStack?.done">
+                                <option value="off">Off</option>
+                                <option value="auto">Auto</option>
+                                <option value="manual">Manual</option>
+                            </select>
+                        </label>
+                        <label x-show="video.stackWb === 'manual'">R gain
+                            <input type="number" x-model.number="video.stackWbR" min="0.1" max="10" step="0.05"
+                                   class="input-sm" style="width:64px"
+                                   :disabled="videoStack && !videoStack?.done">
+                        </label>
+                        <label x-show="video.stackWb === 'manual'">B gain
+                            <input type="number" x-model.number="video.stackWbB" min="0.1" max="10" step="0.05"
+                                   class="input-sm" style="width:64px"
+                                   :disabled="videoStack && !videoStack?.done">
+                        </label>
+                        <label style="display:flex; align-items:center; gap:6px"
+                               :title="$t('Subtract the camera black level and rescale the stack to the full range. Off writes the raw stacked levels, which usually look blown once stretched.')">
+                            <input type="checkbox" x-model="video.normalizeLevels" :disabled="videoStack && !videoStack?.done">
+                            Normalize levels
                         </label>
                         <label style="display:flex; align-items:center; gap:6px"
                                :title="$t('Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only.')">
@@ -5236,8 +5286,8 @@
                     </button>
                     <button class="btn btn-sm" style="width:100%;margin-bottom:10px"
                             @click="showCalReview = true; $nextTick(() => drawCalReviewPlot())"
-                            :disabled="!guider.calDetails"
-                            title="Review the last calibration (rates, angles, plot)">
+                            :disabled="!guider.connected"
+                            title="Review the last calibration (rates, angles, plot), or load one from a file when there is none">
                         ⊹ Calibration details
                     </button>
                     <div class="cal-corr-grid" style="margin-top:10px">
@@ -5423,7 +5473,7 @@
                                             title="Forget the saved calibration for this rig">Clear</button>
                                     <button class="btn btn-sm" x-show="guider.backend === 'native'"
                                             @click="exportGuideCalibration()"
-                                            :disabled="guider.calibrating"
+                                            :disabled="!guider.calDetails || guider.calibrating"
                                             title="Save this calibration to a file, so you can reload it instead of recalibrating when it is lost">Save file</button>
                                     <button class="btn btn-sm" x-show="guider.backend === 'native'"
                                             @click="importGuideCalibration()"
@@ -5431,6 +5481,15 @@
                                             title="Load a calibration from a saved file and use it for the gear fitted now">Load file</button>
                                     <button class="btn btn-sm" @click="showCalReview = false">✕</button>
                                 </span>
+                            </div>
+                            <!-- No calibration: the panel still opens, because
+                                 Load file lives in here and that is exactly what
+                                 recovers one. -->
+                            <div class="cal-review-body" x-show="!guider.calDetails" x-cloak>
+                                <p class="text-muted" style="padding:14px 4px; line-height:1.5">
+                                    <span x-text="$t('No calibration for the gear fitted now.')"></span>
+                                    <span x-text="$t('Run a calibration, or use Load file above to bring one back from a saved file.')"></span>
+                                </p>
                             </div>
                             <div class="cal-review-body" x-show="guider.calDetails">
                                 <canvas x-ref="calReviewPlot" class="cal-review-plot"></canvas>
@@ -5644,9 +5703,12 @@
                         <span class="text-muted" x-show="guideFrameMB() >= 4"
                               x-text="'~' + guideFrameMB() + ' MB/frame'"></span>
                     </label>
-                    <button class="btn btn-sm" @click="guiderLoop()" :disabled="guider.looping || guider.calibrating">Loop</button>
-                    <button class="btn btn-sm btn-primary" @click="guiderStart()" :disabled="guider.guiding || guider.calibrating">Start Guiding</button>
-                    <button class="btn btn-sm" @click="guiderFindStar()" :disabled="guider.guiding || guider.calibrating">Auto-select Star</button>
+                    <!-- Button order is the workflow: Loop first, and the rest
+                         only light up once there is something to act on. See
+                         guideCanLoop/guideCanStart/guideCanStop in app.js. -->
+                    <button class="btn btn-sm" @click="guiderLoop()" :disabled="!guideCanLoop()">Loop</button>
+                    <button class="btn btn-sm btn-primary" @click="guiderStart()" :disabled="!guideCanStart()">Start Guiding</button>
+                    <button class="btn btn-sm" @click="guiderFindStar()" :disabled="!guideCanAutoSelect()">Auto-select Star</button>
                     <!-- Activity phase: what the guider is doing right now, so
                          Loop / Auto-select aren't a silent wait on the guide
                          frame. Only shows while a phase is set (native backend). -->
@@ -5659,8 +5721,9 @@
                     </span>
                     <button class="btn btn-sm" @click="guiderPause()" x-show="guider.guiding && !guider.paused">Pause</button>
                     <button class="btn btn-sm" @click="guiderResume()" x-show="guider.paused">Resume</button>
-                    <button class="btn btn-sm btn-danger" @click="guiderStop()">Stop</button>
+                    <button class="btn btn-sm btn-danger" @click="guiderStop()" :disabled="!guideCanStop()">Stop</button>
                     <button class="btn btn-sm" :class="guideOverlay.on ? 'btn-active' : ''"
+                            :disabled="!guideCanOverlay()"
                             @click="toggleGuideOverlay()"
                             title="Floating always-on guiding graph: draggable &amp; resizable, visible from any tab">Overlay</button>
                     <!-- Dither/settle knobs moved to the side panel's Status
@@ -6624,7 +6687,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     <span class="text-muted" style="font-size:11px">Cooler</span>
                                     <label class="equip-temp-label">
                                         Target
-                                        <input type="number" x-model.number="equipCoolerTarget" step="1" min="-40" max="30" class="input-sm">
+                                        <input type="number" x-model.number="equipCoolerTarget" step="1" min="-40" max="30" class="input-sm"
+                                               @change="persistCoolerTarget()">
                                         <span>&deg;C</span>
                                     </label>
                                     <button class="btn btn-sm" @click="setCooler(true, equipCoolerTarget)">Set</button>
@@ -20650,11 +20714,15 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <!-- Guide controls -->
                 <template x-if="basicScreen==='guide'">
                     <div class="bs-gcol">
-                        <button class="bs-gbtn" @click="guiderLoop()" :disabled="guider.looping || guider.calibrating"><span class="bs-big">&#8635;</span>Loop</button>
-                        <button class="bs-gmain" :class="(guider.guiding||guider.calibrating) ? 'stop' : ''"
-                                @click="(guider.guiding||guider.calibrating) ? guiderStop() : guiderStart()"
-                                x-text="(guider.guiding||guider.calibrating) ? 'Stop' : 'Guide'"></button>
-                        <button class="bs-gbtn" @click="guiderFindStar()" :disabled="guider.guiding || guider.calibrating"><span class="bs-big">&#9737;</span>Auto star</button>
+                        <button class="bs-gbtn" @click="guiderLoop()" :disabled="!guideCanLoop()"><span class="bs-big">&#8635;</span>Loop</button>
+                        <!-- One big button: Guide when there is a frame to start
+                             on, Stop for anything already running (a session, a
+                             calibration, or a bare loop with no frame yet). -->
+                        <button class="bs-gmain" :class="!guideCanStart() && guideCanStop() ? 'stop' : ''"
+                                :disabled="!guideCanStart() && !guideCanStop()"
+                                @click="guideCanStart() ? guiderStart() : guiderStop()"
+                                x-text="guideCanStart() ? 'Guide' : 'Stop'"></button>
+                        <button class="bs-gbtn" @click="guiderFindStar()" :disabled="!guideCanAutoSelect()"><span class="bs-big">&#9737;</span>Auto star</button>
                         <button class="bs-gbtn" @click="guiderDither()" :disabled="!guider.guiding"><span class="bs-big">&#8942;</span>Dither</button>
                         <button class="bs-gbtn" @click="phd2SmartCalibrate()" :disabled="guider.calibrating"><span class="bs-big">&#8853;</span>Calibrate</button>
                     </div>
@@ -21241,7 +21309,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     <p class="hint" style="margin-top:6px;font-size:11px">
                         RA (red) and Dec (blue) raw error in <span x-text="phd2Viewer.unit"></span>; the shaded
                         bands are dither/settle frames (excluded from the RMS). Pixel scale
-                        <span x-text="phd2Viewer.pixelScale ? phd2Viewer.pixelScale.toFixed(2)+'\"/px' : 'unknown (shown in px)'"></span>.
+                        <span x-text="phd2Viewer.pixelScale ? phd2Viewer.pixelScale.toFixed(2)+'&quot;/px' : 'unknown (shown in px)'"></span>.
                     </p>
                 </div>
             </template>
@@ -21952,7 +22020,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                                 <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary);">
                                     <span>Target</span>
                                     <input type="number" x-model.number="equipCoolerTarget"
-                                           step="1" min="-40" max="30" class="equip-select" style="width:80px;">
+                                           step="1" min="-40" max="30" class="equip-select" style="width:80px;"
+                                           @change="persistCoolerTarget()">
                                     <span>&deg;C</span>
                                 </label>
                             </div>
@@ -23157,7 +23226,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260904-planetap2"></script>
+    <script src="/js/app.js?v=20260907-histohandles"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

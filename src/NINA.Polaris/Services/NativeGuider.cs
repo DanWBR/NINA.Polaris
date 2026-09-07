@@ -88,7 +88,18 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     // CHANGES relative to this baseline while guiding — it must never mirror a
     // freshly measured calibration, which is already ground truth for the
     // current side, just because the side stamped at calibration time is stale.
+    /// <summary>Set when a restore was refused because the stored calibrations
+     /// belong to different gear. Surfaced once on connect so "the calibration is
+     /// gone" reads as what it is: still saved, just not for this equipment.</summary>
+    public string? LastRestoreMismatch { get; private set; }
+
     private PierSide _loopPierBaseline = PierSide.pierUnknown;
+    /// <summary>True while the mount is slewing under a guiding session, so the
+    /// end of the slew can be detected on the frame after it stops.</summary>
+    private bool _slewSeen;
+    /// <summary>Settle dwell after the mount reports the slew finished, before
+    /// a star is picked: the mount is still ringing down at that moment.</summary>
+    private const int SlewSettleMs = 2000;
     // Human-readable calibration step, surfaced to the GUIDE UI so the user
     // sees what's happening (ASIAIR-style "Dec (south) step 4, dist 12.3 px").
     private volatile string? _calProgress;
@@ -165,6 +176,16 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
 
     public bool IsConnected { get; private set; }
     public string AppState { get; private set; } = "Stopped";
+    /// <summary>A guiding session is running: the steady state, plus the
+    /// transients it passes through (star lost, mount slewing) that must not
+    /// read as "stopped" to the UI or to a caller waiting on the guider.</summary>
+    public bool IsGuidingSession => IsSessionState(AppState);
+
+    /// <summary>The session-state list itself, as a pure function so the UI
+    /// gating contract can be tested without standing up a guider.</summary>
+    public static bool IsSessionState(string? appState) =>
+        appState is "Guiding" or "LostLock" or "Slewing" or "Paused";
+
     public bool IsGuiding => AppState == "Guiding";
     public bool IsCalibrating => AppState == "Calibrating";
     public string? CalibrationProgress => _calProgress;
@@ -330,8 +351,14 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
         SetAppState("Stopped");
         // Auto-restore the last saved calibration for this rig so a fresh session
         // can guide without recalibrating (PHD2-style restore).
-        if (!_calibration.IsValid && TryRestoreCalibration())
-            RaiseAlert("Restored last calibration for this rig. Recalibrate if the setup changed.");
+        LastRestoreMismatch = null;
+        if (!_calibration.IsValid && TryRestoreCalibration()) {
+            // Information, not a fault: it reads as an error in the GUIDE tab
+            // otherwise, which is what the operator sees first on connect.
+            RaiseAlert("Restored last calibration for this rig. Recalibrate if the setup changed.", "info");
+        } else if (LastRestoreMismatch != null) {
+            RaiseAlert(LastRestoreMismatch, "info");
+        }
         _logger.LogInformation(
             "Native guider connected: cam={Cam}, pixelScale={Scale:F2} arcsec/px",
             cam.DeviceName, PixelScale);

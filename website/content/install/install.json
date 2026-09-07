@@ -59,7 +59,7 @@
         "host": "Mac (Apple Silicon / Intel)",
         "ram": "4+ GB",
         "status": "Needs testing",
-        "notes": "Self-contained builds ship since 0.98.66. Equipment is Alpaca, INDI and the native camera SDKs; ASCOM is Windows-only, and the Linux extras (WiFi setup, power, host clock) are not there. Nobody has run it on a Mac yet."
+        "notes": "Self-contained builds ship since 0.98.66. Equipment is Alpaca, INDI and the native camera SDKs; ASCOM is Windows-only, and the Linux extras (WiFi setup, power, host clock) are not there. A contributor now runs it on a Mac against a local indiserver, with a ZWO camera, mount, focuser and guide camera all connected."
       }
     ]
   },
@@ -314,7 +314,7 @@
       "badge": ".tar.gz",
       "icon": "apple",
       "color": "#a1a1aa",
-      "summary": "New in 0.98.66, and honest about it: the build and the packaging are verified on Apple runners, running the app on a Mac is not. Treat it as a first cut and tell us what you find.",
+      "summary": "New in 0.98.66, and a contributor has since run it on a Mac against a local indiserver: a cooled ZWO camera, an AM5 mount, an EAF focuser and a guide camera, all connected and working. It is still young, and the Linux-only extras are absent, so tell us what you find.",
       "steps": "curl -LO https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-osx-arm64.tar.gz\ntar -xzf polaris-osx-arm64.tar.gz\ncd polaris-osx-arm64\nxattr -dr com.apple.quarantine .\n./NINA.Polaris",
       "notes": "Open https://localhost:5000 and accept the self-signed cert once. The xattr line is there because the download is unsigned. Equipment on macOS is Alpaca, INDI (a local indiserver from Homebrew, or a remote one on a Pi) and the native camera SDKs; ASCOM stays Windows-only. Drop a vendor .dylib next to the binary, or point POLARIS_NATIVE_SDK_DIR at it, and the native camera drivers appear in RIGS. On an Intel Mac replace osx-arm64 with osx-x64."
     },

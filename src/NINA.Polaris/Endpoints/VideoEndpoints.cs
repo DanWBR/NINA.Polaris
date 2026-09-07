@@ -199,7 +199,11 @@ public static class VideoEndpoints {
                 ApFramePercent: Math.Clamp(req.ApFramePercent ?? 10, 1, 100),
                 ApStructureThreshold: Math.Clamp(req.ApStructureThreshold ?? 0.04, 0, 1),
                 ReferencePercent: Math.Clamp(req.ReferencePercent ?? 5, 1, 100),
-                ApDeWarp: req.ApDeWarp ?? true));
+                ApDeWarp: req.ApDeWarp ?? true,
+                NormalizeLevels: req.NormalizeLevels ?? true,
+                WhiteBalance: req.WhiteBalance ?? "off",
+                WbRed: req.WbRed ?? 1.0,
+                WbBlue: req.WbBlue ?? 1.0));
             return Results.Accepted($"/api/video/stack/{job.Id}", new { jobId = job.Id });
         });
 
@@ -442,7 +446,14 @@ public static class VideoEndpoints {
         /// <summary>Search a local shift at every point (omitted = on); off
         /// keeps the per-point frame selection but stacks with the global
         /// shift only.</summary>
-        bool? ApDeWarp = null);
+        bool? ApDeWarp = null,
+        /// <summary>Subtract the black level and rescale the stack to the
+        /// 16-bit range (omitted = on).</summary>
+        bool? NormalizeLevels = null,
+        /// <summary>"off" | "auto" | "manual" channel balance for a colour stack.</summary>
+        string? WhiteBalance = null,
+        double? WbRed = null,
+        double? WbBlue = null);
 
     public record RescaleRequest(
         string SerPath,

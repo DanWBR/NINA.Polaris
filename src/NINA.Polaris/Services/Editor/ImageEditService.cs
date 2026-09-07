@@ -478,10 +478,15 @@ public class ImageEditService : IDisposable {
     private static SKBitmap WrapAsSkiaBitmap(byte[] buf, int w, int h, int channels) {
         if (channels == 1) {
             var bmp = new SKBitmap(w, h, SKColorType.Gray8, SKAlphaType.Opaque);
+            // Copy while the array is still pinned: SetPixels keeps the bare
+            // pointer, so a collection between the end of fixed{} and the copy
+            // hands Skia freed address space (SIGSEGV, 2026-09-07).
             unsafe {
-                fixed (byte* p = buf) bmp.SetPixels((IntPtr)p);
+                fixed (byte* p = buf) {
+                    bmp.SetPixels((IntPtr)p);
+                    return bmp.Copy();
+                }
             }
-            return bmp.Copy();
         } else {
             // RGB interleaved → expand to RGBA for Skia (which doesn't
             // have a packed-RGB ColorType).
@@ -494,9 +499,11 @@ public class ImageEditService : IDisposable {
                 dst[j + 3] = 255;
             }
             unsafe {
-                fixed (byte* p = dst) bmp.SetPixels((IntPtr)p);
+                fixed (byte* p = dst) {
+                    bmp.SetPixels((IntPtr)p);
+                    return bmp.Copy();          // still pinned, see above
+                }
             }
-            return bmp.Copy();
         }
     }
 

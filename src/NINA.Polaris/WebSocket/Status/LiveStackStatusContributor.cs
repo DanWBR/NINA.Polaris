@@ -121,6 +121,19 @@ public sealed class LiveStackStatusContributor : IStatusContributor {
                 colorHistogramR = liveStack.ColorActive ? liveStack.ColorHistogramR : null,
                 colorHistogramG = liveStack.ColorActive ? liveStack.ColorHistogramG : null,
                 colorHistogramB = liveStack.ColorActive ? liveStack.ColorHistogramB : null,
+                // ADU of the first and last bucket: the bins cover the
+                // populated band, not a fixed 0..65535, so the panel needs
+                // these to place them on its axis.
+                colorHistLo = liveStack.ColorHistLo,
+                colorHistHi = liveStack.ColorHistHi,
+                // The stretch the relayed JPEG was rendered with, per channel.
+                // Lets the histogram panel place its handles on the ADU axis it
+                // draws instead of on the 8-bit display scale they act in.
+                colorStretch = liveStack.ColorActive && liveStack.ColorStretch != null
+                    ? liveStack.ColorStretch.Select(p => new {
+                        black = p.Black, mid = p.Mid, white = p.White
+                      }).ToArray()
+                    : null,
                 colorHistMin = liveStack.ColorHistMin,
                 colorHistMax = liveStack.ColorHistMax,
                 colorHistMean = liveStack.ColorHistMean,

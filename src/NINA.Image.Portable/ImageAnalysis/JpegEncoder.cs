@@ -90,13 +90,20 @@ public static class JpegHelper {
 
         using var bitmap = new SKBitmap(width, height, SKColorType.Rgba8888, SKAlphaType.Opaque);
 
+        // The encode happens INSIDE the pin. SetPixels keeps the bare pointer
+        // and copies nothing, so a collection that moved rgba between the end
+        // of fixed{} and Encode left Skia reading address space the runtime had
+        // already decommitted. That is the SIGSEGV of 2026-09-07: PC in libc,
+        // called from libSkiaSharp, faulting on the reserved tail of a GC
+        // region. A 3008x3008 frame makes this a 36 MB array on the large
+        // object heap, and the service runs with DOTNET_GCConserveMemory=5,
+        // which compacts it.
         unsafe {
             fixed (byte* ptr = rgba) {
                 bitmap.SetPixels((IntPtr)ptr);
+                using var data = bitmap.Encode(SKEncodedImageFormat.Jpeg, quality);
+                return data.ToArray();
             }
         }
-
-        using var data = bitmap.Encode(SKEncodedImageFormat.Jpeg, quality);
-        return data.ToArray();
     }
 }
