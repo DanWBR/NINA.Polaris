@@ -4153,7 +4153,8 @@
   "Polaris server stopped. Start it again on the host to reconnect.": "Polaris server stopped. Start it again on the host to reconnect.",
   "Polaris was stopped from the web interface. Start it again on the host when you want to reconnect.": "Polaris was stopped from the web interface. Start it again on the host when you want to reconnect.",
   "Polaris may be down. If it does not come back on its own, start it again on the host.": "Polaris may be down. If it does not come back on its own, start it again on the host.",
-  "Violet halo around bright stars": "Violet halo around bright stars",
-  "The out-of-focus violet an ED doublet spreads from about 10 px outwards. Brings blue down to the other two channels in the halo only; star cores and their colour are left alone.": "The out-of-focus violet an ED doublet spreads from about 10 px outwards. Brings blue down to the other two channels in the halo only; star cores and their colour are left alone.",
-  "Halo radius": "Halo radius"
+  "Halo radius": "Halo radius",
+  "Violet halo": "Violet halo",
+  "Violet halo: removes the out-of-focus violet skirt an ED doublet leaves around bright stars. Select one OSC frame.": "Violet halo: removes the out-of-focus violet skirt an ED doublet leaves around bright stars. Select one OSC frame.",
+  "Removes the out-of-focus violet an ED doublet spreads around bright stars, from about 6 px outwards. Brings blue down to the other two channels in the halo only; star cores and their colour are left alone. This is a telescope defect, so run it on the original frame, not after the star colour repair. Writes a new FITS; the original is kept.": "Removes the out-of-focus violet an ED doublet spreads around bright stars, from about 6 px outwards. Brings blue down to the other two channels in the halo only; star cores and their colour are left alone. This is a telescope defect, so run it on the original frame, not after the star colour repair. Writes a new FITS; the original is kept."
 }

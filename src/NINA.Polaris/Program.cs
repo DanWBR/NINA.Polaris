@@ -571,6 +571,7 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Studio.SpccDatabase>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.SpccService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.ChannelCombineService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.StarColorRepairService>();
+builder.Services.AddSingleton<NINA.Polaris.Services.Studio.VioletHaloService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.ColorCalibrationService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Sky.ApassCatalog>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Sky.ApassDownloadService>();

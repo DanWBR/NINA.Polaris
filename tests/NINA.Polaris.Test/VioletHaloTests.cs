@@ -69,7 +69,7 @@ public class VioletHaloTests {
 
     private static void Run(double[] R, double[] G, double[] B,
                             double amount = 1.0, double radius = 40.0) {
-        var m = typeof(StarColorRepairService).GetMethod(
+        var m = typeof(VioletHaloService).GetMethod(
             "RemoveVioletHalo",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
         m.Invoke(null, new object[] {
@@ -154,5 +154,48 @@ public class VioletHaloTests {
         Run(R, G, B);
 
         Assert.That(RingMedian(B, 55, 70), Is.EqualTo(skyBefore).Within(1e-9));
+    }
+    /// <summary>The field bug this clamp exists for.
+    ///
+    /// A real halo is not azimuthally uniform: a saturated star bleeds more to
+    /// one side. The ring gives ONE number for the whole ring, so subtracting it
+    /// from every pixel in that ring drove the faint side's blue below zero,
+    /// where it clipped, and the star grew a bright YELLOW lobe. That is what
+    /// the first run on an SV503 stack produced.
+    ///
+    /// The invariant that rules it out: a pixel's blue never ends below the mean
+    /// of its own red and green, and never below where it started. Nothing about
+    /// the star's shape can break it.</summary>
+    [Test]
+    public void AnAsymmetricHaloDoesNotLeaveAYellowLobe() {
+        var (R, G, B) = MakeStar(pedestal: 0.05);
+        // one side of the skirt three times the other, like a bleeding star
+        for (int y = 0; y < H; y++) {
+            for (int x = 0; x < W; x++) {
+                double dx = x - CX, dy = y - CY;
+                double d = Math.Sqrt(dx * dx + dy * dy);
+                if (d < 4) continue;
+                double lobe = 1.0 + 1.0 * (dx / Math.Max(d, 1e-9));   // 0..2 across the star
+                B[y * W + x] = 0.01 + Math.Exp(-(d * d) / (2 * 2.2 * 2.2))
+                             + 0.05 * lobe * Math.Exp(-(d * d) / (2 * 12.0 * 12.0));
+            }
+        }
+        var before = (double[])B.Clone();
+
+        Run(R, G, B);
+
+        double worst = 0; int wi = -1;
+        for (int i = 0; i < B.Length; i++) {
+            double floor = Math.Min(before[i], 0.5 * (R[i] + G[i]));
+            double under = floor - B[i];
+            if (under > worst) { worst = under; wi = i; }
+        }
+        Assert.That(worst, Is.LessThan(1e-9),
+            $"azul foi abaixo do par no pixel {wi % W},{wi / W}: {worst:F6} abaixo do piso");
+
+        // e o lado forte realmente foi corrigido
+        double strong = RingMedian(B, 12, 18);
+        Assert.That(strong, Is.LessThan(RingMedian(before, 12, 18)),
+            "o lado forte do halo tem de cair");
     }
 }

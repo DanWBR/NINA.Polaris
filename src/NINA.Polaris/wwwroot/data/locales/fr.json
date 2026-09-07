@@ -4772,7 +4772,8 @@
   "Polaris server stopped. Start it again on the host to reconnect.": "Serveur Polaris arrêté. Relancez-le sur l'hôte pour vous reconnecter.",
   "Polaris was stopped from the web interface. Start it again on the host when you want to reconnect.": "Polaris a été arrêté depuis l'interface web. Relancez-le sur l'hôte quand vous voudrez vous reconnecter.",
   "Polaris may be down. If it does not come back on its own, start it again on the host.": "Polaris est peut-être arrêté. S'il ne revient pas de lui-même, relancez-le sur l'hôte.",
-  "Violet halo around bright stars": "Halo violet autour des étoiles brillantes",
-  "The out-of-focus violet an ED doublet spreads from about 10 px outwards. Brings blue down to the other two channels in the halo only; star cores and their colour are left alone.": "Le violet hors foyer qu'un doublet ED étale à partir d'une dizaine de pixels. Ramène le bleu au niveau des deux autres canaux dans le halo seulement ; le cœur des étoiles et leur couleur ne sont pas touchés.",
-  "Halo radius": "Rayon du halo"
+  "Halo radius": "Rayon du halo",
+  "Violet halo": "Halo violet",
+  "Violet halo: removes the out-of-focus violet skirt an ED doublet leaves around bright stars. Select one OSC frame.": "Halo violet : enlève la jupe violette hors foyer qu'un doublet ED laisse autour des étoiles brillantes. Choisissez un fichier OSC.",
+  "Removes the out-of-focus violet an ED doublet spreads around bright stars, from about 6 px outwards. Brings blue down to the other two channels in the halo only; star cores and their colour are left alone. This is a telescope defect, so run it on the original frame, not after the star colour repair. Writes a new FITS; the original is kept.": "Enlève le violet hors foyer qu'un doublet ED étale autour des étoiles brillantes, à partir d'environ 6 px. Ramène le bleu au niveau des deux autres canaux dans le halo seulement ; le cœur des étoiles et leur couleur ne sont pas touchés. C'est un défaut du télescope, donc lancez-le sur le fichier original, pas après la réparation de couleur. Écrit un nouveau FITS ; l'original est conservé."
 }

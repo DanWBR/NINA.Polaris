@@ -4772,7 +4772,8 @@
   "Polaris server stopped. Start it again on the host to reconnect.": "Polaris-Server beendet. Starten Sie ihn auf dem Host neu, um sich wieder zu verbinden.",
   "Polaris was stopped from the web interface. Start it again on the host when you want to reconnect.": "Polaris wurde über die Weboberfläche beendet. Starten Sie es auf dem Host neu, wenn Sie sich wieder verbinden möchten.",
   "Polaris may be down. If it does not come back on its own, start it again on the host.": "Polaris ist möglicherweise nicht erreichbar. Wenn es nicht von selbst zurückkommt, starten Sie es auf dem Host neu.",
-  "Violet halo around bright stars": "Violetter Halo um helle Sterne",
-  "The out-of-focus violet an ED doublet spreads from about 10 px outwards. Brings blue down to the other two channels in the halo only; star cores and their colour are left alone.": "Das unscharfe Violett, das ein ED-Doublet ab etwa 10 px verteilt. Senkt Blau nur im Halo auf das Niveau der anderen beiden Kanäle; Sternkerne und ihre Farbe bleiben unberührt.",
-  "Halo radius": "Halo-Radius"
+  "Halo radius": "Halo-Radius",
+  "Violet halo": "Violetter Halo",
+  "Violet halo: removes the out-of-focus violet skirt an ED doublet leaves around bright stars. Select one OSC frame.": "Violetter Halo: entfernt den unscharfen violetten Saum, den ein ED-Doublet um helle Sterne legt. Wählen Sie eine OSC-Datei.",
+  "Removes the out-of-focus violet an ED doublet spreads around bright stars, from about 6 px outwards. Brings blue down to the other two channels in the halo only; star cores and their colour are left alone. This is a telescope defect, so run it on the original frame, not after the star colour repair. Writes a new FITS; the original is kept.": "Entfernt das unscharfe Violett, das ein ED-Doublet um helle Sterne verteilt, ab etwa 6 px. Senkt Blau nur im Halo auf das Niveau der anderen beiden Kanäle; Sternkerne und ihre Farbe bleiben unberührt. Das ist ein Teleskopfehler, also auf der Originaldatei ausführen, nicht nach der Sternfarbenreparatur. Schreibt eine neue FITS-Datei; das Original bleibt erhalten."
 }

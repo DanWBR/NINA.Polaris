@@ -55,10 +55,7 @@ public sealed class StarColorRepairService {
         double Aggressiveness = 1.0,    // 0..1
         double ExclusionRadius = 9.0,   // px; how close a neighbour star is "masked off"
         bool Align = true,
-        bool Fringe = true,
-        bool Violet = false,            // the out-of-focus violet pedestal
-        double VioletAmount = 1.0,      // 0..1
-        double VioletRadius = 40.0);    // px; how far out the pedestal reaches
+        bool Fringe = true);
 
     public string StartJob(StarColorRepairRequest req) {
         if (req == null) throw new ArgumentNullException(nameof(req));
@@ -108,12 +105,6 @@ public sealed class StarColorRepairService {
                 double excl = Math.Clamp(req.ExclusionRadius, 3.0, 20.0);
                 foreach (var (sx, sy) in stars) RepairStar(R, G, B, W, H, sx, sy, 22, agg, stars, excl);
             }
-            if (req.Violet && req.VioletAmount > 0) {
-                _jobs[jobId] = _jobs[jobId] with { Stage = "violet halo" };
-                RemoveVioletHalo(R, G, B, W, H, stars,
-                    Math.Clamp(req.VioletAmount, 0.0, 1.0),
-                    Math.Clamp(req.VioletRadius, 12.0, 120.0));
-            }
 
             _jobs[jobId] = _jobs[jobId] with { Stage = "writing" };
             var outData = new ushort[plane * 3];
@@ -127,9 +118,6 @@ public sealed class StarColorRepairService {
             FITSWriter.Write(outImg, outPath, customKeywords: new List<KeyValuePair<string, string>> {
                 new("STARFIX", "T"),
                 new("SFAGG", agg.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)),
-                new("SFVIOLET", req.Violet
-                    ? req.VioletAmount.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)
-                    : "0"),
             });
 
             // Largest-stars before/after montages (same layout) for the comparator,
@@ -157,118 +145,7 @@ public sealed class StarColorRepairService {
 
     // ── bright-star peak detection (self-contained; no external detector) ─────
 
-    /// <summary>Remove the out-of-focus violet pedestal an ED doublet leaves
-    /// around bright stars.
-    ///
-    /// Measured on an SV503 + ASI585MC stack: the three channels share the same
-    /// core (B/G = 1.00 out to 4 px) while blue carries 3 to 8 times the energy
-    /// of the other two from 10 px outwards. Red and green track each other
-    /// through the whole halo (0.0049 and 0.0053 of the peak at 10 px, 0.00037
-    /// and 0.00040 at 20 px); blue alone stands above them. That is the
-    /// pedestal, and how far blue stands above the PAIR is its size.
-    ///
-    /// Three things make this work where per-pixel attempts did not:
-    ///
-    ///   * the target is the mean of the OTHER TWO channels, not the star's own
-    ///     core colour. Keying on the core fails on a yellowish star, whose
-    ///     core sits at B/G = 0.66: asking the halo to match it drives blue a
-    ///     third below green and paints a green ring exactly where the violet
-    ///     one was.
-    ///   * the correction is decided on a 1-D azimuthal median profile, one
-    ///     ring per pixel of radius. Out at 15 px the signal is a hundredth of
-    ///     the peak, and the display stretch has a midtone near 0.002, so a
-    ///     per-pixel estimate turns noise into a coloured ring. A ring holds
-    ///     hundreds of pixels and is steady.
-    ///   * sky comes from an annulus OUTSIDE the halo, per channel. The median
-    ///     of the whole window is contaminated by the pedestal itself, which is
-    ///     blue, so blue's zero point comes out too high.
-    ///
-    /// The core is untouched by construction: there blue already sits below the
-    /// pair, so the excess is zero.</summary>
-    private static void RemoveVioletHalo(double[] R, double[] G, double[] B,
-                                         int W, int H, List<(int x, int y)> stars,
-                                         double amount, double rOut) {
-        double rIn = Math.Max(4.0, rOut * 0.125);        // fade in
-        double rFull = Math.Max(rIn + 2.0, rOut * 0.20); // full strength
-        double rTaper = rOut * 0.80;                     // fade out
-        double rSky0 = rOut * 1.15, rSky1 = rOut * 1.45;
-        int s = (int)Math.Ceiling(rSky1);
-        int nRing = (int)Math.Ceiling(rOut);
-
-        var sumR = new double[nRing]; var sumG = new double[nRing];
-        var sumB = new double[nRing]; var cnt = new int[nRing];
-        var exR = new double[nRing]; var exB = new double[nRing];
-        var skyR = new List<double>(); var skyG = new List<double>(); var skyB = new List<double>();
-
-        foreach (var (cx, cy) in stars) {
-            if (cx - s < 0 || cy - s < 0 || cx + s >= W || cy + s >= H) continue;
-
-            Array.Clear(sumR); Array.Clear(sumG); Array.Clear(sumB); Array.Clear(cnt);
-            skyR.Clear(); skyG.Clear(); skyB.Clear();
-
-            for (int dy = -s; dy <= s; dy++) {
-                int row = (cy + dy) * W + cx;
-                for (int dx = -s; dx <= s; dx++) {
-                    double d = Math.Sqrt(dx * dx + dy * dy);
-                    int i = row + dx;
-                    if (d >= rSky0 && d <= rSky1) {
-                        skyR.Add(R[i]); skyG.Add(G[i]); skyB.Add(B[i]);
-                    } else if (d < rOut) {
-                        int k = (int)d;
-                        if (k < nRing) { sumR[k] += R[i]; sumG[k] += G[i]; sumB[k] += B[i]; cnt[k]++; }
-                    }
-                }
-            }
-            if (skyG.Count < 32) continue;
-            double kR = Median(skyR), kG = Median(skyG), kB = Median(skyB);
-
-            bool any = false;
-            for (int k = 0; k < nRing; k++) {
-                exR[k] = 0; exB[k] = 0;
-                if (cnt[k] == 0) continue;
-                double pr = sumR[k] / cnt[k] - kR;
-                double pg = sumG[k] / cnt[k] - kG;
-                double pb = sumB[k] / cnt[k] - kB;
-                double pair = 0.5 * (Math.Max(pr, 0) + Math.Max(pg, 0));
-                double w = RadialWeight(k + 0.5, rIn, rFull, rTaper, rOut) * amount;
-                if (w <= 0) continue;
-                // Never take off more than the channel has above the sky, and
-                // never past the target: the overshoot is ruled out here, in
-                // one dimension, rather than hoped away by tuning.
-                exB[k] = Math.Clamp(pb - pair, 0, Math.Max(pb, 0)) * w;
-                double pbAfter = pb - exB[k];
-                double pairR = 0.5 * (Math.Max(pbAfter, 0) + Math.Max(pg, 0));
-                exR[k] = Math.Clamp(pr - pairR, 0, Math.Max(pr, 0)) * w;
-                if (exB[k] > 0 || exR[k] > 0) any = true;
-            }
-            if (!any) continue;
-
-            for (int dy = -s; dy <= s; dy++) {
-                int row = (cy + dy) * W + cx;
-                for (int dx = -s; dx <= s; dx++) {
-                    double d = Math.Sqrt(dx * dx + dy * dy);
-                    if (d >= rOut) continue;
-                    int k = (int)d;
-                    if (k >= nRing) continue;
-                    int i = row + dx;
-                    R[i] -= exR[k];
-                    B[i] -= exB[k];
-                }
-            }
-        }
-    }
-
-    /// <summary>0 inside the core, 1 across the pedestal, 0 again past its
-    /// edge, so the correction never leaves a step.</summary>
-    private static double RadialWeight(double r, double rIn, double rFull,
-                                       double rTaper, double rOut) {
-        if (r <= rIn || r >= rOut) return 0;
-        double up = r >= rFull ? 1.0 : (r - rIn) / Math.Max(1e-9, rFull - rIn);
-        double down = r <= rTaper ? 1.0 : (rOut - r) / Math.Max(1e-9, rOut - rTaper);
-        return Math.Max(0, Math.Min(up, down));
-    }
-
-    private static double Median(List<double> v) {
+    internal static double Median(List<double> v) {
         if (v.Count == 0) return 0;
         var a = v.ToArray();
         Array.Sort(a);
@@ -276,7 +153,7 @@ public sealed class StarColorRepairService {
                                  : 0.5 * (a[a.Length / 2 - 1] + a[a.Length / 2]);
     }
 
-    private static List<(int x, int y)> DetectBrightStars(
+    internal static List<(int x, int y)> DetectBrightStars(
             double[] R, double[] G, double[] B, int W, int H,
             double thrFrac = 0.15, int sep = 24, int nmax = 4000) {
         int plane = W * H;
@@ -492,7 +369,7 @@ public sealed class StarColorRepairService {
         return (a.Length & 1) == 1 ? a[m] : 0.5 * (a[m - 1] + a[m]);
     }
 
-    private static ushort Clamp16(double v)
+    internal static ushort Clamp16(double v)
         => (ushort)Math.Clamp(Math.Round(v), 0, 65535);
 
     // ── largest-stars before/after montage ────────────────────────────────────
@@ -500,7 +377,7 @@ public sealed class StarColorRepairService {
     private const int MontCols = 4;       // montage columns
     private const int MontMax = 12;       // up to N largest stars
 
-    private static List<(int x, int y)> PickMontageStars(List<(int x, int y)> stars, int W, int H) {
+    internal static List<(int x, int y)> PickMontageStars(List<(int x, int y)> stars, int W, int H) {
         int half = CropPx / 2;
         var outl = new List<(int x, int y)>();
         foreach (var s in stars) {            // stars[] already brightest-first
@@ -513,7 +390,7 @@ public sealed class StarColorRepairService {
     }
 
     /// <summary>Plane-sequential ushort RGB crop (CropPx²) centred on a star.</summary>
-    private static ushort[] ExtractCropRgb(double[] R, double[] G, double[] B, int W, int cx, int cy) {
+    internal static ushort[] ExtractCropRgb(double[] R, double[] G, double[] B, int W, int cx, int cy) {
         int half = CropPx / 2, cp = CropPx * CropPx;
         var crop = new ushort[cp * 3];
         for (int yy = 0; yy < CropPx; yy++) {
@@ -527,7 +404,7 @@ public sealed class StarColorRepairService {
         return crop;
     }
 
-    private string WriteMontage(List<ushort[]> crops, string outPath, BaseImageData template) {
+    internal static string WriteMontage(List<ushort[]> crops, string outPath, BaseImageData template) {
         int n = crops.Count;
         int cols = Math.Min(MontCols, n);
         int rows = (int)Math.Ceiling(n / (double)cols);
@@ -557,7 +434,7 @@ public sealed class StarColorRepairService {
         return outPath;
     }
 
-    private static string SiblingPath(string srcPath, string suffix) {
+    internal static string SiblingPath(string srcPath, string suffix) {
         var dir = Path.GetDirectoryName(srcPath) ?? ".";
         var stem = Path.GetFileNameWithoutExtension(srcPath);
         var stamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
