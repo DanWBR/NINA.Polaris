@@ -4295,6 +4295,12 @@ function ninaApp() {
             modalOpen: false, busy: false, framePath: '', aggressiveness: 1.0,
             exclusionRadius: 9, stage: '', error: '',
         },
+        // Violet halo (ED doublet). A telescope defect, so a separate tool:
+        // chaining it after the star fix turned every bright star yellow.
+        violetHalo: {
+            modalOpen: false, busy: false, framePath: '',
+            amount: 1.0, radius: 40, stage: '', error: '',
+        },
 
         // STORAGE-1: capture-disk suggestion. `suggest` is only true when a
         // usable data disk exists AND the captures are still on the boot disk,
@@ -38617,6 +38623,65 @@ function ninaApp() {
             } catch (e) {
                 this.starColor.busy = false;
                 this.starColor.error = (e && e.message) ? e.message : String(e);
+            }
+        },
+
+        violetHaloOpenModal(framePath) {
+            if (!framePath) { this.toast?.('Select one frame first'); return; }
+            this.violetHalo.framePath = framePath;
+            this.violetHalo.busy = false;
+            this.violetHalo.stage = '';
+            this.violetHalo.error = '';
+            this.violetHalo.modalOpen = true;
+        },
+        async violetHaloRun() {
+            const src = this.violetHalo.framePath;
+            if (!src) return;
+            this.violetHalo.busy = true;
+            this.violetHalo.error = '';
+            this.violetHalo.stage = 'starting';
+            try {
+                const r = await this.apiFetch('/api/studio/violethalo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        framePath: src,
+                        amount: this.violetHalo.amount,
+                        radius: this.violetHalo.radius,
+                    }),
+                });
+                if (!r.ok) {
+                    const e = await r.json().catch(() => ({}));
+                    throw new Error(e.error || ('HTTP ' + r.status));
+                }
+                const { jobId } = await r.json();
+                let done = null;
+                for (let i = 0; i < 600; i++) {
+                    await new Promise(res => setTimeout(res, 500));
+                    const sr = await this.apiFetch('/api/studio/violethalo/' + jobId);
+                    if (!sr.ok) continue;
+                    const p = await sr.json();
+                    this.violetHalo.stage = p.stage || '';
+                    if (!p.inProgress) {
+                        if (p.error) throw new Error(p.error);
+                        done = p;
+                        break;
+                    }
+                }
+                if (!done || !done.outputPath) throw new Error('Timed out waiting for the job.');
+                this.violetHalo.busy = false;
+                this.violetHalo.modalOpen = false;
+                try { this.filesReload?.(); } catch { /* non-fatal */ }
+                const pairs = [];
+                if (done.starsBeforePath && done.starsAfterPath) {
+                    pairs.push({ src: done.starsBeforePath, out: done.starsAfterPath,
+                                 label: 'Brightest stars' });
+                }
+                pairs.push({ src, out: done.outputPath, label: 'Full frame' });
+                this.graxpertOpenCompare(pairs, 0, 'gx', 'violet-halo');
+            } catch (e) {
+                this.violetHalo.busy = false;
+                this.violetHalo.error = (e && e.message) ? e.message : String(e);
             }
         },
 
