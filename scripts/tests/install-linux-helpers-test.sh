@@ -28,7 +28,7 @@ ok()  { echo "  ok   $1"; }
 bad() { echo "  FAIL $1"; fails=$((fails + 1)); }
 
 # ---- the helpers, lifted out of the real script ----------------------------
-for fn in apt_recover apt_try_each has_candidate d80_installed d80_on_disk; do
+for fn in apt_recover apt_try_each has_candidate d80_installed d80_on_disk \n          system_codename ubuntu_codename ppa_retarget phd2_unsatisfiable; do
     sed -n "/^${fn}()[ {]/,/^}/p" "$SRC" >> "$WORK/helpers.sh"
 done
 sed -n '/^apt_recover(){/p' "$SRC" >> "$WORK/helpers.sh"
@@ -110,6 +110,99 @@ echo x > "$PAYLOAD/d80_star_database.deb"
 found=$(d80_on_disk) && [ "$found" = "$PAYLOAD/d80_star_database.deb" ] \
     && ok  "finds the copy already on disk" \
     || bad "did not find the payload copy (got '${found:-}')"
+
+# ---------------------------------------------------------------------------
+# Linux Mint (Discord, 2026-09-07):
+#   "phd2 has unmet dependencies ... depends on libindi1 but that is not
+#    installable. E: Unable to correct problems, you have held broken packages."
+#
+# Two distinct causes, both checked here:
+#   * Mint reports its own codename, so a PPA added under it points at a suite
+#     Launchpad has never published, and everything in that PPA vanishes.
+#   * phd2 is in no Ubuntu release. It exists only in ppa:pch/phd2 and links
+#     against libindi1, which exists only in the INDI PPA; Ubuntu's own INDI
+#     ships libindidriver1 instead. Without that PPA phd2 is unsatisfiable by
+#     construction, and apt's answer reads like a broken system.
+# ---------------------------------------------------------------------------
+echo "== ubuntu_codename: the base series wins over the derivative's own =="
+OS_RELEASE="$WORK/os-release"
+UPSTREAM_RELEASE="$WORK/upstream-lsb"
+cat > "$BIN/lsb_release" <<'STUB'
+#!/usr/bin/env bash
+[ "${1:-}" = -cs ] && echo "${SYS_CODENAME:-noble}"
+exit 0
+STUB
+chmod +x "$BIN/lsb_release"
+
+export SYS_CODENAME=xia
+printf 'ID=linuxmint\nUBUNTU_CODENAME=noble\n' > "$OS_RELEASE"
+printf 'DISTRIB_CODENAME=noble\n' > "$UPSTREAM_RELEASE"
+[ "$(ubuntu_codename)" = noble ] && ok "Mint resolves to the Ubuntu series" \
+                                 || bad "Mint resolved to '$(ubuntu_codename)'"
+[ "$(system_codename)" = xia ] && ok "and still reports its own name" \
+                               || bad "system_codename was '$(system_codename)'"
+
+rm -f "$UPSTREAM_RELEASE"
+[ "$(ubuntu_codename)" = noble ] && ok "os-release alone is enough" \
+                                 || bad "without upstream-release: '$(ubuntu_codename)'"
+
+export SYS_CODENAME=noble
+printf 'ID=ubuntu\nUBUNTU_CODENAME=noble\n' > "$OS_RELEASE"
+[ "$(ubuntu_codename)" = "$(system_codename)" ] \
+    && ok "plain Ubuntu: the two agree" || bad "plain Ubuntu disagreed"
+
+echo "== ppa_retarget: rewrites the suite, and only for the named PPA =="
+APT_SOURCES_DIR="$WORK/sources.list.d"; mkdir -p "$APT_SOURCES_DIR"
+printf 'deb https://ppa.launchpadcontent.net/mutlaqja/ppa/ubuntu xia main\n' \
+    > "$APT_SOURCES_DIR/indi.list"
+printf 'Types: deb\nURIs: https://ppa.launchpadcontent.net/pch/phd2/ubuntu\nSuites: xia\nComponents: main\n' \
+    > "$APT_SOURCES_DIR/phd2.sources"
+printf 'deb https://example.org/other/ubuntu xia main\n' \
+    > "$APT_SOURCES_DIR/unrelated.list"
+
+ppa_retarget mutlaqja/ppa noble xia >/dev/null
+ppa_retarget pch/phd2     noble xia >/dev/null
+grep -q 'mutlaqja/ppa/ubuntu noble main' "$APT_SOURCES_DIR/indi.list" \
+    && ok "one-line .list retargeted" || bad "list: $(cat "$APT_SOURCES_DIR/indi.list")"
+grep -q '^Suites: noble$' "$APT_SOURCES_DIR/phd2.sources" \
+    && ok "deb822 .sources retargeted" || bad "sources: $(cat "$APT_SOURCES_DIR/phd2.sources")"
+grep -q 'example.org/other/ubuntu xia main' "$APT_SOURCES_DIR/unrelated.list" \
+    && ok "an unrelated repository is untouched" || bad "unrelated file was rewritten"
+
+echo "== ppa_retarget: a no-op on plain Ubuntu =="
+before=$(cat "$APT_SOURCES_DIR/indi.list")
+ppa_retarget mutlaqja/ppa noble noble >/dev/null
+[ "$(cat "$APT_SOURCES_DIR/indi.list")" = "$before" ] \
+    && ok "same codename changes nothing" || bad "rewrote a file it should not have"
+
+echo "== phd2_unsatisfiable =="
+cat > "$BIN/apt-cache" <<'STUB'
+#!/usr/bin/env bash
+case "$1" in
+  policy)
+    for m in $MISSING; do
+        [ "$2" = "$m" ] && { echo "  Candidate: (none)"; exit 0; }
+    done
+    echo "  Candidate: 1.0"
+    ;;
+  depends)
+    [ "$2" = phd2 ] && echo "  Depends: libindi1"
+    ;;
+esac
+exit 0
+STUB
+chmod +x "$BIN/apt-cache"
+
+MISSING="libindi1"
+phd2_unsatisfiable && ok  "phd2 skipped when libindi1 is unavailable" \
+                   || bad "phd2 would still be attempted without libindi1"
+MISSING=""
+phd2_unsatisfiable && bad "phd2 skipped even though libindi1 is there" \
+                   || ok  "phd2 attempted when the INDI PPA is present"
+MISSING="phd2 libindi1"
+phd2_unsatisfiable && bad "reported unsatisfiable for an absent phd2" \
+                   || ok  "an absent phd2 is left to the normal apt path"
+
 
 echo
 [ "$fails" = 0 ] && echo "all checks passed" || echo "$fails check(s) failed"
