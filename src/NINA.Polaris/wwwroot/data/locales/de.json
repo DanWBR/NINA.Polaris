@@ -4760,5 +4760,14 @@
   "Offset -1 (hold to repeat)": "Offset -1 (halten zum Wiederholen)",
   "Offset +1 (hold to repeat)": "Offset +1 (halten zum Wiederholen)",
   "No calibration for the gear fitted now.": "Keine Kalibrierung für die aktuell montierte Ausrüstung.",
-  "Run a calibration, or use Load file above to bring one back from a saved file.": "Führen Sie eine Kalibrierung durch, oder holen Sie mit Load file oben eine aus einer gespeicherten Datei zurück."
+  "Run a calibration, or use Load file above to bring one back from a saved file.": "Führen Sie eine Kalibrierung durch, oder holen Sie mit Load file oben eine aus einer gespeicherten Datei zurück.",
+  "Stop Polaris": "Polaris beenden",
+  "Stopping…": "Wird beendet…",
+  "Stop server": "Server beenden",
+  "Polaris is stopping…": "Polaris wird beendet…",
+  "Could not reach the server to stop it.": "Der Server war nicht erreichbar, um ihn zu beenden.",
+  "Stop the Polaris server now? The host keeps running, but the web interface will be unavailable until Polaris is started again on the host.": "Den Polaris-Server jetzt beenden? Der Host läuft weiter, aber die Weboberfläche ist nicht verfügbar, bis Polaris auf dem Host wieder gestartet wird.",
+  "Polaris server stopped. Start it again on the host to reconnect.": "Polaris-Server beendet. Starten Sie ihn auf dem Host neu, um sich wieder zu verbinden.",
+  "Polaris was stopped from the web interface. Start it again on the host when you want to reconnect.": "Polaris wurde über die Weboberfläche beendet. Starten Sie es auf dem Host neu, wenn Sie sich wieder verbinden möchten.",
+  "Polaris may be down. If it does not come back on its own, start it again on the host.": "Polaris ist möglicherweise nicht erreichbar. Wenn es nicht von selbst zurückkommt, starten Sie es auf dem Host neu."
 }
