@@ -10058,9 +10058,11 @@ function ninaApp() {
             // the operator never asked for. A JPEG-derived luminance really is
             // 0..255 display space, so there full scale IS maxVal.
             this.histo._fullScale = hasRaw ? ((1 << (f.bitDepth || 16)) - 1) : maxVal;
-            // Bins computed here always span the whole scale.
+            // Bins computed here always span the whole scale, and the
+            // handles already act on this same data, so no conversion.
             this.histo._binLo = 0;
             this.histo._binHi = 1;
+            this.histo._srvStretch = null;
             if (hasRaw) {
                 this.histo._autoBlack = Math.max(0, Math.min(1, ap.shadow / maxVal));
                 this.histo._autoWhite = Math.max(0, Math.min(1, aWhite / maxVal));
@@ -10140,6 +10142,21 @@ function ninaApp() {
             const haveBand = isFinite(bandLo) && isFinite(bandHi) && bandHi > bandLo;
             this.histo._binLo = haveBand ? bandLo / maxVal : 0;
             this.histo._binHi = haveBand ? bandHi / maxVal : 1;
+            // The stretch this JPEG was rendered with. The handles drive a LUT
+            // over that 8-bit image while this panel draws 16-bit ADU, so
+            // without it a handle cannot be placed on the axis it sits above:
+            // black and white pinned to 0 and 1 of full scale, which since the
+            // bins cover only the populated band means both clamp to the panel
+            // edges, and a drag moves the LUT by an unrelated amount.
+            // Green is the reference channel: it carries 59% of the luminance
+            // and its pedestal sits between red's and blue's. One handle cannot
+            // stand for three different per-channel mappings.
+            const st = Array.isArray(ls.colorStretch) ? ls.colorStretch : null;
+            const g = st && st.length >= 2 ? st[1] : null;
+            this.histo._srvStretch = (g && isFinite(g.black) && isFinite(g.white)
+                                      && g.white > g.black)
+                ? { black: g.black, mid: g.mid, white: g.white }
+                : null;
             // Server already stretched the JPEG → keep the handles at identity.
             this.histo._autoBlack = 0;
             this.histo._autoWhite = 1;
@@ -10166,6 +10183,15 @@ function ninaApp() {
             // mid-grey = black + midBalance*(white-black).
             const _b = this.histo.blackFrac, _w = this.histo.whiteFrac;
             this.histo.midFrac = _b + Math.max(0.001, Math.min(0.999, midBal)) * (_w - _b);
+            // Everything above is in the space the handles ACT in: the 8-bit
+            // display for a server-rendered colour stack, the data itself
+            // otherwise. The panel draws 16-bit ADU, so convert before anything
+            // downstream places a marker or frames the window.
+            if (this.histo._srvStretch) {
+                this.histo.blackFrac = this._histoDisplayToAxis(this.histo.blackFrac);
+                this.histo.whiteFrac = this._histoDisplayToAxis(this.histo.whiteFrac);
+                this.histo.midFrac = this._histoDisplayToAxis(this.histo.midFrac);
+            }
             // While a handle is being dragged, freeze the drawn X range so the
             // pointer→fraction reference can't shift under the drag (the same
             // drift the editor histogram had). It re-frames on the next redraw
@@ -10279,6 +10305,33 @@ function ninaApp() {
                 return this._histoBinFrac(1);
             };
             return [at(0.001), at(0.995)];
+        },
+
+        // Inverse of _mtf: the input that maps to y under midtone m.
+        _mtfInv(y, m) {
+            if (y <= 0) return 0;
+            if (y >= 1) return 1;
+            if (m <= 0 || m >= 1) return y;
+            const den = y * (2 * m - 1) - m + 1;
+            return Math.abs(den) < 1e-12 ? y : (y * m) / den;
+        },
+
+        // A handle's fraction of the 8-bit display scale, to the fraction of
+        // full scale where it lands on the 16-bit axis this panel draws.
+        // Identity when the histogram came from local pixels, because there the
+        // handles already act on the same data.
+        _histoDisplayToAxis(d) {
+            const s = this.histo._srvStretch;
+            if (!s) return d;
+            return s.black + this._mtfInv(d, s.mid) * (s.white - s.black);
+        },
+
+        // The other direction, for a handle dropped on the axis.
+        _histoAxisToDisplay(a) {
+            const s = this.histo._srvStretch;
+            if (!s) return a;
+            const x = (a - s.black) / Math.max(1e-9, s.white - s.black);
+            return this._mtf(Math.max(0, Math.min(1, x)), s.mid);
         },
 
         // Position within the bin array (0..1) to a fraction of full scale.
@@ -10518,21 +10571,23 @@ function ninaApp() {
             const span = Math.max(1e-6, hi - lo);
             let fx = (e.clientX - d.rect.left) / Math.max(1, d.rect.width);
             fx = Math.max(0, Math.min(1, fx));
-            const frac = lo + fx * span;
+            // The pointer lands on the drawn axis; the stretch lives in the
+            // space the handles act in. Convert once, here, and let
+            // _histoUpdateEndpoints derive the drawn positions back from it, so
+            // there is a single source of truth either way.
+            const dfrac = this._histoAxisToDisplay(lo + fx * span);
             // No hard limits: each handle is bounded only by its neighbours.
             // black: 0 .. white, mid: black .. white, white: mid .. 1.
             if (d.which === 'black') {
-                this.stretchBlack = Math.max(0, Math.min(frac, this.stretchWhite));
-                this.histo.blackFrac = this.stretchBlack;
+                this.stretchBlack = Math.max(0, Math.min(dfrac, this.stretchWhite));
             } else if (d.which === 'white') {
-                this.stretchWhite = Math.min(1, Math.max(frac, this.stretchBlack));
-                this.histo.whiteFrac = this.stretchWhite;
+                this.stretchWhite = Math.min(1, Math.max(dfrac, this.stretchBlack));
             } else { // mid
-                const b = this.histo.blackFrac, w = this.histo.whiteFrac;
-                const cf = Math.max(b, Math.min(frac, w));
+                const b = this.stretchBlack, w = this.stretchWhite;
+                const cf = Math.max(b, Math.min(dfrac, w));
                 this.stretchMid = Math.max(0.001, Math.min(0.999, (cf - b) / Math.max(1e-6, w - b)));
-                this.histo.midFrac = cf;
             }
+            this._histoUpdateEndpoints();   // redraws the pills where they land
             // While dragging, do NOT re-render the frame (that full-frame
             // stretch is what froze the UI). The handles track the pointer
             // live via their reactive :style; only the lightweight histogram
