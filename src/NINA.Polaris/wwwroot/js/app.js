@@ -33739,19 +33739,37 @@ function ninaApp() {
             }
         },
 
+        // Only offered where a stopped Polaris can actually be started
+        // again by hand: see the x-show on the button. The wording stays
+        // platform-neutral because that set is not only macOS.
         async stopPolaris() {
             if (this.power.stopping) return;
             const ok = await this._confirmAsync(
-                'Stop the Polaris server now? The Mac will remain running, but the web interface will be unavailable until Polaris is launched again from the terminal.',
+                'Stop the Polaris server now? The host keeps running, but the '
+                + 'web interface will be unavailable until Polaris is started '
+                + 'again on the host.',
                 { title: 'Stop Polaris', okLabel: 'Stop server', cancelLabel: 'Cancel', danger: true });
             if (!ok) return;
             this.power.stopping = true;
             try {
-                await this.apiFetch('/api/system/stop-app', { method: 'POST' });
+                const r = await this.apiFetch('/api/system/stop-app', { method: 'POST' });
+                let j = {}; try { j = await r.json(); } catch { }
+                if (!r.ok) {
+                    // An older host without the endpoint, or a refusal. The
+                    // server is still up, so the flag has to come back off:
+                    // it gates both WebSocket reconnects, and left set it
+                    // freezes the page on "stopped" until a manual reload.
+                    this.toast(j.error || 'Stop failed', 'error');
+                    this.power.stopping = false;
+                    return;
+                }
                 this.toast('Polaris is stopping…', 'ok', 4000);
             } catch {
-                // The connection may close before the response is received.
-                this.toast('Polaris is stopping…', 'ok', 4000);
+                // Same reasoning for a request that never completed. If the
+                // server really did go away, the banner reports a lost
+                // connection instead, and that one recovers on its own.
+                this.power.stopping = false;
+                this.toast('Could not reach the server to stop it.', 'error');
             }
         },
 

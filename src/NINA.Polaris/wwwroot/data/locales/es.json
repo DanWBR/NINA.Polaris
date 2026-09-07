@@ -4751,5 +4751,14 @@
   "Points with less structure than this fraction of the best point are dropped.": "Los puntos con menos estructura que esta fracción del mejor punto se descartan.",
   "Best frames averaged into the reference the mesh is built on.": "Mejores fotogramas promediados en la referencia sobre la que se construye la malla.",
   "Local shifts": "Desplazamientos locales",
-  "Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only.": "Sigue el seeing en cada punto con su propio desplazamiento. Desactivado conserva la selección de fotogramas por punto, pero apila solo con el desplazamiento global."
+  "Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only.": "Sigue el seeing en cada punto con su propio desplazamiento. Desactivado conserva la selección de fotogramas por punto, pero apila solo con el desplazamiento global.",
+  "Stop Polaris": "Detener Polaris",
+  "Stopping…": "Deteniendo…",
+  "Stop server": "Detener el servidor",
+  "Polaris is stopping…": "Polaris se está deteniendo…",
+  "Could not reach the server to stop it.": "No se pudo contactar con el servidor para detenerlo.",
+  "Stop the Polaris server now? The host keeps running, but the web interface will be unavailable until Polaris is started again on the host.": "¿Detener el servidor Polaris ahora? El host sigue encendido, pero la interfaz web no estará disponible hasta que Polaris se inicie de nuevo en el host.",
+  "Polaris server stopped. Start it again on the host to reconnect.": "Servidor Polaris detenido. Inícialo de nuevo en el host para reconectar.",
+  "Polaris was stopped from the web interface. Start it again on the host when you want to reconnect.": "Polaris se detuvo desde la interfaz web. Inícialo de nuevo en el host cuando quieras reconectar.",
+  "Polaris may be down. If it does not come back on its own, start it again on the host.": "Puede que Polaris esté caído. Si no vuelve por su cuenta, inícialo de nuevo en el host."
 }

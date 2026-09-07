@@ -14,6 +14,7 @@
 
 using System.Globalization;
 using System.Net.Sockets;
+using Microsoft.Extensions.Configuration.EnvironmentVariables;
 using NINA.Polaris.Endpoints;
 using NINA.Polaris.Middleware;
 using NINA.Polaris.Services;
@@ -97,6 +98,23 @@ if (OperatingSystem.IsMacOS()) {
         "appsettings.MacOS.json",
         optional: true,
         reloadOnChange: true);
+
+    // AddJsonFile appends, and the last source wins, so as added the file
+    // would also beat the environment variables and the command line: on a
+    // Mac, Server__Https__Port=8443 and --Server:Https:Port=8443 would both be
+    // ignored, with no way for the operator to move the port. Slide it in just
+    // ahead of the environment provider instead, where it still overrides
+    // appsettings.json and still loses to anything passed in from outside.
+    var sources = builder.Configuration.Sources;
+    var envAt = -1;
+    for (var i = 0; i < sources.Count; i++) {
+        if (sources[i] is EnvironmentVariablesConfigurationSource) { envAt = i; break; }
+    }
+    if (envAt >= 0) {
+        var macFile = sources[^1];
+        sources.RemoveAt(sources.Count - 1);
+        sources.Insert(envAt, macFile);
+    }
 }
 
 // GX-10: HTTPS self-signed cert. Constructed eagerly here (not via DI)

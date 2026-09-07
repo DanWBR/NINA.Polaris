@@ -4132,5 +4132,14 @@
   "Points with less structure than this fraction of the best point are dropped.": "Points with less structure than this fraction of the best point are dropped.",
   "Best frames averaged into the reference the mesh is built on.": "Best frames averaged into the reference the mesh is built on.",
   "Local shifts": "Local shifts",
-  "Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only.": "Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only."
+  "Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only.": "Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only.",
+  "Stop Polaris": "Stop Polaris",
+  "Stopping…": "Stopping…",
+  "Stop server": "Stop server",
+  "Polaris is stopping…": "Polaris is stopping…",
+  "Could not reach the server to stop it.": "Could not reach the server to stop it.",
+  "Stop the Polaris server now? The host keeps running, but the web interface will be unavailable until Polaris is started again on the host.": "Stop the Polaris server now? The host keeps running, but the web interface will be unavailable until Polaris is started again on the host.",
+  "Polaris server stopped. Start it again on the host to reconnect.": "Polaris server stopped. Start it again on the host to reconnect.",
+  "Polaris was stopped from the web interface. Start it again on the host when you want to reconnect.": "Polaris was stopped from the web interface. Start it again on the host when you want to reconnect.",
+  "Polaris may be down. If it does not come back on its own, start it again on the host.": "Polaris may be down. If it does not come back on its own, start it again on the host."
 }
