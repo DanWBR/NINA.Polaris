@@ -4295,6 +4295,9 @@ function ninaApp() {
         starColor: {
             modalOpen: false, busy: false, framePath: '', aggressiveness: 1.0,
             exclusionRadius: 9, stage: '', error: '',
+            // The violet pedestal is a different defect from the one-sided
+            // fringe, so it is its own switch: off unless the operator asks.
+            violet: false, violetAmount: 1.0, violetRadius: 40,
         },
 
         // STORAGE-1: capture-disk suggestion. `suggest` is only true when a
@@ -38203,6 +38206,9 @@ function ninaApp() {
                         aggressiveness: this.starColor.aggressiveness,
                         exclusionRadius: this.starColor.exclusionRadius,
                         align: true, fringe: true,
+                        violet: this.starColor.violet,
+                        violetAmount: this.starColor.violetAmount,
+                        violetRadius: this.starColor.violetRadius,
                     }),
                 });
                 if (!r.ok) {

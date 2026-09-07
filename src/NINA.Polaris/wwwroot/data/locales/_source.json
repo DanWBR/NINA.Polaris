@@ -4152,5 +4152,8 @@
   "Stop the Polaris server now? The host keeps running, but the web interface will be unavailable until Polaris is started again on the host.": "Stop the Polaris server now? The host keeps running, but the web interface will be unavailable until Polaris is started again on the host.",
   "Polaris server stopped. Start it again on the host to reconnect.": "Polaris server stopped. Start it again on the host to reconnect.",
   "Polaris was stopped from the web interface. Start it again on the host when you want to reconnect.": "Polaris was stopped from the web interface. Start it again on the host when you want to reconnect.",
-  "Polaris may be down. If it does not come back on its own, start it again on the host.": "Polaris may be down. If it does not come back on its own, start it again on the host."
+  "Polaris may be down. If it does not come back on its own, start it again on the host.": "Polaris may be down. If it does not come back on its own, start it again on the host.",
+  "Violet halo around bright stars": "Violet halo around bright stars",
+  "The out-of-focus violet an ED doublet spreads from about 10 px outwards. Brings blue down to the other two channels in the halo only; star cores and their colour are left alone.": "The out-of-focus violet an ED doublet spreads from about 10 px outwards. Brings blue down to the other two channels in the halo only; star cores and their colour are left alone.",
+  "Halo radius": "Halo radius"
 }

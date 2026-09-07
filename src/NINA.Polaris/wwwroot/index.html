@@ -21350,6 +21350,33 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                        @input="starColor.exclusionRadius=+$event.target.value">
                 <span x-text="starColor.exclusionRadius + ' px'" style="min-width:38px;text-align:right"></span>
             </label>
+            <label style="display:flex;align-items:center;gap:8px;margin:14px 0 6px"
+                   title="Removes the broad blue skirt an ED doublet leaves around bright stars. Different from the one-sided fringe above.">
+                <input type="checkbox" x-model="starColor.violet">
+                <span>Violet halo around bright stars</span>
+            </label>
+            <p class="text-muted" style="font-size:12px;margin:0 0 8px">
+                The out-of-focus violet an ED doublet spreads from about 10 px outwards.
+                Brings blue down to the other two channels in the halo only; star cores
+                and their colour are left alone.
+            </p>
+            <label class="editor-slider-row" x-show="starColor.violet" x-cloak
+                   style="display:flex;align-items:center;gap:8px;margin:10px 0">
+                <span style="min-width:130px">Halo strength</span>
+                <input type="range" min="0.1" max="1" step="0.1" style="flex:1"
+                       :value="starColor.violetAmount"
+                       @input="starColor.violetAmount=+$event.target.value">
+                <span x-text="starColor.violetAmount.toFixed(1)" style="min-width:28px;text-align:right"></span>
+            </label>
+            <label class="editor-slider-row" x-show="starColor.violet" x-cloak
+                   style="display:flex;align-items:center;gap:8px;margin:10px 0"
+                   title="How far the violet skirt reaches. Larger focal ratios and brighter stars spread it further.">
+                <span style="min-width:130px">Halo radius</span>
+                <input type="range" min="16" max="80" step="4" style="flex:1"
+                       :value="starColor.violetRadius"
+                       @input="starColor.violetRadius=+$event.target.value">
+                <span x-text="starColor.violetRadius + ' px'" style="min-width:38px;text-align:right"></span>
+            </label>
             <p x-show="starColor.busy" class="text-muted" style="font-size:12px"
                x-text="'Working… ' + (starColor.stage || '')"></p>
             <p x-show="starColor.error" style="color:var(--danger,#e66);font-size:12px"
@@ -23226,7 +23253,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260907-histohandles"></script>
+    <script src="/js/app.js?v=20260907-violet"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
