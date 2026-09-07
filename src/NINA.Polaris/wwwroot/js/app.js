@@ -1868,7 +1868,7 @@ function ninaApp() {
             platform: '', underSystemd: false,
             canRestartApp: true, canReboot: false, canShutdown: false,
             autoStartSupported: false, autoStartEnabled: false,
-            restarting: false, rebooting: false, shuttingDown: false, autoStartBusy: false,
+            restarting: false, stopping: false, rebooting: false, shuttingDown: false, autoStartBusy: false,
             loaded: false
         },
 
@@ -8497,6 +8497,7 @@ function ninaApp() {
         // --- WebSocket with exponential backoff + jitter ---
 
         connectStatusWs() {
+            if (this.power.stopping) return;
             if (this._statusWsTimer) {
                 clearTimeout(this._statusWsTimer);
                 this._statusWsTimer = null;
@@ -8547,7 +8548,7 @@ function ninaApp() {
                 // refused upgrade (the certificate banner, most often) is
                 // underneath it.
                 this._bootReveal();
-                this.scheduleReconnect('status');
+                if (!this.power.stopping) this.scheduleReconnect('status');
             };
 
             ws.onerror = () => {
@@ -8561,6 +8562,7 @@ function ninaApp() {
         },
 
         connectImageWs() {
+            if (this.power.stopping) return;
             if (this._imageWsTimer) {
                 clearTimeout(this._imageWsTimer);
                 this._imageWsTimer = null;
@@ -8606,7 +8608,7 @@ function ninaApp() {
             };
 
             ws.onclose = () => {
-                this.scheduleReconnect('image');
+                if (!this.power.stopping) this.scheduleReconnect('image');
             };
 
             ws.onerror = () => { };
@@ -33986,6 +33988,40 @@ function ninaApp() {
                 // A dropped connection mid-restart is expected; treat as success.
                 this.toast('Restarting Polaris… reconnecting shortly', 'ok', 4000);
                 this._waitForServerThenReload(60);
+            }
+        },
+
+        // Only offered where a stopped Polaris can actually be started
+        // again by hand: see the x-show on the button. The wording stays
+        // platform-neutral because that set is not only macOS.
+        async stopPolaris() {
+            if (this.power.stopping) return;
+            const ok = await this._confirmAsync(
+                'Stop the Polaris server now? The host keeps running, but the '
+                + 'web interface will be unavailable until Polaris is started '
+                + 'again on the host.',
+                { title: 'Stop Polaris', okLabel: 'Stop server', cancelLabel: 'Cancel', danger: true });
+            if (!ok) return;
+            this.power.stopping = true;
+            try {
+                const r = await this.apiFetch('/api/system/stop-app', { method: 'POST' });
+                let j = {}; try { j = await r.json(); } catch { }
+                if (!r.ok) {
+                    // An older host without the endpoint, or a refusal. The
+                    // server is still up, so the flag has to come back off:
+                    // it gates both WebSocket reconnects, and left set it
+                    // freezes the page on "stopped" until a manual reload.
+                    this.toast(j.error || 'Stop failed', 'error');
+                    this.power.stopping = false;
+                    return;
+                }
+                this.toast('Polaris is stopping…', 'ok', 4000);
+            } catch {
+                // Same reasoning for a request that never completed. If the
+                // server really did go away, the banner reports a lost
+                // connection instead, and that one recovers on its own.
+                this.power.stopping = false;
+                this.toast('Could not reach the server to stop it.', 'error');
             }
         },
 

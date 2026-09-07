@@ -1,8 +1,10 @@
 # HTTPS + WebGPU on the LAN
 
 Polaris generates a **self-signed TLS certificate** on first boot and
-listens on **port 5001 (HTTPS)** in addition to the default
-**port 5000 (HTTP)**. The HTTPS endpoint exists for one specific
+listens on **port 5000 (HTTPS)** with HTTP available on **port 5080** for
+the default Linux/Windows production configuration. On macOS, the bundled
+`appsettings.MacOS.json` override uses **port 5001 (HTTPS)** and **port 5081
+(HTTP)** because macOS may reserve port 5000. The HTTPS endpoint exists for one specific
 reason: Chrome (and every other modern browser) gates a handful of
 powerful Web APIs behind a "secure context" check. The ones we care
 about for Polaris:
@@ -37,7 +39,8 @@ On first boot:
    `{LocalApplicationData}/NINA.Polaris/cert/polaris.pfx`
    (Windows: `%LOCALAPPDATA%\NINA.Polaris\cert\polaris.pfx`,
    Linux: `~/.local/share/NINA.Polaris/cert/polaris.pfx`).
-4. Configures Kestrel to serve HTTPS on port 5001 using that cert.
+4. Configures Kestrel to serve HTTPS using that cert on the platform's
+   configured HTTPS port.
 
 The cert is reused on subsequent boots unless:
 
