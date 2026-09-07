@@ -356,13 +356,17 @@ public static class FitsThumbnailer {
         // backing storage, then resize. JPEG encoders are flaky with
         // Gray8 input, so the final step is a round-trip via Rgba8888.
         using var gray = new SKBitmap(width, height, SKColorType.Gray8, SKAlphaType.Opaque);
+        // The copy runs inside the pin: SetPixels keeps the bare pointer, so a
+        // collection between the end of fixed{} and Copy leaves Skia reading
+        // freed address space (SIGSEGV, 2026-09-07).
+        SKBitmap grayCopyTmp;
         unsafe {
             fixed (byte* p = stretched) {
                 gray.SetPixels((IntPtr)p);
+                grayCopyTmp = gray.Copy();
             }
         }
-
-        using var grayCopy = gray.Copy();
+        using var grayCopy = grayCopyTmp;
         double scale = (double)maxDim / Math.Max(grayCopy.Width, grayCopy.Height);
         // Caller passes maxDim=int.MaxValue (or any larger-than-the-source
         // value) to skip downsampling, useful for full-res preview.
@@ -464,12 +468,14 @@ public static class FitsThumbnailer {
         }
 
         using var color = new SKBitmap(width, height, SKColorType.Rgba8888, SKAlphaType.Opaque);
+        SKBitmap colorCopyTmp;
         unsafe {
             fixed (byte* p = rgba) {
                 color.SetPixels((IntPtr)p);
+                colorCopyTmp = color.Copy();   // own the storage, still pinned
             }
         }
-        using var colorCopy = color.Copy();   // own the backing storage
+        using var colorCopy = colorCopyTmp;
 
         double scale = (double)maxDim / Math.Max(colorCopy.Width, colorCopy.Height);
         if (scale > 1) scale = 1;
