@@ -452,10 +452,14 @@ public class ImageRelayService : IDisposable {
     /// route draws it on the frame's canvas. Same drop-if-busy guard as
     /// <see cref="RelayVideoJpegAsync"/>.
     /// </summary>
+    /// <param name="captured">Optional sink for the per-channel stretch the
+    /// JPEG was rendered with, so the LIVE histogram can place its handles on
+    /// the 16-bit axis it draws.</param>
     public async Task<bool> RelayRgbJpegAsync(IImageData rgb,
                                         int maxDim = 1280, int quality = 80,
                                         FrameKind kind = FrameKind.Live,
-                                        CancellationToken ct = default) {
+                                        CancellationToken ct = default,
+                                        List<NINA.Image.ImageAnalysis.AutoStretch.StretchParams>? captured = null) {
         if (_clients.IsEmpty) return false;
         if (Interlocked.CompareExchange(ref _videoRenderInFlight, 1, 0) != 0) return false;
         try {
@@ -463,7 +467,7 @@ public class ImageRelayService : IDisposable {
             try {
                 jpeg = await Task.Run(() => FitsThumbnailer.RenderJpegFromRgbPlanes(
                     rgb.Data, rgb.Properties.Width, rgb.Properties.Height,
-                    rgb.Properties.BitDepth, maxDim, quality), ct);
+                    rgb.Properties.BitDepth, maxDim, quality, captured: captured), ct);
             } catch (Exception ex) {
                 _logger.LogDebug(ex, "RGB JPEG render failed (skipping frame)");
                 return false;

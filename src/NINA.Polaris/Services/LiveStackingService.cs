@@ -641,6 +641,13 @@ public class LiveStackingService {
     public int ColorHistLo { get; private set; }
     public int ColorHistHi { get; private set; } = 65535;
 
+    /// <summary>The per-channel black/mid/white the relayed colour JPEG was
+    /// rendered with, R then G then B, as fractions of full scale. Null until
+    /// a colour frame has been relayed. The client needs these to place the
+    /// histogram handles: it draws 16-bit ADU while the handles drive a LUT
+    /// over the 8-bit JPEG this stretch produced.</summary>
+    public NINA.Image.ImageAnalysis.AutoStretch.StretchParams[]? ColorStretch { get; private set; }
+
     /// <summary>Build the 256-bin 16-bit luminance histogram + min/max/mean/std
     /// of a planar RGB stack (subsampled on big sensors). Cheap; runs once per
     /// integrated colour frame, off the relay's broadcast. Two passes: the
@@ -1652,8 +1659,14 @@ public class LiveStackingService {
                 _logger.LogInformation(
                     "LIVE-TRACE   -> RelayRgbJpegAsync kind=LiveStack ch=3 bayer=None jpegDim={Dim} q=90 (client shows the JPEG as-is; no client debayer)",
                     jpegDim == int.MaxValue ? "native" : jpegDim.ToString());
+                // Keep the per-channel stretch this JPEG was rendered with. The
+                // histogram panel draws 16-bit ADU while its handles drive a LUT
+                // over this 8-bit image, so without the mapping between the two
+                // the handles cannot be placed on the axis they sit above.
+                var used = new List<NINA.Image.ImageAnalysis.AutoStretch.StretchParams>(3);
                 await _relay.RelayRgbJpegAsync(rgbImage, maxDim: jpegDim, quality: 90,
-                    kind: FrameKind.LiveStack, ct: ct);
+                    kind: FrameKind.LiveStack, ct: ct, captured: used);
+                if (used.Count >= 3) ColorStretch = used.ToArray();
             } else {
                 // Stabilize the relayed Bayer pattern: a single frame whose
                 // CCD_CFA was momentarily empty (BayerPattern=None) must not

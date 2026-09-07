@@ -404,10 +404,16 @@ public static class FitsThumbnailer {
     /// independently so a stacked OSC integration looks natural
     /// (per-channel MTF is what most viewers do for FITS RGB cubes).
     /// </summary>
+    /// <param name="captured">Optional sink for the per-channel parameters
+    /// this render actually used. The LIVE histogram needs them: it draws the
+    /// 16-bit data while its handles drive a LUT over this 8-bit JPEG, and
+    /// without the mapping between the two a handle cannot be placed on the
+    /// axis it is drawn against.</param>
     public static byte[] RenderJpegFromRgbPlanes(ushort[] pixels, int width, int height,
                                                  int bitDepth, int maxDim = 256, int quality = 85,
                                                  NINA.Image.ImageAnalysis.AutoStretch.StretchParams[]? overrideParams = null,
-                                                 bool asinh = false) {
+                                                 bool asinh = false,
+                                                 List<NINA.Image.ImageAnalysis.AutoStretch.StretchParams>? captured = null) {
         int planeSize = width * height;
         if (pixels.Length < planeSize * 3)
             // Defensive, caller mis-claimed colour. Fall back to mono
@@ -452,9 +458,19 @@ public static class FitsThumbnailer {
             bs = NINA.Image.ImageAnalysis.AutoStretch.ApplyManual(b, width, height,
                 ps[2].Black, ps[2].Mid, ps[2].White, bitDepth);
         } else {
-            rs = NINA.Image.ImageAnalysis.AutoStretch.Apply(r, width, height, bitDepth);
-            gs = NINA.Image.ImageAnalysis.AutoStretch.Apply(g, width, height, bitDepth);
-            bs = NINA.Image.ImageAnalysis.AutoStretch.Apply(b, width, height, bitDepth);
+            // Compute then apply, rather than AutoStretch.Apply, so the three
+            // parameter sets can be handed back: the client needs them to put
+            // its handles on the ADU axis.
+            var pr = NINA.Image.ImageAnalysis.AutoStretch.ComputeAutoStretchParams(r, width, height, bitDepth);
+            var pg = NINA.Image.ImageAnalysis.AutoStretch.ComputeAutoStretchParams(g, width, height, bitDepth);
+            var pb = NINA.Image.ImageAnalysis.AutoStretch.ComputeAutoStretchParams(b, width, height, bitDepth);
+            rs = NINA.Image.ImageAnalysis.AutoStretch.ApplyManual(r, width, height, pr.Black, pr.Mid, pr.White, bitDepth);
+            gs = NINA.Image.ImageAnalysis.AutoStretch.ApplyManual(g, width, height, pg.Black, pg.Mid, pg.White, bitDepth);
+            bs = NINA.Image.ImageAnalysis.AutoStretch.ApplyManual(b, width, height, pb.Black, pb.Mid, pb.White, bitDepth);
+            captured?.AddRange(new[] { pr, pg, pb });
+        }
+        if (captured != null && captured.Count == 0 && overrideParams is { Length: >= 3 }) {
+            captured.AddRange(overrideParams[..3]);
         }
 
         // Interleave into RGBA8888 for Skia. Alpha is opaque.
