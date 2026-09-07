@@ -10030,6 +10030,11 @@ function ninaApp() {
             // the operator never asked for. A JPEG-derived luminance really is
             // 0..255 display space, so there full scale IS maxVal.
             this.histo._fullScale = hasRaw ? ((1 << (f.bitDepth || 16)) - 1) : maxVal;
+            // Bins computed here always span the whole scale, and the
+            // handles already act on this same data, so no conversion.
+            this.histo._binLo = 0;
+            this.histo._binHi = 1;
+            this.histo._srvStretch = null;
             if (hasRaw) {
                 this.histo._autoBlack = Math.max(0, Math.min(1, ap.shadow / maxVal));
                 this.histo._autoWhite = Math.max(0, Math.min(1, aWhite / maxVal));
@@ -10100,7 +10105,30 @@ function ninaApp() {
             this.histo.avg = Math.round(ls.colorHistMean || 0);
             this.histo.std = Math.round(ls.colorHistStd || 0);
             this.histo._maxVal = maxVal;
-            this.histo._fullScale = maxVal;   // server bins already span 0..65535
+            this.histo._fullScale = maxVal;
+            // The server bins over the band it found populated, not over
+            // 0..65535: on a stacked sky the whole distribution used to land in
+            // two buckets of 256, which no window can draw as anything but a
+            // hairline. Place them where the server says they sit.
+            const bandLo = Number(ls.colorHistLo), bandHi = Number(ls.colorHistHi);
+            const haveBand = isFinite(bandLo) && isFinite(bandHi) && bandHi > bandLo;
+            this.histo._binLo = haveBand ? bandLo / maxVal : 0;
+            this.histo._binHi = haveBand ? bandHi / maxVal : 1;
+            // The stretch this JPEG was rendered with. The handles drive a LUT
+            // over that 8-bit image while this panel draws 16-bit ADU, so
+            // without it a handle cannot be placed on the axis it sits above:
+            // black and white pinned to 0 and 1 of full scale, which since the
+            // bins cover only the populated band means both clamp to the panel
+            // edges, and a drag moves the LUT by an unrelated amount.
+            // Green is the reference channel: it carries 59% of the luminance
+            // and its pedestal sits between red's and blue's. One handle cannot
+            // stand for three different per-channel mappings.
+            const st = Array.isArray(ls.colorStretch) ? ls.colorStretch : null;
+            const g = st && st.length >= 2 ? st[1] : null;
+            this.histo._srvStretch = (g && isFinite(g.black) && isFinite(g.white)
+                                      && g.white > g.black)
+                ? { black: g.black, mid: g.mid, white: g.white }
+                : null;
             // Server already stretched the JPEG → keep the handles at identity.
             this.histo._autoBlack = 0;
             this.histo._autoWhite = 1;
@@ -10127,6 +10155,15 @@ function ninaApp() {
             // mid-grey = black + midBalance*(white-black).
             const _b = this.histo.blackFrac, _w = this.histo.whiteFrac;
             this.histo.midFrac = _b + Math.max(0.001, Math.min(0.999, midBal)) * (_w - _b);
+            // Everything above is in the space the handles ACT in: the 8-bit
+            // display for a server-rendered colour stack, the data itself
+            // otherwise. The panel draws 16-bit ADU, so convert before anything
+            // downstream places a marker or frames the window.
+            if (this.histo._srvStretch) {
+                this.histo.blackFrac = this._histoDisplayToAxis(this.histo.blackFrac);
+                this.histo.whiteFrac = this._histoDisplayToAxis(this.histo.whiteFrac);
+                this.histo.midFrac = this._histoDisplayToAxis(this.histo.midFrac);
+            }
             // While a handle is being dragged, freeze the drawn X range so the
             // pointer→fraction reference can't shift under the drag (the same
             // drift the editor histogram had). It re-frames on the next redraw
@@ -10134,8 +10171,14 @@ function ninaApp() {
             if (this._histoDrag) return;
             const maxV = this.histo._maxVal || 65535;
             if (this.histoZoom) {
-                let lo = (this.histo.min / maxV) - 0.01;
-                let hi = (this.histo.avg + 8 * this.histo.std) / maxV + 0.02;
+                // Frame the window on where the pixels ACTUALLY are. The old
+                // rule was avg + 8*std, which assumes one Gaussian: on a
+                // stacked sky (a narrow peak with a long faint tail) and on a
+                // CFA mosaic (one peak per channel pedestal, thousands of
+                // counts apart) the sigma is not the width of anything, so the
+                // window opened far wider than the data and the curve drew as
+                // a hairline until the operator hit Auto a couple of times.
+                let [lo, hi] = this.histoDataWindow();
                 // Expand the window so a handle the user placed stays
                 // visible — but ONLY for handles meaningfully inside the
                 // range. In the OSC/JPEG flow the auto handles sit at
@@ -10148,8 +10191,18 @@ function ninaApp() {
                     lo = Math.min(lo, this.histo.blackFrac - 0.02);
                 if (this.histo.whiteFrac < 0.999)
                     hi = Math.max(hi, this.histo.whiteFrac + 0.02);
+                // Degeneracy guard only. This used to demand 0.05 of full
+                // scale, 3277 ADU, which is wider than an entire stacked sky:
+                // it overrode the window above and left the curve in a corner
+                // of its own panel (measured on a 74-frame OSC stack: window
+                // 1002..1852 ADU asked for, 1002..4279 drawn). Four buckets of
+                // whatever axis the bins are on is enough to keep the maths
+                // well behaved without framing anything the data did not ask
+                // for.
+                const axis = (this.histo._binHi ?? 1) - (this.histo._binLo ?? 0);
+                const minSpan = Math.max(0.004, 4 * axis / 256);
                 this.histo.dispLo = Math.max(0, lo);
-                this.histo.dispHi = Math.min(1, Math.max(this.histo.dispLo + 0.05, hi));
+                this.histo.dispHi = Math.min(1, Math.max(this.histo.dispLo + minSpan, hi));
             } else {
                 // Zoom off means STATIC and FULL RANGE. dispHi is expressed in
                 // bin-fraction space, so when maxVal was clamped below the real
@@ -10160,6 +10213,105 @@ function ninaApp() {
                 this.histo.dispLo = 0;
                 this.histo.dispHi = maxV > 0 ? Math.max(1, full / maxV) : 1;
             }
+        },
+
+        // The [lo, hi] fraction of the axis the zoomed histogram should show:
+        // the 0.1th to 99.9th percentile of the bins, with a small margin, so
+        // the drawn curve fills the panel whatever the distribution looks like.
+        // Falls back to the old spread estimate when there are no bins yet.
+        histoDataWindow() {
+            const h = this.histo;
+            const maxV = h._maxVal || 65535;
+            // Frame every curve the panel actually DRAWS. On an OSC stack that
+            // is the three per-channel arrays, and the window used to be taken
+            // from the luminance array instead. The channels of a colour stack
+            // sit on very different pedestals, so the two are not
+            // interchangeable: measured on a live NGC 7173 stack, R peaked at
+            // 4531 ADU, G at 7507 and B at 11208 while luminance sat at 7049.
+            // The window came out 6369..8045, which framed green nicely and
+            // left red's bulk off the left edge and blue off the right edge
+            // altogether, so the panel showed one green hump and a flat red
+            // line (field, 2026-09-06).
+            const sets = (h.color && h.binsR && h.binsG && h.binsB)
+                ? [h.binsR, h.binsG, h.binsB]
+                : (h.bins ? [h.bins] : []);
+            if (!sets.length || sets[0].length < 2) {
+                return [(h.min / maxV) - 0.01,
+                        (h.avg + 8 * h.std) / maxV + 0.02];
+            }
+            let lo = Infinity, hi = -Infinity;
+            for (const bins of sets) {
+                const [a, b] = this._histoBulkOf(bins);
+                if (a === null) continue;
+                if (a < lo) lo = a;
+                if (b > hi) hi = b;
+            }
+            if (!(hi > lo)) return [0, 1];
+            // Pad relative to the data, not to full scale: 0.01/0.02 of
+            // 0..65535 is 655/1310 ADU, wider than a stacked sky's entire
+            // distribution, so the padding owned the axis and the curve drew
+            // as a hairline in the middle of it.
+            const wide = Math.max(1e-4, hi - lo);
+            return [lo - Math.max(0.0015, wide * 0.10),
+                    hi + Math.max(0.0030, wide * 0.20)];
+        },
+
+        // Where one bin array's bulk sits, as a fraction of full scale. The
+        // upper edge is the 99.5th percentile, not the 99.9th: a sky histogram
+        // is steep on the left with a long sparse tail on the right, and the
+        // last 0.1% of the pixels sits so far up that tail that framing on it
+        // pushed the peak into the left third of the panel. Returns
+        // [null, null] for an empty array.
+        _histoBulkOf(bins) {
+            let total = 0;
+            for (let i = 0; i < bins.length; i++) total += bins[i];
+            if (!(total > 0)) return [null, null];
+            const span = bins.length - 1;
+            const at = (q) => {
+                const want = total * q;
+                let acc = 0;
+                for (let i = 0; i < bins.length; i++) {
+                    acc += bins[i];
+                    if (acc >= want) return this._histoBinFrac(i / span);
+                }
+                return this._histoBinFrac(1);
+            };
+            return [at(0.001), at(0.995)];
+        },
+
+        // Inverse of _mtf: the input that maps to y under midtone m.
+        _mtfInv(y, m) {
+            if (y <= 0) return 0;
+            if (y >= 1) return 1;
+            if (m <= 0 || m >= 1) return y;
+            const den = y * (2 * m - 1) - m + 1;
+            return Math.abs(den) < 1e-12 ? y : (y * m) / den;
+        },
+
+        // A handle's fraction of the 8-bit display scale, to the fraction of
+        // full scale where it lands on the 16-bit axis this panel draws.
+        // Identity when the histogram came from local pixels, because there the
+        // handles already act on the same data.
+        _histoDisplayToAxis(d) {
+            const s = this.histo._srvStretch;
+            if (!s) return d;
+            return s.black + this._mtfInv(d, s.mid) * (s.white - s.black);
+        },
+
+        // The other direction, for a handle dropped on the axis.
+        _histoAxisToDisplay(a) {
+            const s = this.histo._srvStretch;
+            if (!s) return a;
+            const x = (a - s.black) / Math.max(1e-9, s.white - s.black);
+            return this._mtf(Math.max(0, Math.min(1, x)), s.mid);
+        },
+
+        // Position within the bin array (0..1) to a fraction of full scale.
+        // Identity for locally computed histograms; the server's colour-stack
+        // bins cover only the populated band and carry its ADU bounds.
+        _histoBinFrac(t) {
+            const lo = this.histo._binLo ?? 0, hi = this.histo._binHi ?? 1;
+            return lo + t * (hi - lo);
         },
 
         // Draw the histogram bars + black/white marker lines onto the active
@@ -10179,7 +10331,7 @@ function ninaApp() {
             for (let b = 0; b < NB; b++) {
                 const c = bins[b];
                 if (c <= 0) continue;
-                const frac = (b + 0.5) / NB;
+                const frac = this._histoBinFrac((b + 0.5) / NB);
                 if (frac < lo || frac > hi) continue;
                 const x = ((frac - lo) / span) * w;
                 const y = h - (Math.log1p(c) / pk) * (h - 1);
@@ -10391,21 +10543,23 @@ function ninaApp() {
             const span = Math.max(1e-6, hi - lo);
             let fx = (e.clientX - d.rect.left) / Math.max(1, d.rect.width);
             fx = Math.max(0, Math.min(1, fx));
-            const frac = lo + fx * span;
+            // The pointer lands on the drawn axis; the stretch lives in the
+            // space the handles act in. Convert once, here, and let
+            // _histoUpdateEndpoints derive the drawn positions back from it, so
+            // there is a single source of truth either way.
+            const dfrac = this._histoAxisToDisplay(lo + fx * span);
             // No hard limits: each handle is bounded only by its neighbours.
             // black: 0 .. white, mid: black .. white, white: mid .. 1.
             if (d.which === 'black') {
-                this.stretchBlack = Math.max(0, Math.min(frac, this.stretchWhite));
-                this.histo.blackFrac = this.stretchBlack;
+                this.stretchBlack = Math.max(0, Math.min(dfrac, this.stretchWhite));
             } else if (d.which === 'white') {
-                this.stretchWhite = Math.min(1, Math.max(frac, this.stretchBlack));
-                this.histo.whiteFrac = this.stretchWhite;
+                this.stretchWhite = Math.min(1, Math.max(dfrac, this.stretchBlack));
             } else { // mid
-                const b = this.histo.blackFrac, w = this.histo.whiteFrac;
-                const cf = Math.max(b, Math.min(frac, w));
+                const b = this.stretchBlack, w = this.stretchWhite;
+                const cf = Math.max(b, Math.min(dfrac, w));
                 this.stretchMid = Math.max(0.001, Math.min(0.999, (cf - b) / Math.max(1e-6, w - b)));
-                this.histo.midFrac = cf;
             }
+            this._histoUpdateEndpoints();   // redraws the pills where they land
             // While dragging, do NOT re-render the frame (that full-frame
             // stretch is what froze the UI). The handles track the pointer
             // live via their reactive :style; only the lightweight histogram
@@ -45594,7 +45748,23 @@ function ninaApp() {
                 // read .triggers + per-frame HFR / star count without
                 // a second source of truth.
                 const _wasLiveRunning = this.liveStackStatus?.isRunning;
+                // The histogram panel is repainted when a JPEG frame lands, but
+                // the bins and their ADU band ride THIS tick, so a stack update
+                // kept drawing the previous stack's window until something else
+                // forced a redraw. Pressing Auto was that something: it toggles
+                // stretchAuto and calls applyManualStretch, and twice put the
+                // toggle back where it started, so what fixed the panel was the
+                // redraw, not the auto-stretch (field report, 2026-09-06).
+                const _histoSig = (h) => h
+                    ? `${h.frameCount}|${h.colorHistLo}|${h.colorHistHi}|${h.colorHistMean}`
+                    : '';
+                const _histoChanged =
+                    _histoSig(msg.liveStack) !== _histoSig(this.liveStackStatus);
                 this.liveStackStatus = msg.liveStack;
+                if (_histoChanged && Array.isArray(msg.liveStack.colorHistogram)) {
+                    this._histoToken++;
+                    this.drawHistogram();
+                }
                 // Auto-open the quality HUD when a stack starts, so SNR / ETA /
                 // sub-exposure advice + the SNR-HFR chart are visible without
                 // hunting for the overlay toggle (they used to be gated behind

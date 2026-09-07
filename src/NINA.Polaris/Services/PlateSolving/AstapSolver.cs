@@ -369,10 +369,21 @@ public class AstapSolver : IPlateSolver {
     /// the command line) under both <c>/usr/bin</c> and <c>/usr/local/bin</c>,
     /// since the official ASTAP .deb installs the GUI binary as
     /// <c>/usr/local/bin/astap</c> and ships no <c>astap_cli</c>.</summary>
+    // Resolved once per process. Picking involves running each headless
+    // candidate to read its version banner: cheap, but SolverPath is read on
+    // every solve and on every IsAvailable check.
+    private static string? _resolved;
+    private static readonly object _resolveLock = new();
+
     private static string ResolveAstapPath() {
-        foreach (var c in AstapCandidates()) {
-            if (File.Exists(c)) return c;
+        lock (_resolveLock) {
+            return _resolved ??= ResolveAstapPathUncached();
         }
+    }
+
+    private static string ResolveAstapPathUncached() {
+        var picked = PickAstap(AstapCandidates(), File.Exists, ReadAstapVersion);
+        if (picked != null) return picked;
         // Last resort: search PATH for either name.
         foreach (var name in OperatingSystem.IsWindows()
                      ? new[] { "astap_cli.exe", "astap.exe" }
@@ -381,6 +392,90 @@ public class AstapSolver : IPlateSolver {
             if (onPath != null) return onPath;
         }
         return GetDefaultAstapPath();
+    }
+
+    /// <summary>Choose which ASTAP to run. Binary KIND still decides first,
+    /// every headless <c>astap_cli</c> before any graphical <c>astap</c>; what
+    /// changes is how a tie inside the headless group is broken. It used to be
+    /// path order, and that is wrong whenever a board carries more than one
+    /// build.
+    ///
+    /// Measured on an Orange Pi 5 Pro, 2026-09-06. It had
+    /// <c>/usr/bin/astap_cli</c> (CLI-2025.09.29, pulled in by the
+    /// <c>astap-cli</c> package our own .deb recommends) and
+    /// <c>/opt/astap/astap_cli</c> (CLI-2026.05.18). Same frame, same
+    /// arguments, same "Only 0 stars found in image. Abort" verdict:
+    /// <b>114.6 s against 0.93 s</b>. Path order handed every solve to the slow
+    /// one, while an Orange Pi 4 Pro that simply lacked that package was a
+    /// hundred times quicker on slower silicon.
+    ///
+    /// Only headless candidates are ever probed: running the graphical binary
+    /// to ask its version would open a window on a desktop.</summary>
+    internal static string? PickAstap(IEnumerable<string> candidates,
+                                      Func<string, bool> exists,
+                                      Func<string, DateOnly?> versionOf) {
+        var found = candidates.Where(exists).ToList();
+        if (found.Count == 0) return null;
+
+        var headless = found.Where(IsHeadlessAstap).ToList();
+        if (headless.Count == 0) return found[0];
+        if (headless.Count == 1) return headless[0];
+
+        string best = headless[0];
+        DateOnly? bestVersion = null;
+        foreach (var path in headless) {
+            var v = versionOf(path);
+            if (v == null) continue;
+            if (bestVersion == null || v > bestVersion) { bestVersion = v; best = path; }
+        }
+        return best;
+    }
+
+    private static bool IsHeadlessAstap(string path)
+        => Path.GetFileNameWithoutExtension(path)
+               .Equals("astap_cli", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The date out of ASTAP's banner ("...version CLI-2026.05.18"),
+    /// printed on stdout when it is run with no arguments. Null when the binary
+    /// does not answer, times out or prints something else, and then path order
+    /// decides as it always did.</summary>
+    private static DateOnly? ReadAstapVersion(string path) {
+        try {
+            using var p = Process.Start(new ProcessStartInfo(path) {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            });
+            if (p == null) return null;
+            // Both pipes are drained asynchronously: a synchronous ReadToEnd
+            // on one of them deadlocks if the child fills the other, and this
+            // runs once per process start, on a path with no timeout above it.
+            var stdout = p.StandardOutput.ReadToEndAsync();
+            var stderr = p.StandardError.ReadToEndAsync();
+            if (!p.WaitForExit(5000)) {
+                try { p.Kill(entireProcessTree: true); } catch { }
+                return null;
+            }
+            return ParseAstapVersion(stdout.GetAwaiter().GetResult())
+                ?? ParseAstapVersion(stderr.GetAwaiter().GetResult());
+        } catch {
+            return null;
+        }
+    }
+
+    /// <summary>Split out so a test can feed it a real banner.</summary>
+    internal static DateOnly? ParseAstapVersion(string banner) {
+        var m = System.Text.RegularExpressions.Regex.Match(
+            banner ?? "", @"(20\d\d)\.(\d\d)\.(\d\d)");
+        if (!m.Success) return null;
+        try {
+            return new DateOnly(int.Parse(m.Groups[1].Value),
+                                int.Parse(m.Groups[2].Value),
+                                int.Parse(m.Groups[3].Value));
+        } catch {
+            return null;   // 2026.13.40 and friends
+        }
     }
 
     internal static IEnumerable<string> AstapCandidates()

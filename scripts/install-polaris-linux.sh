@@ -118,6 +118,35 @@ fetch() {
 
 apt_try() { apt-get install -y "$@" || { note_fail "apt install $*"; apt_recover; }; }
 
+# Same, but one name that has no installation candidate must not take the rest
+# of the line down with it. apt aborts the WHOLE command in that case: a
+# Kubuntu 24.04 machine with no indi-full candidate also ended up with no
+# openssh-server, no phd2 and no astrometry.net, and then could not even be
+# reached over SSH to fix it. Try the fast combined path first, and on failure
+# install one at a time so the damage is limited to the package that is really
+# missing, and so the summary names it.
+apt_try_each() {
+    if apt-get install -y "$@" >/dev/null 2>&1; then return 0; fi
+    apt_recover
+    echo "  combined install failed, retrying one package at a time"
+    local p rc=0
+    for p in "$@"; do
+        if apt-get install -y "$p"; then
+            echo "  ok: $p"
+        else
+            note_fail "apt install $p"; apt_recover; rc=1
+        fi
+    done
+    return $rc
+}
+
+# Does apt have something to install for this name on this machine?
+has_candidate() {
+    local c
+    c="$(apt-cache policy "$1" 2>/dev/null | awk -F': ' '/Candidate:/ {print $2; exit}')"
+    [ -n "$c" ] && [ "$c" != "(none)" ]
+}
+
 # ---------------------------------------------------------------------------
 # Locate the optional host-built payload (debs pre-downloaded on the host)
 # ---------------------------------------------------------------------------
@@ -265,8 +294,34 @@ apt-get update || note_fail "apt update (ppa)"
 # 3. INDI + PHD2 + SSH + astrometry (mirror packages)
 # ---------------------------------------------------------------------------
 banner "INDI + PHD2 + SSH + astrometry"
-apt_try indi-full phd2 openssh-server astrometry.net astrometry-data-tycho2
-systemctl enable ssh || note_fail "enable ssh"
+
+# indi-full is a PPA package, not an Ubuntu archive one. When the PPA carries
+# nothing for this release, or add-apt-repository failed above, fall back to
+# the indiserver the distribution itself ships: core drivers only, but a
+# working INDI instead of none at all.
+INDI_PKG=indi-full
+if ! has_candidate indi-full; then
+    if has_candidate indi-bin; then
+        INDI_PKG=indi-bin
+        echo "  indi-full has no candidate here (the INDI PPA has nothing for this release)."
+        echo "  Falling back to indi-bin: core drivers only, third-party ones will be missing."
+    else
+        INDI_PKG=""
+        note_fail "no INDI package available (neither indi-full nor indi-bin)"
+    fi
+fi
+
+# shellcheck disable=SC2086
+apt_try_each $INDI_PKG phd2 openssh-server astrometry.net astrometry-data-tycho2
+
+# Only meaningful once openssh-server is actually installed. It used to run
+# unconditionally, so a failed apt line produced a second, confusing failure
+# ("Unit file ssh.service does not exist") that pointed away from the cause.
+if systemctl cat ssh.service >/dev/null 2>&1; then
+    systemctl enable ssh || note_fail "enable ssh"
+else
+    note_fail "enable ssh (openssh-server is not installed)"
+fi
 
 # ---------------------------------------------------------------------------
 # 4. Polaris - the one essential step (local payload first)
@@ -309,7 +364,42 @@ if [ -n "$CLI_ZIP" ]; then
     fi
 fi
 
-install_deb "d80_star_database.deb" "$ASTAP_D80_URL" "astap d80 db" || true
+# The d80 database is the heaviest download in the whole script. Do not pull
+# it again when this machine already has it, and reuse a copy that is already
+# sitting somewhere obvious (suggested by Paul on Discord, 2026-09-06).
+d80_installed() {
+    dpkg-query -W -f='${Status}' d80-star-database 2>/dev/null \
+        | grep -q '^install ok installed' && return 0
+    # The database files themselves, wherever the ASTAP packaging put them.
+    # Loop over the glob instead of handing it to ls: with nullglob set an
+    # unmatched glob vanishes and ls degrades into listing the current
+    # directory, which succeeds, and every machine would look like it
+    # already had the database. Iterating is correct either way.
+    local f
+    for f in /usr/share/astap/*.1476 /opt/astap/*.1476 \
+             /usr/local/share/astap/*.1476; do
+        [ -e "$f" ] && return 0
+    done
+    return 1
+}
+
+d80_on_disk() {
+    local p
+    for p in "$PAYLOAD/d80_star_database.deb" /var/cache/apt/archives/d80*.deb \
+             /root/d80*.deb /home/*/Downloads/d80*.deb /home/*/d80*.deb; do
+        [ -s "$p" ] && { echo "$p"; return 0; }
+    done
+    return 1
+}
+
+if d80_installed; then
+    echo "  d80 star database already present, skipping the download"
+elif D80_LOCAL="$(d80_on_disk)"; then
+    echo "  using the copy already on disk: $D80_LOCAL"
+    apt-get install -y "$D80_LOCAL" || { note_fail "install astap d80 db"; apt_recover; }
+else
+    install_deb "d80_star_database.deb" "$ASTAP_D80_URL" "astap d80 db" || true
+fi
 
 rm -rf /tmp/astap*.deb /tmp/astap_cli.zip /tmp/astapcli /tmp/d80*.deb /tmp/polaris_*.deb 2>/dev/null || true
 [ -n "$PAYLOAD" ] && umount /mnt/payload 2>/dev/null || true

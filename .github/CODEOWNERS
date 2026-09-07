@@ -1,0 +1,20 @@
+# Code owners for Polaris Astro Controller.
+#
+# `master` and `preview` are protected and require an approving review
+# from an owner listed here, so this file decides who has to say yes
+# before a change lands.
+
+# Everything, by default.
+*                                           @DanWBR
+
+# Listed again on purpose, not because the rule above misses them.
+# These are the places where a change is a product decision as much as a
+# code one, and where an unreviewed change is hardest to undo later:
+# the interface, its wording in five languages, the release plumbing and
+# the documents that tell the next contributor how the project works.
+/src/NINA.Polaris/wwwroot/                  @DanWBR
+/src/NINA.Polaris/wwwroot/data/locales/     @DanWBR
+/.github/                                   @DanWBR
+/packaging/                                 @DanWBR
+/AGENTS.md                                  @DanWBR
+/CONTRIBUTING.md                            @DanWBR

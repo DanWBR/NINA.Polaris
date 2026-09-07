@@ -290,14 +290,16 @@ public class FrameProcessingService {
     /// caller passes a fresh array each time, which is what we do).</summary>
     private static SKBitmap LoadGray8Bitmap(byte[] pixels, int width, int height) {
         var bitmap = new SKBitmap(width, height, SKColorType.Gray8, SKAlphaType.Opaque);
+        // SetPixels with a raw pointer doesn't copy, so the copy that gives the
+        // bitmap its own storage has to happen while the array is still pinned.
+        // Copying after fixed{} closed left a window where a collection could
+        // move the array first (SIGSEGV, 2026-09-07).
         unsafe {
             fixed (byte* p = pixels) {
                 bitmap.SetPixels((IntPtr)p);
+                return bitmap.Copy();
             }
         }
-        // SetPixels with a raw pointer doesn't copy; copy now so the
-        // backing byte[] can be GC'd after this call returns.
-        return bitmap.Copy();
     }
 
     private static SKBitmap MaybeResize(SKBitmap src, int maxSize) {

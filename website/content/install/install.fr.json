@@ -59,7 +59,7 @@
         "host": "Mac (Apple Silicon / Intel)",
         "ram": "4+ GB",
         "status": "À tester",
-        "notes": "Builds autonomes depuis la 0.98.66. Le matériel passe par Alpaca, INDI et les SDK natifs de caméra ; ASCOM est réservé à Windows, et les extras Linux (WiFi, alimentation, horloge de l'hôte) sont absents. Personne ne l'a encore lancé sur un Mac."
+        "notes": "Builds autonomes depuis la 0.98.66. Le matériel passe par Alpaca, INDI et les SDK natifs de caméra ; ASCOM est réservé à Windows, et les extras Linux (WiFi, alimentation, horloge de l'hôte) sont absents. Un contributeur l'utilise désormais sur un Mac avec un indiserver local, avec caméra ZWO, monture, focuser et caméra de guidage connectés."
       }
     ]
   },
@@ -314,7 +314,7 @@
       "badge": ".tar.gz",
       "icon": "apple",
       "color": "#a1a1aa",
-      "summary": "Nouveauté de la 0.98.66, en toute franchise : la compilation et l'empaquetage sont vérifiés sur les runners Apple, l'exécution de l'app sur un Mac ne l'est pas. Considérez cela comme une première version et dites-nous ce que vous trouvez.",
+      "summary": "Nouveauté de la 0.98.66, et depuis, un contributeur l'a lancée sur un Mac avec un indiserver local : caméra ZWO refroidie, monture AM5, focuser EAF et caméra de guidage, tout connecté et fonctionnel. C'est encore récent, et les extras propres à Linux sont absents, alors dites-nous ce que vous trouvez.",
       "steps": "curl -LO https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-osx-arm64.tar.gz\ntar -xzf polaris-osx-arm64.tar.gz\ncd polaris-osx-arm64\nxattr -dr com.apple.quarantine .\n./NINA.Polaris",
       "notes": "Ouvrez https://localhost:5000 et acceptez le certificat auto-signé une fois. La ligne xattr est là parce que le téléchargement n'est pas signé. Sur macOS le matériel passe par Alpaca, INDI (un indiserver local via Homebrew, ou distant sur un Pi) et les SDK natifs de caméra ; ASCOM reste réservé à Windows. Placez la .dylib du fabricant à côté du binaire, ou pointez POLARIS_NATIVE_SDK_DIR dessus, et les pilotes natifs apparaissent dans RIGS. Sur un Mac Intel, remplacez osx-arm64 par osx-x64."
     },

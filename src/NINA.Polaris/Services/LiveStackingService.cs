@@ -406,6 +406,29 @@ public class LiveStackingService {
         return 4;
     }
 
+    /// <summary>Mosaic-free view of a CFA frame, at FULL resolution, for star
+    /// detection only. Every output pixel is the mean of the 2x2 block starting
+    /// at it, so it carries one R, two G and one B: the per-channel pedestals
+    /// average out, a robust noise estimate over the result measures noise
+    /// instead of the channel gap, and star positions and sizes stay exactly
+    /// where they were. Cheaper and blunter than a debayer, which is all the
+    /// detector needs; the pixels that get stacked are still the untouched
+    /// mosaic.</summary>
+    internal static ushort[] CfaPseudoLuminance(ushort[] src, int w, int h) {
+        if (src == null || w < 2 || h < 2) return src!;
+        var dst = new ushort[src.Length];
+        for (int y = 0; y < h; y++) {
+            int y1 = y + 1 < h ? y + 1 : y;
+            int r0 = y * w, r1 = y1 * w;
+            for (int x = 0; x < w; x++) {
+                int x1 = x + 1 < w ? x + 1 : x;
+                dst[r0 + x] = (ushort)((src[r0 + x] + src[r0 + x1]
+                                        + src[r1 + x] + src[r1 + x1]) >> 2);
+            }
+        }
+        return dst;
+    }
+
     /// <summary>
     /// Box-average the frame down by <paramref name="bin"/>. For a CFA frame the
     /// reduction works on whole 2x2 Bayer cells and averages the pixels sharing a
@@ -609,9 +632,26 @@ public class LiveStackingService {
     public int[]? ColorHistogramG { get; private set; }
     public int[]? ColorHistogramB { get; private set; }
 
+    // ADU value of the first and last bucket. The bins used to span the whole
+    // 0..65535 unconditionally, which on a stacked sky is far coarser than the
+    // data: measured on a 74-frame OSC stack, 301k samples with std 124 ADU,
+    // every pixel but 236 of them landed in buckets 4 and 5 of 256. Two points
+    // draw as a hairline whatever window the panel picks, so bin over the band
+    // the pixels occupy and tell the client where that band sits.
+    public int ColorHistLo { get; private set; }
+    public int ColorHistHi { get; private set; } = 65535;
+
+    /// <summary>The per-channel black/mid/white the relayed colour JPEG was
+    /// rendered with, R then G then B, as fractions of full scale. Null until
+    /// a colour frame has been relayed. The client needs these to place the
+    /// histogram handles: it draws 16-bit ADU while the handles drive a LUT
+    /// over the 8-bit JPEG this stretch produced.</summary>
+    public NINA.Image.ImageAnalysis.AutoStretch.StretchParams[]? ColorStretch { get; private set; }
+
     /// <summary>Build the 256-bin 16-bit luminance histogram + min/max/mean/std
     /// of a planar RGB stack (subsampled on big sensors). Cheap; runs once per
-    /// integrated colour frame, off the relay's broadcast.</summary>
+    /// integrated colour frame, off the relay's broadcast. Two passes: the
+    /// first finds the band the pixels occupy, the second bins over it.</summary>
     private void ComputeColorHistogram(ushort[] rgb, int w, int h) {
         int plane = w * h;
         if (rgb.Length < plane * 3 || plane == 0) {
@@ -620,17 +660,18 @@ public class LiveStackingService {
             return;
         }
         const int NB = 256;
-        var bins = new int[NB];
-        var binsR = new int[NB];
-        var binsG = new int[NB];
-        var binsB = new int[NB];
-        int mn = 65535, mx = 0; double sum = 0, sumSq = 0; long cnt = 0;
+        const int COARSE = 1024;   // 64 ADU a bucket, enough to place the band
         int step = Math.Max(1, plane / 300_000);
+
+        // Pass 1: luminance stats, plus a coarse histogram of all three
+        // channels together, used only to locate the populated band.
+        var coarse = new int[COARSE];
+        int mn = 65535, mx = 0; double sum = 0, sumSq = 0; long cnt = 0;
         for (int i = 0; i < plane; i += step) {
             int r = rgb[i], g = rgb[plane + i], b = rgb[2 * plane + i];
-            binsR[r * (NB - 1) / 65535]++;
-            binsG[g * (NB - 1) / 65535]++;
-            binsB[b * (NB - 1) / 65535]++;
+            coarse[r * (COARSE - 1) / 65535]++;
+            coarse[g * (COARSE - 1) / 65535]++;
+            coarse[b * (COARSE - 1) / 65535]++;
             // Stats stay on luminance: they feed the MAX/AVG/MIN/STD readout,
             // which is a single number per label, not three.
             int lum = (int)(r * 0.299 + g * 0.587 + b * 0.114);
@@ -638,17 +679,78 @@ public class LiveStackingService {
             if (lum < mn) mn = lum;
             if (lum > mx) mx = lum;
             sum += lum; sumSq += (double)lum * lum; cnt++;
-            bins[lum * (NB - 1) / 65535]++;
         }
-        var mean = cnt > 0 ? sum / cnt : 0;
+        if (cnt == 0) {
+            ColorHistogram = null;
+            ColorHistogramR = ColorHistogramG = ColorHistogramB = null;
+            return;
+        }
+        var (lo, hi) = HistogramBand(coarse, 3 * cnt);
+
+        // Pass 2: the bins the panel draws, over [lo, hi]. Samples outside the
+        // band are dropped rather than clamped into the end buckets: clamping
+        // piles the star tail onto the last bin, and on a log axis that draws
+        // as a tall spike at the edge that is not structure in the image.
+        var bins = new int[NB];
+        var binsR = new int[NB];
+        var binsG = new int[NB];
+        var binsB = new int[NB];
+        int span = hi - lo;
+        for (int i = 0; i < plane; i += step) {
+            int r = rgb[i], g = rgb[plane + i], b = rgb[2 * plane + i];
+            Bin(binsR, r, lo, span, NB);
+            Bin(binsG, g, lo, span, NB);
+            Bin(binsB, b, lo, span, NB);
+            int lum = (int)(r * 0.299 + g * 0.587 + b * 0.114);
+            Bin(bins, lum, lo, span, NB);
+        }
+        var mean = sum / cnt;
         ColorHistogram = bins;
         ColorHistogramR = binsR;
         ColorHistogramG = binsG;
         ColorHistogramB = binsB;
-        ColorHistMin = cnt > 0 ? mn : 0;
+        ColorHistLo = lo;
+        ColorHistHi = hi;
+        ColorHistMin = mn;
         ColorHistMax = mx;
         ColorHistMean = mean;
-        ColorHistStd = cnt > 0 ? Math.Sqrt(Math.Max(0, sumSq / cnt - mean * mean)) : 0;
+        ColorHistStd = Math.Sqrt(Math.Max(0, sumSq / cnt - mean * mean));
+    }
+
+    /// <summary>ADU band worth drawing, from a coarse full-scale histogram:
+    /// the 0.05 to 99.95 percentile of the samples, padded, and never narrower
+    /// than one ADU per bin.</summary>
+    internal static (int Lo, int Hi) HistogramBand(int[] coarse, long total) {
+        int lo = CoarseQuantile(coarse, total, 0.0005);
+        int hi = CoarseQuantile(coarse, total, 0.9995);
+        if (hi < lo) (lo, hi) = (hi, lo);
+        int pad = Math.Max(64, (hi - lo) / 8);
+        lo = Math.Max(0, lo - pad);
+        hi = Math.Min(65535, hi + pad);
+        if (hi - lo < 255) {
+            // A flat or near-flat frame: give it a nominal width so the bins
+            // stay meaningful and nothing downstream divides by zero.
+            int mid = (lo + hi) / 2;
+            lo = Math.Max(0, Math.Min(65535 - 255, mid - 128));
+            hi = lo + 255;
+        }
+        return (lo, hi);
+    }
+
+    private static int CoarseQuantile(int[] coarse, long total, double q) {
+        long want = (long)(total * q);
+        long acc = 0;
+        for (int k = 0; k < coarse.Length; k++) {
+            acc += coarse[k];
+            if (acc >= want) return (int)((long)k * 65535 / (coarse.Length - 1));
+        }
+        return 65535;
+    }
+
+    private static void Bin(int[] bins, int v, int lo, int span, int nb) {
+        if (v < lo || v > lo + span) return;
+        int k = (int)((long)(v - lo) * (nb - 1) / span);
+        bins[k < 0 ? 0 : (k >= nb ? nb - 1 : k)]++;
     }
     /// <summary>One point on the LIVE quality timeline: the stack state
     /// right after integrating a frame. The (frame, CumulativeSnr) pair
@@ -1231,7 +1333,24 @@ public class LiveStackingService {
 
         // StarDetector feeds StarMatcher for alignment and provides the HFR +
         // star count the trigger orchestrator (LSTR-3) runs on.
-        var stars = _detector.Detect(data, props.Width, props.Height);
+        //
+        // CFA: detect on a pseudo-luminance, never on the raw mosaic. The
+        // detector sets its threshold at median + 5 * MAD * 1.4826, and on a
+        // mosaic the MAD does not measure noise at all: it measures the gap
+        // between the R, G and B pedestals, which on an OSC sensor is thousands
+        // of counts. Measured on a real 60 s light (ASI585MC, RGGB, gain 200,
+        // 2026-09-05): mosaic MAD 3215, so the threshold landed at 37705 while
+        // the frame's 99.99th percentile was 23221 — nothing but saturated
+        // pixels could clear it, and the detector reported 2 to 3 stars in a
+        // whole 8 MP frame while live stacking rejected perfectly good frames
+        // for "alignment failed". The same frame through the 2x2 mean: MAD 162,
+        // threshold 15423, 85 stars. BinFrame does not help here, it keeps the
+        // mosaic by design so debayer still works downstream.
+        var detectSrc = (props.BayerPattern != BayerPatternEnum.None
+                         && props.BayerPattern != BayerPatternEnum.Auto)
+            ? CfaPseudoLuminance(data, props.Width, props.Height)
+            : data;
+        var stars = _detector.Detect(detectSrc, props.Width, props.Height);
         _logger.LogDebug("Detected {Count} stars in frame", stars.Count);
 
         // Integration. A plain block: this was the server arm of an if/else
@@ -1540,8 +1659,14 @@ public class LiveStackingService {
                 _logger.LogInformation(
                     "LIVE-TRACE   -> RelayRgbJpegAsync kind=LiveStack ch=3 bayer=None jpegDim={Dim} q=90 (client shows the JPEG as-is; no client debayer)",
                     jpegDim == int.MaxValue ? "native" : jpegDim.ToString());
+                // Keep the per-channel stretch this JPEG was rendered with. The
+                // histogram panel draws 16-bit ADU while its handles drive a LUT
+                // over this 8-bit image, so without the mapping between the two
+                // the handles cannot be placed on the axis they sit above.
+                var used = new List<NINA.Image.ImageAnalysis.AutoStretch.StretchParams>(3);
                 await _relay.RelayRgbJpegAsync(rgbImage, maxDim: jpegDim, quality: 90,
-                    kind: FrameKind.LiveStack, ct: ct);
+                    kind: FrameKind.LiveStack, ct: ct, captured: used);
+                if (used.Count >= 3) ColorStretch = used.ToArray();
             } else {
                 // Stabilize the relayed Bayer pattern: a single frame whose
                 // CCD_CFA was momentarily empty (BayerPattern=None) must not
