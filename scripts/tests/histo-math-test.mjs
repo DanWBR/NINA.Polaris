@@ -40,7 +40,8 @@ function lift(name) {
     return src.slice(start + 1, end + '\n        },'.length).replace(/\r/g, '');
 }
 
-const NAMES = ['_histoBulkOf', '_histoFrame', '_histoUpdateEndpoints', '_histoDragMove'];
+const NAMES = ['_histoBulkOf', '_histoFrame', '_histoUpdateEndpoints', '_histoDragMove',
+               '_histoSample'];
 const app = eval('({' + NAMES.map(lift).join('\n') + '\n})');
 
 // The drag throttles its redraw through a frame callback; outside a browser
@@ -175,6 +176,56 @@ console.log('== a drag freezes the framing ==');
     (st.histo.dispLo === 0.11 && st.histo.dispHi === 0.22)
         ? ok('the window does not move under the cursor')
         : bad(`window moved to ${st.histo.dispLo}..${st.histo.dispHi}`);
+}
+
+console.log('== _histoSample: no staircase when the window covers few bins ==');
+{
+    const b = fieldBins();
+    const W = 800;
+
+    // The case from the field screenshot: a 595 ADU window over 2048 bins is
+    // about 19 bins spread across the canvas. Repeating each bin's value across
+    // its column drew 19 plateaus with a cliff between them.
+    const lo = 1000 / 65535, hi = 1595 / 65535;
+    const binsInWindow = (hi - lo) * NB;
+    (binsInWindow < 25) ? ok(`the window really is narrow (${binsInWindow.toFixed(1)} bins)`)
+                        : bad(`window covers ${binsInWindow.toFixed(1)} bins, not the case under test`);
+
+    const v = app._histoSample.call({}, b, lo, hi, W);
+    const distinct = new Set(Array.from(v, (x) => x.toFixed(6))).size;
+    (distinct > W * 0.5)
+        ? ok(`${distinct} distinct heights across ${W + 1} columns`)
+        : bad(`only ${distinct} distinct heights: the curve is still a staircase`);
+
+    // The longest run of identical samples is the plateau length.
+    let run = 1, worst = 1;
+    for (let i = 1; i <= W; i++) {
+        run = (v[i] === v[i - 1]) ? run + 1 : 1;
+        if (run > worst) worst = run;
+    }
+    (worst <= 4) ? ok(`longest flat run is ${worst} px`)
+                 : bad(`a ${worst} px plateau survived`);
+
+    // Interpolating must not invent signal outside the data's range.
+    let mx = 0;
+    for (let i = 0; i < b.length; i++) if (b[i] > mx) mx = b[i];
+    const smax = Math.max(...v);
+    (smax <= mx + 1e-9) ? ok('sampling never exceeds the tallest bin')
+                        : bad(`sample ${smax} above the tallest bin ${mx}`);
+    (Math.min(...v) >= 0) ? ok('and never goes negative') : bad('negative sample');
+}
+
+console.log('== _histoSample: a narrow spike survives the zoomed-OUT view ==');
+{
+    // The other direction. Full scale over 800 columns is ~2.5 bins per column,
+    // so a one-bin spike has to be picked up by the column that contains it —
+    // averaging there would flatten the sky peak of a stacked frame.
+    const b = new Float64Array(NB);
+    b[1000] = 5000;
+    const v = app._histoSample.call({}, b, 0, 1, 800);
+    (Math.max(...v) > 5000 * 0.4)
+        ? ok('a single-bin spike still reaches the curve')
+        : bad(`spike flattened to ${Math.max(...v).toFixed(0)} of 5000`);
 }
 
 console.log();

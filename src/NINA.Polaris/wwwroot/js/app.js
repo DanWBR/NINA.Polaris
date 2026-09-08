@@ -10129,31 +10129,69 @@ function ninaApp() {
             h.dispHi = Math.max(lo + 1e-6, hi);
         },
 
-        // One curve. Walks CANVAS COLUMNS and takes the tallest bin in each,
-        // so the shape survives both ends of the zoom range: unzoomed there
-        // are several bins per pixel, zoomed in there are several pixels per
-        // bin, and neither aliases away a spike.
-        _histoLine(ctx, bins, peakLog, color, w, h, lo, hi) {
-            if (!bins || !(peakLog > 0)) return;
+        // One curve's height at every canvas column, 0..1 of the peak.
+        //
+        // Which way it samples depends on how the window sits against the bins,
+        // and both directions matter:
+        //
+        //   * MORE than one bin per column (zoomed out): take the tallest bin
+        //     in the column. Averaging there flattens a narrow sky peak, which
+        //     is the whole shape of a stacked frame.
+        //   * FEWER than one bin per column (zoomed in): interpolate between
+        //     bin centres. Repeating a bin's value across its whole column is
+        //     what draws the curve as a staircase -- a 595 ADU window over
+        //     2048 bins is 19 bins across ~1660 px, so each bin becomes an
+        //     87 px plateau with a cliff at each end.
+        //
+        // Bins are read through a 1-2-1 tap either way, so photon noise between
+        // neighbouring bins does not become a sawtooth once it is stretched
+        // across a hundred pixels.
+        _histoSample(bins, lo, hi, w) {
             const NB = bins.length;
             const span = Math.max(1e-9, hi - lo);
-            ctx.beginPath();
-            let started = false;
+            const out = new Float64Array(w + 1);
+            const tap = (i) => {
+                if (i < 0 || i >= NB) return 0;
+                const a = i > 0 ? bins[i - 1] : bins[i];
+                const b = i < NB - 1 ? bins[i + 1] : bins[i];
+                return (a + 2 * bins[i] + b) / 4;
+            };
+            const binsPerPx = (span * NB) / Math.max(1, w);
             for (let x = 0; x <= w; x++) {
-                const f0 = lo + (x / w) * span;
-                const f1 = lo + ((x + 1) / w) * span;
-                let i0 = Math.floor(f0 * NB), i1 = Math.ceil(f1 * NB);
-                if (i1 <= 0 || i0 >= NB) continue;
-                i0 = Math.max(0, i0);
-                i1 = Math.min(NB, Math.max(i1, i0 + 1));
-                let m = 0;
-                for (let i = i0; i < i1; i++) if (bins[i] > m) m = bins[i];
-                const y = h - Math.min(1, Math.log1p(m) / peakLog) * (h - 3) - 1;
-                if (!started) { ctx.moveTo(x, y); started = true; } else { ctx.lineTo(x, y); }
+                if (binsPerPx >= 1) {
+                    const i0 = Math.max(0, Math.floor((lo + (x / w) * span) * NB));
+                    const i1 = Math.min(NB, Math.max(i0 + 1,
+                        Math.ceil((lo + ((x + 1) / w) * span) * NB)));
+                    let m = 0;
+                    for (let i = i0; i < i1; i++) { const v = tap(i); if (v > m) m = v; }
+                    out[x] = m;
+                } else {
+                    // Position in bin space, measured from bin CENTRES.
+                    const pos = (lo + (x / w) * span) * NB - 0.5;
+                    const i = Math.floor(pos), f = pos - i;
+                    out[x] = tap(i) * (1 - f) + tap(i + 1) * f;
+                }
             }
-            if (!started) return;
+            return out;
+        },
+
+        _histoLine(ctx, bins, peakLog, color, w, h, lo, hi) {
+            if (!bins || !(peakLog > 0) || w < 2) return;
+            const vals = this._histoSample(bins, lo, hi, w);
+            const yOf = (v) => h - Math.min(1, Math.log1p(v) / peakLog) * (h - 3) - 1;
+            ctx.beginPath();
+            ctx.moveTo(0, yOf(vals[0]));
+            // Quadratic through the midpoints: the samples are the control
+            // points and the curve passes between them, which rounds the
+            // corners without inventing peaks the data does not have.
+            for (let x = 1; x < w; x++) {
+                const y0 = yOf(vals[x]), y1 = yOf(vals[x + 1]);
+                ctx.quadraticCurveTo(x, y0, x + 0.5, (y0 + y1) / 2);
+            }
+            ctx.lineTo(w, yOf(vals[w]));
             ctx.strokeStyle = color;
             ctx.lineWidth = 1.25;
+            ctx.lineJoin = 'round';
             ctx.stroke();
         },
 
