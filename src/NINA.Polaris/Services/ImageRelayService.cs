@@ -334,13 +334,7 @@ public class ImageRelayService : IDisposable {
         // serve gallery thumbnails, that's a different consumer
         // that wants a static stretched image. Per-frame WS goes
         // RAW + LZ4 + client-side WebGL stretch every time.
-        // Tag calibration frames (BIAS/DARK/FLAT) so the client renders them
-        // with a neutral global stretch instead of the OSC per-channel
-        // sky-neutralising stretch — on a flat noise frame the per-channel path
-        // amplifies tiny channel offset differences into a strong colour cast
-        // (the "bias is all pink under auto-stretch" report).
-        var itype = (sourceData.MetaData?.Exposure?.ImageType ?? "").Trim().ToUpperInvariant();
-        int calibration = (itype is "BIAS" or "DARK" or "FLAT" or "DARKFLAT") ? 1 : 0;
+        int calibration = IsNoiseFrame(sourceData.MetaData?.Exposure?.ImageType) ? 1 : 0;
         var header = buffer.GetStreamHeader(frameKind, calibration);
         // MEMOPT: the payload stays in a POOLED (oversized) buffer — only the
         // first compressedLen bytes are real. Returned to the pool below, so the
@@ -415,6 +409,29 @@ public class ImageRelayService : IDisposable {
     /// </summary>
     /// <returns>true when the frame was handed to the fan-out; false when there
     /// are no clients.</returns>
+    /// <summary>Is this a frame made of NOISE rather than of light?
+    ///
+    /// A bias, a dark or a dark-flat is nothing but the sensor's own floor. The
+    /// browser's OSC auto-stretch neutralises each colour channel against its
+    /// own background, and on a noise frame that turns a few ADU of channel
+    /// offset difference into a strong cast -- the "bias is all pink under
+    /// auto-stretch" report. Those get a single global stretch instead, which
+    /// renders them as the neutral noise they are.
+    ///
+    /// A FLAT is NOT one of them, and lumping it in here is what made every
+    /// flat come out solid blue on screen (field, 2026-09-07). A flat is a
+    /// bright, high-signal image whose channels genuinely sit at very different
+    /// levels, because the sensor's quantum efficiency and the panel's spectrum
+    /// are not flat. A single global stretch shows exactly that imbalance; the
+    /// per-channel one normalises it, which is why a flat reads grey/white on
+    /// an ASIAIR and should here too. The per-channel path has plenty of signal
+    /// to work with on a flat, so the reason the guard exists does not apply.
+    /// </summary>
+    internal static bool IsNoiseFrame(string? imageType) {
+        var t = (imageType ?? "").Trim().ToUpperInvariant();
+        return t is "BIAS" or "DARK" or "DARKFLAT" or "DARK_FLAT" or "DARKFLATS";
+    }
+
     public Task<bool> RelayRgbRawAsync(IImageData rgb, int maxDim = 1536,
                                        FrameKind kind = FrameKind.LiveStack,
                                        CancellationToken ct = default) {

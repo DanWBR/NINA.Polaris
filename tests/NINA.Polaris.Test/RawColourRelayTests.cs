@@ -167,4 +167,27 @@ public class RawColourRelayTests {
         Assert.That(jpeg, Is.Not.Null.And.Not.Empty,
             "the stack preview still renders after the switch to raw");
     }
+    /// <summary>Which frames get the neutral global stretch instead of the OSC
+    /// per-channel one.
+    ///
+    /// The rule is "is this noise?", not "is this a calibration frame". A flat
+    /// used to be on this list and every flat came out solid blue on screen
+    /// (field, 2026-09-07): its channels sit at genuinely different levels
+    /// because of QE and the panel's spectrum, a single global stretch shows
+    /// that imbalance, and per-channel is what makes a flat read grey.</summary>
+    [TestCase("BIAS", true)]
+    [TestCase("DARK", true)]
+    [TestCase("DARKFLAT", true)]
+    [TestCase("dark", true)]
+    [TestCase("  Bias  ", true)]
+    [TestCase("FLAT", false)]
+    [TestCase("flat", false)]
+    [TestCase("LIGHT", false)]
+    [TestCase("SNAP", false)]
+    [TestCase("", false)]
+    [TestCase(null, false)]
+    public void OnlyNoiseFramesSkipThePerChannelStretch(string? imageType, bool expected) {
+        Assert.That(ImageRelayService.IsNoiseFrame(imageType), Is.EqualTo(expected),
+            $"'{imageType}' classified wrongly");
+    }
 }
