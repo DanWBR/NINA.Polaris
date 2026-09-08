@@ -12488,6 +12488,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <span class="files-icon-label">Violet halo</span>
                     </button>
                     <button class="btn btn-sm btn-icon"
+                            x-show="debugTools" x-cloak
                             :disabled="files.selectedPaths.length !== 1 || filesToLiveBusy"
                             @click="filesLoadIntoLive(files.selectedPaths[0])"
                             title="Load this FITS into the LIVE panel through the same path a camera frame takes, so the stretch sliders and the histogram can be tried on a known file."
@@ -15350,6 +15351,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <span class="text-muted"
                                   x-show="clockSkewLabel() !== null"
                                   x-text="' (' + clockSkewLabel() + ')'"></span>
+                        </div>
+                        <div>
+                            Host timezone:
+                            <strong x-text="clockSync.timeZone || '-'"></strong>
+                            <span class="text-muted"
+                                  x-show="clockSync.timeZone === 'UTC' || clockSync.timeZone === 'Etc/UTC'">
+                                (stock image default; DATE-LOC in saved frames equals DATE-UTC)
+                            </span>
                         </div>
                         <div x-show="clockSync.lastSyncAt"
                              style="color:var(--text-muted)">
@@ -23479,7 +23488,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20260908-lut"></script>
+    <script src="/js/app.js?v=20260908-dbg"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

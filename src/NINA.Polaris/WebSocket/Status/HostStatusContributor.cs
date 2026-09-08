@@ -52,7 +52,13 @@ public sealed class HostStatusContributor : IStatusContributor {
 
             tick.Blocks["server"] = new {
                 utcNow = DateTime.UtcNow.ToString("o"),
-                clockSyncSupported = clockSync.IsSupported
+                clockSyncSupported = clockSync.IsSupported,
+                // The client compares this against its own IANA zone and
+                // pushes its own when they differ. A stock image says "UTC"
+                // forever, which is what made DATE-LOC equal DATE-UTC in every
+                // saved FITS and rolled the session-date folder at the wrong
+                // hour outside UTC.
+                timeZone = clockSync.CurrentTimeZoneId
             };
 
             // Server-pushed toasts (auto-connect outcomes,
