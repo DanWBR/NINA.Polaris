@@ -4541,6 +4541,7 @@ function ninaApp() {
         // Stage 1 of the stretch for the cached frame. Kept so a drag re-runs
         // only the screen transfer instead of re-measuring the sky.
         _histoMap: null,
+        _histoLut: null,      // ADU -> screen level, one Float32Array per channel
         _histoToken: 0,       // bumped each time a new raw frame is cached
         _histoDrag: null,     // { which, rect, lo, hi } while dragging
         _histoRaf: 0,         // rAF handle throttling the redraw during a drag
@@ -10007,12 +10008,26 @@ function ninaApp() {
         // MIN/MAX/AVG/STD stay in ADU. Those are about the exposure, not about
         // the rendering: whether the background has lifted off the floor and
         // whether the stars are clipping is a question about the data.
+        //
+        // Two things are worth knowing about how it is counted.
+        //
+        // The mapping goes through a LOOKUP TABLE, one entry per ADU per
+        // channel, rebuilt only when the frame or the handles change. Running
+        // two MTF curves per sample per channel instead made the handles lag:
+        // a drag rebuilds these bins on every animation frame.
+        //
+        // And each sample is SPREAD over the display width its ADU step covers,
+        // rather than dropped in the bin its value happens to land in. The
+        // source is 16-bit integers, and the stretch pulls a sky that occupies
+        // a couple of hundred distinct levels across the whole axis -- so with
+        // point counting most bins get no sample at all and the curve draws as
+        // a comb of spikes separated by zeros. Those zeros are not an absence
+        // of signal, they are an absence of representable values. Spreading a
+        // sample from lut[v] to lut[v+1] tiles the axis with no gaps and gives
+        // the density the curve is supposed to show.
         _histoBuild() {
             const f = this._lastRawFrame;
             if (!f || !f.pixels || !f.pixels.length) { this.histo.bins = null; return false; }
-            // A drag must not see the bins move under the cursor... except that
-            // the bins ARE what the drag changes now, so they are rebuilt from
-            // the cached stage-1 map, which does not move.
             if (this.histo._token === this._histoToken
                 && this.histo._sig === this._histoStretchSig() && this.histo.bins) {
                 this._histoUpdateEndpoints();
@@ -10035,27 +10050,28 @@ function ninaApp() {
                 ? (f.bayerPattern | 0) : 0;
             const color = !!dm.perChan;
 
-            const sh3 = dm.perChan
-                ? [dm.perChan.r.shadow, dm.perChan.g.shadow, dm.perChan.b.shadow]
-                : [dm.shadow, dm.shadow, dm.shadow];
-            const sc3 = dm.perChan
-                ? [dm.perChan.r.scale, dm.perChan.g.scale, dm.perChan.b.scale]
-                : [dm.scale, dm.scale, dm.scale];
-            const am = dm.autoMid;
-            // v (ADU, channel c) -> what the screen shows, 0..1.
-            const show = (v, c) => {
-                const n = Math.max(0, Math.min(1, (v - sh3[c]) * sc3[c]));
-                return this._screenTransfer(this._mtf(n, am));
-            };
-            const idx = (d) => {
-                const b = (d * NB) | 0;
-                return b < 0 ? 0 : (b >= NB ? NB - 1 : b);
-            };
+            const lut = this._histoLuts(dm, maxVal);
+            const lutR = lut[0], lutG = lut[1], lutB = lut[2];
 
-            const bins = new Float64Array(NB);
-            const bR = color ? new Float64Array(NB) : null;
+            const bR = new Float64Array(NB);
             const bG = color ? new Float64Array(NB) : null;
             const bB = color ? new Float64Array(NB) : null;
+            // Spread one sample from display position d0 to d1.
+            const spread = (bins, d0, d1) => {
+                let a = d0 * NB, b = d1 * NB;
+                if (b < a) { const t = a; a = b; b = t; }
+                let i0 = a | 0, i1 = b | 0;
+                if (i0 < 0) i0 = 0;
+                if (i1 > NB - 1) i1 = NB - 1;
+                if (i1 < i0) i1 = i0;
+                if (i0 === i1) { bins[i0] += 1; return; }
+                const per = 1 / (i1 - i0 + 1);
+                for (let i = i0; i <= i1; i++) bins[i] += per;
+            };
+            const put = (bins, lu, v) => {
+                const w = v < maxVal ? v + 1 : v;
+                spread(bins, lu[v], lu[w]);
+            };
 
             let mn = Infinity, mx = 0, sum = 0, sumSq = 0, n = 0;
             const keep = (l) => {
@@ -10063,61 +10079,65 @@ function ninaApp() {
                 if (l > mx) mx = l;
                 sum += l; sumSq += l * l; n++;
             };
+            // A drag rebuilds this on every frame, so take fewer samples while
+            // one is in flight. The curve is normalised by its own peak, so a
+            // coarser sample is the same shape.
+            const target = this._histoDrag ? 90000 : 300000;
 
             if (ch === 3) {
-                const step = Math.max(1, Math.floor(plane / 300000));
+                const step = Math.max(1, Math.floor(plane / target));
                 for (let i = 0; i < plane; i += step) {
                     const r = px[i], g = px[plane + i], b = px[2 * plane + i];
-                    const dr = show(r, 0), dg = show(g, 1), db = show(b, 2);
-                    bR[idx(dr)]++; bG[idx(dg)]++; bB[idx(db)]++;
-                    bins[idx(0.299 * dr + 0.587 * dg + 0.114 * db)]++;
+                    put(bR, lutR, r); put(bG, lutG, g); put(bB, lutB, b);
                     keep(0.299 * r + 0.587 * g + 0.114 * b);
                 }
             } else if (bayer) {
                 const cells = Math.floor(W / 2) * Math.floor(H / 2);
-                const stride = Math.max(1, Math.floor(Math.sqrt(cells / 150000)));
+                const stride = Math.max(1, Math.floor(Math.sqrt(cells / (target / 2))));
                 for (let y = 0; y + 1 < H; y += 2 * stride) {
                     for (let x = 0; x + 1 < W; x += 2 * stride) {
                         const p00 = px[y * W + x], p10 = px[y * W + x + 1];
                         const p01 = px[(y + 1) * W + x], p11 = px[(y + 1) * W + x + 1];
                         let r, g, b;
                         switch (bayer) {
-                            case 1: r = p00; g = 0.5 * (p10 + p01); b = p11; break;          // RGGB
-                            case 2: b = p00; g = 0.5 * (p10 + p01); r = p11; break;          // BGGR
-                            case 3: g = 0.5 * (p00 + p11); b = p10; r = p01; break;          // GBRG
-                            default: g = 0.5 * (p00 + p11); r = p10; b = p01; break;         // GRBG
+                            case 1: r = p00; g = (p10 + p01) >> 1; b = p11; break;      // RGGB
+                            case 2: b = p00; g = (p10 + p01) >> 1; r = p11; break;      // BGGR
+                            case 3: g = (p00 + p11) >> 1; b = p10; r = p01; break;      // GBRG
+                            default: g = (p00 + p11) >> 1; r = p10; b = p01; break;     // GRBG
                         }
-                        const dr = show(r, 0), dg = show(g, 1), db = show(b, 2);
-                        bR[idx(dr)]++; bG[idx(dg)]++; bB[idx(db)]++;
-                        bins[idx(0.299 * dr + 0.587 * dg + 0.114 * db)]++;
+                        put(bR, lutR, r); put(bG, lutG, g); put(bB, lutB, b);
                         keep(0.299 * r + 0.587 * g + 0.114 * b);
                     }
                 }
             } else {
-                const step = Math.max(1, Math.floor(px.length / 300000));
+                const step = Math.max(1, Math.floor(px.length / target));
                 for (let i = 0; i < px.length; i += step) {
                     const v = px[i];
-                    bins[idx(show(v, 0))]++;
+                    put(bR, lutR, v);
                     keep(v);
                 }
             }
             if (n === 0) { this.histo.bins = null; return false; }
 
-            let peak = 0, peakRGB = 0;
-            for (let i = 0; i < NB; i++) if (bins[i] > peak) peak = bins[i];
-            if (color) {
-                for (let i = 0; i < NB; i++) {
-                    if (bR[i] > peakRGB) peakRGB = bR[i];
-                    if (bG[i] > peakRGB) peakRGB = bG[i];
-                    if (bB[i] > peakRGB) peakRGB = bB[i];
+            let peak = 0;
+            for (let i = 0; i < NB; i++) {
+                if (bR[i] > peak) peak = bR[i];
+                if (color) {
+                    if (bG[i] > peak) peak = bG[i];
+                    if (bB[i] > peak) peak = bB[i];
                 }
             }
             const mean = sum / n;
-            this.histo.bins = bins;
-            this.histo.binsR = bR; this.histo.binsG = bG; this.histo.binsB = bB;
+            // On a colour frame the three channel curves are what gets drawn;
+            // `bins` is the mono curve and doubles as the "there is something to
+            // draw" flag, so it points at the reference channel there.
+            this.histo.bins = color ? bG : bR;
+            this.histo.binsR = color ? bR : null;
+            this.histo.binsG = color ? bG : null;
+            this.histo.binsB = color ? bB : null;
             this.histo.color = color;
             this.histo.peak = Math.log1p(peak) || 1;
-            this.histo.peakRGB = Math.log1p(peakRGB) || 1;
+            this.histo.peakRGB = this.histo.peak;
             this.histo.count = n;
             this.histo.maxVal = maxVal;
             this.histo.min = Math.round(mn === Infinity ? 0 : mn);
@@ -10128,6 +10148,33 @@ function ninaApp() {
             this.histo._sig = this._histoStretchSig();
             this._histoUpdateEndpoints();
             return true;
+        },
+
+        // ADU -> screen level, one table per channel, both stretch stages baked
+        // in. Allocated once and refilled in place: this is ~200k entries and a
+        // drag would otherwise hand the collector a megabyte per frame.
+        _histoLuts(dm, maxVal) {
+            const size = maxVal + 1;
+            if (!this._histoLut || this._histoLut[0].length !== size) {
+                this._histoLut = [new Float32Array(size), new Float32Array(size),
+                                  new Float32Array(size)];
+            }
+            const sh3 = dm.perChan
+                ? [dm.perChan.r.shadow, dm.perChan.g.shadow, dm.perChan.b.shadow]
+                : [dm.shadow, dm.shadow, dm.shadow];
+            const sc3 = dm.perChan
+                ? [dm.perChan.r.scale, dm.perChan.g.scale, dm.perChan.b.scale]
+                : [dm.scale, dm.scale, dm.scale];
+            const am = dm.autoMid;
+            const channels = dm.perChan ? 3 : 1;
+            for (let c = 0; c < channels; c++) {
+                const t = this._histoLut[c], sh = sh3[c], sc = sc3[c];
+                for (let v = 0; v < size; v++) {
+                    const n = Math.max(0, Math.min(1, (v - sh) * sc));
+                    t[v] = this._screenTransfer(this._mtf(n, am));
+                }
+            }
+            return this._histoLut;
         },
 
         // The handles' current state, so the bins are rebuilt when they move

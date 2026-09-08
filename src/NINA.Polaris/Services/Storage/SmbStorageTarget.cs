@@ -71,16 +71,52 @@ public sealed class SmbStorageTarget : IStorageTarget {
         if (localLen >= 0 && TryGetRemoteLength(filePath, out var remoteLen) && remoteLen == localLen)
             return;
 
-        var status = _store.CreateFile(out var handle, out _, filePath,
+        // Upload into a sidecar and rename it onto the real name only once the
+        // last byte is written and the size verified. Writing straight to the
+        // science filename meant ANY interruption left a partial FITS under a
+        // name nothing downstream distinguishes from a complete frame: a
+        // per-file Abort (dropped, see StoragePushService), a host shutdown, a
+        // dead link mid-transfer. Field 2026-09: three frames across the whole
+        // archive sat truncated at exact 1 MiB boundaries, i.e. this loop
+        // stopping between chunks. A leftover ".part" is self-evidently
+        // incomplete and is overwritten by the next attempt.
+        var tempPath = filePath + StoragePath.PartialSuffix;
+
+        var status = _store.CreateFile(out var handle, out _, tempPath,
             AccessMask.GENERIC_WRITE | AccessMask.SYNCHRONIZE, SMBLibrary.FileAttributes.Normal,
             ShareAccess.None, CreateDisposition.FILE_OVERWRITE_IF,
             CreateOptions.FILE_NON_DIRECTORY_FILE | CreateOptions.FILE_SYNCHRONOUS_IO_NONALERT, null);
         if (status != NTStatus.STATUS_SUCCESS || handle == null)
-            throw new IOException($"SMB create '{filePath}' failed: {status}");
+            throw new IOException($"SMB create '{tempPath}' failed: {status}");
 
         try {
+            await WriteChunksAsync(handle, localPath, tempPath, ct, progress);
+
+            // The handle is closed, so the server has the final size. Check it
+            // before the rename: the destination only earns the science
+            // filename once it is as long as the source.
+            if (localLen >= 0) {
+                if (!TryGetRemoteLength(tempPath, out var uploadedLen))
+                    throw new IOException($"SMB upload '{tempPath}': cannot read back the uploaded size");
+                if (uploadedLen != localLen)
+                    throw new IOException($"SMB upload '{tempPath}' incomplete: " +
+                                          $"{uploadedLen} of {localLen} bytes");
+            }
+            Rename(tempPath, filePath);
+        } catch {
+            TryDelete(tempPath);
+            throw;
+        }
+    }
+
+    /// <summary>Stream the local file into an open remote handle in MaxWriteSize
+    /// chunks, closing the handle before returning so the caller can read the
+    /// final size back off the server.</summary>
+    private async Task WriteChunksAsync(object handle, string localPath, string remotePath,
+                                        CancellationToken ct, IProgress<long>? progress) {
+        try {
             using var fs = File.OpenRead(localPath);
-            int chunk = (int)Math.Min(_client.MaxWriteSize, 1 << 20);
+            int chunk = (int)Math.Min(_client!.MaxWriteSize, 1 << 20);
             if (chunk <= 0) chunk = 1 << 20;
             var buffer = new byte[chunk];
             long offset = 0;
@@ -94,9 +130,17 @@ public sealed class SmbStorageTarget : IStorageTarget {
                 ct.ThrowIfCancellationRequested();
                 var started = System.Diagnostics.Stopwatch.StartNew();
                 var data = read == buffer.Length ? buffer : buffer[..read];
-                var ws = _store.WriteFile(out int written, handle, offset, data);
+                var ws = _store!.WriteFile(out int written, handle, offset, data);
                 if (ws != NTStatus.STATUS_SUCCESS)
-                    throw new IOException($"SMB write '{filePath}' failed: {ws}");
+                    throw new IOException($"SMB write '{remotePath}' failed: {ws}");
+                // A short write carries a SUCCESS status but leaves the tail of
+                // this chunk unsent, and the read position has already moved
+                // past it: the destination would come out shorter than the
+                // source AND misaligned from that offset on, with no exception
+                // anywhere. Treat it as the failure it is.
+                if (written != data.Length)
+                    throw new IOException($"SMB short write '{remotePath}' at offset {offset}: " +
+                                          $"{written} of {data.Length} bytes");
                 offset += written;
                 progress?.Report(offset);
 
@@ -104,8 +148,47 @@ public sealed class SmbStorageTarget : IStorageTarget {
                 if (idle > TimeSpan.Zero) await Task.Delay(idle, ct);
             }
         } finally {
-            _store.CloseFile(handle);
+            try { _store!.CloseFile(handle); } catch { /* already failing */ }
         }
+    }
+
+    /// <summary>Move the finished sidecar onto the real filename, replacing an
+    /// earlier copy. SMB2 renames through SetFileInformation on a handle opened
+    /// with DELETE access; the target name is share-relative, same as every
+    /// other path here.</summary>
+    private void Rename(string fromPath, string toPath) {
+        if (_store is null) throw new InvalidOperationException("SMB not connected");
+        var st = _store.CreateFile(out var handle, out _, fromPath,
+            AccessMask.GENERIC_WRITE | AccessMask.DELETE | AccessMask.SYNCHRONIZE,
+            SMBLibrary.FileAttributes.Normal, ShareAccess.None, CreateDisposition.FILE_OPEN,
+            CreateOptions.FILE_NON_DIRECTORY_FILE | CreateOptions.FILE_SYNCHRONOUS_IO_NONALERT, null);
+        if (st != NTStatus.STATUS_SUCCESS || handle == null)
+            throw new IOException($"SMB open for rename '{fromPath}' failed: {st}");
+        try {
+            var rs = _store.SetFileInformation(handle, new FileRenameInformationType2 {
+                FileName = toPath,
+                ReplaceIfExists = true
+            });
+            if (rs != NTStatus.STATUS_SUCCESS)
+                throw new IOException($"SMB rename '{fromPath}' -> '{toPath}' failed: {rs}");
+        } finally {
+            try { _store.CloseFile(handle); } catch { /* rename already reported */ }
+        }
+    }
+
+    /// <summary>Best-effort removal of an incomplete sidecar. Usually the link
+    /// is the reason we are here, so a failure to clean up is not worth
+    /// reporting: the ".part" name already says the file is unusable.</summary>
+    private void TryDelete(string filePath) {
+        if (_store is null) return;
+        try {
+            var st = _store.CreateFile(out var handle, out _, filePath,
+                AccessMask.DELETE | AccessMask.SYNCHRONIZE, SMBLibrary.FileAttributes.Normal,
+                ShareAccess.None, CreateDisposition.FILE_OPEN,
+                CreateOptions.FILE_NON_DIRECTORY_FILE | CreateOptions.FILE_DELETE_ON_CLOSE
+                    | CreateOptions.FILE_SYNCHRONOUS_IO_NONALERT, null);
+            if (st == NTStatus.STATUS_SUCCESS && handle != null) _store.CloseFile(handle);
+        } catch { /* ignore */ }
     }
 
     /// <summary>Best-effort remote file size, for the one-way-sync skip. Opens

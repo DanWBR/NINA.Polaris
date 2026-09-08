@@ -42,7 +42,8 @@ function lift(name) {
 
 const NAMES = ['_histoBulkOf', '_histoFrame', '_histoUpdateEndpoints', '_histoDragMove',
                '_histoSample', '_channelGains', '_autoStretchEndpoints',
-               '_screenTransfer', '_mtf'];
+               '_screenTransfer', '_mtf', '_histoBuild', '_histoLuts',
+               '_histoStretchSig', '_displayMap', '_computePerChannelStretch'];
 const app = eval('({' + NAMES.map(lift).join('\n') + '\n})');
 
 // The drag throttles its redraw through a frame callback; outside a browser
@@ -316,6 +317,132 @@ console.log('== the handles ARE the axis ==');
     near(st.histo.blackFrac, 0.2, 1e-9, 'black handle is stretchBlack, unconverted');
     near(st.histo.whiteFrac, 0.9, 1e-9, 'white handle is stretchWhite, unconverted');
     near(st.histo.midFrac, 0.2 + 0.5 * 0.7, 1e-9, 'mid sits between the two');
+}
+
+console.log('== the built histogram has no comb of zeros ==');
+{
+    // A real frame is 16-bit INTEGERS, and the stretch pulls a sky occupying a
+    // couple of hundred distinct levels across the whole axis. Counting each
+    // sample as a point put most of them in the same handful of bins and left
+    // the ones between empty, so the curve drew as a picket fence of spikes
+    // separated by zeros -- which reads as missing data and is nothing of the
+    // sort. Every sample is spread over the width its ADU step covers instead.
+    const W = 220, H = 220, N = W * H;
+    const px = new Uint16Array(N * 3);
+    let seed = 12345;
+    const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+    const gauss = (mu, sd) => {
+        const u = Math.max(1e-9, rnd()), v = rnd();
+        return Math.round(mu + sd * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v));
+    };
+    // The shape of the frame that produced the comb: a background at ~180 ADU
+    // with a spread of a couple of dozen, so the whole sky is a HUNDRED-odd
+    // distinct integer values. The stretch pulls those across four hundred
+    // bins, and point counting leaves five of every six empty. A frame with a
+    // wide background does not show the defect at all, which is why this
+    // fixture is narrow on purpose.
+    for (let i = 0; i < N; i++) {
+        px[i] = Math.max(0, gauss(150, 22));
+        px[N + i] = Math.max(0, gauss(180, 24));
+        px[2 * N + i] = Math.max(0, gauss(310, 30));
+        // A few stars, so the frame is not pure background.
+        if ((i % 4093) === 0) {
+            px[i] += 20000; px[N + i] += 22000; px[2 * N + i] += 18000;
+        }
+    }
+
+    const app2 = {
+        HISTO_BINS: 512, histoZoom: true,
+        stretchBlack: 0, stretchWhite: 1, stretchMid: 0.5,
+        _histoToken: 1, _histoDrag: null, _histoMap: null, _histoLut: null,
+        histo: { bins: null, _token: -1, _sig: null, dispLo: 0, dispHi: 1 },
+        _lastRawFrame: { pixels: px, width: W, height: H, bitDepth: 16,
+                         bayerPattern: 0, channels: 3, maxVal: 65535 },
+        _mtf: app._mtf,
+        _screenTransfer: app._screenTransfer,
+        _autoStretchEndpoints: app._autoStretchEndpoints,
+        _channelGains: app._channelGains,
+        _computePerChannelStretch: app._computePerChannelStretch,
+        _displayMap: app._displayMap,
+        _histoLuts: app._histoLuts,
+        _histoStretchSig: app._histoStretchSig,
+        _histoBulkOf: app._histoBulkOf,
+        _histoFrame: app._histoFrame,
+        _histoUpdateEndpoints: app._histoUpdateEndpoints,
+        _histoBuild: app._histoBuild,
+    };
+
+    app2._histoBuild() ? ok('the histogram builds') : bad('build returned false');
+    app2.histo.color ? ok('a 3-plane frame is colour') : bad('colour not detected');
+
+    // Bin 0 is the clip pile: everything below the black point renders as
+    // black, so it is a real spike with a real gap after it. The comb this
+    // guards against is inside the DISTRIBUTION, so measure from bin 1 and
+    // ignore the sparse tails, where isolated samples are honest.
+    const holes = (bins, label) => {
+        let total = 0;
+        for (let i = 1; i < bins.length; i++) total += bins[i];
+        if (total <= 0) { bad(`${label}: no bins at all`); return; }
+        let acc = 0, first = -1, last = -1;
+        for (let i = 1; i < bins.length; i++) {
+            acc += bins[i];
+            if (first < 0 && acc >= total * 0.005) first = i;
+            if (acc <= total * 0.995) last = i;
+        }
+        let run = 0, worst = 0;
+        for (let i = first; i <= last; i++) {
+            run = bins[i] > 0 ? 0 : run + 1;
+            if (run > worst) worst = run;
+        }
+        (worst === 0)
+            ? ok(`${label}: ${last - first + 1} bins across the bulk, none empty`)
+            : bad(`${label}: a run of ${worst} empty bins inside the distribution`);
+    };
+    holes(app2.histo.binsR, 'R');
+    holes(app2.histo.binsG, 'G');
+    holes(app2.histo.binsB, 'B');
+
+    // And the whole point of the gain balance: the three curves land together.
+    // The MEDIAN bin, not the mode. The gain balance equalises the channels'
+    // medians by construction; their widths still differ (a gain scales the
+    // spread along with the level) and the MTF is steep near the black point,
+    // so the mode of the binned density is not the statistic being controlled.
+    // Bin 0 is excluded: it is the clip pile, not part of the distribution.
+    const medianBinOf = (bins) => {
+        let total = 0;
+        for (let i = 1; i < bins.length; i++) total += bins[i];
+        let acc = 0;
+        for (let i = 1; i < bins.length; i++) {
+            acc += bins[i];
+            if (acc >= total / 2) return i;
+        }
+        return bins.length - 1;
+    };
+    const pr = medianBinOf(app2.histo.binsR), pg = medianBinOf(app2.histo.binsG),
+          pb = medianBinOf(app2.histo.binsB);
+    (Math.abs(pr - pg) <= 8 && Math.abs(pb - pg) <= 8)
+        ? ok(`the three channels sit on top of each other (${pr}, ${pg}, ${pb})`)
+        : bad(`channels apart: R ${pr}, G ${pg}, B ${pb}`);
+
+    // The stats are the exposure's, in ADU, not the screen's.
+    (app2.histo.binsG[0] > 0) ? ok('what falls below the black point piles at zero')
+                              : bad('nothing clipped, so the black point is outside the data');
+
+    // In ADU, and therefore near the fixture's background, NOT near the screen
+    // level the same pixels are drawn at.
+    (app2.histo.avg > 120 && app2.histo.avg < 400)
+        ? ok(`AVG is in ADU (${app2.histo.avg})`)
+        : bad(`AVG looks wrong: ${app2.histo.avg}`);
+
+    // Moving a handle must rebuild, and only then.
+    const sig = app2.histo._sig;
+    app2._histoBuild();
+    (app2.histo._sig === sig) ? ok('a rebuild with nothing changed is skipped')
+                              : bad('rebuilt for no reason');
+    app2.stretchMid = 0.3;
+    app2._histoBuild();
+    (app2.histo._sig !== sig) ? ok('moving a handle rebuilds the bins')
+                              : bad('handle move did not rebuild');
 }
 
 console.log();
