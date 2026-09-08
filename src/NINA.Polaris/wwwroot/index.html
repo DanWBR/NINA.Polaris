@@ -15104,6 +15104,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                   x-show="clockSkewLabel() !== null"
                                   x-text="' (' + clockSkewLabel() + ')'"></span>
                         </div>
+                        <div>
+                            Host timezone:
+                            <strong x-text="clockSync.timeZone || '-'"></strong>
+                            <span class="text-muted"
+                                  x-show="clockSync.timeZone === 'UTC' || clockSync.timeZone === 'Etc/UTC'">
+                                (stock image default; DATE-LOC in saved frames equals DATE-UTC)
+                            </span>
+                        </div>
                         <div x-show="clockSync.lastSyncAt"
                              style="color:var(--text-muted)">
                             Last sync:

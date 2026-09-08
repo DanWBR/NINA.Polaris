@@ -539,8 +539,13 @@ function ninaApp() {
             supported: false,
             busy: false,
             lastSyncAt: null,
-            lastError: null
+            lastError: null,
+            // Host IANA zone as reported on every status tick, so the UI can
+            // show it and _maybePushTimeZone can spot a stock "UTC" image.
+            timeZone: null
         },
+        // One timezone push per page load, whether or not it succeeded.
+        _tzPushed: false,
 
         // Scheduled rig teardown ("sleep timer"). Live state from the WS
         // scheduledShutdown block; the form model drives the Settings card.
@@ -7247,6 +7252,33 @@ function ninaApp() {
         // the host onto the client's clock. On by default; the Settings toggle
         // (settings.autoClockSync) disables it. Throttled so a persistent
         // failure (missing polkit rule) doesn't retry every WS tick.
+        // The host's timezone is not the host's business to guess: a stock
+        // image is UTC forever, and only the browser knows where the operator
+        // is. Push ours once per page load, which is what keeps DATE-LOC and
+        // the session-date folder honest. Unlike a clock sync this never moves
+        // the instant, so it needs no confirmation, but it does announce
+        // itself.
+        //
+        // ONLY from a stock UTC host. Plenty of observers run their rig on UTC
+        // on purpose, and a remote observatory is deliberately on the SITE's
+        // zone, not the operator's; overriding either would be worse than the
+        // bug. An untouched image is the one case where UTC means "nobody ever
+        // said", and that is the case this fixes.
+        async _maybePushTimeZone(hostZone) {
+            if (!hostZone || !this.clockSync.supported) return;
+            if (this._tzPushed) return;
+            if (hostZone !== 'UTC' && hostZone !== 'Etc/UTC') return;
+            let mine = null;
+            try { mine = Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch (_) {}
+            if (!mine || mine === hostZone) return;
+            this._tzPushed = true;   // one attempt per load, success or not
+            try {
+                const r = await this.apiPost('/api/system/clock/timezone', { timeZone: mine });
+                const j = await r.json();
+                if (j.ok) this.toast('Host timezone set to ' + j.timeZone, 'ok');
+            } catch (_) { /* logged host-side; not worth a toast on every load */ }
+        },
+
         _maybeAutoSyncClock() {
             if (this.settings?.autoClockSync === false) return;
             if (!this.clockSync.supported || this.clockSync.busy) return;
@@ -7268,8 +7300,16 @@ function ninaApp() {
                 // races with that and surfaces as 'Request timed out'
                 // -> 'Network error' in the catch even when the
                 // backend would have responded with the real reason.
+                // The host also gets our timezone. SBC images ship as UTC and
+                // nothing moves them, so DATE-LOC in every saved FITS matched
+                // DATE-UTC and the session-date folder rolled at the wrong hour
+                // for anyone outside UTC. Best-effort: an ancient browser
+                // without Intl just omits the field.
+                let tz = null;
+                try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch (_) {}
                 const r = await this.apiPost('/api/system/clock/sync', {
-                    clientUtc: new Date().toISOString()
+                    clientUtc: new Date().toISOString(),
+                    clientTimeZone: tz
                 }, { timeout: 20000 });
                 const j = await r.json();
                 if (j.ok) {
@@ -46023,6 +46063,8 @@ function ninaApp() {
             if (msg.server && msg.server.utcNow) {
                 this.clockSync.serverUtc = msg.server.utcNow;
                 this.clockSync.supported = !!msg.server.clockSyncSupported;
+                this.clockSync.timeZone = msg.server.timeZone || null;
+                this._maybePushTimeZone(this.clockSync.timeZone);
                 const serverMs = Date.parse(msg.server.utcNow);
                 if (Number.isFinite(serverMs)) {
                     _serverNowMs = serverMs;
