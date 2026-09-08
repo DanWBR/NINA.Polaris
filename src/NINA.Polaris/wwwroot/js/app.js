@@ -10033,6 +10033,16 @@ function ninaApp() {
 
         // Guards the FILES "To LIVE" button while a file is on its way.
         filesToLiveBusy: false,
+        // Debug-only tools, hidden from a normal install. "To LIVE" is one:
+        // it exists to exercise the stretch and the histogram against a file
+        // whose contents are known, which is a developer's need, not an
+        // operator's. Turn them on with
+        //     localStorage.setItem('polaris-debug-tools', '1')
+        // and reload; read once at start-up, so it is not a live toggle.
+        debugTools: (function () {
+            try { return localStorage.getItem('polaris-debug-tools') === '1'; }
+            catch (_) { return false; }
+        })(),
 
 
         // Bins of the DISPLAYED image, plus the frame's real statistics.
