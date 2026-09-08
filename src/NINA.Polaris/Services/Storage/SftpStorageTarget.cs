@@ -52,13 +52,29 @@ public sealed class SftpStorageTarget : IStorageTarget {
             if (!_client.Exists(dir)) _client.CreateDirectory(dir);
         }
         var remote = _base + "/" + string.Join('/', segs);
-        using var fs = File.OpenRead(localPath);
-        // Paced through the source stream: SSH.NET does the transfer itself, so
-        // there is no loop of ours to slow down. Unpaced, this took the whole
-        // uplink the live view runs on. See PacedReadStream / TransferPacer.
-        using var paced = new PacedReadStream(fs, _linkShare);
-        _client.UploadFile(paced, remote, canOverride: true,
-            uploaded => { try { progress?.Report((long)uploaded); } catch { } });
+        // Upload into a sidecar and rename it into place once the stream is
+        // fully written. Uploading straight to the science filename left a
+        // partial frame under that name whenever the transfer was cut short,
+        // and nothing downstream tells a short FITS from a complete one.
+        var temp = remote + StoragePath.PartialSuffix;
+        try {
+            using (var fs = File.OpenRead(localPath))
+            // Paced through the source stream: SSH.NET does the transfer itself, so
+            // there is no loop of ours to slow down. Unpaced, this took the whole
+            // uplink the live view runs on. See PacedReadStream / TransferPacer.
+            using (var paced = new PacedReadStream(fs, _linkShare)) {
+                _client.UploadFile(paced, temp, canOverride: true,
+                    uploaded => { try { progress?.Report((long)uploaded); } catch { } });
+            }
+            // SFTP rename fails on an existing target, so clear it first. Not
+            // atomic against a concurrent reader, but the window is a single
+            // metadata round-trip and only one lane ever writes this path.
+            if (_client.Exists(remote)) _client.DeleteFile(remote);
+            _client.RenameFile(temp, remote);
+        } catch {
+            try { if (_client.Exists(temp)) _client.DeleteFile(temp); } catch { /* link is likely down */ }
+            throw;
+        }
         return Task.CompletedTask;
     }
 

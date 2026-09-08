@@ -203,4 +203,38 @@ public class ImageWriterDirectoryLayoutTests {
         Assert.That(ImageWriterService.SessionDateForLocal(local),
             Is.EqualTo(new DateTime(2026, 5, 22)));
     }
+
+    // ---- Cropped-frame detection (a stale ROI leaking into a capture) ----
+
+    [TestCase("LIGHT", true)]
+    [TestCase("Light Frame", true)]
+    [TestCase("DARK", true)]
+    [TestCase("DARKFLAT", true)]
+    [TestCase("BIAS", true)]
+    [TestCase("Flat Frame", true)]
+    [TestCase(null, true)]          // defaults to LIGHT, same as the writer
+    [TestCase("AUX", false)]        // aux camera, another sensor
+    [TestCase("SNAP", false)]       // may be the guide camera
+    [TestCase("MASTER", false)]     // an integration, size is the stacker's call
+    public void FullSensorFrameType_CoversScienceFramesOnly(string? imageType, bool expected) {
+        Assert.That(ImageWriterService.IsFullSensorFrameType(imageType), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void CroppedSensorFrame_FlagsTheFieldCase() {
+        // 2026-09-06: 68 lights at 3000x3006 out of a 3008x3008 SV605CC.
+        Assert.That(ImageWriterService.IsCroppedSensorFrame(3000, 3006, 3008, 3008), Is.True);
+    }
+
+    [Test]
+    public void CroppedSensorFrame_PassesAFullFrame() {
+        Assert.That(ImageWriterService.IsCroppedSensorFrame(3008, 3008, 3008, 3008), Is.False);
+    }
+
+    [Test]
+    public void CroppedSensorFrame_IgnoresAnUnknownSensorSize() {
+        // A driver that has not published CCD_INFO yet reports 0: no evidence
+        // either way, and warning on every frame would be noise.
+        Assert.That(ImageWriterService.IsCroppedSensorFrame(3000, 3006, 0, 0), Is.False);
+    }
 }

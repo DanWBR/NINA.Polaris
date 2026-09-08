@@ -643,8 +643,11 @@ public static class CameraEndpoints {
             try {
                 await equip.Camera.SetSubframeAsync(0, 0, 0, 0);
             } catch (Exception ex) {
+                // Not a detail: this is the assertion that keeps a leftover ROI
+                // out of the night's subs, and it is not retried anywhere.
                 loggerFactory.CreateLogger("Polaris.Camera")
-                    .LogDebug(ex, "Full-frame reset on connect skipped (non-fatal)");
+                    .LogWarning(ex, "Full-frame reset on connect failed; captures may be cropped " +
+                        "by a ROI left in the driver");
             }
             return Results.Ok(new { status = "connected", device = equip.Camera.DeviceName });
         });

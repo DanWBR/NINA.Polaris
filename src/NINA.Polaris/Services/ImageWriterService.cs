@@ -161,6 +161,7 @@ public class ImageWriterService {
             // foldered by exposure/filter and have no sky target.
             targetName = ResolveTargetName(targetName, imageType, imageData, profile);
 
+            WarnOnCroppedSensorFrame(imageData, imageType, stacked);
             EnrichMetadata(imageData, profile, targetName, imageType, gain);
             // Aux camera frames carry the aux optics' focal length (different
             // OTA than the main rig), so FOV/plate-solve metadata is correct.
@@ -252,6 +253,49 @@ public class ImageWriterService {
             _logger.LogError(ex, "Failed to save FITS to {Dir}", dir);
             return null;
         }
+    }
+
+    /// <summary>Warn when a science frame came back smaller than the sensor.
+    ///
+    /// A camera ROI is a VIDEO-only concept here, so a light/dark/flat/bias
+    /// narrower than the full read is a stale ROI leaking into the capture, not
+    /// a choice. Nothing used to notice: such a frame is named, foldered and
+    /// headed exactly like a good one, and only refuses to stack weeks later.
+    /// Field 2026-09-06: an SV605CC delivered 68 consecutive lights at 3000x3006
+    /// of its 3008x3008 sensor, over 72 minutes, in silence.
+    ///
+    /// Scoped to the frame types that are by definition a full read of the MAIN
+    /// camera. AUX / SNAP / MASTER saves also come through here carrying another
+    /// sensor's frames (aux, guide scope) or an integration whose size is the
+    /// stacker's business.</summary>
+    private void WarnOnCroppedSensorFrame(IImageData imageData, string imageType, bool stacked) {
+        if (stacked || !IsFullSensorFrameType(imageType)) return;
+        var cam = _equip.Camera;
+        if (cam == null || !cam.IsConnected) return;
+        var bin = Math.Max(1, cam.BinX);
+        int fullW = cam.MaxX / bin, fullH = cam.MaxY / bin;
+        int w = imageData.Properties.Width, h = imageData.Properties.Height;
+        if (!IsCroppedSensorFrame(w, h, fullW, fullH)) return;
+        _logger.LogWarning(
+            "{Type} frame is {W}x{H} but {Device} reads out {FullW}x{FullH} at bin {Bin}: a region " +
+            "of interest left in the driver is cropping the capture. Reconnect the camera (or set " +
+            "the VIDEO FOV back to the full sensor) before the whole run is shot this way.",
+            imageType, w, h, cam.DeviceName, fullW, fullH, bin);
+    }
+
+    /// <summary>True when the delivered frame is smaller than the sensor read.
+    /// A zero or negative sensor size means the driver has not published its
+    /// geometry, which is not evidence of a crop.</summary>
+    internal static bool IsCroppedSensorFrame(int width, int height, int fullWidth, int fullHeight)
+        => fullWidth > 0 && fullHeight > 0 && (width < fullWidth || height < fullHeight);
+
+    /// <summary>Frame types that are, by definition, a full read of the main
+    /// sensor. Accepts both the short forms ("LIGHT") and the FITS IMAGETYP
+    /// spellings ("Light Frame") that reach this method.</summary>
+    internal static bool IsFullSensorFrameType(string? imageType) {
+        var t = (imageType ?? "LIGHT").Trim().ToUpperInvariant();
+        return t.StartsWith("LIGHT") || t.StartsWith("DARK")
+            || t.StartsWith("BIAS") || t.StartsWith("FLAT");
     }
 
     /// <summary>Names that mean "no real target" and should trigger an

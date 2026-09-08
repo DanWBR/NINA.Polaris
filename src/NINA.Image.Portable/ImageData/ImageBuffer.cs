@@ -38,15 +38,20 @@ public class ImageBuffer : IImageBuffer {
     public int Height { get; }
     public int BitDepth { get; }
     public BayerPatternEnum BayerPattern { get; }
+    /// <summary>1 for a mono / Bayer-mosaic plane, 3 for a plane-sequential RGB
+    /// buffer (R, then G, then B). Width and Height describe ONE plane, so the
+    /// pixel count is Width * Height * Channels.</summary>
+    public int Channels { get; }
     public ReadOnlyMemory<ushort> PixelData => _pixels;
 
     public ImageBuffer(ushort[] pixels, int width, int height, int bitDepth = 16,
-        BayerPatternEnum bayerPattern = BayerPatternEnum.None) {
+        BayerPatternEnum bayerPattern = BayerPatternEnum.None, int channels = 1) {
         _pixels = pixels ?? throw new ArgumentNullException(nameof(pixels));
         Width = width;
         Height = height;
         BitDepth = bitDepth;
         BayerPattern = bayerPattern;
+        Channels = channels < 1 ? 1 : channels;
     }
 
     public static ImageBuffer FromImageData(IImageData imageData) {
@@ -55,7 +60,8 @@ public class ImageBuffer : IImageBuffer {
             imageData.Properties.Width,
             imageData.Properties.Height,
             imageData.Properties.BitDepth,
-            imageData.Properties.BayerPattern);
+            imageData.Properties.BayerPattern,
+            imageData.Properties.Channels);
     }
 
     /// <summary>FIELD-2: same as <see cref="FromImageData(IImageData)"/>
@@ -71,7 +77,8 @@ public class ImageBuffer : IImageBuffer {
             imageData.Properties.Width,
             imageData.Properties.Height,
             imageData.Properties.BitDepth,
-            bayerOverride ?? imageData.Properties.BayerPattern);
+            bayerOverride ?? imageData.Properties.BayerPattern,
+            imageData.Properties.Channels);
     }
 
     /// <summary>Compress into a freshly allocated, exactly-sized array.
@@ -145,6 +152,13 @@ public class ImageBuffer : IImageBuffer {
     ///                          BIAS/DARK/FLAT — client must NOT apply the
     ///                          OSC per-channel sky-neutralising stretch, or
     ///                          a flat noise frame gets a false colour cast)
+    ///   off 28  int Channels (1 = mono / Bayer mosaic, 3 = plane-sequential
+    ///                          RGB. Width and Height are ONE plane's size, so
+    ///                          the payload is Width * Height * Channels
+    ///                          ushorts. A client that predates this field
+    ///                          reads no channel count and must assume 1,
+    ///                          which is why the colour stack only ever sends
+    ///                          3 planes to a client that asked for them.)
     /// The header length is sent as a uint32 BEFORE this blob (in the
     /// relay envelope), so the client can extend / shrink the layout
     /// in future without breaking older builds — old clients that read
@@ -161,6 +175,7 @@ public class ImageBuffer : IImageBuffer {
         bw.Write(_pixels.Length * 2); // uncompressed size in bytes
         bw.Write(kind);
         bw.Write(calibration);
+        bw.Write(Channels);
         return ms.ToArray();
     }
 

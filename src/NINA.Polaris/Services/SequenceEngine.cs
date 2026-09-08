@@ -357,6 +357,23 @@ public class SequenceEngine {
         // it wins the cadence tie; blocking, so the mount waits for it).
         try { _barrier.Register("main", blocking: true, isPrimary: true); } catch { }
         try {
+            // The ROI is a VIDEO-only concept in the UI, but it lives in the
+            // driver (CCD_FRAME on INDI, the SDK ROI natively) and outlives the
+            // tab, the browser session and a Polaris restart. Only /connect
+            // asserted the full sensor, and that assertion is skipped outright
+            // when the driver has not published its geometry yet, so a stale ROI
+            // could crop every frame of a run. Assert it again here, where a
+            // whole night of subs is about to be committed to disk.
+            if (_equip.Camera is { IsConnected: true } roiCam && roiCam.Capabilities.SupportsRoi) {
+                try {
+                    await roiCam.SetSubframeAsync(0, 0, 0, 0, ct);
+                } catch (OperationCanceledException) { throw; }
+                  catch (Exception ex) {
+                    _logger.LogWarning(ex, "Full-frame reset before the sequence failed; " +
+                        "frames may be cropped by a ROI left in the driver");
+                }
+            }
+
             // Resume point captured ONCE up front. CurrentItemIndex is rewritten
             // on every iteration below, so the per-item start-frame check must
             // compare against this snapshot — otherwise every item looked like

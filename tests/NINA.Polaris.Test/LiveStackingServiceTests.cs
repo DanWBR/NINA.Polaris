@@ -156,44 +156,39 @@ public class LiveStackingServiceTests {
     }
 
     /// <summary>
-    /// An OSC stack has to publish PER-CHANNEL histograms, not just luminance.
+    /// An OSC stack must reach the browser as three 16-bit PLANES.
     ///
-    /// The server used to compute only a 16-bit luminance histogram and the
-    /// LIVE panel drew a single white line for a colour stack. Clicking Auto
-    /// made three RGB curves appear, because that recomputed locally from the
-    /// 8-bit JPEG, and the next WS status tick put the white line back (field,
-    /// 2026-08-09). The frame here is RGGB with R bright, G mid and B dark, so
-    /// the three histograms must land in that order.
+    /// It used to go out as an already-stretched 8-bit JPEG, which left the
+    /// client with no linear data: the histogram had to be computed on the
+    /// server, framed on the server, and then reconciled with handles acting in
+    /// the display space of that JPEG. Sending the real pixels removes all of
+    /// it. The frame here is RGGB with R bright, G mid and B dark, so the three
+    /// planes must come out in that order and not be mixed by the relay.
     /// </summary>
     [Test]
-    public async Task ColourStack_PublishesPerChannelHistograms() {
-        var svc = MakeService();
+    public async Task ColourStack_RelaysThreeRawPlanes() {
+        var relay = new ImageRelayService(NullLogger<ImageRelayService>.Instance);
+        var svc = new LiveStackingService(relay, NullLogger<LiveStackingService>.Instance);
         svc.ColorStacking = true;
         svc.Start();
 
         await svc.AddFrameAsync(MakeChannelRampFrame());
 
         Assert.That(svc.ColorActive, Is.True, "precondition: colour session");
-        Assert.That(svc.ColorHistogramR, Is.Not.Null, "R bins missing");
-        Assert.That(svc.ColorHistogramG, Is.Not.Null, "G bins missing");
-        Assert.That(svc.ColorHistogramB, Is.Not.Null, "B bins missing");
-        Assert.That(svc.ColorHistogram, Is.Not.Null, "luminance bins still feed the stats readout");
+        var sent = relay.GetLatestImage();
+        Assert.That(sent, Is.Not.Null, "nothing was handed to the relay");
+        Assert.That(sent!.Channels, Is.EqualTo(3), "the colour stack must go out as 3 planes");
+        Assert.That(sent.PixelData.Length, Is.EqualTo(sent.Width * sent.Height * 3));
 
-        double mr = MeanBin(svc.ColorHistogramR!);
-        double mg = MeanBin(svc.ColorHistogramG!);
-        double mb = MeanBin(svc.ColorHistogramB!);
+        int n = sent.Width * sent.Height;
+        var px = sent.PixelData.Span;
+        double mr = 0, mg = 0, mb = 0;
+        for (int i = 0; i < n; i++) { mr += px[i]; mg += px[n + i]; mb += px[2 * n + i]; }
+        mr /= n; mg /= n; mb /= n;
         Assert.That(mr, Is.GreaterThan(mg),
-            $"R should sit above G (R={mr:F1} G={mg:F1}); identical channels mean "
-            + "the panel would draw three curves on top of each other");
-        Assert.That(mg, Is.GreaterThan(mb),
-            $"G should sit above B (G={mg:F1} B={mb:F1})");
-    }
-
-    /// <summary>Centre of mass of a 256-bin histogram, in bin units.</summary>
-    private static double MeanBin(int[] bins) {
-        double n = 0, s = 0;
-        for (int i = 0; i < bins.Length; i++) { n += bins[i]; s += (double)i * bins[i]; }
-        return n > 0 ? s / n : 0;
+            $"R should sit above G (R={mr:F0} G={mg:F0}); equal planes would mean the "
+            + "debayer or the relay mixed them");
+        Assert.That(mg, Is.GreaterThan(mb), $"G should sit above B (G={mg:F0} B={mb:F0})");
     }
 
     /// <summary>RGGB frame with clearly separated channel levels, so a

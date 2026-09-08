@@ -42,8 +42,18 @@ public sealed class LocalStorageTarget : IStorageTarget {
         // Skip when an identical-length copy already exists (idempotent re-push).
         if (File.Exists(dest) && new FileInfo(dest).Length == new FileInfo(localPath).Length)
             return Task.CompletedTask;
-        File.Copy(localPath, dest, overwrite: true);
-        // Local copy is atomic; report the whole file at the end.
+        // Copy into a sidecar and move it into place, so a copy cut short (a
+        // full disk, an unplugged USB drive, a cancelled push) never leaves a
+        // partial frame under the science filename. File.Copy itself is not
+        // atomic; the move within the same directory is.
+        var temp = dest + StoragePath.PartialSuffix;
+        try {
+            File.Copy(localPath, temp, overwrite: true);
+            File.Move(temp, dest, overwrite: true);
+        } catch {
+            try { File.Delete(temp); } catch { /* nothing better to do */ }
+            throw;
+        }
         try { progress?.Report(new FileInfo(dest).Length); } catch { }
         return Task.CompletedTask;
     }

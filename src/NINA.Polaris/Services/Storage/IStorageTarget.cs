@@ -88,6 +88,11 @@ public interface IStorageTarget : IDisposable {
 /// into ordered remote segments.
 /// </summary>
 public static class StoragePath {
+    /// <summary>Suffix of the sidecar an upload writes into before it is renamed
+    /// onto the real filename. Anything left on a target with this suffix is an
+    /// interrupted transfer, never a usable capture.</summary>
+    public const string PartialSuffix = ".part";
+
     /// <summary>Split a relative path into clean segments, dropping any leading
     /// base prefix's separators and collapsing "." / empty parts. Rejects any
     /// path that tries to escape upward ("..").</summary>

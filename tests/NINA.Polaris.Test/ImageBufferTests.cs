@@ -93,12 +93,16 @@ public class ImageBufferTests {
 
         var header = buffer.GetStreamHeader();
 
-        // Header layout: 7 int32s = 28 bytes
+        // Header layout: 8 int32s = 32 bytes
         // (width, height, bit depth, bayer, uncompressed size, kind tag,
-        // calibration flag). `kind` distinguishes live-stack vs preview vs
-        // sequence frames; `calibration` marks BIAS/DARK/FLAT so the client
-        // skips the OSC sky-neutralising stretch on them.
-        Assert.That(header.Length, Is.EqualTo(28));
+        // calibration flag, channel count). `kind` distinguishes live-stack vs
+        // preview vs sequence frames; `calibration` marks BIAS/DARK/FLAT so the
+        // client skips the OSC sky-neutralising stretch on them; `channels` is
+        // 3 for the colour live stack, whose three planes share one width and
+        // height. Fields only ever get APPENDED: the relay sends the length
+        // first so a client built against an older layout keeps reading the
+        // fields it knows at the offsets it knows.
+        Assert.That(header.Length, Is.EqualTo(32));
 
         using var ms = new MemoryStream(header);
         using var br = new BinaryReader(ms);
@@ -109,6 +113,7 @@ public class ImageBufferTests {
         Assert.That(br.ReadInt32(), Is.EqualTo(pixels.Length * 2), "Uncompressed size");
         Assert.That(br.ReadInt32(), Is.EqualTo(0), "Kind tag default");
         Assert.That(br.ReadInt32(), Is.EqualTo(0), "Calibration flag default");
+        Assert.That(br.ReadInt32(), Is.EqualTo(1), "Channel count default");
     }
 
     [Test]
