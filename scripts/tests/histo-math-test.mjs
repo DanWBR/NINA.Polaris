@@ -41,7 +41,8 @@ function lift(name) {
 }
 
 const NAMES = ['_histoBulkOf', '_histoFrame', '_histoUpdateEndpoints', '_histoDragMove',
-               '_histoSample'];
+               '_histoSample', '_stretchForFrame', '_computePerChannelStretch',
+               '_autoStretchEndpoints', '_mtf'];
 const app = eval('({' + NAMES.map(lift).join('\n') + '\n})');
 
 // The drag throttles its redraw through a frame callback; outside a browser
@@ -226,6 +227,84 @@ console.log('== _histoSample: a narrow spike survives the zoomed-OUT view ==');
     (Math.max(...v) > 5000 * 0.4)
         ? ok('a single-bin spike still reaches the curve')
         : bad(`spike flattened to ${Math.max(...v).toFixed(0)} of 5000`);
+}
+
+console.log('== manual mode keeps the per-channel stretch ==');
+{
+    // A colour sub with the channels at clearly different sky levels — the
+    // shape of a real OSC frame, and the reason the per-channel path exists.
+    const W = 64, H = 64, N = W * H, MAXV = 65535;
+    const px = new Uint16Array(N * 3);
+    let seed = 7;
+    const noise = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return (seed % 400) - 200; };
+    for (let i = 0; i < N; i++) {
+        px[i] = 4000 + noise();          // R
+        px[N + i] = 5000 + noise();      // G
+        px[2 * N + i] = 12000 + noise(); // B, a long way right of the others
+    }
+
+    const mk = (over) => Object.assign({
+        stretchAuto: true, stretchBlack: 0, stretchWhite: 1, stretchMid: 0.25,
+        histo: { _autoBlack: 0.05, _autoWhite: 1, _autoMid: null },
+        _mtf: app._mtf,
+        _autoStretchEndpoints: app._autoStretchEndpoints,
+        _computePerChannelStretch: app._computePerChannelStretch,
+        _stretchForFrame: app._stretchForFrame,
+    }, over);
+
+    const auto = mk({})._stretchForFrame(px, W, H, 0, MAXV, 3, 0, 0.25);
+    if (!auto.perChan) { bad('auto mode produced no per-channel stretch'); }
+    else {
+        ok('auto mode is per-channel');
+        (auto.perChan.b.shadow > auto.perChan.g.shadow
+         && auto.perChan.g.shadow > auto.perChan.r.shadow)
+            ? ok('each channel gets its own black point')
+            : bad(`shadows R=${auto.perChan.r.shadow.toFixed(0)} `
+                + `G=${auto.perChan.g.shadow.toFixed(0)} B=${auto.perChan.b.shadow.toFixed(0)}`);
+    }
+
+    // THE REGRESSION. Manual mode used to return null here, so the first touch
+    // of any handle replaced the per-channel endpoints with one global black
+    // point. On this frame that drives blue far past the other two and the
+    // picture goes solid blue — reported from the field after nudging the
+    // midtones handle, which had nothing to do with it.
+    const manual = mk({ stretchAuto: false, stretchBlack: 0.05, stretchWhite: 1,
+                        stretchMid: 0.4 })._stretchForFrame(px, W, H, 0, MAXV, 3, 0, 0.25);
+    manual.perChan ? ok('manual mode is STILL per-channel')
+                   : bad('manual mode dropped the per-channel stretch');
+
+    if (manual.perChan && auto.perChan) {
+        // Seeded at the auto endpoints, the delta is zero: no jump on the first
+        // pixel of a drag.
+        for (const c of ['r', 'g', 'b']) {
+            near(manual.perChan[c].shadow, auto.perChan[c].shadow, 1e-6,
+                `${c}: black unchanged when the handle sits where Auto left it`);
+        }
+        near(manual.midtone, 0.4, 1e-9, 'the midtone handle is what sets the midtone');
+
+        // Move the black handle: all three shift together, gaps preserved, so
+        // the colour balance does not move.
+        const moved = mk({ stretchAuto: false, stretchBlack: 0.08, stretchWhite: 1,
+                           stretchMid: 0.25 })._stretchForFrame(px, W, H, 0, MAXV, 3, 0, 0.25);
+        const d = 0.03 * MAXV;
+        for (const c of ['r', 'g', 'b']) {
+            near(moved.perChan[c].shadow, auto.perChan[c].shadow + d, 1e-6,
+                `${c}: black moves by exactly the handle delta`);
+        }
+        const gapAuto = auto.perChan.b.shadow - auto.perChan.r.shadow;
+        const gapMoved = moved.perChan.b.shadow - moved.perChan.r.shadow;
+        near(gapMoved, gapAuto, 1e-6, 'the gap between channels survives the drag');
+    }
+
+    const mono = mk({})._stretchForFrame(new Uint16Array(N), W, H, 0, MAXV, 1, 0, 0.25);
+    (mono.perChan === null && mono.midtone === 0.25)
+        ? ok('a mono frame keeps the single global stretch')
+        : bad('mono frame took the colour path');
+
+    const calib = mk({})._stretchForFrame(px, W, H, 0, MAXV, 3, 1, 0.25);
+    (calib.perChan === null)
+        ? ok('a calibration frame is rendered neutral, not sky-neutralised')
+        : bad('calibration frame took the per-channel path');
 }
 
 console.log();

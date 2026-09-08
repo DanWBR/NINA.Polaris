@@ -4528,7 +4528,11 @@ function ninaApp() {
             maxVal: 65535,          // ADU that maps to axis 1.0
             blackFrac: 0, whiteFrac: 1, midFrac: 0.5,   // handle positions
             dispLo: 0, dispHi: 1,   // the visible window
-            _autoBlack: 0, _autoWhite: 1, _autoMid: 0.25,
+            // _autoMid is null until something computes it. On a COLOUR frame
+            // the renderer owns it (_stretchForFrame publishes the midtone it
+            // actually used); the luminance estimate below is only the fallback,
+            // so the mid handle is seeded from the rendering it sits on.
+            _autoBlack: 0, _autoWhite: 1, _autoMid: null,
             _token: -1
         },
         _histoToken: 0,       // bumped each time a new raw frame is cached
@@ -9364,31 +9368,11 @@ function ninaApp() {
                     // so applyManualStretch routes through the JPEG re-stretch
                     // path instead of re-rendering an old mono frame.
                     this._lastRawFrame = null;
-                    // NOTE: do NOT reset histo.dispLo/dispHi here. That
-                    // unconditional reset ran on EVERY incoming stack frame —
-                    // snapping the histogram back to the full 0..65535 range
-                    // even mid-drag (bypassing the _histoDrag freeze) and
-                    // wiping the data-framed zoom on each update. The range
-                    // is owned by _histoUpdateEndpoints, which recomputes it
-                    // from the fresh frame's stats and respects the drag
-                    // freeze.
-                    // The server already auto-stretched this JPEG. Seed the
-                    // handles at identity (black 0, mid 0.5, white 1) so the
-                    // first drag flips to manual without a brightness jump.
-                    // ...but never while the operator is dragging a handle. This
-                    // runs on EVERY incoming stack frame, and the guard was only
-                    // on stretchAuto, which stays true until the drag is released
-                    // (_histoDragMove sets stretchBlack/White/Mid, not the flag).
-                    // So a frame landing mid-gesture snapped the handles back to
-                    // identity under the operator's finger and the reference they
-                    // were aiming at moved. Everything else in this handler
-                    // already respects the _histoDrag freeze; this did not.
-                    if (this.stretchAuto && !this._histoDrag) {
-                        this.histo.blackFrac = 0;
-                        this.histo.whiteFrac = 1;
-                        this.histo.midFrac = 0.5;
-                        this.histo._autoMid = 0.5;
-                    }
+                    // This used to pin the handles to identity here, because a
+                    // JPEG arrived already stretched and the handles then drove
+                    // a LUT over it. Nothing feeds the panel from a JPEG any
+                    // more, so this only clobbered the endpoints of the raw
+                    // frame still being shown.
                 } catch (e) {
                     // Even this much should not fail, but if it does, keep
                     // something paintable rather than dropping the frame.
@@ -9735,6 +9719,63 @@ function ninaApp() {
             return { shadow, scale, xMed };
         },
 
+        // The per-channel stretch to render a frame with, AUTO OR MANUAL.
+        //
+        // Manual mode used to return null here, so the first touch of a handle
+        // swapped the per-channel endpoints for a single global one. On an OSC
+        // frame that is not a small change: the three channels sit at different
+        // sky levels (a blue-heavy sub can have its blue peak a long way right
+        // of the other two), the per-channel path is what neutralises that, and
+        // dropping it turns the picture solid blue the instant a handle moves.
+        // The midtone slider was blamed for it because the midtone handle
+        // happened to be the one people dragged first.
+        //
+        // So the handles now act as a DELTA on the auto endpoints, in full-scale
+        // units, applied identically to all three channels:
+        //
+        //     shadow_c' = shadow_c + (black - autoBlack) * maxVal
+        //     white_c'  = white_c  + (white - autoWhite) * maxVal
+        //
+        // The gaps between the channels are preserved, so the colour balance
+        // does not move; only the common black point, white point and midtone
+        // do, which is what a stretch handle is supposed to mean. At the moment
+        // Auto is switched off the deltas are zero by construction, so the
+        // picture does not jump on the first pixel of the drag.
+        _stretchForFrame(pixels, width, height, bayerPattern, maxVal, channels,
+                         calibration, globalMidtone) {
+            const ch = (channels | 0) === 3 ? 3 : 1;
+            const isColor = ch === 3
+                || ((bayerPattern | 0) >= 1 && (bayerPattern | 0) <= 4);
+            // A calibration frame (BIAS/DARK/FLAT) has no sky to neutralise, so
+            // per-channel there just amplifies channel offset noise into a cast.
+            if (!isColor || calibration) {
+                return { perChan: null, midtone: globalMidtone };
+            }
+            const base = this._computePerChannelStretch(
+                pixels, width, height, bayerPattern, maxVal, ch);
+            if (!base) return { perChan: null, midtone: globalMidtone };
+
+            if (this.stretchAuto) {
+                // Publish what was actually used, so the handles start from the
+                // rendering they are seeded from rather than near it.
+                this.histo._autoMid = base.midtone;
+                return { perChan: base, midtone: base.midtone };
+            }
+
+            const dB = (this.stretchBlack - (this.histo._autoBlack ?? 0)) * maxVal;
+            const dW = (this.stretchWhite - (this.histo._autoWhite ?? 1)) * maxVal;
+            const shift = (c) => {
+                const sh = c.shadow + dB;
+                let wh = c.shadow + (c.scale > 0 ? 1 / c.scale : maxVal) + dW;
+                if (wh <= sh + 1) wh = sh + 1;
+                return { shadow: sh, scale: 1 / (wh - sh), xMed: c.xMed };
+            };
+            return {
+                perChan: { r: shift(base.r), g: shift(base.g), b: shift(base.b) },
+                midtone: Math.max(0.001, Math.min(0.999, this.stretchMid || 0.25)),
+            };
+        },
+
         // Per-channel auto-stretch for an OSC (Bayer) frame: sample the
         // raw mosaic into R / G / B buckets and compute an independent
         // shadow + scale for each. This is the client mirror of the
@@ -9861,16 +9902,10 @@ function ninaApp() {
             // black point + scale so a tab switch / slider change re-renders
             // with the same neutral-background colour, not the bluish global
             // stretch.
-            let perChan = null;
             const fCh = (f.channels | 0) === 3 ? 3 : 1;
-            const isColorFrame = fCh === 3
-                || ((f.bayerPattern | 0) >= 1 && (f.bayerPattern | 0) <= 4);
-            // Calibration frames render neutral (see _renderRawFrame) — no
-            // per-channel sky neutralisation, which would cast a flat frame.
-            if (isColorFrame && this.stretchAuto && !f.calibration) {
-                perChan = this._computePerChannelStretch(
-                    f.pixels, f.width, f.height, f.bayerPattern, f.maxVal, fCh);
-            }
+            const st = this._stretchForFrame(f.pixels, f.width, f.height,
+                f.bayerPattern, f.maxVal, fCh, f.calibration, midtone);
+            const perChan = st.perChan;
             // Pass the original frameKind so the re-render lands on
             // the SAME canvas the frame first painted into. Default
             // kind=0 here would silently shove PREVIEW snaps onto
@@ -9881,8 +9916,7 @@ function ninaApp() {
             // global one is calibrated for a completely different normalisation
             // (see _computePerChannelStretch) and renders the frame black.
             this._tryRenderWebGL(f.pixels, f.width, f.height, f.bitDepth,
-                f.bayerPattern, shadow, scaleFactor,
-                (perChan && perChan.midtone) ? perChan.midtone : midtone,
+                f.bayerPattern, shadow, scaleFactor, st.midtone,
                 f.frameKind || 0, perChan, fCh);
             // Keep the histogram mini-panel (handles + bars) in sync with the
             // stretch we just applied. Cheap: bins are cached per-frame.
@@ -10042,7 +10076,11 @@ function ninaApp() {
             this.histo.std = Math.round(Math.sqrt(Math.max(0, sumSq / n - mean * mean)));
             this.histo._autoBlack = maxVal > 0 ? Math.max(0, Math.min(1, ep.shadow / maxVal)) : 0;
             this.histo._autoWhite = 1;
-            this.histo._autoMid = Math.min(0.999, Math.max(0.001, this._mtf(ep.xMed, 0.15)));
+            const lumMid = Math.min(0.999, Math.max(0.001, this._mtf(ep.xMed, 0.15)));
+            // On a colour frame the renderer's per-channel midtone is the one on
+            // screen; overwriting it with this luminance estimate would put the
+            // mid handle slightly off the picture it points at.
+            if (!color || this.histo._autoMid == null) this.histo._autoMid = lumMid;
             this.histo._token = this._histoToken;
             this._histoUpdateEndpoints();
             return true;
@@ -11479,22 +11517,14 @@ function ninaApp() {
             // same neutral-background colour the server's live stack does
             // (fixes the bluish preview / autorun / autofocus cast). In
             // manual mode the user's global endpoints apply to all channels.
-            let perChan = null;
             const chCount = (channels | 0) === 3 ? 3 : 1;
-            const isColorFrame = chCount === 3
-                || ((bayerPattern | 0) >= 1 && (bayerPattern | 0) <= 4);
-            // Skip per-channel neutralisation for calibration frames (BIAS/DARK
-            // /FLAT): they have no sky background to neutralise, so per-channel
-            // just amplifies channel offset noise into a colour cast. Render
-            // them with the single global stretch (neutral noise, like STUDIO).
-            if (isColorFrame && this.stretchAuto && !calibration) {
-                perChan = this._computePerChannelStretch(pixels, width, height, bayerPattern, maxVal, chCount);
-            }
-
+            const st = this._stretchForFrame(pixels, width, height, bayerPattern,
+                maxVal, chCount, calibration, midtone);
+            const perChan = st.perChan;
             // When the per-channel path is active its midtone MUST win: the
             // global one is calibrated for a completely different normalisation
             // (see _computePerChannelStretch) and renders the frame black.
-            const effMidtone = (perChan && perChan.midtone) ? perChan.midtone : midtone;
+            const effMidtone = st.midtone;
 
             // Try WebGL2 path first (GPU does debayer + stretch in microseconds)
             if (this._tryRenderWebGL(pixels, width, height, bitDepth,
