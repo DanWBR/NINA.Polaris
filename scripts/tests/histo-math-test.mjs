@@ -41,8 +41,8 @@ function lift(name) {
 }
 
 const NAMES = ['_histoBulkOf', '_histoFrame', '_histoUpdateEndpoints', '_histoDragMove',
-               '_histoSample', '_stretchForFrame', '_computePerChannelStretch',
-               '_autoStretchEndpoints', '_mtf'];
+               '_histoSample', '_channelGains', '_autoStretchEndpoints',
+               '_screenTransfer', '_mtf'];
 const app = eval('({' + NAMES.map(lift).join('\n') + '\n})');
 
 // The drag throttles its redraw through a frame callback; outside a browser
@@ -229,82 +229,93 @@ console.log('== _histoSample: a narrow spike survives the zoomed-OUT view ==');
         : bad(`spike flattened to ${Math.max(...v).toFixed(0)} of 5000`);
 }
 
-console.log('== manual mode keeps the per-channel stretch ==');
+console.log('== stage 1 balances the channels by GAIN ==');
 {
-    // A colour sub with the channels at clearly different sky levels — the
-    // shape of a real OSC frame, and the reason the per-channel path exists.
-    const W = 64, H = 64, N = W * H, MAXV = 65535;
-    const px = new Uint16Array(N * 3);
-    let seed = 7;
-    const noise = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return (seed % 400) - 200; };
-    for (let i = 0; i < N; i++) {
-        px[i] = 4000 + noise();          // R
-        px[N + i] = 5000 + noise();      // G
-        px[2 * N + i] = 12000 + noise(); // B, a long way right of the others
+    const MAXV = 65535;
+    const ep = (median, mad) => {
+        const shadow = Math.max(0, median - 3 * mad);
+        const scale = MAXV > shadow ? 1 / (MAXV - shadow) : 1;
+        return { shadow, scale, xMed: (median - shadow) * scale, median, mad };
+    };
+    const ctx = { _mtf: app._mtf, _channelGains: app._channelGains };
+    const shown = (p, v) => Math.max(0, Math.min(1, (v - p.shadow) * p.scale));
+
+    // The operator's SV605CC flat, measured in ASIFitsView: the channels are
+    // nowhere near each other, and blue is at the saturation wall. Shifting
+    // each channel's black point cannot bring those together — it put blue at
+    // 0.900 of the output while red sat at 0.020, which is the solid blue flat
+    // that was reported. A gain does.
+    const flat = ctx._channelGains(ep(10204, 381), ep(28228, 439), ep(65534, 3), MAXV);
+    const fr = shown(flat.r, 10204), fg = shown(flat.g, 28228), fb = shown(flat.b, 65534);
+    near(fr, fg, 0.01, 'flat: red lands where green does');
+    near(fb, fg, 0.01, 'flat: blue lands where green does');
+    (Math.max(fr, fg, fb) < 0.5)
+        ? ok(`flat renders as a mid grey (${fg.toFixed(3)}), not a blown channel`)
+        : bad(`flat still blows out at ${Math.max(fr, fg, fb).toFixed(3)}`);
+
+    // A sky background: the case the old offset model did handle. It must keep
+    // working, or every light frame regresses to fix a flat.
+    const sky = ctx._channelGains(ep(4000, 120), ep(5000, 130), ep(12000, 150), MAXV);
+    const sr = shown(sky.r, 4000), sg = shown(sky.g, 5000), sb = shown(sky.b, 12000);
+    near(sr, sg, 0.01, 'sky: red neutral against green');
+    near(sb, sg, 0.01, 'sky: blue neutral against green');
+
+    // A bias: a few ADU of offset between channels, tiny MAD. This is the
+    // "bias is all pink" case, and it must come out neutral too.
+    const bias = ctx._channelGains(ep(500, 4), ep(505, 4), ep(495, 4), MAXV);
+    const br = shown(bias.r, 500), bg = shown(bias.g, 505), bb = shown(bias.b, 495);
+    near(br, bg, 0.005, 'bias: red neutral');
+    near(bb, bg, 0.005, 'bias: blue neutral');
+
+    // A dead plane must not drag the others through the floor.
+    const dead = ctx._channelGains(ep(0, 0), ep(5000, 130), ep(5100, 130), MAXV);
+    (Number.isFinite(dead.r.shadow) && Number.isFinite(dead.r.scale) && dead.r.scale > 0)
+        ? ok('a dead channel yields finite endpoints') : bad('dead channel produced garbage');
+
+    (flat.midtone > 0 && flat.midtone < 1) ? ok('the auto midtone stays in range')
+                                           : bad(`midtone ${flat.midtone}`);
+}
+
+console.log('== stage 2 is the handles, and it starts as the identity ==');
+{
+    const st = { _mtf: app._mtf, _screenTransfer: app._screenTransfer,
+                 stretchBlack: 0, stretchWhite: 1, stretchMid: 0.5 };
+    for (const v of [0, 0.15, 0.5, 0.83, 1]) {
+        near(st._screenTransfer(v), v, 1e-9, `identity at ${v}`);
     }
+    // Raising the black point clips the bottom and rescales what is left DOWN.
+    // It is the contrast control, not the brightness one.
+    st.stretchBlack = 0.1;
+    (st._screenTransfer(0.3) < 0.3) ? ok('raising black darkens what remains')
+                                    : bad('raising black should not brighten');
+    (st._screenTransfer(0.05) === 0) ? ok('and clips what falls below it')
+                                     : bad('below-black did not clip');
 
-    const mk = (over) => Object.assign({
-        stretchAuto: true, stretchBlack: 0, stretchWhite: 1, stretchMid: 0.25,
-        histo: { _autoBlack: 0.05, _autoWhite: 1, _autoMid: null },
-        _mtf: app._mtf,
-        _autoStretchEndpoints: app._autoStretchEndpoints,
-        _computePerChannelStretch: app._computePerChannelStretch,
-        _stretchForFrame: app._stretchForFrame,
-    }, over);
+    // The two that brighten a faint frame, which is what the handles are for:
+    // pull the white point in, or bend the midtone down.
+    st.stretchBlack = 0; st.stretchWhite = 0.5;
+    (st._screenTransfer(0.3) > 0.3) ? ok('pulling white in brightens')
+                                    : bad('white point did not brighten');
+    st.stretchWhite = 1; st.stretchMid = 0.25;
+    (st._screenTransfer(0.25) > 0.25) ? ok('a lower midtone lifts the shadows')
+                                      : bad('midtone did nothing');
+}
 
-    const auto = mk({})._stretchForFrame(px, W, H, 0, MAXV, 3, 0, 0.25);
-    if (!auto.perChan) { bad('auto mode produced no per-channel stretch'); }
-    else {
-        ok('auto mode is per-channel');
-        (auto.perChan.b.shadow > auto.perChan.g.shadow
-         && auto.perChan.g.shadow > auto.perChan.r.shadow)
-            ? ok('each channel gets its own black point')
-            : bad(`shadows R=${auto.perChan.r.shadow.toFixed(0)} `
-                + `G=${auto.perChan.g.shadow.toFixed(0)} B=${auto.perChan.b.shadow.toFixed(0)}`);
-    }
-
-    // THE REGRESSION. Manual mode used to return null here, so the first touch
-    // of any handle replaced the per-channel endpoints with one global black
-    // point. On this frame that drives blue far past the other two and the
-    // picture goes solid blue — reported from the field after nudging the
-    // midtones handle, which had nothing to do with it.
-    const manual = mk({ stretchAuto: false, stretchBlack: 0.05, stretchWhite: 1,
-                        stretchMid: 0.4 })._stretchForFrame(px, W, H, 0, MAXV, 3, 0, 0.25);
-    manual.perChan ? ok('manual mode is STILL per-channel')
-                   : bad('manual mode dropped the per-channel stretch');
-
-    if (manual.perChan && auto.perChan) {
-        // Seeded at the auto endpoints, the delta is zero: no jump on the first
-        // pixel of a drag.
-        for (const c of ['r', 'g', 'b']) {
-            near(manual.perChan[c].shadow, auto.perChan[c].shadow, 1e-6,
-                `${c}: black unchanged when the handle sits where Auto left it`);
-        }
-        near(manual.midtone, 0.4, 1e-9, 'the midtone handle is what sets the midtone');
-
-        // Move the black handle: all three shift together, gaps preserved, so
-        // the colour balance does not move.
-        const moved = mk({ stretchAuto: false, stretchBlack: 0.08, stretchWhite: 1,
-                           stretchMid: 0.25 })._stretchForFrame(px, W, H, 0, MAXV, 3, 0, 0.25);
-        const d = 0.03 * MAXV;
-        for (const c of ['r', 'g', 'b']) {
-            near(moved.perChan[c].shadow, auto.perChan[c].shadow + d, 1e-6,
-                `${c}: black moves by exactly the handle delta`);
-        }
-        const gapAuto = auto.perChan.b.shadow - auto.perChan.r.shadow;
-        const gapMoved = moved.perChan.b.shadow - moved.perChan.r.shadow;
-        near(gapMoved, gapAuto, 1e-6, 'the gap between channels survives the drag');
-    }
-
-    const mono = mk({})._stretchForFrame(new Uint16Array(N), W, H, 0, MAXV, 1, 0, 0.25);
-    (mono.perChan === null && mono.midtone === 0.25)
-        ? ok('a mono frame keeps the single global stretch')
-        : bad('mono frame took the colour path');
-
-    const calib = mk({})._stretchForFrame(px, W, H, 0, MAXV, 3, 1, 0.25);
-    (calib.perChan === null)
-        ? ok('a calibration frame is rendered neutral, not sky-neutralised')
-        : bad('calibration frame took the per-channel path');
+console.log('== the handles ARE the axis ==');
+{
+    const st = {
+        HISTO_BINS: NB, histoZoom: false,
+        stretchBlack: 0.2, stretchWhite: 0.9, stretchMid: 0.5,
+        histo: { bins: fieldBins(), color: false, binsR: null, dispLo: 0, dispHi: 1 },
+        _histoDrag: null,
+        _histoBulkOf: app._histoBulkOf,
+        _histoFrame: app._histoFrame,
+        _histoUpdateEndpoints: app._histoUpdateEndpoints,
+    };
+    st._histoUpdateEndpoints();
+    near(st.histo.blackFrac, 0.2, 1e-9, 'black handle is stretchBlack, unconverted');
+    near(st.histo.whiteFrac, 0.9, 1e-9, 'white handle is stretchWhite, unconverted');
+    near(st.histo.midFrac, 0.2 + 0.5 * 0.7, 1e-9, 'mid sits between the two');
 }
 
 console.log();

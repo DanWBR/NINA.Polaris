@@ -409,24 +409,21 @@ public class ImageRelayService : IDisposable {
     /// </summary>
     /// <returns>true when the frame was handed to the fan-out; false when there
     /// are no clients.</returns>
-    /// <summary>Is this a frame made of NOISE rather than of light?
+    /// <summary>Is this a frame made of NOISE rather than of light? A bias, a
+    /// dark or a dark-flat is nothing but the sensor's own floor.
     ///
-    /// A bias, a dark or a dark-flat is nothing but the sensor's own floor. The
-    /// browser's OSC auto-stretch neutralises each colour channel against its
-    /// own background, and on a noise frame that turns a few ADU of channel
-    /// offset difference into a strong cast -- the "bias is all pink under
-    /// auto-stretch" report. Those get a single global stretch instead, which
-    /// renders them as the neutral noise they are.
+    /// This rides the wire header as a flag describing the frame. Nothing in
+    /// the renderer keys off it any more: the browser's stage-1 auto stretch
+    /// balances the channels by GAIN against green, which lands a bias, a flat
+    /// and a sky background all on the same neutral rendering, so there is no
+    /// longer a class of frame that needs to opt out of it. It stays because it
+    /// is true about the frame and the header field is cheap; if a future
+    /// renderer wants to treat noise frames differently, this is where "noise"
+    /// is defined.
     ///
-    /// A FLAT is NOT one of them, and lumping it in here is what made every
-    /// flat come out solid blue on screen (field, 2026-09-07). A flat is a
-    /// bright, high-signal image whose channels genuinely sit at very different
-    /// levels, because the sensor's quantum efficiency and the panel's spectrum
-    /// are not flat. A single global stretch shows exactly that imbalance; the
-    /// per-channel one normalises it, which is why a flat reads grey/white on
-    /// an ASIAIR and should here too. The per-channel path has plenty of signal
-    /// to work with on a flat, so the reason the guard exists does not apply.
-    /// </summary>
+    /// A FLAT is deliberately not on the list. It is a bright, high-signal
+    /// image, not noise, and lumping it in here is what once made every flat
+    /// come out solid blue on screen (field, 2026-09-07).</summary>
     internal static bool IsNoiseFrame(string? imageType) {
         var t = (imageType ?? "").Trim().ToUpperInvariant();
         return t is "BIAS" or "DARK" or "DARKFLAT" or "DARK_FLAT" or "DARKFLATS";

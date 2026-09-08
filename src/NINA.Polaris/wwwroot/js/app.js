@@ -4490,11 +4490,14 @@ function ninaApp() {
         lastStars: null,        // { width, height, stars: [{x,y,hfr,...}] }
         hoverPixel: null,       // { x, y, adu, rgb } in source-image coords
 
-        // Manual stretch controls
-        stretchAuto: true,
-        stretchBlack: 0.0,    // 0..1 normalised (0% = black point at min)
-        stretchWhite: 1.0,    // 0..1 normalised (100% = white point at max)
-        stretchMid: 0.25,     // MTF midtones coefficient
+        // The operator's SCREEN TRANSFER, stage 2 of the stretch. It acts on
+        // the auto rendering's output (already 0..1), not on raw ADU, so
+        // 0 / 0.5 / 1 is the identity and Auto is simply these three values.
+        // See _displayMap for why the stretch has two stages.
+        stretchAuto: true,    // false once a handle has been touched
+        stretchBlack: 0.0,    // clip below this screen level
+        stretchWhite: 1.0,    // clip above this screen level
+        stretchMid: 0.5,      // MTF midtone; 0.5 is the identity
         _lastRawFrame: null,  // cache: { pixels, width, height, bitDepth, bayerPattern }
         // Transient CCD_CFA dropout guard for the LIVE canvas: once a colour
         // (Bayered) LIVE frame has rendered, a later LIVE frame that arrives
@@ -4515,26 +4518,29 @@ function ninaApp() {
         // Zoom defaults ON: the useful view is the band the data occupies, not
         // a mostly-empty 0..65535 axis. The button opens the full range.
         histoZoom: true,
-        // Bins over the full scale. 2048, not 256: at 16 bits a 256-bin
-        // histogram gives 256 ADU a bin, and a stacked sky whose sigma is
-        // ~124 ADU collapses into one spike.
-        HISTO_BINS: 2048,
+        // Bins across the screen's own 0..1. 512 is generous for a stretched
+        // image, whose values are spread over the whole axis by construction --
+        // unlike the linear data, where a stacked sky occupies a few hundred of
+        // 65535 ADU and needs far finer bins to show any shape at all.
+        HISTO_BINS: 512,
         histo: {
+            // MIN/MAX/AVG/STD are in ADU: they are about the exposure, not the
+            // rendering.
             min: 0, max: 0, avg: 0, std: 0,
-            // luminance bins + the three channel bins (null on a mono frame)
+            // Bins of the DISPLAYED values. Luminance plus the three channels
+            // (null on a mono frame).
             bins: null, binsR: null, binsG: null, binsB: null,
             color: false,
             peak: 1, peakRGB: 1, count: 0,
-            maxVal: 65535,          // ADU that maps to axis 1.0
+            maxVal: 65535,          // the frame's full scale, for the stats
             blackFrac: 0, whiteFrac: 1, midFrac: 0.5,   // handle positions
             dispLo: 0, dispHi: 1,   // the visible window
-            // _autoMid is null until something computes it. On a COLOUR frame
-            // the renderer owns it (_stretchForFrame publishes the midtone it
-            // actually used); the luminance estimate below is only the fallback,
-            // so the mid handle is seeded from the rendering it sits on.
-            _autoBlack: 0, _autoWhite: 1, _autoMid: null,
-            _token: -1
+            _token: -1,             // the frame the bins were built from
+            _sig: null              // the handle state they were built with
         },
+        // Stage 1 of the stretch for the cached frame. Kept so a drag re-runs
+        // only the screen transfer instead of re-measuring the sky.
+        _histoMap: null,
         _histoToken: 0,       // bumped each time a new raw frame is cached
         _histoDrag: null,     // { which, rect, lo, hi } while dragging
         _histoRaf: 0,         // rAF handle throttling the redraw during a drag
@@ -9603,14 +9609,12 @@ function ninaApp() {
         // washed out. Now we port the same GraXpert "15% Bg, 3σ"
         // preset the server-side AutoStretch.cs uses, so live-stack
         // previews look like the FILES / STUDIO thumbnails.
+        // Stage 1 only. The handles used to short-circuit this and replace the
+        // measured endpoints with their own, which on a colour frame threw away
+        // the per-channel neutralisation and turned the picture solid blue the
+        // moment anything was dragged. They are a screen transfer on top now
+        // (_screenTransfer), so this always measures.
         _computeStretchParams(pixels, maxVal) {
-            if (!this.stretchAuto) {
-                const shadow = this.stretchBlack * maxVal;
-                const white = Math.max(shadow + 1, this.stretchWhite * maxVal);
-                const midtone = Math.min(0.999, Math.max(0.001,
-                    this.stretchMid || 0.25));
-                return { shadow, scaleFactor: 1.0 / (white - shadow), midtone };
-            }
             // Find observedMax. Saturation threshold is normally
             // maxVal, but drivers that pack N-bit sensor data into
             // a 16-bit buffer often cap below the theoretical max
@@ -9705,7 +9709,8 @@ function ninaApp() {
         // only the per-channel shadow + scale differ.
         _autoStretchEndpoints(sampleArr, maxVal) {
             if (!sampleArr || sampleArr.length === 0) {
-                return { shadow: 0, scale: maxVal > 0 ? 1.0 / maxVal : 1.0, xMed: 0 };
+                return { shadow: 0, scale: maxVal > 0 ? 1.0 / maxVal : 1.0,
+                         xMed: 0, median: 0, mad: 0 };
             }
             const sorted = Float32Array.from(sampleArr).sort();
             const median = sorted[Math.floor(sorted.length * 0.5)];
@@ -9716,64 +9721,54 @@ function ninaApp() {
             // Normalised median under THIS channel's own endpoints. The caller
             // needs it to pick a midtone that matches the per-channel scaling.
             const xMed = Math.max(0, (median - shadow) * scale);
-            return { shadow, scale, xMed };
+            return { shadow, scale, xMed, median, mad };
         },
 
-        // The per-channel stretch to render a frame with, AUTO OR MANUAL.
+        // ── The stretch, in two stages ──────────────────────────────────
         //
-        // Manual mode used to return null here, so the first touch of a handle
-        // swapped the per-channel endpoints for a single global one. On an OSC
-        // frame that is not a small change: the three channels sit at different
-        // sky levels (a blue-heavy sub can have its blue peak a long way right
-        // of the other two), the per-channel path is what neutralises that, and
-        // dropping it turns the picture solid blue the instant a handle moves.
-        // The midtone slider was blamed for it because the midtone handle
-        // happened to be the one people dragged first.
+        // Stage 1, AUTO, always on: per channel on a colour frame, global on a
+        // mono one. This is what neutralises the sky background -- each channel
+        // measured against its own median and MAD -- and it is not optional,
+        // because without it an OSC frame renders with whatever cast the sensor
+        // and the sky happen to produce. It is also why a flat reads white and
+        // a bias reads grey rather than pink.
         //
-        // So the handles now act as a DELTA on the auto endpoints, in full-scale
-        // units, applied identically to all three channels:
+        // Stage 2, the HANDLES: a screen transfer on the stage-1 output, which
+        // is already 0..1. Identity at black 0, mid 0.5, white 1. This is the
+        // "pull a bit more out of it" control: it brightens or clips what is
+        // already a neutral rendering, and it cannot reintroduce a colour cast
+        // because it applies the same curve to all three channels.
         //
-        //     shadow_c' = shadow_c + (black - autoBlack) * maxVal
-        //     white_c'  = white_c  + (white - autoWhite) * maxVal
-        //
-        // The gaps between the channels are preserved, so the colour balance
-        // does not move; only the common black point, white point and midtone
-        // do, which is what a stretch handle is supposed to mean. At the moment
-        // Auto is switched off the deltas are zero by construction, so the
-        // picture does not jump on the first pixel of the drag.
-        _stretchForFrame(pixels, width, height, bayerPattern, maxVal, channels,
-                         calibration, globalMidtone) {
-            const ch = (channels | 0) === 3 ? 3 : 1;
+        // The panel draws the histogram of stage 2's output, so the curves are
+        // the picture on screen and not the linear data behind it. On a colour
+        // frame those are very different stories: the linear channels sit at
+        // wildly different levels (that is exactly what stage 1 corrects), and
+        // a histogram showing them contradicts a screen where the background is
+        // grey.
+        _displayMap(f) {
+            const ch = (f.channels | 0) === 3 ? 3 : 1;
             const isColor = ch === 3
-                || ((bayerPattern | 0) >= 1 && (bayerPattern | 0) <= 4);
-            // A calibration frame (BIAS/DARK/FLAT) has no sky to neutralise, so
-            // per-channel there just amplifies channel offset noise into a cast.
-            if (!isColor || calibration) {
-                return { perChan: null, midtone: globalMidtone };
+                || ((f.bayerPattern | 0) >= 1 && (f.bayerPattern | 0) <= 4);
+            const perChan = isColor
+                ? this._computePerChannelStretch(
+                      f.pixels, f.width, f.height, f.bayerPattern, f.maxVal, ch)
+                : null;
+            if (perChan) {
+                return { channels: ch, perChan, shadow: perChan.g.shadow,
+                         scale: perChan.g.scale, autoMid: perChan.midtone };
             }
-            const base = this._computePerChannelStretch(
-                pixels, width, height, bayerPattern, maxVal, ch);
-            if (!base) return { perChan: null, midtone: globalMidtone };
+            const g = this._computeStretchParams(f.pixels, f.maxVal);
+            return { channels: ch, perChan: null, shadow: g.shadow,
+                     scale: g.scaleFactor, autoMid: g.midtone };
+        },
 
-            if (this.stretchAuto) {
-                // Publish what was actually used, so the handles start from the
-                // rendering they are seeded from rather than near it.
-                this.histo._autoMid = base.midtone;
-                return { perChan: base, midtone: base.midtone };
-            }
-
-            const dB = (this.stretchBlack - (this.histo._autoBlack ?? 0)) * maxVal;
-            const dW = (this.stretchWhite - (this.histo._autoWhite ?? 1)) * maxVal;
-            const shift = (c) => {
-                const sh = c.shadow + dB;
-                let wh = c.shadow + (c.scale > 0 ? 1 / c.scale : maxVal) + dW;
-                if (wh <= sh + 1) wh = sh + 1;
-                return { shadow: sh, scale: 1 / (wh - sh), xMed: c.xMed };
-            };
-            return {
-                perChan: { r: shift(base.r), g: shift(base.g), b: shift(base.b) },
-                midtone: Math.max(0.001, Math.min(0.999, this.stretchMid || 0.25)),
-            };
+        // Stage 2 alone, on a stage-1 value. Kept separate so the histogram and
+        // the CPU fallback apply exactly what the shader does.
+        _screenTransfer(a) {
+            const b = this.stretchBlack, w = this.stretchWhite;
+            const m = Math.max(0.001, Math.min(0.999, this.stretchMid));
+            const x = Math.max(0, Math.min(1, (a - b) / Math.max(1e-6, w - b)));
+            return this._mtf(x, m);
         },
 
         // Per-channel auto-stretch for an OSC (Bayer) frame: sample the
@@ -9804,12 +9799,10 @@ function ninaApp() {
                     if (pb > 0 && pb < sat3) bArr.push(pb);
                 }
                 if (rArr.length === 0 || gArr.length === 0 || bArr.length === 0) return null;
-                const pR = this._autoStretchEndpoints(rArr, maxVal);
-                const pG = this._autoStretchEndpoints(gArr, maxVal);
-                const pB = this._autoStretchEndpoints(bArr, maxVal);
-                const xm = (pR.xMed + pG.xMed + pB.xMed) / 3;
-                return { r: pR, g: pG, b: pB,
-                         midtone: Math.min(0.999, Math.max(0.001, this._mtf(xm, 0.15))) };
+                return this._channelGains(
+                    this._autoStretchEndpoints(rArr, maxVal),
+                    this._autoStretchEndpoints(gArr, maxVal),
+                    this._autoStretchEndpoints(bArr, maxVal), maxVal);
             }
             if (!bayerPattern || bayerPattern < 1 || bayerPattern > 4) return null;
             // Target ~40k cells sampled per channel regardless of sensor
@@ -9837,22 +9830,56 @@ function ninaApp() {
                 }
             }
             if (rArr.length === 0 || gArr.length === 0 || bArr.length === 0) return null;
-            const r = this._autoStretchEndpoints(rArr, maxVal);
-            const g = this._autoStretchEndpoints(gArr, maxVal);
-            const b = this._autoStretchEndpoints(bArr, maxVal);
-            // The shader shares ONE midtone across channels, so it MUST come
-            // from the same normalisation these endpoints produce. Taking it
-            // from the GLOBAL stretch instead is catastrophic on an OSC frame:
-            // split per channel the background is very uniform, so MAD collapses
-            // to a few ADU, shadow lands right on the median, and the normalised
-            // median is ~7e-4 — while the global midtone is calibrated for ~9e-2
-            // (its MAD is inflated by mixing the Bayer channels). Applying one to
-            // the other mapped the whole background to 8-bit 0.4 -> a black /
-            // "very faint" preview, while mono frames (global path only) were
-            // fine. Measured on a real SV405CC dual-band sub.
-            const xMed = (r.xMed + g.xMed + b.xMed) / 3;
-            const midtone = Math.min(0.999, Math.max(0.001, this._mtf(xMed, 0.15)));
-            return { r, g, b, midtone };
+            return this._channelGains(
+                this._autoStretchEndpoints(rArr, maxVal),
+                this._autoStretchEndpoints(gArr, maxVal),
+                this._autoStretchEndpoints(bArr, maxVal), maxVal);
+        },
+
+        // Balance the channels by GAIN, then stretch them together.
+        //
+        // This is what an auto white balance does, and it is the difference
+        // between a flat that reads grey and a flat that reads solid blue.
+        //
+        // The old model shifted each channel's BLACK POINT instead
+        // (shadow_c = median_c - 3*MAD_c, with a scale that is nearly common
+        // because it is 1/(maxVal - shadow_c)). On a sky background, where the
+        // three medians are close together, an offset is enough to neutralise
+        // them. On a flat they are nowhere near each other. Measured on the
+        // operator's SV605CC flat: medians R 10204, G 28228, B 65534. Under the
+        // offset model those map to 0.020, 0.034 and 0.900 of the output range
+        // — the blue is nine tenths of the way to white while the red is at
+        // two hundredths, which is exactly the solid blue flat that was
+        // reported. Under a gain all three land on 0.034.
+        //
+        // Green is the reference because it is the channel with two thirds of
+        // the CFA's pixels, and because ASIFitsView's AutoWB does the same: on
+        // that flat it moved R and B to 28228 and 28227, which is G's mean.
+        //
+        // The result is expressed in the SAME per-channel shadow/scale the
+        // shader already takes, since gaining and then stretching is the same
+        // affine map as stretching with a per-channel shadow and scale:
+        //     (v*g - shadow) * scale  ==  (v - shadow/g) * (g*scale)
+        _channelGains(r, g, b, maxVal) {
+            const medG = g.median > 0 ? g.median : Math.max(r.median, b.median, 1);
+            const gain = (c) => {
+                if (!(c.median > 0)) return 1;
+                // A channel that is wildly off (a dead or saturated one) must
+                // not be allowed to drag the others; 0.05..20 covers every real
+                // sensor/filter combination and still catches a broken plane.
+                return Math.max(0.05, Math.min(20, medG / c.median));
+            };
+            const gR = gain(r), gG = gain(g), gB = gain(b);
+            // In gained space every channel's background sits on the reference,
+            // so one shadow and one scale serve all three.
+            const shadow = Math.max(0, medG - 3.0 * g.mad);
+            const scale = maxVal > shadow ? 1.0 / (maxVal - shadow) : 1.0;
+            const xMed = Math.max(0, (medG - shadow) * scale);
+            const per = (gc) => ({ shadow: shadow / gc, scale: gc * scale });
+            return {
+                r: per(gR), g: per(gG), b: per(gB),
+                midtone: Math.min(0.999, Math.max(0.001, this._mtf(xMed, 0.15))),
+            };
         },
 
         // ── Display colour saturation ────────────────────────────────
@@ -9902,10 +9929,9 @@ function ninaApp() {
             // black point + scale so a tab switch / slider change re-renders
             // with the same neutral-background colour, not the bluish global
             // stretch.
-            const fCh = (f.channels | 0) === 3 ? 3 : 1;
-            const st = this._stretchForFrame(f.pixels, f.width, f.height,
-                f.bayerPattern, f.maxVal, fCh, f.calibration, midtone);
-            const perChan = st.perChan;
+            const dm = this._displayMap(f);
+            const fCh = dm.channels;
+            const perChan = dm.perChan;
             // Pass the original frameKind so the re-render lands on
             // the SAME canvas the frame first painted into. Default
             // kind=0 here would silently shove PREVIEW snaps onto
@@ -9916,7 +9942,7 @@ function ninaApp() {
             // global one is calibrated for a completely different normalisation
             // (see _computePerChannelStretch) and renders the frame black.
             this._tryRenderWebGL(f.pixels, f.width, f.height, f.bitDepth,
-                f.bayerPattern, shadow, scaleFactor, st.midtone,
+                f.bayerPattern, shadow, scaleFactor, dm.autoMid,
                 f.frameKind || 0, perChan, fCh);
             // Keep the histogram mini-panel (handles + bars) in sync with the
             // stretch we just applied. Cheap: bins are cached per-frame.
@@ -9968,15 +9994,27 @@ function ninaApp() {
         filesToLiveBusy: false,
 
 
-        // Bins + stats + auto endpoints from the cached raw frame. Cheap
-        // enough to be safe on every draw thanks to the token guard: it only
-        // rebuilds when a new frame actually arrived.
+        // Bins of the DISPLAYED image, plus the frame's real statistics.
+        //
+        // The curves describe what is on screen: every sample goes through the
+        // same two stages the renderer applies, so the three channels sit on
+        // top of each other exactly as far as the picture's background is
+        // neutral. Binning the linear data instead told a different story from
+        // the screen -- three peaks a long way apart under an image whose
+        // background was plainly grey -- and there is no reading of that a
+        // person can act on.
+        //
+        // MIN/MAX/AVG/STD stay in ADU. Those are about the exposure, not about
+        // the rendering: whether the background has lifted off the floor and
+        // whether the stars are clipping is a question about the data.
         _histoBuild() {
             const f = this._lastRawFrame;
             if (!f || !f.pixels || !f.pixels.length) { this.histo.bins = null; return false; }
-            // A drag must not see the bins move under the cursor.
-            if (this._histoDrag && this.histo.bins) return true;
-            if (this.histo._token === this._histoToken && this.histo.bins) {
+            // A drag must not see the bins move under the cursor... except that
+            // the bins ARE what the drag changes now, so they are rebuilt from
+            // the cached stage-1 map, which does not move.
+            if (this.histo._token === this._histoToken
+                && this.histo._sig === this._histoStretchSig() && this.histo.bins) {
                 this._histoUpdateEndpoints();
                 return true;
             }
@@ -9985,42 +10023,57 @@ function ninaApp() {
             const maxVal = f.maxVal || ((1 << (f.bitDepth || 16)) - 1);
             const NB = this.HISTO_BINS;
             const plane = W * H;
-            const ch = (f.channels | 0) === 3 && px.length >= plane * 3 ? 3 : 1;
+
+            // Stage 1 is a property of the frame, so it is cached against the
+            // frame token: dragging a handle must not re-measure the sky.
+            if (this.histo._token !== this._histoToken || !this._histoMap) {
+                this._histoMap = this._displayMap(f);
+            }
+            const dm = this._histoMap;
+            const ch = dm.channels;
             const bayer = (f.bayerPattern | 0) >= 1 && (f.bayerPattern | 0) <= 4
                 ? (f.bayerPattern | 0) : 0;
-            const color = ch === 3 || bayer !== 0;
+            const color = !!dm.perChan;
+
+            const sh3 = dm.perChan
+                ? [dm.perChan.r.shadow, dm.perChan.g.shadow, dm.perChan.b.shadow]
+                : [dm.shadow, dm.shadow, dm.shadow];
+            const sc3 = dm.perChan
+                ? [dm.perChan.r.scale, dm.perChan.g.scale, dm.perChan.b.scale]
+                : [dm.scale, dm.scale, dm.scale];
+            const am = dm.autoMid;
+            // v (ADU, channel c) -> what the screen shows, 0..1.
+            const show = (v, c) => {
+                const n = Math.max(0, Math.min(1, (v - sh3[c]) * sc3[c]));
+                return this._screenTransfer(this._mtf(n, am));
+            };
+            const idx = (d) => {
+                const b = (d * NB) | 0;
+                return b < 0 ? 0 : (b >= NB ? NB - 1 : b);
+            };
 
             const bins = new Float64Array(NB);
             const bR = color ? new Float64Array(NB) : null;
             const bG = color ? new Float64Array(NB) : null;
             const bB = color ? new Float64Array(NB) : null;
-            const k = NB / (maxVal + 1);
-            const idx = (v) => { const b = (v * k) | 0; return b < 0 ? 0 : (b >= NB ? NB - 1 : b); };
 
             let mn = Infinity, mx = 0, sum = 0, sumSq = 0, n = 0;
-            // Luminance sample for the Auto endpoints. Median/MAD on real
-            // values, not on the bins: a bin is 32 ADU wide and a black point
-            // quantised to that is visibly wrong on a faint stack.
-            const lumSample = [];
             const keep = (l) => {
                 if (l < mn) mn = l;
                 if (l > mx) mx = l;
                 sum += l; sumSq += l * l; n++;
-                if (l > 0 && l < maxVal) lumSample.push(l);
             };
 
             if (ch === 3) {
                 const step = Math.max(1, Math.floor(plane / 300000));
                 for (let i = 0; i < plane; i += step) {
                     const r = px[i], g = px[plane + i], b = px[2 * plane + i];
-                    bR[idx(r)]++; bG[idx(g)]++; bB[idx(b)]++;
-                    const l = 0.299 * r + 0.587 * g + 0.114 * b;
-                    bins[idx(l)]++;
-                    keep(l);
+                    const dr = show(r, 0), dg = show(g, 1), db = show(b, 2);
+                    bR[idx(dr)]++; bG[idx(dg)]++; bB[idx(db)]++;
+                    bins[idx(0.299 * dr + 0.587 * dg + 0.114 * db)]++;
+                    keep(0.299 * r + 0.587 * g + 0.114 * b);
                 }
             } else if (bayer) {
-                // 2x2 super-pixels, so a channel's bins hold that channel's
-                // values and not its neighbours'.
                 const cells = Math.floor(W / 2) * Math.floor(H / 2);
                 const stride = Math.max(1, Math.floor(Math.sqrt(cells / 150000)));
                 for (let y = 0; y + 1 < H; y += 2 * stride) {
@@ -10034,17 +10087,17 @@ function ninaApp() {
                             case 3: g = 0.5 * (p00 + p11); b = p10; r = p01; break;          // GBRG
                             default: g = 0.5 * (p00 + p11); r = p10; b = p01; break;         // GRBG
                         }
-                        bR[idx(r)]++; bG[idx(g)]++; bB[idx(b)]++;
-                        const l = 0.299 * r + 0.587 * g + 0.114 * b;
-                        bins[idx(l)]++;
-                        keep(l);
+                        const dr = show(r, 0), dg = show(g, 1), db = show(b, 2);
+                        bR[idx(dr)]++; bG[idx(dg)]++; bB[idx(db)]++;
+                        bins[idx(0.299 * dr + 0.587 * dg + 0.114 * db)]++;
+                        keep(0.299 * r + 0.587 * g + 0.114 * b);
                     }
                 }
             } else {
                 const step = Math.max(1, Math.floor(px.length / 300000));
                 for (let i = 0; i < px.length; i += step) {
                     const v = px[i];
-                    bins[idx(v)]++;
+                    bins[idx(show(v, 0))]++;
                     keep(v);
                 }
             }
@@ -10060,9 +10113,6 @@ function ninaApp() {
                 }
             }
             const mean = sum / n;
-            // Where Auto puts the handles: the same median - 3*MAD rule the
-            // renderer uses, so the pills sit on the stretch actually applied.
-            const ep = this._autoStretchEndpoints(lumSample, maxVal);
             this.histo.bins = bins;
             this.histo.binsR = bR; this.histo.binsG = bG; this.histo.binsB = bB;
             this.histo.color = color;
@@ -10074,16 +10124,16 @@ function ninaApp() {
             this.histo.max = Math.round(mx);
             this.histo.avg = Math.round(mean);
             this.histo.std = Math.round(Math.sqrt(Math.max(0, sumSq / n - mean * mean)));
-            this.histo._autoBlack = maxVal > 0 ? Math.max(0, Math.min(1, ep.shadow / maxVal)) : 0;
-            this.histo._autoWhite = 1;
-            const lumMid = Math.min(0.999, Math.max(0.001, this._mtf(ep.xMed, 0.15)));
-            // On a colour frame the renderer's per-channel midtone is the one on
-            // screen; overwriting it with this luminance estimate would put the
-            // mid handle slightly off the picture it points at.
-            if (!color || this.histo._autoMid == null) this.histo._autoMid = lumMid;
             this.histo._token = this._histoToken;
+            this.histo._sig = this._histoStretchSig();
             this._histoUpdateEndpoints();
             return true;
+        },
+
+        // The handles' current state, so the bins are rebuilt when they move
+        // and not when they do not.
+        _histoStretchSig() {
+            return this.stretchBlack + '|' + this.stretchWhite + '|' + this.stretchMid;
         },
 
         // The 0.1th..99.5th percentile of one bin array, as fractions of full
@@ -10138,29 +10188,22 @@ function ninaApp() {
             return [lo, hi];
         },
 
-        // Handle positions and the visible window. The single writer of
-        // blackFrac / whiteFrac / midFrac / dispLo / dispHi.
+        // Handle positions and the visible window.
+        //
+        // The handles and the axis are the same space -- the screen's own 0..1
+        // -- so there is nothing to convert: the black handle IS stretchBlack.
         _histoUpdateEndpoints() {
             const h = this.histo;
-            const auto = this.stretchAuto;
-            const b = auto ? (h._autoBlack ?? 0) : this.stretchBlack;
-            const w = auto ? (h._autoWhite ?? 1) : this.stretchWhite;
-            const m = auto ? (h._autoMid ?? 0.25) : this.stretchMid;
-            h.blackFrac = Math.max(0, Math.min(1, b));
-            h.whiteFrac = Math.max(0, Math.min(1, w));
-            // stretchMid is the MTF coefficient, and it is DRAWN as a position
-            // between the other two handles -- which is what it means to the
-            // eye even though it is not a coordinate.
+            h.blackFrac = Math.max(0, Math.min(1, this.stretchBlack));
+            h.whiteFrac = Math.max(0, Math.min(1, this.stretchWhite));
+            // The midtone is a curve shape, not a level. It is drawn between
+            // the other two because that is where the eye expects the control
+            // that bends what lies between them.
             h.midFrac = h.blackFrac
-                + Math.max(0.001, Math.min(0.999, m)) * (h.whiteFrac - h.blackFrac);
+                + Math.max(0.001, Math.min(0.999, this.stretchMid)) * (h.whiteFrac - h.blackFrac);
 
-            // Re-framing mid-drag would move the axis under the cursor.
             if (this._histoDrag) return;
             let [lo, hi] = this._histoFrame();
-            // Keep a handle the operator has actually moved inside the window.
-            // Only when it is meaningfully inside: handles pinned at 0 and 1
-            // would otherwise force the full scale on every frame and Zoom
-            // would never do anything.
             if (h.blackFrac > 0.001 && h.blackFrac < lo) lo = Math.max(0, h.blackFrac - 0.01);
             if (h.whiteFrac < 0.999 && h.whiteFrac > hi) hi = Math.min(1, h.whiteFrac + 0.01);
             h.dispLo = lo;
@@ -10291,11 +10334,13 @@ function ninaApp() {
             }
         },
 
-        // ADU under a given fraction of the panel width.
+        // Screen level under a given fraction of the panel width, 0..100.
+        // Not ADU: the axis is the displayed image, and an ADU label under a
+        // curve built from screen values would be a number for a quantity that
+        // is not being drawn.
         histoAxisLabel(pos) {
             const h = this.histo;
-            const mv = h.maxVal || 65535;
-            return Math.round((h.dispLo + pos * (h.dispHi - h.dispLo)) * mv);
+            return Math.round((h.dispLo + pos * (h.dispHi - h.dispLo)) * 100);
         },
 
         histoMarkerPct(which) {
@@ -10310,14 +10355,10 @@ function ninaApp() {
             const graph = ev.target.closest('.histo-graph');
             if (!graph) return;
             ev.preventDefault();
-            // The first drag turns Auto off, seeded from wherever Auto had put
-            // the handles, so the picture does not jump on the first pixel.
-            if (this.stretchAuto) {
-                this.stretchBlack = this.histo._autoBlack ?? 0;
-                this.stretchWhite = this.histo._autoWhite ?? 1;
-                this.stretchMid = this.histo._autoMid ?? 0.25;
-                this.stretchAuto = false;
-            }
+            // Nothing to seed: the handles already hold the identity screen
+            // transfer, so the first pixel of a drag moves the picture from
+            // exactly where it was.
+            this.stretchAuto = false;
             this._histoDrag = {
                 which,
                 rect: graph.getBoundingClientRect(),
@@ -10359,15 +10400,24 @@ function ninaApp() {
             if (!this._histoRaf) {
                 this._histoRaf = requestAnimationFrame(() => {
                     this._histoRaf = 0;
+                    // The curve is the picture, so it has to follow the drag.
+                    // Cheap: stage 1 is cached against the frame, only the
+                    // per-sample screen transfer is redone.
+                    this.histo._sig = null;
                     this.drawHistogram();
                 });
             }
         },
 
+        // Back to the plain auto rendering: the screen transfer to identity.
         histoAuto() {
-            this.stretchAuto = !this.stretchAuto;
+            this.stretchAuto = true;
+            this.stretchBlack = 0;
+            this.stretchWhite = 1;
+            this.stretchMid = 0.5;
+            this.histo._sig = null;
             this.applyManualStretch();
-            this.toast(this.stretchAuto ? 'Auto-stretch on' : 'Auto-stretch off (manual)', 'ok');
+            this.toast('Auto-stretch', 'ok');
         },
 
         histoToggleZoom() {
@@ -10581,7 +10631,15 @@ function ninaApp() {
                 uniform vec2 u_texSize;
                 uniform float u_shadow;
                 uniform float u_scale;
-                uniform float u_mtf;   // typically 0.25
+                uniform float u_mtf;   // the AUTO midtone, stage 1
+                // Stage 2, the operator's screen transfer. It runs on the
+                // already-normalised stage-1 value, so 0/0.5/1 is the identity
+                // and the picture is exactly the auto rendering. Everything the
+                // handles do lives here: stage 1 is what makes the background
+                // neutral, and the handles must not be able to undo that.
+                uniform float u_sBlack;
+                uniform float u_sWhite;
+                uniform float u_sMid;
                 uniform int u_bayer;   // 0=mono 1=RGGB 2=BGGR 3=GBRG 4=GRBG
                 uniform ivec2 u_bayerOff; // pixel offset (0 or 1) for the Bayer grid origin
                 uniform vec2 u_outSize;   // debayer output canvas size in pixels
@@ -10628,10 +10686,16 @@ function ninaApp() {
                 // blue cast). Shared midtone (u_mtf).
                 uniform vec3 u_shadow3;
                 uniform vec3 u_scale3;
+                float screen(float a) {
+                    float x = clamp((a - u_sBlack) / max(1e-6, u_sWhite - u_sBlack), 0.0, 1.0);
+                    float d = (2.0 * u_sMid - 1.0) * x - u_sMid;
+                    return ((u_sMid - 1.0) * x) / (d - 1e-12);
+                }
+
                 float stretchM(float v, float sh, float sc) {
                     float n = clamp((v - sh) * sc, 0.0, 1.0);
                     float denom = (2.0 * u_mtf - 1.0) * n - u_mtf;
-                    return ((u_mtf - 1.0) * n) / (denom - 1e-12);
+                    return screen(((u_mtf - 1.0) * n) / (denom - 1e-12));
                 }
 
                 float stretch(float v) {
@@ -10648,7 +10712,7 @@ function ninaApp() {
                     // the midtone was effectively ignored and the
                     // image looked dim + pale.
                     float denom = (2.0 * u_mtf - 1.0) * n - u_mtf;
-                    return ((u_mtf - 1.0) * n) / (denom - 1e-12);
+                    return screen(((u_mtf - 1.0) * n) / (denom - 1e-12));
                 }
 
                 void main() {
@@ -10797,6 +10861,9 @@ function ninaApp() {
                 shadow3: gl.getUniformLocation(prog, 'u_shadow3'),
                 scale3: gl.getUniformLocation(prog, 'u_scale3'),
                 mtf: gl.getUniformLocation(prog, 'u_mtf'),
+                sBlack: gl.getUniformLocation(prog, 'u_sBlack'),
+                sWhite: gl.getUniformLocation(prog, 'u_sWhite'),
+                sMid: gl.getUniformLocation(prog, 'u_sMid'),
                 bayer: gl.getUniformLocation(prog, 'u_bayer'),
                 bayerOff: gl.getUniformLocation(prog, 'u_bayerOff'),
                 outSize: gl.getUniformLocation(prog, 'u_outSize'),
@@ -10957,6 +11024,12 @@ function ninaApp() {
                 if (!ok) return false;
                 gl.uniform1i(this._glLocs.channels, 3);
                 gl.uniform1i(this._glLocs.bayer, 0);
+                gl.uniform1f(this._glLocs.sBlack, this.stretchBlack);
+                gl.uniform1f(this._glLocs.sWhite,
+                    Math.max(this.stretchBlack + 1e-4, this.stretchWhite));
+                gl.uniform1f(this._glLocs.sMid,
+                    Math.max(0.001, Math.min(0.999, this.stretchMid)));
+
                 gl.uniform2f(this._glLocs.texSize, width, height);
                 gl.uniform1f(this._glLocs.mtf, midtone);
                 if (perChan && perChan.r && perChan.g && perChan.b) {
@@ -10974,6 +11047,11 @@ function ninaApp() {
                 return true;
             }
             gl.uniform1i(this._glLocs.channels, 1);
+                gl.uniform1f(this._glLocs.sBlack, this.stretchBlack);
+                gl.uniform1f(this._glLocs.sWhite,
+                    Math.max(this.stretchBlack + 1e-4, this.stretchWhite));
+                gl.uniform1f(this._glLocs.sMid,
+                    Math.max(0.001, Math.min(0.999, this.stretchMid)));
 
             // Upload pixel data as R16UI texture
             gl.activeTexture(gl.TEXTURE0);
@@ -11331,6 +11409,8 @@ function ninaApp() {
             // 1 = BIAS/DARK/FLAT: skip the OSC per-channel sky-neutralising
             // stretch, which casts a flat noise frame strongly (the "bias is
             // all pink under auto-stretch" report); render it neutral instead.
+            // Informational: nothing keys off it since stage 1 became a
+            // gain balance, which neutralises a bias as well as a light.
             const calibration = (headerLen >= 28 && arrayBuffer.byteLength >= 32)
                 ? dv.getInt32(28, true) : 0;
             // Channels (header offset 28 -> arrayBuffer offset 32). 1 = one
@@ -11517,14 +11597,15 @@ function ninaApp() {
             // same neutral-background colour the server's live stack does
             // (fixes the bluish preview / autorun / autofocus cast). In
             // manual mode the user's global endpoints apply to all channels.
-            const chCount = (channels | 0) === 3 ? 3 : 1;
-            const st = this._stretchForFrame(pixels, width, height, bayerPattern,
-                maxVal, chCount, calibration, midtone);
-            const perChan = st.perChan;
+            const dm = this._displayMap({
+                pixels, width, height, bayerPattern, maxVal, channels, calibration,
+            });
+            const chCount = dm.channels;
+            const perChan = dm.perChan;
             // When the per-channel path is active its midtone MUST win: the
             // global one is calibrated for a completely different normalisation
             // (see _computePerChannelStretch) and renders the frame black.
-            const effMidtone = st.midtone;
+            const effMidtone = dm.autoMid;
 
             // Try WebGL2 path first (GPU does debayer + stretch in microseconds)
             if (this._tryRenderWebGL(pixels, width, height, bitDepth,
@@ -11546,10 +11627,13 @@ function ninaApp() {
             const oCtx = offscreen.getContext('2d');
             const imgData = oCtx.createImageData(width, height);
             const data = imgData.data;
+            // Stage 1 then stage 2, the same two the shader applies, so a
+            // client without WebGL2 sees the same picture and the histogram
+            // still describes it.
             const tone = (v, sh, sc) => {
-                const n = Math.max(0, (v - sh) * sc);
-                const m = n > 0 ? (n * 0.25) / ((0.25 - 1) * n + 1) : 0;
-                return Math.min(255, Math.round(m * 255));
+                const n = Math.max(0, Math.min(1, (v - sh) * sc));
+                const a = this._mtf(n, effMidtone);
+                return Math.min(255, Math.round(this._screenTransfer(a) * 255));
             };
             if (chCount === 3 && pixels.length >= width * height * 3) {
                 // Without this branch a colour stack renders as a GREYSCALE
