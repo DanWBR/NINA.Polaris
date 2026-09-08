@@ -129,7 +129,7 @@ public class IndiCamera : ICamera, IDisposable {
         var prop = _client.GetProperty(DeviceName, "CCD_EXPOSURE") as IndiNumberProperty;
         if (prop != null
             && prop.Values.TryGetValue("CCD_EXPOSURE_VALUE", out var el)
-            && el.Min > 0 && el.Max > el.Min) {
+            && el.Min >= 0 && el.Max > el.Min) {
             return (el.Min, el.Max);
         }
         return null;
@@ -625,6 +625,7 @@ public class IndiCamera : ICamera, IDisposable {
 
         _client.BlobReceived += OnBlobReceived;
         _client.PropertyChanged += OnPropertyChanged;
+        _client.MessageReceived += OnDriverMessage;
     }
 
     public async Task ConnectAsync(CancellationToken ct = default) {
@@ -815,6 +816,8 @@ public class IndiCamera : ICamera, IDisposable {
         // SetSubframeAsync (an AF/solve teardown restoring full frame) sees it and
         // aborts first instead of corrupting this exposure.
         _exposureInFlight = true;
+        // Only what the driver says from here on describes THIS exposure.
+        ClearDriverMessages();
         await _client.SetNumberAsync(DeviceName, "CCD_EXPOSURE",
             new Dictionary<string, double> { ["CCD_EXPOSURE_VALUE"] = exposureSeconds }, ct);
 
@@ -1250,8 +1253,80 @@ public class IndiCamera : ICamera, IDisposable {
 
     private string? _lastLocalFilePath;   // dedupe CCD_FILE_PATH updates
 
+    // The driver's own words about the last thing it was asked to do. INDI
+    // sends the reason as free <message> elements and the verdict separately,
+    // as state=Alert on the property, so the two have to be stitched back
+    // together here to produce an error anyone can act on.
+    private readonly object _msgLock = new();
+    private readonly List<string> _recentMessages = new();
+
+    private void OnDriverMessage(string device, string message) {
+        if (device != DeviceName || string.IsNullOrWhiteSpace(message)) return;
+        lock (_msgLock) {
+            _recentMessages.Add(message.Trim());
+            if (_recentMessages.Count > 8) _recentMessages.RemoveAt(0);
+        }
+    }
+
+    private void ClearDriverMessages() {
+        lock (_msgLock) _recentMessages.Clear();
+    }
+
+    private string DriverComplaint() {
+        List<string> msgs;
+        lock (_msgLock) msgs = new List<string>(_recentMessages);
+        return SummariseDriverMessages(msgs);
+    }
+
+    /// <summary>What the driver said, as one sentence a person can act on.
+    ///
+    /// Drivers say the same thing several ways: the verdict as [ERROR], then
+    /// advice, then a [WARNING] restating it. The ERROR lines carry the reason,
+    /// so they win when present; the level tags come off because the text ends
+    /// up in a toast, where "[ERROR]" adds nothing the red already says.</summary>
+    internal static string SummariseDriverMessages(IEnumerable<string>? messages) {
+        if (messages == null) return "";
+        var msgs = new List<string>();
+        foreach (var m in messages)
+            if (!string.IsNullOrWhiteSpace(m)) msgs.Add(m.Trim());
+        if (msgs.Count == 0) return "";
+        var errors = msgs.FindAll(m => m.Contains("[ERROR]", StringComparison.OrdinalIgnoreCase));
+        var text = string.Join(" ", errors.Count > 0 ? errors : msgs);
+        foreach (var tag in new[] { "[ERROR]", "[WARNING]", "[INFO]", "[DEBUG]" })
+            text = text.Replace(tag, "", StringComparison.OrdinalIgnoreCase);
+        return System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ").Trim();
+    }
+
     private void OnPropertyChanged(string device, IndiProperty prop) {
         if (device != DeviceName) return;
+
+        // A REFUSED EXPOSURE. The driver answers a CCD_EXPOSURE it will not
+        // honour by putting the property into Alert, and says why in separate
+        // <message> elements. Nothing used to act on that: the capture went on
+        // waiting for a BLOB that was never coming, until the request timed out
+        // and the operator was told "request timed out" -- while the driver had
+        // already explained itself in plain language.
+        //
+        // Field case (Discord, 2026-09-08): an SVBony SV105 on indi_v4l2_ccd
+        // asked for 2 s. The driver replied "Failed 2.000-second manual
+        // exposure, out of device bounds [0.000,0.500]" and Polaris showed an
+        // empty preview and a timeout. Now it fails at once, quoting that line.
+        if (prop.Name == "CCD_EXPOSURE" && prop.State == IndiPropertyState.Alert && !_isStreaming) {
+            var tcs = _exposureTcs;
+            if (tcs != null && !tcs.Task.IsCompleted) {
+                _exposureInFlight = false;
+                var why = DriverComplaint();
+                if (string.IsNullOrWhiteSpace(why)) why = prop.Message ?? "";
+                var bounds = ExposureBounds();
+                var range = bounds.HasValue
+                    ? $" The driver advertises {bounds.Value.Min:0.###} to {bounds.Value.Max:0.###} s."
+                    : "";
+                tcs.TrySetException(new InvalidOperationException(
+                    $"{DeviceName} refused the exposure"
+                    + (string.IsNullOrWhiteSpace(why) ? "." : ": " + why)
+                    + range));
+            }
+        }
 
         // UPLOAD_LOCAL fallback. Some indi_gphoto builds refuse UPLOAD_CLIENT
         // (the switch reverts to UPLOAD_LOCAL even when set manually), so the
