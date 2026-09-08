@@ -497,16 +497,24 @@ public class LiveStackingService {
     public int MaxDurationSeconds { get; set; }
 
     /// <summary>Max dimension (px, longest side) for the COLOUR live-stack
-    /// preview JPEG. The colour stack has no client-side raw-RGB render path —
-    /// the browser decodes this JPEG — so this is what actually controls the
-    /// LIVE colour preview resolution, and it mirrors the client's Appearance
-    /// "Preview quality" (previewMaxDim: 2048 / 4096 / 0=native). Lower = the
-    /// encoder downsamples the planes before the heavy stretch/RGBA/SKBitmap
-    /// pass (big RAM win on OSC sensors); higher = sharper zoom, more RAM. 0 or
-    /// negative = native (no downscale). Pushed by the client via
-    /// POST /api/livestack/preview-dim. Default 4096 matches the pre-MEMOPT2
-    /// behaviour so an untouched Appearance never regresses.</summary>
+    /// preview. Mirrors the client's Appearance "Preview quality"
+    /// (previewMaxDim: 2048 / 4096 / 0=native). Lower = fewer pixels
+    /// downsampled before they go on the wire (the RAM and bandwidth lever);
+    /// higher = sharper zoom. Pushed by the client via
+    /// POST /api/livestack/preview-dim.</summary>
     public int PreviewMaxDim { get; set; } = 4096;
+
+    /// <summary>Hard ceiling on the longest side of the RAW colour frame that
+    /// goes on the wire, whatever the operator picked above.
+    ///
+    /// <para>The colour stack now travels as 16-bit RGB rather than a JPEG, so
+    /// the browser can stretch it and build a truthful histogram. That costs
+    /// about ten times the bytes: at 1536 a frame is ~9 MB before LZ4, at 2048
+    /// ~17 MB, and at a 4144x2822 native size 70 MB. One integrated frame every
+    /// few seconds at 9 MB is already a real load on a field WiFi link, and
+    /// "native" would be hopeless — so the native sentinel maps here instead of
+    /// to full resolution.</para></summary>
+    public int RawColorPreviewMaxDim { get; set; } = 1536;
 
     /// <summary>When the current stack started (first frame after
     /// the most recent Reset). Null when no frame has been
@@ -613,145 +621,6 @@ public class LiveStackingService {
     public double LastFrameBackgroundAdu { get; private set; }
     public double LastFramePeakAdu { get; private set; }
 
-    // 16-bit luminance histogram + stats of the latest colour stack, surfaced
-    // over the WS status so the LIVE histogram panel shows the real 16-bit data
-    // even though the colour frame is broadcast as an 8-bit JPEG. Null until a
-    // colour frame has been integrated; bins span 0..65535 in 256 buckets.
-    public int[]? ColorHistogram { get; private set; }
-    public int ColorHistMin { get; private set; }
-    public int ColorHistMax { get; private set; }
-    public double ColorHistMean { get; private set; }
-    public double ColorHistStd { get; private set; }
-
-    // Per-channel bins on the same 0..65535 / 256-bucket scale. The panel wants
-    // three curves for an OSC stack; sending only the luminance above meant the
-    // LIVE histogram drew ONE white line, and the only way to see RGB was to
-    // click Auto — which recomputed locally from the 8-bit JPEG — until the next
-    // status tick overwrote it with the luminance again (field, 2026-08-09).
-    public int[]? ColorHistogramR { get; private set; }
-    public int[]? ColorHistogramG { get; private set; }
-    public int[]? ColorHistogramB { get; private set; }
-
-    // ADU value of the first and last bucket. The bins used to span the whole
-    // 0..65535 unconditionally, which on a stacked sky is far coarser than the
-    // data: measured on a 74-frame OSC stack, 301k samples with std 124 ADU,
-    // every pixel but 236 of them landed in buckets 4 and 5 of 256. Two points
-    // draw as a hairline whatever window the panel picks, so bin over the band
-    // the pixels occupy and tell the client where that band sits.
-    public int ColorHistLo { get; private set; }
-    public int ColorHistHi { get; private set; } = 65535;
-
-    /// <summary>The per-channel black/mid/white the relayed colour JPEG was
-    /// rendered with, R then G then B, as fractions of full scale. Null until
-    /// a colour frame has been relayed. The client needs these to place the
-    /// histogram handles: it draws 16-bit ADU while the handles drive a LUT
-    /// over the 8-bit JPEG this stretch produced.</summary>
-    public NINA.Image.ImageAnalysis.AutoStretch.StretchParams[]? ColorStretch { get; private set; }
-
-    /// <summary>Build the 256-bin 16-bit luminance histogram + min/max/mean/std
-    /// of a planar RGB stack (subsampled on big sensors). Cheap; runs once per
-    /// integrated colour frame, off the relay's broadcast. Two passes: the
-    /// first finds the band the pixels occupy, the second bins over it.</summary>
-    private void ComputeColorHistogram(ushort[] rgb, int w, int h) {
-        int plane = w * h;
-        if (rgb.Length < plane * 3 || plane == 0) {
-            ColorHistogram = null;
-            ColorHistogramR = ColorHistogramG = ColorHistogramB = null;
-            return;
-        }
-        const int NB = 256;
-        const int COARSE = 1024;   // 64 ADU a bucket, enough to place the band
-        int step = Math.Max(1, plane / 300_000);
-
-        // Pass 1: luminance stats, plus a coarse histogram of all three
-        // channels together, used only to locate the populated band.
-        var coarse = new int[COARSE];
-        int mn = 65535, mx = 0; double sum = 0, sumSq = 0; long cnt = 0;
-        for (int i = 0; i < plane; i += step) {
-            int r = rgb[i], g = rgb[plane + i], b = rgb[2 * plane + i];
-            coarse[r * (COARSE - 1) / 65535]++;
-            coarse[g * (COARSE - 1) / 65535]++;
-            coarse[b * (COARSE - 1) / 65535]++;
-            // Stats stay on luminance: they feed the MAX/AVG/MIN/STD readout,
-            // which is a single number per label, not three.
-            int lum = (int)(r * 0.299 + g * 0.587 + b * 0.114);
-            if (lum < 0) lum = 0; else if (lum > 65535) lum = 65535;
-            if (lum < mn) mn = lum;
-            if (lum > mx) mx = lum;
-            sum += lum; sumSq += (double)lum * lum; cnt++;
-        }
-        if (cnt == 0) {
-            ColorHistogram = null;
-            ColorHistogramR = ColorHistogramG = ColorHistogramB = null;
-            return;
-        }
-        var (lo, hi) = HistogramBand(coarse, 3 * cnt);
-
-        // Pass 2: the bins the panel draws, over [lo, hi]. Samples outside the
-        // band are dropped rather than clamped into the end buckets: clamping
-        // piles the star tail onto the last bin, and on a log axis that draws
-        // as a tall spike at the edge that is not structure in the image.
-        var bins = new int[NB];
-        var binsR = new int[NB];
-        var binsG = new int[NB];
-        var binsB = new int[NB];
-        int span = hi - lo;
-        for (int i = 0; i < plane; i += step) {
-            int r = rgb[i], g = rgb[plane + i], b = rgb[2 * plane + i];
-            Bin(binsR, r, lo, span, NB);
-            Bin(binsG, g, lo, span, NB);
-            Bin(binsB, b, lo, span, NB);
-            int lum = (int)(r * 0.299 + g * 0.587 + b * 0.114);
-            Bin(bins, lum, lo, span, NB);
-        }
-        var mean = sum / cnt;
-        ColorHistogram = bins;
-        ColorHistogramR = binsR;
-        ColorHistogramG = binsG;
-        ColorHistogramB = binsB;
-        ColorHistLo = lo;
-        ColorHistHi = hi;
-        ColorHistMin = mn;
-        ColorHistMax = mx;
-        ColorHistMean = mean;
-        ColorHistStd = Math.Sqrt(Math.Max(0, sumSq / cnt - mean * mean));
-    }
-
-    /// <summary>ADU band worth drawing, from a coarse full-scale histogram:
-    /// the 0.05 to 99.95 percentile of the samples, padded, and never narrower
-    /// than one ADU per bin.</summary>
-    internal static (int Lo, int Hi) HistogramBand(int[] coarse, long total) {
-        int lo = CoarseQuantile(coarse, total, 0.0005);
-        int hi = CoarseQuantile(coarse, total, 0.9995);
-        if (hi < lo) (lo, hi) = (hi, lo);
-        int pad = Math.Max(64, (hi - lo) / 8);
-        lo = Math.Max(0, lo - pad);
-        hi = Math.Min(65535, hi + pad);
-        if (hi - lo < 255) {
-            // A flat or near-flat frame: give it a nominal width so the bins
-            // stay meaningful and nothing downstream divides by zero.
-            int mid = (lo + hi) / 2;
-            lo = Math.Max(0, Math.Min(65535 - 255, mid - 128));
-            hi = lo + 255;
-        }
-        return (lo, hi);
-    }
-
-    private static int CoarseQuantile(int[] coarse, long total, double q) {
-        long want = (long)(total * q);
-        long acc = 0;
-        for (int k = 0; k < coarse.Length; k++) {
-            acc += coarse[k];
-            if (acc >= want) return (int)((long)k * 65535 / (coarse.Length - 1));
-        }
-        return 65535;
-    }
-
-    private static void Bin(int[] bins, int v, int lo, int span, int nb) {
-        if (v < lo || v > lo + span) return;
-        int k = (int)((long)(v - lo) * (nb - 1) / span);
-        bins[k < 0 ? 0 : (k >= nb ? nb - 1 : k)]++;
-    }
     /// <summary>One point on the LIVE quality timeline: the stack state
     /// right after integrating a frame. The (frame, CumulativeSnr) pair
     /// feeds <see cref="SnrEtaCalculator"/>; the full record backs the
@@ -1626,9 +1495,10 @@ public class LiveStackingService {
 
             // Generate stacked result and relay to clients.
             if (_colorActive) {
-                // Colour: broadcast the debayered RGB stack as a colour JPEG
-                // on the LIVE canvas (the client renders headered JPEGs by
-                // FrameKind, no RGB-raw WebGL path needed).
+                // Colour: broadcast the debayered RGB stack as a DOWNSAMPLED
+                // 16-bit raw frame, three planes in one payload. The client
+                // stretches it and builds its histogram from it, exactly as it
+                // already does for a mono stack.
                 var rgbPixels = GetStackedResultRgb();
                 var rgbProps = new ImageProperties {
                     Width = _width, Height = _height, BitDepth = props.BitDepth,
@@ -1637,36 +1507,23 @@ public class LiveStackingService {
                     BayerPattern = BayerPatternEnum.None
                 };
                 var rgbImage = new BaseImageData(rgbPixels, rgbProps, imageData.MetaData);
-                // The colour stack is broadcast as an 8-bit JPEG (the raw WS
-                // protocol is single-channel only), so the client can't build a
-                // 16-bit histogram from it — it would pin the LIVE histogram
-                // panel to 0..255 while the real frame is 16-bit. Compute the
-                // true 16-bit luminance histogram + stats here and surface them
-                // via the WS status so the panel reflects the actual data.
-                ComputeColorHistogram(rgbPixels, _width, _height);
-                // The colour live stack is the image the operator zooms into on
-                // the LIVE tab, and it's broadcast only once per integrated
-                // frame (seconds apart), so it isn't fps-critical like the video
-                // stream. Send it at a much higher resolution + quality than the
-                // 1280/80 video default so zooming stays sharp instead of
-                // upscaling a downsized preview. Capped at the stack's native
-                // size by the renderer's scale<=1 clamp.
-                // Honour the client's Appearance "Preview quality": 0/native ->
-                // full res (int.MaxValue sentinel skips the downscale); else the
-                // chosen cap, which the encoder downsamples the planes to BEFORE
-                // the heavy pass (the RAM lever). Default 4096 = old behaviour.
-                int jpegDim = PreviewMaxDim <= 0 ? int.MaxValue : Math.Clamp(PreviewMaxDim, 512, 8192);
+                // 16-bit RGB is roughly ten times the bytes of the JPEG this
+                // replaced, so the cap is not optional: a full-frame 4144x2822
+                // colour stack is 70 MB on the wire. PreviewMaxDim is the
+                // operator's existing Appearance "Preview quality" lever; the
+                // 0/native sentinel is deliberately NOT honoured here, because
+                // native means tens of megabytes per integrated frame over a
+                // field WiFi link. The full-resolution stack is still what the
+                // relay caches for annotate, plate solve and the preview
+                // endpoint — only the wire copy is reduced.
+                int rawDim = PreviewMaxDim <= 0
+                    ? RawColorPreviewMaxDim
+                    : Math.Clamp(PreviewMaxDim, 512, RawColorPreviewMaxDim);
                 _logger.LogInformation(
-                    "LIVE-TRACE   -> RelayRgbJpegAsync kind=LiveStack ch=3 bayer=None jpegDim={Dim} q=90 (client shows the JPEG as-is; no client debayer)",
-                    jpegDim == int.MaxValue ? "native" : jpegDim.ToString());
-                // Keep the per-channel stretch this JPEG was rendered with. The
-                // histogram panel draws 16-bit ADU while its handles drive a LUT
-                // over this 8-bit image, so without the mapping between the two
-                // the handles cannot be placed on the axis they sit above.
-                var used = new List<NINA.Image.ImageAnalysis.AutoStretch.StretchParams>(3);
-                await _relay.RelayRgbJpegAsync(rgbImage, maxDim: jpegDim, quality: 90,
-                    kind: FrameKind.LiveStack, ct: ct, captured: used);
-                if (used.Count >= 3) ColorStretch = used.ToArray();
+                    "LIVE-TRACE   -> RelayRgbRawAsync kind=LiveStack ch=3 bayer=None rawDim={Dim} (client stretches and builds its own histogram)",
+                    rawDim);
+                await _relay.RelayRgbRawAsync(rgbImage, maxDim: rawDim,
+                                              kind: FrameKind.LiveStack, ct: ct);
             } else {
                 // Stabilize the relayed Bayer pattern: a single frame whose
                 // CCD_CFA was momentarily empty (BayerPattern=None) must not

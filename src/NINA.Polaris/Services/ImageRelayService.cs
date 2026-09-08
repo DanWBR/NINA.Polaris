@@ -257,6 +257,16 @@ public class ImageRelayService : IDisposable {
         => RelayImageAsync(imageData, stackable ? FrameKind.Live : FrameKind.Preview, ct);
 
     public Task RelayImageAsync(IImageData imageData, FrameKind kind, CancellationToken ct = default) {
+        // A 3-plane buffer used to go through here without complaint: the header
+        // carried Width*Height, the client allocated three planes' worth of
+        // ushorts and uploaded only the first one, and the frame rendered as a
+        // GREYSCALE picture of the red channel. No error, wrong picture. Colour
+        // goes to RelayRgbRawAsync, which says so on the wire.
+        if (imageData?.Properties != null && imageData.Properties.Channels > 1)
+            throw new ArgumentException(
+                $"RelayImageAsync is the single-plane path; this frame has " +
+                $"{imageData.Properties.Channels} channels. Use RelayRgbRawAsync.",
+                nameof(imageData));
         var frameKind = (int)kind;
         // FIELD3-2: optional vertical flip. Some camera drivers
         // (SV405CC indi_svbony_ccd notably) deliver TOP-DOWN buffers
@@ -380,6 +390,85 @@ public class ImageRelayService : IDisposable {
         return Task.CompletedTask;
     }
 
+
+    /// <summary>Broadcast a colour stack as a DOWNSAMPLED 16-bit RAW frame, three
+    /// plane-sequential channels in one payload, over the same envelope the mono
+    /// path uses.
+    ///
+    /// <para>This replaces the colour JPEG that used to carry the live stack. The
+    /// JPEG arrived already stretched, so the browser had no linear data: its
+    /// histogram had to come from a second, server-side computation, its handles
+    /// had to be converted between the stretch the server applied and the stretch
+    /// they set, and the two framings drifted apart. Sending the real pixels
+    /// removes all of that — the client stretches and builds its histogram from
+    /// the same numbers, which is what the mono path has always done and what
+    /// ASIAIR does.</para>
+    ///
+    /// <para>The cost is bandwidth: 16-bit RGB is about ten times the JPEG. Hence
+    /// <paramref name="maxDim"/>, which is not optional — a full-frame 4144x2822
+    /// colour stack is 70 MB. <see cref="FitsThumbnailer.DownsampleForPreview"/>
+    /// box-averages whole pixels per plane, so the downsample costs signal-to-noise
+    /// nothing and the histogram it feeds still describes the real stack.</para>
+    ///
+    /// <para>The FULL-resolution frame is what gets cached for annotate, plate
+    /// solve and /api/livestack/preview; only the wire copy is reduced.</para>
+    /// </summary>
+    /// <returns>true when the frame was handed to the fan-out; false when there
+    /// are no clients.</returns>
+    public Task<bool> RelayRgbRawAsync(IImageData rgb, int maxDim = 1536,
+                                       FrameKind kind = FrameKind.LiveStack,
+                                       CancellationToken ct = default) {
+        if (rgb?.Properties == null) throw new ArgumentNullException(nameof(rgb));
+        int fw = rgb.Properties.Width, fh = rgb.Properties.Height;
+        if (rgb.Properties.Channels < 3 || rgb.Data.Length < fw * fh * 3)
+            throw new ArgumentException(
+                "RelayRgbRawAsync needs a 3-channel plane-sequential buffer.", nameof(rgb));
+
+        // Cache the FULL-resolution stack: the preview endpoint, annotate and
+        // plate solve all want the real thing, not the wire copy.
+        _latestImageData = rgb;
+        _latestJpeg = null;
+        if (kind == FrameKind.LiveStack) {
+            lock (_stackGate) { _stackImage = rgb; _stackJpeg = null; }
+        }
+
+        var (pix, w, h) = maxDim > 0
+            ? FitsThumbnailer.DownsampleForPreview(rgb.Data, fw, fh, 3, maxDim)
+            : (rgb.Data, fw, fh);
+
+        var buffer = new ImageBuffer(pix, w, h, rgb.Properties.BitDepth,
+                                     BayerPatternEnum.None, channels: 3);
+        _latestImage = buffer;
+
+        if (_clients.IsEmpty) return Task.FromResult(false);
+
+        var header = buffer.GetStreamHeader((int)kind);
+        var compressed = buffer.RentLz4Compressed(out int compressedLen);
+
+        _logger.LogInformation(
+            "Relaying RGB stack {W}x{H}x3 ({BitDepth}-bit, from {FW}x{FH}): " +
+            "{RawMB:F1}MB raw -> {CompMB:F1}MB LZ4 to {Count} clients",
+            w, h, buffer.BitDepth, fw, fh,
+            (double)pix.Length * 2 / (1024 * 1024),
+            (double)compressedLen / (1024 * 1024), _clients.Count);
+
+        var prefix = new byte[4 + header.Length];
+        BitConverter.GetBytes(header.Length).CopyTo(prefix, 0);
+        header.CopyTo(prefix, 4);
+
+        // Fire-and-forget for the same reason the mono path is (see the WSDRAIN
+        // note there): awaiting the drain charges a slow client's download to the
+        // stacking loop.
+        _ = BroadcastFrameAsync(prefix, compressed, compressedLen, CancellationToken.None)
+            .ContinueWith(t => {
+                System.Buffers.ArrayPool<byte>.Shared.Return(compressed);
+                if (t.IsFaulted)
+                    _logger.LogWarning(t.Exception, "Background RGB raw relay drain faulted");
+            }, CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
+
+        return Task.FromResult(true);
+    }
+
     /// <summary>
     /// Efficient video-stream path: instead of the full RAW buffer, send a
     /// downscaled, auto-stretched JPEG (tagged <see cref="FrameKind.Video"/>)
@@ -452,14 +541,10 @@ public class ImageRelayService : IDisposable {
     /// route draws it on the frame's canvas. Same drop-if-busy guard as
     /// <see cref="RelayVideoJpegAsync"/>.
     /// </summary>
-    /// <param name="captured">Optional sink for the per-channel stretch the
-    /// JPEG was rendered with, so the LIVE histogram can place its handles on
-    /// the 16-bit axis it draws.</param>
     public async Task<bool> RelayRgbJpegAsync(IImageData rgb,
                                         int maxDim = 1280, int quality = 80,
                                         FrameKind kind = FrameKind.Live,
-                                        CancellationToken ct = default,
-                                        List<NINA.Image.ImageAnalysis.AutoStretch.StretchParams>? captured = null) {
+                                        CancellationToken ct = default) {
         if (_clients.IsEmpty) return false;
         if (Interlocked.CompareExchange(ref _videoRenderInFlight, 1, 0) != 0) return false;
         try {
@@ -467,7 +552,7 @@ public class ImageRelayService : IDisposable {
             try {
                 jpeg = await Task.Run(() => FitsThumbnailer.RenderJpegFromRgbPlanes(
                     rgb.Data, rgb.Properties.Width, rgb.Properties.Height,
-                    rgb.Properties.BitDepth, maxDim, quality, captured: captured), ct);
+                    rgb.Properties.BitDepth, maxDim, quality), ct);
             } catch (Exception ex) {
                 _logger.LogDebug(ex, "RGB JPEG render failed (skipping frame)");
                 return false;
@@ -688,6 +773,19 @@ public class ImageRelayService : IDisposable {
             // than pixels two columns apart, the signature of an
             // un-demosaiced CFA, and the histogram carried one hump per
             // colour instead of one.
+            // A 3-plane buffer (the colour stack, since it moved to the raw
+            // relay) has nothing to debayer and everything to lose in a grey
+            // encoder — same trap as the Bayer case below, one step later.
+            if (img.Channels >= 3 && img.PixelData.Length >= img.Width * img.Height * 3) {
+                var planes = System.Runtime.InteropServices.MemoryMarshal
+                                 .TryGetArray(img.PixelData, out var pseg) && pseg.Array != null
+                                 && pseg.Offset == 0 && pseg.Count == pseg.Array.Length
+                             ? pseg.Array
+                             : img.PixelData.ToArray();
+                return _latestJpeg = FitsThumbnailer.RenderJpegFromRgbPlanes(
+                    planes, img.Width, img.Height, img.BitDepth,
+                    Math.Max(img.Width, img.Height), quality);
+            }
             var pattern = img.BayerPattern;
             if (pattern != BayerPatternEnum.None && pattern != BayerPatternEnum.Auto) {
                 // The buffer is array-backed (ImageBuffer wraps a ushort[]),

@@ -1,0 +1,182 @@
+// Tests for the LIVE histogram's pure math, lifted straight out of app.js.
+//
+// app.js is one 48k-line Alpine component, not a module, so there is nothing to
+// import. The functions are cut out by name and evaluated against a stub `this`
+// — the same trick scripts/tests/install-linux-helpers-test.sh uses to test the
+// installer's shell helpers without running the installer.
+//
+//   node scripts/tests/histo-math-test.mjs
+//
+// What is guarded here:
+//   * the framing rule, which used to live in two places (a percentile band
+//     chosen on the server and a zoom applied on the client) that drifted apart
+//   * the resolution requirement inherited from LiveStackHistogramBandTests: a
+//     stacked sky whose sigma is ~124 ADU must span several bins, not collapse
+//     into one spike
+//   * the handle round trip, which is now the identity because axis space and
+//     stretch space are the same space
+
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const SRC = path.join(here, '..', '..', 'src', 'NINA.Polaris', 'wwwroot', 'js', 'app.js');
+const src = fs.readFileSync(SRC, 'utf8');
+
+let fails = 0;
+const ok = (m) => console.log('  ok   ' + m);
+const bad = (m) => { console.log('  FAIL ' + m); fails++; };
+const near = (a, b, eps, m) =>
+    Math.abs(a - b) <= eps ? ok(m) : bad(`${m}: ${a} vs ${b} (tol ${eps})`);
+
+// ---- lift the functions ---------------------------------------------------
+// Each is `        name(args) {` at 8 spaces, closing at `        },`.
+function lift(name) {
+    const start = src.indexOf(`\n        ${name}(`);
+    if (start < 0) throw new Error(`not found in app.js: ${name}`);
+    const end = src.indexOf('\n        },', start);
+    if (end < 0) throw new Error(`unterminated: ${name}`);
+    return src.slice(start + 1, end + '\n        },'.length).replace(/\r/g, '');
+}
+
+const NAMES = ['_histoBulkOf', '_histoFrame', '_histoUpdateEndpoints', '_histoDragMove'];
+const app = eval('({' + NAMES.map(lift).join('\n') + '\n})');
+
+// The drag throttles its redraw through a frame callback; outside a browser
+// there is neither, and the redraw is not what is under test here.
+globalThis.requestAnimationFrame = () => 0;
+globalThis.cancelAnimationFrame = () => {};
+
+// ---- a stack-shaped luminance histogram -----------------------------------
+// 300k samples, sky at 1277 ADU with sigma 124, plus a sparse star tail out to
+// 43738 — the same shape LiveStackHistogramBandTests used on real field data.
+const NB = 2048;
+function fieldBins() {
+    const bins = new Float64Array(NB);
+    const put = (adu, n) => {
+        let i = Math.floor((adu / 65536) * NB);
+        if (i < 0) i = 0; if (i >= NB) i = NB - 1;
+        bins[i] += n;
+    };
+    for (let s = -400; s <= 400; s += 8) {
+        const w = Math.exp(-(s * s) / (2 * 124 * 124));
+        put(1277 + s, Math.round(300000 * w / 40));
+    }
+    for (let adu = 2000; adu < 43738; adu += 250) put(adu, 3);
+    return bins;
+}
+
+console.log('== _histoBulkOf: the band the data occupies ==');
+{
+    const b = fieldBins();
+    const [lo, hi] = app._histoBulkOf(b);
+    const loAdu = lo * 65535, hiAdu = hi * 65535;
+    (loAdu > 500 && loAdu < 1277) ? ok('low edge sits below the sky peak')
+                                  : bad(`low edge ${loAdu.toFixed(0)} ADU`);
+    (hiAdu > 1400 && hiAdu < 12000) ? ok('the sparse star tail does not set the high edge')
+                                    : bad(`high edge ${hiAdu.toFixed(0)} ADU`);
+    const empty = app._histoBulkOf(new Float64Array(NB));
+    empty[0] === null ? ok('an empty histogram reports no band') : bad('empty band');
+}
+
+console.log('== _histoFrame: one framing rule ==');
+{
+    const base = {
+        HISTO_BINS: NB,
+        histoZoom: false,
+        histo: { bins: fieldBins(), color: false, binsR: null },
+        _histoBulkOf: app._histoBulkOf,
+    };
+    const off = app._histoFrame.call(base);
+    (off[0] === 0 && off[1] === 1) ? ok('zoom off is the full scale')
+                                   : bad(`zoom off gave ${off}`);
+
+    base.histoZoom = true;
+    const on = app._histoFrame.call(base);
+    (on[0] >= 0 && on[1] <= 1 && on[1] > on[0]) ? ok('zoom on stays inside the scale')
+                                                : bad(`zoom on gave ${on}`);
+    (on[1] - on[0] < 0.5) ? ok('zoom on actually narrows the window')
+                          : bad(`window is ${(on[1] - on[0]).toFixed(3)} of full scale`);
+
+    // THE resolution requirement. The window is what the canvas shows, and the
+    // canvas is ~256 px wide, so one sigma of sky has to cover several pixels
+    // or the stack draws as a hairline — the defect the server-side band was
+    // introduced to fix, restated where the framing now lives.
+    const sigmaFrac = 124 / 65535;
+    const perPixel = (on[1] - on[0]) / 256;
+    (sigmaFrac / perPixel >= 4)
+        ? ok(`one sigma of sky spans ${(sigmaFrac / perPixel).toFixed(1)} pixels`)
+        : bad(`sky sigma covers only ${(sigmaFrac / perPixel).toFixed(2)} pixels`);
+
+    // And the bins themselves must resolve it, which is why there are 2048.
+    const sigmaBins = sigmaFrac * NB;
+    (sigmaBins >= 3) ? ok(`one sigma of sky spans ${sigmaBins.toFixed(1)} bins`)
+                     : bad(`sky sigma covers only ${sigmaBins.toFixed(2)} bins`);
+
+    // A degenerate frame must not collapse to a zero-width window.
+    const flat = { ...base, histo: { bins: (() => {
+        const b = new Float64Array(NB); b[900] = 1e6; return b;
+    })(), color: false, binsR: null } };
+    const w = app._histoFrame.call(flat);
+    (w[1] - w[0] >= 8 / NB) ? ok('a single-spike frame still gets a usable window')
+                            : bad(`degenerate window ${w}`);
+}
+
+console.log('== handles: axis space IS stretch space ==');
+{
+    const st = {
+        HISTO_BINS: NB, histoZoom: true,
+        stretchAuto: false, stretchBlack: 0.10, stretchWhite: 0.80, stretchMid: 0.25,
+        histo: { bins: fieldBins(), color: false, binsR: null,
+                 _autoBlack: 0, _autoWhite: 1, _autoMid: 0.25,
+                 dispLo: 0, dispHi: 1 },
+        _histoDrag: null,
+        _histoBulkOf: app._histoBulkOf,
+        _histoFrame: app._histoFrame,
+        _histoUpdateEndpoints: app._histoUpdateEndpoints,
+        _histoDragMove: app._histoDragMove,
+    };
+    st._histoUpdateEndpoints();
+    near(st.histo.blackFrac, 0.10, 1e-9, 'black handle sits on stretchBlack');
+    near(st.histo.whiteFrac, 0.80, 1e-9, 'white handle sits on stretchWhite');
+    near(st.histo.midFrac, 0.10 + 0.25 * 0.70, 1e-9, 'mid handle sits between them');
+
+    // Drag the black handle to a known pixel and read the value back.
+    st._histoDrag = { which: 'black', rect: { left: 0, width: 200 }, lo: 0, hi: 1 };
+    st._histoDragMove({ clientX: 60 });
+    near(st.stretchBlack, 0.30, 1e-9, 'dragging to 30% of the axis sets black to 0.30');
+    near(st.histo.blackFrac, 0.30, 1e-9, 'and the handle follows, with no conversion');
+
+    // Inside a zoomed window the mapping is the window, not the full scale.
+    st._histoDrag = { which: 'white', rect: { left: 0, width: 200 }, lo: 0.20, hi: 0.40 };
+    st._histoDragMove({ clientX: 100 });
+    near(st.stretchWhite, 0.30, 1e-9, 'a zoomed drag maps through the window');
+
+    // Neighbours bound each other, nothing else does.
+    st._histoDrag = { which: 'black', rect: { left: 0, width: 200 }, lo: 0, hi: 1 };
+    st._histoDragMove({ clientX: 190 });
+    (st.stretchBlack <= st.stretchWhite) ? ok('black cannot cross white')
+                                         : bad(`black ${st.stretchBlack} > white ${st.stretchWhite}`);
+}
+
+console.log('== a drag freezes the framing ==');
+{
+    const st = {
+        HISTO_BINS: NB, histoZoom: true,
+        stretchAuto: false, stretchBlack: 0, stretchWhite: 1, stretchMid: 0.25,
+        histo: { bins: fieldBins(), color: false, binsR: null, dispLo: 0.11, dispHi: 0.22 },
+        _histoDrag: { which: 'black', rect: { left: 0, width: 100 }, lo: 0.11, hi: 0.22 },
+        _histoBulkOf: app._histoBulkOf,
+        _histoFrame: app._histoFrame,
+        _histoUpdateEndpoints: app._histoUpdateEndpoints,
+    };
+    st._histoUpdateEndpoints();
+    (st.histo.dispLo === 0.11 && st.histo.dispHi === 0.22)
+        ? ok('the window does not move under the cursor')
+        : bad(`window moved to ${st.histo.dispLo}..${st.histo.dispHi}`);
+}
+
+console.log();
+console.log(fails === 0 ? 'all checks passed' : `${fails} check(s) failed`);
+process.exit(fails === 0 ? 0 : 1);

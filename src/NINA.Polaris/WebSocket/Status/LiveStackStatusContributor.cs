@@ -109,35 +109,13 @@ public sealed class LiveStackStatusContributor : IStatusContributor {
                 rejectedFrames = liveStack.RejectedFrames,
                 lastRejectReason = liveStack.LastRejectReason,
                 lastRejectAt = liveStack.LastRejectAt,
-                // 16-bit luminance histogram + stats of the colour
-                // stack (the broadcast frame is an 8-bit JPEG, so the
-                // client can't compute these itself). Null when not
-                // colour-stacking. Lets the LIVE histogram panel show
-                // real 16-bit min/max/mean/std + bars.
-                colorHistogram = liveStack.ColorActive ? liveStack.ColorHistogram : null,
-                // Per-channel bins on the same scale, so the panel can draw the
-                // three RGB curves an OSC stack should show. Without these it
-                // fell back to the luminance array and drew one white line.
-                colorHistogramR = liveStack.ColorActive ? liveStack.ColorHistogramR : null,
-                colorHistogramG = liveStack.ColorActive ? liveStack.ColorHistogramG : null,
-                colorHistogramB = liveStack.ColorActive ? liveStack.ColorHistogramB : null,
-                // ADU of the first and last bucket: the bins cover the
-                // populated band, not a fixed 0..65535, so the panel needs
-                // these to place them on its axis.
-                colorHistLo = liveStack.ColorHistLo,
-                colorHistHi = liveStack.ColorHistHi,
-                // The stretch the relayed JPEG was rendered with, per channel.
-                // Lets the histogram panel place its handles on the ADU axis it
-                // draws instead of on the 8-bit display scale they act in.
-                colorStretch = liveStack.ColorActive && liveStack.ColorStretch != null
-                    ? liveStack.ColorStretch.Select(p => new {
-                        black = p.Black, mid = p.Mid, white = p.White
-                      }).ToArray()
-                    : null,
-                colorHistMin = liveStack.ColorHistMin,
-                colorHistMax = liveStack.ColorHistMax,
-                colorHistMean = liveStack.ColorHistMean,
-                colorHistStd = liveStack.ColorHistStd,
+                // The colour stack used to publish its own 16-bit histogram
+                // here, because the frame on the wire was an already-stretched
+                // 8-bit JPEG and the browser had no linear data of its own.
+                // It now receives the real 16-bit planes (RelayRgbRawAsync), so
+                // it computes min/max/mean/std and the three curves from the
+                // same numbers it renders — one source, no second framing to
+                // reconcile.
                 triggers = liveStackTriggers.CurrentStatus,
                 // REFSUG-1: trend-based advisory. Always
                 // emitted so the UI can decide whether to
