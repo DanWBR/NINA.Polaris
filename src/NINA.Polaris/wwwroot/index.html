@@ -12240,6 +12240,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <span class="files-icon" x-text="violetHalo.busy ? '⏳' : '🟣'"></span>
                         <span class="files-icon-label">Violet halo</span>
                     </button>
+                    <button class="btn btn-sm btn-icon"
+                            :disabled="files.selectedPaths.length !== 1 || filesToLiveBusy"
+                            @click="filesLoadIntoLive(files.selectedPaths[0])"
+                            title="Load this FITS into the LIVE panel through the same path a camera frame takes, so the stretch sliders and the histogram can be tried on a known file."
+                            aria-label="Load into LIVE">
+                        <span class="files-icon" x-text="filesToLiveBusy ? '⏳' : '📡'"></span>
+                        <span class="files-icon-label">To LIVE</span>
+                    </button>
                     <!-- Colour calibration on a plate-solved RGB master: PCC
                          (APASS B-V) and SPCC (spectral integration). One file. -->
                     <!-- WAVE-3: wavelets belonged in the workflow builder only,
@@ -19819,19 +19827,6 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             <div class="image-viewer-body"
                  :class="{ 'with-headers': fitsHeadersAvailable && fitsHeaders.visible }">
                 <div id="osd-viewer" class="image-viewer-canvas"></div>
-                <!-- The histogram of the FILE, built from its linear 16-bit
-                     pixels (/api/files/raw), by exactly the code the LIVE panel
-                     runs. Read-only here: the handles drive the live render,
-                     not this server-rendered picture. -->
-                <div class="viewer-histo-wrap" x-show="imageViewerOpen" x-cloak>
-                    <div class="histo-host" data-histo-canvas="histoCanvas-viewer"
-                         data-histo-class="viewer-histo"></div>
-                    <p class="viewer-histo-note text-muted"
-                       x-show="viewerHisto.loading || viewerHisto.error || !_viewerRawFrame"
-                       x-text="viewerHisto.loading ? 'Reading the linear pixels...'
-                               : (viewerHisto.error ? viewerHisto.error
-                                  : 'Linear histogram: open a FITS file')"></p>
-                </div>
                 <aside class="image-viewer-headers"
                        x-show="fitsHeadersAvailable && fitsHeaders.visible"
                        x-cloak>
@@ -23183,8 +23178,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                          time, before Alpine (deferred) walks the document, so no
                          Alpine.initTree call is needed. -->
                     <template id="tpl-histo-panel">
-                        <div class="histo-panel"
-                             x-show="selectedCamera || _lastRawFrame || (imageViewerOpen && _viewerRawFrame)">
+                        <div class="histo-panel" x-show="selectedCamera || _lastRawFrame">
                             <div class="histo-stats">
                                 <div class="hs-cell"><span class="hs-v" x-text="histo.max"></span><span class="hs-l">Max</span></div>
                                 <div class="hs-cell"><span class="hs-v" x-text="histo.avg"></span><span class="hs-l">Avg</span></div>
@@ -23238,7 +23232,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20260908-histo2"></script>
+    <script src="/js/app.js?v=20260908-tolive"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

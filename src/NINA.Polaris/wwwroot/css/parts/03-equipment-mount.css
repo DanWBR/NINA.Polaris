@@ -2723,33 +2723,3 @@
    each sweep exposure through ImageRelayService, the multi-canvas
    renderer mirrors that into #focusCanvas. Fixed-height to keep the
    layout stable as the V-curve chart appears below. */
-
-/* ── Linear histogram inside the Studio image viewer ─────────────────────
-   The viewer shows a JPEG the server already stretched; this panel measures
-   the FILE, from the 16-bit pixels /api/files/raw hands over, through exactly
-   the code path the LIVE panel uses. That is the point of it being here: a
-   histogram you can check against a file whose contents you know. */
-.image-viewer-body { position: relative; }
-.viewer-histo-wrap {
-    position: absolute;
-    left: 12px;
-    bottom: 12px;
-    width: min(440px, calc(100% - 24px));
-    z-index: 6;
-}
-.viewer-histo-wrap .histo-panel.viewer-histo {
-    height: 106px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: rgba(var(--panel-glass-rgb), 0.86);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-}
-/* Read-only: dragging a handle here would change the LIVE stretch and leave
-   this picture untouched, which is a promise the panel cannot keep. The Auto
-   black/white marker lines still draw on the canvas. */
-.viewer-histo-wrap .histo-handle { display: none; }
-.viewer-histo-note {
-    margin: 6px 2px 0;
-    font-size: 12px;
-}

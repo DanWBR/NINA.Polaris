@@ -396,17 +396,23 @@ public static class FilesEndpoints {
 
         // --- Linear pixels of a FITS, in the /ws/image-stream wire format ---
         //
-        // The viewer shows a JPEG the server already stretched, which is the
-        // right thing for looking at a picture and useless for measuring one:
-        // a histogram built from it describes the rendering, not the data. This
-        // hands the browser the real 16-bit pixels in exactly the envelope it
-        // already decodes for live frames -- [int32 headerLen][header][LZ4] --
-        // so the Studio panel runs the SAME histogram code as LIVE, on a file.
+        // A file previewed through /preview is a JPEG the server already
+        // stretched: right for looking at, useless for measuring, and nothing
+        // the client's own stretch can act on. This hands the browser the real
+        // 16-bit pixels in exactly the envelope it already decodes for live
+        // frames -- [int32 headerLen][header][LZ4] -- so a FITS can be fed
+        // through the LIVE path and the stretch sliders and histogram tried
+        // against a file whose contents are known, off the sky.
         //
-        // maxDim bounds the wire copy (16-bit RGB is ~10x a JPEG). A Bayer
-        // mosaic is sent at native size instead: box-averaging it would blend
-        // neighbouring colours and the per-channel curves would be a fiction.
-        g.MapGet("/raw", (FileBrowserService svc, string path, int? maxDim) => {
+        // kind is the FrameKind the client routes on (0 = Live, the default,
+        // which is what puts the frame on the LIVE canvas).
+        //
+        // maxDim bounds the wire copy; 0 means native, which is what the
+        // "load into LIVE" path asks for, since the stretch endpoints come out
+        // of the pixel statistics and box-averaging changes them. A Bayer
+        // mosaic is never reduced: averaging it blends neighbouring colours and
+        // the per-channel curves would be a fiction.
+        g.MapGet("/raw", (FileBrowserService svc, string path, int? maxDim, int? kind) => {
             try {
                 var full = svc.ResolveSafe(path, mustExist: true);
                 if (!File.Exists(full))
@@ -429,7 +435,7 @@ public static class FilesEndpoints {
 
                 var buffer = new NINA.Image.ImageData.ImageBuffer(
                     px, w, h, img.Properties.BitDepth, pattern, ch);
-                var header = buffer.GetStreamHeader((int)FrameKind.Preview);
+                var header = buffer.GetStreamHeader(kind ?? (int)FrameKind.Live);
                 var compressed = buffer.RentLz4Compressed(out int len);
                 try {
                     var body = new byte[4 + header.Length + len];

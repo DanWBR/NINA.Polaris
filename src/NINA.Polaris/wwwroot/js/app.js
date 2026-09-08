@@ -5547,13 +5547,6 @@ function ninaApp() {
                 });
             });
 
-            // The viewer's file can change without reopening it: the prev/next
-            // arrows, the discard-and-advance cull, and a script writing its
-            // output all just reassign the path.
-            this.$watch('imageViewerPath', (p) => {
-                if (this.imageViewerOpen) this.viewerLoadRawFrame(p);
-            });
-
             this.$watch('settings', () => {
                 this.updateFov();
                 this.saveSettings();
@@ -9929,7 +9922,6 @@ function ninaApp() {
         // 256 ADU, so the entire sky would land in a single spike. At 2048 a
         // bin is 32 ADU and one sigma spans about four of them.
         _histoCanvasId() {
-            if (this.imageViewerOpen) return 'histoCanvas-viewer';
             switch (this.tab) {
                 case 'preview':  return 'histoCanvas-preview';
                 case 'sequence': return 'histoCanvas-autorun';  // AUTORUN tab id is 'sequence'
@@ -9938,84 +9930,15 @@ function ninaApp() {
         },
 
 
-        // ── The histogram of a file, from the file's own pixels ──────────
-        //
-        // The viewer displays a JPEG the server stretched, so measuring THAT
-        // would describe the rendering rather than the data. /api/files/raw
-        // hands over the linear 16-bit pixels in the same envelope live frames
-        // use, and the panel then runs the identical code path as LIVE. That is
-        // the point: it is a way to check the histogram against a file whose
-        // contents are known, not a second implementation.
-        _viewerRawFrame: null,
-        viewerHisto: { loading: false, error: '', path: '' },
+        // Guards the FILES "To LIVE" button while a file is on its way.
+        filesToLiveBusy: false,
 
-        async viewerLoadRawFrame(path) {
-            if (!path || !/\.fits?$/i.test(path)) {
-                this._viewerRawFrame = null;
-                this.viewerHisto.path = '';
-                this.viewerHisto.error = '';
-                this._histoToken++;
-                this.drawHistogram();
-                return;
-            }
-            if (this.viewerHisto.path === path && this._viewerRawFrame) return;
-            this.viewerHisto.loading = true;
-            this.viewerHisto.error = '';
-            try {
-                if (typeof LZ4 === 'undefined') throw new Error('LZ4 decoder not loaded');
-                const r = await this.apiFetch('/api/files/raw?path='
-                    + encodeURIComponent(path) + '&maxDim=1536');
-                if (!r.ok) {
-                    const e = await r.json().catch(() => ({}));
-                    throw new Error(e.error || ('HTTP ' + r.status));
-                }
-                const ab = await r.arrayBuffer();
-                const dv = new DataView(ab);
-                // Same layout as the live stream; see ImageBuffer.GetStreamHeader.
-                // Header offset N is buffer offset N+4.
-                const headerLen = dv.getInt32(0, true);
-                const width = dv.getInt32(4, true);
-                const height = dv.getInt32(8, true);
-                const bitDepth = dv.getInt32(12, true);
-                const bayerPattern = dv.getInt32(16, true);
-                const uncompressedSize = dv.getInt32(20, true);
-                const channels = (headerLen >= 32 && ab.byteLength >= 36)
-                    ? dv.getInt32(32, true) : 1;
-                const out = new Uint8Array(uncompressedSize);
-                LZ4.decompress(new Uint8Array(ab, 4 + headerLen), out);
-                const pixels = new Uint16Array(out.buffer);
-                this._viewerRawFrame = {
-                    pixels, width, height, bitDepth, bayerPattern, channels,
-                    maxVal: (1 << (bitDepth || 16)) - 1,
-                    frameKind: 1, calibration: 0,
-                };
-                this.viewerHisto.path = path;
-                this._histoToken++;
-                this.drawHistogram();
-            } catch (e) {
-                this._viewerRawFrame = null;
-                this.viewerHisto.path = '';
-                this.viewerHisto.error = (e && e.message) ? e.message : String(e);
-                this._histoToken++;
-                this.drawHistogram();
-            } finally {
-                this.viewerHisto.loading = false;
-            }
-        },
 
         // Bins + stats + auto endpoints from the cached raw frame. Cheap
         // enough to be safe on every draw thanks to the token guard: it only
         // rebuilds when a new frame actually arrived.
-        // The frame the panel measures. The viewer's file wins while it is
-        // open; nothing writes to _lastRawFrame, so closing the viewer leaves
-        // the live render exactly as it was.
-        _histoFrameSource() {
-            return (this.imageViewerOpen && this._viewerRawFrame)
-                ? this._viewerRawFrame : this._lastRawFrame;
-        },
-
         _histoBuild() {
-            const f = this._histoFrameSource();
+            const f = this._lastRawFrame;
             if (!f || !f.pixels || !f.pixels.length) { this.histo.bins = null; return false; }
             // A drag must not see the bins move under the cursor.
             if (this._histoDrag && this.histo.bins) return true;
@@ -10239,8 +10162,7 @@ function ninaApp() {
                 // Only LIVE / PREVIEW / AUTORUN host the panel; skip the whole
                 // scan on any other tab.
                 const t = this.tab;
-                if (!this.imageViewerOpen
-                    && t !== 'live' && t !== 'preview' && t !== 'sequence') return;
+                if (t !== 'live' && t !== 'preview' && t !== 'sequence') return;
                 if (!this._histoBuild()) return;
                 const cv = document.getElementById(this._histoCanvasId());
                 if (!cv) return;
@@ -20699,12 +20621,7 @@ function ninaApp() {
         // ---- OpenSeadragon image viewer ----
         openImageViewer() {
             this.imageViewerOpen = true;
-            this.$nextTick(() => {
-                this._initOsdViewer();
-                // Pull the file's linear pixels so the histogram describes the
-                // DATA and not the JPEG on screen.
-                this.viewerLoadRawFrame(this.imageViewerPath);
-            });
+            this.$nextTick(() => this._initOsdViewer());
         },
 
         closeImageViewer() {
@@ -20724,12 +20641,6 @@ function ninaApp() {
             this.imageViewerTitle = 'Image Viewer, full resolution';
             // Drop any STUDIO annotations + the tracked file path.
             this.imageViewerPath = '';
-            this._viewerRawFrame = null;
-            this.viewerHisto.path = '';
-            this.viewerHisto.error = '';
-            // Hand the panel back to the live frame, otherwise the LIVE tab
-            // keeps showing the file's bins until the next exposure lands.
-            this._histoToken++;
             this.studioAnnotate.active = false;
             this.studioAnnotate.items = [];
             // Drop the header cache so reopening a different FITS doesn't
@@ -38220,6 +38131,52 @@ function ninaApp() {
             } catch (e) {
                 this.violetHalo.busy = false;
                 this.violetHalo.error = (e && e.message) ? e.message : String(e);
+            }
+        },
+
+        // ── Send a file through the LIVE path ───────────────────────────
+        //
+        // /api/files/raw returns a FITS in the SAME envelope /ws/image-stream
+        // uses, so handing those bytes to _renderRawFrame is not a simulation
+        // of a rig frame -- it is the identical code path: same header parse,
+        // same LZ4 decode, same _lastRawFrame cache, same WebGL stretch, same
+        // histogram. Which is the point: the stretch sliders and the histogram
+        // can be exercised against a file whose contents are known, off the
+        // sky, and whatever they do here is what they do on a real sub.
+        async filesLoadIntoLive(path) {
+            if (!path) { this.toast('Select one FITS first', 'warn'); return; }
+            if (!/\.fits?$/i.test(path)) {
+                this.toast('Only FITS files can be loaded into LIVE', 'warn');
+                return;
+            }
+            if (typeof LZ4 === 'undefined') {
+                this.toast('LZ4 decoder not loaded', 'error');
+                return;
+            }
+            this.filesToLiveBusy = true;
+            try {
+                // maxDim=0 = native. This is meant to behave like a real sub,
+                // and a downsampled one would not: the stretch endpoints come
+                // from the pixel statistics, and box-averaging changes them.
+                const r = await this.apiFetch('/api/files/raw?kind=0&maxDim=0&path='
+                    + encodeURIComponent(path));
+                if (!r.ok) {
+                    const e = await r.json().catch(() => ({}));
+                    throw new Error(e.error || ('HTTP ' + r.status));
+                }
+                const ab = await r.arrayBuffer();
+                this.imageViewerOpen = false;
+                this.tab = 'live';
+                await this.$nextTick();
+                await this._renderRawFrame(ab);
+                this.drawHistogram();
+                const name = (path.split(/[\\/]/).pop()) || path;
+                this.toast('Loaded ' + name + ' into LIVE', 'ok');
+            } catch (e) {
+                this.toast('Load into LIVE failed: '
+                    + ((e && e.message) ? e.message : String(e)), 'error');
+            } finally {
+                this.filesToLiveBusy = false;
             }
         },
 
