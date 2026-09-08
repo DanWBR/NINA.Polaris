@@ -12,6 +12,7 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using Microsoft.Extensions.Logging;
 using NINA.Core.Enum;
 using NINA.Image.FileFormat.FITS;
 using NINA.Image.ImageData;
@@ -913,7 +914,16 @@ public class IndiCamera : ICamera, IDisposable {
         // If we still don't know the real geometry (e.g. CCD_INFO hasn't
         // arrived yet right after connect), don't write a zero/garbage
         // CCD_FRAME — that would corrupt the ROI instead of resetting it.
-        if (width <= 0 || height <= 0) return;
+        // Say so instead of returning quietly: this call is the only full-frame
+        // assertion a session gets, so skipping it leaves whatever CCD_FRAME the
+        // driver happens to hold in force for every frame that follows.
+        if (width <= 0 || height <= 0) {
+            _client.DiagLogger.LogWarning(
+                "{Device}: full-frame reset skipped, CCD_INFO carries no sensor size yet. " +
+                "The driver keeps its current CCD_FRAME, so captures may come back cropped.",
+                DeviceName);
+            return;
+        }
         // Idempotent guard. Writing CCD_FRAME re-allocates the ROI / capture
         // buffer inside many INDI drivers (notably indi_asi_ccd). The native
         // guide + calibration loop resets to full frame before EVERY capture,
