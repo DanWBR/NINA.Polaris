@@ -87,7 +87,15 @@ public static class PlaintextHttpOnTlsPort {
         int eol = text.IndexOf("\r\n", StringComparison.Ordinal);
         if (eol < 0) return len >= MaxPeek ? Verdict.Tls : Verdict.NeedMore;
         var parts = text[..eol].Split(' ');
-        string path = parts.Length >= 2 && parts[1].StartsWith('/') ? parts[1] : "/";
+        string target = parts.Length >= 2 ? parts[1] : "/";
+        string path = target.StartsWith('/')
+            ? target
+            : Uri.TryCreate(target, UriKind.Absolute, out var absoluteTarget)
+                && (absoluteTarget.Scheme == Uri.UriSchemeHttp || absoluteTarget.Scheme == Uri.UriSchemeHttps)
+                && !string.IsNullOrEmpty(absoluteTarget.Host)
+                ? absoluteTarget.PathAndQuery
+                : "/";
+        if (path.Length == 0) path = "/";
         string host = "";
         foreach (var line in text[(eol + 2)..].Split("\r\n")) {
             if (line.Length == 0) break;

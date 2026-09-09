@@ -87,6 +87,11 @@ public class UserProfile {
     /// skipped with a notification), and the operator can turn it off in
     /// Settings.</summary>
     public bool AutoConnectOnStartup { get; set; } = true;
+    /// <summary>The operator answered the first-run location prompt, even if
+    /// by declining it. Host-side on purpose: it used to be a localStorage
+    /// flag, and localStorage is keyed by origin, so changing the host's IP
+    /// address asked again for something already answered.</summary>
+    public bool LocationPromptDismissed { get; set; } = false;
 
     /// <summary>When the first-run equipment setup wizard was completed or
     /// explicitly skipped. Null = never offered/finished, so the wizard is

@@ -268,66 +268,21 @@ public static class SystemEndpoints {
             return Results.Ok(profiles.Active);
         });
 
-        group.MapPut("/profile", (UserProfile update, ProfileService profiles) => {
-            profiles.UpdateSettings(p => {
-                p.Latitude = update.Latitude;
-                p.Longitude = update.Longitude;
-                p.Altitude = update.Altitude;
-                p.SensorWidthMm = update.SensorWidthMm;
-                p.SensorHeightMm = update.SensorHeightMm;
-                p.FocalLengthMm = update.FocalLengthMm;
-                p.SensorPixelsX = update.SensorPixelsX;
-                p.SensorPixelsY = update.SensorPixelsY;
-                p.DefaultExposure = update.DefaultExposure;
-                p.DefaultGain = update.DefaultGain;
-                p.DefaultBinning = update.DefaultBinning;
-                p.IndiHost = update.IndiHost;
-                p.IndiPort = update.IndiPort;
-                p.AutoConnectOnStartup = update.AutoConnectOnStartup;
-                p.AutoClockSync = update.AutoClockSync;
-                // Self-update channel: only "preview" or "stable" (anything else
-                // normalises to stable so a bad value can't strand a host).
-                p.UpdateChannel = string.Equals(update.UpdateChannel?.Trim(), "preview",
-                    StringComparison.OrdinalIgnoreCase) ? "preview" : "stable";
-                p.AstapPath = update.AstapPath;
-                p.SolveToleranceArcsec = update.SolveToleranceArcsec;
-                // The Studio root (ImageOutputDir) is set through its own
-                // endpoint (/api/files/studio-root) and is HOST hardware state,
-                // not part of the settings form. A general settings save must
-                // never reset it: a client that PUTs the profile without a
-                // fresh value (empty/stale) would otherwise clobber a configured
-                // NVMe path back to the ~/files default. Preserve on empty, the
-                // same guard the GraXpert / ONNX fields already use.
-                if (!string.IsNullOrWhiteSpace(update.ImageOutputDir))
-                    p.ImageOutputDir = update.ImageOutputDir;
-                p.ImageNamePattern = update.ImageNamePattern;
-                p.ImageFormat = update.ImageFormat;
-                p.PreferAdvancedSequencer = update.PreferAdvancedSequencer;
-                // DBGLOG-9: opt-in disk persistence for the debug log.
-                p.LogToDisk = update.LogToDisk;
-                // External-tool path overrides. Empty/null = auto-detect.
-                p.SirilPath = update.SirilPath;
-                p.SirilScriptsDir = update.SirilScriptsDir;
-                p.GraXpertPath = update.GraXpertPath;
-                p.GraXpertBgeSmoothing = update.GraXpertBgeSmoothing;
-                p.GraXpertBgeCorrection = update.GraXpertBgeCorrection
-                                              ?? p.GraXpertBgeCorrection;
-                p.GraXpertDeconStrength = update.GraXpertDeconStrength;
-                p.GraXpertDeconPsfSize = update.GraXpertDeconPsfSize;
-                p.GraXpertDenoiseStrength = update.GraXpertDenoiseStrength;
-                // GX-1b: ONNX in-browser inference settings.
-                p.OnnxModelsPath = update.OnnxModelsPath ?? p.OnnxModelsPath;
-                p.OnnxModelsBucketUrl = update.OnnxModelsBucketUrl ?? p.OnnxModelsBucketUrl;
-                p.OnnxLicenseAcknowledged = update.OnnxLicenseAcknowledged;
-                p.OnnxDefaultDenoiseVersion = update.OnnxDefaultDenoiseVersion
-                                                  ?? p.OnnxDefaultDenoiseVersion;
-                p.OnnxPreferCli = update.OnnxPreferCli;
-                // UI language: only overwrite when the client actually sent a
-                // value, so a settings save from a page that omits it doesn't
-                // reset the stored preference.
-                if (!string.IsNullOrWhiteSpace(update.UiLanguage))
-                    p.UiLanguage = update.UiLanguage;
-            });
+        // A PATCH, not a replace: a field the client leaves out keeps the value
+        // the host already has.
+        //
+        // It used to bind a whole UserProfile and copy every field across, so
+        // anything the body omitted arrived as its type's default and was
+        // written as such. That is a loaded gun: a client that had not yet read
+        // the profile, or a caller that only wanted to change one thing, would
+        // silently reset the location to 0,0 and auto-connect to off. It fired
+        // in the field on 2026-09-08. Four fields had already grown their own
+        // "only if non-empty" guard, one bug at a time; this makes that the rule
+        // for all of them instead.
+        group.MapPut("/profile", (System.Text.Json.JsonElement body, ProfileService profiles) => {
+            if (body.ValueKind != System.Text.Json.JsonValueKind.Object)
+                return Results.BadRequest(new { error = "Expected a JSON object." });
+            profiles.UpdateSettings(p => ApplyProfilePatch(body, p));
             return Results.Ok(new { message = "Profile saved" });
         });
 
@@ -721,6 +676,93 @@ public static class SystemEndpoints {
     record UiLanguageRequest(string? Language);
     record ScheduledShutdownRequest(string Utc, bool ShutdownHost);
     record RelayConfigRequest(bool? Enabled, string? ServerUrl, string? Token);
+
+    /// <summary>Merge the fields a client actually sent onto the stored
+    /// profile. Absent means unchanged, which is the whole point: see the
+    /// PUT /profile route for why.</summary>
+    internal static void ApplyProfilePatch(System.Text.Json.JsonElement body, UserProfile p) {
+        if (body.ValueKind != System.Text.Json.JsonValueKind.Object) return;
+            // Case-insensitive, because JSON casing is a client convention and
+            // the wrong casing silently doing nothing is exactly the failure
+            // mode being closed here.
+            var sent = new Dictionary<string, System.Text.Json.JsonElement>(
+            StringComparer.OrdinalIgnoreCase);
+            foreach (var prop in body.EnumerateObject()) sent[prop.Name] = prop.Value;
+
+            bool Present(string name, out System.Text.Json.JsonElement el)
+            => sent.TryGetValue(name, out el)
+               && el.ValueKind != System.Text.Json.JsonValueKind.Null;
+
+            double Num(string n, double cur)
+            => Present(n, out var e) && e.ValueKind == System.Text.Json.JsonValueKind.Number
+               ? e.GetDouble() : cur;
+            int Int(string n, int cur)
+            => Present(n, out var e) && e.ValueKind == System.Text.Json.JsonValueKind.Number
+               && e.TryGetInt32(out var v) ? v : cur;
+            bool Bool(string n, bool cur)
+            => Present(n, out var e)
+               && (e.ValueKind == System.Text.Json.JsonValueKind.True
+                   || e.ValueKind == System.Text.Json.JsonValueKind.False)
+               ? e.GetBoolean() : cur;
+            // A string field sent as "" is a real value (clearing an override),
+            // so only ABSENT leaves it alone. The two paths below that must not
+            // be cleared say so themselves.
+            string? Str(string n, string? cur)
+            => Present(n, out var e) && e.ValueKind == System.Text.Json.JsonValueKind.String
+               ? e.GetString() : cur;
+
+
+            p.Latitude = Num("latitude", p.Latitude);
+            p.Longitude = Num("longitude", p.Longitude);
+            p.Altitude = Num("altitude", p.Altitude);
+            p.SensorWidthMm = Num("sensorWidthMm", p.SensorWidthMm);
+            p.SensorHeightMm = Num("sensorHeightMm", p.SensorHeightMm);
+            p.FocalLengthMm = Num("focalLengthMm", p.FocalLengthMm);
+            p.SensorPixelsX = Int("sensorPixelsX", p.SensorPixelsX);
+            p.SensorPixelsY = Int("sensorPixelsY", p.SensorPixelsY);
+            p.DefaultExposure = Num("defaultExposure", p.DefaultExposure);
+            p.DefaultGain = Int("defaultGain", p.DefaultGain);
+            p.DefaultBinning = Int("defaultBinning", p.DefaultBinning);
+            p.IndiHost = Str("indiHost", p.IndiHost);
+            p.IndiPort = Int("indiPort", p.IndiPort);
+            p.AutoConnectOnStartup = Bool("autoConnectOnStartup", p.AutoConnectOnStartup);
+            p.LocationPromptDismissed = Bool("locationPromptDismissed", p.LocationPromptDismissed);
+            p.AutoClockSync = Bool("autoClockSync", p.AutoClockSync);
+            p.AstapPath = Str("astapPath", p.AstapPath);
+            p.SolveToleranceArcsec = Num("solveToleranceArcsec", p.SolveToleranceArcsec);
+            p.ImageNamePattern = Str("imageNamePattern", p.ImageNamePattern);
+            p.ImageFormat = Str("imageFormat", p.ImageFormat);
+            p.PreferAdvancedSequencer = Bool("preferAdvancedSequencer", p.PreferAdvancedSequencer);
+            p.LogToDisk = Bool("logToDisk", p.LogToDisk);
+            p.SirilPath = Str("sirilPath", p.SirilPath);
+            p.SirilScriptsDir = Str("sirilScriptsDir", p.SirilScriptsDir);
+            p.GraXpertPath = Str("graXpertPath", p.GraXpertPath);
+            p.GraXpertBgeSmoothing = Num("graXpertBgeSmoothing", p.GraXpertBgeSmoothing);
+            p.GraXpertBgeCorrection = Str("graXpertBgeCorrection", p.GraXpertBgeCorrection);
+            p.GraXpertDeconStrength = Num("graXpertDeconStrength", p.GraXpertDeconStrength);
+            p.GraXpertDeconPsfSize = Num("graXpertDeconPsfSize", p.GraXpertDeconPsfSize);
+            p.GraXpertDenoiseStrength = Num("graXpertDenoiseStrength", p.GraXpertDenoiseStrength);
+            p.OnnxModelsPath = Str("onnxModelsPath", p.OnnxModelsPath);
+            p.OnnxModelsBucketUrl = Str("onnxModelsBucketUrl", p.OnnxModelsBucketUrl);
+            p.OnnxLicenseAcknowledged = Bool("onnxLicenseAcknowledged", p.OnnxLicenseAcknowledged);
+            p.OnnxDefaultDenoiseVersion = Str("onnxDefaultDenoiseVersion", p.OnnxDefaultDenoiseVersion);
+            p.OnnxPreferCli = Bool("onnxPreferCli", p.OnnxPreferCli);
+            // Self-update channel: only "preview" or "stable" (anything else
+            // normalises to stable so a bad value can't strand a host).
+            if (Present("updateChannel", out _)) {
+                p.UpdateChannel = string.Equals(Str("updateChannel", p.UpdateChannel)?.Trim(),
+                    "preview", StringComparison.OrdinalIgnoreCase) ? "preview" : "stable";
+            }
+            // The Studio root is HOST hardware state, set through its own
+            // endpoint (/api/files/studio-root). Blank here means "no fresh
+            // value", never "reset to the default": a configured NVMe path
+            // must survive a settings save that carries a stale empty field.
+            var outDir = Str("imageOutputDir", null);
+            if (!string.IsNullOrWhiteSpace(outDir)) p.ImageOutputDir = outDir;
+            // Same for the UI language, whose source of truth is the browser.
+            var lang = Str("uiLanguage", null);
+            if (!string.IsNullOrWhiteSpace(lang)) p.UiLanguage = lang;
+    }
 }
 /// <summary>Body of POST /api/system/install-to-disk.</summary>
 public record DiskInstallRequest(string Device);
