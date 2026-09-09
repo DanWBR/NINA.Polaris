@@ -10106,21 +10106,14 @@ function ninaApp() {
             const bR = new Float64Array(NB);
             const bG = color ? new Float64Array(NB) : null;
             const bB = color ? new Float64Array(NB) : null;
-            // Spread one sample from display position d0 to d1.
-            const spread = (bins, d0, d1) => {
-                let a = d0 * NB, b = d1 * NB;
-                if (b < a) { const t = a; a = b; b = t; }
-                let i0 = a | 0, i1 = b | 0;
-                if (i0 < 0) i0 = 0;
-                if (i1 > NB - 1) i1 = NB - 1;
-                if (i1 < i0) i1 = i0;
-                if (i0 === i1) { bins[i0] += 1; return; }
-                const per = 1 / (i1 - i0 + 1);
-                for (let i = i0; i <= i1; i++) bins[i] += per;
-            };
+            // One sample, one bin. Spreading each sample across the width of
+            // its ADU step used to live here, to stop empty bins drawing as
+            // zeros; the curve is built from the cumulative count now, which
+            // handles gaps of any width and does not need to guess a step.
             const put = (bins, lu, v) => {
-                const w = v < maxVal ? v + 1 : v;
-                spread(bins, lu[v], lu[w]);
+                let b = (lu[v] * NB) | 0;
+                if (b < 0) b = 0; else if (b > NB - 1) b = NB - 1;
+                bins[b] += 1;
             };
 
             let mn = Infinity, mx = 0, sum = 0, sumSq = 0, n = 0;
@@ -10307,55 +10300,70 @@ function ninaApp() {
             h.dispHi = Math.max(lo + 1e-6, hi);
         },
 
-        // One curve's height at every canvas column, 0..1 of the peak.
+        // The curve is drawn THROUGH THE BINS THAT HAVE SAMPLES, and the empty
+        // ones are skipped rather than drawn as zero.
         //
-        // Which way it samples depends on how the window sits against the bins,
-        // and both directions matter:
+        // Those zeros were never an absence of signal. The source is 16-bit
+        // integers, the stretch pulls a few hundred distinct levels across the
+        // whole axis, and only a sample of the pixels is measured: on a real
+        // SV503 sub, 300k samples covered 1746 distinct values inside a 17746
+        // ADU span, one value in ten, with no regular stride to compensate for.
+        // Counting per bin and reading bins back per column therefore drew a
+        // picket fence of spikes falling to the floor between every one.
         //
-        //   * MORE than one bin per column (zoomed out): take the tallest bin
-        //     in the column. Averaging there flattens a narrow sky peak, which
-        //     is the whole shape of a stacked frame.
-        //   * FEWER than one bin per column (zoomed in): interpolate between
-        //     bin centres. Repeating a bin's value across its whole column is
-        //     what draws the curve as a staircase -- a 595 ADU window over
-        //     2048 bins is 19 bins across ~1660 px, so each bin becomes an
-        //     87 px plateau with a cliff at each end.
+        // So the occupied bins become the points of the curve, and the value at
+        // a column is interpolated between the two points around it. Nothing
+        // can pull the line to the floor inside the distribution, whatever the
+        // spacing happens to be.
         //
-        // Bins are read through a 1-2-1 tap either way, so photon noise between
-        // neighbouring bins does not become a sawtooth once it is stretched
-        // across a hundred pixels.
+        // The consequence, stated plainly: an isolated point out in the star
+        // tail is no longer a spike standing on zero, it is part of a smooth
+        // low envelope joining its neighbours. That is the trade this makes.
         _histoSample(bins, lo, hi, w) {
             const NB = bins.length;
             const span = Math.max(1e-9, hi - lo);
             const out = new Float64Array(w + 1);
-            const tap = (i) => {
-                if (i < 0 || i >= NB) return 0;
-                const a = i > 0 ? bins[i - 1] : bins[i];
-                const b = i < NB - 1 ? bins[i + 1] : bins[i];
-                return (a + 2 * bins[i] + b) / 4;
-            };
-            const binsPerPx = (span * NB) / Math.max(1, w);
+
+            // The points: bin CENTRES, in the 0..1 axis, of every bin that has
+            // samples. One neighbour outside the window on each side is kept so
+            // the ends are interpolated rather than clamped at the edge.
+            const px = [], py = [];
+            for (let i = 0; i < NB; i++) {
+                if (bins[i] === 0) continue;
+                px.push((i + 0.5) / NB);
+                py.push(bins[i]);
+            }
+            if (px.length === 0) return out;
+            if (px.length === 1) {
+                // One value in the whole frame: a flat line at its height is
+                // the only honest reading.
+                for (let x = 0; x <= w; x++) out[x] = py[0];
+                return out;
+            }
+
+            let j = 0;
             for (let x = 0; x <= w; x++) {
-                if (binsPerPx >= 1) {
-                    const i0 = Math.max(0, Math.floor((lo + (x / w) * span) * NB));
-                    const i1 = Math.min(NB, Math.max(i0 + 1,
-                        Math.ceil((lo + ((x + 1) / w) * span) * NB)));
-                    let m = 0;
-                    for (let i = i0; i < i1; i++) { const v = tap(i); if (v > m) m = v; }
-                    out[x] = m;
-                } else {
-                    // Position in bin space, measured from bin CENTRES.
-                    const pos = (lo + (x / w) * span) * NB - 0.5;
-                    const i = Math.floor(pos), f = pos - i;
-                    out[x] = tap(i) * (1 - f) + tap(i + 1) * f;
-                }
+                const t = lo + (x / w) * span;
+                if (t <= px[0]) { out[x] = py[0]; continue; }
+                if (t >= px[px.length - 1]) { out[x] = py[py.length - 1]; continue; }
+                // Columns are walked left to right, so the previous index is
+                // almost always the right place to resume.
+                if (px[j] > t) j = 0;
+                while (j + 1 < px.length && px[j + 1] < t) j++;
+                const x0 = px[j], x1 = px[j + 1];
+                const y0 = py[j], y1 = py[j + 1];
+                out[x] = x1 === x0 ? y1 : y0 + ((t - x0) / (x1 - x0)) * (y1 - y0);
             }
             return out;
         },
 
-        _histoLine(ctx, bins, peakLog, color, w, h, lo, hi) {
-            if (!bins || !(peakLog > 0) || w < 2) return;
+        _histoLine(ctx, bins, _unusedPeak, color, w, h, lo, hi) {
+            if (!bins || w < 2) return;
             const vals = this._histoSample(bins, lo, hi, w);
+            let peak = 0;
+            for (let i = 0; i <= w; i++) if (vals[i] > peak) peak = vals[i];
+            if (!(peak > 0)) return;
+            const peakLog = Math.log1p(peak);
             const yOf = (v) => h - Math.min(1, Math.log1p(v) / peakLog) * (h - 3) - 1;
             ctx.beginPath();
             ctx.moveTo(0, yOf(vals[0]));
@@ -10399,12 +10407,11 @@ function ninaApp() {
                 const xOf = (frac) => ((frac - lo) / span) * w;
 
                 if (this.histo.color && this.histo.binsR) {
-                    const pk = this.histo.peakRGB || 1;
-                    this._histoLine(ctx, this.histo.binsR, pk, 'rgba(255,95,95,0.9)', w, h, lo, hi);
-                    this._histoLine(ctx, this.histo.binsG, pk, 'rgba(90,220,120,0.9)', w, h, lo, hi);
-                    this._histoLine(ctx, this.histo.binsB, pk, 'rgba(90,160,255,0.9)', w, h, lo, hi);
+                    this._histoLine(ctx, this.histo.binsR, 0, 'rgba(255,95,95,0.9)', w, h, lo, hi);
+                    this._histoLine(ctx, this.histo.binsG, 0, 'rgba(90,220,120,0.9)', w, h, lo, hi);
+                    this._histoLine(ctx, this.histo.binsB, 0, 'rgba(90,160,255,0.9)', w, h, lo, hi);
                 } else {
-                    this._histoLine(ctx, this.histo.bins, this.histo.peak || 1,
+                    this._histoLine(ctx, this.histo.bins, 0,
                         'rgba(230,235,245,0.92)', w, h, lo, hi);
                 }
 
@@ -10431,13 +10438,31 @@ function ninaApp() {
             }
         },
 
-        // Screen level under a given fraction of the panel width, 0..100.
-        // Not ADU: the axis is the displayed image, and an ADU label under a
-        // curve built from screen values would be a number for a quantity that
-        // is not being drawn.
+        // The ADU under a given fraction of the panel width.
+        //
+        // The curve lives in screen space, so the axis is inverted back through
+        // the same lookup table the rendering used: for a screen level, the
+        // LOWEST ADU that reaches it. That keeps the two consistent and gives
+        // the number an operator actually wants -- with Zoom off the axis reads
+        // 0 at the left, because every ADU from 0 up to the black point renders
+        // black and so is represented by that first column, and maxVal at the
+        // right.
         histoAxisLabel(pos) {
             const h = this.histo;
-            return Math.round((h.dispLo + pos * (h.dispHi - h.dispLo)) * 100);
+            const d = h.dispLo + pos * (h.dispHi - h.dispLo);
+            const lut = this._histoLut
+                ? this._histoLut[h.color ? 1 : 0]
+                : null;
+            if (!lut || lut.length < 2) return Math.round(d * (h.maxVal || 65535));
+            // Smallest v with lut[v] >= d. The table is monotone, so bisect.
+            let lo = 0, hi = lut.length - 1;
+            if (d <= lut[0]) return 0;
+            if (d >= lut[hi]) return hi;
+            while (lo < hi) {
+                const mid = (lo + hi) >> 1;
+                if (lut[mid] >= d) hi = mid; else lo = mid + 1;
+            }
+            return lo;
         },
 
         histoMarkerPct(which) {

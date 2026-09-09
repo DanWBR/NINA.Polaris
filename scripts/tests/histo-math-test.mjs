@@ -180,54 +180,48 @@ console.log('== a drag freezes the framing ==');
         : bad(`window moved to ${st.histo.dispLo}..${st.histo.dispHi}`);
 }
 
-console.log('== _histoSample: no staircase when the window covers few bins ==');
+console.log('== _histoSample: the curve runs through the occupied bins ==');
 {
     const b = fieldBins();
     const W = 800;
-
-    // The case from the field screenshot: a 595 ADU window over 2048 bins is
-    // about 19 bins spread across the canvas. Repeating each bin's value across
-    // its column drew 19 plateaus with a cliff between them.
     const lo = 1000 / 65535, hi = 1595 / 65535;
-    const binsInWindow = (hi - lo) * NB;
-    (binsInWindow < 25) ? ok(`the window really is narrow (${binsInWindow.toFixed(1)} bins)`)
-                        : bad(`window covers ${binsInWindow.toFixed(1)} bins, not the case under test`);
 
-    const v = app._histoSample.call({}, b, lo, hi, W);
-    const distinct = new Set(Array.from(v, (x) => x.toFixed(6))).size;
-    (distinct > W * 0.5)
-        ? ok(`${distinct} distinct heights across ${W + 1} columns`)
-        : bad(`only ${distinct} distinct heights: the curve is still a staircase`);
+    const v = app._histoSample.call(app, b, lo, hi, W);
 
-    // The longest run of identical samples is the plateau length.
+    // No column may read zero while the window sits inside the distribution.
+    // An empty bin means "no sample landed on this exact level", not "no signal
+    // here", and drawing it as zero is what produced the picket fence.
+    let zeros = 0;
+    for (let i = 0; i <= W; i++) if (v[i] === 0) zeros++;
+    (zeros === 0) ? ok('no column falls to zero inside the window')
+                  : bad(`${zeros} columns read zero`);
+
+    // And the line has to be smooth, not a staircase of plateaus.
     let run = 1, worst = 1;
-    for (let i = 1; i <= W; i++) {
-        run = (v[i] === v[i - 1]) ? run + 1 : 1;
-        if (run > worst) worst = run;
-    }
+    for (let i = 1; i <= W; i++) { run = (v[i] === v[i - 1]) ? run + 1 : 1; if (run > worst) worst = run; }
     (worst <= 4) ? ok(`longest flat run is ${worst} px`)
                  : bad(`a ${worst} px plateau survived`);
 
-    // Interpolating must not invent signal outside the data's range.
+    // Interpolating between occupied bins must not invent height.
     let mx = 0;
     for (let i = 0; i < b.length; i++) if (b[i] > mx) mx = b[i];
-    const smax = Math.max(...v);
-    (smax <= mx + 1e-9) ? ok('sampling never exceeds the tallest bin')
-                        : bad(`sample ${smax} above the tallest bin ${mx}`);
+    (Math.max(...v) <= mx + 1e-9) ? ok('never exceeds the tallest occupied bin')
+                                  : bad(`sample ${Math.max(...v)} above ${mx}`);
     (Math.min(...v) >= 0) ? ok('and never goes negative') : bad('negative sample');
 }
 
-console.log('== _histoSample: a narrow spike survives the zoomed-OUT view ==');
+console.log('== _histoSample: degenerate inputs ==');
 {
-    // The other direction. Full scale over 800 columns is ~2.5 bins per column,
-    // so a one-bin spike has to be picked up by the column that contains it —
-    // averaging there would flatten the sky peak of a stacked frame.
-    const b = new Float64Array(NB);
-    b[1000] = 5000;
-    const v = app._histoSample.call({}, b, 0, 1, 800);
-    (Math.max(...v) > 5000 * 0.4)
-        ? ok('a single-bin spike still reaches the curve')
-        : bad(`spike flattened to ${Math.max(...v).toFixed(0)} of 5000`);
+    const W = 200;
+    const empty = app._histoSample.call(app, new Float64Array(NB), 0, 1, W);
+    (Math.max(...empty) === 0) ? ok('an empty histogram draws nothing')
+                              : bad('empty histogram produced height');
+
+    const one = new Float64Array(NB); one[1000] = 5000;
+    const single = app._histoSample.call(app, one, 0, 1, W);
+    (Math.min(...single) === 5000 && Math.max(...single) === 5000)
+        ? ok('a frame with one value reads flat at its height')
+        : bad(`single-value frame gave ${Math.min(...single)}..${Math.max(...single)}`);
 }
 
 console.log('== stage 1 balances the channels by GAIN ==');
@@ -375,32 +369,28 @@ console.log('== the built histogram has no comb of zeros ==');
     app2._histoBuild() ? ok('the histogram builds') : bad('build returned false');
     app2.histo.color ? ok('a 3-plane frame is colour') : bad('colour not detected');
 
-    // Bin 0 is the clip pile: everything below the black point renders as
-    // black, so it is a real spike with a real gap after it. The comb this
-    // guards against is inside the DISTRIBUTION, so measure from bin 1 and
-    // ignore the sparse tails, where isolated samples are honest.
-    const holes = (bins, label) => {
-        let total = 0;
-        for (let i = 1; i < bins.length; i++) total += bins[i];
-        if (total <= 0) { bad(`${label}: no bins at all`); return; }
-        let acc = 0, first = -1, last = -1;
-        for (let i = 1; i < bins.length; i++) {
-            acc += bins[i];
-            if (first < 0 && acc >= total * 0.005) first = i;
-            if (acc <= total * 0.995) last = i;
-        }
-        let run = 0, worst = 0;
-        for (let i = first; i <= last; i++) {
-            run = bins[i] > 0 ? 0 : run + 1;
-            if (run > worst) worst = run;
-        }
-        (worst === 0)
-            ? ok(`${label}: ${last - first + 1} bins across the bulk, none empty`)
-            : bad(`${label}: a run of ${worst} empty bins inside the distribution`);
+    // Empty bins are expected and fine: what must never happen is a COLUMN of
+    // the drawn curve reading zero inside the distribution. That is the picket
+    // fence, and it is the curve, not the bins, that has to be checked.
+    app2._histoSample = app._histoSample;
+    const noZeroColumns = (bins, label) => {
+        const W = 700;
+        // Frame the bulk the way the panel does, so the check is on what is
+        // actually shown rather than on the empty axis around it.
+        const [lo, hi] = app._histoFrame.call({
+            HISTO_BINS: 512, histoZoom: true,
+            histo: { bins, color: false, binsR: null },
+            _histoBulkOf: app._histoBulkOf,
+        });
+        const v = app2._histoSample(bins, lo, hi, W);
+        let zeros = 0;
+        for (let i = 0; i <= W; i++) if (v[i] === 0) zeros++;
+        (zeros === 0) ? ok(`${label}: no column of the curve reads zero`)
+                      : bad(`${label}: ${zeros} of ${W + 1} columns read zero`);
     };
-    holes(app2.histo.binsR, 'R');
-    holes(app2.histo.binsG, 'G');
-    holes(app2.histo.binsB, 'B');
+    noZeroColumns(app2.histo.binsR, 'R');
+    noZeroColumns(app2.histo.binsG, 'G');
+    noZeroColumns(app2.histo.binsB, 'B');
 
     // And the whole point of the gain balance: the three curves land together.
     // The MEDIAN bin, not the mode. The gain balance equalises the channels'
