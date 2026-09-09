@@ -284,6 +284,7 @@ public static class SystemEndpoints {
                 p.IndiHost = update.IndiHost;
                 p.IndiPort = update.IndiPort;
                 p.AutoConnectOnStartup = update.AutoConnectOnStartup;
+                p.LocationPromptDismissed = update.LocationPromptDismissed;
                 p.AutoClockSync = update.AutoClockSync;
                 // Self-update channel: only "preview" or "stable" (anything else
                 // normalises to stable so a bad value can't strand a host).

@@ -5359,10 +5359,22 @@ function ninaApp() {
                 console.log('[Polaris] WASM live-stack ready, ' + this.wasmVersion);
             });
 
-            const saved = localStorage.getItem('nina-settings');
-            if (saved) {
-                try { Object.assign(this.settings, JSON.parse(saved)); } catch (e) { }
-            }
+            // `settings` is the HOST's profile, not this browser's preferences:
+            // location, focal length, auto-connect on startup, output paths. It
+            // used to be mirrored into localStorage and read back here, which
+            // broke in two ways.
+            //
+            // localStorage is keyed by ORIGIN, so changing the host's IP address
+            // is a different origin and the mirror is simply gone. And an empty
+            // mirror is not empty settings, it is settings not read yet: the
+            // code defaults (latitude 0, auto-connect off) sat in `settings`
+            // until the profile arrived, and any save in that window pushed
+            // those defaults over the host's real values. That is why a new IP
+            // address asked for the coordinates again and the hardware stopped
+            // connecting on boot: the host's profile had been overwritten with
+            // zeros, permanently, not just for that page load.
+            //
+            // So there is no local copy. The host is asked, every time.
 
             // Restore sticky per-field UI values (panel exposure/gain/binning,
             // target name, AF params) from the server, then watch them so
@@ -12485,7 +12497,6 @@ function ninaApp() {
         },
 
         saveSettings() {
-            localStorage.setItem('nina-settings', JSON.stringify(this.settings));
             this.saveSettingsToServer();
         },
 
@@ -12511,6 +12522,7 @@ function ninaApp() {
                     this.settings.imageNamePattern = data.imageNamePattern || '';
                     this.settings.preferAdvancedSequencer = !!data.preferAdvancedSequencer;
                     this.settings.autoConnectOnStartup = !!data.autoConnectOnStartup;
+                    this.settings.locationPromptDismissed = !!data.locationPromptDismissed;
                     // Auto clock sync: default on (absent ⇒ true).
                     this.settings.autoClockSync = data.autoClockSync !== false;
                     this.settings.updateChannel = data.updateChannel === 'preview' ? 'preview' : 'stable';
@@ -12559,6 +12571,10 @@ function ninaApp() {
                         }
                     }
                     this.updateFov();
+                    // Only now may anything write back: before this the object
+                    // holds code defaults, and writing those over the host's
+                    // profile is how the location and auto-connect were lost.
+                    this._settingsLoaded = true;
                     this._maybeShowLocationSetup();
                 }
             } catch (e) { }
@@ -12569,7 +12585,7 @@ function ninaApp() {
         _maybeShowLocationSetup() {
             const isUnset = Math.abs(this.settings.latitude || 0) < 0.01
                          && Math.abs(this.settings.longitude || 0) < 0.01;
-            const dismissed = localStorage.getItem('nina-location-prompted') === '1';
+            const dismissed = !!this.settings.locationPromptDismissed;
             if (isUnset && !dismissed) {
                 // Pre-fill the modal with current values (zeros), wait one tick
                 this.$nextTick(() => {
@@ -12762,18 +12778,20 @@ function ninaApp() {
             this.settings.latitude = lat;
             this.settings.longitude = lon;
             this.settings.altitude = parseFloat(this.locSetup.alt) || 0;
-            this.saveSettings();
+            this.settings.locationPromptDismissed = true;
             await this.saveSettingsToServer();
-            localStorage.setItem('nina-location-prompted', '1');
             this.showLocationSetup = false;
             this.toast(`Location saved: ${lat.toFixed(2)}°, ${lon.toFixed(2)}°`, 'ok');
         },
 
-        // remember=true means "don't ask again until they clear localStorage"
+        // remember=true means "do not ask again". Recorded on the HOST, so the
+        // answer survives a new IP address and reaching the host from another
+        // browser.
         dismissLocationSetup(remember) {
             this.showLocationSetup = false;
             if (remember) {
-                localStorage.setItem('nina-location-prompted', '1');
+                this.settings.locationPromptDismissed = true;
+                this.saveSettingsToServer();
             }
         },
 
@@ -25442,7 +25460,18 @@ function ninaApp() {
             }, 400);
         },
 
+        // True once the host's profile has actually been read into `settings`.
+        // Until then a save would be writing defaults, so it is refused.
+        _settingsLoaded: false,
+
         async saveSettingsToServer() {
+            if (!this._settingsLoaded) {
+                // Not a failure and not silent: the operator changed something
+                // before the profile landed, which is a fraction of a second at
+                // page load, and the alternative is destroying their settings.
+                console.warn('[Polaris] profile not loaded yet; settings save skipped');
+                return;
+            }
             try {
                 await this.apiPost('/api/system/profile', null, {
                     method: 'PUT',
@@ -25465,6 +25494,7 @@ function ninaApp() {
                         imageNamePattern: this.settings.imageNamePattern,
                         preferAdvancedSequencer: this.settings.preferAdvancedSequencer,
                         autoConnectOnStartup: this.settings.autoConnectOnStartup,
+                        locationPromptDismissed: this.settings.locationPromptDismissed,
                         autoClockSync: this.settings.autoClockSync,
                         updateChannel: this.settings.updateChannel,
                         // DBGLOG-9: opt-in disk persistence.
