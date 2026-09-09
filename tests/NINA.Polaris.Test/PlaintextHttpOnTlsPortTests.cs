@@ -29,6 +29,20 @@ public class PlaintextHttpOnTlsPortTests {
     }
 
     [Test]
+    public void PlainGet_AbsoluteForm_PreservesPathAndQuery() {
+        var v = PlaintextHttpOnTlsPort.Inspect(Bytes("GET http://host:5000/video?x=1 HTTP/1.1\r\nHost: host:5000\r\n\r\n"), 5000, "1.2.3.4", out var loc);
+        Assert.That(v, Is.EqualTo(PlaintextHttpOnTlsPort.Verdict.Plaintext));
+        Assert.That(loc, Is.EqualTo("https://host:5000/video?x=1"));
+    }
+
+    [Test]
+    public void PlainGet_AbsoluteFormWithoutPath_RedirectsToRoot() {
+        var v = PlaintextHttpOnTlsPort.Inspect(Bytes("GET http://host:5000 HTTP/1.1\r\nHost: host:5000\r\n\r\n"), 5000, "1.2.3.4", out var loc);
+        Assert.That(v, Is.EqualTo(PlaintextHttpOnTlsPort.Verdict.Plaintext));
+        Assert.That(loc, Is.EqualTo("https://host:5000/"));
+    }
+
+    [Test]
     public void PlainGet_WithHostname_KeepsTheName() {
         var v = PlaintextHttpOnTlsPort.Inspect(Bytes("GET / HTTP/1.1\r\nHost: polaris-rpi.local\r\n\r\n"), 5000, "1.2.3.4", out var loc);
         Assert.That(v, Is.EqualTo(PlaintextHttpOnTlsPort.Verdict.Plaintext));
