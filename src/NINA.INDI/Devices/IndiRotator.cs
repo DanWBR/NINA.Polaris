@@ -14,10 +14,11 @@
 
 using NINA.INDI.Client;
 using NINA.INDI.Protocol;
+using NINA.Image.Interfaces;
 
 namespace NINA.INDI.Devices;
 
-public class IndiRotator : IDisposable {
+public class IndiRotator : IRotator, IDisposable {
     private readonly IndiClient _client;
 
     public string DeviceName { get; }
