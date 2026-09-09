@@ -163,4 +163,53 @@ public class StoragePushTests {
             src.Delete(true); dst.Delete(true);
         }
     }
+
+    // ---- Atomic upload: the science filename only ever holds a complete file ----
+
+    [Test]
+    public async Task LocalTarget_LeavesNoPartialSidecarBehind() {
+        // Uploads stage through a ".part" sidecar; a completed one must be
+        // renamed away, not left next to the frame.
+        var src = Directory.CreateTempSubdirectory("polaris_src3_");
+        var dst = Directory.CreateTempSubdirectory("polaris_dst3_");
+        try {
+            var srcFile = Path.Combine(src.FullName, "f.fits");
+            await File.WriteAllTextAsync(srcFile, "complete");
+            using var target = new LocalStorageTarget();
+            var cfg = new StorageConfig("local", "", 0, "", dst.FullName, "", "", "");
+            await target.ConnectAsync(cfg, CancellationToken.None);
+            await target.UploadAsync(srcFile, Path.Combine("rig", "f.fits"), CancellationToken.None);
+
+            var leftovers = Directory.GetFiles(dst.FullName, "*" + StoragePath.PartialSuffix,
+                                               SearchOption.AllDirectories);
+            Assert.That(leftovers, Is.Empty, "no .part sidecar survives a successful upload");
+            Assert.That(await File.ReadAllTextAsync(Path.Combine(dst.FullName, "rig", "f.fits")),
+                        Is.EqualTo("complete"));
+        } finally {
+            src.Delete(true); dst.Delete(true);
+        }
+    }
+
+    [Test]
+    public async Task LocalTarget_ReplacesADestinationOfDifferentLength() {
+        // The size check only skips an identical-length copy. A destination left
+        // short by an earlier interrupted push must be overwritten, not kept.
+        var src = Directory.CreateTempSubdirectory("polaris_src4_");
+        var dst = Directory.CreateTempSubdirectory("polaris_dst4_");
+        try {
+            var srcFile = Path.Combine(src.FullName, "f.fits");
+            await File.WriteAllTextAsync(srcFile, "the whole frame");
+            var dest = Path.Combine(dst.FullName, "f.fits");
+            await File.WriteAllTextAsync(dest, "truncated");
+
+            using var target = new LocalStorageTarget();
+            var cfg = new StorageConfig("local", "", 0, "", dst.FullName, "", "", "");
+            await target.ConnectAsync(cfg, CancellationToken.None);
+            await target.UploadAsync(srcFile, "f.fits", CancellationToken.None);
+
+            Assert.That(await File.ReadAllTextAsync(dest), Is.EqualTo("the whole frame"));
+        } finally {
+            src.Delete(true); dst.Delete(true);
+        }
+    }
 }

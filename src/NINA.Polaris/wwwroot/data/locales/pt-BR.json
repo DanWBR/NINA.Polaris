@@ -4762,5 +4762,20 @@
   "Offset -1 (hold to repeat)": "Offset -1 (segure para repetir)",
   "Offset +1 (hold to repeat)": "Offset +1 (segure para repetir)",
   "No calibration for the gear fitted now.": "Sem calibração para o equipamento montado agora.",
-  "Run a calibration, or use Load file above to bring one back from a saved file.": "Faça uma calibração, ou use Load file acima para trazer uma de volta de um arquivo salvo."
+  "Run a calibration, or use Load file above to bring one back from a saved file.": "Faça uma calibração, ou use Load file acima para trazer uma de volta de um arquivo salvo.",
+  "Stop Polaris": "Parar o Polaris",
+  "Stopping…": "Parando…",
+  "Stop server": "Parar o servidor",
+  "Polaris is stopping…": "O Polaris está parando…",
+  "Could not reach the server to stop it.": "Não foi possível falar com o servidor para pará-lo.",
+  "Stop the Polaris server now? The host keeps running, but the web interface will be unavailable until Polaris is started again on the host.": "Parar o servidor Polaris agora? O host continua ligado, mas a interface web fica indisponível até o Polaris ser iniciado de novo no host.",
+  "Polaris server stopped. Start it again on the host to reconnect.": "Servidor Polaris parado. Inicie de novo no host para reconectar.",
+  "Polaris was stopped from the web interface. Start it again on the host when you want to reconnect.": "O Polaris foi parado pela interface web. Inicie de novo no host quando quiser reconectar.",
+  "Polaris may be down. If it does not come back on its own, start it again on the host.": "O Polaris pode estar fora do ar. Se ele não voltar sozinho, inicie de novo no host.",
+  "Halo radius": "Raio do halo",
+  "Violet halo": "Halo violeta",
+  "Violet halo: removes the out-of-focus violet skirt an ED doublet leaves around bright stars. Select one OSC frame.": "Halo violeta: remove a saia violeta fora de foco que um doublet ED deixa em volta das estrelas brilhantes. Selecione um arquivo OSC.",
+  "Removes the out-of-focus violet an ED doublet spreads around bright stars, from about 6 px outwards. Brings blue down to the other two channels in the halo only; star cores and their colour are left alone. This is a telescope defect, so run it on the original frame, not after the star colour repair. Writes a new FITS; the original is kept.": "Remove o violeta fora de foco que um doublet ED espalha em volta das estrelas brilhantes, a partir de uns 6 px. Traz o azul para o nível dos outros dois canais só no halo; o núcleo das estrelas e a cor delas ficam intactos. É um defeito do telescópio, então rode no arquivo original, não depois do reparo de cor das estrelas. Grava um FITS novo; o original fica.",
+  "To LIVE": "Para o LIVE",
+  "Load this FITS into the LIVE panel through the same path a camera frame takes, so the stretch sliders and the histogram can be tried on a known file.": "Carrega este FITS no painel LIVE pelo mesmo caminho de um frame da câmera, para testar os sliders de esticamento e o histograma num arquivo conhecido."
 }

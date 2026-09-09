@@ -1270,46 +1270,7 @@
                          a translucent overlay along the bottom of the frame
                          (same treatment as AUTORUN) instead of a full-width
                          bar below it. -->
-                    <div class="histo-panel histo-overlay" x-show="selectedCamera || _lastRawFrame">
-                        <div class="histo-stats">
-                            <div class="hs-cell"><span class="hs-v" x-text="histo.max"></span><span class="hs-l">Max</span></div>
-                            <div class="hs-cell"><span class="hs-v" x-text="histo.avg"></span><span class="hs-l">Avg</span></div>
-                            <div class="hs-cell"><span class="hs-v" x-text="histo.min"></span><span class="hs-l">Min</span></div>
-                            <div class="hs-cell"><span class="hs-v" x-text="histo.std"></span><span class="hs-l">Std</span></div>
-                        </div>
-                        <div class="histo-graph">
-                            <canvas id="histoCanvas-live" class="histo-canvas"></canvas>
-                            <div class="histo-axis"><span x-text="histoAxisLabel(0)">0</span><span x-text="histoAxisLabel(0.5)">32768</span><span x-text="histoAxisLabel(1)">65535</span></div>
-                            <div class="histo-handle histo-handle-black"
-                                 :style="'left:' + histoMarkerPct('black') + '%'"
-                                 @pointerdown="histoHandleDown($event,'black')" title="Black point"></div>
-                            <div class="histo-handle histo-handle-mid"
-                                 :style="'left:' + histoMarkerPct('mid') + '%'"
-                                 @pointerdown="histoHandleDown($event,'mid')" title="Midtones"></div>
-                            <div class="histo-handle histo-handle-white"
-                                 :style="'left:' + histoMarkerPct('white') + '%'"
-                                 @pointerdown="histoHandleDown($event,'white')" title="White point"></div>
-                        </div>
-                        <div class="histo-actions">
-                            <button class="btn btn-sm" :class="stretchAuto ? 'btn-active' : ''"
-                                    @click="histoAuto()" title="Auto-stretch">Auto</button>
-                            <button class="btn btn-sm" :class="histoZoom ? 'btn-active' : ''"
-                                    @click="histoToggleZoom()" title="Zoom the histogram to the data">Zoom</button>
-                            <!-- Display-only colour saturation (OSC previews).
-                                 The per-channel auto-stretch neutralises the
-                                 background but inflates colour; this dials it
-                                 back. Saved frames are untouched. -->
-                            <span class="histo-sat" x-show="dispSaturation !== undefined"
-                                  :title="'Display saturation: ' + Math.round(dispSaturation * 100) + '% (double-click resets to 100%). Display only: saved frames are untouched.'">
-                                <span class="histo-sat-label">Sat</span>
-                                <input type="range" class="histo-sat-slider"
-                                       min="0" max="1.5" step="0.05"
-                                       :value="dispSaturation"
-                                       @input="setDispSaturation($event.target.value)"
-                                       @dblclick="setDispSaturation(1)">
-                            </span>
-                        </div>
-                    </div>
+                    <div class="histo-host" data-histo-canvas="histoCanvas-live" data-histo-class="histo-overlay"></div>
                 </div>
                 <div class="quick-controls"
                      :class="{ 'quick-controls--collapsed': quickControlsCollapsed }">
@@ -3382,46 +3343,7 @@
                          translucent overlay along the bottom of the frame (same
                          treatment as LIVE/AUTORUN) instead of a full-width bar
                          below it. -->
-                    <div class="histo-panel histo-overlay" x-show="selectedCamera || _lastRawFrame">
-                        <div class="histo-stats">
-                            <div class="hs-cell"><span class="hs-v" x-text="histo.max"></span><span class="hs-l">Max</span></div>
-                            <div class="hs-cell"><span class="hs-v" x-text="histo.avg"></span><span class="hs-l">Avg</span></div>
-                            <div class="hs-cell"><span class="hs-v" x-text="histo.min"></span><span class="hs-l">Min</span></div>
-                            <div class="hs-cell"><span class="hs-v" x-text="histo.std"></span><span class="hs-l">Std</span></div>
-                        </div>
-                        <div class="histo-graph">
-                            <canvas id="histoCanvas-preview" class="histo-canvas"></canvas>
-                            <div class="histo-axis"><span x-text="histoAxisLabel(0)">0</span><span x-text="histoAxisLabel(0.5)">32768</span><span x-text="histoAxisLabel(1)">65535</span></div>
-                            <div class="histo-handle histo-handle-black"
-                                 :style="'left:' + histoMarkerPct('black') + '%'"
-                                 @pointerdown="histoHandleDown($event,'black')" title="Black point"></div>
-                            <div class="histo-handle histo-handle-mid"
-                                 :style="'left:' + histoMarkerPct('mid') + '%'"
-                                 @pointerdown="histoHandleDown($event,'mid')" title="Midtones"></div>
-                            <div class="histo-handle histo-handle-white"
-                                 :style="'left:' + histoMarkerPct('white') + '%'"
-                                 @pointerdown="histoHandleDown($event,'white')" title="White point"></div>
-                        </div>
-                        <div class="histo-actions">
-                            <button class="btn btn-sm" :class="stretchAuto ? 'btn-active' : ''"
-                                    @click="histoAuto()" title="Auto-stretch">Auto</button>
-                            <button class="btn btn-sm" :class="histoZoom ? 'btn-active' : ''"
-                                    @click="histoToggleZoom()" title="Zoom the histogram to the data">Zoom</button>
-                            <!-- Display-only colour saturation (OSC previews).
-                                 The per-channel auto-stretch neutralises the
-                                 background but inflates colour; this dials it
-                                 back. Saved frames are untouched. -->
-                            <span class="histo-sat" x-show="dispSaturation !== undefined"
-                                  :title="'Display saturation: ' + Math.round(dispSaturation * 100) + '% (double-click resets to 100%). Display only: saved frames are untouched.'">
-                                <span class="histo-sat-label">Sat</span>
-                                <input type="range" class="histo-sat-slider"
-                                       min="0" max="1.5" step="0.05"
-                                       :value="dispSaturation"
-                                       @input="setDispSaturation($event.target.value)"
-                                       @dblclick="setDispSaturation(1)">
-                            </span>
-                        </div>
-                    </div>
+                    <div class="histo-host" data-histo-canvas="histoCanvas-preview" data-histo-class="histo-overlay"></div>
                 </div>
 
                 <div class="quick-controls"
@@ -11553,46 +11475,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
 
                     <!-- ASIAIR-style histogram + stretch mini-panel, docked
                          inside the frame area at the bottom. -->
-                    <div class="histo-panel autorun-histo" x-show="selectedCamera || _lastRawFrame">
-                        <div class="histo-stats">
-                            <div class="hs-cell"><span class="hs-v" x-text="histo.max"></span><span class="hs-l">Max</span></div>
-                            <div class="hs-cell"><span class="hs-v" x-text="histo.avg"></span><span class="hs-l">Avg</span></div>
-                            <div class="hs-cell"><span class="hs-v" x-text="histo.min"></span><span class="hs-l">Min</span></div>
-                            <div class="hs-cell"><span class="hs-v" x-text="histo.std"></span><span class="hs-l">Std</span></div>
-                        </div>
-                        <div class="histo-graph">
-                            <canvas id="histoCanvas-autorun" class="histo-canvas"></canvas>
-                            <div class="histo-axis"><span x-text="histoAxisLabel(0)">0</span><span x-text="histoAxisLabel(0.5)">32768</span><span x-text="histoAxisLabel(1)">65535</span></div>
-                            <div class="histo-handle histo-handle-black"
-                                 :style="'left:' + histoMarkerPct('black') + '%'"
-                                 @pointerdown="histoHandleDown($event,'black')" title="Black point"></div>
-                            <div class="histo-handle histo-handle-mid"
-                                 :style="'left:' + histoMarkerPct('mid') + '%'"
-                                 @pointerdown="histoHandleDown($event,'mid')" title="Midtones"></div>
-                            <div class="histo-handle histo-handle-white"
-                                 :style="'left:' + histoMarkerPct('white') + '%'"
-                                 @pointerdown="histoHandleDown($event,'white')" title="White point"></div>
-                        </div>
-                        <div class="histo-actions">
-                            <button class="btn btn-sm" :class="stretchAuto ? 'btn-active' : ''"
-                                    @click="histoAuto()" title="Auto-stretch">Auto</button>
-                            <button class="btn btn-sm" :class="histoZoom ? 'btn-active' : ''"
-                                    @click="histoToggleZoom()" title="Zoom the histogram to the data">Zoom</button>
-                            <!-- Display-only colour saturation (OSC previews).
-                                 The per-channel auto-stretch neutralises the
-                                 background but inflates colour; this dials it
-                                 back. Saved frames are untouched. -->
-                            <span class="histo-sat" x-show="dispSaturation !== undefined"
-                                  :title="'Display saturation: ' + Math.round(dispSaturation * 100) + '% (double-click resets to 100%). Display only: saved frames are untouched.'">
-                                <span class="histo-sat-label">Sat</span>
-                                <input type="range" class="histo-sat-slider"
-                                       min="0" max="1.5" step="0.05"
-                                       :value="dispSaturation"
-                                       @input="setDispSaturation($event.target.value)"
-                                       @dblclick="setDispSaturation(1)">
-                            </span>
-                        </div>
-                    </div>
+                    <div class="histo-host" data-histo-canvas="histoCanvas-autorun" data-histo-class="autorun-histo"></div>
                 </div>
                 </div><!-- /.autorun-pane -->
 
@@ -12380,6 +12263,23 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             aria-label="Star colour repair">
                         <span class="files-icon" x-text="starColor.busy ? '⏳' : '🔘'"></span>
                         <span class="files-icon-label">Star fix</span>
+                    </button>
+                    <button class="btn btn-sm btn-icon"
+                            :disabled="files.selectedPaths.length !== 1"
+                            @click="violetHaloOpenModal(files.selectedPaths[0])"
+                            title="Violet halo: removes the out-of-focus violet skirt an ED doublet leaves around bright stars. Select one OSC frame."
+                            aria-label="Violet halo">
+                        <span class="files-icon" x-text="violetHalo.busy ? '⏳' : '🟣'"></span>
+                        <span class="files-icon-label">Violet halo</span>
+                    </button>
+                    <button class="btn btn-sm btn-icon"
+                            x-show="debugTools" x-cloak
+                            :disabled="files.selectedPaths.length !== 1 || filesToLiveBusy"
+                            @click="filesLoadIntoLive(files.selectedPaths[0])"
+                            title="Load this FITS into the LIVE panel through the same path a camera frame takes, so the stretch sliders and the histogram can be tried on a known file."
+                            aria-label="Load into LIVE">
+                        <span class="files-icon" x-text="filesToLiveBusy ? '⏳' : '📡'"></span>
+                        <span class="files-icon-label">To LIVE</span>
                     </button>
                     <!-- Colour calibration on a plate-solved RGB master: PCC
                          (APASS B-V) and SPCC (spectral integration). One file. -->
@@ -15237,6 +15137,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                   x-show="clockSkewLabel() !== null"
                                   x-text="' (' + clockSkewLabel() + ')'"></span>
                         </div>
+                        <div>
+                            Host timezone:
+                            <strong x-text="clockSync.timeZone || '-'"></strong>
+                            <span class="text-muted"
+                                  x-show="clockSync.timeZone === 'UTC' || clockSync.timeZone === 'Etc/UTC'">
+                                (stock image default; DATE-LOC in saved frames equals DATE-UTC)
+                            </span>
+                        </div>
                         <div x-show="clockSync.lastSyncAt"
                              style="color:var(--text-muted)">
                             Last sync:
@@ -15332,7 +15240,13 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <span x-show="!power.restarting">🔄 Restart Polaris</span>
                             <span x-show="power.restarting">Restarting…</span>
                         </button>
+                        <!-- Only where stopping is recoverable by hand. Under
+                             systemd the unit is Restart=on-failure, so a clean
+                             stop exits 0 and nothing brings Polaris back: on a
+                             headless SBC at the telescope that costs the
+                             operator the whole interface. -->
                         <button class="btn btn-sm btn-danger"
+                             x-show="power.loaded && !power.underSystemd" x-cloak
                             @click="stopPolaris()"
                             :disabled="power.stopping">
                             <span x-show="!power.stopping">Stop Polaris</span>
@@ -18042,7 +17956,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
          :class="{ 'is-slow': !connectionLost && link.state !== 'offline' }"
          x-show="connectionLost || link.alarm" x-transition x-cloak>
         <span x-show="power.stopping">
-            Polaris server stopped. Start Polaris again from the terminal to reconnect.
+             Polaris server stopped. Start it again on the host to reconnect.
         </span>
         <span x-show="!power.stopping && (connectionLost || link.state === 'offline')">
             Connection to server lost. Reconnecting...
@@ -18051,12 +17965,12 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
             The network to the host is slow right now.
         </span>
         <span class="connection-banner-why" x-show="power.stopping">
-            Polaris was stopped from the web interface. Start it again from the
-            terminal when you want to reconnect.
-        </span>
-        <span class="connection-banner-why" x-show="connectionLost && !power.stopping">
-            Polaris may be down. If it does not reconnect, start the server again
-            from the terminal.
+             Polaris was stopped from the web interface. Start it again on the
+             host when you want to reconnect.
+         </span>
+         <span class="connection-banner-why" x-show="connectionLost && !power.stopping">
+             Polaris may be down. If it does not come back on its own, start it
+             again on the host.
         </span>
         <span class="connection-banner-why" x-show="!connectionLost && !power.stopping">
             The host keeps running the session on its own. This is the link
@@ -20649,7 +20563,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <div class="bs-cardt">Power</div>
                 <div class="bs-cbtns">
                     <button class="bs-cbtn" :disabled="power.restarting" @click="restartPolaris()" x-text="power.restarting ? 'Restarting…' : '🔄 Restart Polaris'"></button>
-                    <button class="bs-cbtn danger" :disabled="power.stopping" @click="stopPolaris()" x-text="power.stopping ? 'Stopping…' : 'Stop Polaris'"></button>
+                    <button class="bs-cbtn danger" x-show="power.loaded && !power.underSystemd" x-cloak :disabled="power.stopping" @click="stopPolaris()" x-text="power.stopping ? 'Stopping…' : 'Stop Polaris'"></button>
                     <button class="bs-cbtn danger" x-show="power.canReboot" x-cloak :disabled="power.rebooting" @click="rebootDevice()" x-text="power.rebooting ? 'Rebooting…' : '⟳ Reboot'"></button>
                     <button class="bs-cbtn danger" x-show="power.canShutdown" x-cloak :disabled="power.shuttingDown" @click="shutdownDevice()" x-text="power.shuttingDown ? 'Shutting down…' : '⏻ Shut down'"></button>
                 </div>
@@ -21346,6 +21260,52 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     </div>
 
     <!-- PLAN: host-shutdown risk confirmation -->
+    <!-- Violet halo (ED doublet out-of-focus pedestal) run modal -->
+    <div class="modal-overlay" x-show="violetHalo.modalOpen" x-cloak
+         @click.self="if(!violetHalo.busy) violetHalo.modalOpen=false"
+         @keydown.escape.window="if(!violetHalo.busy) violetHalo.modalOpen=false">
+        <div class="modal-card">
+            <div class="modal-head">
+                <span class="modal-icon">🟣</span>
+                <h3>Violet halo</h3>
+            </div>
+            <p style="font-size:13px">
+                Removes the out-of-focus violet an ED doublet spreads around bright stars,
+                from about 6 px outwards. Brings blue down to the other two channels in the
+                halo only; star cores and their colour are left alone. This is a telescope
+                defect, so run it on the original frame, not after the star colour repair.
+                Writes a new FITS; the original is kept.
+            </p>
+            <label class="editor-slider-row" style="display:flex;align-items:center;gap:8px;margin:10px 0">
+                <span style="min-width:130px">Halo strength</span>
+                <input type="range" min="0.1" max="1" step="0.1" style="flex:1"
+                       :value="violetHalo.amount"
+                       @input="violetHalo.amount=+$event.target.value">
+                <span x-text="violetHalo.amount.toFixed(1)" style="min-width:28px;text-align:right"></span>
+            </label>
+            <label class="editor-slider-row" style="display:flex;align-items:center;gap:8px;margin:10px 0"
+                   title="How far the violet skirt reaches. Larger focal ratios and brighter stars spread it further.">
+                <span style="min-width:130px">Halo radius</span>
+                <input type="range" min="16" max="80" step="4" style="flex:1"
+                       :value="violetHalo.radius"
+                       @input="violetHalo.radius=+$event.target.value">
+                <span x-text="violetHalo.radius + ' px'" style="min-width:38px;text-align:right"></span>
+            </label>
+            <p x-show="violetHalo.busy" class="text-muted" style="font-size:12px"
+               x-text="'Working… ' + (violetHalo.stage || '')"></p>
+            <p x-show="violetHalo.error" style="color:var(--danger,#e66);font-size:12px"
+               x-text="violetHalo.error"></p>
+            <div class="modal-actions">
+                <button class="btn btn-sm" :disabled="violetHalo.busy"
+                        @click="violetHalo.modalOpen=false">Cancel</button>
+                <button class="btn btn-sm btn-primary" :disabled="violetHalo.busy"
+                        @click="violetHaloRun()">
+                    <span x-text="violetHalo.busy ? 'Running…' : 'Run'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Star colour repair (SVBony debayer fringe) run modal -->
     <div class="modal-overlay" x-show="starColor.modalOpen" x-cloak
          @click.self="if(!starColor.busy) starColor.modalOpen=false"
@@ -23252,7 +23212,68 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
     <!-- Browser-side Richardson-Lucy FFT engine. Must load before app.js
          so _runBrowserRl can find window.RlBrowserDecon. -->
     <script src="/js/rl-decon.js?v=20260630-browserrl"></script>
-    <script src="/js/app.js?v=20260907-histohandles"></script>
+                    <!-- The LIVE / PREVIEW / AUTORUN histogram panel, defined ONCE.
+                         The three copies this replaces were identical apart from the
+                         canvas id and one class, and drifted apart by hand. Each
+                         .histo-host below is replaced by a clone of this at parse
+                         time, before Alpine (deferred) walks the document, so no
+                         Alpine.initTree call is needed. -->
+                    <template id="tpl-histo-panel">
+                        <div class="histo-panel" x-show="selectedCamera || _lastRawFrame">
+                            <div class="histo-stats">
+                                <div class="hs-cell"><span class="hs-v" x-text="histo.max"></span><span class="hs-l">Max</span></div>
+                                <div class="hs-cell"><span class="hs-v" x-text="histo.avg"></span><span class="hs-l">Avg</span></div>
+                                <div class="hs-cell"><span class="hs-v" x-text="histo.min"></span><span class="hs-l">Min</span></div>
+                                <div class="hs-cell"><span class="hs-v" x-text="histo.std"></span><span class="hs-l">Std</span></div>
+                            </div>
+                            <div class="histo-graph">
+                                <canvas class="histo-canvas"></canvas>
+                                <div class="histo-axis"><span x-text="histoAxisLabel(0)">0</span><span x-text="histoAxisLabel(0.5)">32768</span><span x-text="histoAxisLabel(1)">65535</span></div>
+                                <div class="histo-handle histo-handle-black"
+                                     :style="'left:' + histoMarkerPct('black') + '%'"
+                                     @pointerdown="histoHandleDown($event,'black')" title="Black point"></div>
+                                <div class="histo-handle histo-handle-mid"
+                                     :style="'left:' + histoMarkerPct('mid') + '%'"
+                                     @pointerdown="histoHandleDown($event,'mid')" title="Midtones"></div>
+                                <div class="histo-handle histo-handle-white"
+                                     :style="'left:' + histoMarkerPct('white') + '%'"
+                                     @pointerdown="histoHandleDown($event,'white')" title="White point"></div>
+                            </div>
+                            <div class="histo-actions">
+                                <button class="btn btn-sm" :class="stretchAuto ? 'btn-active' : ''"
+                                        @click="histoAuto()" title="Auto-stretch">Auto</button>
+                                <button class="btn btn-sm" :class="histoZoom ? 'btn-active' : ''"
+                                        @click="histoToggleZoom()" title="Zoom the histogram to the data">Zoom</button>
+                                <!-- Display-only colour saturation (OSC previews).
+                                     The per-channel auto-stretch neutralises the
+                                     background but inflates colour; this dials it
+                                     back. Saved frames are untouched. -->
+                                <span class="histo-sat" x-show="dispSaturation !== undefined"
+                                      :title="'Display saturation: ' + Math.round(dispSaturation * 100) + '% (double-click resets to 100%). Display only: saved frames are untouched.'">
+                                    <span class="histo-sat-label">Sat</span>
+                                    <input type="range" class="histo-sat-slider"
+                                           min="0" max="1.5" step="0.05"
+                                           :value="dispSaturation"
+                                           @input="setDispSaturation($event.target.value)"
+                                           @dblclick="setDispSaturation(1)">
+                                </span>
+                            </div>
+                        </div>
+                    </template>
+                    <script>
+                        (function () {
+                            var tpl = document.getElementById('tpl-histo-panel');
+                            if (!tpl || !tpl.content.firstElementChild) return;
+                            document.querySelectorAll('.histo-host').forEach(function (host) {
+                                var node = tpl.content.firstElementChild.cloneNode(true);
+                                if (host.dataset.histoClass) node.classList.add(host.dataset.histoClass);
+                                var cv = node.querySelector('canvas.histo-canvas');
+                                if (cv && host.dataset.histoCanvas) cv.id = host.dataset.histoCanvas;
+                                host.replaceWith(node);
+                            });
+                        })();
+                    </script>
+    <script src="/js/app.js?v=20260908-dbg"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

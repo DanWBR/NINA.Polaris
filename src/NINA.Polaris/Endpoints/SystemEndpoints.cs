@@ -445,8 +445,40 @@ public static class SystemEndpoints {
         group.MapGet("/clock", (ClockSyncService clock) => {
             return Results.Ok(new {
                 serverUtcNow = clock.ServerUtcNow().ToString("o"),
-                supported = clock.IsSupported
+                supported = clock.IsSupported,
+                // What the host thinks its timezone is. A stock image says
+                // "UTC", which is what made every saved FITS carry a DATE-LOC
+                // equal to DATE-UTC until the browser pushed its own zone.
+                timeZone = clock.CurrentTimeZoneId
             });
+        });
+
+        // Timezone on its own. Kept apart from /clock/sync because the two
+        // have different risk: moving the zone does not move the instant, so
+        // it is safe to apply without asking, while jumping the wall clock
+        // mid-sequence wrecks frame timestamps and stays user-initiated.
+        group.MapPost("/clock/timezone", async (ClockSyncService clock,
+                TimeZoneRequest req, CancellationToken ct) => {
+            if (req == null || string.IsNullOrWhiteSpace(req.TimeZone)) {
+                return Results.BadRequest(new { error = "timeZone is required (IANA id)" });
+            }
+            if (!clock.IsSupported) {
+                return Results.Json(new {
+                    ok = false,
+                    error = "Setting the timezone is Linux-only on this host. "
+                          + "Use the OS date and time settings."
+                }, statusCode: 501);
+            }
+            var applied = await clock.SetTimeZoneAsync(req.TimeZone, ct);
+            if (applied == null) {
+                return Results.Json(new {
+                    ok = false,
+                    error = $"Could not set the timezone to '{req.TimeZone}'. "
+                          + "Check the host log for the timedatectl error.",
+                    timeZone = clock.CurrentTimeZoneId
+                }, statusCode: 500);
+            }
+            return Results.Ok(new { ok = true, timeZone = applied });
         });
 
         group.MapPost("/clock/sync", async (ClockSyncService clock,
@@ -481,7 +513,7 @@ public static class SystemEndpoints {
                           + "Use the OS clock settings or enable NTP."
                 }, statusCode: 501);
             }
-            var result = await clock.SetUtcAsync(parsed, ct);
+            var result = await clock.SetUtcAsync(parsed, req.ClientTimeZone, ct);
             if (!result.Ok) {
                 return Results.Json(new {
                     ok = false,
@@ -492,7 +524,8 @@ public static class SystemEndpoints {
             return Results.Ok(new {
                 ok = true,
                 serverUtcNow = result.ServerUtcNow.ToString("o"),
-                residualSkewSeconds = result.ResidualSkewSeconds
+                residualSkewSeconds = result.ResidualSkewSeconds,
+                timeZone = result.TimeZoneId
             });
         });
 
@@ -679,7 +712,8 @@ public static class SystemEndpoints {
     }
 
     record SaveAsRequest(string Name);
-    record ClockSyncRequest(string ClientUtc);
+    record ClockSyncRequest(string ClientUtc, string? ClientTimeZone = null);
+    record TimeZoneRequest(string? TimeZone);
     record DeviceNameRequest(string? Name);
     record AutoStartRequest(bool Enable);
     record GpuToggleRequest(bool Enabled);

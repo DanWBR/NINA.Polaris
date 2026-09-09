@@ -144,7 +144,16 @@ public sealed class StarColorRepairService {
     }
 
     // ── bright-star peak detection (self-contained; no external detector) ─────
-    private static List<(int x, int y)> DetectBrightStars(
+
+    internal static double Median(List<double> v) {
+        if (v.Count == 0) return 0;
+        var a = v.ToArray();
+        Array.Sort(a);
+        return a.Length % 2 == 1 ? a[a.Length / 2]
+                                 : 0.5 * (a[a.Length / 2 - 1] + a[a.Length / 2]);
+    }
+
+    internal static List<(int x, int y)> DetectBrightStars(
             double[] R, double[] G, double[] B, int W, int H,
             double thrFrac = 0.15, int sep = 24, int nmax = 4000) {
         int plane = W * H;
@@ -360,7 +369,7 @@ public sealed class StarColorRepairService {
         return (a.Length & 1) == 1 ? a[m] : 0.5 * (a[m - 1] + a[m]);
     }
 
-    private static ushort Clamp16(double v)
+    internal static ushort Clamp16(double v)
         => (ushort)Math.Clamp(Math.Round(v), 0, 65535);
 
     // ── largest-stars before/after montage ────────────────────────────────────
@@ -368,7 +377,7 @@ public sealed class StarColorRepairService {
     private const int MontCols = 4;       // montage columns
     private const int MontMax = 12;       // up to N largest stars
 
-    private static List<(int x, int y)> PickMontageStars(List<(int x, int y)> stars, int W, int H) {
+    internal static List<(int x, int y)> PickMontageStars(List<(int x, int y)> stars, int W, int H) {
         int half = CropPx / 2;
         var outl = new List<(int x, int y)>();
         foreach (var s in stars) {            // stars[] already brightest-first
@@ -381,7 +390,7 @@ public sealed class StarColorRepairService {
     }
 
     /// <summary>Plane-sequential ushort RGB crop (CropPx²) centred on a star.</summary>
-    private static ushort[] ExtractCropRgb(double[] R, double[] G, double[] B, int W, int cx, int cy) {
+    internal static ushort[] ExtractCropRgb(double[] R, double[] G, double[] B, int W, int cx, int cy) {
         int half = CropPx / 2, cp = CropPx * CropPx;
         var crop = new ushort[cp * 3];
         for (int yy = 0; yy < CropPx; yy++) {
@@ -395,7 +404,7 @@ public sealed class StarColorRepairService {
         return crop;
     }
 
-    private string WriteMontage(List<ushort[]> crops, string outPath, BaseImageData template) {
+    internal static string WriteMontage(List<ushort[]> crops, string outPath, BaseImageData template) {
         int n = crops.Count;
         int cols = Math.Min(MontCols, n);
         int rows = (int)Math.Ceiling(n / (double)cols);
@@ -425,7 +434,7 @@ public sealed class StarColorRepairService {
         return outPath;
     }
 
-    private static string SiblingPath(string srcPath, string suffix) {
+    internal static string SiblingPath(string srcPath, string suffix) {
         var dir = Path.GetDirectoryName(srcPath) ?? ".";
         var stem = Path.GetFileNameWithoutExtension(srcPath);
         var stamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");

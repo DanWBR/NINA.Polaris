@@ -23,6 +23,13 @@ namespace NINA.Polaris.Services;
 /// client sends its own UTC; the server applies it via
 /// <c>timedatectl set-time</c>.
 ///
+/// The same call carries the browser's IANA timezone, applied with
+/// <c>timedatectl set-timezone</c>. The SBC images ship as UTC and nothing
+/// ever moved them, so on every rig outside UTC the saved FITS carried a
+/// DATE-LOC identical to DATE-UTC and the astronomical session-date folder
+/// rolled hours early or late. The browser is the only party that knows
+/// where the operator actually is, and it is already telling us the time.
+///
 /// Linux only. The .deb postinst installs a polkit rule
 /// (50-polaris-clock.rules) so the polaris service user can call
 /// <c>org.freedesktop.timedate1.set-time</c> without a password
@@ -68,6 +75,11 @@ public class ClockSyncService {
     /// 1Hz status stream.</summary>
     public DateTime ServerUtcNow() => DateTime.UtcNow;
 
+    /// <summary>The host's current timezone, as an IANA id on Linux ("UTC" on
+    /// a stock image). Surfaced so the UI can show what the rig believes and
+    /// offer to push the browser's zone.</summary>
+    public string CurrentTimeZoneId => TimeZoneInfo.Local.Id;
+
     /// <summary>
     /// Set the system wall clock to the provided UTC. Returns a
     /// ClockSyncResult with the post-sync time and a sanity-check
@@ -77,8 +89,14 @@ public class ClockSyncService {
     /// Refuses on non-Linux, on missing timedatectl, and when the
     /// provided UTC is more than 10 years off (defends against the
     /// client clock being itself broken).
+    ///
+    /// <paramref name="clientTimeZone"/> is the browser's IANA id
+    /// (Intl.DateTimeFormat().resolvedOptions().timeZone). Optional, and
+    /// applied best-effort: an unknown zone must not cost the user the clock
+    /// sync they actually asked for.
     /// </summary>
-    public async Task<ClockSyncResult> SetUtcAsync(DateTime clientUtc, CancellationToken ct = default) {
+    public async Task<ClockSyncResult> SetUtcAsync(DateTime clientUtc,
+            string? clientTimeZone = null, CancellationToken ct = default) {
         if (!IsSupported) {
             return ClockSyncResult.Fail("Clock sync is Linux-only. "
                 + "On this platform use the OS clock settings or NTP.");
@@ -101,14 +119,24 @@ public class ClockSyncService {
                 + "Wait a few seconds and try again.");
         }
         try {
-            return await SetUtcCoreAsync(clientUtc, ct);
+            return await SetUtcCoreAsync(clientUtc, clientTimeZone, ct);
         } finally {
             _gate.Release();
         }
     }
 
     /// <summary>The actual sync, run under <see cref="_gate"/>.</summary>
-    private async Task<ClockSyncResult> SetUtcCoreAsync(DateTime clientUtc, CancellationToken ct) {
+    private async Task<ClockSyncResult> SetUtcCoreAsync(DateTime clientUtc,
+            string? clientTimeZone, CancellationToken ct) {
+
+        // The zone has to move BEFORE the clock. set-time below parses its
+        // argument in the machine's LOCAL zone, so changing the zone afterwards
+        // would leave the wall clock off by the difference between the old and
+        // the new offset.
+        string? appliedZone = null;
+        if (!string.IsNullOrWhiteSpace(clientTimeZone)) {
+            appliedZone = await ApplyTimeZoneAsync(clientTimeZone.Trim(), ct);
+        }
 
         // IMPORTANT: `timedatectl set-time "YYYY-MM-DD HH:MM:SS"` parses
         // the wall-clock string in the machine's LOCAL timezone, NOT UTC
@@ -178,13 +206,79 @@ public class ClockSyncService {
                 Ok: true,
                 Error: null,
                 ServerUtcNow: after,
-                ResidualSkewSeconds: newSkew);
+                ResidualSkewSeconds: newSkew,
+                TimeZoneId: appliedZone ?? CurrentTimeZoneId);
         } catch (OperationCanceledException) {
             return ClockSyncResult.Fail("Cancelled");
         } catch (Exception ex) {
             _logger.LogError(ex, "Clock sync failed");
             return ClockSyncResult.Fail("Clock sync failed: " + ex.Message);
         }
+    }
+
+    /// <summary>Set the host timezone on its own, without touching the wall
+    /// clock. Returns the id now in force, or null when nothing was applied.
+    ///
+    /// Serialised on the same gate as a clock sync: systemd-timedated refuses
+    /// a second caller while the first is in flight.</summary>
+    public async Task<string?> SetTimeZoneAsync(string id, CancellationToken ct = default) {
+        if (!IsSupported) return null;
+        if (!await _gate.WaitAsync(GateWait, ct)) {
+            _logger.LogWarning("set timezone: another clock operation still running");
+            return null;
+        }
+        try {
+            return await ApplyTimeZoneAsync((id ?? "").Trim(), ct);
+        } finally {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>Point the host at the browser's IANA timezone. Returns the id
+    /// now in force, or null when nothing was applied.
+    ///
+    /// Best-effort on purpose: this rides along with a clock sync the user
+    /// asked for, and a zone the host has never heard of is no reason to leave
+    /// the clock wrong. Failures are logged, not raised.</summary>
+    private async Task<string?> ApplyTimeZoneAsync(string id, CancellationToken ct) {
+        if (!IsPlausibleTimeZoneId(id)) {
+            _logger.LogWarning("clock sync: ignoring implausible timezone id {Id}", id);
+            return null;
+        }
+        try {
+            TimeZoneInfo.FindSystemTimeZoneById(id);
+        } catch (Exception ex) {
+            _logger.LogWarning("clock sync: this host has no timezone {Id} ({Msg}). "
+                + "Install tzdata to widen the zoneinfo database.", id, ex.Message);
+            return null;
+        }
+        // Already there: skip the write, the way every other system-touching
+        // path here does, so a per-sync no-op never reaches timedated.
+        if (string.Equals(TimeZoneInfo.Local.Id, id, StringComparison.Ordinal)) return id;
+
+        var res = await RunAsync("timedatectl", $"set-timezone {id}", ct, timeoutMs: 5_000);
+        if (res.ExitCode != 0) {
+            _logger.LogWarning("timedatectl set-timezone {Id} failed: {Err}",
+                id, res.Stderr?.Trim());
+            return null;
+        }
+        // The runtime caches the local zone on first use, so without this the
+        // running process keeps stamping DATE-LOC and the session-date folder
+        // with the OLD offset until someone restarts Polaris.
+        TimeZoneInfo.ClearCachedData();
+        _logger.LogInformation("Host timezone set to {Id} from the browser", id);
+        return id;
+    }
+
+    /// <summary>IANA ids only: letters, digits, '/', '_', '+' and '-'. Keeps
+    /// anything that could carry a surprise into the timedatectl argument out,
+    /// and rejects the shapes no real zone id has.</summary>
+    internal static bool IsPlausibleTimeZoneId(string? id) {
+        if (string.IsNullOrWhiteSpace(id) || id.Length > 64) return false;
+        foreach (var c in id) {
+            if (!char.IsAsciiLetterOrDigit(c) && c is not ('/' or '_' or '+' or '-')) return false;
+        }
+        return !id.StartsWith('/') && !id.EndsWith('/') && !id.Contains("..");
     }
 
     private async Task<ProcessResult> RunAsync(string fileName, string args,
@@ -223,7 +317,8 @@ public record ClockSyncResult(
     bool Ok,
     string? Error,
     DateTime ServerUtcNow,
-    double ResidualSkewSeconds
+    double ResidualSkewSeconds,
+    string? TimeZoneId = null
 ) {
     public static ClockSyncResult Fail(string error) => new(
         Ok: false,

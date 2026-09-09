@@ -147,6 +147,69 @@ has_candidate() {
     [ -n "$c" ] && [ "$c" != "(none)" ]
 }
 
+# The codename this distribution reports for itself, and the Ubuntu series it
+# is actually built on. On Ubuntu they are the same. On Linux Mint they are
+# not: Mint calls itself wilma / xia / zara, while the PPAs we need publish
+# only for Ubuntu series (jammy, noble, resolute). A PPA added under the Mint
+# name resolves to nothing, and every package in it silently disappears.
+# Overridable so the helpers can be exercised without touching a real system.
+: "${OS_RELEASE:=/etc/os-release}"
+: "${UPSTREAM_RELEASE:=/etc/upstream-release/lsb-release}"
+: "${APT_SOURCES_DIR:=/etc/apt/sources.list.d}"
+
+system_codename() { lsb_release -cs 2>/dev/null || true; }
+
+ubuntu_codename() {
+    local c=""
+    if [ -r "$OS_RELEASE" ]; then
+        c="$( . "$OS_RELEASE" 2>/dev/null; echo "${UBUNTU_CODENAME:-}" )"
+    fi
+    # Mint ships the base series here, and it is the more reliable of the two.
+    if [ -r "$UPSTREAM_RELEASE" ]; then
+        local u
+        u="$( . "$UPSTREAM_RELEASE" 2>/dev/null; echo "${DISTRIB_CODENAME:-}" )"
+        [ -n "$u" ] && c="$u"
+    fi
+    [ -z "$c" ] && c="$(system_codename)"
+    echo "$c"
+}
+
+# Point a just-added PPA at that Ubuntu series. add-apt-repository imports the
+# signing key correctly whatever the codename, so only the suite needs fixing;
+# handles both the one-line ".list" form and deb822 ".sources".
+ppa_retarget() {
+    local ppa="$1" want="$2" have="$3" f hit=0
+    [ -n "$want" ] && [ -n "$have" ] && [ "$want" != "$have" ] || return 0
+    for f in "$APT_SOURCES_DIR"/*; do
+        [ -f "$f" ] || continue
+        grep -q "/${ppa}/ubuntu" "$f" 2>/dev/null || continue
+        sed -i -e "s#\(/${ppa}/ubuntu[[:space:]]\{1,\}\)${have}\([[:space:]]\|$\)#\1${want}\2#" \
+               -e "s#^\([[:space:]]*Suites:[[:space:]]*\)${have}\([[:space:]]\|$\)#\1${want}\2#" "$f"
+        hit=1
+    done
+    [ "$hit" = 1 ] && echo "  ppa:$ppa retargeted from '$have' to Ubuntu '$want'"
+    return 0
+}
+
+ppa_add() {
+    local ppa="$1" desc="$2"
+    add-apt-repository -y "ppa:$ppa" || { note_fail "add-apt-repository $desc"; return 1; }
+    ppa_retarget "$ppa" "$(ubuntu_codename)" "$(system_codename)"
+}
+
+# PHD2 is in no Ubuntu release: it exists only in ppa:pch/phd2, and that build
+# links against libindi1, which exists only in the INDI PPA. Ubuntu's own INDI
+# (indi-bin 1.9.9) ships libindidriver1 / libindiclient1 instead. So the moment
+# we are on the indi-bin fallback, phd2 can never be satisfied, and apt answers
+# with "unmet dependencies ... you have held broken packages", which reads like
+# a broken system instead of a missing repository. Reported from Linux Mint,
+# 2026-09-07.
+phd2_unsatisfiable() {
+    has_candidate phd2 || return 1
+    apt-cache depends phd2 2>/dev/null | grep -qi 'depends:[[:space:]]*libindi1' || return 1
+    ! has_candidate libindi1
+}
+
 # ---------------------------------------------------------------------------
 # Locate the optional host-built payload (debs pre-downloaded on the host)
 # ---------------------------------------------------------------------------
@@ -286,8 +349,8 @@ fi   # end appliance-only section
 # 2. PPAs: INDI (+ 3rd party drivers) and PHD2
 # ---------------------------------------------------------------------------
 banner "PPAs (INDI + PHD2)"
-add-apt-repository -y ppa:mutlaqja/ppa || note_fail "add-apt-repository indi"
-add-apt-repository -y ppa:pch/phd2     || note_fail "add-apt-repository phd2"
+ppa_add mutlaqja/ppa indi
+ppa_add pch/phd2     phd2
 apt-get update || note_fail "apt update (ppa)"
 
 # ---------------------------------------------------------------------------
@@ -311,8 +374,17 @@ if ! has_candidate indi-full; then
     fi
 fi
 
+PHD2_PKG=phd2
+if phd2_unsatisfiable; then
+    PHD2_PKG=""
+    echo "  phd2 needs libindi1, which only the INDI PPA provides, and that PPA is"
+    echo "  not usable on this distribution. Skipping it so it cannot take the rest"
+    echo "  of the line down; Polaris has its own guider and does not need PHD2."
+    note_fail "phd2 skipped (needs libindi1 from the INDI PPA, which is unavailable here)"
+fi
+
 # shellcheck disable=SC2086
-apt_try_each $INDI_PKG phd2 openssh-server astrometry.net astrometry-data-tycho2
+apt_try_each $INDI_PKG $PHD2_PKG openssh-server astrometry.net astrometry-data-tycho2
 
 # Only meaningful once openssh-server is actually installed. It used to run
 # unconditionally, so a failed apt line produced a second, confusing failure

@@ -539,8 +539,13 @@ function ninaApp() {
             supported: false,
             busy: false,
             lastSyncAt: null,
-            lastError: null
+            lastError: null,
+            // Host IANA zone as reported on every status tick, so the UI can
+            // show it and _maybePushTimeZone can spot a stock "UTC" image.
+            timeZone: null
         },
+        // One timezone push per page load, whether or not it succeeded.
+        _tzPushed: false,
 
         // Scheduled rig teardown ("sleep timer"). Live state from the WS
         // scheduledShutdown block; the form model drives the Settings card.
@@ -4301,6 +4306,12 @@ function ninaApp() {
             modalOpen: false, busy: false, framePath: '', aggressiveness: 1.0,
             exclusionRadius: 9, stage: '', error: '',
         },
+        // Violet halo (ED doublet). A telescope defect, so a separate tool:
+        // chaining it after the star fix turned every bright star yellow.
+        violetHalo: {
+            modalOpen: false, busy: false, framePath: '',
+            amount: 1.0, radius: 40, stage: '', error: '',
+        },
 
         // STORAGE-1: capture-disk suggestion. `suggest` is only true when a
         // usable data disk exists AND the captures are still on the boot disk,
@@ -4489,11 +4500,14 @@ function ninaApp() {
         lastStars: null,        // { width, height, stars: [{x,y,hfr,...}] }
         hoverPixel: null,       // { x, y, adu, rgb } in source-image coords
 
-        // Manual stretch controls
-        stretchAuto: true,
-        stretchBlack: 0.0,    // 0..1 normalised (0% = black point at min)
-        stretchWhite: 1.0,    // 0..1 normalised (100% = white point at max)
-        stretchMid: 0.25,     // MTF midtones coefficient
+        // The operator's SCREEN TRANSFER, stage 2 of the stretch. It acts on
+        // the auto rendering's output (already 0..1), not on raw ADU, so
+        // 0 / 0.5 / 1 is the identity and Auto is simply these three values.
+        // See _displayMap for why the stretch has two stages.
+        stretchAuto: true,    // false once a handle has been touched
+        stretchBlack: 0.0,    // clip below this screen level
+        stretchWhite: 1.0,    // clip above this screen level
+        stretchMid: 0.5,      // MTF midtone; 0.5 is the identity
         _lastRawFrame: null,  // cache: { pixels, width, height, bitDepth, bayerPattern }
         // Transient CCD_CFA dropout guard for the LIVE canvas: once a colour
         // (Bayered) LIVE frame has rendered, a later LIVE frame that arrives
@@ -4506,27 +4520,41 @@ function ninaApp() {
         showStretchPanel: false,
 
         // ASIAIR-style histogram mini-panel (bottom of LIVE / PREVIEW /
-        // AUTORUN). histo holds the computed bins + stats for the cached
-        // frame; histoZoom narrows the drawn X range to the populated
-        // region. blackFrac/whiteFrac are the 0..1 stretch endpoints the
-        // two draggable handles sit on (auto-derived when stretchAuto).
-        // Zoom defaults ON: the expected behaviour is the histogram framed
-        // to the populated band on every new stacked frame (ASIAIR-style),
-        // not the full 0..65535 axis. The toggle still lets the user open
-        // the full range.
+        // AUTORUN). See the block of functions starting at _histoCanvasId for
+        // the design; the short version is that every number here is a
+        // fraction of full scale, measured from the same raw pixels the
+        // renderer stretches.
+        //
+        // Zoom defaults ON: the useful view is the band the data occupies, not
+        // a mostly-empty 0..65535 axis. The button opens the full range.
         histoZoom: true,
+        // Bins across the screen's own 0..1. 512 is generous for a stretched
+        // image, whose values are spread over the whole axis by construction --
+        // unlike the linear data, where a stacked sky occupies a few hundred of
+        // 65535 ADU and needs far finer bins to show any shape at all.
+        HISTO_BINS: 512,
         histo: {
+            // MIN/MAX/AVG/STD are in ADU: they are about the exposure, not the
+            // rendering.
             min: 0, max: 0, avg: 0, std: 0,
-            bins: null, peak: 1, count: 0,
-            blackFrac: 0, whiteFrac: 1, midFrac: 0.5,
-            dispLo: 0, dispHi: 1,
-            _token: -1
+            // Bins of the DISPLAYED values. Luminance plus the three channels
+            // (null on a mono frame).
+            bins: null, binsR: null, binsG: null, binsB: null,
+            color: false,
+            peak: 1, peakRGB: 1, count: 0,
+            maxVal: 65535,          // the frame's full scale, for the stats
+            blackFrac: 0, whiteFrac: 1, midFrac: 0.5,   // handle positions
+            dispLo: 0, dispHi: 1,   // the visible window
+            _token: -1,             // the frame the bins were built from
+            _sig: null              // the handle state they were built with
         },
+        // Stage 1 of the stretch for the cached frame. Kept so a drag re-runs
+        // only the screen transfer instead of re-measuring the sky.
+        _histoMap: null,
+        _histoLut: null,      // ADU -> screen level, one Float32Array per channel
         _histoToken: 0,       // bumped each time a new raw frame is cached
-        _histoDrag: null,     // { which:'black'|'white', tab, rect } while dragging
-        // Last live-stack status that carried a colorHistogram, kept so the
-        // panel does not change source on the ticks that omit it.
-        _lastServerHisto: null,
+        _histoDrag: null,     // { which, rect, lo, hi } while dragging
+        _histoRaf: 0,         // rAF handle throttling the redraw during a drag
 
         // Editor stretch histogram (same UX as the live mini-panel, but the
         // black/white handles drive the editor's Blacks/Whites light params and
@@ -5510,6 +5538,13 @@ function ninaApp() {
                     if (this._lastRawFrame) {
                         this.applyManualStretch();
                     }
+                    // The panel on the tab we just arrived at has its own
+                    // canvas, and nothing has ever drawn into it. Redraw
+                    // unconditionally: applyManualStretch only runs when a raw
+                    // frame is cached, so without this the histogram was blank
+                    // on every tab the operator had not been on when the last
+                    // frame landed.
+                    this.drawHistogram();
                 });
             });
             // Same trick for sub-tabs that host their own preview
@@ -7223,6 +7258,33 @@ function ninaApp() {
         // the host onto the client's clock. On by default; the Settings toggle
         // (settings.autoClockSync) disables it. Throttled so a persistent
         // failure (missing polkit rule) doesn't retry every WS tick.
+        // The host's timezone is not the host's business to guess: a stock
+        // image is UTC forever, and only the browser knows where the operator
+        // is. Push ours once per page load, which is what keeps DATE-LOC and
+        // the session-date folder honest. Unlike a clock sync this never moves
+        // the instant, so it needs no confirmation, but it does announce
+        // itself.
+        //
+        // ONLY from a stock UTC host. Plenty of observers run their rig on UTC
+        // on purpose, and a remote observatory is deliberately on the SITE's
+        // zone, not the operator's; overriding either would be worse than the
+        // bug. An untouched image is the one case where UTC means "nobody ever
+        // said", and that is the case this fixes.
+        async _maybePushTimeZone(hostZone) {
+            if (!hostZone || !this.clockSync.supported) return;
+            if (this._tzPushed) return;
+            if (hostZone !== 'UTC' && hostZone !== 'Etc/UTC') return;
+            let mine = null;
+            try { mine = Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch (_) {}
+            if (!mine || mine === hostZone) return;
+            this._tzPushed = true;   // one attempt per load, success or not
+            try {
+                const r = await this.apiPost('/api/system/clock/timezone', { timeZone: mine });
+                const j = await r.json();
+                if (j.ok) this.toast('Host timezone set to ' + j.timeZone, 'ok');
+            } catch (_) { /* logged host-side; not worth a toast on every load */ }
+        },
+
         _maybeAutoSyncClock() {
             if (this.settings?.autoClockSync === false) return;
             if (!this.clockSync.supported || this.clockSync.busy) return;
@@ -7244,8 +7306,16 @@ function ninaApp() {
                 // races with that and surfaces as 'Request timed out'
                 // -> 'Network error' in the catch even when the
                 // backend would have responded with the real reason.
+                // The host also gets our timezone. SBC images ship as UTC and
+                // nothing moves them, so DATE-LOC in every saved FITS matched
+                // DATE-UTC and the session-date folder rolled at the wrong hour
+                // for anyone outside UTC. Best-effort: an ancient browser
+                // without Intl just omits the field.
+                let tz = null;
+                try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch (_) {}
                 const r = await this.apiPost('/api/system/clock/sync', {
-                    clientUtc: new Date().toISOString()
+                    clientUtc: new Date().toISOString(),
+                    clientTimeZone: tz
                 }, { timeout: 20000 });
                 const j = await r.json();
                 if (j.ok) {
@@ -9351,31 +9421,11 @@ function ninaApp() {
                     // so applyManualStretch routes through the JPEG re-stretch
                     // path instead of re-rendering an old mono frame.
                     this._lastRawFrame = null;
-                    // NOTE: do NOT reset histo.dispLo/dispHi here. That
-                    // unconditional reset ran on EVERY incoming stack frame —
-                    // snapping the histogram back to the full 0..65535 range
-                    // even mid-drag (bypassing the _histoDrag freeze) and
-                    // wiping the data-framed zoom on each update. The range
-                    // is owned by _histoUpdateEndpoints, which recomputes it
-                    // from the fresh frame's stats and respects the drag
-                    // freeze.
-                    // The server already auto-stretched this JPEG. Seed the
-                    // handles at identity (black 0, mid 0.5, white 1) so the
-                    // first drag flips to manual without a brightness jump.
-                    // ...but never while the operator is dragging a handle. This
-                    // runs on EVERY incoming stack frame, and the guard was only
-                    // on stretchAuto, which stays true until the drag is released
-                    // (_histoDragMove sets stretchBlack/White/Mid, not the flag).
-                    // So a frame landing mid-gesture snapped the handles back to
-                    // identity under the operator's finger and the reference they
-                    // were aiming at moved. Everything else in this handler
-                    // already respects the _histoDrag freeze; this did not.
-                    if (this.stretchAuto && !this._histoDrag) {
-                        this.histo.blackFrac = 0;
-                        this.histo.whiteFrac = 1;
-                        this.histo.midFrac = 0.5;
-                        this.histo._autoMid = 0.5;
-                    }
+                    // This used to pin the handles to identity here, because a
+                    // JPEG arrived already stretched and the handles then drove
+                    // a LUT over it. Nothing feeds the panel from a JPEG any
+                    // more, so this only clobbered the endpoints of the raw
+                    // frame still being shown.
                 } catch (e) {
                     // Even this much should not fail, but if it does, keep
                     // something paintable rather than dropping the frame.
@@ -9392,14 +9442,10 @@ function ninaApp() {
                     this._paintJpegToCanvases(source, frameKind);
                     // Fan out to still-hidden canvases for tab switches.
                     this._mirrorLiveToPreviewCanvas();
-                    // Refresh the histogram mini-panel from this JPEG frame.
-                    // New frame → invalidate the cached bins so min/max/avg/std
-                    // recompute (the JPEG branch of _ensureHistogram derives
-                    // them from the 8-bit luminance). Without this the stats
-                    // stayed at their zero init whenever the live feed was
-                    // server-rendered JPEG (no raw buffer to scan).
-                    this._histoToken++;
-                    this.drawHistogram();
+                    // A JPEG frame carries no linear data, so the panel has
+                    // nothing new to measure from it; it keeps showing the last
+                    // raw frame's bins rather than inventing bins from an
+                    // already-stretched picture.
                 }
             };
             img.onerror = () => URL.revokeObjectURL(url);
@@ -9531,7 +9577,12 @@ function ninaApp() {
             if (drewAny) {
                 this.redrawOverlay();
                 this.redrawFocusStarOverlay();
-                this._drawCanvasHistogram(firstDrawn);
+                // The histogram is NOT drawn from here any more. It used to be:
+                // this painted canvas is already stretched, so the bins it gave
+                // described the picture rather than the data, over a different
+                // window than the handles were placed in -- and it ran right
+                // after drawHistogram on the same canvas element, so the two
+                // took turns winning. The panel reads the raw frame now.
             }
             return drewAny;
         },
@@ -9605,14 +9656,12 @@ function ninaApp() {
         // washed out. Now we port the same GraXpert "15% Bg, 3σ"
         // preset the server-side AutoStretch.cs uses, so live-stack
         // previews look like the FILES / STUDIO thumbnails.
+        // Stage 1 only. The handles used to short-circuit this and replace the
+        // measured endpoints with their own, which on a colour frame threw away
+        // the per-channel neutralisation and turned the picture solid blue the
+        // moment anything was dragged. They are a screen transfer on top now
+        // (_screenTransfer), so this always measures.
         _computeStretchParams(pixels, maxVal) {
-            if (!this.stretchAuto) {
-                const shadow = this.stretchBlack * maxVal;
-                const white = Math.max(shadow + 1, this.stretchWhite * maxVal);
-                const midtone = Math.min(0.999, Math.max(0.001,
-                    this.stretchMid || 0.25));
-                return { shadow, scaleFactor: 1.0 / (white - shadow), midtone };
-            }
             // Find observedMax. Saturation threshold is normally
             // maxVal, but drivers that pack N-bit sensor data into
             // a 16-bit buffer often cap below the theoretical max
@@ -9707,7 +9756,8 @@ function ninaApp() {
         // only the per-channel shadow + scale differ.
         _autoStretchEndpoints(sampleArr, maxVal) {
             if (!sampleArr || sampleArr.length === 0) {
-                return { shadow: 0, scale: maxVal > 0 ? 1.0 / maxVal : 1.0, xMed: 0 };
+                return { shadow: 0, scale: maxVal > 0 ? 1.0 / maxVal : 1.0,
+                         xMed: 0, median: 0, mad: 0 };
             }
             const sorted = Float32Array.from(sampleArr).sort();
             const median = sorted[Math.floor(sorted.length * 0.5)];
@@ -9718,7 +9768,54 @@ function ninaApp() {
             // Normalised median under THIS channel's own endpoints. The caller
             // needs it to pick a midtone that matches the per-channel scaling.
             const xMed = Math.max(0, (median - shadow) * scale);
-            return { shadow, scale, xMed };
+            return { shadow, scale, xMed, median, mad };
+        },
+
+        // ── The stretch, in two stages ──────────────────────────────────
+        //
+        // Stage 1, AUTO, always on: per channel on a colour frame, global on a
+        // mono one. This is what neutralises the sky background -- each channel
+        // measured against its own median and MAD -- and it is not optional,
+        // because without it an OSC frame renders with whatever cast the sensor
+        // and the sky happen to produce. It is also why a flat reads white and
+        // a bias reads grey rather than pink.
+        //
+        // Stage 2, the HANDLES: a screen transfer on the stage-1 output, which
+        // is already 0..1. Identity at black 0, mid 0.5, white 1. This is the
+        // "pull a bit more out of it" control: it brightens or clips what is
+        // already a neutral rendering, and it cannot reintroduce a colour cast
+        // because it applies the same curve to all three channels.
+        //
+        // The panel draws the histogram of stage 2's output, so the curves are
+        // the picture on screen and not the linear data behind it. On a colour
+        // frame those are very different stories: the linear channels sit at
+        // wildly different levels (that is exactly what stage 1 corrects), and
+        // a histogram showing them contradicts a screen where the background is
+        // grey.
+        _displayMap(f) {
+            const ch = (f.channels | 0) === 3 ? 3 : 1;
+            const isColor = ch === 3
+                || ((f.bayerPattern | 0) >= 1 && (f.bayerPattern | 0) <= 4);
+            const perChan = isColor
+                ? this._computePerChannelStretch(
+                      f.pixels, f.width, f.height, f.bayerPattern, f.maxVal, ch)
+                : null;
+            if (perChan) {
+                return { channels: ch, perChan, shadow: perChan.g.shadow,
+                         scale: perChan.g.scale, autoMid: perChan.midtone };
+            }
+            const g = this._computeStretchParams(f.pixels, f.maxVal);
+            return { channels: ch, perChan: null, shadow: g.shadow,
+                     scale: g.scaleFactor, autoMid: g.midtone };
+        },
+
+        // Stage 2 alone, on a stage-1 value. Kept separate so the histogram and
+        // the CPU fallback apply exactly what the shader does.
+        _screenTransfer(a) {
+            const b = this.stretchBlack, w = this.stretchWhite;
+            const m = Math.max(0.001, Math.min(0.999, this.stretchMid));
+            const x = Math.max(0, Math.min(1, (a - b) / Math.max(1e-6, w - b)));
+            return this._mtf(x, m);
         },
 
         // Per-channel auto-stretch for an OSC (Bayer) frame: sample the
@@ -9731,10 +9828,30 @@ function ninaApp() {
         // colour / has no usable signal (caller falls back to the single
         // global stretch). The 2x2 super-pixel walk + zero-cell skip
         // mirrors _computeAutoWB so the two stay consistent.
-        _computePerChannelStretch(pixels, width, height, bayerPattern, maxVal) {
-            if (!bayerPattern || bayerPattern < 1 || bayerPattern > 4) return null;
+        _computePerChannelStretch(pixels, width, height, bayerPattern, maxVal, channels = 1) {
             if (!pixels || width < 4 || height < 4) return null;
             const rArr = [], gArr = [], bArr = [];
+            if ((channels | 0) === 3 && pixels.length >= width * height * 3) {
+                // Already debayered: the planes ARE the channels.
+                const plane = width * height;
+                const stride = Math.max(1, Math.floor(plane / 40000));
+                const sat3 = maxVal;
+                for (let i = 0; i < plane; i += stride) {
+                    const pr = pixels[i], pg = pixels[plane + i], pb = pixels[2 * plane + i];
+                    // An unfilled corner of the accumulator is 0 in all three;
+                    // let it not drag any channel's black point down.
+                    if (pr === 0 && pg === 0 && pb === 0) continue;
+                    if (pr > 0 && pr < sat3) rArr.push(pr);
+                    if (pg > 0 && pg < sat3) gArr.push(pg);
+                    if (pb > 0 && pb < sat3) bArr.push(pb);
+                }
+                if (rArr.length === 0 || gArr.length === 0 || bArr.length === 0) return null;
+                return this._channelGains(
+                    this._autoStretchEndpoints(rArr, maxVal),
+                    this._autoStretchEndpoints(gArr, maxVal),
+                    this._autoStretchEndpoints(bArr, maxVal), maxVal);
+            }
+            if (!bayerPattern || bayerPattern < 1 || bayerPattern > 4) return null;
             // Target ~40k cells sampled per channel regardless of sensor
             // size: stride over 2x2 Bayer cells.
             const cells = Math.floor(width / 2) * Math.floor(height / 2);
@@ -9760,22 +9877,56 @@ function ninaApp() {
                 }
             }
             if (rArr.length === 0 || gArr.length === 0 || bArr.length === 0) return null;
-            const r = this._autoStretchEndpoints(rArr, maxVal);
-            const g = this._autoStretchEndpoints(gArr, maxVal);
-            const b = this._autoStretchEndpoints(bArr, maxVal);
-            // The shader shares ONE midtone across channels, so it MUST come
-            // from the same normalisation these endpoints produce. Taking it
-            // from the GLOBAL stretch instead is catastrophic on an OSC frame:
-            // split per channel the background is very uniform, so MAD collapses
-            // to a few ADU, shadow lands right on the median, and the normalised
-            // median is ~7e-4 — while the global midtone is calibrated for ~9e-2
-            // (its MAD is inflated by mixing the Bayer channels). Applying one to
-            // the other mapped the whole background to 8-bit 0.4 -> a black /
-            // "very faint" preview, while mono frames (global path only) were
-            // fine. Measured on a real SV405CC dual-band sub.
-            const xMed = (r.xMed + g.xMed + b.xMed) / 3;
-            const midtone = Math.min(0.999, Math.max(0.001, this._mtf(xMed, 0.15)));
-            return { r, g, b, midtone };
+            return this._channelGains(
+                this._autoStretchEndpoints(rArr, maxVal),
+                this._autoStretchEndpoints(gArr, maxVal),
+                this._autoStretchEndpoints(bArr, maxVal), maxVal);
+        },
+
+        // Balance the channels by GAIN, then stretch them together.
+        //
+        // This is what an auto white balance does, and it is the difference
+        // between a flat that reads grey and a flat that reads solid blue.
+        //
+        // The old model shifted each channel's BLACK POINT instead
+        // (shadow_c = median_c - 3*MAD_c, with a scale that is nearly common
+        // because it is 1/(maxVal - shadow_c)). On a sky background, where the
+        // three medians are close together, an offset is enough to neutralise
+        // them. On a flat they are nowhere near each other. Measured on the
+        // operator's SV605CC flat: medians R 10204, G 28228, B 65534. Under the
+        // offset model those map to 0.020, 0.034 and 0.900 of the output range
+        // — the blue is nine tenths of the way to white while the red is at
+        // two hundredths, which is exactly the solid blue flat that was
+        // reported. Under a gain all three land on 0.034.
+        //
+        // Green is the reference because it is the channel with two thirds of
+        // the CFA's pixels, and because ASIFitsView's AutoWB does the same: on
+        // that flat it moved R and B to 28228 and 28227, which is G's mean.
+        //
+        // The result is expressed in the SAME per-channel shadow/scale the
+        // shader already takes, since gaining and then stretching is the same
+        // affine map as stretching with a per-channel shadow and scale:
+        //     (v*g - shadow) * scale  ==  (v - shadow/g) * (g*scale)
+        _channelGains(r, g, b, maxVal) {
+            const medG = g.median > 0 ? g.median : Math.max(r.median, b.median, 1);
+            const gain = (c) => {
+                if (!(c.median > 0)) return 1;
+                // A channel that is wildly off (a dead or saturated one) must
+                // not be allowed to drag the others; 0.05..20 covers every real
+                // sensor/filter combination and still catches a broken plane.
+                return Math.max(0.05, Math.min(20, medG / c.median));
+            };
+            const gR = gain(r), gG = gain(g), gB = gain(b);
+            // In gained space every channel's background sits on the reference,
+            // so one shadow and one scale serve all three.
+            const shadow = Math.max(0, medG - 3.0 * g.mad);
+            const scale = maxVal > shadow ? 1.0 / (maxVal - shadow) : 1.0;
+            const xMed = Math.max(0, (medG - shadow) * scale);
+            const per = (gc) => ({ shadow: shadow / gc, scale: gc * scale });
+            return {
+                r: per(gR), g: per(gG), b: per(gB),
+                midtone: Math.min(0.999, Math.max(0.001, this._mtf(xMed, 0.15))),
+            };
         },
 
         // ── Display colour saturation ────────────────────────────────
@@ -9825,14 +9976,9 @@ function ninaApp() {
             // black point + scale so a tab switch / slider change re-renders
             // with the same neutral-background colour, not the bluish global
             // stretch.
-            let perChan = null;
-            const isColorFrame = (f.bayerPattern | 0) >= 1 && (f.bayerPattern | 0) <= 4;
-            // Calibration frames render neutral (see _renderRawFrame) — no
-            // per-channel sky neutralisation, which would cast a flat frame.
-            if (isColorFrame && this.stretchAuto && !f.calibration) {
-                perChan = this._computePerChannelStretch(
-                    f.pixels, f.width, f.height, f.bayerPattern, f.maxVal);
-            }
+            const dm = this._displayMap(f);
+            const fCh = dm.channels;
+            const perChan = dm.perChan;
             // Pass the original frameKind so the re-render lands on
             // the SAME canvas the frame first painted into. Default
             // kind=0 here would silently shove PREVIEW snaps onto
@@ -9843,9 +9989,8 @@ function ninaApp() {
             // global one is calibrated for a completely different normalisation
             // (see _computePerChannelStretch) and renders the frame black.
             this._tryRenderWebGL(f.pixels, f.width, f.height, f.bitDepth,
-                f.bayerPattern, shadow, scaleFactor,
-                (perChan && perChan.midtone) ? perChan.midtone : midtone,
-                f.frameKind || 0, perChan);
+                f.bayerPattern, shadow, scaleFactor, dm.autoMid,
+                f.frameKind || 0, perChan, fCh);
             // Keep the histogram mini-panel (handles + bars) in sync with the
             // stretch we just applied. Cheap: bins are cached per-frame.
             this.drawHistogram();
@@ -9858,7 +10003,31 @@ function ninaApp() {
         applyWb() { this.applyManualStretch(); },
 
         // ───────── ASIAIR-style histogram mini-panel ─────────
-        // Which canvas the histogram draws into, per active tab.
+        //
+        // ONE source, ONE framing rule, ONE draw. That is the whole design,
+        // and it is worth saying why, because the panel spent months not
+        // having it.
+        //
+        // The colour live stack used to arrive as an already-stretched 8-bit
+        // JPEG, so the browser had no linear data to measure. That forced a
+        // second histogram computed on the server, a second framing rule (the
+        // server chose a percentile band, the client then zoomed inside it), a
+        // second draw path that read the painted canvas, and a conversion
+        // between the stretch the server had applied and the stretch the
+        // handles set. The two draw paths raced on the same canvas element and
+        // the handles floated over a curve drawn in a different window.
+        //
+        // The stack now arrives as real 16-bit planes (RelayRgbRawAsync), so:
+        //   * the bins come from the same pixels the renderer stretches,
+        //   * the x axis, the handles and stretchBlack/White/Mid are all one
+        //     space -- a fraction of full scale -- with nothing to convert,
+        //   * and the only framing rule is the Zoom button.
+        //
+        // Bins cover the FULL 0..maxVal range, always. That is only viable
+        // because there are 2048 of them: a stacked sky has a standard
+        // deviation around 124 ADU, and at 256 bins over 16 bits one bin is
+        // 256 ADU, so the entire sky would land in a single spike. At 2048 a
+        // bin is 32 ADU and one sigma spans about four of them.
         _histoCanvasId() {
             switch (this.tab) {
                 case 'preview':  return 'histoCanvas-preview';
@@ -9867,518 +10036,356 @@ function ninaApp() {
             }
         },
 
-        // Build the 256-bin histogram + min/max/avg/std from the cached raw
-        // frame, plus the auto-stretch endpoints (so the handles can show
-        // where Auto placed black/white). Recomputed only when a new frame
-        // arrived (token guard); endpoint + display range refresh is cheap
-        // and runs every draw.
-        _ensureHistogram() {
-            // While a handle is being dragged the whole panel must stay
-            // frozen: same bins, same stats, same zoom. A stacked frame
-            // landing mid-drag bumps _histoToken; without this guard the
-            // recompute below would swap the bars (and endpoint math)
-            // under the user's pointer. The bumped token makes the first
-            // redraw after release pick up the fresh frame.
-            if (this._histoDrag && this.histo.bins) return true;
+
+        // Guards the FILES "To LIVE" button while a file is on its way.
+        filesToLiveBusy: false,
+        // Debug-only tools, hidden from a normal install. "To LIVE" is one:
+        // it exists to exercise the stretch and the histogram against a file
+        // whose contents are known, which is a developer's need, not an
+        // operator's. Turn them on with
+        //     localStorage.setItem('polaris-debug-tools', '1')
+        // and reload; read once at start-up, so it is not a live toggle.
+        debugTools: (function () {
+            try { return localStorage.getItem('polaris-debug-tools') === '1'; }
+            catch (_) { return false; }
+        })(),
+
+
+        // Bins of the DISPLAYED image, plus the frame's real statistics.
+        //
+        // The curves describe what is on screen: every sample goes through the
+        // same two stages the renderer applies, so the three channels sit on
+        // top of each other exactly as far as the picture's background is
+        // neutral. Binning the linear data instead told a different story from
+        // the screen -- three peaks a long way apart under an image whose
+        // background was plainly grey -- and there is no reading of that a
+        // person can act on.
+        //
+        // MIN/MAX/AVG/STD stay in ADU. Those are about the exposure, not about
+        // the rendering: whether the background has lifted off the floor and
+        // whether the stars are clipping is a question about the data.
+        //
+        // Two things are worth knowing about how it is counted.
+        //
+        // The mapping goes through a LOOKUP TABLE, one entry per ADU per
+        // channel, rebuilt only when the frame or the handles change. Running
+        // two MTF curves per sample per channel instead made the handles lag:
+        // a drag rebuilds these bins on every animation frame.
+        //
+        // And each sample is SPREAD over the display width its ADU step covers,
+        // rather than dropped in the bin its value happens to land in. The
+        // source is 16-bit integers, and the stretch pulls a sky that occupies
+        // a couple of hundred distinct levels across the whole axis -- so with
+        // point counting most bins get no sample at all and the curve draws as
+        // a comb of spikes separated by zeros. Those zeros are not an absence
+        // of signal, they are an absence of representable values. Spreading a
+        // sample from lut[v] to lut[v+1] tiles the axis with no gaps and gives
+        // the density the curve is supposed to show.
+        _histoBuild() {
             const f = this._lastRawFrame;
-            const hasRaw = !!(f && f.pixels && f.pixels.length);
-            // Colour live stack: the frame on screen is an 8-bit JPEG, but the
-            // server sends the real 16-bit histogram + stats over the WS status.
-            // Use those so the panel reflects the true data (min/max/mean/std +
-            // bars on the 0..65535 scale) instead of the 8-bit JPEG luminance.
-            let ls = this.liveStackStatus;
-            const serverHisto = !!(ls && Array.isArray(ls.colorHistogram)
-                && ls.colorHistogram.length === 256);
-            // Hold on to the last server histogram for as long as the same live
-            // stack is running. The block is not in every status tick, and
-            // without this the panel changed SOURCE between refreshes: a tick
-            // with it drew one white luminance line, the next tick without it
-            // fell through and drew three RGB lines off the JPEG. Same frame,
-            // two different panels, flickering back and forth.
-            if (serverHisto) {
-                this._lastServerHisto = ls;
-            } else if (this._lastServerHisto
-                    && ls && ls.isRunning && ls.startedAt === this._lastServerHisto.startedAt) {
-                ls = this._lastServerHisto;
-            } else {
-                this._lastServerHisto = null;
-            }
-            if (!hasRaw && ls && Array.isArray(ls.colorHistogram)
-                    && ls.colorHistogram.length === 256) {
-                return this._histogramFromServer(ls);
-            }
-            // Fall back to the server-rendered JPEG frame (8-bit RGBA) when
-            // there's no raw buffer — otherwise the histogram + min/max/avg/std
-            // stayed zeroed whenever the live feed was JPEG.
-            const j = hasRaw ? null : this._lastJpegFrame;
-            // The pixel cache is lazy now, so ask for it here: this branch is
-            // one of the two things that genuinely need pixels. It returns null
-            // when the frame is too big to cache, and then there is simply no
-            // local histogram -- the image itself is unaffected.
-            const jpegPixels = j ? this._ensureJpegPixels() : null;
-            const hasJpeg = !!(jpegPixels && jpegPixels.data && jpegPixels.data.length);
-            if (!hasRaw && !hasJpeg) return false;
-            if (this.histo._token === this._histoToken && this.histo.bins) {
+            if (!f || !f.pixels || !f.pixels.length) { this.histo.bins = null; return false; }
+            if (this.histo._token === this._histoToken
+                && this.histo._sig === this._histoStretchSig() && this.histo.bins) {
                 this._histoUpdateEndpoints();
                 return true;
             }
-            let px, n, maxVal;
-            if (hasRaw) {
-                px = f.pixels; n = px.length; maxVal = f.maxVal || 65535;
-            } else {
-                // Derive a luminance array (Rec.601) from the JPEG RGBA pixels.
-                // The server already display-stretched it, so the stats describe
-                // the shown image (0..255 space).
-                const d = jpegPixels.data, npix = d.length >> 2;
-                const lum = new Uint16Array(npix);
-                for (let i = 0, p = 0; i < npix; i++, p += 4) {
-                    lum[i] = (d[p] * 0.299 + d[p + 1] * 0.587 + d[p + 2] * 0.114) | 0;
+
+            const px = f.pixels, W = f.width, H = f.height;
+            const maxVal = f.maxVal || ((1 << (f.bitDepth || 16)) - 1);
+            const NB = this.HISTO_BINS;
+            const plane = W * H;
+
+            // Stage 1 is a property of the frame, so it is cached against the
+            // frame token: dragging a handle must not re-measure the sky.
+            if (this.histo._token !== this._histoToken || !this._histoMap) {
+                this._histoMap = this._displayMap(f);
+            }
+            const dm = this._histoMap;
+            const ch = dm.channels;
+            const bayer = (f.bayerPattern | 0) >= 1 && (f.bayerPattern | 0) <= 4
+                ? (f.bayerPattern | 0) : 0;
+            const color = !!dm.perChan;
+
+            const lut = this._histoLuts(dm, maxVal);
+            const lutR = lut[0], lutG = lut[1], lutB = lut[2];
+
+            const bR = new Float64Array(NB);
+            const bG = color ? new Float64Array(NB) : null;
+            const bB = color ? new Float64Array(NB) : null;
+            // Spread one sample from display position d0 to d1.
+            const spread = (bins, d0, d1) => {
+                let a = d0 * NB, b = d1 * NB;
+                if (b < a) { const t = a; a = b; b = t; }
+                let i0 = a | 0, i1 = b | 0;
+                if (i0 < 0) i0 = 0;
+                if (i1 > NB - 1) i1 = NB - 1;
+                if (i1 < i0) i1 = i0;
+                if (i0 === i1) { bins[i0] += 1; return; }
+                const per = 1 / (i1 - i0 + 1);
+                for (let i = i0; i <= i1; i++) bins[i] += per;
+            };
+            const put = (bins, lu, v) => {
+                const w = v < maxVal ? v + 1 : v;
+                spread(bins, lu[v], lu[w]);
+            };
+
+            let mn = Infinity, mx = 0, sum = 0, sumSq = 0, n = 0;
+            const keep = (l) => {
+                if (l < mn) mn = l;
+                if (l > mx) mx = l;
+                sum += l; sumSq += l * l; n++;
+            };
+            // A drag rebuilds this on every frame, so take fewer samples while
+            // one is in flight. The curve is normalised by its own peak, so a
+            // coarser sample is the same shape.
+            const target = this._histoDrag ? 90000 : 300000;
+
+            if (ch === 3) {
+                const step = Math.max(1, Math.floor(plane / target));
+                for (let i = 0; i < plane; i += step) {
+                    const r = px[i], g = px[plane + i], b = px[2 * plane + i];
+                    put(bR, lutR, r); put(bG, lutG, g); put(bB, lutB, b);
+                    keep(0.299 * r + 0.587 * g + 0.114 * b);
                 }
-                px = lum; n = npix; maxVal = 255;
-            }
-            const NB = 256;
-            const bins = new Float64Array(NB);
-            const step = Math.max(1, Math.floor(n / 300000)); // subsample big sensors
-            const scale = (NB - 1) / maxVal;
-            let mn = maxVal, mx = 0, sum = 0, sumSq = 0, cnt = 0;
-            for (let i = 0; i < n; i += step) {
-                const v = px[i];
-                if (v < mn) mn = v;
-                if (v > mx) mx = v;
-                sum += v; sumSq += v * v; cnt++;
-                let b = (v * scale) | 0;
-                if (b < 0) b = 0; else if (b >= NB) b = NB - 1;
-                bins[b]++;
-            }
-            const avg = cnt ? sum / cnt : 0;
-            const std = cnt ? Math.sqrt(Math.max(0, sumSq / cnt - avg * avg)) : 0;
-            let peak = 1;
-            for (let i = 0; i < NB; i++) if (bins[i] > peak) peak = bins[i];
-
-            // Auto endpoints, computed once per frame via the existing
-            // GraXpert-preset path (temporarily force auto mode so we get the
-            // computed shadow/white regardless of the live toggle).
-            const savedAuto = this.stretchAuto;
-            this.stretchAuto = true;
-            let ap;
-            try { ap = this._computeStretchParams(px, maxVal); }
-            finally { this.stretchAuto = savedAuto; }
-            const aWhite = ap.shadow + (ap.scaleFactor > 0 ? 1 / ap.scaleFactor : maxVal);
-
-            // Per-channel R/G/B bins for the line histogram. The RAW path is
-            // tried FIRST because it is what the LIVE stack and preview/autorun
-            // actually deliver — bucketing the Bayer mosaic keeps a colour frame
-            // showing R/G/B lines instead of collapsing to one white line the
-            // moment a freshly stacked raw frame lands (it only came back after
-            // toggling auto, which re-rendered from the cached JPEG).
-            if (hasRaw && f.bayerPattern >= 1 && f.bayerPattern <= 4
-                && f.width > 3 && f.height > 3) {
-                const w = f.width, h = f.height, bp = f.bayerPattern;
-                const nb = 256, bR = new Float64Array(nb), bG = new Float64Array(nb), bB = new Float64Array(nb);
-                const sc = (nb - 1) / (maxVal || 65535);
-                const cells = Math.floor(w / 2) * Math.floor(h / 2);
-                const st = Math.max(1, Math.floor(Math.sqrt(cells / 150000)));
-                const put = (arr, v) => {
-                    let b = (v * sc) | 0;
-                    if (b < 0) b = 0; else if (b >= nb) b = nb - 1;
-                    arr[b]++;
-                };
-                for (let y = 0; y + 1 < h; y += 2 * st) {
-                    for (let x = 0; x + 1 < w; x += 2 * st) {
-                        const p00 = px[y * w + x], p10 = px[y * w + x + 1];
-                        const p01 = px[(y + 1) * w + x], p11 = px[(y + 1) * w + x + 1];
-                        switch (bp) {
-                            case 1: put(bR, p00); put(bG, p10); put(bG, p01); put(bB, p11); break; // RGGB
-                            case 2: put(bB, p00); put(bG, p10); put(bG, p01); put(bR, p11); break; // BGGR
-                            case 3: put(bG, p00); put(bB, p10); put(bR, p01); put(bG, p11); break; // GBRG
-                            case 4: put(bG, p00); put(bR, p10); put(bB, p01); put(bG, p11); break; // GRBG
+            } else if (bayer) {
+                const cells = Math.floor(W / 2) * Math.floor(H / 2);
+                const stride = Math.max(1, Math.floor(Math.sqrt(cells / (target / 2))));
+                for (let y = 0; y + 1 < H; y += 2 * stride) {
+                    for (let x = 0; x + 1 < W; x += 2 * stride) {
+                        const p00 = px[y * W + x], p10 = px[y * W + x + 1];
+                        const p01 = px[(y + 1) * W + x], p11 = px[(y + 1) * W + x + 1];
+                        let r, g, b;
+                        switch (bayer) {
+                            case 1: r = p00; g = (p10 + p01) >> 1; b = p11; break;      // RGGB
+                            case 2: b = p00; g = (p10 + p01) >> 1; r = p11; break;      // BGGR
+                            case 3: g = (p00 + p11) >> 1; b = p10; r = p01; break;      // GBRG
+                            default: g = (p00 + p11) >> 1; r = p10; b = p01; break;     // GRBG
                         }
+                        put(bR, lutR, r); put(bG, lutG, g); put(bB, lutB, b);
+                        keep(0.299 * r + 0.587 * g + 0.114 * b);
                     }
                 }
-                let pk = 1;
-                for (let i = 0; i < nb; i++) { if (bR[i] > pk) pk = bR[i]; if (bG[i] > pk) pk = bG[i]; if (bB[i] > pk) pk = bB[i]; }
-                this.histo.binsR = bR; this.histo.binsG = bG; this.histo.binsB = bB;
-                this.histo.peakRGB = Math.log1p(pk); this.histo.color = true;
-            } else if (hasJpeg && j) {
-                const d = jpegPixels.data, npix = d.length >> 2;
-                const nb = 256, bR = new Float64Array(nb), bG = new Float64Array(nb), bB = new Float64Array(nb);
-                const st = Math.max(1, Math.floor(npix / 300000));
-                let isColor = false;
-                for (let i = 0; i < npix; i += st) {
-                    const p = i << 2, r = d[p], g = d[p + 1], b = d[p + 2];
-                    bR[r]++; bG[g]++; bB[b]++;
-                    if (!isColor && (r !== g || g !== b)) isColor = true;
-                }
-                if (isColor) {
-                    let pk = 1;
-                    for (let i = 0; i < nb; i++) { if (bR[i] > pk) pk = bR[i]; if (bG[i] > pk) pk = bG[i]; if (bB[i] > pk) pk = bB[i]; }
-                    this.histo.binsR = bR; this.histo.binsG = bG; this.histo.binsB = bB;
-                    this.histo.peakRGB = Math.log1p(pk); this.histo.color = true;
-                } else {
-                    this.histo.color = false; this.histo.binsR = null;
-                }
             } else {
-                this.histo.color = false; this.histo.binsR = null;
+                const step = Math.max(1, Math.floor(px.length / target));
+                for (let i = 0; i < px.length; i += step) {
+                    const v = px[i];
+                    put(bR, lutR, v);
+                    keep(v);
+                }
             }
+            if (n === 0) { this.histo.bins = null; return false; }
 
-            this.histo.bins = bins;
-            this.histo.peak = Math.log1p(peak);
-            this.histo.count = cnt;
-            this.histo.min = mn | 0;
-            this.histo.max = mx | 0;
-            this.histo.avg = Math.round(avg);
-            this.histo.std = Math.round(std);
-            this.histo._maxVal = maxVal;
-            // TRUE full scale of the data, which is NOT always maxVal: the
-            // bit-depth probe in _renderRawFrame may clamp maxVal down to the
-            // observed range, and binning against that made the un-zoomed
-            // histogram cover 0..maxVal instead of 0..65535 - a permanent zoom
-            // the operator never asked for. A JPEG-derived luminance really is
-            // 0..255 display space, so there full scale IS maxVal.
-            this.histo._fullScale = hasRaw ? ((1 << (f.bitDepth || 16)) - 1) : maxVal;
-            // Bins computed here always span the whole scale, and the
-            // handles already act on this same data, so no conversion.
-            this.histo._binLo = 0;
-            this.histo._binHi = 1;
-            this.histo._srvStretch = null;
-            if (hasRaw) {
-                this.histo._autoBlack = Math.max(0, Math.min(1, ap.shadow / maxVal));
-                this.histo._autoWhite = Math.max(0, Math.min(1, aWhite / maxVal));
-                this.histo._autoMid = ap.midtone;
-            } else {
-                // The JPEG on screen was ALREADY display-stretched by the server
-                // (the comment where lum[] is built says so). Deriving auto
-                // endpoints from it and applying them stretches the frame twice:
-                // the endpoints come off a luminance array but the render applies
-                // them per channel, so the weakest channel lifts the most and a
-                // stacked OSC goes blue. It only looked intermittent because the
-                // panel picks its source per refresh - a tick carrying
-                // ls.colorHistogram takes _histogramFromServer, which already
-                // pins the handles to identity, and the next tick without it
-                // lands here and re-derives them. Same frame, two answers.
-                //
-                // Identity here too, matching _histogramFromServer.
-                this.histo._autoBlack = 0;
-                this.histo._autoWhite = 1;
-                this.histo._autoMid = 0.5;
+            let peak = 0;
+            for (let i = 0; i < NB; i++) {
+                if (bR[i] > peak) peak = bR[i];
+                if (color) {
+                    if (bG[i] > peak) peak = bG[i];
+                    if (bB[i] > peak) peak = bB[i];
+                }
             }
+            const mean = sum / n;
+            // On a colour frame the three channel curves are what gets drawn;
+            // `bins` is the mono curve and doubles as the "there is something to
+            // draw" flag, so it points at the reference channel there.
+            this.histo.bins = color ? bG : bR;
+            this.histo.binsR = color ? bR : null;
+            this.histo.binsG = color ? bG : null;
+            this.histo.binsB = color ? bB : null;
+            this.histo.color = color;
+            this.histo.peak = Math.log1p(peak) || 1;
+            this.histo.peakRGB = this.histo.peak;
+            this.histo.count = n;
+            this.histo.maxVal = maxVal;
+            this.histo.min = Math.round(mn === Infinity ? 0 : mn);
+            this.histo.max = Math.round(mx);
+            this.histo.avg = Math.round(mean);
+            this.histo.std = Math.round(Math.sqrt(Math.max(0, sumSq / n - mean * mean)));
             this.histo._token = this._histoToken;
+            this.histo._sig = this._histoStretchSig();
             this._histoUpdateEndpoints();
             return true;
         },
 
-        // Populate the histogram panel from the server-provided 16-bit colour-
-        // stack histogram + stats (OSC live stacking, where the on-wire frame is
-        // an 8-bit JPEG). Mirrors the tail of _ensureHistogram but skips the
-        // pixel scan. Handles stay at identity (the server already auto-stretched
-        // the displayed JPEG); the Zoom button frames the populated band.
-        _histogramFromServer(ls) {
-            const NB = 256;
-            const bins = Float64Array.from(ls.colorHistogram);
-            let peak = 1;
-            for (let i = 0; i < NB; i++) if (bins[i] > peak) peak = bins[i];
-            const maxVal = 65535;
-            this.histo.bins = bins;
-            // Three curves whenever the server sent per-channel bins, which is
-            // what an OSC stack should show. The server used to send only the
-            // luminance array, so this panel drew ONE white line and the only
-            // way to see RGB was to click Auto -- which recomputed locally off
-            // the 8-bit JPEG -- until the next status tick overwrote it again.
-            const cr = ls.colorHistogramR, cg = ls.colorHistogramG, cb = ls.colorHistogramB;
-            const haveRgb = Array.isArray(cr) && cr.length === NB
-                         && Array.isArray(cg) && cg.length === NB
-                         && Array.isArray(cb) && cb.length === NB;
-            if (haveRgb) {
-                const bR = Float64Array.from(cr);
-                const bG = Float64Array.from(cg);
-                const bB = Float64Array.from(cb);
-                let pk = 1;
-                for (let i = 0; i < NB; i++) {
-                    if (bR[i] > pk) pk = bR[i];
-                    if (bG[i] > pk) pk = bG[i];
-                    if (bB[i] > pk) pk = bB[i];
+        // ADU -> screen level, one table per channel, both stretch stages baked
+        // in. Allocated once and refilled in place: this is ~200k entries and a
+        // drag would otherwise hand the collector a megabyte per frame.
+        _histoLuts(dm, maxVal) {
+            const size = maxVal + 1;
+            if (!this._histoLut || this._histoLut[0].length !== size) {
+                this._histoLut = [new Float32Array(size), new Float32Array(size),
+                                  new Float32Array(size)];
+            }
+            const sh3 = dm.perChan
+                ? [dm.perChan.r.shadow, dm.perChan.g.shadow, dm.perChan.b.shadow]
+                : [dm.shadow, dm.shadow, dm.shadow];
+            const sc3 = dm.perChan
+                ? [dm.perChan.r.scale, dm.perChan.g.scale, dm.perChan.b.scale]
+                : [dm.scale, dm.scale, dm.scale];
+            const am = dm.autoMid;
+            const channels = dm.perChan ? 3 : 1;
+            for (let c = 0; c < channels; c++) {
+                const t = this._histoLut[c], sh = sh3[c], sc = sc3[c];
+                for (let v = 0; v < size; v++) {
+                    const n = Math.max(0, Math.min(1, (v - sh) * sc));
+                    t[v] = this._screenTransfer(this._mtf(n, am));
                 }
-                this.histo.binsR = bR; this.histo.binsG = bG; this.histo.binsB = bB;
-                this.histo.peakRGB = Math.log1p(pk); this.histo.color = true;
-            } else {
-                // Older host, or a mono stack: single luminance curve.
-                this.histo.color = false; this.histo.binsR = null;
             }
-            this.histo.peak = Math.log1p(peak);
-            this.histo.count = bins.reduce((a, b) => a + b, 0);
-            this.histo.min = (ls.colorHistMin || 0) | 0;
-            this.histo.max = (ls.colorHistMax || 0) | 0;
-            this.histo.avg = Math.round(ls.colorHistMean || 0);
-            this.histo.std = Math.round(ls.colorHistStd || 0);
-            this.histo._maxVal = maxVal;
-            this.histo._fullScale = maxVal;
-            // The server bins over the band it found populated, not over
-            // 0..65535: on a stacked sky the whole distribution used to land in
-            // two buckets of 256, which no window can draw as anything but a
-            // hairline. Place them where the server says they sit.
-            const bandLo = Number(ls.colorHistLo), bandHi = Number(ls.colorHistHi);
-            const haveBand = isFinite(bandLo) && isFinite(bandHi) && bandHi > bandLo;
-            this.histo._binLo = haveBand ? bandLo / maxVal : 0;
-            this.histo._binHi = haveBand ? bandHi / maxVal : 1;
-            // The stretch this JPEG was rendered with. The handles drive a LUT
-            // over that 8-bit image while this panel draws 16-bit ADU, so
-            // without it a handle cannot be placed on the axis it sits above:
-            // black and white pinned to 0 and 1 of full scale, which since the
-            // bins cover only the populated band means both clamp to the panel
-            // edges, and a drag moves the LUT by an unrelated amount.
-            // Green is the reference channel: it carries 59% of the luminance
-            // and its pedestal sits between red's and blue's. One handle cannot
-            // stand for three different per-channel mappings.
-            const st = Array.isArray(ls.colorStretch) ? ls.colorStretch : null;
-            const g = st && st.length >= 2 ? st[1] : null;
-            this.histo._srvStretch = (g && isFinite(g.black) && isFinite(g.white)
-                                      && g.white > g.black)
-                ? { black: g.black, mid: g.mid, white: g.white }
-                : null;
-            // Server already stretched the JPEG → keep the handles at identity.
-            this.histo._autoBlack = 0;
-            this.histo._autoWhite = 1;
-            this.histo._autoMid = 0.5;
-            this.histo._token = this._histoToken;
-            this._histoUpdateEndpoints();
-            return true;
+            return this._histoLut;
         },
 
-        // Refresh the black/white handle fractions (auto vs manual) and the
-        // drawn X range (full 0..65535, or zoomed to the populated band).
-        _histoUpdateEndpoints() {
-            let midBal;
-            if (this.stretchAuto) {
-                this.histo.blackFrac = this.histo._autoBlack ?? 0;
-                this.histo.whiteFrac = this.histo._autoWhite ?? 1;
-                midBal = this.histo._autoMid ?? 0.5;
-            } else {
-                this.histo.blackFrac = Math.max(0, Math.min(1, this.stretchBlack));
-                this.histo.whiteFrac = Math.max(0, Math.min(1, this.stretchWhite));
-                midBal = this.stretchMid || 0.25;
-            }
-            // Midtone handle: input value (within [black,white]) that maps to
-            // mid-grey = black + midBalance*(white-black).
-            const _b = this.histo.blackFrac, _w = this.histo.whiteFrac;
-            this.histo.midFrac = _b + Math.max(0.001, Math.min(0.999, midBal)) * (_w - _b);
-            // Everything above is in the space the handles ACT in: the 8-bit
-            // display for a server-rendered colour stack, the data itself
-            // otherwise. The panel draws 16-bit ADU, so convert before anything
-            // downstream places a marker or frames the window.
-            if (this.histo._srvStretch) {
-                this.histo.blackFrac = this._histoDisplayToAxis(this.histo.blackFrac);
-                this.histo.whiteFrac = this._histoDisplayToAxis(this.histo.whiteFrac);
-                this.histo.midFrac = this._histoDisplayToAxis(this.histo.midFrac);
-            }
-            // While a handle is being dragged, freeze the drawn X range so the
-            // pointer→fraction reference can't shift under the drag (the same
-            // drift the editor histogram had). It re-frames on the next redraw
-            // after release.
-            if (this._histoDrag) return;
-            const maxV = this.histo._maxVal || 65535;
-            if (this.histoZoom) {
-                // Frame the window on where the pixels ACTUALLY are. The old
-                // rule was avg + 8*std, which assumes one Gaussian: on a
-                // stacked sky (a narrow peak with a long faint tail) and on a
-                // CFA mosaic (one peak per channel pedestal, thousands of
-                // counts apart) the sigma is not the width of anything, so the
-                // window opened far wider than the data and the curve drew as
-                // a hairline until the operator hit Auto a couple of times.
-                let [lo, hi] = this.histoDataWindow();
-                // Expand the window so a handle the user placed stays
-                // visible — but ONLY for handles meaningfully inside the
-                // range. In the OSC/JPEG flow the auto handles sit at
-                // IDENTITY (0 and 1, "server already stretched"), and
-                // expanding to contain them degenerated the zoom to the
-                // full 0..65535 axis on every new stacked frame, which is
-                // exactly the "histogram updates without zoom" complaint.
-                // Identity-pinned handles simply clamp to the panel edges.
-                if (this.histo.blackFrac > 0.001)
-                    lo = Math.min(lo, this.histo.blackFrac - 0.02);
-                if (this.histo.whiteFrac < 0.999)
-                    hi = Math.max(hi, this.histo.whiteFrac + 0.02);
-                // Degeneracy guard only. This used to demand 0.05 of full
-                // scale, 3277 ADU, which is wider than an entire stacked sky:
-                // it overrode the window above and left the curve in a corner
-                // of its own panel (measured on a 74-frame OSC stack: window
-                // 1002..1852 ADU asked for, 1002..4279 drawn). Four buckets of
-                // whatever axis the bins are on is enough to keep the maths
-                // well behaved without framing anything the data did not ask
-                // for.
-                const axis = (this.histo._binHi ?? 1) - (this.histo._binLo ?? 0);
-                const minSpan = Math.max(0.004, 4 * axis / 256);
-                this.histo.dispLo = Math.max(0, lo);
-                this.histo.dispHi = Math.min(1, Math.max(this.histo.dispLo + minSpan, hi));
-            } else {
-                // Zoom off means STATIC and FULL RANGE. dispHi is expressed in
-                // bin-fraction space, so when maxVal was clamped below the real
-                // full scale we open past 1.0 - the bins then occupy only their
-                // true share of the width and histoAxisLabel lands on 0 /
-                // 32768 / 65535 by construction.
-                const full = this.histo._fullScale || maxV;
-                this.histo.dispLo = 0;
-                this.histo.dispHi = maxV > 0 ? Math.max(1, full / maxV) : 1;
-            }
+        // The handles' current state, so the bins are rebuilt when they move
+        // and not when they do not.
+        _histoStretchSig() {
+            return this.stretchBlack + '|' + this.stretchWhite + '|' + this.stretchMid;
         },
 
-        // The [lo, hi] fraction of the axis the zoomed histogram should show:
-        // the 0.1th to 99.9th percentile of the bins, with a small margin, so
-        // the drawn curve fills the panel whatever the distribution looks like.
-        // Falls back to the old spread estimate when there are no bins yet.
-        histoDataWindow() {
-            const h = this.histo;
-            const maxV = h._maxVal || 65535;
-            // Frame every curve the panel actually DRAWS. On an OSC stack that
-            // is the three per-channel arrays, and the window used to be taken
-            // from the luminance array instead. The channels of a colour stack
-            // sit on very different pedestals, so the two are not
-            // interchangeable: measured on a live NGC 7173 stack, R peaked at
-            // 4531 ADU, G at 7507 and B at 11208 while luminance sat at 7049.
-            // The window came out 6369..8045, which framed green nicely and
-            // left red's bulk off the left edge and blue off the right edge
-            // altogether, so the panel showed one green hump and a flat red
-            // line (field, 2026-09-06).
-            const sets = (h.color && h.binsR && h.binsG && h.binsB)
-                ? [h.binsR, h.binsG, h.binsB]
-                : (h.bins ? [h.bins] : []);
-            if (!sets.length || sets[0].length < 2) {
-                return [(h.min / maxV) - 0.01,
-                        (h.avg + 8 * h.std) / maxV + 0.02];
-            }
-            let lo = Infinity, hi = -Infinity;
-            for (const bins of sets) {
-                const [a, b] = this._histoBulkOf(bins);
-                if (a === null) continue;
-                if (a < lo) lo = a;
-                if (b > hi) hi = b;
-            }
-            if (!(hi > lo)) return [0, 1];
-            // Pad relative to the data, not to full scale: 0.01/0.02 of
-            // 0..65535 is 655/1310 ADU, wider than a stacked sky's entire
-            // distribution, so the padding owned the axis and the curve drew
-            // as a hairline in the middle of it.
-            const wide = Math.max(1e-4, hi - lo);
-            return [lo - Math.max(0.0015, wide * 0.10),
-                    hi + Math.max(0.0030, wide * 0.20)];
-        },
-
-        // Where one bin array's bulk sits, as a fraction of full scale. The
-        // upper edge is the 99.5th percentile, not the 99.9th: a sky histogram
-        // is steep on the left with a long sparse tail on the right, and the
-        // last 0.1% of the pixels sits so far up that tail that framing on it
-        // pushed the peak into the left third of the panel. Returns
-        // [null, null] for an empty array.
+        // The 0.1th..99.5th percentile of one bin array, as fractions of full
+        // scale. Asymmetric on purpose: a star field's bright tail is long and
+        // sparse, and letting it set the right edge collapses the sky -- the
+        // part anyone is actually looking at -- into a hairline.
         _histoBulkOf(bins) {
+            if (!bins) return [null, null];
             let total = 0;
             for (let i = 0; i < bins.length; i++) total += bins[i];
-            if (!(total > 0)) return [null, null];
-            const span = bins.length - 1;
+            if (total <= 0) return [null, null];
             const at = (q) => {
                 const want = total * q;
                 let acc = 0;
                 for (let i = 0; i < bins.length; i++) {
                     acc += bins[i];
-                    if (acc >= want) return this._histoBinFrac(i / span);
+                    if (acc >= want) return (i + 0.5) / bins.length;
                 }
-                return this._histoBinFrac(1);
+                return 1;
             };
             return [at(0.001), at(0.995)];
         },
 
-        // Inverse of _mtf: the input that maps to y under midtone m.
-        _mtfInv(y, m) {
-            if (y <= 0) return 0;
-            if (y >= 1) return 1;
-            if (m <= 0 || m >= 1) return y;
-            const den = y * (2 * m - 1) - m + 1;
-            return Math.abs(den) < 1e-12 ? y : (y * m) / den;
+        // The visible window, in fractions of full scale. Zoom off is the whole
+        // scale; Zoom on is the band the data occupies, across EVERY curve the
+        // panel draws (framing on luminance while drawing R/G/B put two of the
+        // three curves partly off-screen).
+        _histoFrame() {
+            if (!this.histoZoom || !this.histo.bins) return [0, 1];
+            const curves = (this.histo.color && this.histo.binsR)
+                ? [this.histo.binsR, this.histo.binsG, this.histo.binsB]
+                : [this.histo.bins];
+            let lo = 1, hi = 0;
+            for (const c of curves) {
+                const w = this._histoBulkOf(c);
+                if (w[0] === null) continue;
+                if (w[0] < lo) lo = w[0];
+                if (w[1] > hi) hi = w[1];
+            }
+            if (hi <= lo) return [0, 1];
+            const pad = Math.max(0.002, (hi - lo) * 0.15);
+            lo = Math.max(0, lo - pad);
+            hi = Math.min(1, hi + pad);
+            // A window narrower than a handful of bins draws as a staircase of
+            // three points, which reads as a broken panel.
+            const MINW = 8 / this.HISTO_BINS;
+            if (hi - lo < MINW) {
+                const mid = (lo + hi) / 2;
+                lo = Math.max(0, Math.min(1 - MINW, mid - MINW / 2));
+                hi = lo + MINW;
+            }
+            return [lo, hi];
         },
 
-        // A handle's fraction of the 8-bit display scale, to the fraction of
-        // full scale where it lands on the 16-bit axis this panel draws.
-        // Identity when the histogram came from local pixels, because there the
-        // handles already act on the same data.
-        _histoDisplayToAxis(d) {
-            const s = this.histo._srvStretch;
-            if (!s) return d;
-            return s.black + this._mtfInv(d, s.mid) * (s.white - s.black);
+        // Handle positions and the visible window.
+        //
+        // The handles and the axis are the same space -- the screen's own 0..1
+        // -- so there is nothing to convert: the black handle IS stretchBlack.
+        _histoUpdateEndpoints() {
+            const h = this.histo;
+            h.blackFrac = Math.max(0, Math.min(1, this.stretchBlack));
+            h.whiteFrac = Math.max(0, Math.min(1, this.stretchWhite));
+            // The midtone is a curve shape, not a level. It is drawn between
+            // the other two because that is where the eye expects the control
+            // that bends what lies between them.
+            h.midFrac = h.blackFrac
+                + Math.max(0.001, Math.min(0.999, this.stretchMid)) * (h.whiteFrac - h.blackFrac);
+
+            if (this._histoDrag) return;
+            let [lo, hi] = this._histoFrame();
+            if (h.blackFrac > 0.001 && h.blackFrac < lo) lo = Math.max(0, h.blackFrac - 0.01);
+            if (h.whiteFrac < 0.999 && h.whiteFrac > hi) hi = Math.min(1, h.whiteFrac + 0.01);
+            h.dispLo = lo;
+            h.dispHi = Math.max(lo + 1e-6, hi);
         },
 
-        // The other direction, for a handle dropped on the axis.
-        _histoAxisToDisplay(a) {
-            const s = this.histo._srvStretch;
-            if (!s) return a;
-            const x = (a - s.black) / Math.max(1e-9, s.white - s.black);
-            return this._mtf(Math.max(0, Math.min(1, x)), s.mid);
+        // One curve's height at every canvas column, 0..1 of the peak.
+        //
+        // Which way it samples depends on how the window sits against the bins,
+        // and both directions matter:
+        //
+        //   * MORE than one bin per column (zoomed out): take the tallest bin
+        //     in the column. Averaging there flattens a narrow sky peak, which
+        //     is the whole shape of a stacked frame.
+        //   * FEWER than one bin per column (zoomed in): interpolate between
+        //     bin centres. Repeating a bin's value across its whole column is
+        //     what draws the curve as a staircase -- a 595 ADU window over
+        //     2048 bins is 19 bins across ~1660 px, so each bin becomes an
+        //     87 px plateau with a cliff at each end.
+        //
+        // Bins are read through a 1-2-1 tap either way, so photon noise between
+        // neighbouring bins does not become a sawtooth once it is stretched
+        // across a hundred pixels.
+        _histoSample(bins, lo, hi, w) {
+            const NB = bins.length;
+            const span = Math.max(1e-9, hi - lo);
+            const out = new Float64Array(w + 1);
+            const tap = (i) => {
+                if (i < 0 || i >= NB) return 0;
+                const a = i > 0 ? bins[i - 1] : bins[i];
+                const b = i < NB - 1 ? bins[i + 1] : bins[i];
+                return (a + 2 * bins[i] + b) / 4;
+            };
+            const binsPerPx = (span * NB) / Math.max(1, w);
+            for (let x = 0; x <= w; x++) {
+                if (binsPerPx >= 1) {
+                    const i0 = Math.max(0, Math.floor((lo + (x / w) * span) * NB));
+                    const i1 = Math.min(NB, Math.max(i0 + 1,
+                        Math.ceil((lo + ((x + 1) / w) * span) * NB)));
+                    let m = 0;
+                    for (let i = i0; i < i1; i++) { const v = tap(i); if (v > m) m = v; }
+                    out[x] = m;
+                } else {
+                    // Position in bin space, measured from bin CENTRES.
+                    const pos = (lo + (x / w) * span) * NB - 0.5;
+                    const i = Math.floor(pos), f = pos - i;
+                    out[x] = tap(i) * (1 - f) + tap(i + 1) * f;
+                }
+            }
+            return out;
         },
 
-        // Position within the bin array (0..1) to a fraction of full scale.
-        // Identity for locally computed histograms; the server's colour-stack
-        // bins cover only the populated band and carry its ADU bounds.
-        _histoBinFrac(t) {
-            const lo = this.histo._binLo ?? 0, hi = this.histo._binHi ?? 1;
-            return lo + t * (hi - lo);
-        },
-
-        // Draw the histogram bars + black/white marker lines onto the active
-        // tab's canvas. No-ops cleanly when the canvas isn't laid out yet
-        // (hidden tab) — the next applyManualStretch / tab switch redraws it.
-        // Draw one histogram channel as a polyline (log-scaled). `bins` is a
-        // 256-length array; lo/hi are the visible frac window [0,1].
         _histoLine(ctx, bins, peakLog, color, w, h, lo, hi) {
-            const NB = bins.length, span = Math.max(1e-6, hi - lo);
-            const pk = peakLog || 1;
-            // Collect points for visible, NON-EMPTY bins only. Plotting empty
-            // bins dropped the line to the floor (log1p(0)=0) on every gap,
-            // which on a combed/bit-quantised mono frame turns the curve into a
-            // sawtooth of spikes. Skipping zeros traces the envelope through the
-            // populated bins instead.
-            const pts = [];
-            for (let b = 0; b < NB; b++) {
-                const c = bins[b];
-                if (c <= 0) continue;
-                const frac = this._histoBinFrac((b + 0.5) / NB);
-                if (frac < lo || frac > hi) continue;
-                const x = ((frac - lo) / span) * w;
-                const y = h - (Math.log1p(c) / pk) * (h - 1);
-                pts.push({ x, y });
-            }
-            if (!pts.length) return;
-            // Gentle 3-tap moving average on the vertical values so both the OSC
-            // and mono curves read as clean envelopes rather than noisy combs.
-            if (pts.length > 2) {
-                const ys = pts.map(p => p.y);
-                for (let i = 0; i < pts.length; i++) {
-                    const a = ys[i - 1] ?? ys[i], b0 = ys[i], c0 = ys[i + 1] ?? ys[i];
-                    pts[i].y = (a + b0 + c0) / 3;
-                }
-            }
-            ctx.strokeStyle = color; ctx.lineWidth = 1.25;
-            ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+            if (!bins || !(peakLog > 0) || w < 2) return;
+            const vals = this._histoSample(bins, lo, hi, w);
+            const yOf = (v) => h - Math.min(1, Math.log1p(v) / peakLog) * (h - 3) - 1;
             ctx.beginPath();
-            ctx.moveTo(pts[0].x, pts[0].y);
-            if (pts.length < 3) {
-                for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-            } else {
-                // Smooth path: quadratic curves through bin midpoints so the
-                // envelope is rounded rather than a jagged polyline.
-                let i;
-                for (i = 1; i < pts.length - 2; i++) {
-                    const xc = (pts[i].x + pts[i + 1].x) / 2;
-                    const yc = (pts[i].y + pts[i + 1].y) / 2;
-                    ctx.quadraticCurveTo(pts[i].x, pts[i].y, xc, yc);
-                }
-                ctx.quadraticCurveTo(pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y);
+            ctx.moveTo(0, yOf(vals[0]));
+            // Quadratic through the midpoints: the samples are the control
+            // points and the curve passes between them, which rounds the
+            // corners without inventing peaks the data does not have.
+            for (let x = 1; x < w; x++) {
+                const y0 = yOf(vals[x]), y1 = yOf(vals[x + 1]);
+                ctx.quadraticCurveTo(x, y0, x + 0.5, (y0 + y1) / 2);
             }
+            ctx.lineTo(w, yOf(vals[w]));
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1.25;
+            ctx.lineJoin = 'round';
             ctx.stroke();
         },
+
         drawHistogram() {
             try {
-                // Only LIVE / PREVIEW / AUTORUN(sequence) host the panel; skip
-                // the histogram scan entirely on other tabs (e.g. VIDEO).
+                // Only LIVE / PREVIEW / AUTORUN host the panel; skip the whole
+                // scan on any other tab.
                 const t = this.tab;
                 if (t !== 'live' && t !== 'preview' && t !== 'sequence') return;
-                if (!this._ensureHistogram()) return;
+                if (!this._histoBuild()) return;
                 const cv = document.getElementById(this._histoCanvasId());
                 if (!cv) return;
                 const rect = cv.getBoundingClientRect();
@@ -10393,201 +10400,132 @@ function ninaApp() {
                 ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
                 ctx.clearRect(0, 0, w, h);
 
-                const bins = this.histo.bins;
-                if (!bins) return;
                 const lo = this.histo.dispLo, hi = this.histo.dispHi;
+                const span = Math.max(1e-9, hi - lo);
+                const xOf = (frac) => ((frac - lo) / span) * w;
 
-                // Per-channel R/G/B lines for a colour frame, a single white
-                // line for mono.
                 if (this.histo.color && this.histo.binsR) {
                     const pk = this.histo.peakRGB || 1;
                     this._histoLine(ctx, this.histo.binsR, pk, 'rgba(255,95,95,0.9)', w, h, lo, hi);
                     this._histoLine(ctx, this.histo.binsG, pk, 'rgba(90,220,120,0.9)', w, h, lo, hi);
                     this._histoLine(ctx, this.histo.binsB, pk, 'rgba(90,160,255,0.9)', w, h, lo, hi);
                 } else {
-                    this._histoLine(ctx, bins, this.histo.peak || 1, 'rgba(230,235,245,0.92)', w, h, lo, hi);
+                    this._histoLine(ctx, this.histo.bins, this.histo.peak || 1,
+                        'rgba(230,235,245,0.92)', w, h, lo, hi);
                 }
-                // Midpoint tick (helps read the 0..65535 scale like ASIAIR's
-                // centre gridline at 32768).
-                const midFrac = 0.5;
-                if (midFrac >= lo && midFrac <= hi) {
+
+                // Half-scale gridline, ASIAIR's 32768 tick.
+                if (0.5 >= lo && 0.5 <= hi) {
                     ctx.strokeStyle = 'rgba(255,255,255,0.12)';
                     ctx.lineWidth = 1;
-                    const xm = ((midFrac - lo) / span) * w;
+                    const xm = xOf(0.5);
                     ctx.beginPath(); ctx.moveTo(xm, 0); ctx.lineTo(xm, h); ctx.stroke();
                 }
                 const marker = (frac, color) => {
                     if (frac < lo || frac > hi) return;
-                    const x = ((frac - lo) / span) * w;
                     ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+                    const x = xOf(frac);
                     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
                 };
                 marker(this.histo.blackFrac, 'rgba(255,255,255,0.55)');
                 marker(this.histo.whiteFrac, 'rgba(255,255,255,0.55)');
-            } catch (e) { /* canvas not ready / context lost — ignore */ }
+            } catch (e) {
+                // A canvas can genuinely be missing mid tab switch. Say so
+                // instead of swallowing it: a silent catch here is exactly how
+                // an undeclared variable hid in this function for two months.
+                console.debug('[histogram] draw skipped:', e);
+            }
         },
 
-        // Histogram for JPEG frames (the colour OSC live stack, which the
-        // server broadcasts already rendered — there's no raw pixel buffer
-        // for _ensureHistogram to read). Computes a 256-bin luminance
-        // histogram directly from the decoded canvas and draws bars onto the
-        // tab's histo canvas. No black/white handles: the stack is already
-        // stretched server-side, so the manual stretch markers don't apply.
-        _drawCanvasHistogram(srcCanvas) {
-            try {
-                const t = this.tab;
-                if (t !== 'live' && t !== 'preview' && t !== 'sequence') return;
-                if (!srcCanvas || !srcCanvas.width || !srcCanvas.height) return;
-                const cv = document.getElementById(this._histoCanvasId());
-                if (!cv) return;
-                const rect = cv.getBoundingClientRect();
-                if (rect.width < 2 || rect.height < 2) return;
-
-                let data;
-                try {
-                    const sctx = srcCanvas.getContext('2d');
-                    data = sctx.getImageData(0, 0, srcCanvas.width, srcCanvas.height).data;
-                } catch (e) { return; }  // tainted/empty canvas
-
-                const NB = 256;
-                const bR = new Float64Array(NB), bG = new Float64Array(NB), bB = new Float64Array(NB);
-                const npx = (data.length / 4) | 0;
-                const step = Math.max(1, Math.floor(npx / 150000)); // subsample
-                let isColor = false;
-                for (let i = 0; i < npx; i += step) {
-                    const o = i * 4, r = data[o], g = data[o + 1], b = data[o + 2];
-                    bR[r]++; bG[g]++; bB[b]++;
-                    if (!isColor && (r !== g || g !== b)) isColor = true;
-                }
-                let peak = 1;
-                for (let i = 0; i < NB; i++) { if (bR[i] > peak) peak = bR[i]; if (bG[i] > peak) peak = bG[i]; if (bB[i] > peak) peak = bB[i]; }
-                const logPeak = Math.log1p(peak) || 1;
-
-                const dpr = window.devicePixelRatio || 1;
-                const w = Math.round(rect.width), h = Math.round(rect.height);
-                if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) {
-                    cv.width = Math.round(w * dpr);
-                    cv.height = Math.round(h * dpr);
-                }
-                const ctx = cv.getContext('2d');
-                ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-                ctx.clearRect(0, 0, w, h);
-                const xm = 0.5 * w;
-                ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-                ctx.lineWidth = 1;
-                ctx.beginPath(); ctx.moveTo(xm, 0); ctx.lineTo(xm, h); ctx.stroke();
-                if (isColor) {
-                    this._histoLine(ctx, bR, logPeak, 'rgba(255,95,95,0.9)', w, h, 0, 1);
-                    this._histoLine(ctx, bG, logPeak, 'rgba(90,220,120,0.9)', w, h, 0, 1);
-                    this._histoLine(ctx, bB, logPeak, 'rgba(90,160,255,0.9)', w, h, 0, 1);
-                } else {
-                    this._histoLine(ctx, bR, logPeak, 'rgba(230,235,245,0.92)', w, h, 0, 1);
-                }
-            } catch (e) { /* ignore */ }
-        },
-
-        // Axis tick label for the mini-panel histogram. pos is 0..1 across the
-        // drawn width; returns the raw 16-bit value at that position. Must track
-        // the zoom (dispLo/dispHi) so the axis numbers match where the bars and
-        // handles actually sit — otherwise Zoom compresses the bars into the
-        // populated band while the axis still reads 0 / 32768 / 65535 and the
-        // graph no longer corresponds to its own scale.
+        // Screen level under a given fraction of the panel width, 0..100.
+        // Not ADU: the axis is the displayed image, and an ADU label under a
+        // curve built from screen values would be a number for a quantity that
+        // is not being drawn.
         histoAxisLabel(pos) {
-            const mv = this.histo._maxVal || 65535;
-            const lo = this.histo.dispLo ?? 0, hi = this.histo.dispHi ?? 1;
-            return Math.round((lo + pos * (hi - lo)) * mv);
+            const h = this.histo;
+            return Math.round((h.dispLo + pos * (h.dispHi - h.dispLo)) * 100);
         },
 
-        // Handle X position (%) within the drawn range, for the draggable
-        // pill overlays.
         histoMarkerPct(which) {
-            const lo = this.histo.dispLo, hi = this.histo.dispHi;
-            const span = Math.max(1e-6, hi - lo);
-            const frac = which === 'black' ? this.histo.blackFrac
-                       : which === 'mid'  ? this.histo.midFrac
-                       : this.histo.whiteFrac;
-            return Math.max(0, Math.min(100, ((frac - lo) / span) * 100));
+            const h = this.histo;
+            const frac = which === 'black' ? h.blackFrac
+                       : which === 'white' ? h.whiteFrac : h.midFrac;
+            const span = Math.max(1e-9, h.dispHi - h.dispLo);
+            return Math.max(0, Math.min(100, ((frac - h.dispLo) / span) * 100));
         },
 
         histoHandleDown(ev, which) {
-            ev.preventDefault();
-            const graph = ev.currentTarget.closest('.histo-graph');
+            const graph = ev.target.closest('.histo-graph');
             if (!graph) return;
-            // First drag flips to manual, seeding the sliders from wherever
-            // Auto currently has the endpoints so the image doesn't jump.
-            if (this.stretchAuto) {
-                this.stretchBlack = this.histo.blackFrac;
-                this.stretchWhite = this.histo.whiteFrac;
-                if (this.histo._autoMid != null) this.stretchMid = this.histo._autoMid;
-                this.stretchAuto = false;
-            }
-            // Capture the rect + display range now and use them for the whole
-            // drag so the pointer→fraction mapping is rock-stable.
+            ev.preventDefault();
+            // Nothing to seed: the handles already hold the identity screen
+            // transfer, so the first pixel of a drag moves the picture from
+            // exactly where it was.
+            this.stretchAuto = false;
             this._histoDrag = {
-                which, rect: graph.getBoundingClientRect(),
-                lo: this.histo.dispLo, hi: this.histo.dispHi
+                which,
+                rect: graph.getBoundingClientRect(),
+                lo: this.histo.dispLo,
+                hi: this.histo.dispHi,
             };
             const move = (e) => this._histoDragMove(e);
             const up = () => {
                 window.removeEventListener('pointermove', move);
                 window.removeEventListener('pointerup', up);
-                if (this._histoRaf) { cancelAnimationFrame(this._histoRaf); this._histoRaf = null; }
+                if (this._histoRaf) { cancelAnimationFrame(this._histoRaf); this._histoRaf = 0; }
                 this._histoDrag = null;
-                // Commit the new stretch to the frame ONLY on release, and defer
-                // it off the pointerup handler so the gesture ends instantly and
-                // the heavy full-frame re-render never blocks the drag.
+                // Commit on release, not per pointermove: a full re-render of a
+                // 20 MP frame per move event freezes the drag.
                 requestAnimationFrame(() => this.applyManualStretch());
             };
             window.addEventListener('pointermove', move);
             window.addEventListener('pointerup', up);
+            this._histoDragMove(ev);
         },
 
         _histoDragMove(e) {
             const d = this._histoDrag;
             if (!d) return;
-            const lo = d.lo, hi = d.hi;   // captured at drag start; stable
-            const span = Math.max(1e-6, hi - lo);
-            let fx = (e.clientX - d.rect.left) / Math.max(1, d.rect.width);
-            fx = Math.max(0, Math.min(1, fx));
-            // The pointer lands on the drawn axis; the stretch lives in the
-            // space the handles act in. Convert once, here, and let
-            // _histoUpdateEndpoints derive the drawn positions back from it, so
-            // there is a single source of truth either way.
-            const dfrac = this._histoAxisToDisplay(lo + fx * span);
-            // No hard limits: each handle is bounded only by its neighbours.
-            // black: 0 .. white, mid: black .. white, white: mid .. 1.
+            const span = Math.max(1e-9, d.hi - d.lo);
+            const x = (e.clientX - d.rect.left) / Math.max(1, d.rect.width);
+            // Handle space IS data space now, so this is the whole conversion.
+            const frac = Math.max(0, Math.min(1, d.lo + Math.max(0, Math.min(1, x)) * span));
             if (d.which === 'black') {
-                this.stretchBlack = Math.max(0, Math.min(dfrac, this.stretchWhite));
+                this.stretchBlack = Math.max(0, Math.min(frac, this.stretchWhite));
             } else if (d.which === 'white') {
-                this.stretchWhite = Math.min(1, Math.max(dfrac, this.stretchBlack));
-            } else { // mid
+                this.stretchWhite = Math.min(1, Math.max(frac, this.stretchBlack));
+            } else {
                 const b = this.stretchBlack, w = this.stretchWhite;
-                const cf = Math.max(b, Math.min(dfrac, w));
+                const cf = Math.max(b, Math.min(frac, w));
                 this.stretchMid = Math.max(0.001, Math.min(0.999, (cf - b) / Math.max(1e-6, w - b)));
             }
-            this._histoUpdateEndpoints();   // redraws the pills where they land
-            // While dragging, do NOT re-render the frame (that full-frame
-            // stretch is what froze the UI). The handles track the pointer
-            // live via their reactive :style; only the lightweight histogram
-            // overlay (cached bins + shaded region) is redrawn, throttled to
-            // one per animation frame. The frame itself is committed once on
-            // release (see histoHandleDown's up handler).
+            this._histoUpdateEndpoints();
             if (!this._histoRaf) {
                 this._histoRaf = requestAnimationFrame(() => {
-                    this._histoRaf = null;
+                    this._histoRaf = 0;
+                    // The curve is the picture, so it has to follow the drag.
+                    // Cheap: stage 1 is cached against the frame, only the
+                    // per-sample screen transfer is redone.
+                    this.histo._sig = null;
                     this.drawHistogram();
                 });
             }
         },
 
+        // Back to the plain auto rendering: the screen transfer to identity.
         histoAuto() {
-            this.stretchAuto = !this.stretchAuto;
+            this.stretchAuto = true;
+            this.stretchBlack = 0;
+            this.stretchWhite = 1;
+            this.stretchMid = 0.5;
+            this.histo._sig = null;
             this.applyManualStretch();
-            this.toast(this.stretchAuto ? 'Auto-stretch on' : 'Auto-stretch off (manual)', 'ok');
+            this.toast('Auto-stretch', 'ok');
         },
 
         histoToggleZoom() {
             this.histoZoom = !this.histoZoom;
+            this._histoUpdateEndpoints();
             this.drawHistogram();
         },
 
@@ -10784,10 +10722,27 @@ function ninaApp() {
                 precision highp float;
                 precision highp usampler2D;
                 uniform usampler2D u_tex;
+                // The colour live stack arrives as three separate 16-bit
+                // planes. They go in three textures rather than one tall
+                // atlas: a 3*height atlas of a 1536-wide frame is 4608 rows,
+                // over the 4096 MAX_TEXTURE_SIZE that plenty of mobile GPUs
+                // report, and an oversize upload does not throw -- it leaves
+                // the texture incomplete and paints black.
+                uniform usampler2D u_texG;
+                uniform usampler2D u_texB;
+                uniform int u_channels;   // 1 = mono / Bayer mosaic, 3 = RGB planes
                 uniform vec2 u_texSize;
                 uniform float u_shadow;
                 uniform float u_scale;
-                uniform float u_mtf;   // typically 0.25
+                uniform float u_mtf;   // the AUTO midtone, stage 1
+                // Stage 2, the operator's screen transfer. It runs on the
+                // already-normalised stage-1 value, so 0/0.5/1 is the identity
+                // and the picture is exactly the auto rendering. Everything the
+                // handles do lives here: stage 1 is what makes the background
+                // neutral, and the handles must not be able to undo that.
+                uniform float u_sBlack;
+                uniform float u_sWhite;
+                uniform float u_sMid;
                 uniform int u_bayer;   // 0=mono 1=RGGB 2=BGGR 3=GBRG 4=GRBG
                 uniform ivec2 u_bayerOff; // pixel offset (0 or 1) for the Bayer grid origin
                 uniform vec2 u_outSize;   // debayer output canvas size in pixels
@@ -10834,10 +10789,16 @@ function ninaApp() {
                 // blue cast). Shared midtone (u_mtf).
                 uniform vec3 u_shadow3;
                 uniform vec3 u_scale3;
+                float screen(float a) {
+                    float x = clamp((a - u_sBlack) / max(1e-6, u_sWhite - u_sBlack), 0.0, 1.0);
+                    float d = (2.0 * u_sMid - 1.0) * x - u_sMid;
+                    return ((u_sMid - 1.0) * x) / (d - 1e-12);
+                }
+
                 float stretchM(float v, float sh, float sc) {
                     float n = clamp((v - sh) * sc, 0.0, 1.0);
                     float denom = (2.0 * u_mtf - 1.0) * n - u_mtf;
-                    return ((u_mtf - 1.0) * n) / (denom - 1e-12);
+                    return screen(((u_mtf - 1.0) * n) / (denom - 1e-12));
                 }
 
                 float stretch(float v) {
@@ -10854,10 +10815,24 @@ function ninaApp() {
                     // the midtone was effectively ignored and the
                     // image looked dim + pale.
                     float denom = (2.0 * u_mtf - 1.0) * n - u_mtf;
-                    return ((u_mtf - 1.0) * n) / (denom - 1e-12);
+                    return screen(((u_mtf - 1.0) * n) / (denom - 1e-12));
                 }
 
                 void main() {
+                    if (u_channels == 3) {
+                        // Already debayered, one texel per output pixel per
+                        // plane. Same per-channel stretch the Bayer path uses,
+                        // so a stack and a sub of the same target look alike.
+                        ivec2 p = ivec2(v_uv * u_texSize);
+                        p = clamp(p, ivec2(0), ivec2(u_texSize) - ivec2(1));
+                        float r = float(texelFetch(u_tex,  p, 0).r);
+                        float g = float(texelFetch(u_texG, p, 0).r);
+                        float b = float(texelFetch(u_texB, p, 0).r);
+                        fragColor = vec4(stretchM(r, u_shadow3.r, u_scale3.r),
+                                         stretchM(g, u_shadow3.g, u_scale3.g),
+                                         stretchM(b, u_shadow3.b, u_scale3.b), 1.0);
+                        return;
+                    }
                     if (u_bayer == 0) {
                         float v = fetch(v_uv);
                         float s = stretch(v);
@@ -10980,12 +10955,18 @@ function ninaApp() {
             this._glProgram = prog;
             this._glLocs = {
                 tex: gl.getUniformLocation(prog, 'u_tex'),
+                texG: gl.getUniformLocation(prog, 'u_texG'),
+                texB: gl.getUniformLocation(prog, 'u_texB'),
+                channels: gl.getUniformLocation(prog, 'u_channels'),
                 texSize: gl.getUniformLocation(prog, 'u_texSize'),
                 shadow: gl.getUniformLocation(prog, 'u_shadow'),
                 scale: gl.getUniformLocation(prog, 'u_scale'),
                 shadow3: gl.getUniformLocation(prog, 'u_shadow3'),
                 scale3: gl.getUniformLocation(prog, 'u_scale3'),
                 mtf: gl.getUniformLocation(prog, 'u_mtf'),
+                sBlack: gl.getUniformLocation(prog, 'u_sBlack'),
+                sWhite: gl.getUniformLocation(prog, 'u_sWhite'),
+                sMid: gl.getUniformLocation(prog, 'u_sMid'),
                 bayer: gl.getUniformLocation(prog, 'u_bayer'),
                 bayerOff: gl.getUniformLocation(prog, 'u_bayerOff'),
                 outSize: gl.getUniformLocation(prog, 'u_outSize'),
@@ -10993,13 +10974,21 @@ function ninaApp() {
                 fullDebayer: gl.getUniformLocation(prog, 'u_fullDebayer')
             };
             this._glTexture = gl.createTexture();
+            this._glTextureG = gl.createTexture();
+            this._glTextureB = gl.createTexture();
+            // Sampler units are fixed for the life of the program.
+            gl.useProgram(prog);
+            if (this._glLocs.tex) gl.uniform1i(this._glLocs.tex, 0);
+            if (this._glLocs.texG) gl.uniform1i(this._glLocs.texG, 1);
+            if (this._glLocs.texB) gl.uniform1i(this._glLocs.texB, 2);
             console.info('WebGL2 renderer initialised');
             return true;
         },
 
-        _tryRenderWebGL(pixels, width, height, bitDepth, bayerPattern, shadow, scaleFactor, midtone, frameKind = 0, perChan = null) {
+        _tryRenderWebGL(pixels, width, height, bitDepth, bayerPattern, shadow, scaleFactor, midtone, frameKind = 0, perChan = null, channels = 1) {
             if (!this._initWebGL()) return false;
             const gl = this._gl;
+            const isRgb = (channels | 0) === 3 && pixels.length >= width * height * 3;
             // GPU surface is an OFFSCREEN canvas, not the LIVE display.
             // _initWebGL() creates it once and attaches the WebGL2
             // context to it. Rendering used to target liveCanvas
@@ -11108,7 +11097,67 @@ function ninaApp() {
             gl.viewport(0, 0, canvas.width, canvas.height);
             gl.useProgram(this._glProgram);
 
+            if (isRgb) {
+                // Three planes, three R16UI textures, one texel each per output
+                // pixel. Nothing to debayer and no cell phase to preserve, so
+                // the mosaic-aware sizing above does not apply.
+                const plane = width * height;
+                const ok = [0, 1, 2].every((k) => {
+                    const tex = k === 0 ? this._glTexture
+                              : k === 1 ? this._glTextureG : this._glTextureB;
+                    gl.activeTexture(gl.TEXTURE0 + k);
+                    gl.bindTexture(gl.TEXTURE_2D, tex);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                    gl.getError();
+                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16UI, width, height, 0,
+                        gl.RED_INTEGER, gl.UNSIGNED_SHORT,
+                        pixels.subarray(k * plane, (k + 1) * plane));
+                    const e = gl.getError();
+                    if (e !== gl.NO_ERROR) {
+                        console.warn('RGB plane ' + k + ' upload failed: GL error 0x'
+                            + e.toString(16) + ' for ' + width + 'x' + height);
+                        return false;
+                    }
+                    return true;
+                });
+                gl.activeTexture(gl.TEXTURE0);
+                if (!ok) return false;
+                gl.uniform1i(this._glLocs.channels, 3);
+                gl.uniform1i(this._glLocs.bayer, 0);
+                gl.uniform1f(this._glLocs.sBlack, this.stretchBlack);
+                gl.uniform1f(this._glLocs.sWhite,
+                    Math.max(this.stretchBlack + 1e-4, this.stretchWhite));
+                gl.uniform1f(this._glLocs.sMid,
+                    Math.max(0.001, Math.min(0.999, this.stretchMid)));
+
+                gl.uniform2f(this._glLocs.texSize, width, height);
+                gl.uniform1f(this._glLocs.mtf, midtone);
+                if (perChan && perChan.r && perChan.g && perChan.b) {
+                    gl.uniform3f(this._glLocs.shadow3,
+                        perChan.r.shadow, perChan.g.shadow, perChan.b.shadow);
+                    gl.uniform3f(this._glLocs.scale3,
+                        perChan.r.scale, perChan.g.scale, perChan.b.scale);
+                } else {
+                    gl.uniform3f(this._glLocs.shadow3, shadow, shadow, shadow);
+                    gl.uniform3f(this._glLocs.scale3, scaleFactor, scaleFactor, scaleFactor);
+                }
+                gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+                this._fanOutFrameToCanvases(canvas, canvas.width, canvas.height, frameKind);
+                this.redrawOverlay();
+                return true;
+            }
+            gl.uniform1i(this._glLocs.channels, 1);
+                gl.uniform1f(this._glLocs.sBlack, this.stretchBlack);
+                gl.uniform1f(this._glLocs.sWhite,
+                    Math.max(this.stretchBlack + 1e-4, this.stretchWhite));
+                gl.uniform1f(this._glLocs.sMid,
+                    Math.max(0.001, Math.min(0.999, this.stretchMid)));
+
             // Upload pixel data as R16UI texture
+            gl.activeTexture(gl.TEXTURE0);
             gl.bindTexture(gl.TEXTURE_2D, this._glTexture);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
@@ -11463,8 +11512,18 @@ function ninaApp() {
             // 1 = BIAS/DARK/FLAT: skip the OSC per-channel sky-neutralising
             // stretch, which casts a flat noise frame strongly (the "bias is
             // all pink under auto-stretch" report); render it neutral instead.
+            // Informational: nothing keys off it since stage 1 became a
+            // gain balance, which neutralises a bias as well as a light.
             const calibration = (headerLen >= 28 && arrayBuffer.byteLength >= 32)
                 ? dv.getInt32(28, true) : 0;
+            // Channels (header offset 28 -> arrayBuffer offset 32). 1 = one
+            // plane (mono, or a Bayer mosaic the shader debayers); 3 = a
+            // plane-sequential RGB buffer, R then G then B, each width*height.
+            // A server that predates the field sends no channel count, so the
+            // absent value must read as 1 -- assuming 3 there would slice a
+            // mono frame into thirds.
+            const channels = (headerLen >= 32 && arrayBuffer.byteLength >= 36)
+                ? dv.getInt32(32, true) : 1;
 
             // LIVE-TRACE (FIELD6-8): client half of the server's LIVE-TRACE.
             // Pairs 1:1 with the "-> RelayImageAsync" line in the app LOG, so a
@@ -11579,6 +11638,8 @@ function ninaApp() {
             // case this guard exists for — never a real 16-bit sub, whose
             // background alone sits in the thousands.
             const probeStride = Math.max(1, (pixels.length / 1_000_000) | 0);
+            // (the probe walks every plane on an RGB frame, which is what we
+            // want: maxVal has to cover the brightest channel)
             let observedMax = 0;
             for (let i = 0; i < pixels.length; i += probeStride) {
                 if (pixels[i] > observedMax) observedMax = pixels[i];
@@ -11611,7 +11672,7 @@ function ninaApp() {
             // snap, switch tabs (triggers $watch('tab') -> applyManualStretch),
             // and the preview frame leaks onto the LIVE canvas because
             // the re-render forgot which panel originally owned it.
-            this._lastRawFrame = { pixels, width, height, bitDepth, bayerPattern, maxVal, frameKind, calibration };
+            this._lastRawFrame = { pixels, width, height, bitDepth, bayerPattern, maxVal, frameKind, calibration, channels };
             // New frame → invalidate the cached histogram bins so the mini
             // panel recomputes min/max/avg/std + bars on the next draw.
             this._histoToken++;
@@ -11639,24 +11700,19 @@ function ninaApp() {
             // same neutral-background colour the server's live stack does
             // (fixes the bluish preview / autorun / autofocus cast). In
             // manual mode the user's global endpoints apply to all channels.
-            let perChan = null;
-            const isColorFrame = (bayerPattern | 0) >= 1 && (bayerPattern | 0) <= 4;
-            // Skip per-channel neutralisation for calibration frames (BIAS/DARK
-            // /FLAT): they have no sky background to neutralise, so per-channel
-            // just amplifies channel offset noise into a colour cast. Render
-            // them with the single global stretch (neutral noise, like STUDIO).
-            if (isColorFrame && this.stretchAuto && !calibration) {
-                perChan = this._computePerChannelStretch(pixels, width, height, bayerPattern, maxVal);
-            }
-
+            const dm = this._displayMap({
+                pixels, width, height, bayerPattern, maxVal, channels, calibration,
+            });
+            const chCount = dm.channels;
+            const perChan = dm.perChan;
             // When the per-channel path is active its midtone MUST win: the
             // global one is calibrated for a completely different normalisation
             // (see _computePerChannelStretch) and renders the frame black.
-            const effMidtone = (perChan && perChan.midtone) ? perChan.midtone : midtone;
+            const effMidtone = dm.autoMid;
 
             // Try WebGL2 path first (GPU does debayer + stretch in microseconds)
             if (this._tryRenderWebGL(pixels, width, height, bitDepth,
-                    bayerPattern, shadow, scaleFactor, effMidtone, frameKind, perChan)) {
+                    bayerPattern, shadow, scaleFactor, effMidtone, frameKind, perChan, chCount)) {
                 this.drawHistogram();   // refresh the histogram mini-panel
                 return;
             }
@@ -11674,15 +11730,39 @@ function ninaApp() {
             const oCtx = offscreen.getContext('2d');
             const imgData = oCtx.createImageData(width, height);
             const data = imgData.data;
-            for (let i = 0; i < pixels.length; i++) {
-                const normalized = Math.max(0, (pixels[i] - shadow) * scaleFactor);
-                const mtf = normalized > 0 ? (normalized * 0.25) / ((0.25 - 1) * normalized + 1) : 0;
-                const val = Math.min(255, Math.round(mtf * 255));
-                const j = i * 4;
-                data[j] = val;
-                data[j + 1] = val;
-                data[j + 2] = val;
-                data[j + 3] = 255;
+            // Stage 1 then stage 2, the same two the shader applies, so a
+            // client without WebGL2 sees the same picture and the histogram
+            // still describes it.
+            const tone = (v, sh, sc) => {
+                const n = Math.max(0, Math.min(1, (v - sh) * sc));
+                const a = this._mtf(n, effMidtone);
+                return Math.min(255, Math.round(this._screenTransfer(a) * 255));
+            };
+            if (chCount === 3 && pixels.length >= width * height * 3) {
+                // Without this branch a colour stack renders as a GREYSCALE
+                // picture of its red plane on any client without WebGL2 —
+                // the loop below reads pixels[i] straight through.
+                const plane = width * height;
+                const sh3 = perChan ? [perChan.r.shadow, perChan.g.shadow, perChan.b.shadow]
+                                    : [shadow, shadow, shadow];
+                const sc3 = perChan ? [perChan.r.scale, perChan.g.scale, perChan.b.scale]
+                                    : [scaleFactor, scaleFactor, scaleFactor];
+                for (let i = 0; i < plane; i++) {
+                    const j = i * 4;
+                    data[j]     = tone(pixels[i], sh3[0], sc3[0]);
+                    data[j + 1] = tone(pixels[plane + i], sh3[1], sc3[1]);
+                    data[j + 2] = tone(pixels[2 * plane + i], sh3[2], sc3[2]);
+                    data[j + 3] = 255;
+                }
+            } else {
+                for (let i = 0; i < pixels.length; i++) {
+                    const val = tone(pixels[i], shadow, scaleFactor);
+                    const j = i * 4;
+                    data[j] = val;
+                    data[j + 1] = val;
+                    data[j + 2] = val;
+                    data[j + 3] = 255;
+                }
             }
             oCtx.putImageData(imgData, 0, 0);
 
@@ -34007,19 +34087,37 @@ function ninaApp() {
             }
         },
 
+        // Only offered where a stopped Polaris can actually be started
+        // again by hand: see the x-show on the button. The wording stays
+        // platform-neutral because that set is not only macOS.
         async stopPolaris() {
             if (this.power.stopping) return;
             const ok = await this._confirmAsync(
-                'Stop the Polaris server now? The Mac will remain running, but the web interface will be unavailable until Polaris is launched again from the terminal.',
+                'Stop the Polaris server now? The host keeps running, but the '
+                + 'web interface will be unavailable until Polaris is started '
+                + 'again on the host.',
                 { title: 'Stop Polaris', okLabel: 'Stop server', cancelLabel: 'Cancel', danger: true });
             if (!ok) return;
             this.power.stopping = true;
             try {
-                await this.apiFetch('/api/system/stop-app', { method: 'POST' });
+                const r = await this.apiFetch('/api/system/stop-app', { method: 'POST' });
+                let j = {}; try { j = await r.json(); } catch { }
+                if (!r.ok) {
+                    // An older host without the endpoint, or a refusal. The
+                    // server is still up, so the flag has to come back off:
+                    // it gates both WebSocket reconnects, and left set it
+                    // freezes the page on "stopped" until a manual reload.
+                    this.toast(j.error || 'Stop failed', 'error');
+                    this.power.stopping = false;
+                    return;
+                }
                 this.toast('Polaris is stopping…', 'ok', 4000);
             } catch {
-                // The connection may close before the response is received.
-                this.toast('Polaris is stopping…', 'ok', 4000);
+                // Same reasoning for a request that never completed. If the
+                // server really did go away, the banner reports a lost
+                // connection instead, and that one recovers on its own.
+                this.power.stopping = false;
+                this.toast('Could not reach the server to stop it.', 'error');
             }
         },
 
@@ -38239,6 +38337,111 @@ function ninaApp() {
             } catch (e) {
                 this.starColor.busy = false;
                 this.starColor.error = (e && e.message) ? e.message : String(e);
+            }
+        },
+
+        violetHaloOpenModal(framePath) {
+            if (!framePath) { this.toast?.('Select one frame first'); return; }
+            this.violetHalo.framePath = framePath;
+            this.violetHalo.busy = false;
+            this.violetHalo.stage = '';
+            this.violetHalo.error = '';
+            this.violetHalo.modalOpen = true;
+        },
+        async violetHaloRun() {
+            const src = this.violetHalo.framePath;
+            if (!src) return;
+            this.violetHalo.busy = true;
+            this.violetHalo.error = '';
+            this.violetHalo.stage = 'starting';
+            try {
+                const r = await this.apiFetch('/api/studio/violethalo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        framePath: src,
+                        amount: this.violetHalo.amount,
+                        radius: this.violetHalo.radius,
+                    }),
+                });
+                if (!r.ok) {
+                    const e = await r.json().catch(() => ({}));
+                    throw new Error(e.error || ('HTTP ' + r.status));
+                }
+                const { jobId } = await r.json();
+                let done = null;
+                for (let i = 0; i < 600; i++) {
+                    await new Promise(res => setTimeout(res, 500));
+                    const sr = await this.apiFetch('/api/studio/violethalo/' + jobId);
+                    if (!sr.ok) continue;
+                    const p = await sr.json();
+                    this.violetHalo.stage = p.stage || '';
+                    if (!p.inProgress) {
+                        if (p.error) throw new Error(p.error);
+                        done = p;
+                        break;
+                    }
+                }
+                if (!done || !done.outputPath) throw new Error('Timed out waiting for the job.');
+                this.violetHalo.busy = false;
+                this.violetHalo.modalOpen = false;
+                try { this.filesReload?.(); } catch { /* non-fatal */ }
+                const pairs = [];
+                if (done.starsBeforePath && done.starsAfterPath) {
+                    pairs.push({ src: done.starsBeforePath, out: done.starsAfterPath,
+                                 label: 'Brightest stars' });
+                }
+                pairs.push({ src, out: done.outputPath, label: 'Full frame' });
+                this.graxpertOpenCompare(pairs, 0, 'gx', 'violet-halo');
+            } catch (e) {
+                this.violetHalo.busy = false;
+                this.violetHalo.error = (e && e.message) ? e.message : String(e);
+            }
+        },
+
+        // ── Send a file through the LIVE path ───────────────────────────
+        //
+        // /api/files/raw returns a FITS in the SAME envelope /ws/image-stream
+        // uses, so handing those bytes to _renderRawFrame is not a simulation
+        // of a rig frame -- it is the identical code path: same header parse,
+        // same LZ4 decode, same _lastRawFrame cache, same WebGL stretch, same
+        // histogram. Which is the point: the stretch sliders and the histogram
+        // can be exercised against a file whose contents are known, off the
+        // sky, and whatever they do here is what they do on a real sub.
+        async filesLoadIntoLive(path) {
+            if (!path) { this.toast('Select one FITS first', 'warn'); return; }
+            if (!/\.fits?$/i.test(path)) {
+                this.toast('Only FITS files can be loaded into LIVE', 'warn');
+                return;
+            }
+            if (typeof LZ4 === 'undefined') {
+                this.toast('LZ4 decoder not loaded', 'error');
+                return;
+            }
+            this.filesToLiveBusy = true;
+            try {
+                // maxDim=0 = native. This is meant to behave like a real sub,
+                // and a downsampled one would not: the stretch endpoints come
+                // from the pixel statistics, and box-averaging changes them.
+                const r = await this.apiFetch('/api/files/raw?kind=0&maxDim=0&path='
+                    + encodeURIComponent(path));
+                if (!r.ok) {
+                    const e = await r.json().catch(() => ({}));
+                    throw new Error(e.error || ('HTTP ' + r.status));
+                }
+                const ab = await r.arrayBuffer();
+                this.imageViewerOpen = false;
+                this.tab = 'live';
+                await this.$nextTick();
+                await this._renderRawFrame(ab);
+                this.drawHistogram();
+                const name = (path.split(/[\\/]/).pop()) || path;
+                this.toast('Loaded ' + name + ' into LIVE', 'ok');
+            } catch (e) {
+                this.toast('Load into LIVE failed: '
+                    + ((e && e.message) ? e.message : String(e)), 'error');
+            } finally {
+                this.filesToLiveBusy = false;
             }
         },
 
@@ -45805,23 +46008,7 @@ function ninaApp() {
                 // read .triggers + per-frame HFR / star count without
                 // a second source of truth.
                 const _wasLiveRunning = this.liveStackStatus?.isRunning;
-                // The histogram panel is repainted when a JPEG frame lands, but
-                // the bins and their ADU band ride THIS tick, so a stack update
-                // kept drawing the previous stack's window until something else
-                // forced a redraw. Pressing Auto was that something: it toggles
-                // stretchAuto and calls applyManualStretch, and twice put the
-                // toggle back where it started, so what fixed the panel was the
-                // redraw, not the auto-stretch (field report, 2026-09-06).
-                const _histoSig = (h) => h
-                    ? `${h.frameCount}|${h.colorHistLo}|${h.colorHistHi}|${h.colorHistMean}`
-                    : '';
-                const _histoChanged =
-                    _histoSig(msg.liveStack) !== _histoSig(this.liveStackStatus);
                 this.liveStackStatus = msg.liveStack;
-                if (_histoChanged && Array.isArray(msg.liveStack.colorHistogram)) {
-                    this._histoToken++;
-                    this.drawHistogram();
-                }
                 // Auto-open the quality HUD when a stack starts, so SNR / ETA /
                 // sub-exposure advice + the SNR-HFR chart are visible without
                 // hunting for the overlay toggle (they used to be gated behind
@@ -45943,6 +46130,8 @@ function ninaApp() {
             if (msg.server && msg.server.utcNow) {
                 this.clockSync.serverUtc = msg.server.utcNow;
                 this.clockSync.supported = !!msg.server.clockSyncSupported;
+                this.clockSync.timeZone = msg.server.timeZone || null;
+                this._maybePushTimeZone(this.clockSync.timeZone);
                 const serverMs = Date.parse(msg.server.utcNow);
                 if (Number.isFinite(serverMs)) {
                     _serverNowMs = serverMs;

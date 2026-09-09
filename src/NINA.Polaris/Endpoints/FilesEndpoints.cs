@@ -393,6 +393,69 @@ public static class FilesEndpoints {
             }
         });
 
+
+        // --- Linear pixels of a FITS, in the /ws/image-stream wire format ---
+        //
+        // A file previewed through /preview is a JPEG the server already
+        // stretched: right for looking at, useless for measuring, and nothing
+        // the client's own stretch can act on. This hands the browser the real
+        // 16-bit pixels in exactly the envelope it already decodes for live
+        // frames -- [int32 headerLen][header][LZ4] -- so a FITS can be fed
+        // through the LIVE path and the stretch sliders and histogram tried
+        // against a file whose contents are known, off the sky.
+        //
+        // kind is the FrameKind the client routes on (0 = Live, the default,
+        // which is what puts the frame on the LIVE canvas).
+        //
+        // maxDim bounds the wire copy; 0 means native, which is what the
+        // "load into LIVE" path asks for, since the stretch endpoints come out
+        // of the pixel statistics and box-averaging changes them. A Bayer
+        // mosaic is never reduced: averaging it blends neighbouring colours and
+        // the per-channel curves would be a fiction.
+        g.MapGet("/raw", (FileBrowserService svc, string path, int? maxDim, int? kind) => {
+            try {
+                var full = svc.ResolveSafe(path, mustExist: true);
+                if (!File.Exists(full))
+                    return Results.NotFound(new { error = "Not a file" });
+                if (FileBrowserService.ClassifyForPreview(full) != PreviewKind.Fits)
+                    return Results.StatusCode(StatusCodes.Status415UnsupportedMediaType);
+
+                NINA.Image.ImageData.BaseImageData img;
+                using (var fs = File.OpenRead(full)) img = FITSReader.Read(fs);
+
+                int w = img.Properties.Width, h = img.Properties.Height;
+                int ch = Math.Max(1, img.Properties.Channels);
+                var pattern = img.Properties.BayerPattern;
+                var px = img.Data;
+                bool bayered = ch == 1 && pattern != BayerPatternEnum.None
+                                       && pattern != BayerPatternEnum.Auto;
+                int cap = maxDim ?? 1536;
+                if (!bayered && cap > 0 && Math.Max(w, h) > cap)
+                    (px, w, h) = FitsThumbnailer.DownsampleForPreview(px, w, h, ch, cap);
+
+                var buffer = new NINA.Image.ImageData.ImageBuffer(
+                    px, w, h, img.Properties.BitDepth, pattern, ch);
+                var header = buffer.GetStreamHeader(kind ?? (int)FrameKind.Live);
+                var compressed = buffer.RentLz4Compressed(out int len);
+                try {
+                    var body = new byte[4 + header.Length + len];
+                    BitConverter.GetBytes(header.Length).CopyTo(body, 0);
+                    header.CopyTo(body, 4);
+                    Array.Copy(compressed, 0, body, 4 + header.Length, len);
+                    return Results.File(body, "application/octet-stream");
+                } finally {
+                    System.Buffers.ArrayPool<byte>.Shared.Return(compressed);
+                }
+            } catch (UnauthorizedAccessException ex) {
+                return Results.Json(new { error = ex.Message },
+                    statusCode: StatusCodes.Status403Forbidden);
+            } catch (FileNotFoundException ex) {
+                return Results.NotFound(new { error = ex.Message });
+            } catch (Exception ex) {
+                return Results.UnprocessableEntity(new { error = ex.Message });
+            }
+        });
+
         // Parsed FITS header cards as JSON, grouped into sensible
         // sections for the viewer side panel. Reads headers only
         // (skips the pixel block, 64 MB of memory and ~100 ms saved

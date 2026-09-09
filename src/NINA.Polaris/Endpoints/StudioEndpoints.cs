@@ -354,6 +354,27 @@ public static class StudioEndpoints {
             return p == null ? Results.NotFound() : Results.Ok(p);
         });
 
+        // --- Violet halo (ED doublet out-of-focus pedestal) -----------
+        // A telescope defect, not a camera one, so it is its own tool:
+        // running it after the star colour repair let that stage rebuild
+        // the star colours this one then measured, and every bright star
+        // came out yellow. Run either on the original frame.
+        // Body: { framePath, amount (0..1), radius (px) }
+        g.MapPost("/violethalo", (VioletHaloService svc,
+                                  VioletHaloService.VioletHaloRequest req) => {
+            try {
+                var jobId = svc.StartJob(req);
+                return Results.Accepted(value: new { jobId });
+            } catch (ArgumentException ex) {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
+        g.MapGet("/violethalo/{jobId}", (VioletHaloService svc, string jobId) => {
+            var p = svc.GetStatus(jobId);
+            return p == null ? Results.NotFound() : Results.Ok(p);
+        });
+
         // --- CCALB-1/2/3: Siril-style color calibration ---------------
         // Calibrate an RGB FITS so the background is neutral grey
         // (BgNeutral) and / or the chosen reference is neutral white
