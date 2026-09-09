@@ -1055,7 +1055,9 @@ app.UseStaticFiles(new StaticFileOptions {
 app.UseStaticFiles(new StaticFileOptions {
     RequestPath = "/sky/data",
     FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(
-        Path.Combine(builder.Environment.WebRootPath, "sky", "data")),
+        Path.Combine(builder.Environment.WebRootPath
+            ?? Path.Combine(builder.Environment.ContentRootPath, "wwwroot"),
+            "sky", "data")),
     ServeUnknownFileTypes = true,
     DefaultContentType = "application/octet-stream"
 });
