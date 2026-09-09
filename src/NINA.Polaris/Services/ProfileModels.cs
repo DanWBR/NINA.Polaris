@@ -494,6 +494,12 @@ public class EquipmentProfile {
     /// string = "None" (default).</summary>
     public string AttachedFilter { get; set; } = "";
     public string? Rotator { get; set; }
+    /// <summary>Rotator backend kind: <c>indi</c> (default) or <c>alpaca</c>.</summary>
+    public string RotatorDriver { get; set; } = "indi";
+    /// <summary>Maximum permitted absolute position for this rotator. The
+    /// common 90° and 180° travel-limit rotators are protected from an
+    /// accidental full-turn command; 360° remains the legacy default.</summary>
+    public double RotatorMaxAngle { get; set; } = 360;
     public string? FlatDevice { get; set; }
     public string? Dome { get; set; }
     public string? Weather { get; set; }

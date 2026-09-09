@@ -91,7 +91,7 @@ public class HardwareAutoConnectService : IHostedService {
             await Task.Delay(TimeSpan.FromSeconds(3), ct);
 
             // -------- INDI --------
-            bool indiOk = await TryConnectIndiAsync(ct);
+            await TryConnectIndiAsync(ct);
 
             // -------- Alpaca (independent, runs even if INDI fails) --------
             await TryDiscoverAlpacaAsync(ct);
@@ -106,13 +106,10 @@ public class HardwareAutoConnectService : IHostedService {
             await TryConnectPhd2Async(ct);
 
             // -------- Active rig equipment --------
-            // Equipment selections in the rig might point at INDI device
-            // names; without INDI they can't be bound. Skip silently when
-            // INDI is down. (Alpaca-only rigs would need their own path,
-            // not in scope yet; today every Select* binds via _indiClient.)
-            if (indiOk) {
-                await TryConnectActiveRigAsync(ct);
-            }
+            // The per-device pass below skips unavailable INDI selections,
+            // but must still run when INDI is down: Alpaca-only rigs (such
+            // as an OpenAstro AlpacaBridge Pi) have no INDI dependency.
+            await TryConnectActiveRigAsync(ct);
         } catch (OperationCanceledException) {
             // shutdown
         } catch (Exception ex) {
@@ -307,7 +304,7 @@ public class HardwareAutoConnectService : IHostedService {
             }),
             ("Focuser",      rig.Focuser,     async name => { var f = _equip.SelectFocuser(name);                                await f.ConnectAsync(ct); }),
             ("Filter wheel", rig.FilterWheel, async name => { var w = _equip.SelectFilterWheel(name);                            await w.ConnectAsync(ct); }),
-            ("Rotator",      rig.Rotator,     async name => { var r = _equip.SelectRotator(name);                                await r.ConnectAsync(ct); }),
+            ("Rotator",      rig.Rotator,     async name => { var r = _equip.SelectRotator(rig.RotatorDriver ?? "indi", name); await r.ConnectAsync(ct); }),
             ("Flat panel",   rig.FlatDevice,  async name => { var p = _equip.SelectFlatDevice(name);                             await p.ConnectAsync(ct); }),
             ("Dome",         rig.Dome,        async name => { var d = _equip.SelectDome(name);                                   await d.ConnectAsync(ct); }),
             ("Weather",      rig.Weather,     async name => { var w = _equip.SelectWeather(name);                                await w.ConnectAsync(ct); }),
@@ -327,6 +324,7 @@ public class HardwareAutoConnectService : IHostedService {
                 "Guide camera" => (rig.GuideCameraDriver ?? "indi") == "indi",
                 "Mount"  => (rig.TelescopeDriver ?? "indi") == "indi",
                 "Power box" => (rig.SwitchDriver ?? "indi") == "indi",
+                "Rotator" => (rig.RotatorDriver ?? "indi") == "indi",
                 _        => true,
             };
             if (isIndi && !available.Contains(name)) {
