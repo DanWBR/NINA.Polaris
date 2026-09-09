@@ -7977,17 +7977,39 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <span class="equip-status-dot" :class="rotator.connected ? 'connected' : 'disconnected'"></span>
                         </div>
                         <div class="equip-card-body">
+                            <div class="equip-driver-row" x-show="rotatorDrivers.length > 1">
+                                <label class="equip-driver-label">Driver</label>
+                                <select class="equip-select equip-driver-select"
+                                        @change="rotatorDriver = $event.target.value; rotatorVendorDevices = []; equipRotatorChoice = ''; if (rotatorDriver !== 'indi' && rotatorDriverInfo?.available) detectVendorRotators()">
+                                    <template x-for="d in rotatorDrivers" :key="d.id">
+                                        <option :value="d.id" :disabled="!d.available"
+                                                :selected="rotatorDriver === d.id"
+                                                x-text="d.name + (d.available ? '' : ' (not discovered)')"></option>
+                                    </template>
+                                </select>
+                            </div>
                             <div class="equip-select-row">
-                                <select class="equip-select" x-model="equipRotatorChoice">
-                                    <option value="">Select device</option>
+                                <select class="equip-select" x-show="rotatorDriver === 'indi'" x-model="equipRotatorChoice">
+                                    <option value="" x-text="devices.length ? 'Select device' : 'No INDI devices, start drivers in the INDI panel'"></option>
                                     <template x-for="dev in devices" :key="'rot-'+dev.name">
                                         <option :value="dev.name" x-text="dev.name + (dev.driver ? ' (' + dev.driver + ')' : '')"></option>
                                     </template>
                                 </select>
-                                <button class="btn btn-sm btn-primary" @click="equipConnectRotator()"
-                                        :disabled="!equipRotatorChoice">Connect</button>
-                                <button class="btn btn-sm btn-danger" @click="equipDisconnectRotator()"
-                                        :disabled="!rotator.connected">Disconnect</button>
+                                <select class="equip-select" x-show="rotatorDriver !== 'indi'"
+                                        @change="equipRotatorChoice = $event.target.value" :disabled="rotatorDiscovering">
+                                    <option value="" x-text="rotatorDiscovering ? 'Detecting…' : (rotatorVendorDevices.length ? 'Select rotator' : 'No devices found')"></option>
+                                    <template x-for="r in rotatorVendorDevices" :key="r.id">
+                                        <option :value="r.id" :selected="equipRotatorChoice === r.id"
+                                                x-text="r.model + ' (' + r.detail + ')'"></option>
+                                    </template>
+                                </select>
+                                <label class="equip-toggle" :aria-disabled="(!rotator.connected && !equipRotatorChoice).toString()"
+                                       :title="rotator.connected ? 'Disconnect rotator' : 'Connect rotator'">
+                                    <input type="checkbox" :checked="!!rotator.connected"
+                                           :disabled="!rotator.connected && !equipRotatorChoice"
+                                           @change="$event.target.checked ? equipConnectRotator() : equipDisconnectRotator()">
+                                    <span class="equip-toggle-track"></span><span class="equip-toggle-thumb"></span>
+                                </label>
                             </div>
                             <div class="equip-detail" x-show="rotator.connected">
                                 <div class="equip-detail-name" x-text="rotator.name"></div>
@@ -7996,10 +8018,20 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     <span x-show="rotator.reversed" class="text-warn">REVERSED</span>
                                     <span x-show="rotator.moving" class="text-warn">MOVING</span>
                                 </div>
+                                <div class="equip-driver-row">
+                                    <label class="equip-driver-label">Rotation range</label>
+                                    <select class="equip-select equip-input-sm" x-model.number="rotatorMaxAngle"
+                                            @change="equipRotatorTarget = Math.min(equipRotatorTarget, rotatorMaxAngle); saveCurrentSelectionsToRig()"
+                                            title="Safety limit for absolute rotator moves on this rig">
+                                        <option :value="90">0–90°</option>
+                                        <option :value="180">0–180°</option>
+                                        <option :value="360">0–360°</option>
+                                    </select>
+                                </div>
                                 <div class="equip-inline-controls">
                                     <label class="equip-temp-label">
                                         Target
-                                        <input type="number" x-model.number="equipRotatorTarget" step="0.1" min="0" max="360" class="input-sm">
+                                        <input type="number" x-model.number="equipRotatorTarget" step="0.1" min="0" :max="rotatorMaxAngle" class="input-sm">
                                         <span>°</span>
                                     </label>
                                     <button class="btn btn-sm" @click="rotatorMoveTo()">Move</button>
