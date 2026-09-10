@@ -4775,5 +4775,11 @@
   "Violet halo: removes the out-of-focus violet skirt an ED doublet leaves around bright stars. Select one OSC frame.": "Halo violeta: quita la falda violeta desenfocada que un doblete ED deja alrededor de las estrellas brillantes. Selecciona un archivo OSC.",
   "Removes the out-of-focus violet an ED doublet spreads around bright stars, from about 6 px outwards. Brings blue down to the other two channels in the halo only; star cores and their colour are left alone. This is a telescope defect, so run it on the original frame, not after the star colour repair. Writes a new FITS; the original is kept.": "Quita el violeta desenfocado que un doblete ED reparte alrededor de las estrellas brillantes, desde unos 6 px. Baja el azul al nivel de los otros dos canales solo en el halo; los núcleos de las estrellas y su color quedan intactos. Es un defecto del telescopio, así que ejecútalo sobre el archivo original, no después de la reparación de color. Escribe un FITS nuevo; el original se conserva.",
   "To LIVE": "Al LIVE",
-  "Load this FITS into the LIVE panel through the same path a camera frame takes, so the stretch sliders and the histogram can be tried on a known file.": "Carga este FITS en el panel LIVE por el mismo camino que sigue un frame de la cámara, para probar los deslizadores de estiramiento y el histograma con un archivo conocido."
+  "Load this FITS into the LIVE panel through the same path a camera frame takes, so the stretch sliders and the histogram can be tried on a known file.": "Carga este FITS en el panel LIVE por el mismo camino que sigue un frame de la cámara, para probar los deslizadores de estiramiento y el histograma con un archivo conocido.",
+  "Apply sensor to driver": "Aplicar sensor al driver",
+  "Write the sensor size, pixel pitch and bit depth into the driver": "Escribe el tamaño del sensor, el paso de píxel y la profundidad de bits en el driver",
+  "Pick the camera brand and model first": "Elige primero la marca y el modelo de la cámara",
+  "Applying…": "Aplicando…",
+  "Could not apply the sensor": "No se pudo aplicar el sensor",
+  "This camera has not told the driver its sensor size, and without it no frame can be taken. Pick the brand and model below and it goes to the driver automatically.": "Esta cámara no le informó el tamaño del sensor al driver, y sin eso no se puede tomar ningún frame. Elige la marca y el modelo abajo y eso pasa al driver automáticamente."
 }

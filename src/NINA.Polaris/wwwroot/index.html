@@ -6730,6 +6730,28 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     <span x-show="equipCameraInfo.pixelSizeUm > 0">Pixel: <strong x-text="(equipCameraInfo.pixelSizeUm || 0).toFixed(2) + ' µm'"></strong></span>
                                 </div>
 
+                                <!-- A gphoto DSLR whose driver has no sensor
+                                     geometry cannot take a frame at all, which
+                                     reads as "nothing happens" rather than as a
+                                     missing setting. Say it, and offer the one
+                                     action that fixes it. A notice, not a modal:
+                                     this can become true mid-session. -->
+                                <div class="equip-inline-controls dslr-sensor-notice"
+                                     x-show="dslrSensorMissing" x-cloak>
+                                    <span>
+                                        This camera has not told the driver its sensor size, and
+                                        without it no frame can be taken. Pick the brand and model
+                                        below and it goes to the driver automatically.
+                                    </span>
+                                    <button class="btn btn-sm btn-primary"
+                                            :disabled="!dslrSensorConfigured || dslrApplyBusy"
+                                            :title="dslrSensorConfigured
+                                                ? 'Write the sensor size, pixel pitch and bit depth into the driver'
+                                                : 'Pick the camera brand and model first'"
+                                            @click="dslrApplySensorToDriver()">
+                                        <span x-text="dslrApplyBusy ? 'Applying…' : 'Apply sensor to driver'"></span>
+                                    </button>
+                                </div>
                                 <!-- Pixel-size fallback. indi_gphoto (DSLRs)
                                      reports CCD_INFO pixel size as 0; without a
                                      value the FOV, plate-solve scale hint and
@@ -23488,7 +23510,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20260909-hostcfg"></script>
+    <script src="/js/app.js?v=20260910-dslr"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

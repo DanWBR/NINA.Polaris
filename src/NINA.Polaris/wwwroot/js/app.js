@@ -91,6 +91,11 @@ const EXPOSURE_PRESETS_ALL = [
     60, 90, 120, 150, 180, 300, 600, 1000
 ];
 
+// Bumped whenever a catalogue under wwwroot/data changes. The optics fetch
+// uses cache: 'force-cache', which does not revalidate, so without a new URL
+// an edit reaches nobody who already loaded the old file.
+const CATALOGUE_VERSION = '20260910b';
+
 function ninaApp() {
     return {
         tab: 'home',
@@ -23773,8 +23778,15 @@ function ninaApp() {
                 // iOS drops some of them under that burst while the server
                 // stays up, so there is no reconnect event to recover from.
                 this.opticsCatalogue = await this._retryGet(async () => {
-                    const urls = ['/data/telescopes.json', '/data/optical-accessories.json',
-                                  '/data/guidescopes.json', '/data/dslr-cameras.json'];
+                    // force-cache below means the browser serves its copy
+                    // WITHOUT revalidating, so an edit to any of these files
+                    // would never reach a browser that already had one. Bump
+                    // CATALOGUE_VERSION whenever a /data/*.json catalogue
+                    // changes; the cache stays (it is there because init fires
+                    // ~25 fetches and iOS drops some) and the URL is new.
+                    const v = '?v=' + CATALOGUE_VERSION;
+                    const urls = ['/data/telescopes.json' + v, '/data/optical-accessories.json' + v,
+                                  '/data/guidescopes.json' + v, '/data/dslr-cameras.json' + v];
                     const resps = await Promise.all(urls.map(u => fetch(u, { cache: 'force-cache' })));
                     const bad = resps.find(r => !r.ok);
                     // Without this the error body parsed fine and every list
@@ -23879,6 +23891,53 @@ function ninaApp() {
         // write it into the rig's CameraPixelSizeUm / AuxCameraPixelSizeUm.
         // The picks themselves aren't persisted; the resolved µm value is.
         dslrPick: { mainBrand: '', mainModel: '', auxBrand: '', auxModel: '' },
+        dslrApplyBusy: false,
+        /// True when a DSLR is connected and its driver is missing the geometry
+        /// it needs to expose a frame at all. indi_gphoto publishes CCD_INFO as
+        /// zeros, and with a zero pixel size or a zero Max X/Y the driver will
+        /// not capture, so this is the difference between "the FOV is wrong"
+        /// and "no photo comes out". Only a notice, never a modal: it can come
+        /// true in the middle of a session and stealing focus then is worse
+        /// than the problem.
+        get dslrSensorMissing() {
+            if (!this.isDslrCamera || !this.cameraConnected) return false;
+            const i = this.equipCameraInfo || {};
+            return !(i.pixelSizeUm > 0) || !(i.maxX > 0) || !(i.maxY > 0);
+        },
+        /// Whether the rig already holds numbers this can push.
+        get dslrSensorConfigured() {
+            const s = this.settings || {};
+            return s.cameraPixelSizeUm > 0 && s.cameraMaxX > 0 && s.cameraMaxY > 0;
+        },
+        /// Write sensor geometry into the live driver, now. `geom` overrides the
+        /// stored rig (the picker passes what it just picked, because its own save
+        /// is debounced); omit it to use the rig, which is what the button does.
+        /// opts.quiet drops the success toast, for the automatic path.
+        async dslrApplySensorToDriver(geom, opts) {
+            this.dslrApplyBusy = true;
+            try {
+                const r = await this.apiPost('/api/camera/ccd-info/apply', geom || {});
+                if (!r.ok) {
+                    const e = await r.json().catch(() => ({}));
+                    throw new Error(e.error || ('HTTP ' + r.status));
+                }
+                const d = await r.json();
+                if (!(opts && opts.quiet)) {
+                    this.toast('Sensor applied: ' + d.maxX + '×' + d.maxY + ' px · '
+                        + Number(d.pixelSizeUm).toFixed(2) + ' µm · ' + d.bitDepth + '-bit', 'ok');
+                }
+                // Nothing to refresh by hand: equipCameraInfo is rebuilt from
+                // /ws/status on every tick, so the notice clears itself within a
+                // second once the driver echoes the new CCD_INFO. (An earlier
+                // version called a refresh helper that does not exist, and the
+                // optional-call syntax made it a silent no-op forever.)
+            } catch (e) {
+                this.toastFail('Could not apply the sensor', e);
+            } finally {
+                this.dslrApplyBusy = false;
+            }
+        },
+
         /// Distinct DSLR brands in the catalogue, sorted.
         get dslrBrands() {
             const set = new Set((this.opticsCatalogue.dslrCameras || []).map(c => c.brand));
@@ -23898,14 +23957,17 @@ function ninaApp() {
             const hit = (this.opticsCatalogue.dslrCameras || [])
                 .find(c => c.brand === brand && c.model === model);
             if (!hit || !(hit.pixelSizeUm > 0)) return;
-            // Derive sensor resolution from the catalogue's sensor size ÷ pixel
-            // pitch (gphoto needs a non-zero CCD_INFO Max X/Y to capture). Exact
-            // resolution isn't critical — the driver corrects it after the first
-            // frame — but it must be non-zero. Bit depth: catalogue or 14 (the
-            // RAW depth of virtually every modern DSLR/mirrorless).
+            // gphoto needs a non-zero CCD_INFO Max X/Y to capture at all, so the
+            // catalogue carries the real pixel array. Older rows without it fall
+            // back to sensor size ÷ pixel pitch, which lands a few pixels off
+            // because the pitch is rounded to 0.01 µm; non-zero is what matters,
+            // and the driver replaces both after the first frame. Bit depth:
+            // catalogue or 14 (the RAW depth of virtually every modern body).
             const px = hit.pixelSizeUm;
-            const maxX = hit.sensorWidthMm > 0 ? Math.round(hit.sensorWidthMm * 1000 / px) : 0;
-            const maxY = hit.sensorHeightMm > 0 ? Math.round(hit.sensorHeightMm * 1000 / px) : 0;
+            const maxX = hit.maxX > 0 ? hit.maxX
+                : (hit.sensorWidthMm > 0 ? Math.round(hit.sensorWidthMm * 1000 / px) : 0);
+            const maxY = hit.maxY > 0 ? hit.maxY
+                : (hit.sensorHeightMm > 0 ? Math.round(hit.sensorHeightMm * 1000 / px) : 0);
             const bits = hit.bitDepth || 14;
             if (which === 'aux') {
                 this.aux.pixelSizeUm = px;
@@ -23920,6 +23982,17 @@ function ninaApp() {
             }
             this.toast(hit.brand + ' ' + hit.model + ': ' + px.toFixed(2) + ' µm · '
                 + maxX + '×' + maxY, 'ok', 2200);
+            // A connected gphoto driver publishes CCD_INFO as zeros and refuses to
+            // expose a frame until something fills it in, so picking the model is
+            // only half the job. Send it now, with the numbers just picked rather
+            // than the stored rig: the save above is debounced, so reading the
+            // profile from the server here would read the PREVIOUS camera.
+            // Quiet by design, since this runs off a <select> and the operator is
+            // told by the notice clearing. The button stays, for a retry.
+            if (which !== 'aux' && this.dslrSensorMissing) {
+                this.dslrApplySensorToDriver({ maxX, maxY, pixelSizeUm: px, bitDepth: bits },
+                    { quiet: true });
+            }
         },
 
         /// Distinct guide-scope brands in the catalogue, sorted.
