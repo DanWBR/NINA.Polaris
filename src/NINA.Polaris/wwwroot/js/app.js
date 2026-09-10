@@ -91,6 +91,11 @@ const EXPOSURE_PRESETS_ALL = [
     60, 90, 120, 150, 180, 300, 600, 1000
 ];
 
+// Bumped whenever a catalogue under wwwroot/data changes. The optics fetch
+// uses cache: 'force-cache', which does not revalidate, so without a new URL
+// an edit reaches nobody who already loaded the old file.
+const CATALOGUE_VERSION = '20260910';
+
 function ninaApp() {
     return {
         tab: 'home',
@@ -23813,8 +23818,15 @@ function ninaApp() {
                 // iOS drops some of them under that burst while the server
                 // stays up, so there is no reconnect event to recover from.
                 this.opticsCatalogue = await this._retryGet(async () => {
-                    const urls = ['/data/telescopes.json', '/data/optical-accessories.json',
-                                  '/data/guidescopes.json', '/data/dslr-cameras.json'];
+                    // force-cache below means the browser serves its copy
+                    // WITHOUT revalidating, so an edit to any of these files
+                    // would never reach a browser that already had one. Bump
+                    // CATALOGUE_VERSION whenever a /data/*.json catalogue
+                    // changes; the cache stays (it is there because init fires
+                    // ~25 fetches and iOS drops some) and the URL is new.
+                    const v = '?v=' + CATALOGUE_VERSION;
+                    const urls = ['/data/telescopes.json' + v, '/data/optical-accessories.json' + v,
+                                  '/data/guidescopes.json' + v, '/data/dslr-cameras.json' + v];
                     const resps = await Promise.all(urls.map(u => fetch(u, { cache: 'force-cache' })));
                     const bad = resps.find(r => !r.ok);
                     // Without this the error body parsed fine and every list

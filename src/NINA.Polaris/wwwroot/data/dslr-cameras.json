@@ -20,6 +20,8 @@
     { "brand": "Canon",     "model": "EOS R",                    "pixelSizeUm": 5.36, "sensorWidthMm": 36.0, "sensorHeightMm": 24.0 },
     { "brand": "Canon",     "model": "EOS Ra",                   "pixelSizeUm": 5.36, "sensorWidthMm": 36.0, "sensorHeightMm": 24.0 },
     { "brand": "Canon",     "model": "EOS R6",                   "pixelSizeUm": 6.56, "sensorWidthMm": 35.9, "sensorHeightMm": 23.9 },
+    { "brand": "Canon",     "model": "EOS R6 Mark II",           "pixelSizeUm": 5.98, "sensorWidthMm": 35.9, "sensorHeightMm": 23.9 },
+    { "brand": "Canon",     "model": "EOS R8",                   "pixelSizeUm": 5.98, "sensorWidthMm": 35.9, "sensorHeightMm": 23.9 },
 
     { "brand": "Nikon",     "model": "D3300",                    "pixelSizeUm": 3.92, "sensorWidthMm": 23.5, "sensorHeightMm": 15.6 },
     { "brand": "Nikon",     "model": "D3400",                    "pixelSizeUm": 3.92, "sensorWidthMm": 23.5, "sensorHeightMm": 15.6 },
