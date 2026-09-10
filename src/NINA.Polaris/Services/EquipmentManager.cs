@@ -66,7 +66,10 @@ public class EquipmentManager : IDisposable {
     /// <summary>Driver kind currently bound to <see cref="FilterWheel"/>.
     /// Mirrors <c>EquipmentProfile.FilterWheelDriver</c>.</summary>
     public string? FilterWheelDriver { get; private set; }
-    public IndiRotator? Rotator { get; private set; }
+    public IRotator? Rotator { get; private set; }
+    /// <summary>Driver kind currently bound to <see cref="Rotator"/>.
+    /// Either <c>indi</c> or <c>alpaca</c>.</summary>
+    public string? RotatorDriver { get; private set; }
     public IndiFlatDevice? FlatDevice { get; private set; }
     public IndiDome? Dome { get; private set; }
     public IndiWeather? Weather { get; private set; }
@@ -609,6 +612,16 @@ public class EquipmentManager : IDisposable {
         return Array.Empty<DiscoveredCamera>();
     }
 
+    /// <summary>Alpaca rotators discovered by the shared RIGS discovery pass.</summary>
+    public IReadOnlyList<DiscoveredCamera> GetDiscoveredRotatorsFor(string driver) {
+        driver = (driver ?? "").Trim().ToLowerInvariant();
+        return driver == "alpaca"
+            ? _alpacaCache.ByType("Rotator")
+                .Select(d => new DiscoveredCamera(d.DeviceId, d.DeviceName, d.ServerName))
+                .ToList()
+            : Array.Empty<DiscoveredCamera>();
+    }
+
     public IReadOnlyList<DiscoveredCamera> GetDiscoveredSwitchesFor(string driver) {
         driver = (driver ?? "").Trim().ToLowerInvariant();
         if (driver == "alpaca") {
@@ -882,11 +895,21 @@ public class EquipmentManager : IDisposable {
         return new NINA.Ascom.Com.AscomComSwitch(progId);
     }
 
-    public IndiRotator SelectRotator(string deviceName) {
+    public IRotator SelectRotator(string deviceName)
+        => SelectRotator("indi", deviceName);
+
+    public IRotator SelectRotator(string driver, string deviceId) {
+        driver = (driver ?? "indi").Trim().ToLowerInvariant();
         var previousRotator = Rotator;
-        Rotator = new IndiRotator(_indiClient, deviceName);
+        Rotator = driver switch {
+            "indi" => new IndiRotator(_indiClient, deviceId),
+            "alpaca" => AlpacaRotator.FromDeviceId(deviceId),
+            _ => throw new NotSupportedException(
+                $"Rotator driver '{driver}' is not implemented yet. Use 'indi' or 'alpaca'."),
+        };
         ReleaseReplacedDevice(previousRotator);
-        _logger.LogInformation("Rotator selected: {Name}", deviceName);
+        RotatorDriver = driver;
+        _logger.LogInformation("Rotator selected: driver={Driver}, id={DeviceId}", driver, deviceId);
         return Rotator;
     }
 
@@ -1136,6 +1159,7 @@ public class EquipmentManager : IDisposable {
         if (Rotator != null) {
             status["rotator"] = new {
                 name = Rotator.DeviceName,
+                driver = RotatorDriver,
                 connected = Rotator.IsConnected,
                 position = Safe(Rotator.Position),
                 moving = Rotator.IsMoving,
