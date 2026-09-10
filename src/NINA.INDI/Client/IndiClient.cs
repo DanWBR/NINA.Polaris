@@ -125,6 +125,15 @@ public class IndiClient : IDisposable {
     /// (rate limits + notifications).</summary>
     public event Action<string>? DeviceConnectionLost;
 
+    /// <summary>Raised after the post-connect CONFIG_LOAD has been replayed for
+    /// a device. Anything asserted between connect and this point may have just
+    /// been overwritten by the driver's saved config, so this is the moment to
+    /// assert it again. The camera's ROI is the case that made this necessary:
+    /// /connect writes a full-frame CCD_FRAME, and a config saved with an old
+    /// region put that region straight back about a second and a half later,
+    /// with nothing in the logs to say so.</summary>
+    public event Action<string>? DeviceConfigLoaded;
+
     private void OnPropertyChangedForConfigAutoLoad(string device, IndiProperty prop) {
         if (!string.Equals(prop.Name, "CONNECTION", StringComparison.OrdinalIgnoreCase))
             return;
@@ -183,6 +192,11 @@ public class IndiClient : IDisposable {
                         DiagLogger.LogInformation(
                             "INDI CONFIG_LOAD auto-dispatched for '{Device}' on connect",
                             device);
+                        // Give the driver a moment to echo the restored values
+                        // before anyone re-reads or re-asserts them.
+                        await Task.Delay(400);
+                        try { DeviceConfigLoaded?.Invoke(device); }
+                        catch { /* a subscriber must not break this task */ }
                     }
                 } catch (Exception ex) {
                     DiagLogger.LogDebug(ex,

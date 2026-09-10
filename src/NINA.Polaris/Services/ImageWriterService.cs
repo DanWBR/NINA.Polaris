@@ -260,15 +260,33 @@ public class ImageWriterService {
         var cam = _equip.Camera;
         if (cam == null || !cam.IsConnected) return;
         var bin = Math.Max(1, cam.BinX);
-        int fullW = cam.MaxX / bin, fullH = cam.MaxY / bin;
+        // The driver's own CCD_INFO is the first reference, and the sensor size
+        // configured on the rig is the second. Both are needed: a driver that
+        // republishes CCD_INFO as the CURRENT region makes the first agree with
+        // the crop, and then a check built only on it goes quiet -- which is
+        // what a 5472x3672 night off a 5496x3672 IMX183 looked like, with no
+        // warning anywhere. The rig's number is the operator's statement about
+        // the sensor, so it does not move when a region does.
+        var rigMaxX = _profile?.ActiveEquipmentProfile?.CameraMaxX ?? 0;
+        var rigMaxY = _profile?.ActiveEquipmentProfile?.CameraMaxY ?? 0;
+        int fullW = Math.Max(cam.MaxX, rigMaxX) / bin;
+        int fullH = Math.Max(cam.MaxY, rigMaxY) / bin;
         int w = imageData.Properties.Width, h = imageData.Properties.Height;
         if (!IsCroppedSensorFrame(w, h, fullW, fullH)) return;
         _logger.LogWarning(
-            "{Type} frame is {W}x{H} but {Device} reads out {FullW}x{FullH} at bin {Bin}: a region " +
-            "of interest left in the driver is cropping the capture. Reconnect the camera (or set " +
-            "the VIDEO FOV back to the full sensor) before the whole run is shot this way.",
-            imageType, w, h, cam.DeviceName, fullW, fullH, bin);
+            "{Type} frame is {W}x{H} but {Device} should read out {FullW}x{FullH} at bin {Bin} " +
+            "(driver says {DrvX}x{DrvY}, rig says {RigX}x{RigY}): the capture is being cropped, " +
+            "either by a region left in the driver or by the driver aligning the one we asked for. " +
+            "Reconnect the camera (or set the VIDEO FOV back to the full sensor) before the whole " +
+            "run is shot this way.",
+            imageType, w, h, cam.DeviceName, fullW, fullH, bin,
+            cam.MaxX, cam.MaxY, rigMaxX, rigMaxY);
     }
+
+    /// <summary>The bigger of two sensor readings, ignoring a zero or negative
+    /// one (a driver that has not published its geometry, or a rig field the
+    /// operator never filled in).</summary>
+    internal static int LargerSensorSide(int a, int b) => Math.Max(a > 0 ? a : 0, b > 0 ? b : 0);
 
     /// <summary>True when the delivered frame is smaller than the sensor read.
     /// A zero or negative sensor size means the driver has not published its
@@ -280,7 +298,10 @@ public class ImageWriterService {
     /// sensor. Accepts both the short forms ("LIGHT") and the FITS IMAGETYP
     /// spellings ("Light Frame") that reach this method.</summary>
     internal static bool IsFullSensorFrameType(string? imageType) {
-        var t = (imageType ?? "LIGHT").Trim().ToUpperInvariant();
+        // Blank and null are the same statement -- the caller did not say --
+        // and both mean a light here. They used to differ: null defaulted to
+        // LIGHT while "" fell through every prefix test and disabled the check.
+        var t = (string.IsNullOrWhiteSpace(imageType) ? "LIGHT" : imageType).Trim().ToUpperInvariant();
         return t.StartsWith("LIGHT") || t.StartsWith("DARK")
             || t.StartsWith("BIAS") || t.StartsWith("FLAT");
     }
