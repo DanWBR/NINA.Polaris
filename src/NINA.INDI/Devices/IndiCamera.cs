@@ -694,6 +694,28 @@ public class IndiCamera : ICamera, IDisposable {
         // on CaptureAsync.
         if (AlreadyAt(_client.GetProperty(DeviceName, "CCD_BINNING") as IndiNumberProperty, wanted)) return;
         await _client.SetNumberAsync(DeviceName, "CCD_BINNING", wanted, ct);
+
+        // Changing the binning re-scales CCD_FRAME, and the driver re-validates
+        // the region against the new geometry. Whatever it clamps there stays in
+        // force once the binning changes back, because nothing asks for the full
+        // frame again.
+        //
+        // The arithmetic from the night that showed this: an ASI183 (5496 wide)
+        // focused and previewed at bin 3, then shot 60 lights at 5472. 5496-5472
+        // is 24, which is exactly EIGHT columns at bin 3, and eight is the ZWO
+        // width alignment quantum. So the width lost eight columns in the binned
+        // domain and the unbinned frame carried the loss for the rest of the
+        // night. Only the width: the height's quantum is two, and 3672/3 needed
+        // no alignment, which is why it came back whole.
+        //
+        // So re-assert the full sensor after the change, but only when full frame
+        // is what was last asked for -- a region the operator set in VIDEO is
+        // theirs to keep.
+        if (_wantFullFrame) {
+            try { await Task.Delay(FrameEchoWaitMs, ct); }
+            catch (OperationCanceledException) { return; }
+            await SetSubframeAsync(0, 0, 0, 0, ct);
+        }
     }
 
     public async Task SetTemperatureAsync(double temperature, CancellationToken ct = default) {
