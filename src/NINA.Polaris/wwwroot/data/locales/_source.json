@@ -4158,5 +4158,11 @@
   "Violet halo: removes the out-of-focus violet skirt an ED doublet leaves around bright stars. Select one OSC frame.": "Violet halo: removes the out-of-focus violet skirt an ED doublet leaves around bright stars. Select one OSC frame.",
   "Removes the out-of-focus violet an ED doublet spreads around bright stars, from about 6 px outwards. Brings blue down to the other two channels in the halo only; star cores and their colour are left alone. This is a telescope defect, so run it on the original frame, not after the star colour repair. Writes a new FITS; the original is kept.": "Removes the out-of-focus violet an ED doublet spreads around bright stars, from about 6 px outwards. Brings blue down to the other two channels in the halo only; star cores and their colour are left alone. This is a telescope defect, so run it on the original frame, not after the star colour repair. Writes a new FITS; the original is kept.",
   "To LIVE": "To LIVE",
-  "Load this FITS into the LIVE panel through the same path a camera frame takes, so the stretch sliders and the histogram can be tried on a known file.": "Load this FITS into the LIVE panel through the same path a camera frame takes, so the stretch sliders and the histogram can be tried on a known file."
+  "Load this FITS into the LIVE panel through the same path a camera frame takes, so the stretch sliders and the histogram can be tried on a known file.": "Load this FITS into the LIVE panel through the same path a camera frame takes, so the stretch sliders and the histogram can be tried on a known file.",
+  "This camera has not told the driver its sensor size, and without it no frame can be taken. Pick the brand and model below, then apply.": "This camera has not told the driver its sensor size, and without it no frame can be taken. Pick the brand and model below, then apply.",
+  "Apply sensor to driver": "Apply sensor to driver",
+  "Write the sensor size, pixel pitch and bit depth into the driver": "Write the sensor size, pixel pitch and bit depth into the driver",
+  "Pick the camera brand and model first": "Pick the camera brand and model first",
+  "Applying…": "Applying…",
+  "Could not apply the sensor": "Could not apply the sensor"
 }

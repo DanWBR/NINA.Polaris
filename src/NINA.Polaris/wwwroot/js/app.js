@@ -23931,6 +23931,48 @@ function ninaApp() {
         // write it into the rig's CameraPixelSizeUm / AuxCameraPixelSizeUm.
         // The picks themselves aren't persisted; the resolved µm value is.
         dslrPick: { mainBrand: '', mainModel: '', auxBrand: '', auxModel: '' },
+        dslrApplyBusy: false,
+        /// True when a DSLR is connected and its driver is missing the geometry
+        /// it needs to expose a frame at all. indi_gphoto publishes CCD_INFO as
+        /// zeros, and with a zero pixel size or a zero Max X/Y the driver will
+        /// not capture, so this is the difference between "the FOV is wrong"
+        /// and "no photo comes out". Only a notice, never a modal: it can come
+        /// true in the middle of a session and stealing focus then is worse
+        /// than the problem.
+        get dslrSensorMissing() {
+            if (!this.isDslrCamera || !this.cameraConnected) return false;
+            const i = this.equipCameraInfo || {};
+            return !(i.pixelSizeUm > 0) || !(i.maxX > 0) || !(i.maxY > 0);
+        },
+        /// Whether the rig already holds numbers this can push.
+        get dslrSensorConfigured() {
+            const s = this.settings || {};
+            return s.cameraPixelSizeUm > 0 && s.cameraMaxX > 0 && s.cameraMaxY > 0;
+        },
+        /// Write the rig's sensor geometry into the live driver, now.
+        async dslrApplySensorToDriver() {
+            this.dslrApplyBusy = true;
+            try {
+                const r = await this.apiPost('/api/camera/ccd-info/apply', {});
+                if (!r.ok) {
+                    const e = await r.json().catch(() => ({}));
+                    throw new Error(e.error || ('HTTP ' + r.status));
+                }
+                const d = await r.json();
+                this.toast('Sensor applied: ' + d.maxX + '×' + d.maxY + ' px · '
+                    + Number(d.pixelSizeUm).toFixed(2) + ' µm · ' + d.bitDepth + '-bit', 'ok');
+                // Nothing to refresh by hand: equipCameraInfo is rebuilt from
+                // /ws/status on every tick, so the notice clears itself within a
+                // second once the driver echoes the new CCD_INFO. (An earlier
+                // version called a refresh helper that does not exist, and the
+                // optional-call syntax made it a silent no-op forever.)
+            } catch (e) {
+                this.toastFail('Could not apply the sensor', e);
+            } finally {
+                this.dslrApplyBusy = false;
+            }
+        },
+
         /// Distinct DSLR brands in the catalogue, sorted.
         get dslrBrands() {
             const set = new Set((this.opticsCatalogue.dslrCameras || []).map(c => c.brand));

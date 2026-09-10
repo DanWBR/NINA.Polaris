@@ -613,6 +613,51 @@ public static class CameraEndpoints {
             return Results.Ok(new { status = "connected", device = equip.Camera.DeviceName });
         });
 
+        // Push the rig's configured sensor geometry into the CONNECTED driver.
+        //
+        // indi_gphoto publishes CCD_INFO as zeros, and a zero pixel size or a
+        // zero Max X/Y is not a cosmetic gap: the driver will not take a frame,
+        // so a fresh DSLR cannot shoot at all until something fills them in.
+        // The connect path already pushes the rig's values, but only when the
+        // camera reports nothing itself, which is deliberately conservative --
+        // it must not overwrite a camera that knows its own sensor.
+        //
+        // This route is the operator saying "use my numbers", so it writes
+        // unconditionally and does not wait for a reconnect.
+        group.MapPost("/ccd-info/apply", async (EquipmentManager equip, ProfileService profiles,
+                                                ILoggerFactory loggerFactory) => {
+            if (equip.Camera == null || !equip.Camera.IsConnected)
+                return Results.BadRequest(new { error = "No camera connected." });
+            if (equip.Camera is not NINA.INDI.Devices.IndiCamera indiCam)
+                return Results.BadRequest(new {
+                    error = "This only applies to an INDI camera; other backends report their own sensor."
+                });
+            var rig = profiles.ActiveEquipmentProfile;
+            if (rig == null || !(rig.CameraPixelSizeUm > 0)
+                || rig.CameraMaxX <= 0 || rig.CameraMaxY <= 0) {
+                return Results.BadRequest(new {
+                    error = "This rig has no sensor geometry yet. Pick the camera brand and model first."
+                });
+            }
+            try {
+                await indiCam.TrySetCcdInfoAsync(rig.CameraMaxX, rig.CameraMaxY,
+                    rig.CameraPixelSizeUm, rig.CameraBitDepth);
+            } catch (Exception ex) {
+                loggerFactory.CreateLogger("Polaris.Camera")
+                    .LogWarning(ex, "CCD_INFO apply failed for {Dev}", equip.Camera.DeviceName);
+                return Results.Json(new { error = "The driver refused the write: " + ex.Message },
+                    statusCode: StatusCodes.Status502BadGateway);
+            }
+            loggerFactory.CreateLogger("Polaris.Camera")
+                .LogInformation("Applied rig CCD_INFO to {Dev}: {X}x{Y} px, {P}µm, {B}-bit",
+                    equip.Camera.DeviceName, rig.CameraMaxX, rig.CameraMaxY,
+                    rig.CameraPixelSizeUm, rig.CameraBitDepth);
+            return Results.Ok(new {
+                applied = true, maxX = rig.CameraMaxX, maxY = rig.CameraMaxY,
+                pixelSizeUm = rig.CameraPixelSizeUm, bitDepth = rig.CameraBitDepth,
+            });
+        });
+
         group.MapPost("/disconnect", async (EquipmentManager equip) => {
             if (equip.Camera == null)
                 return Results.BadRequest(new { error = "No camera selected" });

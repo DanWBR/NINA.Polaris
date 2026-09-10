@@ -2359,3 +2359,23 @@ body.link-offline .preview-pane::after {
 }
 .cert-modal-frame .hint { font-size: 12px; }
 
+/* A gphoto DSLR whose driver has no sensor geometry cannot take a frame, so
+   this is a blocker and not a hint. Warning-toned, with the padding every new
+   surface gets, and it wraps on a phone rather than pushing the button off. */
+.dslr-sensor-notice {
+    padding: 10px 12px;
+    margin: 8px 0;
+    border: 1px solid var(--warn, #d9a23a);
+    border-left-width: 3px;
+    border-radius: var(--radius);
+    background: rgba(217, 162, 58, 0.10);
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.dslr-sensor-notice > span {
+    font-size: 12px;
+    line-height: 1.45;
+    flex: 1 1 260px;
+    min-width: 0;
+}
