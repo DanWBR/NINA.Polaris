@@ -152,6 +152,39 @@ public class FileBrowserServiceTests {
             Throws.TypeOf<FileNotFoundException>());
     }
 
+    [Test]
+    public void ResolveSafe_SymlinkToBlockedFile_Refused() {
+        if (!OperatingSystem.IsLinux()) return;
+
+        var link = Path.Combine(_tmp, "shadow-link");
+        File.CreateSymbolicLink(link, "/etc/shadow");
+
+        Assert.That(() => _svc.ResolveSafe(link, mustExist: true),
+            Throws.TypeOf<UnauthorizedAccessException>());
+    }
+
+    [Test]
+    public void WriteText_SymlinkedDestinationParentToBlockedDirectory_Refused() {
+        if (!OperatingSystem.IsLinux()) return;
+
+        var link = Path.Combine(_tmp, "etc-link");
+        Directory.CreateSymbolicLink(link, "/etc");
+
+        Assert.That(
+            async () => await _svc.WriteTextAsync(
+                Path.Combine(link, "polaris-test.txt"), "x", overwrite: false),
+            Throws.TypeOf<UnauthorizedAccessException>());
+    }
+
+    [Test]
+    public async Task WriteText_NormalTemporaryDestination_Works() {
+        var path = Path.Combine(_tmp, "output.txt");
+
+        await _svc.WriteTextAsync(path, "x", overwrite: false);
+
+        Assert.That(await File.ReadAllTextAsync(path), Is.EqualTo("x"));
+    }
+
     // --- Mutations ----------------------------------------------------
 
     [Test]

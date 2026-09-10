@@ -529,6 +529,12 @@ public class FileBrowserService {
         var full = Path.GetFullPath(userPath);
         if (mustExist && !File.Exists(full) && !Directory.Exists(full))
             throw new FileNotFoundException(full);
+        if (mustExist) {
+            FileSystemInfo info = Directory.Exists(full)
+                ? new DirectoryInfo(full)
+                : new FileInfo(full);
+            full = info.ResolveLinkTarget(returnFinalTarget: true)?.FullName ?? full;
+        }
         if (IsBlocked(full))
             throw new UnauthorizedAccessException($"Path is blocked: {full}");
         return full;
@@ -540,9 +546,25 @@ public class FileBrowserService {
         if (string.IsNullOrWhiteSpace(userPath))
             throw new ArgumentException("Empty destination", nameof(userPath));
         var full = Path.GetFullPath(userPath);
-        if (IsBlocked(full))
-            throw new UnauthorizedAccessException($"Destination is blocked: {full}");
-        return full;
+        if (File.Exists(full) || Directory.Exists(full))
+            return ResolveSafe(full, mustExist: true);
+
+        var missing = new Stack<string>();
+        var existing = full;
+        while (!File.Exists(existing) && !Directory.Exists(existing)) {
+            var parent = Path.GetDirectoryName(existing);
+            if (string.IsNullOrEmpty(parent) || parent == existing) break;
+            missing.Push(Path.GetFileName(existing));
+            existing = parent;
+        }
+
+        var canonical = File.Exists(existing) || Directory.Exists(existing)
+            ? ResolveSafe(existing, mustExist: true)
+            : existing;
+        while (missing.Count > 0) canonical = Path.Combine(canonical, missing.Pop());
+        if (IsBlocked(canonical))
+            throw new UnauthorizedAccessException($"Destination is blocked: {canonical}");
+        return canonical;
     }
 
     public static bool IsBlocked(string fullPath) {
