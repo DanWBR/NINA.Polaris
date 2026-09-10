@@ -626,6 +626,7 @@ public class IndiCamera : ICamera, IDisposable {
         _client.BlobReceived += OnBlobReceived;
         _client.PropertyChanged += OnPropertyChanged;
         _client.MessageReceived += OnDriverMessage;
+        _client.DeviceConfigLoaded += OnDeviceConfigLoaded;
     }
 
     public async Task ConnectAsync(CancellationToken ct = default) {
@@ -693,6 +694,28 @@ public class IndiCamera : ICamera, IDisposable {
         // on CaptureAsync.
         if (AlreadyAt(_client.GetProperty(DeviceName, "CCD_BINNING") as IndiNumberProperty, wanted)) return;
         await _client.SetNumberAsync(DeviceName, "CCD_BINNING", wanted, ct);
+
+        // Changing the binning re-scales CCD_FRAME, and the driver re-validates
+        // the region against the new geometry. Whatever it clamps there stays in
+        // force once the binning changes back, because nothing asks for the full
+        // frame again.
+        //
+        // The arithmetic from the night that showed this: an ASI183 (5496 wide)
+        // focused and previewed at bin 3, then shot 60 lights at 5472. 5496-5472
+        // is 24, which is exactly EIGHT columns at bin 3, and eight is the ZWO
+        // width alignment quantum. So the width lost eight columns in the binned
+        // domain and the unbinned frame carried the loss for the rest of the
+        // night. Only the width: the height's quantum is two, and 3672/3 needed
+        // no alignment, which is why it came back whole.
+        //
+        // So re-assert the full sensor after the change, but only when full frame
+        // is what was last asked for -- a region the operator set in VIDEO is
+        // theirs to keep.
+        if (_wantFullFrame) {
+            try { await Task.Delay(FrameEchoWaitMs, ct); }
+            catch (OperationCanceledException) { return; }
+            await SetSubframeAsync(0, 0, 0, 0, ct);
+        }
     }
 
     public async Task SetTemperatureAsync(double temperature, CancellationToken ct = default) {
@@ -906,13 +929,62 @@ public class IndiCamera : ICamera, IDisposable {
         await _client.SetNumberAsync(DeviceName, "SCOPE_INFO", payload, ct);
     }
 
+    // The largest geometry CCD_INFO has ever published for this device.
+    //
+    // CCD_MAX_X/Y is supposed to be the sensor, and for most drivers it is. But
+    // the value is the one thing the full-frame assertion is built on, so if a
+    // driver ever republishes it as the CURRENT region instead, every guard
+    // built on it agrees with the crop and goes quiet -- which is exactly what a
+    // 5472x3672 night off a 5496x3672 IMX183 looks like. Remembering the high
+    // water mark costs two ints and makes that failure self-correcting: once the
+    // real sensor size has been seen, it stays the target.
+    private int _sensorMaxX, _sensorMaxY;
+
+    private (int X, int Y) SensorSize() {
+        int x = MaxX, y = MaxY;
+        if (x > _sensorMaxX) _sensorMaxX = x;
+        if (y > _sensorMaxY) _sensorMaxY = y;
+        if (_sensorMaxX > x && x > 0) {
+            _client.DiagLogger.LogWarning(
+                "{Device}: CCD_INFO now reports {NowX}x{NowY} but published {WasX}x{WasY} earlier. " +
+                "Using the larger, or the full-frame assertion would agree with a crop.",
+                DeviceName, x, y, _sensorMaxX, _sensorMaxY);
+        }
+        return (_sensorMaxX, _sensorMaxY);
+    }
+
+    /// <summary>True while the last geometry we asked for was the whole sensor.
+    /// Set false by a real region, so re-asserting after a config load cannot
+    /// undo a region the operator chose in VIDEO.</summary>
+    private bool _wantFullFrame;
+
+    private void OnDeviceConfigLoaded(string device) {
+        if (device != DeviceName || !_wantFullFrame) return;
+        // The saved config may have carried an old CCD_FRAME. Put the sensor
+        // back, in the background: this runs on the client's config task.
+        _ = Task.Run(async () => {
+            try {
+                await SetSubframeAsync(0, 0, 0, 0);
+            } catch (Exception ex) {
+                _client.DiagLogger.LogWarning(ex,
+                    "{Device}: could not re-assert the full sensor after CONFIG_LOAD; " +
+                    "a region saved in the driver's config may still be cropping captures",
+                    DeviceName);
+            }
+        });
+    }
+
     /// <summary>Writes CCD_FRAME (X, Y, WIDTH, HEIGHT). Passing w=0 OR
     /// h=0 resets to the full sensor (Max X/Y).</summary>
     public async Task SetSubframeAsync(int x, int y, int width, int height, CancellationToken ct = default) {
         if (width <= 0 || height <= 0) {
+            var (sx, sy) = SensorSize();
             x = 0; y = 0;
-            width = MaxX > 0 ? MaxX : 0;
-            height = MaxY > 0 ? MaxY : 0;
+            width = sx > 0 ? sx : 0;
+            height = sy > 0 ? sy : 0;
+            _wantFullFrame = true;
+        } else {
+            _wantFullFrame = false;
         }
         // If we still don't know the real geometry (e.g. CCD_INFO hasn't
         // arrived yet right after connect), don't write a zero/garbage
@@ -964,12 +1036,73 @@ public class IndiCamera : ICamera, IDisposable {
             try { await Task.Delay(SubframeAbortSettleMs, ct); } catch (OperationCanceledException) { }
         }
 
+        // Offsets first when they are moving TOWARDS zero, then the sizes.
+        //
+        // CCD_FRAME arrives as one vector, and a driver is free to validate each
+        // element against the values it currently holds. Asking for the full
+        // width while the driver still has a non-zero X gives it every excuse to
+        // clamp that width to "sensor minus the old offset", and the clamped
+        // value is what stays. Sending the offsets on their own first removes
+        // the excuse; the sizes are then measured against an origin of zero.
+        bool offsetsShrinking = x < (int)_client.GetNumber(DeviceName, "CCD_FRAME", "X")
+                             || y < (int)_client.GetNumber(DeviceName, "CCD_FRAME", "Y");
+        if (offsetsShrinking) {
+            await _client.SetNumberAsync(DeviceName, "CCD_FRAME",
+                new Dictionary<string, double> { ["X"] = x, ["Y"] = y }, ct);
+            try { await Task.Delay(FrameEchoWaitMs, ct); }
+            catch (OperationCanceledException) { return; }
+        }
+
         await _client.SetNumberAsync(DeviceName, "CCD_FRAME",
             new Dictionary<string, double> {
                 ["X"] = x, ["Y"] = y,
                 ["WIDTH"] = width, ["HEIGHT"] = height
             }, ct);
+
+        // Read it back. A driver is free to align or clamp what we asked for --
+        // the ZWO SDK wants the width on an 8 px boundary, and some drivers round
+        // harder than that -- and until now the write was fire-and-forget, so a
+        // clamp cost a whole night of cropped subs without a line in the log to
+        // explain it. This does not fight the driver, it just stops the
+        // difference being invisible.
+        try {
+            await Task.Delay(FrameEchoWaitMs, ct);
+        } catch (OperationCanceledException) { return; }
+        int gotW = (int)_client.GetNumber(DeviceName, "CCD_FRAME", "WIDTH");
+        int gotH = (int)_client.GetNumber(DeviceName, "CCD_FRAME", "HEIGHT");
+        int gotX = (int)_client.GetNumber(DeviceName, "CCD_FRAME", "X");
+        int gotY = (int)_client.GetNumber(DeviceName, "CCD_FRAME", "Y");
+        if (gotW > 0 && gotH > 0 && (gotW != width || gotH != height || gotX != x || gotY != y)) {
+            // One retry, now that the offsets are settled at what we asked for.
+            // A clamp caused by the previous geometry clears on the second pass;
+            // a genuine alignment rule does not, and then the warning below is
+            // the honest answer.
+            await _client.SetNumberAsync(DeviceName, "CCD_FRAME",
+                new Dictionary<string, double> {
+                    ["X"] = x, ["Y"] = y,
+                    ["WIDTH"] = width, ["HEIGHT"] = height
+                }, ct);
+            try { await Task.Delay(FrameEchoWaitMs, ct); }
+            catch (OperationCanceledException) { return; }
+            gotW = (int)_client.GetNumber(DeviceName, "CCD_FRAME", "WIDTH");
+            gotH = (int)_client.GetNumber(DeviceName, "CCD_FRAME", "HEIGHT");
+            gotX = (int)_client.GetNumber(DeviceName, "CCD_FRAME", "X");
+            gotY = (int)_client.GetNumber(DeviceName, "CCD_FRAME", "Y");
+        }
+        if (gotW > 0 && gotH > 0 && (gotW != width || gotH != height || gotX != x || gotY != y)) {
+            _client.DiagLogger.LogWarning(
+                "{Device}: asked for CCD_FRAME {WantW}x{WantH}+{WantX}+{WantY} and the driver " +
+                "settled on {GotW}x{GotH}+{GotX}+{GotY}, twice. Captures will come out at the " +
+                "second size; if that is smaller than the sensor, the driver is aligning or " +
+                "clamping the region and Polaris cannot talk it out of it.",
+                DeviceName, width, height, x, y, gotW, gotH, gotX, gotY);
+        }
     }
+
+    /// <summary>How long to wait for the driver to echo CCD_FRAME before reading
+    /// it back. Long enough for a local indiserver round trip, short enough that
+    /// a per-capture full-frame assertion does not become a stall.</summary>
+    internal const int FrameEchoWaitMs = 300;
 
     /// <summary>Settle delay (ms) between aborting an in-flight exposure and
     /// rewriting CCD_FRAME, so the driver finishes releasing the old capture

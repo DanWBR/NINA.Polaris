@@ -468,20 +468,28 @@ public class AutoFocusService {
                 State = AutoFocusState.Idle;
             }
         } finally {
-            if (roiActive) {
-                try { await camera.SetSubframeAsync(0, 0, 0, 0, CancellationToken.None); }
-                catch (Exception ex) { _logger.LogWarning(ex, "AF failed to clear ROI subframe"); }
-            }
-            // Put binning back before the ROI reset lands, and unconditionally:
-            // leaving the imaging camera in 2x2 after a focus run would silently
-            // halve the resolution of every light frame for the rest of the
-            // night, and nobody would connect that to the auto-focus.
+            // BINNING FIRST, then the region. The comment that used to sit below
+            // said exactly this and the code did the opposite: the region was
+            // reset while the camera was still binned, so the full-frame width
+            // was validated by the driver against the binned geometry, and
+            // whatever it clamped to stayed in force once the binning came back.
+            // Restoring the binning first means the full-frame reset is measured
+            // against the geometry the night is actually going to be shot at.
+            //
+            // Unconditional either way: leaving the imaging camera in 2x2 after a
+            // focus run would silently halve the resolution of every light frame
+            // for the rest of the night, and nobody would connect that to the
+            // auto-focus.
             if (restoreBinX > 0) {
                 try { await camera.SetBinningAsync(restoreBinX, restoreBinY, CancellationToken.None); }
                 catch (Exception ex) {
                     _logger.LogError(ex, "AF could not restore binning {X}x{Y}; the camera may "
                         + "still be binned", restoreBinX, restoreBinY);
                 }
+            }
+            if (roiActive) {
+                try { await camera.SetSubframeAsync(0, 0, 0, 0, CancellationToken.None); }
+                catch (Exception ex) { _logger.LogWarning(ex, "AF failed to clear ROI subframe"); }
             }
         }
     }
