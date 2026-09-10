@@ -1014,6 +1014,23 @@ public class IndiCamera : ICamera, IDisposable {
             try { await Task.Delay(SubframeAbortSettleMs, ct); } catch (OperationCanceledException) { }
         }
 
+        // Offsets first when they are moving TOWARDS zero, then the sizes.
+        //
+        // CCD_FRAME arrives as one vector, and a driver is free to validate each
+        // element against the values it currently holds. Asking for the full
+        // width while the driver still has a non-zero X gives it every excuse to
+        // clamp that width to "sensor minus the old offset", and the clamped
+        // value is what stays. Sending the offsets on their own first removes
+        // the excuse; the sizes are then measured against an origin of zero.
+        bool offsetsShrinking = x < (int)_client.GetNumber(DeviceName, "CCD_FRAME", "X")
+                             || y < (int)_client.GetNumber(DeviceName, "CCD_FRAME", "Y");
+        if (offsetsShrinking) {
+            await _client.SetNumberAsync(DeviceName, "CCD_FRAME",
+                new Dictionary<string, double> { ["X"] = x, ["Y"] = y }, ct);
+            try { await Task.Delay(FrameEchoWaitMs, ct); }
+            catch (OperationCanceledException) { return; }
+        }
+
         await _client.SetNumberAsync(DeviceName, "CCD_FRAME",
             new Dictionary<string, double> {
                 ["X"] = x, ["Y"] = y,
@@ -1034,11 +1051,28 @@ public class IndiCamera : ICamera, IDisposable {
         int gotX = (int)_client.GetNumber(DeviceName, "CCD_FRAME", "X");
         int gotY = (int)_client.GetNumber(DeviceName, "CCD_FRAME", "Y");
         if (gotW > 0 && gotH > 0 && (gotW != width || gotH != height || gotX != x || gotY != y)) {
+            // One retry, now that the offsets are settled at what we asked for.
+            // A clamp caused by the previous geometry clears on the second pass;
+            // a genuine alignment rule does not, and then the warning below is
+            // the honest answer.
+            await _client.SetNumberAsync(DeviceName, "CCD_FRAME",
+                new Dictionary<string, double> {
+                    ["X"] = x, ["Y"] = y,
+                    ["WIDTH"] = width, ["HEIGHT"] = height
+                }, ct);
+            try { await Task.Delay(FrameEchoWaitMs, ct); }
+            catch (OperationCanceledException) { return; }
+            gotW = (int)_client.GetNumber(DeviceName, "CCD_FRAME", "WIDTH");
+            gotH = (int)_client.GetNumber(DeviceName, "CCD_FRAME", "HEIGHT");
+            gotX = (int)_client.GetNumber(DeviceName, "CCD_FRAME", "X");
+            gotY = (int)_client.GetNumber(DeviceName, "CCD_FRAME", "Y");
+        }
+        if (gotW > 0 && gotH > 0 && (gotW != width || gotH != height || gotX != x || gotY != y)) {
             _client.DiagLogger.LogWarning(
                 "{Device}: asked for CCD_FRAME {WantW}x{WantH}+{WantX}+{WantY} and the driver " +
-                "settled on {GotW}x{GotH}+{GotX}+{GotY}. Captures will come out at the second " +
-                "size; if that is smaller than the sensor, the driver is aligning or clamping " +
-                "the region.",
+                "settled on {GotW}x{GotH}+{GotX}+{GotY}, twice. Captures will come out at the " +
+                "second size; if that is smaller than the sensor, the driver is aligning or " +
+                "clamping the region and Polaris cannot talk it out of it.",
                 DeviceName, width, height, x, y, gotW, gotH, gotX, gotY);
         }
     }
