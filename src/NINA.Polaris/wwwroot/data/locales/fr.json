@@ -4778,10 +4778,10 @@
   "Removes the out-of-focus violet an ED doublet spreads around bright stars, from about 6 px outwards. Brings blue down to the other two channels in the halo only; star cores and their colour are left alone. This is a telescope defect, so run it on the original frame, not after the star colour repair. Writes a new FITS; the original is kept.": "Enlève le violet hors foyer qu'un doublet ED étale autour des étoiles brillantes, à partir d'environ 6 px. Ramène le bleu au niveau des deux autres canaux dans le halo seulement ; le cœur des étoiles et leur couleur ne sont pas touchés. C'est un défaut du télescope, donc lancez-le sur le fichier original, pas après la réparation de couleur. Écrit un nouveau FITS ; l'original est conservé.",
   "To LIVE": "Vers LIVE",
   "Load this FITS into the LIVE panel through the same path a camera frame takes, so the stretch sliders and the histogram can be tried on a known file.": "Charge ce FITS dans le panneau LIVE par le même chemin qu'une image de la caméra, pour essayer les curseurs d'étirement et l'histogramme sur un fichier connu.",
-  "This camera has not told the driver its sensor size, and without it no frame can be taken. Pick the brand and model below, then apply.": "Cet appareil n'a pas indiqué la taille de son capteur au pilote, et sans elle aucune image ne peut être prise. Choisissez la marque et le modèle ci-dessous, puis appliquez.",
   "Apply sensor to driver": "Appliquer le capteur au pilote",
   "Write the sensor size, pixel pitch and bit depth into the driver": "Écrit la taille du capteur, le pas de pixel et la profondeur de bits dans le pilote",
   "Pick the camera brand and model first": "Choisissez d'abord la marque et le modèle de l'appareil",
   "Applying…": "Application…",
-  "Could not apply the sensor": "Impossible d'appliquer le capteur"
+  "Could not apply the sensor": "Impossible d'appliquer le capteur",
+  "This camera has not told the driver its sensor size, and without it no frame can be taken. Pick the brand and model below and it goes to the driver automatically.": "Cet appareil n'a pas indiqué la taille de son capteur au pilote, et sans elle aucune image ne peut être prise. Choisissez la marque et le modèle ci-dessous, et cela part vers le pilote automatiquement."
 }

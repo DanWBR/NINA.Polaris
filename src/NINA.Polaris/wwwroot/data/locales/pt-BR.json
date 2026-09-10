@@ -4778,10 +4778,10 @@
   "Removes the out-of-focus violet an ED doublet spreads around bright stars, from about 6 px outwards. Brings blue down to the other two channels in the halo only; star cores and their colour are left alone. This is a telescope defect, so run it on the original frame, not after the star colour repair. Writes a new FITS; the original is kept.": "Remove o violeta fora de foco que um doublet ED espalha em volta das estrelas brilhantes, a partir de uns 6 px. Traz o azul para o nível dos outros dois canais só no halo; o núcleo das estrelas e a cor delas ficam intactos. É um defeito do telescópio, então rode no arquivo original, não depois do reparo de cor das estrelas. Grava um FITS novo; o original fica.",
   "To LIVE": "Para o LIVE",
   "Load this FITS into the LIVE panel through the same path a camera frame takes, so the stretch sliders and the histogram can be tried on a known file.": "Carrega este FITS no painel LIVE pelo mesmo caminho de um frame da câmera, para testar os sliders de esticamento e o histograma num arquivo conhecido.",
-  "This camera has not told the driver its sensor size, and without it no frame can be taken. Pick the brand and model below, then apply.": "Esta câmera não informou o tamanho do sensor ao driver, e sem isso nenhum frame pode ser tirado. Escolha a marca e o modelo abaixo e aplique.",
   "Apply sensor to driver": "Aplicar sensor ao driver",
   "Write the sensor size, pixel pitch and bit depth into the driver": "Grava o tamanho do sensor, o passo de pixel e a profundidade de bits no driver",
   "Pick the camera brand and model first": "Escolha primeiro a marca e o modelo da câmera",
   "Applying…": "Aplicando…",
-  "Could not apply the sensor": "Não foi possível aplicar o sensor"
+  "Could not apply the sensor": "Não foi possível aplicar o sensor",
+  "This camera has not told the driver its sensor size, and without it no frame can be taken. Pick the brand and model below and it goes to the driver automatically.": "Esta câmera não informou o tamanho do sensor ao driver, e sem isso nenhum frame pode ser tirado. Escolha a marca e o modelo abaixo e isso vai para o driver automaticamente."
 }

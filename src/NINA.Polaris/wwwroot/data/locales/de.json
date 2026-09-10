@@ -4778,10 +4778,10 @@
   "Removes the out-of-focus violet an ED doublet spreads around bright stars, from about 6 px outwards. Brings blue down to the other two channels in the halo only; star cores and their colour are left alone. This is a telescope defect, so run it on the original frame, not after the star colour repair. Writes a new FITS; the original is kept.": "Entfernt das unscharfe Violett, das ein ED-Doublet um helle Sterne verteilt, ab etwa 6 px. Senkt Blau nur im Halo auf das Niveau der anderen beiden Kanäle; Sternkerne und ihre Farbe bleiben unberührt. Das ist ein Teleskopfehler, also auf der Originaldatei ausführen, nicht nach der Sternfarbenreparatur. Schreibt eine neue FITS-Datei; das Original bleibt erhalten.",
   "To LIVE": "Nach LIVE",
   "Load this FITS into the LIVE panel through the same path a camera frame takes, so the stretch sliders and the histogram can be tried on a known file.": "Lädt diese FITS-Datei über denselben Weg wie ein Kamerabild in das LIVE-Panel, um die Streckungsregler und das Histogramm an einer bekannten Datei zu erproben.",
-  "This camera has not told the driver its sensor size, and without it no frame can be taken. Pick the brand and model below, then apply.": "Diese Kamera hat dem Treiber ihre Sensorgröße nicht mitgeteilt, und ohne sie kann kein Bild aufgenommen werden. Wählen Sie unten Marke und Modell und übernehmen Sie.",
   "Apply sensor to driver": "Sensor auf den Treiber anwenden",
   "Write the sensor size, pixel pitch and bit depth into the driver": "Schreibt Sensorgröße, Pixelabstand und Bittiefe in den Treiber",
   "Pick the camera brand and model first": "Wählen Sie zuerst Marke und Modell der Kamera",
   "Applying…": "Wird angewendet…",
-  "Could not apply the sensor": "Sensor konnte nicht angewendet werden"
+  "Could not apply the sensor": "Sensor konnte nicht angewendet werden",
+  "This camera has not told the driver its sensor size, and without it no frame can be taken. Pick the brand and model below and it goes to the driver automatically.": "Diese Kamera hat dem Treiber ihre Sensorgröße nicht mitgeteilt, und ohne sie kann kein Bild aufgenommen werden. Wählen Sie unten Marke und Modell, dann geht das automatisch an den Treiber."
 }

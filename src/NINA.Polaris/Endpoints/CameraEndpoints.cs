@@ -12,6 +12,7 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using System.Text.Json;
 using NINA.Polaris.Services;
 
 namespace NINA.Polaris.Endpoints;
@@ -624,7 +625,8 @@ public static class CameraEndpoints {
         //
         // This route is the operator saying "use my numbers", so it writes
         // unconditionally and does not wait for a reconnect.
-        group.MapPost("/ccd-info/apply", async (EquipmentManager equip, ProfileService profiles,
+        group.MapPost("/ccd-info/apply", async (JsonElement body, EquipmentManager equip,
+                                                ProfileService profiles,
                                                 ILoggerFactory loggerFactory) => {
             if (equip.Camera == null || !equip.Camera.IsConnected)
                 return Results.BadRequest(new { error = "No camera connected." });
@@ -632,16 +634,27 @@ public static class CameraEndpoints {
                 return Results.BadRequest(new {
                     error = "This only applies to an INDI camera; other backends report their own sensor."
                 });
-            var rig = profiles.ActiveEquipmentProfile;
-            if (rig == null || !(rig.CameraPixelSizeUm > 0)
-                || rig.CameraMaxX <= 0 || rig.CameraMaxY <= 0) {
-                return Results.BadRequest(new {
-                    error = "This rig has no sensor geometry yet. Pick the camera brand and model first."
-                });
+
+            // The geometry may come with the request or from the stored rig.
+            //
+            // The camera picker saves the rig on a debounce, so a push issued
+            // right after a pick would read the PREVIOUS profile -- the body is
+            // what removes that ordering dependency. Absent body => the rig,
+            // which is what the manual button sends.
+            var (maxX, maxY, pixelUm, bits) = ReadCcdInfoRequest(body);
+            if (maxX <= 0 || maxY <= 0 || !(pixelUm > 0)) {
+                var rig = profiles.ActiveEquipmentProfile;
+                if (rig == null || !(rig.CameraPixelSizeUm > 0)
+                    || rig.CameraMaxX <= 0 || rig.CameraMaxY <= 0) {
+                    return Results.BadRequest(new {
+                        error = "This rig has no sensor geometry yet. Pick the camera brand and model first."
+                    });
+                }
+                (maxX, maxY, pixelUm, bits) =
+                    (rig.CameraMaxX, rig.CameraMaxY, rig.CameraPixelSizeUm, rig.CameraBitDepth);
             }
             try {
-                await indiCam.TrySetCcdInfoAsync(rig.CameraMaxX, rig.CameraMaxY,
-                    rig.CameraPixelSizeUm, rig.CameraBitDepth);
+                await indiCam.TrySetCcdInfoAsync(maxX, maxY, pixelUm, bits);
             } catch (Exception ex) {
                 loggerFactory.CreateLogger("Polaris.Camera")
                     .LogWarning(ex, "CCD_INFO apply failed for {Dev}", equip.Camera.DeviceName);
@@ -649,12 +662,10 @@ public static class CameraEndpoints {
                     statusCode: StatusCodes.Status502BadGateway);
             }
             loggerFactory.CreateLogger("Polaris.Camera")
-                .LogInformation("Applied rig CCD_INFO to {Dev}: {X}x{Y} px, {P}µm, {B}-bit",
-                    equip.Camera.DeviceName, rig.CameraMaxX, rig.CameraMaxY,
-                    rig.CameraPixelSizeUm, rig.CameraBitDepth);
+                .LogInformation("Applied CCD_INFO to {Dev}: {X}x{Y} px, {P}µm, {B}-bit",
+                    equip.Camera.DeviceName, maxX, maxY, pixelUm, bits);
             return Results.Ok(new {
-                applied = true, maxX = rig.CameraMaxX, maxY = rig.CameraMaxY,
-                pixelSizeUm = rig.CameraPixelSizeUm, bitDepth = rig.CameraBitDepth,
+                applied = true, maxX, maxY, pixelSizeUm = pixelUm, bitDepth = bits,
             });
         });
 
@@ -780,6 +791,33 @@ public static class CameraEndpoints {
         string? CameraSource = null);
 
     /// <summary>Run the same star-detector + laplacian-variance pass the main
+    /// <summary>Sensor geometry out of a POST /ccd-info/apply body, or zeros when
+    /// it does not carry a usable set. The ranges are sanity bounds, not hardware
+    /// limits: these numbers land in CCD_INFO, and an INDI number vector is
+    /// validated element by element, so one absurd value gets the whole vector
+    /// refused. A partial body (maxX without maxY, say) counts as no body at all
+    /// rather than being half-applied.</summary>
+    internal static (int MaxX, int MaxY, double PixelUm, int BitDepth)
+            ReadCcdInfoRequest(JsonElement body) {
+        if (body.ValueKind != JsonValueKind.Object) return (0, 0, 0, 0);
+
+        double Num(string name) =>
+            body.TryGetProperty(name, out var v)
+            && v.ValueKind == JsonValueKind.Number
+            && v.TryGetDouble(out var d) ? d : 0;
+
+        var maxX = Num("maxX");
+        var maxY = Num("maxY");
+        var px = Num("pixelSizeUm");
+        var bits = Num("bitDepth");
+
+        if (maxX < 1 || maxX > 32000 || maxY < 1 || maxY > 32000) return (0, 0, 0, 0);
+        if (px < 0.1 || px > 50) return (0, 0, 0, 0);
+        if (bits < 8 || bits > 16) bits = 0;   // 0 = leave the driver's own value
+
+        return ((int)Math.Round(maxX), (int)Math.Round(maxY), px, (int)Math.Round(bits));
+    }
+
     /// capture path uses, for the aux-camera FOCUS snap. Returns the stats shape
     /// the manual-focus loop consumes (hfr/starCount/laplacianVar/width/height).</summary>
     private static object ComputeFocusStats(NINA.Image.Interfaces.IImageData img) {

@@ -94,7 +94,7 @@ const EXPOSURE_PRESETS_ALL = [
 // Bumped whenever a catalogue under wwwroot/data changes. The optics fetch
 // uses cache: 'force-cache', which does not revalidate, so without a new URL
 // an edit reaches nobody who already loaded the old file.
-const CATALOGUE_VERSION = '20260910';
+const CATALOGUE_VERSION = '20260910b';
 
 function ninaApp() {
     return {
@@ -23949,18 +23949,23 @@ function ninaApp() {
             const s = this.settings || {};
             return s.cameraPixelSizeUm > 0 && s.cameraMaxX > 0 && s.cameraMaxY > 0;
         },
-        /// Write the rig's sensor geometry into the live driver, now.
-        async dslrApplySensorToDriver() {
+        /// Write sensor geometry into the live driver, now. `geom` overrides the
+        /// stored rig (the picker passes what it just picked, because its own save
+        /// is debounced); omit it to use the rig, which is what the button does.
+        /// opts.quiet drops the success toast, for the automatic path.
+        async dslrApplySensorToDriver(geom, opts) {
             this.dslrApplyBusy = true;
             try {
-                const r = await this.apiPost('/api/camera/ccd-info/apply', {});
+                const r = await this.apiPost('/api/camera/ccd-info/apply', geom || {});
                 if (!r.ok) {
                     const e = await r.json().catch(() => ({}));
                     throw new Error(e.error || ('HTTP ' + r.status));
                 }
                 const d = await r.json();
-                this.toast('Sensor applied: ' + d.maxX + '×' + d.maxY + ' px · '
-                    + Number(d.pixelSizeUm).toFixed(2) + ' µm · ' + d.bitDepth + '-bit', 'ok');
+                if (!(opts && opts.quiet)) {
+                    this.toast('Sensor applied: ' + d.maxX + '×' + d.maxY + ' px · '
+                        + Number(d.pixelSizeUm).toFixed(2) + ' µm · ' + d.bitDepth + '-bit', 'ok');
+                }
                 // Nothing to refresh by hand: equipCameraInfo is rebuilt from
                 // /ws/status on every tick, so the notice clears itself within a
                 // second once the driver echoes the new CCD_INFO. (An earlier
@@ -23992,14 +23997,17 @@ function ninaApp() {
             const hit = (this.opticsCatalogue.dslrCameras || [])
                 .find(c => c.brand === brand && c.model === model);
             if (!hit || !(hit.pixelSizeUm > 0)) return;
-            // Derive sensor resolution from the catalogue's sensor size ÷ pixel
-            // pitch (gphoto needs a non-zero CCD_INFO Max X/Y to capture). Exact
-            // resolution isn't critical — the driver corrects it after the first
-            // frame — but it must be non-zero. Bit depth: catalogue or 14 (the
-            // RAW depth of virtually every modern DSLR/mirrorless).
+            // gphoto needs a non-zero CCD_INFO Max X/Y to capture at all, so the
+            // catalogue carries the real pixel array. Older rows without it fall
+            // back to sensor size ÷ pixel pitch, which lands a few pixels off
+            // because the pitch is rounded to 0.01 µm; non-zero is what matters,
+            // and the driver replaces both after the first frame. Bit depth:
+            // catalogue or 14 (the RAW depth of virtually every modern body).
             const px = hit.pixelSizeUm;
-            const maxX = hit.sensorWidthMm > 0 ? Math.round(hit.sensorWidthMm * 1000 / px) : 0;
-            const maxY = hit.sensorHeightMm > 0 ? Math.round(hit.sensorHeightMm * 1000 / px) : 0;
+            const maxX = hit.maxX > 0 ? hit.maxX
+                : (hit.sensorWidthMm > 0 ? Math.round(hit.sensorWidthMm * 1000 / px) : 0);
+            const maxY = hit.maxY > 0 ? hit.maxY
+                : (hit.sensorHeightMm > 0 ? Math.round(hit.sensorHeightMm * 1000 / px) : 0);
             const bits = hit.bitDepth || 14;
             if (which === 'aux') {
                 this.aux.pixelSizeUm = px;
@@ -24014,6 +24022,17 @@ function ninaApp() {
             }
             this.toast(hit.brand + ' ' + hit.model + ': ' + px.toFixed(2) + ' µm · '
                 + maxX + '×' + maxY, 'ok', 2200);
+            // A connected gphoto driver publishes CCD_INFO as zeros and refuses to
+            // expose a frame until something fills it in, so picking the model is
+            // only half the job. Send it now, with the numbers just picked rather
+            // than the stored rig: the save above is debounced, so reading the
+            // profile from the server here would read the PREVIOUS camera.
+            // Quiet by design, since this runs off a <select> and the operator is
+            // told by the notice clearing. The button stays, for a retry.
+            if (which !== 'aux' && this.dslrSensorMissing) {
+                this.dslrApplySensorToDriver({ maxX, maxY, pixelSizeUm: px, bitDepth: bits },
+                    { quiet: true });
+            }
         },
 
         /// Distinct guide-scope brands in the catalogue, sorted.
