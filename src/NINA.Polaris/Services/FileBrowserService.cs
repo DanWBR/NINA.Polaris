@@ -529,15 +529,32 @@ public class FileBrowserService {
         var full = Path.GetFullPath(userPath);
         if (mustExist && !File.Exists(full) && !Directory.Exists(full))
             throw new FileNotFoundException(full);
-        if (mustExist) {
-            FileSystemInfo info = Directory.Exists(full)
-                ? new DirectoryInfo(full)
-                : new FileInfo(full);
-            full = info.ResolveLinkTarget(returnFinalTarget: true)?.FullName ?? full;
-        }
+        // Validate and return the canonical target, not necessarily the requested path.
+        full = ResolveExistingPath(full);
         if (IsBlocked(full))
             throw new UnauthorizedAccessException($"Path is blocked: {full}");
         return full;
+    }
+
+    private static string ResolveExistingPath(string fullPath) {
+        var current = Path.GetPathRoot(fullPath)
+                      ?? throw new ArgumentException("Path has no root", nameof(fullPath));
+        var components = fullPath[current.Length..]
+            .Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+                StringSplitOptions.RemoveEmptyEntries);
+
+        foreach (var component in components) {
+            var candidate = Path.Combine(current, component);
+            if (File.Exists(candidate) || Directory.Exists(candidate)) {
+                FileSystemInfo info = Directory.Exists(candidate)
+                    ? new DirectoryInfo(candidate)
+                    : new FileInfo(candidate);
+                current = info.ResolveLinkTarget(returnFinalTarget: true)?.FullName ?? candidate;
+            } else {
+                current = candidate;
+            }
+        }
+        return current;
     }
 
     private string ResolveSafeDestination(string userPath) {
@@ -546,22 +563,7 @@ public class FileBrowserService {
         if (string.IsNullOrWhiteSpace(userPath))
             throw new ArgumentException("Empty destination", nameof(userPath));
         var full = Path.GetFullPath(userPath);
-        if (File.Exists(full) || Directory.Exists(full))
-            return ResolveSafe(full, mustExist: true);
-
-        var missing = new Stack<string>();
-        var existing = full;
-        while (!File.Exists(existing) && !Directory.Exists(existing)) {
-            var parent = Path.GetDirectoryName(existing);
-            if (string.IsNullOrEmpty(parent) || parent == existing) break;
-            missing.Push(Path.GetFileName(existing));
-            existing = parent;
-        }
-
-        var canonical = File.Exists(existing) || Directory.Exists(existing)
-            ? ResolveSafe(existing, mustExist: true)
-            : existing;
-        while (missing.Count > 0) canonical = Path.Combine(canonical, missing.Pop());
+        var canonical = ResolveExistingPath(full);
         if (IsBlocked(canonical))
             throw new UnauthorizedAccessException($"Destination is blocked: {canonical}");
         return canonical;

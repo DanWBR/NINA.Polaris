@@ -154,10 +154,11 @@ public class FileBrowserServiceTests {
 
     [Test]
     public void ResolveSafe_SymlinkToBlockedFile_Refused() {
-        if (!OperatingSystem.IsLinux()) return;
+        if (!OperatingSystem.IsLinux())
+            Assert.Ignore("Symbolic-link test requires Linux");
 
         var link = Path.Combine(_tmp, "shadow-link");
-        File.CreateSymbolicLink(link, "/etc/shadow");
+        File.CreateSymbolicLink(link, "/proc/self/status");
 
         Assert.That(() => _svc.ResolveSafe(link, mustExist: true),
             Throws.TypeOf<UnauthorizedAccessException>());
@@ -165,7 +166,8 @@ public class FileBrowserServiceTests {
 
     [Test]
     public void WriteText_SymlinkedDestinationParentToBlockedDirectory_Refused() {
-        if (!OperatingSystem.IsLinux()) return;
+        if (!OperatingSystem.IsLinux())
+            Assert.Ignore("Symbolic-link test requires Linux");
 
         var link = Path.Combine(_tmp, "etc-link");
         Directory.CreateSymbolicLink(link, "/etc");
@@ -173,6 +175,32 @@ public class FileBrowserServiceTests {
         Assert.That(
             async () => await _svc.WriteTextAsync(
                 Path.Combine(link, "polaris-test.txt"), "x", overwrite: false),
+            Throws.TypeOf<UnauthorizedAccessException>());
+    }
+
+    [Test]
+    public void OpenRead_IntermediateSymlinkToBlockedDirectory_Refused() {
+        if (!OperatingSystem.IsLinux())
+            Assert.Ignore("Symbolic-link test requires Linux");
+
+        var link = Path.Combine(_tmp, "proc-link");
+        Directory.CreateSymbolicLink(link, "/proc");
+
+        Assert.That(
+            () => _svc.OpenRead(Path.Combine(link, "self", "status")),
+            Throws.TypeOf<UnauthorizedAccessException>());
+    }
+
+    [Test]
+    public void ResolveSafe_NonexistentPathThroughBlockedSymlink_Refused() {
+        if (!OperatingSystem.IsLinux())
+            Assert.Ignore("Symbolic-link test requires Linux");
+
+        var link = Path.Combine(_tmp, "proc-link");
+        Directory.CreateSymbolicLink(link, "/proc");
+
+        Assert.That(
+            () => _svc.ResolveSafe(Path.Combine(link, "not-created.txt"), mustExist: false),
             Throws.TypeOf<UnauthorizedAccessException>());
     }
 
