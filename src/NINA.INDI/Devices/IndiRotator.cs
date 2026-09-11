@@ -42,6 +42,9 @@ public class IndiRotator : IRotator, IDisposable {
         _client.PropertyChanged += OnPropertyChanged;
     }
 
+    // INDI's client snapshot is refreshed by the protocol read loop.
+    public Task RefreshAsync(CancellationToken ct = default) => Task.CompletedTask;
+
     public Task ConnectAsync(CancellationToken ct = default)
         => _client.ConnectDeviceAsync(DeviceName, ct);
 

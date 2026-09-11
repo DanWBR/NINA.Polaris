@@ -177,8 +177,7 @@ public static class EquipmentEndpoints {
                 r.Rotator = update.Rotator;
                 if (!string.IsNullOrWhiteSpace(update.RotatorDriver))
                     r.RotatorDriver = update.RotatorDriver;
-                r.RotatorMaxAngle = update.RotatorMaxAngle is 90 or 180 or 360
-                    ? update.RotatorMaxAngle : 360;
+                r.RotatorMaxAngle = RotatorRange.NormalizeMaximum(update.RotatorMaxAngle);
                 r.FlatDevice = update.FlatDevice;
                 r.Dome = update.Dome;
                 r.Weather = update.Weather;
