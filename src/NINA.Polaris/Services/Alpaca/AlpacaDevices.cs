@@ -285,23 +285,36 @@ public class AlpacaFilterWheel : IFilterWheel {
 // ---- Rotator ----------------------------------------------------------------
 public class AlpacaRotator : IRotator {
     private readonly AlpacaClient _c;
+    private readonly object _stateLock = new();
     private string _deviceName = "Alpaca Rotator";
+    private bool _isConnected;
+    private double _position = double.NaN;
+    private bool _isMoving;
+    private bool _isReversed;
     public AlpacaRotator(string host, int port, int n = 0) { _c = new(host, port, "rotator", n); }
 
     /// <summary>Construct from the <c>host:port[:deviceNumber]</c> identity
     /// stored by Alpaca discovery in equipment profiles.</summary>
     public static AlpacaRotator FromDeviceId(string deviceId) {
         var parts = (deviceId ?? "").Split(':');
-        if (parts.Length < 2)
-            throw new ArgumentException($"Alpaca device id '{deviceId}' must be host:port[:deviceNumber].",
-                nameof(deviceId));
+        if (parts.Length is < 2 or > 3 || string.IsNullOrWhiteSpace(parts[0]))
+            throw InvalidDeviceId(deviceId);
         var host = parts[0];
-        var port = int.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture);
-        var dev = parts.Length >= 3 && int.TryParse(parts[2],
-            System.Globalization.NumberStyles.Integer,
-            System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : 0;
+        if (!int.TryParse(parts[1], System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out var port)
+            || port is < 1 or > 65535)
+            throw InvalidDeviceId(deviceId);
+        var dev = 0;
+        if (parts.Length == 3 && (!int.TryParse(parts[2],
+                System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out dev)
+            || dev < 0))
+            throw InvalidDeviceId(deviceId);
         return new AlpacaRotator(host, port, dev);
     }
+
+    private static ArgumentException InvalidDeviceId(string? deviceId) =>
+        new($"Alpaca device id '{deviceId}' must be host:port[:deviceNumber].", nameof(deviceId));
 
     public Task<bool> GetConnectedAsync(CancellationToken ct = default) => Safe(_c.GetAsync<bool>("connected", ct));
     public Task SetConnectedAsync(bool v, CancellationToken ct = default) =>
@@ -320,20 +333,50 @@ public class AlpacaRotator : IRotator {
     public Task HaltAsync(CancellationToken ct = default) => _c.PutAsync("halt", null, ct);
 
     // ---- IRotator surface ----
-    public string DeviceName => _deviceName;
-    public bool IsConnected => GetConnectedAsync().GetAwaiter().GetResult();
-    public double Position => GetPositionAsync().GetAwaiter().GetResult();
-    public bool IsMoving => GetIsMovingAsync().GetAwaiter().GetResult();
-    public bool IsReversed => GetReverseAsync().GetAwaiter().GetResult();
+    public string DeviceName { get { lock (_stateLock) return _deviceName; } }
+    public bool IsConnected { get { lock (_stateLock) return _isConnected; } }
+    public double Position { get { lock (_stateLock) return _position; } }
+    public bool IsMoving { get { lock (_stateLock) return _isMoving; } }
+    public bool IsReversed { get { lock (_stateLock) return _isReversed; } }
+
+    /// <summary>Alpaca does not push property changes. Fetch state explicitly
+    /// so synchronous <see cref="IRotator"/> properties remain cheap and never
+    /// block a capture or metadata-writing thread.</summary>
+    public async Task RefreshAsync(CancellationToken ct = default) {
+        var connected = await _c.GetAsync<bool>("connected", ct);
+        var name = await _c.GetAsync<string>("name", ct);
+        var position = await _c.GetAsync<double>("position", ct);
+        var moving = await _c.GetAsync<bool>("ismoving", ct);
+        var reversed = await _c.GetAsync<bool>("reverse", ct);
+        lock (_stateLock) {
+            _isConnected = connected;
+            _deviceName = name ?? _deviceName;
+            _position = position;
+            _isMoving = moving;
+            _isReversed = reversed;
+        }
+    }
 
     public async Task ConnectAsync(CancellationToken ct = default) {
         await SetConnectedAsync(true, ct);
-        _deviceName = (await GetNameAsync(ct)) ?? _deviceName;
+        await RefreshAsync(ct);
     }
-    public Task DisconnectAsync(CancellationToken ct = default) => SetConnectedAsync(false, ct);
-    public Task MoveToAsync(double degrees, CancellationToken ct = default) => MoveAbsoluteAsync(degrees, ct);
-    public Task ReverseAsync(bool reversed, CancellationToken ct = default) => SetReverseAsync(reversed, ct);
-    public Task AbortAsync(CancellationToken ct = default) => HaltAsync(ct);
+    public async Task DisconnectAsync(CancellationToken ct = default) {
+        await SetConnectedAsync(false, ct);
+        lock (_stateLock) { _isConnected = false; _isMoving = false; }
+    }
+    public async Task MoveToAsync(double degrees, CancellationToken ct = default) {
+        await MoveAbsoluteAsync(degrees, ct);
+        lock (_stateLock) { _isMoving = true; }
+    }
+    public async Task ReverseAsync(bool reversed, CancellationToken ct = default) {
+        await SetReverseAsync(reversed, ct);
+        lock (_stateLock) { _isReversed = reversed; }
+    }
+    public async Task AbortAsync(CancellationToken ct = default) {
+        await HaltAsync(ct);
+        lock (_stateLock) { _isMoving = false; }
+    }
 
     private static async Task<bool> Safe(Task<bool> t)     { try { return await t; }   catch { return false; } }
     private static async Task<int> Safe(Task<int> t)       { try { return await t; }   catch { return 0; } }

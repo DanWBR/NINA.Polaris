@@ -39475,11 +39475,6 @@ function ninaApp() {
         },
         async rotatorMoveTo() {
             try {
-                const max = this.rotatorMaxAngle || 360;
-                if (this.equipRotatorTarget < 0 || this.equipRotatorTarget > max) {
-                    this.toast(`Rotator target must be between 0° and ${max}°.`, 'warn');
-                    return;
-                }
                 await this.apiPost('/api/rotator/move', { angle: this.equipRotatorTarget });
                 this.toast(`Rotator moving to ${this.equipRotatorTarget}°`, 'ok');
             } catch (e) {

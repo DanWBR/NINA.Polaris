@@ -20,7 +20,7 @@ public static class RotatorEndpoints {
     public static void MapRotatorEndpoints(this WebApplication app) {
         var group = app.MapGroup("/api/rotator");
 
-        group.MapGet("/status", (EquipmentManager equip, ProfileService profiles) => {
+        group.MapGet("/status", async (EquipmentManager equip, ProfileService profiles, CancellationToken ct) => {
             if (equip.Rotator == null)
                 return Results.Ok(new {
                     connected = false,
@@ -29,6 +29,7 @@ public static class RotatorEndpoints {
                     reversed = false
                 });
 
+            await equip.Rotator.RefreshAsync(ct);
             var pos = equip.Rotator.Position;
             return Results.Ok(new {
                 connected = equip.Rotator.IsConnected,
@@ -43,11 +44,10 @@ public static class RotatorEndpoints {
         group.MapPost("/move", async (EquipmentManager equip, ProfileService profiles, MoveRotatorRequest request) => {
             if (equip.Rotator == null)
                 return Results.BadRequest(new { error = "No rotator selected" });
-            var maxAngle = profiles.ActiveEquipmentProfile?.RotatorMaxAngle ?? 360;
-            if (request.Angle < 0 || request.Angle > maxAngle)
-                return Results.BadRequest(new {
-                    error = $"Rotator target must be between 0° and {maxAngle:0}° for this rig."
-                });
+            var maxAngle = RotatorRange.NormalizeMaximum(
+                profiles.ActiveEquipmentProfile?.RotatorMaxAngle ?? 360);
+            if (!RotatorRange.Allows(request.Angle, maxAngle))
+                return Results.BadRequest(new { error = RotatorRange.Error(maxAngle) });
 
             await equip.Rotator.MoveToAsync(request.Angle);
             return Results.Ok(new { status = "moving", target = request.Angle });
