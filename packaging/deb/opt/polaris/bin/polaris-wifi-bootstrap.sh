@@ -13,13 +13,13 @@
 # the WiFi-interface detection bails out cleanly on hosts without
 # WiFi (mini PCs, ethernet-only setups).
 #
-# Defaults baked into the image: SSID 'Polaris-Hotspot' / PSK
-# 'polaris1234'. Users change these via Polaris UI (Settings →
-# Network → Edit hotspot credentials).
+# Defaults baked into the image: SSID 'Polaris-Hotspot-XXXX' (XXXX =
+# last four hex digits of the adapter's MAC) / PSK 'polaris1234'.
+# Users change these via Polaris UI (Settings → Network → Edit
+# hotspot credentials).
 set -euo pipefail
 
 CONN=polaris-hotspot
-SSID="${POLARIS_HOTSPOT_SSID:-Polaris-Hotspot}"
 PSK="${POLARIS_HOTSPOT_PSK:-polaris1234}"
 
 # Pick the first WiFi interface NetworkManager reports. We do not
@@ -37,6 +37,19 @@ fi
 if nmcli -t connection show | grep -q "^${CONN}:"; then
     echo "polaris-wifi-bootstrap: connection ${CONN} already exists, skipping" >&2
     exit 0
+fi
+
+# The SSID carries the last four hex digits of the adapter's MAC
+# (Polaris-Hotspot-3F2A), so several rigs at one site do not all
+# announce the same network. Same rule as NetworkManagerService, which
+# also renames a pre-existing bare "Polaris-Hotspot" on its first start.
+SUFFIX=$(tr -d ':\n' < "/sys/class/net/${IFACE}/address" 2>/dev/null | tail -c 4 | tr 'a-f' 'A-F' || true)
+if [ -n "${POLARIS_HOTSPOT_SSID:-}" ]; then
+    SSID="$POLARIS_HOTSPOT_SSID"
+elif [ "${#SUFFIX}" -eq 4 ]; then
+    SSID="Polaris-Hotspot-${SUFFIX}"
+else
+    SSID="Polaris-Hotspot"
 fi
 
 # 2.4 GHz band (b/g) for maximum client compatibility. 5 GHz works

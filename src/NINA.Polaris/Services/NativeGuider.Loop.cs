@@ -52,9 +52,12 @@ public sealed partial class NativeGuider {
         // before the run's state goes away. Here rather than per frame: one
         // profile write per session instead of one per guide frame.
         PersistPredictiveModel();
-        IsSettling = false;
-        IsDithering = false;
-        _settleActive = false;
+        lock (_settleLock) {
+            IsSettling = false;
+            IsDithering = false;
+            _settleActive = false;
+            _settler = null;
+        }
         SetActivity(null);
         if (AppState is "Guiding" or "Looping" or "Paused" or "LostLock") SetAppState("Stopped");
         // MEMOPT2: guiding retains almost nothing but churns ~2-3 full guide
@@ -181,6 +184,14 @@ public sealed partial class NativeGuider {
             PushStep(new PortableGuideStep(NowMs(), 0, 0, 0, 0, 0, 0, snr, hfd, false));
             BuildView(curX, curY, snr, false);
 
+            // A settle in progress keeps its clock running while the star is
+            // gone. Until this the settler was only consulted on frames that
+            // found the star, so a dither that pushed the star out of the search
+            // window (or a cloud over a settle) left IsSettling raised for the
+            // whole loss: "Settling" on screen with no way out, and the LIVE
+            // loop parked behind it well past the timeout it had been given.
+            AdvanceSettle(null);
+
             // RE-ACQUISITION. Widening the search (see RecoverySearchRegionFor)
             // handles a star that merely drifted; it can't help once the star has
             // left even the widened window. Then the ONLY thing that recovered
@@ -286,39 +297,84 @@ public sealed partial class NativeGuider {
         BuildView(curX, curY, snr, true);
 
         // Settle progress (dither / start).
-        if (_settler != null) {
-            double totalErrPx = Math.Sqrt(raPx * raPx + decPx * decPx);
-            long now = NowMs();
-            var state = _settler.Update(totalErrPx, now);
-            // Snapshot live progress for the WS/UI ASIAIR-style readout.
-            _settleErrPx = totalErrPx;
-            _settleBelowSec = _settler.BelowSeconds(now);
-            _settleElapsedSec = _settler.ElapsedSeconds(now);
-            if (state != GuidingSettler.State.Settling) {
-                IsSettling = false;
-                _settleActive = false;
-                bool ok = state == GuidingSettler.State.Done;
-                LastSettleStatus = ok ? "done" : "failed";
-                // A dither just finished settling: drop the error history that
-                // accumulated against the old lock so the RMS reflects only
-                // post-dither guiding, not the dither excursion itself.
-                if (IsDithering) _rms.Reset();
-                IsDithering = false;
-                Settled?.Invoke(new SettleResult {
-                    Status = ok ? 0 : 1,
-                    Error = ok ? null : "Settle timed out",
-                    TotalFrames = 0,
-                    DroppedFrames = 0
-                });
-                _settler = null;
-            } else {
-                IsSettling = true;
-            }
-        }
+        AdvanceSettle(Math.Sqrt(raPx * raPx + decPx * decPx));
 
         // Delay so the loop cadence ≈ exposure period (capture already
         // consumed most of it; the camera blocks for the exposure).
         await Task.CompletedTask;
+    }
+
+    /// <summary>Test seam: install a settle exactly as DitherAsync or StartAsync
+    /// would, without needing a camera, a mount or a star. The state machine is
+    /// what the tests drive; the guide loop that normally feeds it is not.</summary>
+    internal void InstallSettleForTest(double settlePixels, double settleSec, double timeoutSec, bool dithering) {
+        lock (_settleLock) {
+            IsSettling = true;
+            IsDithering = dithering;
+            LastSettleStatus = "settling";
+            _settleThresholdPx = settlePixels;
+            _settleTimeSec = settleSec;
+            _settleTimeoutSec = timeoutSec;
+            _settleActive = true;
+            _settleErrPx = 0; _settleBelowSec = 0; _settleElapsedSec = 0;
+            _settler = new GuidingSettler(settlePixels, settleSec, timeoutSec, NowMs());
+        }
+    }
+
+    /// <summary>Test seam: the invariant the settle lock exists to keep. A raised
+    /// IsSettling with no settler behind it is the orphaned state that showed
+    /// "Settling" for the rest of a night. (The reverse, a settler with the flag
+    /// lowered, is the legitimate paused state.)</summary>
+    internal bool SettleInvariantHolds {
+        get { lock (_settleLock) return !IsSettling || _settler != null; }
+    }
+
+    /// <summary>Advance the settle in progress, if any, by one guide frame.
+    /// <paramref name="totalErrPx"/> is the measured distance to the lock, or
+    /// null on a frame that did not find the star (which still counts against
+    /// the timeout). Runs under the settle lock so a dither arriving from
+    /// another thread cannot interleave with the terminal branch; the
+    /// <see cref="Settled"/> event is raised after the lock is released, so a
+    /// handler that turns straight around and dithers again cannot deadlock.
+    /// Its own method so the two frame paths cannot drift apart again.</summary>
+    internal void AdvanceSettle(double? totalErrPx) {
+        SettleResult? result = null;
+        lock (_settleLock) {
+            if (_settler == null) return;
+            long now = NowMs();
+            var state = totalErrPx.HasValue
+                ? _settler.Update(totalErrPx.Value, now)
+                : _settler.Tick(now);
+            // Snapshot live progress for the WS/UI ASIAIR-style readout. A lost
+            // star keeps the last measured error on screen rather than a zero
+            // that would read as "settled".
+            if (totalErrPx.HasValue) _settleErrPx = totalErrPx.Value;
+            _settleBelowSec = _settler.BelowSeconds(now);
+            _settleElapsedSec = _settler.ElapsedSeconds(now);
+            if (state == GuidingSettler.State.Settling) {
+                IsSettling = true;
+                return;
+            }
+            IsSettling = false;
+            _settleActive = false;
+            bool ok = state == GuidingSettler.State.Done;
+            LastSettleStatus = ok ? "done" : "failed";
+            // A dither just finished settling: drop the error history that
+            // accumulated against the old lock so the RMS reflects only
+            // post-dither guiding, not the dither excursion itself.
+            if (IsDithering) _rms.Reset();
+            IsDithering = false;
+            _settler = null;
+            result = new SettleResult {
+                Status = ok ? 0 : 1,
+                Error = ok ? null : (totalErrPx.HasValue ? "Settle timed out" : "Settle timed out (star lost)"),
+                TotalFrames = 0,
+                DroppedFrames = 0
+            };
+        }
+        if (result.Status != 0)
+            _logger.LogWarning("Native settle failed: {Why}", result.Error);
+        Settled?.Invoke(result);
     }
 
     // ----- Capture + centroid helpers -----
@@ -389,6 +445,19 @@ public sealed partial class NativeGuider {
         capCts.CancelAfter(budgetMs);
         // Surface the wait to the GUIDE UI so Loop / Auto-select aren't silent.
         if (phase != null) SetActivity(phase, expMs);
+        // Wait for any exposure already in flight from this guider rather than
+        // start a second one over it. The budget covers the wait too: a frame
+        // stuck behind a wedged one is not worth more than one frame's time.
+        try {
+            await _captureGate.WaitAsync(capCts.Token);
+        } catch (OperationCanceledException) when (!ct.IsCancellationRequested) {
+            _logger.LogWarning("Guide capture waited {Ms} ms for the camera and gave up", budgetMs);
+            if (phase != null) SetActivity(null);
+            return null;
+        } catch (OperationCanceledException) {
+            if (phase != null) SetActivity(null);
+            throw;
+        }
         try {
             var img = await cam.CaptureAsync(expMs / 1000.0, opts, capCts.Token);
             // Apply the dark library / bad-pixel map (per NativeGuideCalibrationMode)
@@ -420,6 +489,7 @@ public sealed partial class NativeGuider {
             _logger.LogWarning(ex, "Guide capture failed");
             return null;
         } finally {
+            _captureGate.Release();
             // The capture wait is over; the caller sets the next phase
             // ("Selecting", etc.) if there is one.
             if (phase != null) SetActivity(null);

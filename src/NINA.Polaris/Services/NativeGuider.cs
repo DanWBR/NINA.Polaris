@@ -164,7 +164,21 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     // slew-and-center under an active guide loop). On the slew's completion the
     // loop drops the stale lock, auto-selects a NEW star and resumes guiding.
     private volatile bool _slewHold;
+    // Guards every write to the settle state (_settler, IsSettling, IsDithering,
+    // _settleActive and the progress snapshot). The guide loop advances the
+    // settler on its own thread while DitherAsync arrives from the caller's
+    // (the live-stack trigger, the sequencer, a button). Unserialized, the loop
+    // could finish an old settle in the same instant a dither installed a new
+    // one, and the interleaving left IsSettling true with no settler to ever
+    // clear it: "Settling" on screen for the rest of the night.
+    private readonly object _settleLock = new();
     private GuidingSettler? _settler;
+    // One guide-camera exposure at a time. IndiCamera keeps a single pending
+    // exposure, so two overlapping CaptureAsync calls on the guide camera hand
+    // the BLOB to whichever asked last and time the other out, and that one
+    // then aborts the exposure the winner was waiting on. Calibration, star
+    // selection and the loop all capture from here; this makes them take turns.
+    private readonly SemaphoreSlim _captureGate = new(1, 1);
     private double _settleThresholdPx = 1.5;
     private double _settleTimeSec = 10;
     private double _settleTimeoutSec = 40;
@@ -397,6 +411,13 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
             SetAppState("Stopped");
             return;
         }
+        // Calibration and the star pick below capture from the guide camera
+        // themselves. A loop still running from Loop (or from the guiding session
+        // being restarted) captures from it too, and the two fight over the one
+        // pending exposure: calibration read "no frame from the guide camera"
+        // and failed at its first step. Stop the loop first; it is restarted in
+        // Guide mode at the end either way. The dark-library build does the same.
+        await StopLoopAsync();
         // A fresh calibration is ground truth for the CURRENT pier side; a reused
         // (restored) one may be for the other side if a flip happened while we
         // weren't guiding. Remember which case this is before calibrating.
@@ -447,12 +468,14 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
         }
         BuildAlgorithms();
         await BuildMultiStarAsync(ct);
-        _settleThresholdPx = settlePixels;
-        _settleTimeSec = settleTime;
-        _settleTimeoutSec = settleTimeout;
-        _settleActive = true;
-        _settleErrPx = 0; _settleBelowSec = 0; _settleElapsedSec = 0;
-        _settler = new GuidingSettler(settlePixels, settleTime, settleTimeout, NowMs());
+        lock (_settleLock) {
+            _settleThresholdPx = settlePixels;
+            _settleTimeSec = settleTime;
+            _settleTimeoutSec = settleTimeout;
+            _settleActive = true;
+            _settleErrPx = 0; _settleBelowSec = 0; _settleElapsedSec = 0;
+            _settler = new GuidingSettler(settlePixels, settleTime, settleTimeout, NowMs());
+        }
         await StartLoopAsync(LoopMode.Guide);
     }
 
@@ -473,9 +496,14 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
             // A pause (e.g. during a meridian flip) supersedes any in-flight
             // dither/settle, so the UI shows "Paused" (waiting) instead of
             // staying stuck on the "Dithering" banner through the whole flip.
-            IsDithering = false;
-            IsSettling = false;
-            _settleActive = false;
+            // The settler itself stays: on resume the loop picks it back up and
+            // finishes it (done or timed out), so a caller waiting on Settled
+            // still gets its answer.
+            lock (_settleLock) {
+                IsDithering = false;
+                IsSettling = false;
+                _settleActive = false;
+            }
             SetAppState("Paused");
         }
         return Task.CompletedTask;
@@ -510,15 +538,20 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
         _multiStar.OffsetReferences(offX, offY);
         _raAlgo.Reset();
         _decAlgo.Reset();
-        IsSettling = true;
-        IsDithering = true;
-        LastSettleStatus = "settling";
-        _settleThresholdPx = settlePixels;
-        _settleTimeSec = settleTime;
-        _settleTimeoutSec = settleTimeout;
-        _settleActive = true;
-        _settleErrPx = mag; _settleBelowSec = 0; _settleElapsedSec = 0;
-        _settler = new GuidingSettler(settlePixels, settleTime, settleTimeout, NowMs());
+        // Installed as one unit against the guide loop's settle update: a settle
+        // still running from a previous dither (or from the start of guiding) is
+        // simply replaced, and the loop's next frame measures against this one.
+        lock (_settleLock) {
+            IsSettling = true;
+            IsDithering = true;
+            LastSettleStatus = "settling";
+            _settleThresholdPx = settlePixels;
+            _settleTimeSec = settleTime;
+            _settleTimeoutSec = settleTimeout;
+            _settleActive = true;
+            _settleErrPx = mag; _settleBelowSec = 0; _settleElapsedSec = 0;
+            _settler = new GuidingSettler(settlePixels, settleTime, settleTimeout, NowMs());
+        }
         _logger.LogInformation("Native dither: {Px}px (raOnly={RaOnly})", pixels, raOnly);
         return Task.CompletedTask;
     }

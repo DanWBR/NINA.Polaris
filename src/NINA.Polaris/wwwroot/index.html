@@ -10198,6 +10198,18 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <span x-show="networkStation.scanning">Scanning…</span>
                         </button>
                     </label>
+                    <!-- One radio cannot listen while it beacons: from hotspot
+                         mode the plain rescan sees nothing but this hotspot.
+                         This one drops the AP for ~10 s to look around, then
+                         brings it back; the phone rejoins on its own. -->
+                    <div class="hint" x-show="network?.mode === 'hotspot'" style="margin:2px 0 6px">
+                        Only this hotspot in the list? A radio cannot scan while it runs the hotspot.
+                        <button class="btn btn-xs" @click="networkRescan(true)"
+                                :disabled="networkSwitching || networkStation.scanning">
+                            Scan with the hotspot paused (~10 s)
+                        </button>
+                        <span>Your device drops off the hotspot briefly and rejoins by itself.</span>
+                    </div>
                     <label class="editor-export-row" x-show="networkStation.ssid === '__hidden__'">
                         <span>SSID</span>
                         <input type="text" class="input-md"
@@ -15802,7 +15814,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 </button>
                             </div>
                             <p class="text-muted" style="font-size: 11px; margin-top: 6px; max-width:560px">
-                                Default hotspot: <code>Polaris-Hotspot</code> / <code>polaris1234</code>.
+                                Default hotspot: <code x-text="network?.hotspotSsid || 'Polaris-Hotspot-XXXX'"></code> / <code>polaris1234</code>.
+                                <span>The four letters at the end come from the WiFi adapter, so rigs side by side stay apart.</span>
                                 Switching to Station mode hands the Pi to your home WiFi
                                 so it stops broadcasting its own network. Auto-reverts
                                 to Hotspot after 30 s if the new connection cannot get a DHCP lease.
@@ -15844,6 +15857,13 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <span x-show="!obsGpsLoading">📍 Use my location</span>
                                 <span x-show="obsGpsLoading">…</span>
                             </button>
+                            <!-- Works with no internet and no GPS: the map and
+                                 the town names are bundled with the host. -->
+                            <button class="btn btn-sm"
+                                    @click="mapPickOpen('settings')"
+                                    title="Pick the site on an offline world map">
+                                🗺 Pick on map
+                            </button>
                         </div>
                         <div class="obs-location-error" x-show="obsAddressError" x-text="obsAddressError"></div>
                         <div class="obs-location-results" x-show="obsAddressResults.length">
@@ -15872,16 +15892,25 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                          right, so the three coord fields line up
                          neatly instead of each label/input pair
                          sizing independently. -->
+                    <!-- Text inputs on purpose, not type=number. A number input
+                         reports "" for every in-between state ("-", "-5.") and
+                         x-model.number wrote that back, so editing -5.17 with
+                         backspace emptied the field the moment the point went.
+                         The value is parsed once, on change; typing is left alone.
+                         A decimal comma is accepted (pt-BR keyboards). -->
                     <div class="coords-grid">
                         <label for="settings-lat">Latitude</label>
-                        <input id="settings-lat" type="number" x-model.number="settings.latitude"
-                               step="0.001" class="input-md">
+                        <input id="settings-lat" type="text" inputmode="decimal" class="input-md"
+                               :value="settings.latitude"
+                               @change="coordInput($event, settings, 'latitude', -90, 90, 4)">
                         <label for="settings-lon">Longitude</label>
-                        <input id="settings-lon" type="number" x-model.number="settings.longitude"
-                               step="0.001" class="input-md">
+                        <input id="settings-lon" type="text" inputmode="decimal" class="input-md"
+                               :value="settings.longitude"
+                               @change="coordInput($event, settings, 'longitude', -180, 180, 4)">
                         <label for="settings-alt">Altitude (m)</label>
-                        <input id="settings-alt" type="number" x-model.number="settings.altitude"
-                               step="1" class="input-md">
+                        <input id="settings-alt" type="text" inputmode="decimal" class="input-md"
+                               :value="settings.altitude"
+                               @change="coordInput($event, settings, 'altitude', -500, 9000, 0)">
                     </div>
 
                     <!-- Custom horizon: an azimuth/altitude mask of what the
@@ -18301,6 +18330,64 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
         </div>
     </div>
 
+    <!-- Offline world map picker. Coastlines and town names come with the
+         package, so this works at a dark site with no internet and a tablet
+         with no GPS. Drag to pan, wheel or pinch to zoom, tap to place the
+         marker. Search jumps the view to a town first. -->
+    <div class="location-setup-modal map-pick-modal" x-transition.opacity.duration.200ms
+         x-show="mapPick.open" x-cloak
+         @keydown.escape.window="mapPick.open && mapPickClose()">
+        <div class="location-setup-frame map-pick-frame">
+            <div class="map-pick-head">
+                <h2>🗺 Pick the site on the map</h2>
+                <button class="btn btn-sm" @click="mapPickClose()" title="Close">✕</button>
+            </div>
+            <form class="location-search-row" @submit.prevent="mapPickSearch()">
+                <input type="search" placeholder="Search a town to jump there"
+                       x-model="mapPick.query" inputmode="search" enterkeyhint="search"
+                       autocomplete="off" @input="mapPick.results = []">
+                <button type="submit" class="btn btn-sm"
+                        :disabled="mapPick.searching || !mapPick.query">
+                    <span x-text="mapPick.searching ? 'Searching…' : 'Search'"></span>
+                </button>
+            </form>
+            <div class="location-search-results" x-show="mapPick.results.length > 0" x-cloak>
+                <template x-for="(r, i) in mapPick.results"
+                          :key="i + '|' + (r.latitude || 0) + ',' + (r.longitude || 0)">
+                    <div class="location-search-result" @click="mapPickGoToResult(r)">
+                        <div class="location-search-name" x-text="r.displayName"></div>
+                        <div class="text-muted" style="font-size: 10px;"
+                             x-text="(Number(r.latitude) || 0).toFixed(4) + '°, ' + (Number(r.longitude) || 0).toFixed(4) + '°'"></div>
+                    </div>
+                </template>
+            </div>
+            <div class="obs-location-error" x-show="mapPick.error" x-text="mapPick.error"></div>
+
+            <div class="map-pick-canvas-box">
+                <canvas x-ref="mapPickCanvas" class="map-pick-canvas"></canvas>
+                <div class="map-pick-loading" x-show="mapPick.loading">Loading the map…</div>
+                <div class="map-pick-zoom">
+                    <button class="btn btn-sm" @click="mapPickZoom(1.6)" title="Zoom in">+</button>
+                    <button class="btn btn-sm" @click="mapPickZoom(1 / 1.6)" title="Zoom out">−</button>
+                    <button class="btn btn-sm" @click="mapPickGoToSite()"
+                            x-show="settings.latitude || settings.longitude"
+                            title="Go to the current observatory location">⌖</button>
+                </div>
+                <div class="map-pick-scale" x-text="mapPick.zoomLabel"></div>
+            </div>
+
+            <div class="map-pick-foot">
+                <div class="map-pick-coords" x-text="mapPickCoordText()"></div>
+                <div class="hint" style="margin:0">Drag to pan, wheel or pinch to zoom, tap to place the marker.</div>
+            </div>
+            <div class="location-setup-actions">
+                <button class="btn btn-primary" @click="mapPickUse()"
+                        :disabled="mapPick.lat == null">Use this location</button>
+                <button class="btn" @click="mapPickClose()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <!-- First-run location setup modal -->
     <div class="location-setup-modal" x-transition.opacity.duration.200ms x-show="showLocationSetup" x-cloak
          @keydown.escape.window="dismissLocationSetup(false)">
@@ -18352,16 +18439,20 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
             </div>
 
             <div class="location-setup-row">
+                <!-- Text inputs, parsed on change: see the Observatory card. -->
                 <label>Latitude (°)
-                    <input type="number" x-model.number="locSetup.lat" step="0.0001" min="-90" max="90"
+                    <input type="text" inputmode="decimal" :value="locSetup.lat"
+                           @change="coordInput($event, locSetup, 'lat', -90, 90, 4)"
                            placeholder="e.g. -23.55">
                 </label>
                 <label>Longitude (°, +E)
-                    <input type="number" x-model.number="locSetup.lon" step="0.0001" min="-180" max="180"
+                    <input type="text" inputmode="decimal" :value="locSetup.lon"
+                           @change="coordInput($event, locSetup, 'lon', -180, 180, 4)"
                            placeholder="e.g. -46.63">
                 </label>
                 <label>Altitude (m)
-                    <input type="number" x-model.number="locSetup.alt" step="10" min="-500" max="9000"
+                    <input type="text" inputmode="decimal" :value="locSetup.alt"
+                           @change="coordInput($event, locSetup, 'alt', -500, 9000, 0)"
                            placeholder="optional">
                 </label>
             </div>
@@ -18371,6 +18462,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         :disabled="locSetup.locating">
                     <span x-text="locSetup.locating ? 'Locating…' : '📡 Use browser location'"></span>
                 </button>
+                <button class="btn" @click="mapPickOpen('locSetup')"
+                        title="Pick the site on an offline world map">🗺 Pick on map</button>
                 <button class="btn btn-primary" @click="saveLocationAndDismiss()"
                         :disabled="!locSetup.lat && !locSetup.lon">Save</button>
                 <button class="btn" @click="dismissLocationSetup(true)">Skip for now</button>

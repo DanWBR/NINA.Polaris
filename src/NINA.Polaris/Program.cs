@@ -549,6 +549,7 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Alpaca.AlpacaDiscovery>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Alpaca.AlpacaDiscoveryCache>();
 builder.Services.AddSingleton<StellariumClient>();
 builder.Services.AddSingleton<AltitudeService>();
+builder.Services.AddSingleton<CityGazetteer>();
 builder.Services.AddSingleton<GeocodingService>();
 builder.Services.AddSingleton<WeatherForecastService>();
 builder.Services.AddSingleton<CelestialImageService>();

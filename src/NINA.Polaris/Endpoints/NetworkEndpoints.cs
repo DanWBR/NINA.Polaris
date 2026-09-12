@@ -33,13 +33,15 @@ public static class NetworkEndpoints {
             return Results.Ok(snap);
         });
 
-        group.MapGet("/scan", async (NetworkManagerService net) => {
+        // ?pauseHotspot=true drops the AP for the scan (see ScanAsync): the
+        // only way a single radio in hotspot mode gets to see the neighbours.
+        group.MapGet("/scan", async (NetworkManagerService net, bool? pauseHotspot) => {
             if (!net.IsSupportedOs || !net.NmcliInstalled || !net.HasWifiInterface) {
                 return Results.Json(
                     new { error = net.UnsupportedReason ?? "WiFi management not available" },
                     statusCode: 501);
             }
-            var nets = await net.ScanAsync();
+            var nets = await net.ScanAsync(pauseHotspot == true);
             return Results.Ok(nets);
         });
 

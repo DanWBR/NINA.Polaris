@@ -110,7 +110,7 @@ Each tab in the sidebar has its own page. Read the ones you need:
   CPU-only inference.
 - **[Network mode (Hotspot ↔ Station)](network-mode.md)**,
   ASIAIR-style WiFi panel. Pi ships as a hotspot
-  (`Polaris-Hotspot` / `polaris1234`) on first boot so you can
+  (`Polaris-Hotspot-XXXX` / `polaris1234`) on first boot so you can
   reach it without a monitor; flip the Pi onto your home WiFi
   from Settings → Network with a 30 s try-and-revert safety net.
 - **[Relay (remote access)](relay.md)**, TLS-tunneled access from

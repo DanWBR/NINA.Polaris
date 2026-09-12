@@ -155,6 +155,8 @@ public class NetworkManagerService : BackgroundService {
             _logger.LogInformation("NetworkManagerService: no WiFi interface detected. Service idle.");
             return;
         }
+        try { await AdoptHotspotSsidAsync(stoppingToken); }
+        catch (Exception ex) { _logger.LogDebug(ex, "hotspot SSID adoption failed"); }
 
         // 5s snapshot loop. Cheap (3 nmcli calls), keeps the UI WS
         // payload accurate without endpoint polling.
@@ -209,6 +211,74 @@ public class NetworkManagerService : BackgroundService {
             _logger.LogDebug(ex, "wifi interface detection failed");
             HasWifiInterface = false;
         }
+    }
+
+    /// <summary>The bare name every image shipped with. A hotspot still called
+    /// exactly this gets the per-adapter suffix on the next start; a name the
+    /// operator chose is left alone.</summary>
+    public const string LegacyHotspotSsid = "Polaris-Hotspot";
+
+    /// <summary>"Polaris-Hotspot-3F2A": the base name plus the last four hex
+    /// digits of the adapter's MAC. Three rigs at one site used to bring up
+    /// three networks all called Polaris-Hotspot, and a phone joined whichever
+    /// answered first. The MAC is stable for the adapter and unique enough
+    /// across the handful of rigs anyone stands next to; falling back to the
+    /// base name when there is no MAC keeps a host without one working.</summary>
+    internal static string SuffixedSsid(string baseSsid, string? mac) {
+        var hex = new string((mac ?? "").Where(Uri.IsHexDigit).ToArray());
+        if (hex.Length < 4) return baseSsid;
+        var ssid = baseSsid + "-" + hex[^4..].ToUpperInvariant();
+        return ssid.Length <= 32 ? ssid : ssid[..32];
+    }
+
+    private async Task<string?> ReadMacAsync(string iface, CancellationToken ct) {
+        try {
+            var path = "/sys/class/net/" + iface + "/address";
+            if (!File.Exists(path)) return null;
+            return (await File.ReadAllTextAsync(path, ct)).Trim();
+        } catch { return null; }
+    }
+
+    /// <summary>What the hotspot is actually called, from NetworkManager, and
+    /// the one-time rename of the shared default. The config default only says
+    /// what to create when nothing exists; once a connection does, its SSID is
+    /// the truth, or the status card and the scan filter would show a name the
+    /// radio is not beaconing.</summary>
+    private async Task AdoptHotspotSsidAsync(CancellationToken ct) {
+        var det = await RunCommandAsync("nmcli",
+            "-t -f 802-11-wireless.ssid connection show polaris-hotspot", ct, timeoutMs: 5000);
+        if (det.exitCode != 0) return;                       // no hotspot connection yet
+        string? current = null;
+        foreach (var l in det.stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries)) {
+            var kv = SplitNmcliTerse(l);
+            if (kv.Length >= 2 && kv[0].EndsWith("ssid", StringComparison.OrdinalIgnoreCase)) current = kv[1];
+        }
+        if (string.IsNullOrEmpty(current)) return;
+
+        if (!current.Equals(LegacyHotspotSsid, StringComparison.Ordinal)) {
+            HotspotSsid = current;
+            return;
+        }
+        var unique = SuffixedSsid(LegacyHotspotSsid, await ReadMacAsync(WifiInterface!, ct));
+        if (unique == current) { HotspotSsid = current; return; }
+
+        var mod = await RunCommandAsync("nmcli",
+            $"connection modify polaris-hotspot 802-11-wireless.ssid {Shell(unique)}", ct, timeoutMs: 8000);
+        if (mod.exitCode != 0) {
+            _logger.LogWarning("NetworkManagerService: could not rename the hotspot to {Ssid}: {Err}",
+                unique, mod.stderr.Trim());
+            HotspotSsid = current;
+            return;
+        }
+        HotspotSsid = unique;
+        _logger.LogInformation(
+            "NetworkManagerService: hotspot renamed from {Old} to {New} so rigs side by side stay apart",
+            current, unique);
+        // A modify does not touch the running AP; re-activate so the radio
+        // beacons the new name now rather than after the next reboot.
+        await RefreshSnapshotAsync(ct);
+        if (CurrentMode == WifiMode.Hotspot)
+            await RunCommandAsync("nmcli", "connection up polaris-hotspot", ct, timeoutMs: 15000);
     }
 
     /// <summary>All wireless devices NetworkManager sees (DEVICE names, in the
@@ -381,16 +451,48 @@ public class NetworkManagerService : BackgroundService {
     /// exactly the "connect the adapter to itself" confusion that was
     /// reported.
     /// </remarks>
-    public async Task<List<WifiNetwork>> ScanAsync(CancellationToken ct = default) {
+    public async Task<List<WifiNetwork>> ScanAsync(CancellationToken ct = default)
+        => await ScanAsync(pauseHotspot: false, ct);
+
+    /// <summary>
+    /// With <paramref name="pauseHotspot"/>, and only while this host IS the
+    /// hotspot, the AP is taken down for the scan and brought back right after.
+    /// A single radio cannot listen for other networks while it is beaconing
+    /// its own, so on most adapters the ordinary scan from hotspot mode returns
+    /// the cached list, which holds nothing but the hotspot itself. The client
+    /// on the hotspot loses the link for about ten seconds; phones rejoin a
+    /// known network on their own, and the fresh list is then also in
+    /// NetworkManager's cache, so reopening the picker shows it even if this
+    /// response never made it back.
+    /// </summary>
+    public async Task<List<WifiNetwork>> ScanAsync(bool pauseHotspot, CancellationToken ct = default) {
         if (!NmcliInstalled || !HasWifiInterface) return new();
         string ListArgs(string rescan) =>
             $"-t -f SSID,SIGNAL,SECURITY,IN-USE device wifi list ifname {Shell(WifiInterface!)} --rescan {rescan}";
 
-        var res = await RunCommandAsync("nmcli", ListArgs("yes"), ct, timeoutMs: 25000);
-        if (res.exitCode != 0) {
-            _logger.LogDebug("wifi rescan refused ({Err}); falling back to the cached list",
-                res.stderr.Trim());
-            res = await RunCommandAsync("nmcli", ListArgs("auto"), ct, timeoutMs: 15000);
+        (int exitCode, string stdout, string stderr) res;
+        if (pauseHotspot && CurrentMode == WifiMode.Hotspot) {
+            _logger.LogInformation("NetworkManagerService: pausing the hotspot to scan for networks");
+            // The fallback watchdog would otherwise see "hotspot gone, nothing
+            // connected" and race us to bring it back mid-scan.
+            _suppressFallbackUntil = DateTime.UtcNow.AddSeconds(60);
+            try {
+                await RunCommandAsync("nmcli", "connection down polaris-hotspot", ct, timeoutMs: 8000);
+                await RunCommandAsync("nmcli", $"device wifi rescan ifname {Shell(WifiInterface!)}", ct, timeoutMs: 10000);
+                try { await Task.Delay(TimeSpan.FromSeconds(6), ct); } catch (OperationCanceledException) { }
+                res = await RunCommandAsync("nmcli", ListArgs("no"), ct, timeoutMs: 15000);
+            } finally {
+                try { await RunCommandAsync("nmcli", "connection up polaris-hotspot", CancellationToken.None, timeoutMs: 15000); }
+                catch (Exception ex) { _logger.LogWarning(ex, "hotspot did not come back after the scan"); }
+                try { await RefreshSnapshotAsync(CancellationToken.None); } catch { }
+            }
+        } else {
+            res = await RunCommandAsync("nmcli", ListArgs("yes"), ct, timeoutMs: 25000);
+            if (res.exitCode != 0) {
+                _logger.LogDebug("wifi rescan refused ({Err}); falling back to the cached list",
+                    res.stderr.Trim());
+                res = await RunCommandAsync("nmcli", ListArgs("auto"), ct, timeoutMs: 15000);
+            }
         }
 
         var byBest = new Dictionary<string, WifiNetwork>(StringComparer.OrdinalIgnoreCase);
@@ -632,7 +734,10 @@ public class NetworkManagerService : BackgroundService {
 
             var ssid = HotspotSsid;
             var psk = _hotspotPsk;
-            if (ValidateSsidPsk(ssid, psk) != null) { ssid = "Polaris-Hotspot"; psk = "polaris1234"; }
+            if (ValidateSsidPsk(ssid, psk) != null) { ssid = LegacyHotspotSsid; psk = "polaris1234"; }
+            if (ssid == LegacyHotspotSsid)
+                ssid = SuffixedSsid(LegacyHotspotSsid, await ReadMacAsync(WifiInterface!, ct));
+            HotspotSsid = ssid;
 
             _logger.LogInformation(
                 "NetworkManagerService: polaris-hotspot connection missing, recreating it (SSID {Ssid})", ssid);

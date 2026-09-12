@@ -1,7 +1,7 @@
 # Network mode (Hotspot ↔ Station)
 
 The Pi running Polaris is, by default, a **WiFi hotspot** named
-`Polaris-Hotspot` with password `polaris1234`. That is what you
+`Polaris-Hotspot-XXXX` with password `polaris1234`. That is what you
 connect to with your phone, tablet, or laptop on the first night
 in the field, before the Pi has ever seen your home WiFi.
 
@@ -17,7 +17,7 @@ mode** (joining your home WiFi like a normal client) right from
    (`sudo apt install ./polaris_arm64.deb`).
 3. Reboot.
 4. Wait ~30 seconds. On your phone, look for the WiFi network
-   `Polaris-Hotspot`. Connect with password `polaris1234`.
+   `Polaris-Hotspot-XXXX`. Connect with password `polaris1234`.
 5. Open `https://polaris-pi.local:5000` in your browser. Accept the
    self-signed certificate warning once.
 6. The Polaris home screen loads.
@@ -57,7 +57,7 @@ To finish:
 Polaris waits up to 30 seconds for the Pi to actually get a DHCP
 lease and reach the gateway on the new network. If it does not,
 Polaris **automatically reverts to the hotspot**. You can
-reconnect to `Polaris-Hotspot` and try again. The Pi never gets
+reconnect to `Polaris-Hotspot-XXXX` and try again. The Pi never gets
 stranded with no working WiFi.
 
 The same auto-revert covers the case where the network exists but
@@ -76,7 +76,7 @@ would be unreachable without an Ethernet cable.
 
 Polaris watches for this. If the Pi stays disconnected from every
 saved WiFi for about a minute, it **automatically brings the
-`Polaris-Hotspot` network back up** so you can connect with your
+`Polaris-Hotspot-XXXX` network back up** so you can connect with your
 phone exactly like the first night, with no cable. The Network
 panel shows a note explaining the hotspot started on its own; from
 there you can switch to whatever WiFi is available at the new site.
@@ -96,7 +96,7 @@ configuration:
 
 In Station mode you will see a **Switch back to Hotspot** button in
 the same panel. Click it, then reconnect your phone/laptop to
-`Polaris-Hotspot` to keep using Polaris.
+`Polaris-Hotspot-XXXX` to keep using Polaris.
 
 ## Changing the hotspot SSID or password
 

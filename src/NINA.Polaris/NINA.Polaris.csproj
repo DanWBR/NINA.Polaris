@@ -221,6 +221,8 @@
        executable + no separate "make sure to copy the scripts dir" step. -->
   <ItemGroup>
     <EmbeddedResource Include="Resources\SirilScripts\*.ssf" />
+    <EmbeddedResource Include="Resources\geo\cities5000.tsv.gz" />
+    <EmbeddedResource Include="Resources\geo\countries.tsv" />
   </ItemGroup>
 
   <!-- SWE-3: Stellarium Web HiPS skydata ships in-repo at

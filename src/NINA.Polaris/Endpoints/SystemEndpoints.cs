@@ -62,6 +62,22 @@ public static class SystemEndpoints {
             }
         });
 
+        // Towns inside a map window, biggest first, from the bundled index. The
+        // Observatory map picker asks for these on every pan and zoom so the
+        // operator has named places to steer by when there is no internet for
+        // tiles. Cheap: a linear pass over 70,000 rows in memory.
+        group.MapGet("/cities", (double south, double north, double west, double east, int? limit,
+                                 CityGazetteer cities) => {
+            if (double.IsNaN(south) || double.IsNaN(north) || double.IsNaN(west) || double.IsNaN(east)
+                || south < -90 || north > 90 || south > north || west < -180 || east > 180)
+                return Results.BadRequest(new { error = "south/north in -90..90, west/east in -180..180, south <= north" });
+            var hits = cities.InBox(south, north, west, east, limit ?? 120);
+            return Results.Ok(hits.Select(c => new {
+                name = c.Name, admin1 = c.Admin1, country = c.Country,
+                latitude = c.Latitude, longitude = c.Longitude, population = c.Population
+            }));
+        });
+
         group.MapGet("/relay", (RelayClient relay, ProfileService profiles) => {
             var p = profiles.Active;
             return Results.Ok(new {

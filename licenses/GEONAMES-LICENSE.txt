@@ -1,0 +1,18 @@
+GeoNames geographical database
+==============================
+
+Polaris bundles a reduced extract of the GeoNames database
+(https://www.geonames.org/): the cities5000 dump (towns of 5,000 people or
+more), admin1CodesASCII and countryInfo, cut down to name, ASCII name,
+first-level division, country, coordinates and population. It is embedded in
+NINA.Polaris.dll as Resources/geo/cities5000.tsv.gz and countries.tsv and is
+what the Observatory location search answers from when the host has no
+internet.
+
+The GeoNames data is licensed under the Creative Commons Attribution 4.0
+International License (CC BY 4.0): https://creativecommons.org/licenses/by/4.0/
+
+    "The data is provided 'as is' without warranty or any representation of
+    accuracy, timeliness or completeness."
+
+Attribution: GeoNames, https://www.geonames.org/, CC BY 4.0.
