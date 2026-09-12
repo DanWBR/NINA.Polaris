@@ -24,6 +24,10 @@ public class RotateToAngleInstruction : SequenceInstruction {
 
     public override async Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) {
         var r = ctx.Equipment.Rotator ?? throw new InvalidOperationException("No rotator connected");
+        var maxAngle = RotatorRange.NormalizeMaximum(
+            ctx.Profiles.ActiveEquipmentProfile?.RotatorMaxAngle ?? 360);
+        if (!RotatorRange.Allows(AngleDeg, maxAngle))
+            throw new InvalidOperationException(RotatorRange.Error(maxAngle));
         await r.MoveToAsync(AngleDeg, ct);
     }
 }

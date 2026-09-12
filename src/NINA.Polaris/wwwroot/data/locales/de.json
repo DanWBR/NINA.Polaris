@@ -1,4 +1,9 @@
 {
+  "Rotation range": "Drehbereich",
+  "Safety limit for absolute rotator moves on this rig": "Sicherheitsgrenze für absolute Rotatorbewegungen dieser Ausrüstung",
+  "Connect rotator": "Rotator verbinden",
+  "Disconnect rotator": "Rotator trennen",
+  "Select rotator": "Rotator auswählen",
   "Send to PLAN": "An PLAN senden",
   "Add this solved position to the PLAN as a target. Identifies the object automatically and merges into an existing target if one is already there.": "Fügt diese gelöste Position als Ziel zum PLAN hinzu. Erkennt das Objekt automatisch und führt es mit einem vorhandenen Ziel zusammen, falls hier bereits eines ist.",
   "Solve the image first": "Löse zuerst das Bild",
