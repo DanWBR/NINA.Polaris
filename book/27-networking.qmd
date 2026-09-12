@@ -54,8 +54,8 @@ overrides for either port are still honoured.]
 
 A Raspberry Pi installed from the Polaris `.deb` package
 (@sec-installation) boots as a **WiFi hotspot**: it broadcasts its
-own network, named `Polaris-Hotspot-XXXX` with password `polaris1234`
-(XXXX is the last four hex digits of the host's WiFi adapter, so two or
+own network, named `Polaris-Hotspot-XXXX` with password `polaris1234`
+(XXXX is the last four hex digits of the host's WiFi adapter, so two or
 three rigs at the same site each announce their own name),
 instead of joining one. That is what you connect your phone or
 laptop to on the first night in the field, before the host has ever
