@@ -79,10 +79,20 @@ public static class TelescopeEndpoints {
 
             try {
                 // Push the correct UTC + location first so a stale mount clock/site
-                // can't send the OTA the wrong way into the tripod. Best-effort
-                // (the confirm-gated path is /api/sky/slew-and-center); on by default.
-                if (profiles.ActiveEquipmentProfile?.AutoSyncMountBeforeSlew != false)
-                    await MountTimeSync.SyncAsync(equip.Telescope, profiles.Active);
+                // cannot send the OTA to a physically wrong place. Unlike the
+                // confirm-gated SKY route, this direct endpoint has no Force
+                // override, so never silently proceed when that verification
+                // fails.
+                if (profiles.ActiveEquipmentProfile?.AutoSyncMountBeforeSlew != false) {
+                    var sync = await MountTimeSync.SyncAsync(equip.Telescope, profiles.Active);
+                    if (!sync.Ok) {
+                        return Results.Json(new {
+                            needsConfirm = true,
+                            kind = "mount-sync",
+                            reason = sync.Reason,
+                        }, statusCode: StatusCodes.Status409Conflict);
+                    }
+                }
                 await equip.Telescope.SlewAsync(request.Ra, request.Dec);
                 return Results.Ok(new {
                     status = "slewing",
@@ -166,6 +176,21 @@ public static class TelescopeEndpoints {
             }
 
             try {
+                // Keep this alternate slew path consistent with ordinary GoTo:
+                // its equatorial zenith target uses the profile location, while
+                // the mount needs the same location and UTC before it resolves
+                // that target. A confirmed request is the explicit operator
+                // override, matching /api/sky/slew-and-center.
+                if (!force && profiles.ActiveEquipmentProfile?.AutoSyncMountBeforeSlew != false) {
+                    var sync = await MountTimeSync.SyncAsync(scope, profiles.Active);
+                    if (!sync.Ok) {
+                        return Results.Json(new {
+                            needsConfirm = true,
+                            kind = "mount-sync",
+                            reason = sync.Reason,
+                        }, statusCode: StatusCodes.Status409Conflict);
+                    }
+                }
                 await scope.SlewAsync(ra, dec);
                 // Freeze the tube vertical. With tracking on it would drift west
                 // of the zenith over the flat session. Best-effort: a mount that
