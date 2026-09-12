@@ -169,6 +169,12 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     // clear it: "Settling" on screen for the rest of the night.
     private readonly object _settleLock = new();
     private GuidingSettler? _settler;
+    // One guide-camera exposure at a time. IndiCamera keeps a single pending
+    // exposure, so two overlapping CaptureAsync calls on the guide camera hand
+    // the BLOB to whichever asked last and time the other out, and that one
+    // then aborts the exposure the winner was waiting on. Calibration, star
+    // selection and the loop all capture from here; this makes them take turns.
+    private readonly SemaphoreSlim _captureGate = new(1, 1);
     private double _settleThresholdPx = 1.5;
     private double _settleTimeSec = 10;
     private double _settleTimeoutSec = 40;
@@ -404,6 +410,13 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
             SetAppState("Stopped");
             return;
         }
+        // Calibration and the star pick below capture from the guide camera
+        // themselves. A loop still running from Loop (or from the guiding session
+        // being restarted) captures from it too, and the two fight over the one
+        // pending exposure: calibration read "no frame from the guide camera"
+        // and failed at its first step. Stop the loop first; it is restarted in
+        // Guide mode at the end either way. The dark-library build does the same.
+        await StopLoopAsync();
         // A fresh calibration is ground truth for the CURRENT pier side; a reused
         // (restored) one may be for the other side if a flip happened while we
         // weren't guiding. Remember which case this is before calibrating.

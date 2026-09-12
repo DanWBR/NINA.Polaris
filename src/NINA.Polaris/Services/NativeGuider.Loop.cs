@@ -403,6 +403,19 @@ public sealed partial class NativeGuider {
         capCts.CancelAfter(budgetMs);
         // Surface the wait to the GUIDE UI so Loop / Auto-select aren't silent.
         if (phase != null) SetActivity(phase, expMs);
+        // Wait for any exposure already in flight from this guider rather than
+        // start a second one over it. The budget covers the wait too: a frame
+        // stuck behind a wedged one is not worth more than one frame's time.
+        try {
+            await _captureGate.WaitAsync(capCts.Token);
+        } catch (OperationCanceledException) when (!ct.IsCancellationRequested) {
+            _logger.LogWarning("Guide capture waited {Ms} ms for the camera and gave up", budgetMs);
+            if (phase != null) SetActivity(null);
+            return null;
+        } catch (OperationCanceledException) {
+            if (phase != null) SetActivity(null);
+            throw;
+        }
         try {
             var img = await cam.CaptureAsync(expMs / 1000.0, opts, capCts.Token);
             // Apply the dark library / bad-pixel map (per NativeGuideCalibrationMode)
@@ -434,6 +447,7 @@ public sealed partial class NativeGuider {
             _logger.LogWarning(ex, "Guide capture failed");
             return null;
         } finally {
+            _captureGate.Release();
             // The capture wait is over; the caller sets the next phase
             // ("Selecting", etc.) if there is one.
             if (phase != null) SetActivity(null);
