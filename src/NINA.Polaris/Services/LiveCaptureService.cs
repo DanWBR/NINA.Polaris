@@ -252,7 +252,7 @@ public sealed class LiveCaptureService {
 
     /// <summary>True while the camera should NOT start a new LIVE sub: a
     /// dither/settle is in progress or an auto-focus run is active.</summary>
-    private bool ShouldPause() {
+    internal bool ShouldPause() {
         try {
             var g = _guiders.Active;
             if (g != null && (g.IsDithering || g.IsSettling)) return true;

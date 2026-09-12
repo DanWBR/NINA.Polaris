@@ -122,4 +122,16 @@ public sealed class GuidingSettler {
         }
         return State.Settling;
     }
+
+    /// <summary>A frame on which the star could not be measured. It is not
+    /// evidence of being within tolerance, so the within-tolerance clock
+    /// restarts; the timeout still runs, because wall-clock time does not stop
+    /// when the star does. Without this a settle that loses its star can never
+    /// finish: nothing ever asks the settler again, so it reports "settling"
+    /// for as long as the star stays gone.</summary>
+    public State Tick(long nowMs) {
+        _belowSinceMs = -1;
+        if (nowMs - _startMs > _timeoutMs) return State.TimedOut;
+        return State.Settling;
+    }
 }
