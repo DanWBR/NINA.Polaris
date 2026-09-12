@@ -94,7 +94,9 @@ const EXPOSURE_PRESETS_ALL = [
 // Bumped whenever a catalogue under wwwroot/data changes. The optics fetch
 // uses cache: 'force-cache', which does not revalidate, so without a new URL
 // an edit reaches nobody who already loaded the old file.
-const CATALOGUE_VERSION = '20260910b';
+const CATALOGUE_VERSION = '20260912';
+// Offline world map state (outline rings, canvas, pointers); see mapPickOpen.
+const WM = { land: null, lakes: null, cities: [], citiesBox: null, handlers: [] };
 
 function ninaApp() {
     return {
@@ -6806,7 +6808,7 @@ function ninaApp() {
                         screenshot: 'first-night/04-wifi.png',
                         docLink: 'network-mode.md',
                         body: [
-                            'On a fresh .deb install the Pi comes up as a hotspot named "Polaris-Hotspot" (password "polaris1234") so you can reach it without plugging in a screen. The hotspot is great in the field but useless at home, your phone disconnects from the internet whenever you join it.',
+                            'On a fresh .deb install the Pi comes up as a hotspot named "Polaris-Hotspot-XXXX" (password "polaris1234") so you can reach it without plugging in a screen. The hotspot is great in the field but useless at home, your phone disconnects from the internet whenever you join it.',
                             'Settings → Network has a "Switch to Station" button: pick your home SSID, type the password, click Switch. The Pi joins your home WiFi, mDNS keeps the polaris-pi.local hostname pointing at the new IP. If something goes wrong (wrong password, dead AP), it auto-reverts to hotspot after 30s.'
                         ],
                         tip: 'Linux only (NetworkManager). On Windows mini-PCs the button is hidden, manage WiFi through Windows itself.'
@@ -15117,6 +15119,524 @@ function ninaApp() {
             } finally {
                 this.obsAddressLoading = false;
             }
+        },
+
+        // ─── Offline world map picker (Settings → Observatory, first-run) ──
+        //
+        // The rig at a dark site has no internet, the tablet driving it may
+        // have no GPS, and typing coordinates from memory is how a site ends
+        // up 30 km off. This is a map that works with nothing but the
+        // package: Natural Earth 1:50m coastlines (/data/world-50m.json, drawn
+        // on a canvas in plain equirectangular projection) with the bundled
+        // town index (/api/system/cities) for names to steer by. Drag to pan,
+        // wheel or pinch to zoom, tap to drop the marker, then "Use this
+        // location". Search jumps the view to a town first.
+        //
+        // The heavy state (outline rings, canvas, pointer bookkeeping) lives
+        // on WM, outside Alpine, so a pan frame does not run the
+        // reactive graph over 100,000 vertices.
+        mapPick: {
+            open: false, loading: false, error: '', target: 'settings',
+            lat: null, lon: null,           // the marker; null until a tap
+            zoomLabel: '', query: '', searching: false, results: [],
+        },
+
+        mapPickOpen(target) {
+            const t = target || 'settings';
+            const cur = t === 'locSetup'
+                ? { lat: Number(this.locSetup.lat) || 0, lon: Number(this.locSetup.lon) || 0 }
+                : { lat: Number(this.settings.latitude) || 0, lon: Number(this.settings.longitude) || 0 };
+            this.mapPick.target = t;
+            this.mapPick.open = true;
+            this.mapPick.error = '';
+            this.mapPick.query = '';
+            this.mapPick.results = [];
+            // A site already set is the marker and the starting view; otherwise
+            // the whole world, and the operator finds their region by search or
+            // by zooming in.
+            const hasSite = cur.lat !== 0 || cur.lon !== 0;
+            this.mapPick.lat = hasSite ? cur.lat : null;
+            this.mapPick.lon = hasSite ? cur.lon : null;
+            this.$nextTick(async () => {
+                await this._wmEnsureData();
+                const c = this.$refs.mapPickCanvas;
+                if (!c) return;
+                this._wmAttach(c);
+                if (hasSite) this._wmCenter(cur.lon, cur.lat, 40);
+                else this._wmFitWorld();
+                this._wmDraw();
+                this._wmFetchCities();
+            });
+        },
+
+        mapPickClose() {
+            this.mapPick.open = false;
+            this._wmDetach();
+        },
+
+        mapPickUse() {
+            const p = this.mapPick;
+            if (p.lat == null || p.lon == null) return;
+            const lat = +p.lat.toFixed(4), lon = +p.lon.toFixed(4);
+            if (p.target === 'locSetup') {
+                this.locSetup.lat = lat;
+                this.locSetup.lon = lon;
+                this.locSetup.error = null;
+            } else {
+                this.settings.latitude = lat;
+                this.settings.longitude = lon;
+                this.saveSettings();
+                this._refreshLocationLabel();
+            }
+            this.mapPickClose();
+        },
+
+        mapPickZoom(factor) {
+            const w = WM; if (!w) return;
+            this._wmZoomAt(w.canvas.width / 2, w.canvas.height / 2, factor);
+            this._wmDraw();
+            this._wmFetchCitiesSoon();
+        },
+
+        mapPickGoToSite() {
+            const lat = Number(this.settings.latitude) || 0, lon = Number(this.settings.longitude) || 0;
+            if (!lat && !lon) return;
+            this._wmCenter(lon, lat, 40);
+            this._wmDraw();
+            this._wmFetchCitiesSoon();
+        },
+
+        async mapPickSearch() {
+            const q = (this.mapPick.query || '').trim();
+            if (!q) return;
+            this.mapPick.searching = true;
+            this.mapPick.error = '';
+            this.mapPick.results = [];
+            try {
+                const r = await this.apiGet(`/api/system/geocode?query=${encodeURIComponent(q)}&limit=6`);
+                this.mapPick.results = Array.isArray(r?.results) ? r.results : [];
+                if (!this.mapPick.results.length) {
+                    this.mapPick.error = 'No matches. Offline, the search knows towns of 5,000 people or more; try the nearest larger town, then tap the exact spot.';
+                }
+            } catch (e) {
+                this.mapPick.error = 'Search failed: ' + (e.message || e);
+            } finally {
+                this.mapPick.searching = false;
+            }
+        },
+
+        mapPickGoToResult(r) {
+            const lat = Number(r.latitude) || 0, lon = Number(r.longitude) || 0;
+            this.mapPick.results = [];
+            this.mapPick.query = r.displayName;
+            this.mapPick.lat = lat; this.mapPick.lon = lon;
+            this._wmCenter(lon, lat, 60);
+            this._wmDraw();
+            this._wmFetchCitiesSoon();
+        },
+
+        // ----- data -----
+
+        async _wmEnsureData() {
+            if (WM.land) return;
+            this.mapPick.loading = true;
+            try {
+                const resp = await fetch('/data/world-50m.json?v=' + CATALOGUE_VERSION, { cache: 'force-cache' });
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                const d = await resp.json();
+                // Precompute each ring's bounding box so a zoomed-in frame skips
+                // the rings that are not on screen, which at street scale is
+                // nearly all of them.
+                const prep = (rings) => rings.map(pts => {
+                    let x0 = 999, x1 = -999, y0 = 999, y1 = -999;
+                    for (let i = 0; i < pts.length; i += 2) {
+                        const x = pts[i], y = pts[i + 1];
+                        if (x < x0) x0 = x; if (x > x1) x1 = x;
+                        if (y < y0) y0 = y; if (y > y1) y1 = y;
+                    }
+                    return { pts, x0, x1, y0, y1 };
+                });
+                Object.assign(WM, {
+                    land: prep(d.land || []), lakes: prep(d.lakes || []),
+                    cities: [], citiesBox: null,
+                });
+            } catch (e) {
+                this.mapPick.error = 'Could not load the map: ' + (e.message || e);
+                Object.assign(WM, { land: [], lakes: [], cities: [] });
+            } finally {
+                this.mapPick.loading = false;
+            }
+        },
+
+        // ----- view: equirectangular, cx/cy = centre lon/lat, scale = px per degree -----
+
+        _wmAttach(canvas) {
+            const w = WM;
+            w.canvas = canvas; w.ctx = canvas.getContext('2d');
+            w.cx = w.cx ?? 0; w.cy = w.cy ?? 0; w.scale = w.scale ?? 1;
+            w.pointers = new Map(); w.drag = null; w.pinch = null;
+            this._wmResize();
+            // The modal is still laying out when this runs (fonts, the flex
+            // column, a phone rotating), so the first measurement is not the
+            // last: follow the box and redraw at its real size.
+            w.resize = new ResizeObserver(() => { if (this._wmResize()) this._wmDraw(); });
+            w.resize.observe(canvas.parentElement);
+            const on = (ev, fn) => { canvas.addEventListener(ev, fn, { passive: false }); w.handlers.push([ev, fn]); };
+            w.handlers = [];
+            on('pointerdown', e => this._wmPointerDown(e));
+            on('pointermove', e => this._wmPointerMove(e));
+            on('pointerup', e => this._wmPointerUp(e));
+            on('pointercancel', e => this._wmPointerUp(e));
+            on('wheel', e => { e.preventDefault(); this._wmWheel(e); });
+            canvas.style.touchAction = 'none';
+        },
+
+        _wmDetach() {
+            const w = WM; if (!w || !w.canvas) return;
+            for (const [ev, fn] of (w.handlers || [])) w.canvas.removeEventListener(ev, fn);
+            try { w.resize?.disconnect(); } catch (_) { }
+            w.resize = null; w.handlers = []; w.canvas = null; w.ctx = null;
+        },
+
+        /// Size the canvas to its box at device resolution. Returns true when
+        /// the size changed (a redraw is then due). Keeps the geographic
+        /// centre, so a resize does not move the map under the marker.
+        _wmResize() {
+            const w = WM; if (!w.canvas) return false;
+            const box = w.canvas.parentElement;
+            const cssW = Math.max(1, box.clientWidth), cssH = Math.max(1, box.clientHeight);
+            const dpr = window.devicePixelRatio || 1;
+            const pw = Math.max(320, Math.round(cssW * dpr)), ph = Math.max(200, Math.round(cssH * dpr));
+            if (w.canvas.width === pw && w.canvas.height === ph && w.dpr === dpr) return false;
+            w.canvas.width = pw; w.canvas.height = ph; w.dpr = dpr;
+            w.canvas.style.width = cssW + 'px'; w.canvas.style.height = cssH + 'px';
+            this._wmClamp();
+            return true;
+        },
+
+        _wmFitWorld() {
+            const w = WM;
+            w.scale = Math.min(w.canvas.width / 360, w.canvas.height / 180);
+            w.cx = 0; w.cy = 10;
+            this._wmClamp();
+        },
+
+        _wmCenter(lon, lat, scale) {
+            const w = WM;
+            w.cx = lon; w.cy = lat;
+            if (scale) w.scale = scale * w.dpr;
+            this._wmClamp();
+        },
+
+        _wmClamp() {
+            const w = WM;
+            const min = Math.min(w.canvas.width / 360, w.canvas.height / 180) * 0.9;
+            w.scale = Math.min(Math.max(w.scale, min), 4000 * w.dpr);
+            // Keep the view on the sphere: no scrolling off past the poles or
+            // more than a full turn of longitude.
+            const halfH = w.canvas.height / 2 / w.scale;
+            w.cy = Math.max(-90 + halfH, Math.min(90 - halfH, w.cy));
+            if (w.cx > 180) w.cx -= 360; if (w.cx < -180) w.cx += 360;
+            this.mapPick.zoomLabel = this._wmScaleLabel();
+        },
+
+        _wmScaleLabel() {
+            const w = WM;
+            const degPerPx = 1 / (w.scale / w.dpr);
+            const kmPerPx = degPerPx * 111.32 * Math.cos((w.cy || 0) * Math.PI / 180);
+            const m = kmPerPx * 1000;
+            return m >= 1000 ? (kmPerPx).toFixed(kmPerPx < 10 ? 1 : 0) + ' km/px' : Math.round(m) + ' m/px';
+        },
+
+        _wmToPx(lon, lat) {
+            const w = WM;
+            let dx = lon - w.cx;
+            if (dx > 180) dx -= 360; if (dx < -180) dx += 360;
+            return [w.canvas.width / 2 + dx * w.scale, w.canvas.height / 2 - (lat - w.cy) * w.scale];
+        },
+
+        _wmToGeo(px, py) {
+            const w = WM;
+            let lon = w.cx + (px - w.canvas.width / 2) / w.scale;
+            const lat = w.cy - (py - w.canvas.height / 2) / w.scale;
+            if (lon > 180) lon -= 360; if (lon < -180) lon += 360;
+            return [lon, Math.max(-90, Math.min(90, lat))];
+        },
+
+        _wmZoomAt(px, py, factor) {
+            const w = WM;
+            const [lon, lat] = this._wmToGeo(px, py);
+            w.scale *= factor;
+            this._wmClamp();
+            // Keep the point under the cursor where it was.
+            const [nx, ny] = this._wmToPx(lon, lat);
+            w.cx += (nx - px) / w.scale;
+            w.cy -= (ny - py) / w.scale;
+            this._wmClamp();
+        },
+
+        _wmVisibleBox() {
+            const w = WM;
+            const [w0, n0] = this._wmToGeo(0, 0);
+            const [e0, s0] = this._wmToGeo(w.canvas.width, w.canvas.height);
+            const wide = w.canvas.width / w.scale >= 360;
+            return { south: s0, north: n0, west: wide ? -180 : w0, east: wide ? 180 : e0 };
+        },
+
+        // ----- pointer handling: pan, pinch, tap -----
+
+        _wmEventPx(e) {
+            const w = WM;
+            const r = w.canvas.getBoundingClientRect();
+            return [(e.clientX - r.left) * w.dpr, (e.clientY - r.top) * w.dpr];
+        },
+
+        _wmPointerDown(e) {
+            const w = WM; if (!w || !w.canvas) return;
+            e.preventDefault();
+            w.canvas.setPointerCapture?.(e.pointerId);
+            const [x, y] = this._wmEventPx(e);
+            w.pointers.set(e.pointerId, { x, y });
+            if (w.pointers.size === 1) {
+                w.drag = { x0: x, y0: y, cx0: w.cx, cy0: w.cy, moved: false };
+                w.pinch = null;
+            } else if (w.pointers.size === 2) {
+                const [a, b] = [...w.pointers.values()];
+                w.pinch = { d0: Math.hypot(a.x - b.x, a.y - b.y), scale0: w.scale };
+                w.drag = null;
+            }
+        },
+
+        _wmPointerMove(e) {
+            const w = WM; if (!w || !w.canvas || !w.pointers.has(e.pointerId)) return;
+            e.preventDefault();
+            const [x, y] = this._wmEventPx(e);
+            w.pointers.set(e.pointerId, { x, y });
+            if (w.pinch && w.pointers.size >= 2) {
+                const [a, b] = [...w.pointers.values()];
+                const d = Math.hypot(a.x - b.x, a.y - b.y);
+                if (w.pinch.d0 > 0) {
+                    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+                    const target = w.pinch.scale0 * (d / w.pinch.d0);
+                    this._wmZoomAt(mx, my, target / w.scale);
+                    this._wmDraw();
+                }
+                return;
+            }
+            if (w.drag) {
+                const dx = x - w.drag.x0, dy = y - w.drag.y0;
+                if (Math.hypot(dx, dy) > 6 * w.dpr) w.drag.moved = true;
+                if (w.drag.moved) {
+                    w.cx = w.drag.cx0 - dx / w.scale;
+                    w.cy = w.drag.cy0 + dy / w.scale;
+                    this._wmClamp();
+                    this._wmDraw();
+                }
+            }
+        },
+
+        _wmPointerUp(e) {
+            const w = WM; if (!w || !w.canvas) return;
+            const had = w.pointers.has(e.pointerId);
+            w.pointers.delete(e.pointerId);
+            if (w.pointers.size < 2) w.pinch = null;
+            if (had && w.drag && !w.drag.moved && w.pointers.size === 0) {
+                // A tap: drop the marker here.
+                const [x, y] = this._wmEventPx(e);
+                const [lon, lat] = this._wmToGeo(x, y);
+                this.mapPick.lat = lat; this.mapPick.lon = lon;
+                this._wmDraw();
+            }
+            if (w.pointers.size === 0) {
+                if (w.drag && w.drag.moved) this._wmFetchCitiesSoon();
+                w.drag = null;
+            }
+        },
+
+        _wmWheel(e) {
+            const [x, y] = this._wmEventPx(e);
+            this._wmZoomAt(x, y, e.deltaY < 0 ? 1.25 : 0.8);
+            this._wmDraw();
+            this._wmFetchCitiesSoon();
+        },
+
+        // ----- towns for the current window -----
+
+        _wmFetchCitiesSoon() {
+            clearTimeout(this._wmCityTimer);
+            this._wmCityTimer = setTimeout(() => this._wmFetchCities(), 250);
+        },
+
+        async _wmFetchCities() {
+            const w = WM; if (!w || !w.canvas) return;
+            const b = this._wmVisibleBox();
+            // Ask for a little more than the window so a small pan does not
+            // have to wait for the next answer.
+            const padY = (b.north - b.south) * 0.25;
+            const padX = b.west <= b.east ? (b.east - b.west) * 0.25 : 0;
+            const q = {
+                south: Math.max(-90, b.south - padY), north: Math.min(90, b.north + padY),
+                west: Math.max(-180, b.west - padX), east: Math.min(180, b.east + padX),
+            };
+            const key = [q.south, q.north, q.west, q.east].map(v => v.toFixed(2)).join(',');
+            if (w.citiesBox === key) return;
+            w.citiesBox = key;
+            try {
+                const r = await this.apiGet(`/api/system/cities?south=${q.south}&north=${q.north}&west=${q.west}&east=${q.east}&limit=150`);
+                if (w.citiesBox !== key) return;      // a newer window is on its way
+                w.cities = Array.isArray(r) ? r : [];
+                this._wmDraw();
+            } catch (e) {
+                // Labels are a convenience; the outline still works without them.
+            }
+        },
+
+        // ----- drawing -----
+
+        _wmDraw() {
+            const w = WM; if (!w || !w.ctx) return;
+            const ctx = w.ctx, W = w.canvas.width, H = w.canvas.height, dpr = w.dpr;
+            const css = getComputedStyle(document.documentElement);
+            const tok = (n, d) => (css.getPropertyValue(n) || d).trim() || d;
+            const ocean = tok('--bg-input', '#0d1b30');
+            const land = '#2b3a55';
+            const coast = '#5b6d8f';
+            const grid = 'rgba(255,255,255,0.07)';
+            const text = tok('--text-secondary', '#a0a0b0');
+            const accent = tok('--accent', '#2196f3');
+            const marker = tok('--warning', '#ff9800');
+
+            ctx.fillStyle = ocean;
+            ctx.fillRect(0, 0, W, H);
+
+            const box = this._wmVisibleBox();
+            const wide = W / w.scale >= 360;
+            const visible = (r) => {
+                if (r.y1 < box.south || r.y0 > box.north) return false;
+                if (wide) return true;
+                if (box.west <= box.east) return !(r.x1 < box.west || r.x0 > box.east);
+                return !(r.x1 < box.west && r.x0 > box.east);   // window across the antimeridian
+            };
+            const trace = (rings) => {
+                ctx.beginPath();
+                for (const r of rings) {
+                    if (!visible(r)) continue;
+                    const p = r.pts;
+                    let [x, y] = this._wmToPx(p[0], p[1]);
+                    ctx.moveTo(x, y);
+                    let px = x;
+                    for (let i = 2; i < p.length; i += 2) {
+                        [x, y] = this._wmToPx(p[i], p[i + 1]);
+                        // A ring that wraps the antimeridian would draw a line
+                        // across the whole map; lift the pen instead.
+                        if (Math.abs(x - px) > W) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                        px = x;
+                    }
+                    ctx.closePath();
+                }
+            };
+
+            trace(w.land);
+            ctx.fillStyle = land; ctx.fill('evenodd');
+            ctx.strokeStyle = coast; ctx.lineWidth = Math.max(1, 1 * dpr); ctx.stroke();
+            trace(w.lakes);
+            ctx.fillStyle = ocean; ctx.fill('evenodd');
+
+            // Graticule at a spacing that gives a handful of lines per screen.
+            const spanDeg = W / w.scale;
+            const step = [60, 30, 15, 10, 5, 2, 1, 0.5, 0.25, 0.1, 0.05].find(s => spanDeg / s <= 12) || 0.05;
+            ctx.strokeStyle = grid; ctx.lineWidth = 1;
+            ctx.font = `${11 * dpr}px ${tok('--font-mono', 'monospace')}`;
+            ctx.fillStyle = text;
+            ctx.beginPath();
+            const lonA = Math.floor(box.west / step) * step, lonB = box.west <= box.east ? box.east : box.east + 360;
+            for (let lo = lonA; lo <= lonB + step; lo += step) {
+                const [x] = this._wmToPx(((lo + 180) % 360 + 360) % 360 - 180, box.south);
+                ctx.moveTo(x, 0); ctx.lineTo(x, H);
+            }
+            const latA = Math.floor(box.south / step) * step;
+            for (let la = latA; la <= box.north + step; la += step) {
+                const [, y] = this._wmToPx(box.west, la);
+                ctx.moveTo(0, y); ctx.lineTo(W, y);
+            }
+            ctx.stroke();
+            for (let la = latA; la <= box.north + step; la += step) {
+                const [, y] = this._wmToPx(box.west, la);
+                if (y > 12 * dpr && y < H - 4) ctx.fillText(this._wmFmt(la, step) + '°', 4 * dpr, y - 3 * dpr);
+            }
+
+            // Towns: dots sized by population, labels when there is room.
+            const labelAt = w.scale / dpr;      // px per degree, CSS pixels
+            const drawn = [];
+            ctx.textBaseline = 'middle';
+            for (const c of w.cities) {
+                const [x, y] = this._wmToPx(c.longitude, c.latitude);
+                if (x < -20 || x > W + 20 || y < -20 || y > H + 20) continue;
+                const big = c.population >= 1_000_000, mid = c.population >= 100_000;
+                const r = (big ? 4 : mid ? 3 : 2) * dpr;
+                ctx.fillStyle = accent;
+                ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+                // Label only when zoomed enough for the town to matter at this
+                // scale, and only if it does not sit on another label.
+                const wants = big ? labelAt >= 2 : mid ? labelAt >= 8 : labelAt >= 25;
+                if (!wants) continue;
+                ctx.font = `${(big ? 13 : 12) * dpr}px ${tok('--font-body', 'sans-serif')}`;
+                const tw = ctx.measureText(c.name).width;
+                const lx = x + r + 3 * dpr, ly = y;
+                const rect = { x0: lx, x1: lx + tw, y0: ly - 7 * dpr, y1: ly + 7 * dpr };
+                if (drawn.some(d => !(rect.x1 < d.x0 || rect.x0 > d.x1 || rect.y1 < d.y0 || rect.y0 > d.y1))) continue;
+                drawn.push(rect);
+                ctx.fillStyle = 'rgba(0,0,0,0.55)';
+                ctx.fillRect(rect.x0 - 2 * dpr, rect.y0, tw + 4 * dpr, 14 * dpr);
+                ctx.fillStyle = tok('--text-primary', '#e0e0e0');
+                ctx.fillText(c.name, lx, ly);
+            }
+
+            // The marker.
+            if (this.mapPick.lat != null && this.mapPick.lon != null) {
+                const [x, y] = this._wmToPx(this.mapPick.lon, this.mapPick.lat);
+                ctx.strokeStyle = marker; ctx.lineWidth = 2 * dpr;
+                ctx.beginPath();
+                ctx.moveTo(x - 14 * dpr, y); ctx.lineTo(x - 5 * dpr, y);
+                ctx.moveTo(x + 5 * dpr, y); ctx.lineTo(x + 14 * dpr, y);
+                ctx.moveTo(x, y - 14 * dpr); ctx.lineTo(x, y - 5 * dpr);
+                ctx.moveTo(x, y + 5 * dpr); ctx.lineTo(x, y + 14 * dpr);
+                ctx.stroke();
+                ctx.beginPath(); ctx.arc(x, y, 4 * dpr, 0, Math.PI * 2); ctx.stroke();
+            }
+        },
+
+        _wmFmt(v, step) {
+            const d = step >= 1 ? 0 : step >= 0.1 ? 1 : 2;
+            return v.toFixed(d);
+        },
+
+        mapPickCoordText() {
+            const p = this.mapPick;
+            if (p.lat == null || p.lon == null) return this.$t('Tap the map to drop the marker');
+            const ns = p.lat >= 0 ? 'N' : 'S', ew = p.lon >= 0 ? 'E' : 'W';
+            return `${Math.abs(p.lat).toFixed(4)}° ${ns}, ${Math.abs(p.lon).toFixed(4)}° ${ew}  (${p.lat.toFixed(4)}, ${p.lon.toFixed(4)})`;
+        },
+
+        // A coordinate field, parsed once on change. Leaves the field alone
+        // while the operator types (see the Observatory card markup for why),
+        // accepts a decimal comma, clamps to the physical range, and puts the
+        // previous value back when what was typed is not a number at all.
+        coordInput(ev, obj, field, min, max, decimals) {
+            const el = ev && ev.target;
+            const raw = String(el ? el.value : '').trim().replace(',', '.');
+            const v = Number(raw);
+            if (raw === '' || !Number.isFinite(v)) {
+                if (el) el.value = obj[field] ?? '';
+                return;
+            }
+            const clamped = Math.min(max, Math.max(min, v));
+            const rounded = Number(clamped.toFixed(decimals));
+            obj[field] = rounded;
+            // The :value binding only re-renders on a model change; a re-entry
+            // of the same number ("-6,2" for -6.2) must still show the
+            // normalised form.
+            if (el) el.value = rounded;
         },
 
         adoptObservatoryResult(r) {
@@ -32133,7 +32653,9 @@ function ninaApp() {
             if (!la && !lo) return this.$t('Location not set (set it in Settings)');
             const ns = la >= 0 ? 'N' : 'S';
             const ew = lo >= 0 ? 'E' : 'W';
-            return `${Math.abs(la).toFixed(4)}° ${ns}, ${Math.abs(lo).toFixed(4)}° ${ew}`;
+            // Hemisphere letters AND the signed numbers: "6.2000° S" alone was
+            // read in the field as the minus sign having been lost.
+            return `${Math.abs(la).toFixed(4)}° ${ns}, ${Math.abs(lo).toFixed(4)}° ${ew} (${la.toFixed(4)}, ${lo.toFixed(4)})`;
         },
         // The clock "Sync Site"/"Sync Time" pushes is the HOST's, not this
         // browser's. Show the host UTC (from the status feed, updates each tick)
@@ -42586,12 +43108,12 @@ function ninaApp() {
 
         networkOpenHotspotDialog() {
             this.networkHotspot.open = true;
-            this.networkHotspot.ssid = (this.network && this.network.hotspotSsid) || 'Polaris-Hotspot';
+            this.networkHotspot.ssid = (this.network && this.network.hotspotSsid) || '';
             this.networkHotspot.password = '';
             this.networkHotspot.lastError = '';
         },
 
-        async networkRescan() {
+        async networkRescan(pauseHotspot) {
             this.networkStation.scanning = true;
             this.networkStation.lastError = '';
             try {
@@ -42606,7 +43128,12 @@ function ninaApp() {
                 // Stay above the server's ceiling: whoever waits less decides
                 // the outcome, and that must be the side that knows what is
                 // happening.
-                const results = await this.apiGet('/api/network/scan', { timeout: 45000 });
+                // pauseHotspot: the host drops its AP for the scan (about ten
+                // seconds) and brings it back; our own link goes with it, so the
+                // request may die here and be answered by the next plain rescan,
+                // which then reads the fresh list out of NetworkManager's cache.
+                const url = '/api/network/scan' + (pauseHotspot ? '?pauseHotspot=true' : '');
+                const results = await this.apiGet(url, { timeout: 45000 });
                 this.networkStation.scanResults = Array.isArray(results) ? results : [];
                 if (!this.networkStation.scanResults.length) {
                     this.networkStation.lastError =
@@ -42615,6 +43142,15 @@ function ninaApp() {
                 }
             } catch (e) {
                 const aborted = e && (e.name === 'AbortError' || /abort/i.test(e.message || ''));
+                if (pauseHotspot && !aborted) {
+                    // Expected when this device rode the hotspot that just went
+                    // down: it is coming back. The list is cached on the host.
+                    this.networkStation.lastError =
+                        'The hotspot was paused for the scan and your device lost it for a moment. '
+                        + 'Reconnect to it if needed, then press Rescan: the list is ready.';
+                    this.networkStation.scanResults = [];
+                    return;
+                }
                 this.networkStation.lastError = aborted
                     ? 'The scan took too long and was cancelled. Some WiFi adapters need a '
                       + 'while on the first scan after boot. Try again, or type the SSID and '
@@ -42657,7 +43193,7 @@ function ninaApp() {
                     'Lost contact with the Pi. If your laptop / phone is connected ' +
                     'via the hotspot, reconnect it to ' + ssid + ' and reopen ' +
                     this.networkExpectedReachUrl() + '. If the new network failed, ' +
-                    'reconnect to Polaris-Hotspot (auto-reverts after 30 s).';
+                    'reconnect to ' + ((this.network && this.network.hotspotSsid) || 'the hotspot') + ' (auto-reverts after 30 s).';
             } finally {
                 this.networkSwitching = false;
             }

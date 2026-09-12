@@ -27,7 +27,7 @@ boot.
 
 On first boot Polaris starts automatically and is ready to use, no setup
 needed. If the device cannot join a known WiFi network and it has WiFi, it
-raises its own hotspot named **Polaris-Hotspot** (password `polaris1234`);
+raises its own hotspot named **Polaris-Hotspot-XXXX** (password `polaris1234`);
 connect to that, then open the UI.
 
 Open it at `https://<hostname>.local:5000` (each image ships with its own

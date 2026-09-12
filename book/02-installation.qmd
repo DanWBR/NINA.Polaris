@@ -40,7 +40,7 @@ Download links live on the project's
 
 On first boot Polaris starts automatically and is ready to use with no
 setup. If the device has WiFi but cannot join a known network, it
-raises its own hotspot named **Polaris-Hotspot** (password
+raises its own hotspot named **Polaris-Hotspot-XXXX** (password
 `polaris1234`); connect to that hotspot, then open the UI. Each image
 ships with its own hostname (for example `polaris-pi.local`), so the
 address is `https://<hostname>.local:5000`. The SSH^[SSH (secure
@@ -124,7 +124,7 @@ hand:
   and started;
 - a self-signed HTTPS certificate on port 5000;
 - a WiFi hotspot on first boot: on the very next reboot the device
-  comes up as an access point named `Polaris-Hotspot` (password
+  comes up as an access point named `Polaris-Hotspot-XXXX` (password
   `polaris1234`) via NetworkManager, so you can reach the UI from a
   phone with no further setup. From **SETTINGS**, under **Network**,
   you can move the device onto your home WiFi at any time with a

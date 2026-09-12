@@ -603,7 +603,7 @@ What the .deb resolves on your behalf:
 - systemd unit at `/lib/systemd/system/polaris.service` (section 7),
   enabled and started
 - **WiFi hotspot on first boot.** On the very next reboot the Pi
-  comes up as an access point named `Polaris-Hotspot` (password
+  comes up as an access point named `Polaris-Hotspot-XXXX` (password
   `polaris1234`) via NetworkManager, so you can reach
   `https://<hostname>.local:5000` from a phone with zero further
   setup. From **Settings → Network** you can flip the Pi onto your

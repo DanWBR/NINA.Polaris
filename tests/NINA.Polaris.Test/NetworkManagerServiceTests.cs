@@ -294,4 +294,53 @@ public class NetworkManagerServiceTests {
         Assert.That(NetworkManagerService.HasAssociatedStation(
             "command failed: No such device (-19)\n"), Is.False);
     }
+
+    // ----- SuffixedSsid -----
+    //
+    // Three rigs at one site all announced "Polaris-Hotspot", and a phone
+    // joined whichever answered first. The name now ends in four hex digits
+    // of the adapter's MAC.
+
+    [Test]
+    public void SuffixedSsid_TakesTheLastFourHexDigitsOfTheMac_UpperCase() {
+        Assert.That(NetworkManagerService.SuffixedSsid("Polaris-Hotspot", "dc:a6:32:1b:3f:2a"),
+            Is.EqualTo("Polaris-Hotspot-3F2A"));
+    }
+
+    [Test]
+    public void SuffixedSsid_IsStableForTheSameAdapter() {
+        var a = NetworkManagerService.SuffixedSsid("Polaris-Hotspot", "DC:A6:32:1B:3F:2A");
+        var b = NetworkManagerService.SuffixedSsid("Polaris-Hotspot", "dc-a6-32-1b-3f-2a");
+        Assert.That(a, Is.EqualTo(b), "separators and case in the MAC must not matter");
+    }
+
+    [Test]
+    public void SuffixedSsid_DifferentAdaptersGetDifferentNames() {
+        Assert.That(NetworkManagerService.SuffixedSsid("Polaris-Hotspot", "dc:a6:32:1b:3f:2a"),
+            Is.Not.EqualTo(NetworkManagerService.SuffixedSsid("Polaris-Hotspot", "dc:a6:32:1b:41:07")));
+    }
+
+    /// <summary>No MAC (a host with no /sys, a container): the bare name still
+    /// works rather than a broken one.</summary>
+    [TestCase(null)]
+    [TestCase("")]
+    [TestCase("??")]
+    public void SuffixedSsid_WithoutAMac_KeepsTheBaseName(string? mac) {
+        Assert.That(NetworkManagerService.SuffixedSsid("Polaris-Hotspot", mac), Is.EqualTo("Polaris-Hotspot"));
+    }
+
+    /// <summary>An SSID is at most 32 bytes; a long base name must not push
+    /// the result past what the driver will accept.</summary>
+    [Test]
+    public void SuffixedSsid_NeverExceeds32Characters() {
+        var ssid = NetworkManagerService.SuffixedSsid(new string('x', 30), "dc:a6:32:1b:3f:2a");
+        Assert.That(ssid.Length, Is.LessThanOrEqualTo(32));
+        Assert.That(NetworkManagerService.ValidateSsidPsk(ssid, "polaris1234"), Is.Null);
+    }
+
+    [Test]
+    public void SuffixedSsid_PassesTheSameValidationAsAnyOtherName() {
+        Assert.That(NetworkManagerService.ValidateSsidPsk(
+            NetworkManagerService.SuffixedSsid("Polaris-Hotspot", "dc:a6:32:1b:3f:2a"), "polaris1234"), Is.Null);
+    }
 }

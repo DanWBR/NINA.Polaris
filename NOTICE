@@ -65,6 +65,13 @@ license files. Notable copyleft / restricted components:
   * GraXpert AI models ............. CC BY-NC-SA 4.0 (NonCommercial) -
                                       distributed as an OPTIONAL separate
                                       download, not part of this AGPL work
+  * GeoNames town index ............ CC BY 4.0 (cities5000, admin1Codes,
+                                      countryInfo from geonames.org, reduced
+                                      and embedded as Resources/geo/*; see
+                                      licenses/GEONAMES-LICENSE.txt)
+  * Natural Earth coastlines ....... public domain (1:50m admin-0 countries
+                                      and lakes, naturalearthdata.com, as
+                                      wwwroot/data/world-50m.json)
   * Camera vendor SDKs (ZWO,
     PlayerOne, ToupTek, SVBony) .... vendor licenses; see camera_sdk/*/
                                       and the linking exception above

@@ -571,6 +571,14 @@ vendor SDKs and dynamically-loaded plugins - see
   [`licenses/PHD2-LICENSE.txt`](licenses/PHD2-LICENSE.txt). PHD2 is
   Copyright (c) the Open PHD Guiding development team and the Max Planck
   Society. See https://openphdguiding.org.
+- **GeoNames** -- CC BY 4.0. A reduced extract of the cities5000, admin1Codes
+  and countryInfo dumps (towns of 5,000 people or more with coordinates) is
+  embedded in `NINA.Polaris.dll` and answers the Observatory location search
+  offline. See [`licenses/GEONAMES-LICENSE.txt`](licenses/GEONAMES-LICENSE.txt)
+  and https://www.geonames.org.
+- **Natural Earth** -- public domain. The 1:50m country and lake outlines
+  (`wwwroot/data/world-50m.json`) draw the offline map picker. See
+  https://www.naturalearthdata.com.
 - **Silk.NET** -- MIT. Managed OpenCL bindings used by the optional SBC GPU
   compute backend (`NINA.Polaris.Services.OpenCl`). Copyright (c) .NET
   Foundation and Contributors. See https://github.com/dotnet/Silk.NET.

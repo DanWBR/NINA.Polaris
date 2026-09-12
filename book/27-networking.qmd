@@ -54,7 +54,9 @@ overrides for either port are still honoured.]
 
 A Raspberry Pi installed from the Polaris `.deb` package
 (@sec-installation) boots as a **WiFi hotspot**: it broadcasts its
-own network, named `Polaris-Hotspot` with password `polaris1234`,
+own network, named `Polaris-Hotspot-XXXX` with password `polaris1234`
+(XXXX is the last four hex digits of the host's WiFi adapter, so two or
+three rigs at the same site each announce their own name),
 instead of joining one. That is what you connect your phone or
 laptop to on the first night in the field, before the host has ever
 seen your home WiFi. If you have used an ASIAIR, this is the same
@@ -65,7 +67,7 @@ model as its Station Mode toggle.
 1. Flash Raspberry Pi OS and install the Polaris `.deb`
    (@sec-installation covers this end to end), then reboot.
 2. Wait about 30 seconds, then look for the WiFi network
-   `Polaris-Hotspot` on your phone. Connect with `polaris1234`.
+   `Polaris-Hotspot-XXXX` on your phone. Connect with `polaris1234`.
 3. Open `https://polaris-pi.local:5000` and accept the certificate
    warning once (explained under HTTPS below).
 
@@ -100,7 +102,7 @@ What if the password was wrong? Polaris waits up to 30 seconds for
 the host to actually obtain an address on the new network and reach
 its gateway (in other words, to be genuinely usable there). If that
 does not happen, it automatically reverts to the hotspot. Reconnect
-to `Polaris-Hotspot` and try again. The same revert covers a
+to `Polaris-Hotspot-XXXX` and try again. The same revert covers a
 network that is out of range or a router that is up but not handing
 out addresses. The host can never strand itself with no working
 WiFi.
@@ -114,7 +116,7 @@ Your home network is out of range, so the host cannot join anything
 on boot, and without a screen you would need an Ethernet cable to
 reach it. Polaris watches for exactly this: if the host stays
 disconnected from every saved network for about 45 seconds after
-boot, it brings `Polaris-Hotspot` back up on its own. Connect with
+boot, it brings `Polaris-Hotspot-XXXX` back up on its own. Connect with
 your phone as on the first night; the **Network** panel shows a
 note that the hotspot started automatically, and from there you can
 join whatever WiFi the new site offers. Back home, the saved home
@@ -129,7 +131,7 @@ switch, and `Network:HotspotFallbackSeconds` (default `45`, minimum
 ### Switching back, and changing the hotspot credentials
 
 In station mode the same panel shows a **Switch back to Hotspot**
-button; click it and reconnect your device to `Polaris-Hotspot`.
+button; click it and reconnect your device to `Polaris-Hotspot-XXXX`.
 The default hotspot name and password are public knowledge, so
 change them if the rig lives anywhere a stranger might wander past:
 **SETTINGS**, **Network**, **Edit hotspot SSID / password** accepts
@@ -142,7 +144,7 @@ Some hosts carry more than one WiFi radio, most often the board's
 built-in one plus an external USB antenna added for range. When Polaris
 sees more than one, a **Hotspot adapter** picker appears in
 **SETTINGS**, **Network**. Choose a radio and Polaris rebinds both the
-hotspot and station mode to it, so you can serve `Polaris-Hotspot` from
+hotspot and station mode to it, so you can serve `Polaris-Hotspot-XXXX` from
 a high-gain USB antenna instead of the weaker built-in radio. The
 picker is reachable in either mode; with a single radio it is hidden,
 since there is nothing to choose.

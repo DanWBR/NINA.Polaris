@@ -339,7 +339,7 @@ BRLTTY
         echo " elsewhere). LAN access is HTTPS:5000 only."
         echo ""
         echo " WiFi: on the next boot the Pi comes up as a hotspot named"
-        echo "   SSID:     Polaris-Hotspot"
+        echo "   SSID:     Polaris-Hotspot-XXXX (XXXX from the WiFi adapter's MAC)"
         echo "   Password: polaris1234"
         echo " Connect any device, open https://${HOST}.local:5000, then go to"
         echo " Settings → Network to switch the Pi onto your home WiFi instead."
