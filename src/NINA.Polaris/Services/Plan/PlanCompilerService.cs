@@ -211,6 +211,7 @@ public class PlanCompilerService {
                 });
             }
         }
+        if (plan.EndHome) root.Items.Add(new HomeMountInstruction { Name = "Mount to home" });
         if (plan.EndGoHome) root.Items.Add(new ParkMountInstruction { Name = "Park mount" });
         if (plan.EndEafZero) root.Items.Add(new MoveFocuserInstruction { Name = "Focuser → 0", Position = 0 });
 
