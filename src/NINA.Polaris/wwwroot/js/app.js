@@ -1056,6 +1056,13 @@ function ninaApp() {
         planDeleteConfirm: false,  // delete-plan confirm modal (styled, not native confirm)
         planAlt: {},               // per-target altitude-track cache (keyed by target id)
         planVizOpen: false,        // "View plan" timeline modal visibility
+        // What-if start for the timeline preview: 'now' or 'at' + local HH:mm.
+        // Seeded from the plan's own start setting each time the modal opens.
+        planVizStart: { mode: 'now', local: '' },
+        // The clock button beside Start: a draft of the plan's start setting
+        // until Apply writes it to the plan.
+        planStartPickerOpen: false,
+        planStartPick: { mode: 'now', local: '' },
         planViz: null,             // computed timeline model (built by openPlanViz)
 
         // Flat Wizard state. Form fields mirror EquipmentProfile.FlatWizard
@@ -25462,6 +25469,8 @@ function ninaApp() {
         planStartLabel() {
             if (this.planIsRunning()) return this._t('Stop');
             if (this.planStatus && this.planStatus.canResume) return this._t('Start over');
+            if (this.plan && this.plan.startMode === 'AtTime' && this.plan.startAtUtc)
+                return this._t('Start at {t}', { t: this._todUtcToLocal(this.plan.startAtUtc) });
             return this._t('Start');
         },
 
@@ -25471,6 +25480,8 @@ function ninaApp() {
                 return this._t('Discard the {n} frames already done and run the plan from the beginning. '
                     + 'Use Resume to continue instead.', { n: this.planStatus.resumeDoneFrames || 0 });
             }
+            if (this.plan && this.plan.startMode === 'AtTime' && this.plan.startAtUtc)
+                return this._t('Arm the plan now; it waits until {t} and then runs', { t: this._todUtcToLocal(this.plan.startAtUtc) });
             return this._t('Run the plan');
         },
 
@@ -25788,12 +25799,69 @@ function ninaApp() {
 
         closePlanViz() { this.planVizOpen = false; },
 
+        _planLocalNowHHmm() {
+            const d = new Date();
+            return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+        },
+
+        /// Turn the what-if start into the plan's real start setting.
+        planVizUseAsStart() {
+            if (!this.plan) return;
+            if (this.planVizStart.mode === 'at' && this.planVizStart.local) {
+                this.plan.startMode = 'AtTime';
+                this.plan.startAtUtc = this._todLocalToUtc(this.planVizStart.local);
+            } else {
+                this.plan.startMode = 'Now';
+            }
+            this.savePlan();
+            this.toast(this.plan.startMode === 'AtTime'
+                ? this._t('Plan starts at {t}', { t: this.planVizStart.local })
+                : this._t('Plan starts when you press Start'), 'ok', 2500);
+        },
+
+        planStartPickerToggle() {
+            if (!this.plan) return;
+            if (!this.planStartPickerOpen) {
+                const at = this.plan.startMode === 'AtTime' && this.plan.startAtUtc;
+                this.planStartPick = {
+                    mode: at ? 'at' : 'now',
+                    local: at ? this._todUtcToLocal(this.plan.startAtUtc) : this._planLocalNowHHmm()
+                };
+            }
+            this.planStartPickerOpen = !this.planStartPickerOpen;
+        },
+
+        planStartPickerApply() {
+            if (!this.plan) return;
+            if (this.planStartPick.mode === 'at' && this.planStartPick.local) {
+                this.plan.startMode = 'AtTime';
+                this.plan.startAtUtc = this._todLocalToUtc(this.planStartPick.local);
+            } else {
+                this.plan.startMode = 'Now';
+            }
+            this.savePlan();
+            this.planStartPickerOpen = false;
+        },
+
         // Build the whole-plan timeline model and open the modal: a combined
         // night graph (one elevation curve per target in its colour) plus a
         // Gantt strip of each target's scheduled sub-interval, start → end.
         async openPlanViz() {
             if (!this.plan) return;
             this.planVizOpen = true;
+            // Seed the what-if start from the plan's own setting; a later
+            // change in the modal is preview-only until "Use as start".
+            const at = this.plan.startMode === 'AtTime' && this.plan.startAtUtc;
+            this.planVizStart = {
+                mode: at ? 'at' : 'now',
+                local: at ? this._todUtcToLocal(this.plan.startAtUtc) : this._planLocalNowHHmm()
+            };
+            await this.planVizRefresh();
+        },
+
+        /// Redraw the timeline for the current what-if start.
+        async planVizRefresh() {
+            if (!this.plan) return;
             this.planViz = { loading: true };
             try {
                 const targets = (this.plan.targets || []).filter(t => t.enabled);
@@ -25828,14 +25896,15 @@ function ninaApp() {
                 // so a Now plan built after dark drew its window in the PAST:
                 // at 22:52 the card read "Start 18:43, End 21:59 (AllDone)",
                 // an already-finished night that the run would not follow.
-                let cursor;
-                if (this.plan.startMode === 'AtTime' && this.plan.startAtUtc) {
-                    cursor = this._planTodToWinMs(fromMs, this.plan.startAtUtc) ?? fromMs;
+                let cursor, startClamped = false;
+                if (this.planVizStart.mode === 'at' && this.planVizStart.local) {
+                    cursor = this._planTodToWinMs(fromMs, this._todLocalToUtc(this.planVizStart.local)) ?? fromMs;
                 } else {
                     // Clamped into the charted night so the marker stays on the
-                    // canvas; before dusk it honestly shows the run starting in
-                    // twilight, because that is what Now does.
+                    // canvas. In daytime "now" is off the chart, and the preview
+                    // says so rather than let sunset pass for the present.
                     cursor = Math.min(Math.max(Date.now(), fromMs), toMs);
+                    startClamped = cursor !== Date.now() && Math.abs(cursor - Date.now()) > 60000;
                 }
                 const planStartMs = cursor;
 
@@ -25969,7 +26038,7 @@ function ninaApp() {
                 gantt += `</svg>`;
 
                 this.planViz = {
-                    loading: false, ticks, anyDelay,
+                    loading: false, ticks, anyDelay, startClamped,
                     planStartLocal: toLocal(planStartMs), planEndLocal: toLocal(planEndMs),
                     endMode: this.plan.endMode,
                     segs, chartHtml: chart, ganttHtml: gantt,

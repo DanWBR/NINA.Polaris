@@ -168,4 +168,45 @@ public class AltitudeServiceTests {
         Assert.That(w.Sunset, Is.LessThan(anchor), $"sunset {w.Sunset:u} should be behind us");
         Assert.That(w.Sunrise, Is.GreaterThan(anchor));
     }
+
+    /// <summary>
+    /// The same fault one step later: past the SITE's midnight. At 01:30 local
+    /// on 12 September the site date is the 12th, and the night that begins on
+    /// the evening of the 12th is not the one overhead; the observer is under
+    /// the night that began on the 11th. This is what drew the plan preview's
+    /// start at "dusk" seventeen hours away, and would have sent a plan ending
+    /// "at dawn" after the dawn after next (field, 2026-09-12).
+    /// </summary>
+    [Test]
+    public void ComputeNightWindow_AfterLocalMidnight_ReturnsTheNightInProgress() {
+        var svc = MakeService(-5.19, -37.34);                                    // UTC-2.5 by longitude
+        var anchor = new DateTime(2026, 9, 12, 4, 0, 0, DateTimeKind.Utc);       // ~01:30 site time
+        var w = svc.ComputeNightWindow(anchor);
+        Assert.Multiple(() => {
+            Assert.That(w.Sunset, Is.LessThan(anchor), "the night began yesterday evening");
+            Assert.That(w.Sunrise, Is.GreaterThan(anchor), "and has not reached sunrise");
+            Assert.That(w.AstronomicalDawnUtc, Is.GreaterThan(anchor));
+            Assert.That((w.AstronomicalDawnUtc - anchor).TotalHours, Is.LessThan(8), "this coming dawn, not tomorrow's");
+        });
+    }
+
+    /// <summary>Evening, midnight and small hours of one night all name the same window.</summary>
+    [Test]
+    public void ComputeNightWindow_WholeNight_IsOneWindow() {
+        var svc = MakeService(-5.19, -37.34);
+        var evening = svc.ComputeNightWindow(new DateTime(2026, 9, 11, 22, 0, 0, DateTimeKind.Utc));  // 19:30 site
+        var small   = svc.ComputeNightWindow(new DateTime(2026, 9, 12, 6, 0, 0, DateTimeKind.Utc));   // 03:30 site
+        Assert.That(small.Sunset, Is.EqualTo(evening.Sunset).Within(TimeSpan.FromMinutes(1)));
+        Assert.That(small.Sunrise, Is.EqualTo(evening.Sunrise).Within(TimeSpan.FromMinutes(1)));
+    }
+
+    /// <summary>Once the sun is up, the coming night is the one to plan for.</summary>
+    [Test]
+    public void ComputeNightWindow_MidMorning_ReturnsTheComingNight() {
+        var svc = MakeService(-5.19, -37.34);
+        var anchor = new DateTime(2026, 9, 12, 13, 0, 0, DateTimeKind.Utc);      // ~10:30 site
+        var w = svc.ComputeNightWindow(anchor);
+        Assert.That(w.Sunset, Is.GreaterThan(anchor));
+        Assert.That((w.Sunset - anchor).TotalHours, Is.LessThan(12));
+    }
 }

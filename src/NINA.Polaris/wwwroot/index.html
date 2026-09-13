@@ -10566,7 +10566,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <div class="plan-set-end">
                                     <div class="plan-set-end-title">End of session</div>
                                     <label class="chk"><input type="checkbox" x-model="plan.endWarmCoolerOff" @change="savePlan()"> Warm camera + cooler off</label>
-                                    <label class="chk"><input type="checkbox" x-model="plan.endGoHome" @change="savePlan()"> Go to home / park mount</label>
+                                    <!-- Two things, not one: home is a pose the mount can
+                                         leave again, park powers the axes down. Both ticked
+                                         means home first, then park. -->
+                                    <label class="chk"><input type="checkbox" x-model="plan.endHome" @change="savePlan()"> Mount to home position</label>
+                                    <label class="chk"><input type="checkbox" x-model="plan.endGoHome" @change="savePlan()"> Park mount</label>
                                     <label class="chk"><input type="checkbox" x-model="plan.endEafZero" @change="savePlan()"> EAF return to zero</label>
                                     <label class="chk chk-danger">
                                         <input type="checkbox" x-model="plan.endShutdownHost"
@@ -10799,6 +10803,28 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             :disabled="!plan || planTargetCount() === 0"
                             :title="planStartTitle()"
                             x-text="planStartLabel()"></button>
+                    <!-- When to start: now, or at a set time tonight. The same
+                         setting lives in the settings sheet; this is the short
+                         way to it from the button that runs the plan. -->
+                    <div class="plan-start-when" x-show="!planIsRunning()">
+                        <button class="btn" :class="{ 'btn-active': plan?.startMode === 'AtTime' }"
+                                @click="planStartPickerToggle()"
+                                :disabled="!plan"
+                                title="Choose when the plan starts: now, or at a set time">🕒</button>
+                        <div class="plan-start-pop card" x-show="planStartPickerOpen" x-cloak
+                             @click.outside="planStartPickerOpen = false">
+                            <div class="plan-set-end-title">Start the plan</div>
+                            <label class="chk"><input type="radio" name="plan-start-when" value="now" x-model="planStartPick.mode"> Now, when I press Start</label>
+                            <label class="chk"><input type="radio" name="plan-start-when" value="at" x-model="planStartPick.mode"> At a set time (local)
+                                <input type="time" x-model="planStartPick.local" @focus="planStartPick.mode = 'at'">
+                            </label>
+                            <div class="hint" style="margin:4px 0 0">With a set time, Start arms the plan and it waits for that time.</div>
+                            <div style="display:flex;gap:6px;margin-top:8px">
+                                <button class="btn btn-sm btn-primary" @click="planStartPickerApply()">Apply</button>
+                                <button class="btn btn-sm" @click="planStartPickerOpen = false">Cancel</button>
+                            </div>
+                        </div>
+                    </div>
                     <!-- Resume the last prematurely-ended plan (stop or
                          end-time) from its retained progress: completed
                          targets skip, already-captured frames are kept. -->
@@ -10856,9 +10882,25 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         </template>
                         <template x-if="planViz && !planViz.loading && !planViz.empty && !planViz.error">
                         <div style="display:flex;flex-direction:column;gap:14px">
+                            <!-- What-if: draw the same plan as if it started at
+                                 another time. Preview only; the plan's own start
+                                 setting is untouched unless "Use as start" is
+                                 pressed. -->
+                            <div class="plan-viz-start">
+                                <span class="muted">Preview start</span>
+                                <button class="btn btn-sm" :class="{ 'btn-active': planVizStart.mode === 'now' }"
+                                        @click="planVizStart.mode = 'now'; planVizRefresh()">Now</button>
+                                <button class="btn btn-sm" :class="{ 'btn-active': planVizStart.mode === 'at' }"
+                                        @click="planVizStart.mode = 'at'; planVizRefresh()">At</button>
+                                <input type="time" x-model="planVizStart.local"
+                                       @change="planVizStart.mode = 'at'; planVizRefresh()">
+                                <button class="btn btn-sm" @click="planVizUseAsStart()"
+                                        title="Make this the plan's start setting">Use as start</button>
+                            </div>
                             <!-- Totals -->
                             <div class="plan-viz-summary">
-                                <span><span class="muted">Start</span> <strong x-text="planViz.planStartLocal"></strong></span>
+                                <span><span class="muted">Start</span> <strong x-text="planViz.planStartLocal"></strong>
+                                    <span class="muted" x-show="planViz.startClamped">(now is outside tonight's chart; drawn from its edge)</span></span>
                                 <span><span class="muted">End</span> <strong x-text="planViz.planEndLocal"></strong>
                                     <span class="muted" x-show="planViz.endMode" x-text="'(' + planViz.endMode + ')'"></span></span>
                                 <span><span class="muted">Targets</span> <strong x-text="planViz.targetCount"></strong></span>

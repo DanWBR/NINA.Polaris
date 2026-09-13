@@ -4798,5 +4798,21 @@
   "Scan with the hotspot paused (~10 s)": "Escanear com o hotspot pausado (~10 s)",
   "Your device drops off the hotspot briefly and rejoins by itself.": "Seu aparelho cai do hotspot por um instante e volta sozinho.",
   "The four letters at the end come from the WiFi adapter, so rigs side by side stay apart.": "As quatro letras do final vêm do adaptador WiFi, para rigs lado a lado não se confundirem.",
-  "The hotspot was paused for the scan and your device lost it for a moment. Reconnect to it if needed, then press Rescan: the list is ready.": "O hotspot foi pausado para o escaneamento e seu aparelho o perdeu por um momento. Reconecte se precisar e aperte Rescan: a lista está pronta."
+  "The hotspot was paused for the scan and your device lost it for a moment. Reconnect to it if needed, then press Rescan: the list is ready.": "O hotspot foi pausado para o escaneamento e seu aparelho o perdeu por um momento. Reconecte se precisar e aperte Rescan: a lista está pronta.",
+  "Mount to home position": "Montagem para a posição home",
+  "Choose when the plan starts: now, or at a set time": "Escolha quando o plano começa: agora ou num horário definido",
+  "Start the plan": "Iniciar o plano",
+  "Now, when I press Start": "Agora, quando eu apertar Start",
+  "At a set time (local)": "Num horário definido (local)",
+  "With a set time, Start arms the plan and it waits for that time.": "Com horário definido, Start arma o plano e ele espera essa hora.",
+  "Preview start": "Início da prévia",
+  "Now": "Agora",
+  "At": "Às",
+  "Use as start": "Usar como início",
+  "Make this the plan's start setting": "Tornar este o horário de início do plano",
+  "(now is outside tonight's chart; drawn from its edge)": "(agora está fora do gráfico desta noite; desenhado a partir da borda)",
+  "Plan starts at {t}": "O plano começa às {t}",
+  "Plan starts when you press Start": "O plano começa quando você apertar Start",
+  "Start at {t}": "Iniciar às {t}",
+  "Arm the plan now; it waits until {t} and then runs": "Arma o plano agora; ele espera até {t} e então roda"
 }

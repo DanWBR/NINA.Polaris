@@ -172,6 +172,7 @@ public class PlanCompilerService {
         var root = new SequentialContainer { Name = "End of session" };
         if (plan.AutoGuiding) root.Items.Add(new StopGuidingInstruction { Name = "Stop guiding" });
         if (plan.EndWarmCoolerOff) root.Items.Add(new WarmCameraInstruction { Name = "Warm camera + cooler off" });
+        if (plan.EndHome) root.Items.Add(new HomeMountInstruction { Name = "Mount to home" });
         if (plan.EndGoHome) root.Items.Add(new ParkMountInstruction { Name = "Park mount" });
         if (plan.EndEafZero) root.Items.Add(new MoveFocuserInstruction { Name = "Focuser → 0", Position = 0 });
 

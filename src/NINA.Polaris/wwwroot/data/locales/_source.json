@@ -4179,5 +4179,21 @@
   "Scan with the hotspot paused (~10 s)": "",
   "Your device drops off the hotspot briefly and rejoins by itself.": "",
   "The four letters at the end come from the WiFi adapter, so rigs side by side stay apart.": "",
-  "The hotspot was paused for the scan and your device lost it for a moment. Reconnect to it if needed, then press Rescan: the list is ready.": ""
+  "The hotspot was paused for the scan and your device lost it for a moment. Reconnect to it if needed, then press Rescan: the list is ready.": "",
+  "Mount to home position": "",
+  "Choose when the plan starts: now, or at a set time": "",
+  "Start the plan": "",
+  "Now, when I press Start": "",
+  "At a set time (local)": "",
+  "With a set time, Start arms the plan and it waits for that time.": "",
+  "Preview start": "",
+  "Now": "",
+  "At": "",
+  "Use as start": "",
+  "Make this the plan's start setting": "",
+  "(now is outside tonight's chart; drawn from its edge)": "",
+  "Plan starts at {t}": "",
+  "Plan starts when you press Start": "",
+  "Start at {t}": "",
+  "Arm the plan now; it waits until {t} and then runs": ""
 }

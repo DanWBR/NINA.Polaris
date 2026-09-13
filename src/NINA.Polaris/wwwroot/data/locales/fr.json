@@ -4798,5 +4798,21 @@
   "Scan with the hotspot paused (~10 s)": "Scanner avec le hotspot en pause (~10 s)",
   "Your device drops off the hotspot briefly and rejoins by itself.": "Votre appareil quitte le hotspot un instant et le rejoint tout seul.",
   "The four letters at the end come from the WiFi adapter, so rigs side by side stay apart.": "Les quatre lettres à la fin viennent de l'adaptateur WiFi, pour que des rigs côte à côte restent distincts.",
-  "The hotspot was paused for the scan and your device lost it for a moment. Reconnect to it if needed, then press Rescan: the list is ready.": "Le hotspot a été mis en pause pour le scan et votre appareil l'a perdu un instant. Reconnectez-vous si besoin, puis appuyez sur Rescan : la liste est prête."
+  "The hotspot was paused for the scan and your device lost it for a moment. Reconnect to it if needed, then press Rescan: the list is ready.": "Le hotspot a été mis en pause pour le scan et votre appareil l'a perdu un instant. Reconnectez-vous si besoin, puis appuyez sur Rescan : la liste est prête.",
+  "Mount to home position": "Monture en position home",
+  "Choose when the plan starts: now, or at a set time": "Choisissez quand le plan démarre : maintenant ou à une heure définie",
+  "Start the plan": "Démarrer le plan",
+  "Now, when I press Start": "Maintenant, quand j'appuie sur Start",
+  "At a set time (local)": "À une heure définie (locale)",
+  "With a set time, Start arms the plan and it waits for that time.": "Avec une heure définie, Start arme le plan, qui attend cette heure.",
+  "Preview start": "Début de l'aperçu",
+  "Now": "Maintenant",
+  "At": "À",
+  "Use as start": "Utiliser comme début",
+  "Make this the plan's start setting": "En faire l'heure de début du plan",
+  "(now is outside tonight's chart; drawn from its edge)": "(maintenant est hors du graphique de cette nuit ; tracé depuis son bord)",
+  "Plan starts at {t}": "Le plan démarre à {t}",
+  "Plan starts when you press Start": "Le plan démarre quand vous appuyez sur Start",
+  "Start at {t}": "Démarrer à {t}",
+  "Arm the plan now; it waits until {t} and then runs": "Arme le plan maintenant ; il attend {t} puis s'exécute"
 }

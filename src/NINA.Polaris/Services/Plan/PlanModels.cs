@@ -64,7 +64,13 @@ public class ImagingPlan {
 
     // ---- End-of-session actions --------------------------------------
     public bool EndWarmCoolerOff { get; set; } = false;
+    /// <summary>Park the mount. The property keeps the name it was saved under
+    /// when "home / park" was one checkbox that only ever parked, so existing
+    /// plans keep doing what they did.</summary>
     public bool EndGoHome { get; set; } = false;
+    /// <summary>Send the mount to its home position (before parking, when both
+    /// are set). Different thing: home is a pose, park powers the axes down.</summary>
+    public bool EndHome { get; set; } = false;
     public bool EndEafZero { get; set; } = false;
     /// <summary>Power the host off after the plan ends. Gated behind an explicit
     /// confirm in the UI; executed by the runner, never inside the sequence doc.</summary>

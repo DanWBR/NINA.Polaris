@@ -2660,3 +2660,28 @@
     font-size: 13px;
     color: var(--text-primary);
 }
+
+/* ---- PLAN: start-time picker beside Start, what-if start in View plan ---- */
+.plan-start-when { position: relative; }
+.plan-start-pop {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 0;
+    z-index: 30;
+    min-width: 260px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+.plan-start-pop input[type="time"] { margin-left: 6px; }
+.plan-viz-start {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}

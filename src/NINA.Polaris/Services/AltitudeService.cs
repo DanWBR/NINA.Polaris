@@ -74,6 +74,25 @@ public class AltitudeService {
         var anchor = nightUtc ?? DateTime.UtcNow;
         var lonOffsetHours = lon / 15.0;                  // east of Greenwich is positive
         var siteLocal = anchor.AddHours(lonOffsetHours);  // the site's wall clock
+
+        // After the site's midnight the calendar date is already tomorrow's,
+        // and "tomorrow evening's night" is the wrong answer while the
+        // observer is still under tonight's sky: the plan preview drew its
+        // start at a dusk eighteen hours away, and a plan ending "at dawn"
+        // would have aimed at the dawn after next. So in the morning hours,
+        // if the night that began yesterday evening has not reached sunrise
+        // yet, that is the night.
+        if (siteLocal.Hour < 12) {
+            var previous = WindowForSiteDate(siteLocal.AddDays(-1), lonOffsetHours, lat, lon);
+            if (anchor < previous.Sunrise) return previous;
+        }
+        return WindowForSiteDate(siteLocal, lonOffsetHours, lat, lon);
+    }
+
+    /// <summary>The night that begins on the evening of the given site-local
+    /// date: sunset and the dusks after that day's local noon, the dawns and
+    /// sunrise before the next day's.</summary>
+    private static NightWindow WindowForSiteDate(DateTime siteLocal, double lonOffsetHours, double lat, double lon) {
         var localNoon = new DateTime(siteLocal.Year, siteLocal.Month, siteLocal.Day, 12, 0, 0, DateTimeKind.Utc)
             .AddHours(-lonOffsetHours);
 

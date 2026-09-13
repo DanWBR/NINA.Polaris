@@ -4798,5 +4798,21 @@
   "Scan with the hotspot paused (~10 s)": "Escanear con el hotspot en pausa (~10 s)",
   "Your device drops off the hotspot briefly and rejoins by itself.": "Tu dispositivo se cae del hotspot un momento y vuelve solo.",
   "The four letters at the end come from the WiFi adapter, so rigs side by side stay apart.": "Las cuatro letras del final vienen del adaptador WiFi, para que rigs uno al lado del otro no se confundan.",
-  "The hotspot was paused for the scan and your device lost it for a moment. Reconnect to it if needed, then press Rescan: the list is ready.": "El hotspot se pausó para el escaneo y tu dispositivo lo perdió un momento. Vuelve a conectarte si hace falta y pulsa Rescan: la lista está lista."
+  "The hotspot was paused for the scan and your device lost it for a moment. Reconnect to it if needed, then press Rescan: the list is ready.": "El hotspot se pausó para el escaneo y tu dispositivo lo perdió un momento. Vuelve a conectarte si hace falta y pulsa Rescan: la lista está lista.",
+  "Mount to home position": "Montura a la posición home",
+  "Choose when the plan starts: now, or at a set time": "Elige cuándo empieza el plan: ahora o a una hora definida",
+  "Start the plan": "Iniciar el plan",
+  "Now, when I press Start": "Ahora, cuando pulse Start",
+  "At a set time (local)": "A una hora definida (local)",
+  "With a set time, Start arms the plan and it waits for that time.": "Con una hora definida, Start arma el plan y espera esa hora.",
+  "Preview start": "Inicio de la vista previa",
+  "Now": "Ahora",
+  "At": "A las",
+  "Use as start": "Usar como inicio",
+  "Make this the plan's start setting": "Hacer de esta la hora de inicio del plan",
+  "(now is outside tonight's chart; drawn from its edge)": "(ahora está fuera del gráfico de esta noche; dibujado desde el borde)",
+  "Plan starts at {t}": "El plan empieza a las {t}",
+  "Plan starts when you press Start": "El plan empieza cuando pulses Start",
+  "Start at {t}": "Iniciar a las {t}",
+  "Arm the plan now; it waits until {t} and then runs": "Arma el plan ahora; espera hasta las {t} y luego corre"
 }

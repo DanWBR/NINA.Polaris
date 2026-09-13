@@ -67,6 +67,23 @@ public class ParkMountInstruction : SequenceInstruction {
     }
 }
 
+/// <summary>Send the mount to its home position. Not park: home is a pose the
+/// mount can slew away from (dew-cap, flats, the next plan), park powers the
+/// axes down. A mount without a home command is skipped, not failed, so the
+/// end-of-session actions after it (park, focuser to zero) still run.</summary>
+public class HomeMountInstruction : SequenceInstruction {
+    public override string Type => "HomeMount";
+    public override async Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) {
+        var mount = ctx.Equipment.Telescope;
+        if (mount == null) throw new InvalidOperationException("No telescope connected");
+        if (!mount.Capabilities.SupportsFindHome) {
+            ctx.Logger.LogWarning("HomeMount: this mount reports no home command; skipping");
+            return;
+        }
+        await mount.FindHomeAsync(ct);
+    }
+}
+
 public class UnparkMountInstruction : SequenceInstruction {
     public override string Type => "UnparkMount";
     public override async Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) {
