@@ -152,6 +152,67 @@ public class FileBrowserServiceTests {
             Throws.TypeOf<FileNotFoundException>());
     }
 
+    [Test]
+    public void ResolveSafe_SymlinkToBlockedFile_Refused() {
+        if (!OperatingSystem.IsLinux())
+            Assert.Ignore("Symbolic-link test requires Linux");
+
+        var link = Path.Combine(_tmp, "shadow-link");
+        File.CreateSymbolicLink(link, "/proc/self/status");
+
+        Assert.That(() => _svc.ResolveSafe(link, mustExist: true),
+            Throws.TypeOf<UnauthorizedAccessException>());
+    }
+
+    [Test]
+    public void WriteText_SymlinkedDestinationParentToBlockedDirectory_Refused() {
+        if (!OperatingSystem.IsLinux())
+            Assert.Ignore("Symbolic-link test requires Linux");
+
+        var link = Path.Combine(_tmp, "etc-link");
+        Directory.CreateSymbolicLink(link, "/etc");
+
+        Assert.That(
+            async () => await _svc.WriteTextAsync(
+                Path.Combine(link, "polaris-test.txt"), "x", overwrite: false),
+            Throws.TypeOf<UnauthorizedAccessException>());
+    }
+
+    [Test]
+    public void OpenRead_IntermediateSymlinkToBlockedDirectory_Refused() {
+        if (!OperatingSystem.IsLinux())
+            Assert.Ignore("Symbolic-link test requires Linux");
+
+        var link = Path.Combine(_tmp, "proc-link");
+        Directory.CreateSymbolicLink(link, "/proc");
+
+        Assert.That(
+            () => _svc.OpenRead(Path.Combine(link, "self", "status")),
+            Throws.TypeOf<UnauthorizedAccessException>());
+    }
+
+    [Test]
+    public void ResolveSafe_NonexistentPathThroughBlockedSymlink_Refused() {
+        if (!OperatingSystem.IsLinux())
+            Assert.Ignore("Symbolic-link test requires Linux");
+
+        var link = Path.Combine(_tmp, "proc-link");
+        Directory.CreateSymbolicLink(link, "/proc");
+
+        Assert.That(
+            () => _svc.ResolveSafe(Path.Combine(link, "not-created.txt"), mustExist: false),
+            Throws.TypeOf<UnauthorizedAccessException>());
+    }
+
+    [Test]
+    public async Task WriteText_NormalTemporaryDestination_Works() {
+        var path = Path.Combine(_tmp, "output.txt");
+
+        await _svc.WriteTextAsync(path, "x", overwrite: false);
+
+        Assert.That(await File.ReadAllTextAsync(path), Is.EqualTo("x"));
+    }
+
     // --- Mutations ----------------------------------------------------
 
     [Test]
