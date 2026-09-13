@@ -131,11 +131,37 @@ public class PlanCompilerTests {
         Assert.That(items.OfType<MoveFocuserInstruction>().Single().Position, Is.EqualTo(0));
     }
 
+    /// <summary>Home and park are two actions. Home is a pose the mount can
+    /// leave again; park powers the axes down. With both ticked the mount goes
+    /// home first, then parks, and the old single flag keeps meaning park so
+    /// plans saved before the split behave as they did.</summary>
+    [Test]
+    public void CompileEndActions_HomeThenPark_AreTwoInstructionsInThatOrder() {
+        var plan = TwoTargetPlan();
+        plan.AutoGuiding = false; plan.EndWarmCoolerOff = false; plan.EndEafZero = false;
+        plan.EndHome = true;
+        plan.EndGoHome = true;
+
+        var items = ((SequentialContainer)_c.CompileEndActions(plan)!.Root).Items;
+        Assert.That(items.Select(i => i.Type), Is.EqualTo(new[] { "HomeMount", "ParkMount" }));
+    }
+
+    [Test]
+    public void CompileEndActions_HomeAlone_DoesNotPark() {
+        var plan = TwoTargetPlan();
+        plan.AutoGuiding = false; plan.EndWarmCoolerOff = false; plan.EndEafZero = false;
+        plan.EndHome = true;
+        plan.EndGoHome = false;
+
+        var items = ((SequentialContainer)_c.CompileEndActions(plan)!.Root).Items;
+        Assert.That(items.Select(i => i.Type), Is.EqualTo(new[] { "HomeMount" }));
+    }
+
     [Test]
     public void CompileEndActions_NullWhenNothingToDo() {
         var plan = TwoTargetPlan();
         plan.AutoGuiding = false;
-        plan.EndWarmCoolerOff = false; plan.EndGoHome = false; plan.EndEafZero = false;
+        plan.EndWarmCoolerOff = false; plan.EndGoHome = false; plan.EndHome = false; plan.EndEafZero = false;
         Assert.That(_c.CompileEndActions(plan), Is.Null);
     }
 

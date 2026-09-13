@@ -62,15 +62,37 @@ public class CenterOnCoordinatesInstruction : SequenceInstruction {
 public class ParkMountInstruction : SequenceInstruction {
     public override string Type => "ParkMount";
     public override async Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) {
-        if (ctx.Equipment.Telescope == null) throw new InvalidOperationException("No telescope connected");
-        await ctx.Equipment.Telescope.ParkAsync(ct);
+        var mount = ctx.Equipment.Telescope;
+        if (mount == null) throw new InvalidOperationException("No telescope connected");
+        await mount.ParkAsync(ct);
+        // The park is a slew. Whatever follows (focuser to zero, a host
+        // shutdown) must not run over it, so wait for the driver to say parked.
+        await MountWaits.UntilAsync(() => mount.IsParked, TimeSpan.FromSeconds(120), ct);
+    }
+}
+
+/// <summary>Polling waits on mount state, shared by the mount instructions.
+/// A timeout returns rather than throws: the mount is where it is, and the
+/// next instruction gets to decide whether that matters.</summary>
+internal static class MountWaits {
+    public static async Task<bool> UntilAsync(Func<bool> done, TimeSpan max, CancellationToken ct) {
+        var deadline = DateTime.UtcNow + max;
+        while (DateTime.UtcNow < deadline) {
+            if (done()) return true;
+            await Task.Delay(500, ct);
+        }
+        return done();
     }
 }
 
 /// <summary>Send the mount to its home position. Not park: home is a pose the
 /// mount can slew away from (dew-cap, flats, the next plan), park powers the
-/// axes down. A mount without a home command is skipped, not failed, so the
-/// end-of-session actions after it (park, focuser to zero) still run.</summary>
+/// axes down. The same call the RIGS mount card's Home button makes
+/// (POST /api/telescope/find-home), which works on the ZWO AM3/AM5 through
+/// INDI's TELESCOPE_HOME; plus a wait for the slew to end, because inside a
+/// plan the next action is usually Park, and parking a mount that is still
+/// on its way home interrupts the move. A mount without a home command is
+/// skipped, not failed, so the actions after it still run.</summary>
 public class HomeMountInstruction : SequenceInstruction {
     public override string Type => "HomeMount";
     public override async Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) {
@@ -80,7 +102,18 @@ public class HomeMountInstruction : SequenceInstruction {
             ctx.Logger.LogWarning("HomeMount: this mount reports no home command; skipping");
             return;
         }
+        if (mount.IsParked) {
+            // A parked mount does not slew. The card's button is disabled in
+            // that state; here the honest thing is to say so and move on.
+            ctx.Logger.LogWarning("HomeMount: the mount is parked; skipping the home slew");
+            return;
+        }
         await mount.FindHomeAsync(ct);
+        // The driver takes a moment to report the slew, so give it a couple of
+        // seconds to start before waiting for it to stop.
+        await MountWaits.UntilAsync(() => mount.IsSlewing, TimeSpan.FromSeconds(3), ct);
+        var arrived = await MountWaits.UntilAsync(() => !mount.IsSlewing, TimeSpan.FromSeconds(180), ct);
+        if (!arrived) ctx.Logger.LogWarning("HomeMount: the mount was still slewing after 180 s; continuing");
     }
 }
 
