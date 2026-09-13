@@ -4195,5 +4195,8 @@
   "Plan starts at {t}": "",
   "Plan starts when you press Start": "",
   "Start at {t}": "",
-  "Arm the plan now; it waits until {t} and then runs": ""
+  "Arm the plan now; it waits until {t} and then runs": "",
+  "Meridian flip, {n} min after transit:": "",
+  "No meridian flip falls inside any target window.": "",
+  "Auto meridian flip is off: a target that crosses the meridian will stop at the mount's limit.": ""
 }

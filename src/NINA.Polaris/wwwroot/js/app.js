@@ -25799,6 +25799,24 @@ function ninaApp() {
 
         closePlanViz() { this.planVizOpen = false; },
 
+        // Instants inside [fromMs, toMs] at which a target crosses the local
+        // meridian (hour angle 0), from the observatory longitude. Solved from
+        // the sidereal clock directly: LST advances one sidereal day per
+        // 86,164,090 ms, so the first transit after `fromMs` is a single linear
+        // step, and later ones are a sidereal day apart. The plan's meridian
+        // flip fires this many minutes after each of these, when the target is
+        // being imaged at the time.
+        _planTransitsMs(raHours, fromMs, toMs) {
+            const lon = Number(this.settings.longitude) || 0;
+            const SIDEREAL_DAY_MS = 86164090.5;
+            const lst0 = this._localSiderealTime(new Date(fromMs), lon);
+            let ahead = ((raHours - lst0) % 24 + 24) % 24;          // sidereal hours until HA = 0
+            let t = fromMs + ahead / 24 * SIDEREAL_DAY_MS;
+            const out = [];
+            while (t <= toMs) { out.push(t); t += SIDEREAL_DAY_MS; }
+            return out;
+        },
+
         _planLocalNowHHmm() {
             const d = new Date();
             return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
@@ -25959,8 +25977,21 @@ function ninaApp() {
                     const delaySec = Math.max(0, t.firstDelaySec || 0);
                     const x0 = xOf(s0);
                     const delayX1 = delaySec > 0 ? xOf(s0 + delaySec * 1000) : x0;
+                    // Meridian flips the plan will perform during this target's
+                    // window: transit + the plan's "minutes after" for each
+                    // transit that falls inside the window. Only with auto flip
+                    // on; without it the operator gets no flip and should see none.
+                    const flips = [];
+                    if (this.plan.autoMeridianFlip) {
+                        const afterMs = Math.max(0, this.plan.meridianFlipMinutesAfter || 0) * 60000;
+                        for (const tr of this._planTransitsMs(t.raHours || 0, s0 - afterMs, s1)) {
+                            const f = tr + afterMs;
+                            if (f >= s0 && f <= s1) flips.push({ ms: f, x: xOf(f), local: toLocal(f) });
+                        }
+                    }
                     return {
                         id: t.id, name: t.name || ('Target ' + (i + 1)),
+                        flips,
                         thumbKey: t.thumbKey || null,
                         color: this.planVizColor(i),
                         x0, x1: xOf(s1),
@@ -26021,6 +26052,14 @@ function ninaApp() {
                     chart += `<path d="${s.winPath}" fill="none" stroke="${s.color}" stroke-width="3.5" vector-effect="non-scaling-stroke"/>`;
                 chart += `<line x1="${planStartX.toFixed(1)}" y1="0" x2="${planStartX.toFixed(1)}" y2="${VBH}" stroke="#e5e7eb" stroke-width="1.5" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/>`;
                 chart += `<line x1="${planEndX.toFixed(1)}" y1="0" x2="${planEndX.toFixed(1)}" y2="${VBH}" stroke="#e5e7eb" stroke-width="1.5" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/>`;
+                // Scheduled meridian flips: an amber line in the target's slot,
+                // with a small pennant at the top so it reads as an event and
+                // not as another window edge.
+                for (const s of segs) for (const f of s.flips) {
+                    const x = f.x.toFixed(1);
+                    chart += `<line x1="${x}" y1="0" x2="${x}" y2="${VBH}" stroke="#ffb020" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
+                    chart += `<path d="M${x},2 l14,7 l-14,7 z" fill="#ffb020"/>`;
+                }
                 chart += `</svg>`;
 
                 let gantt = `<svg viewBox="0 0 ${VBW} ${ganttH}" preserveAspectRatio="none" style="width:100%;height:${ganttH}px;display:block;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius)">`;
@@ -26035,10 +26074,20 @@ function ninaApp() {
                 });
                 gantt += `<line x1="${planStartX.toFixed(1)}" y1="0" x2="${planStartX.toFixed(1)}" y2="${ganttH}" stroke="#e5e7eb" stroke-width="1.5" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/>`;
                 gantt += `<line x1="${planEndX.toFixed(1)}" y1="0" x2="${planEndX.toFixed(1)}" y2="${ganttH}" stroke="#e5e7eb" stroke-width="1.5" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/>`;
+                segs.forEach((s, i) => {
+                    const y = top + i * (rowH + gap);
+                    for (const f of s.flips) {
+                        const x = f.x.toFixed(1);
+                        gantt += `<line x1="${x}" y1="${y - 2}" x2="${x}" y2="${y + rowH + 2}" stroke="#ffb020" stroke-width="2.5" vector-effect="non-scaling-stroke"/>`;
+                    }
+                });
                 gantt += `</svg>`;
 
+                const flipCount = segs.reduce((a, s) => a + s.flips.length, 0);
                 this.planViz = {
                     loading: false, ticks, anyDelay, startClamped,
+                    flipCount, flipAuto: !!this.plan.autoMeridianFlip,
+                    flipAfterMin: Math.max(0, this.plan.meridianFlipMinutesAfter || 0),
                     planStartLocal: toLocal(planStartMs), planEndLocal: toLocal(planEndMs),
                     endMode: this.plan.endMode,
                     segs, chartHtml: chart, ganttHtml: gantt,

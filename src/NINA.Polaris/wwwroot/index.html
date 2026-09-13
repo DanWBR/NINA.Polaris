@@ -10933,12 +10933,28 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <span class="plan-viz-hatch"></span>
                                 <span class="muted">Hatched = delay (waiting before capture starts)</span>
                             </div>
+                            <!-- Scheduled meridian flips: the operator wants to know
+                                 when the mount will swing, and that the plan has it
+                                 covered (or, with auto flip off, that it does not). -->
+                            <div class="plan-viz-legend" x-show="planViz.flipAuto && planViz.flipCount > 0">
+                                <span class="plan-viz-flipmark"></span>
+                                <span class="muted" x-text="_t('Meridian flip, {n} min after transit:', { n: planViz.flipAfterMin })"></span>
+                                <template x-for="s in planViz.segs.filter(s => s.flips.length)" :key="'vf'+s.id">
+                                    <span><strong x-text="s.name"></strong> <span x-text="s.flips.map(f => f.local).join(', ')"></span></span>
+                                </template>
+                            </div>
+                            <div class="plan-viz-legend" x-show="planViz.flipAuto && planViz.flipCount === 0">
+                                <span class="muted">No meridian flip falls inside any target window.</span>
+                            </div>
+                            <div class="plan-viz-legend text-warn" x-show="!planViz.flipAuto">
+                                <span>Auto meridian flip is off: a target that crosses the meridian will stop at the mount's limit.</span>
+                            </div>
 
                             <!-- Per-target legend / details -->
                             <table class="plan-viz-table">
                                 <thead><tr>
                                     <th></th><th></th><th>Target</th><th>Mode</th><th>Window (local)</th>
-                                    <th>Frames</th><th>Est.</th><th>Max alt</th>
+                                    <th>Frames</th><th>Est.</th><th>Max alt</th><th>Flip</th>
                                 </tr></thead>
                                 <tbody>
                                     <template x-for="s in planViz.segs" :key="'vt'+s.id">
@@ -10953,6 +10969,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                             <td x-text="s.frames"></td>
                                             <td x-text="planFormatDuration(s.durationSec)"></td>
                                             <td x-text="s.maxAlt != null ? (s.maxAlt + '°') : '-'"></td>
+                                            <td x-text="s.flips.length ? s.flips.map(f => f.local).join(', ') : '-'"></td>
                                         </tr>
                                     </template>
                                 </tbody>
