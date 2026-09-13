@@ -2685,3 +2685,14 @@
     gap: 6px;
     flex-wrap: wrap;
 }
+
+/* PLAN visualiser: the amber meridian-flip marker in the legend */
+.plan-viz-flipmark {
+    display: inline-block;
+    width: 3px;
+    height: 14px;
+    background: #ffb020;
+    border-radius: 1px;
+    vertical-align: middle;
+    margin-right: 4px;
+}

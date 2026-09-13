@@ -4812,5 +4812,8 @@
   "Plan starts at {t}": "Le plan démarre à {t}",
   "Plan starts when you press Start": "Le plan démarre quand vous appuyez sur Start",
   "Start at {t}": "Démarrer à {t}",
-  "Arm the plan now; it waits until {t} and then runs": "Arme le plan maintenant ; il attend {t} puis s'exécute"
+  "Arm the plan now; it waits until {t} and then runs": "Arme le plan maintenant ; il attend {t} puis s'exécute",
+  "Meridian flip, {n} min after transit:": "Retournement au méridien, {n} min après le transit :",
+  "No meridian flip falls inside any target window.": "Aucun retournement au méridien ne tombe dans la fenêtre d'une cible.",
+  "Auto meridian flip is off: a target that crosses the meridian will stop at the mount's limit.": "Le retournement automatique est désactivé : une cible qui passe le méridien s'arrêtera à la limite de la monture."
 }
