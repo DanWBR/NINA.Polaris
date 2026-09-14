@@ -242,6 +242,28 @@ The big workflow button:
 Status banner shows phase live: "Slewing → Capturing → Solving →
 Centering → ✓ Centered (12 arcsec error)".
 
+### Framing rotation and rotators
+
+The angle on the red target box is the camera's **sky position angle**
+(0 = north up), the same number a plate solve reports. To choose the
+angle instead of reading it, click **↻ Rotation** in the toolbar: a
+slider appears beside the box and turns it live, with -1 / +1 nudges
+and a field for typing the angle. **Follow solve** drops the choice
+and shows the solved angle again.
+
+With a rotator on the rig (RIGS → Rotator), the chosen angle rides
+along with every Slew & Center from this tab: after each solve, the
+loop turns the rotator by the difference, then solves again to confirm,
+until the angle is within 0.5°. **Rotate now** does the same without
+moving the mount. The rotator's own angle is a mechanical number that
+differs from the sky angle by a fixed offset, so the first move may go
+the wrong way once; the loop notices, reverses, and remembers the
+direction for the rest of the session. A rectangular sensor frames the
+same field either way up, so a difference of 180° counts as done.
+
+Without a rotator the angle is still kept: it is the rotation stored on
+a PLAN target and on targets added to a sequence.
+
 ## Center on Sun / Moon / planet
 
 Plate solving can't lock onto solar-system objects - the Sun/Moon wash the

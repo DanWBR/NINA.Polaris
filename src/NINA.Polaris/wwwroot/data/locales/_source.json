@@ -4213,5 +4213,22 @@
   "Show on sky map": "",
   "Could not read the coordinates. Try 05:35:17 -05:23:28, 5h35m17s -5d23m28s, or 83.82 -5.39.": "",
   "RA must be between 0h and 24h (0° and 360°).": "",
-  "Dec must be between -90° and +90°.": ""
+  "Dec must be between -90° and +90°.": "",
+  "↻ Rotation": "",
+  "Turn the red target box to the framing angle you want; a rotator follows it on Slew & Center": "",
+  "Framing rotation": "",
+  "1 degree counter-clockwise": "",
+  "1 degree clockwise": "",
+  "Rotate now": "",
+  "Connect a rotator first": "",
+  "Solve, turn the rotator to this angle, solve again to confirm; the mount stays where it is": "",
+  "Follow solve": "",
+  "Drop the chosen angle and show the solved camera angle again": "",
+  "No rotator: the angle is kept for framing and for PLAN targets.": "",
+  "Slew & Center will turn the rotator to this angle.": "",
+  "Wanted:": "",
+  "(off by": "",
+  "Turning the rotator": "",
+  "Rotating to {a}°": "",
+  "Rotate failed": ""
 }

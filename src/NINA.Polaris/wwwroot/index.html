@@ -9044,6 +9044,12 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                            @input="skyShowResults = false">
                     <button class="btn btn-sm" @click="gotoCoordsOpen()"
                             title="Type RA and Dec and send the mount there, or show the position on the map">🎯 RA/Dec</button>
+                    <!-- Framing rotation: turn the red target box with a
+                         slider; a rotator on the rig follows it on the next
+                         Slew & Center or with Rotate now. -->
+                    <button class="btn btn-sm" @click="skyRotToggle()"
+                            :class="skyRotAdjust ? 'btn-active' : ''"
+                            title="Turn the red target box to the framing angle you want; a rotator follows it on Slew &amp; Center">↻ Rotation</button>
                     <button class="btn btn-sm" @click="showAtlasFilters = !showAtlasFilters"
                             :class="showAtlasFilters ? 'btn-active' : ''">Filters</button>
                     <button class="btn btn-sm" @click="openMosaicPlanner()"
@@ -9299,6 +9305,35 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         </div>
                     </div>
 
+                    <!-- Rotation mode: slider beside the red box. The angle
+                         is a sky position angle (0 = north up), the same
+                         number the plate solve reports. -->
+                    <div class="sky-rot-adjust" x-show="skyRotAdjust" x-cloak>
+                        <div class="sky-rot-head">
+                            <span>Framing rotation</span>
+                            <strong x-text="_skyRotCurrent().toFixed(1) + '°'"></strong>
+                            <button class="btn btn-sm" @click="skyRotAdjust = false" title="Close">✕</button>
+                        </div>
+                        <div class="sky-rot-row">
+                            <button class="btn btn-sm" @click="skyRotNudge(-1)" title="1 degree counter-clockwise">-1</button>
+                            <input type="range" min="0" max="359.9" step="0.1"
+                                   :value="_skyRotCurrent()" @input="skyRotSet($event.target.value)">
+                            <button class="btn btn-sm" @click="skyRotNudge(1)" title="1 degree clockwise">+1</button>
+                            <input type="text" inputmode="decimal" class="input-sm sky-rot-num"
+                                   :value="_skyRotCurrent().toFixed(1)" @change="skyRotSet($event.target.value)">
+                        </div>
+                        <div class="sky-rot-row">
+                            <button class="btn btn-sm btn-primary" @click="skyRotateNow()"
+                                    :disabled="!rotator.connected || !mount.connected || slewCenterJobId"
+                                    :title="!rotator.connected ? 'Connect a rotator first' : 'Solve, turn the rotator to this angle, solve again to confirm; the mount stays where it is'">Rotate now</button>
+                            <button class="btn btn-sm" @click="skyRotClear()"
+                                    :disabled="skyTargetRotDeg == null"
+                                    title="Drop the chosen angle and show the solved camera angle again">Follow solve</button>
+                            <span class="hint" x-show="!rotator.connected">No rotator: the angle is kept for framing and for PLAN targets.</span>
+                            <span class="hint" x-show="rotator.connected && skyTargetRotDeg != null">Slew &amp; Center will turn the rotator to this angle.</span>
+                        </div>
+                    </div>
+
                     <!-- Map-centre actions overlay (bottom-left). These
                          act on whatever's framed by the red target FOV
                          (the live map centre), NOT on the picked object
@@ -9540,6 +9575,12 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         </span>
                         <span x-show="slewCenterStatus?.rotation != null">
                             Rotation: <strong x-text="(slewCenterStatus?.rotation || 0).toFixed(1) + '°'"></strong>
+                        </span>
+                        <span x-show="slewCenterStatus?.targetRotation != null">
+                            Wanted: <strong x-text="(slewCenterStatus?.targetRotation || 0).toFixed(1) + '°'"></strong>
+                            <span x-show="slewCenterStatus?.rotationError != null">
+                                (off by <span x-text="Math.abs(slewCenterStatus?.rotationError || 0).toFixed(1) + '°'"></span>)
+                            </span>
                         </span>
                         <button class="btn btn-sm btn-danger" @click="cancelSlewCenter()"
                                 style="margin-left:auto">Cancel</button>

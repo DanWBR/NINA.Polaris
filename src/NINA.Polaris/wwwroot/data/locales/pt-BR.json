@@ -4832,5 +4832,22 @@
   "Show on sky map": "Mostrar no mapa do céu",
   "Could not read the coordinates. Try 05:35:17 -05:23:28, 5h35m17s -5d23m28s, or 83.82 -5.39.": "Não deu para ler as coordenadas. Tente 05:35:17 -05:23:28, 5h35m17s -5d23m28s ou 83.82 -5.39.",
   "RA must be between 0h and 24h (0° and 360°).": "RA precisa estar entre 0h e 24h (0° e 360°).",
-  "Dec must be between -90° and +90°.": "Dec precisa estar entre -90° e +90°."
+  "Dec must be between -90° and +90°.": "Dec precisa estar entre -90° e +90°.",
+  "↻ Rotation": "↻ Rotação",
+  "Turn the red target box to the framing angle you want; a rotator follows it on Slew & Center": "Gire a caixa vermelha do alvo até o ângulo de enquadramento desejado; um rotator a acompanha no Slew & Center",
+  "Framing rotation": "Rotação do enquadramento",
+  "1 degree counter-clockwise": "1 grau no sentido anti-horário",
+  "1 degree clockwise": "1 grau no sentido horário",
+  "Rotate now": "Girar agora",
+  "Connect a rotator first": "Conecte um rotator primeiro",
+  "Solve, turn the rotator to this angle, solve again to confirm; the mount stays where it is": "Resolve, gira o rotator até este ângulo e resolve de novo para confirmar; a montagem fica onde está",
+  "Follow solve": "Seguir o solve",
+  "Drop the chosen angle and show the solved camera angle again": "Descarta o ângulo escolhido e volta a mostrar o ângulo resolvido da câmera",
+  "No rotator: the angle is kept for framing and for PLAN targets.": "Sem rotator: o ângulo fica guardado para o enquadramento e para os alvos do PLAN.",
+  "Slew & Center will turn the rotator to this angle.": "O Slew & Center vai girar o rotator até este ângulo.",
+  "Wanted:": "Desejado:",
+  "(off by": "(erro de",
+  "Turning the rotator": "Girando o rotator",
+  "Rotating to {a}°": "Girando para {a}°",
+  "Rotate failed": "Falha ao girar"
 }
