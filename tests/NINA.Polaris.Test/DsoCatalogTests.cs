@@ -172,6 +172,11 @@ public class DsoCatalogTests {
         public string EnvironmentName { get; set; } = "Test";
 
         private static string LocateWwwroot() {
+            // The source tree, from this file's own path: the build output can
+            // live anywhere (a scratch directory outside the repo), and walking
+            // up from it then finds nothing and every test here is skipped.
+            var fromSource = Path.Combine(Path.GetDirectoryName(ThisFile())!, "..", "..", "src", "NINA.Polaris", "wwwroot");
+            if (Directory.Exists(fromSource)) return Path.GetFullPath(fromSource);
             var dir = AppContext.BaseDirectory;
             for (var i = 0; i < 8; i++) {
                 var candidate = Path.Combine(dir, "src", "NINA.Polaris", "wwwroot");
@@ -181,5 +186,66 @@ public class DsoCatalogTests {
             }
             return "wwwroot";
         }
+
+        private static string ThisFile([System.Runtime.CompilerServices.CallerFilePath] string path = "") => path;
+    }
+
+    // ----- Stars (scripts/build-star-catalog.py) -----
+    //
+    // Asked for from the field: "V1764 Cygni / WR 134" found nothing, because
+    // the search knew deep-sky objects and little else. The Bright Star
+    // Catalogue, the IAU proper names and the galactic Wolf-Rayet list now
+    // sit in the same table, findable by every designation people use.
+
+    [TestCase("WR 134", "WR 134")]
+    [TestCase("WR134", "WR 134")]
+    [TestCase("V1769 Cyg", "WR 134")]
+    [TestCase("V1769 Cygni", "WR 134")]
+    [TestCase("HD 191765", "WR 134")]
+    [TestCase("Betelgeuse", "Betelgeuse")]
+    [TestCase("alpha Ori", "Betelgeuse")]
+    [TestCase("alf Ori", "Betelgeuse")]
+    [TestCase("58 Ori", "Betelgeuse")]
+    [TestCase("HR 2061", "Betelgeuse")]
+    [TestCase("La Superba", "La Superba")]
+    [TestCase("Y CVn", "La Superba")]
+    [TestCase("Hind's Crimson Star", "Hind's Crimson Star")]
+    [TestCase("R Lep", "Hind's Crimson Star")]
+    [TestCase("Proxima", "Proxima Centauri")]
+    public async Task SearchAsync_Stars_FindTheStarFirst(string query, string expectedName) {
+        var hits = await _catalog.SearchAsync(query, 5);
+        Assert.That(hits, Is.Not.Empty, query);
+        Assert.That(hits[0].Name, Is.EqualTo(expectedName), query);
+    }
+
+    /// <summary>"P Cyg" is also a substring of "Alp Cyg" (Deneb), and Deneb is
+    /// brighter. The exact alias token has to win over the substring hit.</summary>
+    [Test]
+    public async Task SearchAsync_ExactAliasToken_BeatsABrighterSubstringHit() {
+        var hits = await _catalog.SearchAsync("P Cyg", 5);
+        Assert.That(hits.Select(h => h.Name).First(), Is.EqualTo("P Cygni"));
+    }
+
+    [Test]
+    public async Task SearchAsync_WolfRayet_HaveTheirOwnType() {
+        var hits = await _catalog.SearchAsync("WR 6", 3);
+        Assert.That(hits[0].Type, Is.EqualTo("Wolf-Rayet Star"));
+        Assert.That(hits[0].CommonName, Does.Contain("EZ CMa"));
+    }
+
+    /// <summary>The star tables are for searching, not for the bulk pools:
+    /// Tonight's Best iterates AllPlanningObjects and would rank nine
+    /// thousand naked-eye stars above every galaxy.</summary>
+    [Test]
+    public async Task LoadAllAsync_LeavesTheStarTablesOut() {
+        var all = await _catalog.LoadAllAsync(magCap: 14.0, minSizeNoMag: 10.0);
+        Assert.That(all.Any(o => o.Catalog is "HR" or "Star" or "WR"), Is.False);
+        Assert.That(all.Count, Is.GreaterThan(5_000), "the deep-sky pool itself is intact");
+    }
+
+    [Test]
+    public async Task GetTypesAsync_IncludesTheStarTypes() {
+        var types = await _catalog.GetTypesAsync();
+        Assert.That(types, Does.Contain("Wolf-Rayet Star").And.Contain("Carbon Star").And.Contain("Variable Star"));
     }
 }

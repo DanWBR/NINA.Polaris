@@ -30089,6 +30089,161 @@ function ninaApp() {
             }
         },
 
+        // ─── GoTo typed coordinates (issue #23) ───────────────────────────
+        //
+        // Targets normally come from the catalogue or the sky map. A newly
+        // found comet, a position pasted from another program, or a framing
+        // worked out elsewhere has no catalogue entry, so the mount can be
+        // sent to RA/Dec typed in. The parser takes what people actually
+        // paste: "05:35:17.3 -05:23:28", "5h35m17s -5d23m28s",
+        // "05 35 17 -05 23 28", "83.82 -5.39". Sexagesimal RA is always
+        // hours; a bare decimal RA is hours unless told it is degrees, because
+        // hours is what every other RA field in this UI means.
+        gotoCoords: {
+            open: false, ra: '', dec: '', raDecimalDegrees: false,
+            raHours: null, decDeg: null, error: '',
+        },
+
+        /// One coordinate: sexagesimal (h/d m s with any of ": h d ° m ′ ' s ″ \" or
+        /// spaces between parts) or decimal. Returns the value in the unit of
+        /// the leading part (hours for RA text, degrees for Dec text), or null.
+        _parseSexagesimal(text) {
+            let s = String(text ?? '').trim().replace(/[′’]/g, "'").replace(/[″”]/g, '"');
+            if (!s) return null;
+            let sign = 1;
+            if (/^[+-]/.test(s)) { if (s[0] === '-') sign = -1; s = s.slice(1).trim(); }
+            // Decimal number, optionally suffixed with a unit letter.
+            const dec = /^(\d+(?:\.\d+)?)\s*[hHdD°]?$/.exec(s);
+            if (dec) return sign * parseFloat(dec[1]);
+            // Sexagesimal: parts split by the usual separators.
+            const parts = s.split(/[\s:hHdD°mM'"sS]+/).filter(p => p.length);
+            if (parts.length < 2 || parts.length > 3) return null;
+            if (!parts.every(p => /^\d+(?:\.\d+)?$/.test(p))) return null;
+            const a = parseFloat(parts[0]), b = parseFloat(parts[1]), c = parts.length === 3 ? parseFloat(parts[2]) : 0;
+            if (b >= 60 || c >= 60) return null;
+            return sign * (a + b / 60 + c / 3600);
+        },
+
+        /// RA and Dec typed separately. `raDecimalDegrees` says how to read a
+        /// bare decimal RA. Returns { raHours, decDeg } or { error }.
+        parseRaDec(raText, decText, raDecimalDegrees) {
+            const raRaw = String(raText ?? '').trim(), decRaw = String(decText ?? '').trim();
+            let ra = this._parseSexagesimal(raRaw);
+            const dec = this._parseSexagesimal(decRaw);
+            if (ra == null || dec == null) return { error: 'Could not read the coordinates. Try 05:35:17 -05:23:28, 5h35m17s -5d23m28s, or 83.82 -5.39.' };
+            const raIsDecimal = /^[+-]?\d+(?:\.\d+)?\s*[hHdD°]?$/.test(raRaw);
+            const raSaysDegrees = /[dD°]$/.test(raRaw), raSaysHours = /[hH]$/.test(raRaw);
+            // A bare decimal past 24 can only be degrees; below that it is
+            // hours unless the caller (the unit switch) says degrees.
+            const degreesByRange = raIsDecimal && !raSaysHours && !raSaysDegrees && ra > 24 && ra < 360;
+            if (raIsDecimal && (raSaysDegrees || degreesByRange || (raDecimalDegrees && !raSaysHours))) ra = ra / 15;
+            if (ra < 0 || ra >= 24) return { error: 'RA must be between 0h and 24h (0° and 360°).' };
+            if (dec < -90 || dec > 90) return { error: 'Dec must be between -90° and +90°.' };
+            return { raHours: ra, decDeg: dec };
+        },
+
+        /// A single line holding both coordinates, as the sky search box gets
+        /// them. Splits at the sign of the declination when the two halves are
+        /// not already separated by a comma. Null when it is not a coordinate
+        /// pair (then it is an object name, and the search goes on as before).
+        parseRaDecLine(q) {
+            const s = String(q ?? '').trim();
+            if (!s || /[a-gi-zA-GI-Z]{2,}/.test(s.replace(/[hHdDmMsS]/g, ''))) return null;   // letters = a name
+            let ra, dec;
+            if (s.includes(',')) {
+                [ra, dec] = s.split(',').map(x => x.trim());
+            } else {
+                // The Dec starts at the last sign that is preceded by a space,
+                // or at the middle of an even run of space-separated parts.
+                const m = /^(.*?)\s+([+-]\S.*)$/.exec(s);
+                if (m) { ra = m[1]; dec = m[2]; }
+                else {
+                    const parts = s.split(/\s+/);
+                    if (parts.length % 2 !== 0) return null;
+                    ra = parts.slice(0, parts.length / 2).join(' ');
+                    dec = parts.slice(parts.length / 2).join(' ');
+                }
+            }
+            if (ra == null || dec == null) return null;
+            const r = this.parseRaDec(ra, dec, false);
+            return r.error ? null : r;
+        },
+
+        /// "05h35m17.3s, -05°23′28″" for display.
+        formatRaDec(raHours, decDeg) {
+            const ra = ((raHours % 24) + 24) % 24;
+            const rh = Math.floor(ra), rm = Math.floor((ra - rh) * 60), rs = ((ra - rh) * 60 - rm) * 60;
+            const sign = decDeg < 0 ? '-' : '+', d = Math.abs(decDeg);
+            const dd = Math.floor(d), dm = Math.floor((d - dd) * 60), ds = Math.round(((d - dd) * 60 - dm) * 60);
+            const p2 = n => String(n).padStart(2, '0');
+            return `${p2(rh)}h${p2(rm)}m${rs.toFixed(1).padStart(4, '0')}s ${sign}${p2(dd)}°${p2(dm)}′${p2(ds)}″`;
+        },
+
+        gotoCoordsOpen() {
+            this.gotoCoords.open = true;
+            this.gotoCoords.error = '';
+            this.$nextTick(() => { try { this.$refs.gotoRaInput?.focus(); } catch (_) { } });
+            this.gotoCoordsParse();
+        },
+
+        gotoCoordsParse() {
+            const g = this.gotoCoords;
+            if (!g.ra.trim() && !g.dec.trim()) { g.raHours = null; g.decDeg = null; g.error = ''; return; }
+            const r = this.parseRaDec(g.ra, g.dec, g.raDecimalDegrees);
+            if (r.error) { g.raHours = null; g.decDeg = null; g.error = (g.ra.trim() && g.dec.trim()) ? r.error : ''; return; }
+            g.raHours = r.raHours; g.decDeg = r.decDeg; g.error = '';
+        },
+
+        gotoCoordsPreview() {
+            const g = this.gotoCoords;
+            if (g.raHours == null) return '';
+            return this.formatRaDec(g.raHours, g.decDeg) + '  (' + (g.raHours * 15).toFixed(4) + '°, ' + g.decDeg.toFixed(4) + '°)';
+        },
+
+        _gotoCoordsTarget() {
+            const g = this.gotoCoords;
+            if (g.raHours == null) return null;
+            return {
+                name: this.formatRaDec(g.raHours, g.decDeg),
+                ra: g.raHours, dec: g.decDeg,
+                type: 'Coordinates', commonName: null, aliases: [], magnitude: null
+            };
+        },
+
+        async gotoCoordsSlew() {
+            const t = this._gotoCoordsTarget(); if (!t) return;
+            if (this._blockIfBelowHorizon(t.ra, t.dec)) return;
+            await this.slewTo(t.ra, t.dec);
+            this.gotoCoords.open = false;
+        },
+
+        async gotoCoordsSlewCenter() {
+            const t = this._gotoCoordsTarget(); if (!t) return;
+            if (this._blockIfBelowHorizon(t.ra, t.dec)) return;
+            try {
+                const data = await this._postSlewAndCenter({ ra: t.ra, dec: t.dec, toleranceArcsec: 30 });
+                if (!data) return;
+                this.slewCenterJobId = data.jobId;
+                this.slewCenterStatus = { state: 'pending', iteration: 0 };
+                this.slewCenterFailedLog = '';
+                this.filesSolveLog = '';
+                this.skySolverHidden = false;
+                this.toast('Slew & center started', 'ok');
+                this.startSlewCenterPolling();
+                this.gotoCoords.open = false;
+            } catch (e) {
+                this.toastFail('Slew & center failed', e);
+            }
+        },
+
+        /// Show the typed position on the sky map, with the usual target card.
+        gotoCoordsShowOnMap() {
+            const t = this._gotoCoordsTarget(); if (!t) return;
+            this.gotoCoords.open = false;
+            this.tab = 'sky';
+            this.$nextTick(() => this.selectSkyTarget(t));
+        },
+
         async slewTo(ra, dec) {
             try {
                 await this.apiPost('/api/telescope/slew', { ra, dec });
@@ -41571,6 +41726,19 @@ function ninaApp() {
         async searchSky() {
             const q = this.skySearch.trim();
             if (!q) return;
+            // A coordinate pair typed into the search box is a target too:
+            // "05:35:17 -05:23:28", "83.82 -5.39". The map goes there and the
+            // Slew / Slew & Center buttons work on it like on any object.
+            const coords = this.parseRaDecLine(q);
+            if (coords) {
+                this.selectSkyTarget({
+                    name: this.formatRaDec(coords.raHours, coords.decDeg),
+                    ra: coords.raHours, dec: coords.decDeg,
+                    type: 'Coordinates', commonName: null, aliases: [], magnitude: null
+                });
+                this.skyShowResults = false;
+                return;
+            }
             try {
                 // Always query BOTH sources in parallel and merge. The
                 // DSO catalog only knows deep-sky objects (Messier /

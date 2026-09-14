@@ -93,3 +93,24 @@ picked assignment of existing NGC / IC entries to Caldwell numbers.
 The mapping table is embedded in scripts/build-dso-catalog.py as
 public-domain coordinates; the underlying objects come from
 OpenNGC.
+
+-------------------------------------------------------------------
+Stars (catalog = HR, Star, WR; scripts/build-star-catalog.py)
+-------------------------------------------------------------------
+Yale Bright Star Catalogue, 5th revised edition (Hoffleit D., Warren
+W.H. Jr., 1991), VizieR V/50. Public domain; obtained through the
+VizieR service (see the CDS acknowledgement above).
+
+IAU Catalog of Star Names, IAU Working Group on Star Names (WGSN),
+https://www.iau.org/public/themes/naming_stars/ (file maintained at
+https://www.pas.rochester.edu/~emamajek/WGSN/IAU-CSN.txt). Creative
+Commons Attribution 4.0 International (CC BY 4.0). The proper names
+are attached to the Bright Star rows above; stars with no Bright
+Star entry become rows of their own.
+
+VIIth Catalogue of Galactic Wolf-Rayet Stars (van der Hucht K.A.,
+2001, New Astronomy Reviews 45, 135), VizieR III/215. Obtained
+through the VizieR service (see the CDS acknowledgement above).
+
+A few common nicknames (Hind's Crimson Star, La Superba, Herschel's
+Garnet Star, Merrill's Star) are added by the build script.

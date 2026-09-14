@@ -69,6 +69,11 @@ license files. Notable copyleft / restricted components:
                                       countryInfo from geonames.org, reduced
                                       and embedded as Resources/geo/*; see
                                       licenses/GEONAMES-LICENSE.txt)
+  * Star tables in dso.db .......... Yale Bright Star Catalogue (public
+                                      domain), IAU Catalog of Star Names
+                                      (CC BY 4.0), van der Hucht 2001 WR
+                                      catalogue via VizieR; see
+                                      wwwroot/catalogs/dso/LICENSE.txt
   * Natural Earth coastlines ....... public domain (1:50m admin-0 countries
                                       and lakes, naturalearthdata.com, as
                                       wwwroot/data/world-50m.json)
