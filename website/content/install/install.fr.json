@@ -280,7 +280,7 @@
       "color": "#0891b2",
       "summary": "Installez Ubuntu avec son propre installateur (il partitionne le SSD correctement et utilise tout le disque), puis lancez une commande. Cela installe tout ce que contient l'image prête à flasher et que le .deb seul n'apporte pas : INDI avec les pilotes tiers, PHD2, astrometry.net, ASTAP avec la base d80, et Polaris lui-même. C'est le script même dont l'image est issue, les deux ne peuvent donc pas diverger.",
       "steps": "curl -fsSL https://raw.githubusercontent.com/DanWBR/NINA.Polaris/master/scripts/install-polaris-linux.sh | sudo bash",
-      "notes": "Aucune image de 13 Go à écrire sur un disque interne. Ajoutez --addon pour installer sur une machine que vous utilisez déjà, sans créer l'utilisateur polaris, l'autologin, le nom d'hôte ni la politique de veille."
+      "notes": "Aucune image de 13 Go à écrire sur un disque interne. Ajoutez --addon pour installer sur une machine que vous utilisez déjà, sans créer l'utilisateur polaris, l'autologin, le nom d'hôte ni la politique de veille. Choisissez un Ubuntu LTS (24.04 recommandé ; 22.04 et 26.04 fonctionnent aussi) ou un dérivé comme Lubuntu 24.04 ou Linux Mint 22 : le PPA INDI ne compile les pilotes tiers que pour ces séries, et sur une version intermédiaire comme 25.04 ou 25.10 le script doit se rabattre sur les pilotes INDI de base."
     },
     {
       "name": "PC x86-64 (Debian / Ubuntu)",

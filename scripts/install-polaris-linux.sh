@@ -197,6 +197,33 @@ ppa_add() {
     ppa_retarget "$ppa" "$(ubuntu_codename)" "$(system_codename)"
 }
 
+# The Ubuntu series for which ppa:mutlaqja/ppa publishes indi-full (INDI server,
+# core and every third-party driver, prebuilt). Interim releases such as 25.04
+# and 25.10 get nothing, and on them apt reports indi-full with no candidate.
+# Checked against Launchpad on 2026-09-14; refresh when a new LTS appears.
+INDI_PPA_SERIES="focal (20.04) jammy (22.04) noble (24.04) resolute (26.04)"
+
+indi_ppa_covers() {
+    case " $INDI_PPA_SERIES " in *" $1 "*) return 0;; esac
+    return 1
+}
+
+# What to tell someone whose release the INDI PPA does not cover: which
+# release they are on, which ones have a build, and the shortest way out.
+indi_fallback_hint() {
+    local have; have="$(ubuntu_codename)"
+    echo "  indi-full has no candidate here: the INDI PPA publishes it for Ubuntu"
+    echo "  $INDI_PPA_SERIES,"
+    if [ -n "$have" ] && ! indi_ppa_covers "$have"; then
+        echo "  and this system is based on '$have', which is not one of them."
+    else
+        echo "  and apt could not see it on this system (was the PPA added above?)."
+    fi
+    echo "  Falling back to indi-bin: core drivers only, third-party ones will be missing."
+    echo "  For the full driver set, install on Ubuntu 24.04 LTS (noble) or a"
+    echo "  derivative of it such as Lubuntu 24.04 or Linux Mint 22, then rerun this script."
+}
+
 # PHD2 is in no Ubuntu release: it exists only in ppa:pch/phd2, and that build
 # links against libindi1, which exists only in the INDI PPA. Ubuntu's own INDI
 # (indi-bin 1.9.9) ships libindidriver1 / libindiclient1 instead. So the moment
@@ -366,8 +393,8 @@ INDI_PKG=indi-full
 if ! has_candidate indi-full; then
     if has_candidate indi-bin; then
         INDI_PKG=indi-bin
-        echo "  indi-full has no candidate here (the INDI PPA has nothing for this release)."
-        echo "  Falling back to indi-bin: core drivers only, third-party ones will be missing."
+        indi_fallback_hint
+        note_fail "indi-full unavailable for Ubuntu '$(ubuntu_codename)' (PPA covers $INDI_PPA_SERIES); installed indi-bin, third-party INDI drivers missing"
     else
         INDI_PKG=""
         note_fail "no INDI package available (neither indi-full nor indi-bin)"
