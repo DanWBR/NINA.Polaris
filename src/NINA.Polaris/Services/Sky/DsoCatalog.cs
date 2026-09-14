@@ -160,13 +160,24 @@ public class DsoCatalog {
                    -- hid every secondary common name in the catalogue.
                    OR common_name LIKE $aliasLike COLLATE NOCASE
                    OR aliases LIKE $aliasLike COLLATE NOCASE
+                -- An exact alias token ('P Cyg', 'HD 191765') ranks right after
+                -- an exact name. Without this a substring hit on a brighter
+                -- star wins: 'P Cyg' is also inside 'AlP Cyg' (an alias of
+                -- Deneb), and Deneb is brighter, so P Cygni came second to it.
                 ORDER BY (name = $exact COLLATE NOCASE) DESC,
+                         (aliases LIKE $tokMid COLLATE NOCASE
+                          OR aliases LIKE $tokHead COLLATE NOCASE
+                          OR aliases LIKE $tokTail COLLATE NOCASE
+                          OR aliases = $exact COLLATE NOCASE) DESC,
                          CASE WHEN magnitude IS NULL THEN 1 ELSE 0 END,
                          magnitude ASC
                 LIMIT $limit";
             cmd.Parameters.AddWithValue("$like", $"{q}%");
             cmd.Parameters.AddWithValue("$aliasLike", $"%{q}%");
             cmd.Parameters.AddWithValue("$exact", q);
+            cmd.Parameters.AddWithValue("$tokMid", $"%|{q}|%");
+            cmd.Parameters.AddWithValue("$tokHead", $"{q}|%");
+            cmd.Parameters.AddWithValue("$tokTail", $"%|{q}");
             cmd.Parameters.AddWithValue("$limit", Math.Max(1, limit));
             return ReadAll(cmd);
         } catch (Exception ex) {
@@ -393,6 +404,12 @@ public class DsoCatalog {
             using var conn = new SqliteConnection($"Data Source={_dbPath};Mode=ReadOnly");
             conn.Open();
             using var cmd = conn.CreateCommand();
+            // The star tables (HR, IAU-named, Wolf-Rayet; see
+            // scripts/build-star-catalog.py) exist for the search box and the
+            // atlas filter. They stay out of the bulk pools: nine thousand
+            // naked-eye stars at magnitude 6 would outrank every galaxy in
+            // Tonight's Best and paper the polar-alignment target picker.
+            const string notStars = "catalog NOT IN ('HR','Star','WR')";
             if (magCap.HasValue) {
                 var where = "magnitude IS NOT NULL AND magnitude <= $cap";
                 if (minSizeNoMag.HasValue) {
@@ -405,14 +422,15 @@ public class DsoCatalog {
                            ra_hours, dec_deg, magnitude, size_arcmin,
                            constellation, aliases
                     FROM objects
-                    WHERE " + where;
+                    WHERE " + notStars + " AND (" + where + ")";
                 cmd.Parameters.AddWithValue("$cap", magCap.Value);
             } else {
                 cmd.CommandText = @"
                     SELECT catalog, catalog_id, name, common_name, type,
                            ra_hours, dec_deg, magnitude, size_arcmin,
                            constellation, aliases
-                    FROM objects";
+                    FROM objects
+                    WHERE " + notStars;
             }
             return ReadAll(cmd);
         } catch (Exception ex) {
