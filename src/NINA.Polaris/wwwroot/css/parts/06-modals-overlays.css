@@ -2696,3 +2696,12 @@
     vertical-align: middle;
     margin-right: 4px;
 }
+
+/* GoTo typed coordinates modal */
+.goto-coords-frame {
+    max-width: 520px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+.goto-coords-frame .coords-grid { margin-top: 4px; }

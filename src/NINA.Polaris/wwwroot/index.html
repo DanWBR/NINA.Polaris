@@ -6929,6 +6929,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                          hour-angle nudge off the meridian) and stops
                                          tracking so the tube stays vertical. Same
                                          safety confirm as a normal slew. -->
+                                    <!-- Typed RA/Dec: for a position that is in no
+                                         catalogue (a new comet, a framing worked out in
+                                         another program). Issue #23. -->
+                                    <button class="btn btn-sm" @click="gotoCoordsOpen()"
+                                            :disabled="!mount.connected || mount.parked"
+                                            title="Type RA and Dec and slew there">
+                                        GoTo RA/Dec
+                                    </button>
                                     <button class="btn btn-sm" @click="pointToZenith()"
                                             :disabled="!mount.connected || mount.parked"
                                             title="Slew the mount to point nearly straight up so you can rest a flat panel on the aperture. Tracking stops on arrival so the tube stays vertical.">
@@ -9030,10 +9038,12 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             title="Search for an object by name (M31, NGC 7000, …)">🔍 Search</button>
                     <input type="text" class="search-input" x-ref="skySearchInput"
                            x-show="skySearchOpen" x-cloak
-                           placeholder="Search object (M31, NGC 7000, Orion...)"
+                           placeholder="Search object (M31, NGC 7000, Orion...) or RA Dec"
                            x-model="skySearch" @keyup.enter="searchSky()"
                            @keyup.escape="skySearchOpen = false"
                            @input="skyShowResults = false">
+                    <button class="btn btn-sm" @click="gotoCoordsOpen()"
+                            title="Type RA and Dec and send the mount there, or show the position on the map">🎯 RA/Dec</button>
                     <button class="btn btn-sm" @click="showAtlasFilters = !showAtlasFilters"
                             :class="showAtlasFilters ? 'btn-active' : ''">Filters</button>
                     <button class="btn btn-sm" @click="openMosaicPlanner()"
@@ -18138,6 +18148,50 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         title="Create a new multi-target Plan (PLAN tab), one target per panel">📋 Export to Plan</button>
                 <button class="btn btn-primary" @click="exportMosaicToSequencer(true)" :disabled="!mosaic.plan?.panels?.length"
                         title="Load the mosaic straight into the Advanced Sequencer">Load in Sequencer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- GoTo typed coordinates (issue #23). Accepts sexagesimal or decimal
+         in either field, shows what it understood before anything moves. -->
+    <div class="location-setup-modal" x-transition.opacity.duration.200ms
+         x-show="gotoCoords.open" x-cloak
+         @keydown.escape.window="gotoCoords.open && (gotoCoords.open = false)">
+        <div class="location-setup-frame goto-coords-frame">
+            <div class="map-pick-head">
+                <h2>🎯 GoTo coordinates</h2>
+                <button class="btn btn-sm" @click="gotoCoords.open = false" title="Close">✕</button>
+            </div>
+            <p class="hint" style="margin:0">
+                Sexagesimal or decimal: 05:35:17.3 or 5h35m17s or 83.82 for RA; -05:23:28 or -5d23m28s or -5.39 for Dec.
+            </p>
+            <div class="coords-grid">
+                <label for="goto-ra">RA</label>
+                <input id="goto-ra" type="text" inputmode="decimal" class="input-md" x-ref="gotoRaInput"
+                       x-model="gotoCoords.ra" @input="gotoCoordsParse()" @keyup.enter="gotoCoordsSlew()"
+                       placeholder="05:35:17.3">
+                <label for="goto-dec">Dec</label>
+                <input id="goto-dec" type="text" inputmode="decimal" class="input-md"
+                       x-model="gotoCoords.dec" @input="gotoCoordsParse()" @keyup.enter="gotoCoordsSlew()"
+                       placeholder="-05:23:28">
+                <label for="goto-raunit">Decimal RA is in</label>
+                <select id="goto-raunit" class="input-md" x-model="gotoCoords.raDecimalDegrees" @change="gotoCoordsParse()">
+                    <option :value="false">hours (5.59 = 05h35m)</option>
+                    <option :value="true">degrees (83.82 = 05h35m)</option>
+                </select>
+            </div>
+            <div class="map-pick-coords" x-show="gotoCoords.raHours != null" x-text="gotoCoordsPreview()"></div>
+            <div class="obs-location-error" x-show="gotoCoords.error" x-text="gotoCoords.error"></div>
+            <div class="location-setup-actions">
+                <button class="btn btn-primary" @click="gotoCoordsSlewCenter()"
+                        :disabled="gotoCoords.raHours == null || !mount.connected || slewCenterJobId"
+                        title="Slew, plate-solve and re-center on these coordinates">Slew &amp; Center</button>
+                <button class="btn" @click="gotoCoordsSlew()"
+                        :disabled="gotoCoords.raHours == null || !mount.connected"
+                        title="Slew without the plate-solve loop">Slew Only</button>
+                <button class="btn" @click="gotoCoordsShowOnMap()"
+                        :disabled="gotoCoords.raHours == null">Show on sky map</button>
+                <button class="btn" @click="gotoCoords.open = false">Cancel</button>
             </div>
         </div>
     </div>
