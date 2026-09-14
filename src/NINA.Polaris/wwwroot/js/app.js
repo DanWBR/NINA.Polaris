@@ -20587,9 +20587,13 @@ function ninaApp() {
             // with the mount frame (the operator's report: red appeared
             // unrotated / mirrored vs the mount). Fall back to the desired
             // framing angle when there's no solve yet.
-            const targetRot = Number.isFinite(this.solveRotationDeg)
-                ? this.solveRotationDeg
-                : (this.fov.rotationDeg || 0);
+            // A framing angle chosen in rotation mode wins over the solve:
+            // that is the whole point of turning the red box by hand.
+            const targetRot = Number.isFinite(this.skyTargetRotDeg)
+                ? this.skyTargetRotDeg
+                : Number.isFinite(this.solveRotationDeg)
+                    ? this.solveRotationDeg
+                    : (this.fov.rotationDeg || 0);
 
             // The displayed/captured frame is vertically flipped on the
             // client for cameras with the verticalFlipImage quirk (e.g.
@@ -25339,7 +25343,7 @@ function ninaApp() {
                 t.name = this.skyTarget?.name || ('RA ' + (c.raDeg / 15).toFixed(2) + 'h');
                 t.raHours = c.raDeg / 15;
                 t.decDeg = c.decDeg;
-                t.rotation = this.solveRotationDeg ?? (this.fov && this.fov.rotationDeg) ?? 0;
+                t.rotation = this.skyTargetRotDeg ?? this.solveRotationDeg ?? (this.fov && this.fov.rotationDeg) ?? 0;
                 this.planFramingActive = false;
                 this.tab = 'plan';
                 this._planPushTarget(t);
@@ -27682,6 +27686,7 @@ function ninaApp() {
         // Returns the started-job data ({ jobId, ... }) or null if declined.
         // Born from a near tripod-strike on an AM3 after a flip + guard trip.
         async _postSlewAndCenter(body) {
+            if (body && body.rotation === undefined) body = { ...body, ...this._skyRotForSlew() };
             // apiPost (→ apiFetch) THROWS ApiError on any non-2xx, so a 409
             // arrives as a thrown error, not a returned Response — we must
             // catch it (the old `resp.status === 409` check was dead code, which
@@ -30177,6 +30182,80 @@ function ninaApp() {
             const dd = Math.floor(d), dm = Math.floor((d - dd) * 60), ds = Math.round(((d - dd) * 60 - dm) * 60);
             const p2 = n => String(n).padStart(2, '0');
             return `${p2(rh)}h${p2(rm)}m${rs.toFixed(1).padStart(4, '0')}s ${sign}${p2(dd)}°${p2(dm)}′${p2(ds)}″`;
+        },
+
+        // ─── Framing rotation (SKY) ────────────────────────────────────────
+        //
+        // The red target box normally shows the camera's solved angle. In
+        // rotation mode the operator turns it with a slider, the way the
+        // ASIAIR framing wizard does, and the chosen sky angle rides along
+        // with every Slew & Center from the SKY tab: the loop solves, turns
+        // the rotator by the difference, solves again. Without a rotator
+        // the angle is still useful as a framing preview and as the
+        // rotation stored on a PLAN target.
+        skyRotAdjust: false,
+        skyTargetRotDeg: null,     // null = follow the solve, like before
+
+        skyRotToggle() {
+            this.skyRotAdjust = !this.skyRotAdjust;
+            if (this.skyRotAdjust && !Number.isFinite(this.skyTargetRotDeg)) {
+                this.skyTargetRotDeg = this._skyRotCurrent();
+            }
+        },
+
+        /// The angle the red box is showing right now.
+        _skyRotCurrent() {
+            if (Number.isFinite(this.skyTargetRotDeg)) return this.skyTargetRotDeg;
+            if (Number.isFinite(this.solveRotationDeg)) return this.solveRotationDeg;
+            return Number(this.fov?.rotationDeg) || 0;
+        },
+
+        skyRotSet(v) {
+            let d = Number(v);
+            if (!Number.isFinite(d)) return;
+            d = ((d % 360) + 360) % 360;
+            this.skyTargetRotDeg = Math.round(d * 10) / 10;
+            try { this._pushSkyFovOverlays && this._pushSkyFovOverlays(); } catch (_) { }
+        },
+
+        skyRotNudge(delta) { this.skyRotSet(this._skyRotCurrent() + delta); },
+
+        /// Back to following the plate solve.
+        skyRotClear() {
+            this.skyTargetRotDeg = null;
+            try { this._pushSkyFovOverlays && this._pushSkyFovOverlays(); } catch (_) { }
+        },
+
+        /// Sky angle to send with a Slew & Center from the SKY tab, or
+        /// nothing when there is no rotator to act on it.
+        _skyRotForSlew() {
+            if (!Number.isFinite(this.skyTargetRotDeg) || !this.rotator?.connected) return {};
+            return { rotation: this.skyTargetRotDeg };
+        },
+
+        /// Turn the camera to the chosen angle where the mount already
+        /// points: a center-only job with the rotation attached.
+        async skyRotateNow() {
+            if (!this.mount?.connected) { this.toast('Connect a mount first', 'warn'); return; }
+            if (!this.rotator?.connected) { this.toast('Connect a rotator first', 'warn'); return; }
+            if (!Number.isFinite(this.skyTargetRotDeg)) return;
+            if (this.slewCenterJobId) { this.toast('Slew & Center already running', 'warn'); return; }
+            try {
+                const data = await this._postSlewAndCenter({
+                    ra: this.mount.ra, dec: this.mount.dec, toleranceArcsec: 30,
+                    centerOnly: true, rotation: this.skyTargetRotDeg
+                });
+                if (!data) return;
+                this.slewCenterJobId = data.jobId;
+                this.slewCenterStatus = { state: 'pending', iteration: 0 };
+                this.slewCenterFailedLog = '';
+                this.filesSolveLog = '';
+                this.skySolverHidden = false;
+                this.toast(this.$t('Rotating to {a}°', { a: this.skyTargetRotDeg.toFixed(1) }), 'ok');
+                this.startSlewCenterPolling();
+            } catch (e) {
+                this.toastFail('Rotate failed', e);
+            }
         },
 
         gotoCoordsOpen() {
@@ -42774,6 +42853,7 @@ function ninaApp() {
                 case 'capturing':  return '📷';
                 case 'solving':    return '🧭';
                 case 'syncing':    return '🔄';
+                case 'rotating':   return '↻';
                 case 'centered':   return '✅';
                 case 'failed':     return '❌';
                 case 'cancelled':  return '⏹';
@@ -42787,6 +42867,7 @@ function ninaApp() {
                 case 'capturing':  return 'Capturing solve frame';
                 case 'solving':    return 'Plate solving';
                 case 'syncing':    return 'Syncing mount';
+                case 'rotating':   return 'Turning the rotator';
                 case 'centered':   return 'Centered';
                 case 'failed':     return 'Failed';
                 case 'cancelled':  return 'Cancelled';

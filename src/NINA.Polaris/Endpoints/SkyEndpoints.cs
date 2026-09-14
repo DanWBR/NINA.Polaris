@@ -81,8 +81,12 @@ public static class SkyEndpoints {
                 }
             }
 
+            // A requested sky angle only means something with a rotator on
+            // the rig; without one it is dropped rather than failing the slew.
+            double? wantRot = request.Rotation is double r && equip.Rotator is { IsConnected: true }
+                ? ((r % 360) + 360) % 360 : null;
             var job = slewCenter.StartJob(request.Ra, request.Dec, request.ToleranceArcsec,
-                request.CenterOnly, request.Force);
+                request.CenterOnly, request.Force, wantRot, request.RotationToleranceDeg ?? 0.5);
             return Results.Accepted(value: new {
                 jobId = job.Id,
                 target = new { request.Ra, request.Dec },
@@ -107,6 +111,9 @@ public static class SkyEndpoints {
                 actualDec = job.ActualDec,
                 errorArcsec = job.ErrorArcsec,
                 rotation = job.Rotation,
+                targetRotation = job.TargetRotation,
+                rotationError = job.RotationErrorDeg,
+                rotatorMoves = job.RotatorMoves,
                 scale = job.Scale,
                 error = job.Error
             });
@@ -741,7 +748,8 @@ public static class SkyEndpoints {
     }
 
     public record SlewAndCenterRequest(double Ra, double Dec, double ToleranceArcsec = 30.0,
-        bool CenterOnly = false, bool Force = false);
+        bool CenterOnly = false, bool Force = false,
+        double? Rotation = null, double? RotationToleranceDeg = null);
 
     /// <summary>POST body for <c>/api/sky/center-body</c>. <c>Body</c> is a
     /// friendly name (Sun/Moon/Mercury…Neptune). <c>OffsetDeg</c> is how far the

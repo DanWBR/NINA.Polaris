@@ -968,8 +968,10 @@
 
         // SWE-5: single combined label "Target — W°×H° — Rotation X°"
         // above the top edge. Rotation in [0, 360) to match ASIAIR /
-        // N.I.N.A. solver convention.
-        var rotPositive = ((rotDeg % 360) + 360) % 360;
+        // N.I.N.A. solver convention: the camera's sky angle alone, the
+        // same number the plate solve reports and the blue box shows.
+        // The parallactic part only tilts the drawing on screen.
+        var rotPositive = ((cameraRollDeg % 360) + 360) % 360;
         var label = document.getElementById('sky-target-label');
         if (label) label.textContent =
             'Target  ' + target.widthDeg.toFixed(2) + '° × '

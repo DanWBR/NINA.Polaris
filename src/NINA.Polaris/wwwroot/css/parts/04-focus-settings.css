@@ -1974,3 +1974,44 @@
 .af-advanced .af-params {
     margin-top: 8px;
 }
+
+/* SKY framing rotation panel: sits on the map, above the bottom action row,
+   so the slider is next to the red box it turns. */
+.sky-rot-adjust {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 64px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px 10px;
+    background: rgba(8, 12, 22, 0.78);
+    border: 1px solid rgba(255, 80, 80, 0.35);
+    border-radius: 8px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 6;
+    pointer-events: auto;
+}
+.sky-rot-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85em;
+}
+.sky-rot-head strong { font-variant-numeric: tabular-nums; }
+.sky-rot-head .btn { margin-left: auto; }
+.sky-rot-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.sky-rot-row input[type="range"] {
+    flex: 1 1 120px;
+    min-width: 80px;
+    accent-color: #ff5050;
+}
+.sky-rot-num { width: 64px; text-align: right; font-variant-numeric: tabular-nums; }
+.sky-rot-row .hint { font-size: 0.8em; opacity: 0.8; }

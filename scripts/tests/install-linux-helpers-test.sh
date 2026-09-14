@@ -28,10 +28,11 @@ ok()  { echo "  ok   $1"; }
 bad() { echo "  FAIL $1"; fails=$((fails + 1)); }
 
 # ---- the helpers, lifted out of the real script ----------------------------
-for fn in apt_recover apt_try_each has_candidate d80_installed d80_on_disk \n          system_codename ubuntu_codename ppa_retarget phd2_unsatisfiable; do
+for fn in apt_recover apt_try_each has_candidate d80_installed d80_on_disk \n          system_codename ubuntu_codename ppa_retarget phd2_unsatisfiable           indi_ppa_covers indi_fallback_hint; do
     sed -n "/^${fn}()[ {]/,/^}/p" "$SRC" >> "$WORK/helpers.sh"
 done
 sed -n '/^apt_recover(){/p' "$SRC" >> "$WORK/helpers.sh"
+sed -n '/^INDI_PPA_SERIES=/p' "$SRC" >> "$WORK/helpers.sh"
 note_fail() { NOTED+=("$*"); }
 # shellcheck disable=SC1090,SC1091
 . "$WORK/helpers.sh"
@@ -150,6 +151,29 @@ export SYS_CODENAME=noble
 printf 'ID=ubuntu\nUBUNTU_CODENAME=noble\n' > "$OS_RELEASE"
 [ "$(ubuntu_codename)" = "$(system_codename)" ] \
     && ok "plain Ubuntu: the two agree" || bad "plain Ubuntu disagreed"
+
+echo "== indi_fallback_hint: names the release and the ones the PPA covers =="
+indi_ppa_covers noble    && ok "noble is covered"    || bad "noble not covered"
+indi_ppa_covers jammy    && ok "jammy is covered"    || bad "jammy not covered"
+indi_ppa_covers plucky   && bad "plucky must not be covered" || ok "plucky is not covered"
+indi_ppa_covers ""       && bad "empty must not be covered"  || ok "empty is not covered"
+
+export SYS_CODENAME=plucky
+printf 'ID=ubuntu
+UBUNTU_CODENAME=plucky
+' > "$OS_RELEASE"
+hint="$(indi_fallback_hint)"
+grep -q "based on 'plucky', which is not one of them" <<<"$hint"     && ok "the machine's own series is named" || bad "hint: $hint"
+grep -q "noble (24.04)" <<<"$hint"     && ok "the covered series are listed" || bad "hint lacks the series list"
+grep -q "Ubuntu 24.04 LTS" <<<"$hint"     && ok "points at the LTS" || bad "hint lacks the LTS suggestion"
+grep -q "indi-bin" <<<"$hint"     && ok "says what it falls back to" || bad "hint lacks indi-bin"
+
+export SYS_CODENAME=noble
+printf 'ID=ubuntu
+UBUNTU_CODENAME=noble
+' > "$OS_RELEASE"
+hint="$(indi_fallback_hint)"
+grep -q "was the PPA added above" <<<"$hint"     && ok "on a covered series it blames the PPA step instead" || bad "hint: $hint"
 
 echo "== ppa_retarget: rewrites the suite, and only for the named PPA =="
 APT_SOURCES_DIR="$WORK/sources.list.d"; mkdir -p "$APT_SOURCES_DIR"

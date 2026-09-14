@@ -110,9 +110,11 @@ When the plan finishes (or reaches its end condition), Polaris can:
 
 - PLAN and ADV share one engine - start one and the other is blocked, with a
   clear message.
-- **Single-frame targets** in this version; mosaic targets and
-  rotator-driven auto-rotation are planned for a later pass (today
-  `Rotation` is record-keeping unless a rotator move is added to the flow).
+- **Single-frame targets** in this version; mosaic targets are planned
+  for a later pass. `Rotation` is stored with the target and is what the
+  SKY tab's framing rotation seeds; the PLAN itself does not turn a
+  rotator yet, use Slew & Center from SKY (see
+  [Framing rotation and rotators](sky-explorer.md#framing-rotation-and-rotators)).
 
 ---
 

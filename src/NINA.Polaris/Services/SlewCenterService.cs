@@ -69,7 +69,8 @@ public class SlewCenterService {
     }
 
     public SlewCenterJob StartJob(double ra, double dec, double toleranceArcsec = 30,
-            bool skipInitialSlew = false, bool force = false) {
+            bool skipInitialSlew = false, bool force = false,
+            double? targetRotation = null, double rotationToleranceDeg = 0.5) {
         var job = new SlewCenterJob {
             Id = Guid.NewGuid().ToString("N"),
             TargetRa = ra,
@@ -77,6 +78,8 @@ public class SlewCenterService {
             ToleranceArcsec = toleranceArcsec,
             SkipInitialSlew = skipInitialSlew,
             Force = force,
+            TargetRotation = targetRotation,
+            RotationToleranceDeg = rotationToleranceDeg > 0 ? rotationToleranceDeg : 0.5,
             State = SlewCenterState.Pending,
             CreatedAt = DateTime.UtcNow
         };
@@ -116,7 +119,9 @@ public class SlewCenterService {
     }
 
     private async Task RunJobAsync(SlewCenterJob job, CancellationToken ct) {
-        const int maxIterations = 5;
+        // A rotator adds its own convergence steps (and possibly one to learn
+        // its direction), so the budget grows when a sky angle was requested.
+        int maxIterations = job.TargetRotation != null ? 7 : 5;
         // Per-rig knobs so long-FL setups don't saturate Sirius on a
         // hardcoded 5s frame and short-FL setups don't time out
         // waiting for stars at gain 0. Defaults match the previous
@@ -298,6 +303,14 @@ public class SlewCenterService {
 
             try {
 
+            // Rotator convergence bookkeeping: the sky-angle error after the
+            // previous solve, and whether the rotator moved since. When a move
+            // made the error worse the rotator turns the other way for this
+            // camera, so the sign flips for the rest of the job.
+            double? lastRotErr = null;
+            bool rotatorMovedLastIter = false;
+            bool skipNextSlew = false;
+
             for (int i = 0; i < maxIterations; i++) {
                 ct.ThrowIfCancellationRequested();
                 job.Iteration = i + 1;
@@ -307,10 +320,14 @@ public class SlewCenterService {
                 // already pointing at (roughly) the field, so we go
                 // straight to capture + solve + sync and let the
                 // convergence loop nudge it in. Later iterations still
-                // slew to apply the corrected coordinates.
+                // slew to apply the corrected coordinates, except when the
+                // only thing left to fix was the rotation.
                 if (i == 0 && job.SkipInitialSlew) {
                     _logger.LogInformation(
                         "Center-only: skipping initial slew, refining current pointing");
+                } else if (skipNextSlew) {
+                    skipNextSlew = false;
+                    _logger.LogInformation("Pointing already within tolerance; re-solving after the rotator move");
                 } else {
                     job.State = SlewCenterState.Slewing;
                     _logger.LogInformation("Slew-and-center iteration {I}: slewing to RA={Ra:F4} Dec={Dec:F4}",
@@ -502,13 +519,44 @@ public class SlewCenterService {
                     TryUpdateFocalLengthFromSolve(solveResult.ScaleArcsecPerPixel, job);
                 }
 
+                // Rotation: only when the caller asked for a sky angle and a
+                // rotator is connected. The error is taken modulo 180 because
+                // a rectangular sensor frames the same field either way up.
+                double? rotErr = null;
+                var rotator = _equip.Rotator;
+                if (job.TargetRotation is double wantPa && rotator is { IsConnected: true }) {
+                    rotErr = RotationErrorDeg(wantPa, solveResult.RotationDeg);
+                    job.RotationErrorDeg = rotErr;
+                    if (rotatorMovedLastIter && lastRotErr is double prev
+                            && Math.Abs(rotErr.Value) > Math.Abs(prev) * 0.9) {
+                        _rotatorSkySign = -_rotatorSkySign;
+                        _logger.LogInformation(
+                            "Rotator move did not reduce the sky-angle error ({Prev:F1} -> {Now:F1}); "
+                            + "reversing the direction for this camera", prev, rotErr.Value);
+                    }
+                    lastRotErr = rotErr;
+                    rotatorMovedLastIter = false;
+                    _logger.LogInformation("Sky angle {Pa:F1}°, wanted {Want:F1}°, error {Err:F1}° (tolerance {Tol:F1}°)",
+                        solveResult.RotationDeg, wantPa, rotErr.Value, job.RotationToleranceDeg);
+                }
+
                 // Step 5: Check convergence
-                if (errorArcsec <= job.ToleranceArcsec) {
+                bool posOk = errorArcsec <= job.ToleranceArcsec;
+                bool rotOk = rotErr == null || Math.Abs(rotErr.Value) <= job.RotationToleranceDeg;
+                if (posOk && rotOk) {
                     job.State = SlewCenterState.Centered;
                     _logger.LogInformation("Centered! Error {Err:F1}\" within tolerance {Tol:F0}\"",
                         errorArcsec, job.ToleranceArcsec);
                     return;
                 }
+
+                if (!rotOk && rotator != null) {
+                    job.State = SlewCenterState.Rotating;
+                    await MoveRotatorBySkyDeltaAsync(rotator, rotErr!.Value, job, ct);
+                    rotatorMovedLastIter = true;
+                }
+
+                if (posOk) { skipNextSlew = true; continue; }
 
                 // Step 6: Sync mount and prepare for next iteration
                 job.State = SlewCenterState.Syncing;
@@ -538,7 +586,9 @@ public class SlewCenterService {
             // mount that lands at e.g. 18" against an 11" goal but a 30"
             // request is centred for the user's purposes. Only fail when
             // we're outside even the requested tolerance.
-            if (job.ErrorArcsec > 0 && job.ErrorArcsec <= requestedTol) {
+            bool rotWithin = job.RotationErrorDeg == null
+                || Math.Abs(job.RotationErrorDeg.Value) <= job.RotationToleranceDeg;
+            if (job.ErrorArcsec > 0 && job.ErrorArcsec <= requestedTol && rotWithin) {
                 job.State = SlewCenterState.Centered;
                 _logger.LogInformation(
                     "Accepted at {Err:F1}\" (within requested {Req:F0}\", goal was {Goal:F1}\")",
@@ -547,7 +597,9 @@ public class SlewCenterService {
             }
 
             job.State = SlewCenterState.Failed;
-            job.Error = $"Did not converge after {maxIterations} iterations (last error: {job.ErrorArcsec:F1}\")";
+            job.Error = rotWithin
+                ? $"Did not converge after {maxIterations} iterations (last error: {job.ErrorArcsec:F1}\")"
+                : $"Rotation did not converge after {maxIterations} iterations (last error: {job.RotationErrorDeg:F1}°)";
 
             } finally {
                 // FIELD-1: restart the stream with the operator's saved
@@ -677,6 +729,54 @@ public class SlewCenterService {
             || e.Contains("insufficient stars");
     }
 
+    // Which way the rotator's mechanical angle moves the sky angle: +1 when
+    // they increase together, -1 when opposed. Learned from the first move
+    // that makes the error worse, kept for the life of the process.
+    private static int _rotatorSkySign = 1;
+    internal static int RotatorSkySign { get => _rotatorSkySign; set => _rotatorSkySign = value; }
+
+    /// <summary>
+    /// Signed sky-angle error, target minus solved, folded into (-90, 90]:
+    /// a rectangular sensor rotated by 180 degrees frames the same field,
+    /// so the shorter of the two ways round is always taken.
+    /// </summary>
+    internal static double RotationErrorDeg(double targetPa, double solvedPa) {
+        double d = (targetPa - solvedPa) % 180.0;
+        if (d > 90.0) d -= 180.0;
+        else if (d <= -90.0) d += 180.0;
+        return d;
+    }
+
+    /// <summary>Mechanical angle to command so the sky angle changes by
+    /// <paramref name="skyDeltaDeg"/>, wrapped into [0, 360).</summary>
+    internal static double NextMechanicalAngle(double currentMech, double skyDeltaDeg, int sign) {
+        double m = (currentMech + sign * skyDeltaDeg) % 360.0;
+        return m < 0 ? m + 360.0 : m;
+    }
+
+    private async Task MoveRotatorBySkyDeltaAsync(NINA.INDI.Devices.IndiRotator rotator,
+            double skyDeltaDeg, SlewCenterJob job, CancellationToken ct) {
+        double current = rotator.Position;
+        if (double.IsNaN(current))
+            throw new InvalidOperationException("The rotator does not report its angle");
+        double next = NextMechanicalAngle(current, skyDeltaDeg, _rotatorSkySign);
+        _logger.LogInformation("Rotator: {Cur:F1}° -> {Next:F1}° (sky delta {Delta:F1}°, sign {Sign})",
+            current, next, skyDeltaDeg, _rotatorSkySign);
+        _progress?.Append($"-- rotator {current:0.0}° -> {next:0.0}° --");
+        await rotator.MoveToAsync(next, ct);
+        job.RotatorMoves++;
+        // The driver flips the property to Busy on its own time; give it a
+        // beat before trusting a non-Busy state to mean "done".
+        await Task.Delay(700, ct);
+        for (int i = 0; i < 240; i++) {
+            ct.ThrowIfCancellationRequested();
+            if (!rotator.IsMoving) break;
+            await Task.Delay(500, ct);
+        }
+        // Settle so the solve frame is not smeared by the last few steps.
+        await Task.Delay(500, ct);
+    }
+
     private static double AngularSeparationArcsec(double ra1Hours, double dec1Deg,
         double ra2Hours, double dec2Deg) {
         var ra1Rad = ra1Hours * 15.0 * Math.PI / 180.0;
@@ -711,6 +811,12 @@ public class SlewCenterJob {
     public double? ActualDec { get; set; }
     public double? ErrorArcsec { get; set; }
     public double? Rotation { get; set; }
+    /// <summary>Sky position angle the camera should end up at, when a rotator is to be driven.</summary>
+    public double? TargetRotation { get; set; }
+    public double RotationToleranceDeg { get; set; } = 0.5;
+    /// <summary>Signed sky-angle error after the last solve, folded into (-90, 90].</summary>
+    public double? RotationErrorDeg { get; set; }
+    public int RotatorMoves { get; set; }
     public double? Scale { get; set; }
     /// <summary>Focal length (mm) derived from the first successful solve in this job, if any.</summary>
     public double? DerivedFocalLengthMm { get; set; }
@@ -727,6 +833,7 @@ public enum SlewCenterState {
     Capturing,
     Solving,
     Syncing,
+    Rotating,
     Centered,
     Failed,
     Cancelled
