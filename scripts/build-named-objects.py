@@ -377,7 +377,88 @@ OTHER = [
       hms(7, 18, 30), dms(-1, 13, 13, 36), 11.5, 8.0, "CMa", ["Thor's Helmet", "Thors Helmet", "NGC 2359", "Gum 4", "Sh2-298"]),
 ]
 
-OBJECTS = QUASARS + LENSES + PULSARS + BLACK_HOLES + GROUPS + GALAXIES + REMNANTS + STARS + OTHER
+# ---- historical bright novae and supernovae -----------------------------------
+NOVAE = [
+    o("SAnd", "S Andromedae", "SN 1885A, first supernova seen in another galaxy (M31)", "Nova",
+      hms(0, 42, 43.0), dms(1, 41, 16, 4), 21.0, None, "And", ["S Andromedae", "S And", "SN 1885A", "SN1885A"]),
+    o("GKPer", "GK Persei", "Nova Persei 1901, with expanding Firework Nebula", "Nova",
+      hms(3, 31, 12.01), dms(1, 43, 54, 15.5), 13.0, 1.5, "Per", ["GK Per", "GK Persei", "Nova Persei 1901", "Nova Per 1901", "Firework Nebula"]),
+    o("V603Aql", "V603 Aquilae", "Nova Aquilae 1918, brightest nova of the 20th century", "Nova",
+      hms(18, 48, 54.64), dms(1, 0, 35, 2.9), 11.8, None, "Aql", ["V603 Aql", "V603 Aquilae", "Nova Aquilae 1918", "Nova Aql 1918"]),
+    o("DQHer", "DQ Herculis", "Nova Herculis 1934, intermediate polar", "Nova",
+      hms(18, 7, 30.25), dms(1, 45, 51, 32.6), 14.5, None, "Her", ["DQ Her", "DQ Herculis", "Nova Herculis 1934", "Nova Her 1934"]),
+    o("CPPup", "CP Puppis", "Nova Puppis 1942", "Nova",
+      hms(8, 11, 38.09), dms(-1, 35, 21, 4.9), 15.0, None, "Pup", ["CP Pup", "CP Puppis", "Nova Puppis 1942", "Nova Pup 1942"]),
+    o("V1500Cyg", "V1500 Cygni", "Nova Cygni 1975, fastest bright nova", "Nova",
+      hms(21, 11, 36.61), dms(1, 48, 9, 1.9), 17.0, None, "Cyg", ["V1500 Cyg", "V1500 Cygni", "Nova Cygni 1975", "Nova Cyg 1975"]),
+    o("V1974Cyg", "V1974 Cygni", "Nova Cygni 1992", "Nova",
+      hms(20, 30, 31.61), dms(1, 52, 37, 51.3), 16.5, None, "Cyg", ["V1974 Cyg", "V1974 Cygni", "Nova Cygni 1992", "Nova Cyg 1992"]),
+    o("V339Del", "V339 Delphini", "Nova Delphini 2013", "Nova",
+      hms(20, 23, 30.68), dms(1, 20, 46, 3.8), 17.0, None, "Del", ["V339 Del", "V339 Delphini", "Nova Delphini 2013", "Nova Del 2013", "PNV J20233073+2046041"]),
+    o("V1405Cas", "V1405 Cassiopeiae", "Nova Cassiopeiae 2021", "Nova",
+      hms(23, 24, 47.73), dms(1, 61, 11, 14.8), 15.0, None, "Cas", ["V1405 Cas", "V1405 Cassiopeiae", "Nova Cassiopeiae 2021", "Nova Cas 2021"]),
+    o("V1324Sco", "V1324 Scorpii", "Nova Scorpii 2012, gamma-ray nova", "Nova",
+      hms(17, 50, 53.94), dms(-1, 32, 37, 21.0), 18.0, None, "Sco", ["V1324 Sco", "V1324 Scorpii", "Nova Scorpii 2012", "Nova Sco 2012"]),
+    o("USco", "U Scorpii", "Fastest recurrent nova", "Nova",
+      hms(16, 22, 30.78), dms(-1, 17, 52, 42.8), 18.0, None, "Sco", ["U Sco", "U Scorpii"]),
+    o("V407Cyg", "V407 Cygni", "Symbiotic nova of 2010, first gamma-ray nova", "Nova",
+      hms(21, 2, 13.05), dms(1, 45, 46, 30.5), 12.0, None, "Cyg", ["V407 Cyg", "V407 Cygni", "Nova Cygni 2010"]),
+    o("SN1993J", "SN 1993J", "Bright supernova in M81", "Nova",
+      hms(9, 55, 24.77), dms(1, 69, 1, 13.7), 22.0, None, "UMa", ["SN 1993J", "SN1993J"]),
+    o("SN2011fe", "SN 2011fe", "Nearby Type Ia supernova in M101", "Nova",
+      hms(14, 3, 5.81), dms(1, 54, 16, 25.4), 22.0, None, "UMa", ["SN 2011fe", "SN2011fe", "PTF 11kly"]),
+    o("SN2014J", "SN 2014J", "Type Ia supernova in M82", "Nova",
+      hms(9, 55, 42.14), dms(1, 69, 40, 26.0), 22.0, None, "UMa", ["SN 2014J", "SN2014J"]),
+    o("SN2023ixf", "SN 2023ixf", "Bright 2023 supernova in M101", "Nova",
+      hms(14, 3, 38.56), dms(1, 54, 18, 42.0), 22.0, None, "UMa", ["SN 2023ixf", "SN2023ixf"]),
+]
+
+# ---- isolated neutron stars: the Magnificent Seven and Calvera --------------
+ISOLATED_NS = [
+    o("RXJ0720", "RX J0720.4-3125", "Magnificent Seven neutron star", "Neutron Star",
+      hms(7, 20, 24.96), dms(-1, 31, 25, 50.1), 26.6, None, "CMa", ["RX J0720.4-3125", "RXJ0720.4-3125"]),
+    o("RXJ1308", "RX J1308.6+2127", "Magnificent Seven neutron star (RBS 1223)", "Neutron Star",
+      hms(13, 8, 48.27), dms(1, 21, 27, 6.8), 28.6, None, "Com", ["RX J1308.6+2127", "RBS 1223", "RBS1223"]),
+    o("RXJ1605", "RX J1605.3+3249", "Magnificent Seven neutron star", "Neutron Star",
+      hms(16, 5, 18.52), dms(1, 32, 49, 18.0), 27.2, None, "CrB", ["RX J1605.3+3249", "RBS 1556", "RBS1556"]),
+    o("RXJ0806", "RX J0806.4-4123", "Magnificent Seven neutron star", "Neutron Star",
+      hms(8, 6, 23.40), dms(-1, 41, 22, 30.9), None, None, "Pup", ["RX J0806.4-4123", "RXJ0806.4-4123"]),
+    o("RXJ0420", "RX J0420.0-5022", "Magnificent Seven neutron star", "Neutron Star",
+      hms(4, 20, 1.95), dms(-1, 50, 22, 48.1), None, None, "Dor", ["RX J0420.0-5022", "RXJ0420.0-5022"]),
+    o("RXJ2143", "RX J2143.0+0654", "Magnificent Seven neutron star (RBS 1774)", "Neutron Star",
+      hms(21, 43, 3.38), dms(1, 6, 54, 17.5), None, None, "Peg", ["RX J2143.0+0654", "RBS 1774", "RBS1774"]),
+    o("Calvera", "Calvera", "Isolated neutron star far above the Galactic plane", "Neutron Star",
+      hms(14, 12, 55.84), dms(1, 79, 22, 3.7), None, None, "UMi", ["Calvera", "1RXS J141256.0+792204"]),
+    o("PSRJ0108", "PSR J0108-1431", "One of the nearest and faintest pulsars", "Pulsar",
+      hms(1, 8, 8.35), dms(-1, 14, 31, 50.4), None, None, "Cet", ["PSR J0108-1431", "PSRJ0108-1431"]),
+]
+
+# ---- more gravitational lenses -----------------------------------------------
+MORE_LENSES = [
+    o("Abell2218", "Abell 2218", "Cluster with spectacular lensed arcs", "Gravitational Lens",
+      hms(16, 35, 54), dms(1, 66, 13, 0), 16.0, 4.0, "Dra", ["Abell 2218", "A2218"]),
+    o("CheshireCat", "Cheshire Cat", "Lensed galaxy group that looks like a smiling cat", "Gravitational Lens",
+      hms(10, 38, 43.6), dms(1, 48, 49, 18), 19.0, 0.5, "UMa", ["Cheshire Cat", "SDSS J1038+4849", "SDSSJ1038+4849"]),
+    o("PG1115", "PG 1115+080", "Quadruply lensed quasar", "Gravitational Lens",
+      hms(11, 18, 16.95), dms(1, 7, 45, 58.2), 16.9, None, "Leo", ["PG 1115+080", "PG1115+080"]),
+    o("RXJ1131", "RX J1131-1231", "Quadruply lensed quasar with a spinning black hole", "Gravitational Lens",
+      hms(11, 31, 51.6), dms(-1, 12, 31, 57), 17.0, None, "Crt", ["RX J1131-1231", "RXJ1131-1231"]),
+    o("DoubleRing", "SDSS J0946+1006", "Double Einstein ring", "Gravitational Lens",
+      hms(9, 46, 56.68), dms(1, 10, 6, 52.8), 17.5, None, "Leo", ["SDSS J0946+1006", "SDSSJ0946+1006", "Double Einstein Ring"]),
+    o("SunburstArc", "Sunburst Arc", "Brightest known lensed galaxy", "Gravitational Lens",
+      hms(15, 50, 0.4), dms(-1, 78, 11, 5), 17.0, 1.0, "Aps", ["Sunburst Arc", "PSZ1 G311.65-18.48"]),
+    o("CosmicEye", "Cosmic Eye", "Lensed star-forming galaxy", "Gravitational Lens",
+      hms(21, 35, 12.7), dms(-1, 1, 1, 43), 20.0, None, "Aqr", ["Cosmic Eye", "LBG J213512.73-010143"]),
+    o("MoltenRing", "Molten Ring", "Nearly complete Einstein ring imaged by Hubble", "Gravitational Lens",
+      hms(22, 0, 58.3), dms(-1, 60, 32, 40), 19.0, None, "Ind", ["Molten Ring", "GAL-CLUS-022058s", "GAL-CLUS-022058s Ring"]),
+    o("B1938", "B1938+666", "Complete Einstein ring", "Gravitational Lens",
+      hms(19, 38, 25.3), dms(1, 66, 48, 53), 20.0, None, "Dra", ["B1938+666", "JVAS B1938+666"]),
+    o("Abell1689", "Abell 1689", "Most massive lensing cluster with hundreds of arcs", "Gravitational Lens",
+      hms(13, 11, 29.5), dms(-1, 1, 20, 17), 15.9, 4.0, "Vir", ["Abell 1689", "A1689"]),
+]
+
+OBJECTS = (QUASARS + LENSES + MORE_LENSES + PULSARS + ISOLATED_NS + BLACK_HOLES + GROUPS
+           + GALAXIES + REMNANTS + NOVAE + STARS + OTHER)
 
 
 def build(db_path: Path):

@@ -165,7 +165,7 @@ public class DsoCatalogTests {
     /// <summary>Mirrors the pattern from CometEphemerisServiceTests:
     /// resolve the real wwwroot under src/NINA.Polaris/ so the bundled
     /// dso.db is found at test time.</summary>
-    private class TestEnv : IWebHostEnvironment {
+    internal class TestEnv : IWebHostEnvironment {
         public string WebRootPath { get; set; } = LocateWwwroot();
         public IFileProvider WebRootFileProvider { get; set; } = null!;
         public string ApplicationName { get; set; } = "tests";
@@ -188,6 +188,9 @@ public class DsoCatalogTests {
             }
             return "wwwroot";
         }
+
+        public static NINA.Polaris.Services.Sky.DsoCatalog OpenBundled()
+            => new(new TestEnv(), NullLogger<NINA.Polaris.Services.Sky.DsoCatalog>.Instance);
 
         private static string ThisFile([System.Runtime.CompilerServices.CallerFilePath] string path = "") => path;
     }

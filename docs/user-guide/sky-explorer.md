@@ -137,6 +137,8 @@ are always on the map whatever the magnitude cap (most are far fainter
 than it), searchable by every common designation, and listed under the
 Atlas filter as catalog "Notable" with their own types ("Quasar",
 "Pulsar", "Black Hole", "Gravitational Lens", "Dwarf Galaxy", ...).
+Tonight's Best lists them under their own **Notable** chip: every one
+that peaks above 30° tonight, with no brightness gate, ordered by score.
 
 The AGC entry is magnitude-trimmed at m10 < 17 to keep the brightest
 ~30% of the 2712-cluster catalog - fainter clusters require deep

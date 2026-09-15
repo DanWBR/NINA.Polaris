@@ -4849,5 +4849,11 @@
   "(off by": "(écart de",
   "Turning the rotator": "Rotation du rotateur",
   "Rotating to {a}°": "Rotation vers {a}°",
-  "Rotate failed": "Échec de la rotation"
+  "Rotate failed": "Échec de la rotation",
+  "Notable": "Remarquables",
+  "Galaxies": "Galaxies",
+  "Nebulae": "Nébuleuses",
+  "Clusters": "Amas",
+  "Planets": "Planètes",
+  "Comets": "Comètes"
 }

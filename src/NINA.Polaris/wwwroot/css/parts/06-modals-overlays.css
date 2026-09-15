@@ -271,6 +271,7 @@
 .tonight-card--planet { border-left: 3px solid #ffe082; }
 .tonight-card--dso    { border-left: 3px solid #90caf9; }
 .tonight-card--comet  { border-left: 3px solid #ce93d8; }
+.tonight-card--notable { border-left: 3px solid #ffab91; }
 
 .tonight-thumb {
     width: 80px;
