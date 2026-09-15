@@ -4847,5 +4847,11 @@
   "(off by": "(error de",
   "Turning the rotator": "Girando el rotador",
   "Rotating to {a}°": "Girando a {a}°",
-  "Rotate failed": "Fallo al girar"
+  "Rotate failed": "Fallo al girar",
+  "Notable": "Notables",
+  "Galaxies": "Galaxias",
+  "Nebulae": "Nebulosas",
+  "Clusters": "Cúmulos",
+  "Planets": "Planetas",
+  "Comets": "Cometas"
 }

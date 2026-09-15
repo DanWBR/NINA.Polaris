@@ -609,18 +609,17 @@ public sealed partial class NativeGuider {
 
         SetActivity("Selecting");
         int w = img.Properties.Width, h = img.Properties.Height;
-        var detector = new NINA.Image.ImageAnalysis.StarDetector();
-        var stars = detector.Detect(img.Data, w, h);
+        var stars = NewGuideStarDetector().Detect(img.Data, w, h);
 
         int margin = SearchRegion + 5;
-        double satGuard = (1 << Math.Max(1, img.Properties.BitDepth)) - 1;
+        double satGuard = SaturationLevel(img.Properties.BitDepth, img.Properties.SignificantBitDepth, img.Data);
         double minSep = SearchRegion * 3.0;
 
         var refs = new List<(double x, double y)> { (_lockX, _lockY) };
         foreach (var s in stars
                      .Where(s => s.X >= margin && s.Y >= margin &&
                                  s.X <= w - margin && s.Y <= h - margin)
-                     .Where(s => !(satGuard > 1 && s.Peak >= satGuard * 0.95))
+                     .Where(s => !IsSaturated(s, satGuard))
                      .OrderByDescending(s => s.Flux)) {
             if (refs.Count >= maxStars) break;
             bool near = refs.Any(r => (r.x - s.X) * (r.x - s.X) +
@@ -728,7 +727,7 @@ public sealed partial class NativeGuider {
         double bestDist = double.MaxValue;
         foreach (var s in stars) {
             if (s.X < margin || s.Y < margin || s.X > width - margin || s.Y > height - margin) continue;
-            if (satGuard > 1 && s.Peak >= satGuard * 0.95) continue;
+            if (IsSaturated(s, satGuard)) continue;
             var dx = s.X - lockX;
             var dy = s.Y - lockY;
             var dist = Math.Sqrt(dx * dx + dy * dy);
@@ -756,8 +755,8 @@ public sealed partial class NativeGuider {
             var img = await CaptureFullAsync(cam, ct);
             if (img == null) return;
             int w = img.Properties.Width, h = img.Properties.Height;
-            var stars = new NINA.Image.ImageAnalysis.StarDetector().Detect(img.Data, w, h);
-            double satGuard = (1 << Math.Max(1, img.Properties.BitDepth)) - 1;
+            var stars = NewGuideStarDetector().Detect(img.Data, w, h);
+            double satGuard = SaturationLevel(img.Properties.BitDepth, img.Properties.SignificantBitDepth, img.Data);
             var pick = PickReacquireStar(stars, _lockX, _lockY, ReacquireRadiusPx,
                                          w, h, SearchRegion + 5, satGuard);
             if (pick == null) {

@@ -19967,6 +19967,7 @@ function ninaApp() {
                 case 'planet':  return cat === 'planet';
                 case 'moon':    return cat === 'moon';
                 case 'comet':   return cat === 'comet';
+                case 'notable': return cat === 'notable';
                 case 'dso':     return cat === 'dso';
                 default:        return true;
             }
@@ -19983,6 +19984,9 @@ function ninaApp() {
                 { key: 'planet',  label: 'Planets' },
                 { key: 'moon',    label: 'Moon' },
                 { key: 'comet',   label: 'Comets' },
+                // Quasars, pulsars, black holes, lenses, famous stars: the
+                // hand-curated Notable catalogue, gated by altitude only.
+                { key: 'notable', label: 'Notable' },
             ];
             const chips = [{ key: 'all', label: 'All' }];
             for (const d of defs) {

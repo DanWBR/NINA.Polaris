@@ -126,6 +126,19 @@ R*tree-indexed bundle at `wwwroot/catalogs/dso/dso.db` (~2.6 MB,
 | **Sh2**        | 313     | CDS Vizier `VII/20/catalog` (Sharpless 1959)             | Public domain  |
 | **HCG**        | 100     | CDS Vizier `VII/213/groups` (Hickson 1982/89)            | Public domain  |
 | **AGC**        | 767     | CDS Vizier `VII/110A/table3` (Abell-Corwin-Olowin 1989)  | Public domain  |
+| **HR / Star / WR** | ~9400 | Bright Star Catalogue, IAU star names, Galactic Wolf-Rayet list (`scripts/build-star-catalog.py`) | Public domain |
+| **Notable**    | ~150    | Hand-curated famous objects: quasars and blazars, pulsars and magnetars, black holes, gravitational lenses, galaxy groups and clusters, dwarf galaxies, record stars, deep fields (`scripts/build-named-objects.py`) | Public domain |
+
+The Notable rows are the things people ask for by name that no NGC / IC /
+Messier number covers: Phoenix A, TON 618, 3C 273, the Vela pulsar,
+Cygnus X-1, Sagittarius A*, Markarian's Chain, the Leo Triplet, the Coma
+and Perseus clusters, Wolf 359, TRAPPIST-1, the Hubble Deep Fields. They
+are always on the map whatever the magnitude cap (most are far fainter
+than it), searchable by every common designation, and listed under the
+Atlas filter as catalog "Notable" with their own types ("Quasar",
+"Pulsar", "Black Hole", "Gravitational Lens", "Dwarf Galaxy", ...).
+Tonight's Best lists them under their own **Notable** chip: every one
+that peaks above 30° tonight, with no brightness gate, ordered by score.
 
 The AGC entry is magnitude-trimmed at m10 < 17 to keep the brightest
 ~30% of the 2712-cluster catalog - fainter clusters require deep

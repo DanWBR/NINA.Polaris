@@ -32,13 +32,17 @@ namespace NINA.Polaris.Test;
 [TestFixture]
 public class TonightsBestServiceTests {
 
-    private TonightsBestService MakeService(double lat, double lng) {
+    /// <param name="bundled">Open the shipped dso.db instead of the 150-object
+    /// fallback list, for the tests that need a catalogue the fallback lacks.</param>
+    private TonightsBestService MakeService(double lat, double lng, bool bundled = false) {
         var emptyConfig = new ConfigurationBuilder().Build();
         var profile = new ProfileService(emptyConfig, NullLogger<ProfileService>.Instance);
         profile.Active.Latitude  = lat;
         profile.Active.Longitude = lng;
 
-        var catalog  = new SkyCatalogService();
+        var catalog  = bundled
+            ? new SkyCatalogService(DsoCatalogTests.TestEnv.OpenBundled())
+            : new SkyCatalogService();
         var altitude = new AltitudeService(profile);
         var indi     = new IndiClient("localhost", 7624);
         var equip    = new EquipmentManager(indi, NullLogger<EquipmentManager>.Instance,
@@ -111,6 +115,22 @@ public class TonightsBestServiceTests {
         var sut = MakeService(lat: 0, lng: 0);
         var result = sut.Compute(limit: 5);
         Assert.That(result.NightEndUtc, Is.GreaterThan(result.NightStartUtc));
+    }
+
+    /// <summary>The Notable catalogue has its own category: present whatever
+    /// the brightness (Phoenix A is magnitude 17), never merged into a DSO at
+    /// the same position (the Crab Pulsar sits inside M1), and never counted
+    /// as a galaxy / nebula / cluster.</summary>
+    [Test]
+    public void Compute_NotableObjects_HaveTheirOwnCategory() {
+        var sut = MakeService(lat: -5.18, lng: -37.36, bundled: true);
+        var result = sut.Compute(limit: 30);
+        var notable = result.Items.Where(i => i.Category == "Notable").ToList();
+        Assert.That(notable, Is.Not.Empty, "some notable object is above 30 degrees on any night");
+        Assert.That(notable.All(i => i.Catalog == "Notable"), Is.True);
+        Assert.That(notable.Any(i => (i.Magnitude ?? 0) > 14 || i.Magnitude == null), Is.True,
+            "faint or magnitude-less notables pass, there is no brightness gate");
+        Assert.That(result.Items.Where(i => i.Category == "Dso").All(i => i.Catalog != "Notable"), Is.True);
     }
 
     [Test]

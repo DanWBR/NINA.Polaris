@@ -579,24 +579,29 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
         SetActivity("Selecting");
         try {
             int w = img.Properties.Width, h = img.Properties.Height;
-            var detector = new NINA.Image.ImageAnalysis.StarDetector();
-            var stars = detector.Detect(img.Data, w, h);
+            var stars = NewGuideStarDetector().Detect(img.Data, w, h);
 
             // Pick the brightest, non-saturated, interior star (away from
             // edges so the search window stays in-frame).
             int margin = SearchRegion + 5;
-            double satGuard = (1 << Math.Max(1, img.Properties.BitDepth)) - 1;
+            double satGuard = SaturationLevel(img.Properties.BitDepth, img.Properties.SignificantBitDepth, img.Data);
             NINA.Image.ImageAnalysis.DetectedStar? best = null;
             double bestFlux = -1;
+            int saturated = 0;
             foreach (var s in stars) {
                 if (s.X < margin || s.Y < margin || s.X > w - margin || s.Y > h - margin) continue;
-                if (satGuard > 1 && s.Peak >= satGuard * 0.95) continue;
+                if (IsSaturated(s, satGuard)) { saturated++; continue; }
                 if (s.Flux > bestFlux) { bestFlux = s.Flux; best = s; }
             }
             if (best == null) {
-                RaiseAlert("Auto-select failed: no suitable guide star.");
+                RaiseAlert(saturated > 0
+                    ? $"Auto-select failed: the {saturated} star(s) found are saturated; lower the guide gain or exposure."
+                    : "Auto-select failed: no suitable guide star.");
                 return;
             }
+            _logger.LogInformation(
+                "Native auto-select: {N} stars, {Sat} saturated (level {Lvl}); best peak {Peak:F0} flux {Flux:F0}",
+                stars.Count, saturated, satGuard, best.Peak, best.Flux);
             _lockX = best.X;
             _lockY = best.Y;
             _haveLock = true;
@@ -620,21 +625,17 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
 
         int w = img.Properties.Width, h = img.Properties.Height;
         _lastFrame = img; _lastFrameOriginX = 0; _lastFrameOriginY = 0;
-        var detector = new NINA.Image.ImageAnalysis.StarDetector();
-        var stars = detector.Detect(img.Data, w, h);
+        var stars = NewGuideStarDetector().Detect(img.Data, w, h);
 
-        int margin = SearchRegion + 5;
-        double satGuard = (1 << Math.Max(1, img.Properties.BitDepth)) - 1;
-        NINA.Image.ImageAnalysis.DetectedStar? best = null;
-        double bestDist = double.MaxValue;
-        foreach (var s in stars) {
-            if (s.X < margin || s.Y < margin || s.X > w - margin || s.Y > h - margin) continue;
-            if (satGuard > 1 && s.Peak >= satGuard * 0.95) continue;
-            double dx = s.X - targetX, dy = s.Y - targetY;
-            double d = dx * dx + dy * dy;
-            if (d < bestDist) { bestDist = d; best = s; }
+        double satGuard = SaturationLevel(img.Properties.BitDepth, img.Properties.SignificantBitDepth, img.Data);
+        var pick = PickStarNear(stars, targetX, targetY, w, h, SearchRegion + 5, satGuard, TapRadiusPx);
+        if (pick.Star == null) {
+            RaiseAlert(pick.Reason ?? "No star near the tap.");
+            _logger.LogInformation("Native select-star near ({Tx:F0},{Ty:F0}): {Reason} ({N} stars detected)",
+                targetX, targetY, pick.Reason, stars.Count);
+            return;
         }
-        if (best == null) { RaiseAlert("No suitable star near the click."); return; }
+        var best = pick.Star;
 
         _lockX = best.X;
         _lockY = best.Y;
@@ -644,6 +645,60 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
         BuildView(_lockX, _lockY, 0, true);
         _logger.LogInformation("Native guide star picked near ({Tx:F0},{Ty:F0}) -> ({X:F1},{Y:F1})",
             targetX, targetY, _lockX, _lockY);
+    }
+
+    /// <summary>How far from a tap a star may sit and still count as the one
+    /// tapped: finger accuracy on a phone showing a downscaled frame is tens of
+    /// sensor pixels, not the 15 px search window.</summary>
+    private const double TapRadiusPx = 60;
+
+    /// <summary>The detector as the guider needs it: a bright guide star with
+    /// its skirt above a 5-sigma threshold covers far more than the 200 pixels
+    /// the default allows, and those were the stars silently dropped, leaving
+    /// the faint ones as the only candidates.</summary>
+    internal static NINA.Image.ImageAnalysis.StarDetector NewGuideStarDetector() =>
+        new() { MaxStarSize = 6000 };
+
+    /// <summary>Full-scale sample value for this frame. The driver's BitDepth is
+    /// 16 for every 16-bit container, while the samples inside may be raw
+    /// 12-bit counts (indi_asi_ccd) or left-aligned ones (the native SDKs), so
+    /// the level is read from the data: the smallest standard depth that holds
+    /// the frame's brightest pixel, capped by what the driver reports.</summary>
+    internal static double SaturationLevel(int bitDepth, int significantBits, ushort[] data) {
+        double cap = (1L << Math.Clamp(bitDepth <= 0 ? 16 : bitDepth, 1, 16)) - 1;
+        if (significantBits is >= 8 and <= 16) return Math.Min(cap, (1L << significantBits) - 1);
+        ushort max = 0;
+        foreach (var v in data) if (v > max) max = v;
+        foreach (int bits in new[] { 8, 10, 12, 14, 16 }) {
+            double lvl = (1L << bits) - 1;
+            if (max <= lvl) return Math.Min(cap, lvl);
+        }
+        return cap;
+    }
+
+    internal static bool IsSaturated(NINA.Image.ImageAnalysis.DetectedStar s, double satLevel) =>
+        satLevel > 1 && s.Peak >= satLevel * 0.95;
+
+    /// <summary>The star a tap meant: the nearest one within <paramref name="radius"/>,
+    /// with a reason instead of a silent jump to some other star when it is
+    /// saturated, on the edge, or simply not there.</summary>
+    internal static (NINA.Image.ImageAnalysis.DetectedStar? Star, string? Reason) PickStarNear(
+            IReadOnlyList<NINA.Image.ImageAnalysis.DetectedStar> stars, double targetX, double targetY,
+            int width, int height, int margin, double satLevel, double radius) {
+        NINA.Image.ImageAnalysis.DetectedStar? nearest = null;
+        double nearestD = double.MaxValue;
+        foreach (var s in stars) {
+            double dx = s.X - targetX, dy = s.Y - targetY;
+            double d = Math.Sqrt(dx * dx + dy * dy);
+            if (d < nearestD) { nearestD = d; nearest = s; }
+        }
+        if (nearest == null || nearestD > radius)
+            return (null, "No star near the tap.");
+        if (IsSaturated(nearest, satLevel))
+            return (null, $"That star is saturated (peak {nearest.Peak:F0} of {satLevel:F0}); pick a fainter one or lower the gain.");
+        if (nearest.X < margin || nearest.Y < margin || nearest.X > width - margin || nearest.Y > height - margin)
+            return (null, "That star is too close to the edge of the frame.");
+        return (nearest, null);
     }
 
     public Task ClearCalibrationAsync(CancellationToken ct = default) {

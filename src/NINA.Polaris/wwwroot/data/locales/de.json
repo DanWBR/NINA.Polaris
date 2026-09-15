@@ -4847,5 +4847,11 @@
   "(off by": "(Abweichung",
   "Turning the rotator": "Rotator dreht",
   "Rotating to {a}°": "Drehung auf {a}°",
-  "Rotate failed": "Drehen fehlgeschlagen"
+  "Rotate failed": "Drehen fehlgeschlagen",
+  "Notable": "Bemerkenswert",
+  "Galaxies": "Galaxien",
+  "Nebulae": "Nebel",
+  "Clusters": "Haufen",
+  "Planets": "Planeten",
+  "Comets": "Kometen"
 }

@@ -82,9 +82,16 @@ public class TonightsBestService {
 
         var fov = ComputeCameraFov();
         var items = new List<TonightCandidate>();
+        // The hand-curated Notable catalogue (quasars, pulsars, black holes,
+        // lenses, famous stars...) gets its own chip: most of it is far
+        // fainter than any brightness gate, and it is wanted for being what
+        // it is, not for how it scores. Kept apart from the DSO pool so the
+        // position de-dup cannot swallow the Crab Pulsar into M1.
+        var notableItems = new List<TonightCandidate>();
 
         // --- DSOs ---
         foreach (var dso in _catalog.AllPlanningObjects) {
+            bool isNotable = string.Equals(dso.Catalog, "Notable", StringComparison.OrdinalIgnoreCase);
             // FromDso maps a NULL catalog magnitude to the 99.0 sentinel, so a
             // value < 90 means we really have a magnitude. Big emission/bright
             // nebulae (Sh2, LBN) have no magnitude but a known size; the pool
@@ -97,7 +104,9 @@ public class TonightsBestService {
             // tighter gate on everything else so the "All" view stays clean.
             bool isGalaxyType = dso.Type != null
                 && dso.Type.Contains("Galax", StringComparison.OrdinalIgnoreCase);
-            if (hasMag) {
+            if (isNotable) {
+                // no brightness or size gate: altitude and horizon only
+            } else if (hasMag) {
                 // Coarse brightness gate before the (expensive) altitude track.
                 if (dso.Magnitude > (isGalaxyType ? 14.0 : 10.0)) continue;
             } else {
@@ -112,12 +121,17 @@ public class TonightsBestService {
             // a large nebula ranks comparably to a mid-brightness object. log2
             // keeps the curve gentle (10′→~20, 30′→~26, 100′→~32) and the clamp
             // stops a giant complex from dominating the whole list.
-            var score = hasMag
+            // Notables are ordered among themselves only: the ones an amateur
+            // can actually image (a magnitude 13 quasar) ahead of the ones that
+            // are a coordinate to point at (a magnetar), altitude as tie-break.
+            var score = isNotable
+                ? (int)Math.Round((hasMag ? (20 - Math.Clamp(dso.Magnitude, -2, 20)) * 4 : 0) + peakAlt / 90.0 * 20)
+                : hasMag
                 ? (int)Math.Round((6 - Math.Clamp(dso.Magnitude, -2, 12)) * 8 + peakAlt / 90.0 * 20)
                 : (int)Math.Round(Math.Clamp(6.0 * Math.Log2(Math.Max(sizeArcmin, 5.0)), 10, 42)
                                   + peakAlt / 90.0 * 20);
-            items.Add(new TonightCandidate(
-                Category:        "Dso",
+            (isNotable ? notableItems : items).Add(new TonightCandidate(
+                Category:        isNotable ? "Notable" : "Dso",
                 Name:            dso.Name,
                 CommonName:      dso.CommonName,
                 Type:            dso.Type,
@@ -134,7 +148,8 @@ public class TonightsBestService {
                 Score:           score,
                 FitsCameraFov:   null,                  // catalog has no size for now
                 CameraFovWidthArcmin:  fov?.WidthArcmin,
-                CameraFovHeightArcmin: fov?.HeightArcmin
+                CameraFovHeightArcmin: fov?.HeightArcmin,
+                Catalog:         dso.Catalog
             ));
         }
 
@@ -203,6 +218,10 @@ public class TonightsBestService {
         TopUp(IsCluster, 25);
         // Keep the merged list score-ordered for the default "All" view.
         ordered = ordered.OrderByDescending(i => i.Score).ToList();
+
+        // Notable objects ride along unconditionally, like the comets: they
+        // have their own chip, and by score they would never make the cut.
+        ordered.AddRange(notableItems.OrderByDescending(i => i.Score));
 
         // …then append comets unconditionally. They share their own
         // category-filter chip in the UI, so cutting them by the global
@@ -532,4 +551,5 @@ public record TonightCandidate(
     int Score,
     bool? FitsCameraFov,
     double? CameraFovWidthArcmin,
-    double? CameraFovHeightArcmin);
+    double? CameraFovHeightArcmin,
+    string? Catalog = null);
