@@ -1148,12 +1148,24 @@ body.link-offline .preview-pane::after {
     display: flex; align-items: center; gap: 10px; cursor: pointer;
     list-style: none; padding: 11px 14px; background: rgba(0, 0, 0, .14);
 }
-.equip-management-section > summary::-webkit-details-marker,
-.equip-subsystem > summary::-webkit-details-marker { display: none; }
-.equip-management-section > summary::before,
-.equip-subsystem > summary::before { content: '▸'; color: var(--accent); }
+.equip-management-section > summary::before { content: none; }
 .equip-management-section[open] > summary::before,
 .equip-subsystem[open] > summary::before { transform: rotate(90deg); }
+.equip-management-section > summary::before {
+    content: none;
+}
+.equip-management-section > summary {
+    display: list-item;
+    list-style: revert;
+}
+.equip-management-section > summary::marker { color: var(--accent); font-size: 16px; }
+.equip-management-section > summary > small { float: right; margin: 0; }
+.equip-subsystem > summary {
+    display: list-item;
+    list-style: revert;
+}
+.equip-subsystem > summary::marker { color: var(--accent); font-size: 12px; }
+.equip-subsystem > summary > small { float: right; margin: 0; }
 .equip-management-section > summary > span,
 .equip-subsystem > summary > span { font-weight: 700; }
 .equip-management-section > summary small,
@@ -1184,10 +1196,21 @@ body.link-offline .preview-pane::after {
 .equip-settings-group:last-child { border-bottom: 0; }
 .equip-settings-group h4 { margin: 0; font-size: 12px; color: var(--text-primary); }
 .indi-device-card { display: block; }
-.indi-device-card > summary { cursor: pointer; list-style: none; }
-.indi-device-card > summary::-webkit-details-marker { display: none; }
-.indi-device-card > summary::before { content: '▸'; color: var(--accent); margin-right: 6px; }
-.indi-device-card[open] > summary::before { display: inline-block; transform: rotate(90deg); }
+.indi-device-card > summary { cursor: pointer; list-style: revert; }
+.indi-device-card > summary::marker { color: var(--accent); font-size: 12px; }
+.ctrl-editor-grid > details.ctrl-panel-card {
+    display: block;
+    height: auto !important;
+    overflow: visible;
+}
+.ctrl-panel-card > summary {
+    cursor: pointer;
+    list-style: revert;
+    padding-bottom: 10px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+.ctrl-panel-card > summary::marker { color: var(--accent); font-size: 12px; }
 /* The old INDI Control Panel was a peer tab, so each device card scrolled
    internally. It now lives inside RIGS: expand it into the page so Equipment
    remains reachable with the normal page scroll. */
@@ -1223,9 +1246,9 @@ body.link-offline .preview-pane::after {
     cursor: pointer;
     list-style: none;
 }
-.tab-panel-equip details.equip-device-accordion > summary::-webkit-details-marker { display: none; }
-.tab-panel-equip details.equip-device-accordion > summary::before { content: '▸'; color: var(--accent); }
-.tab-panel-equip details.equip-device-accordion[open] > summary::before { transform: rotate(90deg); }
+.tab-panel-equip details.equip-device-accordion > summary { list-style: revert; }
+.tab-panel-equip details.equip-device-accordion > summary::marker { color: var(--accent); font-size: 12px; }
+.tab-panel-equip summary::marker { color: var(--accent); font-size: 12px; }
 .tab-panel-equip .equip-subsystem-grid > .equip-card > .equip-card-header,
 .tab-panel-equip .equip-accessories-grid > .equip-card > .equip-card-header {
     padding: 8px 0;

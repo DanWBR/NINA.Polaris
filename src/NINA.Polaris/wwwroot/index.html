@@ -8835,7 +8835,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <template x-if="ctrlEditedPanel()">
                         <div class="ctrl-editor-grid">
                             <!-- Edited panel: settings + its widgets -->
-                            <div class="settings-section" style="margin:0">
+                            <details class="settings-section ctrl-panel-card" style="margin:0" open>
+                                <summary>Panel settings</summary>
                                 <label class="ctrl-field">Title
                                     <input type="text" class="input-md" style="max-width:280px;width:100%"
                                            x-model="ctrlEditedPanel().title" @change="_ctrlSave()">
@@ -8876,11 +8877,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         </div>
                                     </template>
                                 </div>
-                            </div>
+                            </details>
 
                             <!-- Catalog: pick a source, add bindable items -->
-                            <div class="settings-section" style="margin:0">
-                                <h4 class="ctrl-sub-h" style="margin-top:0">Add widget</h4>
+                            <details class="settings-section ctrl-panel-card" style="margin:0">
+                                <summary>Add widget</summary>
                                 <div class="control-row" style="gap:4px;flex-wrap:wrap;margin-bottom:8px">
                                     <button class="btn btn-sm" :class="ctrl.catalogSource==='switch'?'btn-primary':''"
                                             @click="ctrlLoadCatalog('switch')">Power box</button>
@@ -8908,7 +8909,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         </div>
                                     </template>
                                 </div>
-                            </div>
+                            </details>
                         </div>
                     </template>
                     <p class="hint" x-show="!ctrlEditedPanel()">

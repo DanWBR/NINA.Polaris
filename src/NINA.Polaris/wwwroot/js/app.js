@@ -25520,7 +25520,23 @@ function ninaApp() {
             moveCardBody('Telescope Mount', mount.body);
             moveCardBody('Filter Wheel', filterWheel.body);
             moveCardBody('Rotator', rotator.body);
-            moveCardBody('Auxiliary Camera System', auxiliary.body);
+            const auxiliaryCard = findCard('Auxiliary Camera System');
+            const auxiliaryBody = auxiliaryCard?.querySelector(':scope > .equip-card-body');
+            if (auxiliaryBody) {
+                const auxiliaryGrid = document.createElement('div');
+                auxiliaryGrid.className = 'equip-role-grid';
+                Array.from(auxiliaryBody.querySelectorAll(':scope > .equip-group')).forEach(group => {
+                    const title = group.querySelector(':scope > .equip-group-title')?.textContent.trim();
+                    if (!title) return;
+                    group.querySelector(':scope > .equip-group-title')?.remove();
+                    const section = makeSection(title);
+                    section.section.classList.add('equip-role-card');
+                    while (group.firstChild) section.body.appendChild(group.firstChild);
+                    auxiliaryGrid.appendChild(section.section);
+                });
+                auxiliary.body.appendChild(auxiliaryGrid);
+                auxiliaryCard.remove();
+            }
 
             const guidingCard = findCard('Guiding System');
             const guidingBody = guidingCard?.querySelector(':scope > .equip-card-body');
