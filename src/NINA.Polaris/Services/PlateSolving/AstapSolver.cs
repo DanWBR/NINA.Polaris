@@ -694,8 +694,22 @@ public class AstapSolver : IPlateSolver {
         // this to luminance. The real cure for the intermittent failures is the
         // downsample escalation in SolveAsync, not the plane choice.
         int greenIdx = Math.Min(1, channels - 1);
-        var greenPlane = new ushort[planeLen];
-        Array.Copy(full.Data, greenIdx * planeLen, greenPlane, 0, planeLen);
+        // Big colour stacks (a 26 MP OSC gives 156 MB of planes) are solved
+        // from a 2x2-binned copy of the plane: a quarter of the proxy file, of
+        // ASTAP's working set and of its run time on an SBC, and for placing
+        // the field on the map the accuracy is untouched. Only when the binned
+        // sampling stays fine enough for star centroids (see the undersampling
+        // note below); the result is scaled back to the original geometry.
+        double nativeScale = ProxyNativeScale(full);
+        int bin = ProxyBinFactor(w, h, nativeScale);
+        int pw = w / bin, ph = h / bin;
+        var greenPlane = bin > 1
+            ? BinPlane2x2(full.Data, greenIdx * planeLen, w, h)
+            : new ushort[planeLen];
+        if (bin == 1) Array.Copy(full.Data, greenIdx * planeLen, greenPlane, 0, planeLen);
+        if (bin > 1)
+            _logger.LogInformation("ASTAP proxy: {W}x{H} plane binned 2x2 to {PW}x{PH} for the solve",
+                w, h, pw, ph);
 
         // Log per-plane stats so a failed solve is debuggable without re-running
         // the pipeline: min / max / mean flag a plane that's too dim, clipped, or
@@ -710,7 +724,7 @@ public class AstapSolver : IPlateSolver {
         }
         var planeStats = $"plane={greenIdx}/{channels} min={lo} max={hi} " +
             $"mean={(double)sum / greenPlane.Length:F1} " +
-            $"({w}x{h} {full.Properties.BitDepth}-bit)";
+            $"({w}x{h} {full.Properties.BitDepth}-bit" + (bin > 1 ? $", solved at {pw}x{ph}" : "") + ")";
         _logger.LogInformation("ASTAP proxy stats: {Stats}", planeStats);
 
         // Why a perfectly good frame can be unsolvable, and why the operator
@@ -726,12 +740,7 @@ public class AstapSolver : IPlateSolver {
         // HFR 0.94 px. Every solve failed for an hour; switching to 1:1 solved
         // instantly on the same sky. Nothing in the output said "your stacking
         // resolution is the problem", which is what this string is for.
-        double coarseScale = 0;
-        var scopeMeta = full.MetaData.Telescope;
-        var camMeta = full.MetaData.Camera;
-        if (scopeMeta.FocalLength > 0 && camMeta.PixelSizeX > 0) {
-            coarseScale = 206.2648 * camMeta.PixelSizeX / scopeMeta.FocalLength;
-        }
+        double coarseScale = nativeScale;
         string undersampledHint = coarseScale >= 4.0
             ? $" The frame works out to about {coarseScale:F1} arcsec/pixel, which is coarse "
               + "enough that stars span barely a pixel and star detection has little to hold "
@@ -750,8 +759,8 @@ public class AstapSolver : IPlateSolver {
         bool deleteProxyOnExit = true;
         try {
             var proxyProps = new ImageProperties {
-                Width = w,
-                Height = h,
+                Width = pw,
+                Height = ph,
                 BitDepth = full.Properties.BitDepth,
                 IsBayered = false,
             };
@@ -766,7 +775,17 @@ public class AstapSolver : IPlateSolver {
             var proxy = new BaseImageData(greenPlane, proxyProps, proxyMeta);
             FITSWriter.Write(proxy, proxyPath);
 
-            var args = BuildArgs(proxyPath, options);
+            // The proxy already carries the binning, so ASTAP's own downsample
+            // steps down by the same factor to keep the same effective sampling.
+            var proxyOptions = bin > 1
+                ? new PlateSolveOptions {
+                    HintRa = options.HintRa, HintDec = options.HintDec,
+                    SearchRadiusDeg = options.SearchRadiusDeg, FovDeg = options.FovDeg,
+                    ScaleArcsecPerPixel = options.ScaleArcsecPerPixel * bin,
+                    Downsample = Math.Max(1, EffectiveDownsample(options) / bin),
+                    DownsampleIsExplicit = true }
+                : options;
+            var args = BuildArgs(proxyPath, proxyOptions);
             _logger.LogInformation(
                 "Plate solving {File} via single-channel proxy " +
                 "{Proxy} (channels={N}): {Args}",
@@ -826,6 +845,7 @@ public class AstapSolver : IPlateSolver {
                     result.Error = ExplainHeadless(result.Error, stdout, stderr, SolverPath);
                 result.Output = output;
                 if (!result.Success) return result;
+                if (bin > 1) UnbinResult(result, bin);
 
                 // Stamp WCS into the ORIGINAL multi-channel FITS so
                 // downstream consumers (FrameLibrary rescan, PCC,
@@ -833,7 +853,7 @@ public class AstapSolver : IPlateSolver {
                 // We lift the CD matrix straight out of the proxy
                 // (which ASTAP just updated in place) rather than
                 // re-synthesising — see StampWcsIntoOriginal.
-                StampWcsIntoOriginal(originalPath, full, result, w, h, proxyPath);
+                StampWcsIntoOriginal(originalPath, full, result, w, h, bin > 1 ? null : proxyPath);
                 return result;
             } catch (Exception ex) when (ex is not OperationCanceledException) {
                 _logger.LogError(ex, "ASTAP proxy plate solve failed");
@@ -870,9 +890,63 @@ public class AstapSolver : IPlateSolver {
     /// (e.g. rot ~ 90° leaves CD11 and CD22 near zero with the bulk
     /// of the scale in CD12/CD21).
     /// </summary>
+    /// <summary>Arcsec per pixel from the frame's own metadata, 0 when unknown.</summary>
+    internal static double ProxyNativeScale(BaseImageData full) {
+        var scopeMeta = full.MetaData.Telescope;
+        var camMeta = full.MetaData.Camera;
+        return scopeMeta.FocalLength > 0 && camMeta.PixelSizeX > 0
+            ? 206.2648 * camMeta.PixelSizeX / scopeMeta.FocalLength
+            : 0;
+    }
+
+    /// <summary>2 when a plane this big is worth binning for the solve, else 1.
+    /// Big means 12 MP and up (below that the saving is not worth a second
+    /// code path), and binning must leave stars wider than a pixel: the field
+    /// case of 2026-08-07 (a 1:2 stack on a 2.75 arcsec/px rig, every solve
+    /// failing) is what the 4 arcsec/px ceiling guards. An unknown scale bins
+    /// only the really large sensors, where the frame is almost certainly
+    /// oversampled.</summary>
+    internal static int ProxyBinFactor(int w, int h, double nativeScaleArcsec) {
+        if ((long)w * h < 12_000_000L) return 1;
+        if (nativeScaleArcsec > 0) return nativeScaleArcsec * 2.0 < 4.0 ? 2 : 1;
+        return (long)w * h >= 20_000_000L ? 2 : 1;
+    }
+
+    /// <summary>Mean of each 2x2 block of one plane, into a (w/2)x(h/2) plane.</summary>
+    internal static ushort[] BinPlane2x2(ushort[] data, int offset, int w, int h) {
+        int pw = w / 2, ph = h / 2;
+        var dst = new ushort[pw * ph];
+        for (int y = 0; y < ph; y++) {
+            int r0 = offset + (2 * y) * w, r1 = r0 + w;
+            int d = y * pw;
+            for (int x = 0; x < pw; x++) {
+                int c = 2 * x;
+                dst[d + x] = (ushort)((data[r0 + c] + data[r0 + c + 1] + data[r1 + c] + data[r1 + c + 1] + 2) >> 2);
+            }
+        }
+        return dst;
+    }
+
+    /// <summary>Map a solve of the binned proxy back onto the original pixel
+    /// grid: the pointing and rotation are the same, the plate scale and the
+    /// CD matrix shrink by the bin, and the reference pixel moves out to where
+    /// that binned pixel's centre sits in the full frame (FITS pixels are
+    /// 1-based and centred, so binned p covers originals 2p-1 and 2p, centred
+    /// on 2p-0.5).</summary>
+    internal static void UnbinResult(PlateSolveResult r, int bin) {
+        if (bin <= 1) return;
+        r.ScaleArcsecPerPixel /= bin;
+        if (r.CD11.HasValue) r.CD11 /= bin;
+        if (r.CD12.HasValue) r.CD12 /= bin;
+        if (r.CD21.HasValue) r.CD21 /= bin;
+        if (r.CD22.HasValue) r.CD22 /= bin;
+        if (r.CrPix1 != 0) r.CrPix1 = bin * r.CrPix1 - (bin - 1) * 0.5;
+        if (r.CrPix2 != 0) r.CrPix2 = bin * r.CrPix2 - (bin - 1) * 0.5;
+    }
+
     private static void StampWcsIntoOriginal(string originalPath,
             BaseImageData original, PlateSolveResult solve, int w, int h,
-            string proxyPath) {
+            string? proxyPath) {
         WcsInfo? wcs = null;
         // Preferred: the CD matrix ASTAP reported in its .ini/.wcs sidecar,
         // already captured in the solve result. It carries the true parity
@@ -888,7 +962,10 @@ public class AstapSolver : IPlateSolver {
                 solve.CD11!.Value, solve.CD12!.Value,
                 solve.CD21!.Value, solve.CD22!.Value, w, h);
         }
-        if (wcs == null) {
+        // A binned proxy's own WCS describes the binned grid, so it is not
+        // offered here (proxyPath is null then); the synthesised fallback below
+        // works from the already unbinned scale.
+        if (wcs == null && proxyPath != null) {
             try {
                 using var fs = File.OpenRead(proxyPath);
                 var hdr = FITSReader.ReadHeadersOnly(fs);
