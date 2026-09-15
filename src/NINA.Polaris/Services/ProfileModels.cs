@@ -134,6 +134,11 @@ public class UserProfile {
     // browsing on one night is there for the planner on any rig.
     public List<FavouriteTarget> Favourites { get; set; } = new();
 
+    // Night log: the operator's own words per observing night (seeing,
+    // transparency, remarks). Everything else on the night page is read
+    // from the frames themselves.
+    public List<SessionNote> SessionNotes { get; set; } = new();
+
     // Plate solver
     public string? AstapPath { get; set; }
     public double SolveToleranceArcsec { get; set; } = 30;
@@ -1224,6 +1229,16 @@ public class FavouriteTarget {
     public double DecDeg { get; set; }
     public string? Source { get; set; }
     public DateTime AddedUtc { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>The operator's notes for one observing night (local evening date,
+/// yyyy-MM-dd). Seeing and transparency on a 1 to 5 scale, null = not rated.</summary>
+public class SessionNote {
+    public string Night { get; set; } = "";
+    public int? Seeing { get; set; }
+    public int? Transparency { get; set; }
+    public string? Notes { get; set; }
+    public DateTime UpdatedUtc { get; set; } = DateTime.UtcNow;
 }
 
 public class ProfileSummary {

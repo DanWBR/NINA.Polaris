@@ -215,6 +215,37 @@ The Export button opens a modal:
 
 Exported files appear in the browser after a rescan.
 
+## Sessions sub-tab (night log)
+
+One page per observing night, built from the frames the library has
+indexed. Nothing is typed twice: every sub Polaris saves already carries
+the target, filter, exposure, gain, offset, binning, sensor temperature,
+guiding RMS and peak, focus position, pier side and, when the rig has a
+weather source, ambient temperature, humidity and sky brightness. The
+Sessions view groups them by night (local evening date; a 03:00 sub
+belongs to the evening before) and shows:
+
+- the night list on the left, with lights, integration, targets, the
+  equipment used and your seeing / transparency ratings;
+- for the selected night: equipment, sensor and ambient ranges, mean
+  guiding RMS, then one block per target with start and end, frames,
+  integration, guiding RMS (mean and worst), focus travel, pier side,
+  and a per-filter table (frames, exposure, integration, gain, bin);
+- **Calibration in the library**: for each distinct light configuration
+  (camera, filter, exposure, gain, offset, bin, sensor temperature) how
+  many darks (same camera, gain, offset, bin, exposure within 2%, sensor
+  temperature within 2 °C), bias (camera, gain, offset, bin) and flats
+  (camera, filter, bin; the same night first, else the nearest night)
+  the library holds, with "none" in amber where a set is missing;
+- **Seeing**, **Transparency** (1 to 5) and free **Notes**, saved on the
+  host profile per night;
+- **Copy as Markdown** puts the whole page on the clipboard for a
+  notebook or a forum post.
+
+**Rescan** re-reads every header; the first visit after an update that
+added these columns does that on its own. Stacked masters are results,
+not frames of a night, and are left out.
+
 ## Common pitfalls
 
 **Slot has paths but Action says "no files"**: the files were

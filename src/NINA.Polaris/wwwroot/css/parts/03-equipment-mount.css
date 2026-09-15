@@ -2723,3 +2723,30 @@
    each sweep exposure through ImageRelayService, the multi-canvas
    renderer mirrors that into #focusCanvas. Fixed-height to keep the
    layout stable as the V-curve chart appears below. */
+
+/* Studio > Sessions (night log): night list on the left, the night's page on
+   the right; stacks on narrow screens. */
+.sessions-pane { padding-bottom: 16px; }
+.sessions-split { display: grid; grid-template-columns: minmax(220px, 300px) minmax(0, 1fr); gap: 14px; align-items: start; }
+@media (max-width: 900px) { .sessions-split { grid-template-columns: 1fr; } }
+.sessions-list { display: flex; flex-direction: column; gap: 6px; max-height: 70vh; overflow: auto; }
+.sessions-row { border: 1px solid var(--border, #2a2f3a); border-radius: 8px; padding: 8px 10px; cursor: pointer; }
+.sessions-row:hover { border-color: var(--accent, #4a90d9); }
+.sessions-row.selected { border-color: var(--accent, #4a90d9); background: rgba(74, 144, 217, 0.08); }
+.sessions-row-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sessions-row-sub { font-size: 12px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sessions-rating { font-size: 11px; padding: 1px 6px; border-radius: 10px; background: rgba(255, 255, 255, 0.08); }
+.sessions-detail { border: 1px solid var(--border, #2a2f3a); border-radius: 8px; padding: 12px 14px; }
+.sessions-h { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 6px 0 8px; }
+h5.sessions-h { margin-top: 14px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+.sessions-facts { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; margin-bottom: 10px; }
+.sessions-notes { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; gap: 10px; align-items: end; padding: 10px; border: 1px solid var(--border, #2a2f3a); border-radius: 8px; }
+.sessions-notes label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.sessions-notes-text { min-width: 0; }
+.sessions-notes-text textarea { width: 100%; max-width: none; field-sizing: fixed; box-sizing: border-box; resize: vertical; }
+@media (max-width: 700px) { .sessions-notes { grid-template-columns: 1fr 1fr; } .sessions-notes-text { grid-column: 1 / -1; } }
+.sessions-target { margin-bottom: 10px; }
+.sessions-target-head { display: flex; gap: 10px; flex-wrap: wrap; align-items: baseline; margin-bottom: 4px; }
+.sessions-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.sessions-table th, .sessions-table td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--border, #2a2f3a); }
+.sessions-table td.ok { color: var(--ok, #8bc34a); }
