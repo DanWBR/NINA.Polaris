@@ -25539,13 +25539,19 @@ function ninaApp() {
                 guidingCard.remove();
             }
 
+            const accessoryGrid = document.createElement('div');
+            accessoryGrid.className = 'equip-role-grid';
             ['Flat Panel', 'Dome', 'Weather', 'Power Box'].forEach(title => {
                 const card = findCard(title);
                 const body = card?.querySelector(':scope > .equip-card-body');
                 if (!body) return;
-                accessories.body.appendChild(namedGroup(title, body));
+                const accessory = makeSection(title);
+                accessory.section.classList.add('equip-role-card');
+                while (body.firstChild) accessory.body.appendChild(body.firstChild);
+                accessoryGrid.appendChild(accessory.section);
                 card.remove();
             });
+            accessories.body.appendChild(accessoryGrid);
 
             const roleGrid = document.createElement('div');
             roleGrid.className = 'equip-role-grid';

@@ -6218,7 +6218,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 </label>
                                 <span class="equip-meta-derived"
                                       x-show="settings.focalLength > 0"
-                                      x-text="'= ' + settings.focalLength + ' mm'"></span>
+                                      x-text="'= ' + Math.round(settings.focalLength) + ' mm'"></span>
                             </div>
 
                             <!-- Resolved / manual override values. The
