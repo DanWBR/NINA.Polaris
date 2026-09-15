@@ -287,6 +287,20 @@ public class HardwareAutoConnectService : IHostedService {
         // name from the rig + the bind+connect callback. Camera and
         // Telescope honour driver override; the rest are INDI-only
         // today so we don't pass a driver.
+        // The ZWO SDK stops listing the other cameras once one is open, so a
+        // rig that auto-connects a ZWO camera at boot would never learn what
+        // else is on the bus. One scan before anything opens seeds the
+        // discovery's memory for the rest of the process.
+        if (string.Equals(rig.CameraDriver, "zwo-sdk", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(rig.GuideCameraDriver, "zwo-sdk", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(rig.AuxCameraDriver, "zwo-sdk", StringComparison.OrdinalIgnoreCase)) {
+            try {
+                var seen = NINA.Camera.ZwoSdk.ZwoDiscovery.Enumerate();
+                _logger.LogInformation("ZWO scan before auto-connect: {N} camera(s)", seen.Count);
+            } catch (Exception ex) {
+                _logger.LogDebug(ex, "ZWO pre-connect scan skipped");
+            }
+        }
         var devices = new (string Label, string? Name, Func<string, Task> Bind)[] {
             ("Camera",       rig.Camera,      async name => { var c = _equip.SelectCamera(rig.CameraDriver ?? "indi", name);    await c.ConnectAsync(ct); }),
             // Guide camera only auto-connects for native-guider rigs; PHD2

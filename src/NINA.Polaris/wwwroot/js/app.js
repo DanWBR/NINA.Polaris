@@ -47987,6 +47987,31 @@ function ninaApp() {
             this.advSeqDirty = true;
         },
 
+        // The filter names to offer wherever a filter is chosen (PLAN frames,
+        // the mosaic planner, ADV instructions): the connected wheel's slots
+        // first, the rig's saved names when the wheel is not connected yet,
+        // plus `current` so a value typed or saved under another name is not
+        // silently dropped from the dropdown.
+        filterChoices(current) {
+            let names = [];
+            if (this.filterWheel?.connected && Array.isArray(this.filterWheel.filters)) {
+                names = this.filterWheel.filters.filter(Boolean);
+            }
+            if (names.length === 0) {
+                const rig = this.activeRig;
+                if (rig && Array.isArray(rig.filterNames)) names = rig.filterNames.filter(Boolean);
+            }
+            const out = [...new Set(names)];
+            if (current && !out.includes(current)) out.unshift(current);
+            return out;
+        },
+
+        // A filter field renders as a dropdown when there are names to choose
+        // from, and stays a text box on a rig with no wheel.
+        filterFieldIsSelect() {
+            return this.filterChoices('').length > 0;
+        },
+
         advSeqEditableFields() {
             const n = this.advSeqSelectedNode();
             if (!n) return [];
@@ -48010,6 +48035,10 @@ function ninaApp() {
                     // instructions: main imaging train, aux, or guide.
                     kind = 'enum';
                     options = ['main', 'aux', 'guide'];
+                } else if ((k === 'filterName' || k === 'filter') && this.filterFieldIsSelect()) {
+                    // SwitchFilter / TakeExposure filter: the wheel's own names.
+                    kind = 'enum';
+                    options = ['', ...this.filterChoices(typeof v === 'string' ? v : '')];
                 }
                 out.push({ key: k, kind, options });
             }

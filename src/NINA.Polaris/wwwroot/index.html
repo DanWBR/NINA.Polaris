@@ -11064,7 +11064,19 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                                     <div class="plan-frame-row">
                                                         <label>Exp(s) <input type="number" step="0.1" min="0" x-model.number="f.exposureSeconds" @change="savePlan()"></label>
                                                         <label>× <input type="number" min="1" x-model.number="f.count" @change="savePlan()"></label>
-                                                        <label>Filter <input type="text" style="width:5em" x-model="f.filter" @change="savePlan()" placeholder="-"></label>
+                                                        <label>Filter
+                                                            <template x-if="filterFieldIsSelect()">
+                                                                <select style="width:6em" :value="f.filter || ''" @change="f.filter = $event.target.value; savePlan()">
+                                                                    <option value="" :selected="!f.filter">-</option>
+                                                                    <template x-for="fn in filterChoices(f.filter)" :key="'pf-'+fn">
+                                                                        <option :value="fn" x-text="fn" :selected="fn === f.filter"></option>
+                                                                    </template>
+                                                                </select>
+                                                            </template>
+                                                            <template x-if="!filterFieldIsSelect()">
+                                                                <input type="text" style="width:5em" x-model="f.filter" @change="savePlan()" placeholder="-">
+                                                            </template>
+                                                        </label>
                                                         <label>Gain <input type="number" style="width:5em" x-model.number="f.gain" @change="savePlan()" placeholder="auto"></label>
                                                         <label>Bin <input type="number" min="1" style="width:3.5em" x-model.number="f.binning" @change="savePlan()"></label>
                                                         <button class="btn btn-sm btn-icon btn-danger" @click="planRemoveFrame(t, fi)" title="Remove frame">✕</button>
@@ -12297,8 +12309,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                             <select class="input-sm"
                                                     @change="advSeqSelectedNode()[field.key] = $event.target.value; advSeqDirty = true">
                                                 <template x-for="opt in field.options" :key="opt">
-                                                    <option :value="opt" :selected="advSeqSelectedNode()[field.key] === opt"
-                                                            x-text="opt"></option>
+                                                    <option :value="opt" :selected="(advSeqSelectedNode()[field.key] || '') === opt"
+                                                            x-text="opt === '' ? '(current)' : opt"></option>
                                                 </template>
                                             </select>
                                         </template>
@@ -18397,8 +18409,19 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <input type="number" class="input-sm" min="1"
                            x-model.number="mosaic.req.exposureCount"></label>
                 <label class="mfield"><span>Filter</span>
-                    <input type="text" class="input-sm" x-model="mosaic.filterName"
-                           placeholder="L / R / G / B…"></label>
+                    <template x-if="filterFieldIsSelect()">
+                        <select class="input-sm" :value="mosaic.filterName || ''" @change="mosaic.filterName = $event.target.value">
+                            <option value="" :selected="!mosaic.filterName">(current)</option>
+                            <template x-for="fn in filterChoices(mosaic.filterName)" :key="'mf-'+fn">
+                                <option :value="fn" x-text="fn" :selected="fn === mosaic.filterName"></option>
+                            </template>
+                        </select>
+                    </template>
+                    <template x-if="!filterFieldIsSelect()">
+                        <input type="text" class="input-sm" x-model="mosaic.filterName"
+                               placeholder="L / R / G / B…">
+                    </template>
+                </label>
             </div>
 
             <!-- Summary: live grid preview + stat strip -->

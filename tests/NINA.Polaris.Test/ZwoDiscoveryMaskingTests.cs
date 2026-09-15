@@ -53,6 +53,25 @@ public class ZwoDiscoveryMaskingTests {
     /// <summary>THE FIELD SEQUENCE. Both cameras enumerate while nothing is
     /// open; then the imaging camera is opened and the SDK reports only it. The
     /// second camera must survive that, flagged as currently masked.</summary>
+    /// <summary>A rig that auto-connects a ZWO camera by id at boot never
+    /// scanned for it. Remember() puts it in the union anyway, keeping the
+    /// real model name once one is known.</summary>
+    [Test]
+    public void ACameraOpenedWithoutAScan_IsRemembered() {
+        ZwoDiscovery.Remember("0", "ASI2600MC Pro");
+        ZwoDiscovery.Remember("1", null);
+        var all = ZwoDiscovery.Merge(System.Array.Empty<Entry>());
+        Assert.That(all.Select(e => e.Id), Is.EqualTo(new[] { "0", "1" }));
+        Assert.That(all[0].Model, Is.EqualTo("ASI2600MC Pro"));
+        Assert.That(all[1].Model, Is.EqualTo("ASI #1"));
+        Assert.That(all.All(e => !e.Present), Is.True, "nothing on this scan, both are remembered");
+        // A later scan that names the placeholder upgrades it; a placeholder never overwrites a name.
+        ZwoDiscovery.Remember("1", "ASI120MM Mini");
+        ZwoDiscovery.Remember("0", null);
+        var again = ZwoDiscovery.Merge(System.Array.Empty<Entry>());
+        Assert.That(again.Select(e => e.Model), Is.EqualTo(new[] { "ASI2600MC Pro", "ASI120MM Mini" }));
+    }
+
     [Test]
     public void ACameraSeenBeforeAnOpen_SurvivesTheMasking() {
         var both = ZwoDiscovery.Merge(new[] {
