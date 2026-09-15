@@ -239,6 +239,23 @@ snaps onto the aux's **real solved rotation + scale**, so you know for
 certain the field and angle the aux photo will come out with instead of
 assuming it matches the mount. A toast reports the solved aux rotation.
 
+## Favourites
+
+The target card has a **☆ Favourite** button. A starred object goes into a
+list kept on the host (with the plans, not in the browser), so it is there
+on any tablet and for any rig. Favourites show up in three places: the
+**Favourites** chip in Tonight's Best, which lists every starred target
+that peaks above 30° tonight with its peak time; the **★ Favourites**
+button in the PLAN target picker; and the same panel's **Map** button,
+which frames the object on the sky map.
+
+The PLAN favourites panel also has **Import CSV** for a target list
+exported from Telescopius (list page, Export) or from any spreadsheet:
+the file needs a name column and right ascension and declination columns
+(header names such as "Catalogue Entry", "Right Ascension", "Declination"
+or plain "name", "ra", "dec"), in sexagesimal or decimal form. Targets
+already starred, by name or by position, are skipped.
+
 ## Slew & Center
 
 The big workflow button:

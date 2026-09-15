@@ -1398,3 +1398,8 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 }
 .editor-mask-brush .muted { font-size: 11.5px; line-height: 1.35; }
 
+/* PLAN: favourites picker */
+.plan-favourites { margin-top: 6px; }
+.plan-fav-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.plan-fav-head label.btn { margin-left: auto; cursor: pointer; }
+.plan-fav-item { display: flex; align-items: center; gap: 6px; }

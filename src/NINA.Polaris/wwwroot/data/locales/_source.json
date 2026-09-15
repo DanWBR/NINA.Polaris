@@ -4236,5 +4236,21 @@
   "Nebulae": "",
   "Clusters": "",
   "Planets": "",
-  "Comets": ""
+  "Comets": "",
+  "★ Favourite": "",
+  "☆ Favourite": "",
+  "Remove from favourites": "",
+  "Add to favourites (available in the planner and under the Favourites chip in Tonight's Best)": "",
+  "★ Favourites": "",
+  "Targets starred on the SKY tab or imported from a CSV list": "",
+  "No favourites yet. Star objects on the SKY tab, or import a target list.": "",
+  "Import CSV": "",
+  "Import a target list exported as CSV (Telescopius: list page, Export). Needs a name, a right ascension and a declination column.": "",
+  "Show on the sky map": "",
+  "Map": "",
+  "Removed from favourites": "",
+  "Added to favourites": "",
+  "Imported {n} target(s), {d} already starred, {s} skipped": "",
+  "Import failed": "",
+  "Favourites": ""
 }

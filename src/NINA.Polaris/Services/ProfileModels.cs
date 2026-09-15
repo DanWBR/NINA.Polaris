@@ -129,6 +129,11 @@ public class UserProfile {
     public DitherSettings? AutorunDither { get; set; }
     public SequenceEndActions? AutorunEndActions { get; set; }
 
+    // Favourite targets: starred on the SKY tab or imported from a target
+    // list (Telescopius CSV). Global like the plans, so a list built while
+    // browsing on one night is there for the planner on any rig.
+    public List<FavouriteTarget> Favourites { get; set; } = new();
+
     // Plate solver
     public string? AstapPath { get; set; }
     public double SolveToleranceArcsec { get; set; } = 30;
@@ -1206,6 +1211,19 @@ public class EquipmentProfile {
     public List<SequenceItem>? AutorunSequence { get; set; }
     public DitherSettings? AutorunDither { get; set; }
     public SequenceEndActions? AutorunEndActions { get; set; }
+}
+
+/// <summary>One starred target. J2000, hours and degrees like everything
+/// else in the catalogue; Source says where it came from ("sky", "csv").</summary>
+public class FavouriteTarget {
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string Name { get; set; } = "";
+    public string? CommonName { get; set; }
+    public string? Type { get; set; }
+    public double RaHours { get; set; }
+    public double DecDeg { get; set; }
+    public string? Source { get; set; }
+    public DateTime AddedUtc { get; set; } = DateTime.UtcNow;
 }
 
 public class ProfileSummary {

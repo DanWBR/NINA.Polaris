@@ -4855,5 +4855,21 @@
   "Nebulae": "Nebulosas",
   "Clusters": "Aglomerados",
   "Planets": "Planetas",
-  "Comets": "Cometas"
+  "Comets": "Cometas",
+  "★ Favourite": "★ Favorito",
+  "☆ Favourite": "☆ Favorito",
+  "Remove from favourites": "Remover dos favoritos",
+  "Add to favourites (available in the planner and under the Favourites chip in Tonight's Best)": "Adicionar aos favoritos (disponível no planejador e no chip Favoritos do Tonight's Best)",
+  "★ Favourites": "★ Favoritos",
+  "Targets starred on the SKY tab or imported from a CSV list": "Alvos marcados na aba SKY ou importados de uma lista CSV",
+  "No favourites yet. Star objects on the SKY tab, or import a target list.": "Nenhum favorito ainda. Marque objetos na aba SKY ou importe uma lista de alvos.",
+  "Import CSV": "Importar CSV",
+  "Import a target list exported as CSV (Telescopius: list page, Export). Needs a name, a right ascension and a declination column.": "Importa uma lista de alvos exportada em CSV (Telescopius: página da lista, Export). Precisa de uma coluna de nome, uma de ascensão reta e uma de declinação.",
+  "Show on the sky map": "Mostrar no mapa do céu",
+  "Map": "Mapa",
+  "Removed from favourites": "Removido dos favoritos",
+  "Added to favourites": "Adicionado aos favoritos",
+  "Imported {n} target(s), {d} already starred, {s} skipped": "Importados {n} alvo(s), {d} já marcados, {s} ignorados",
+  "Import failed": "Falha na importação",
+  "Favourites": "Favoritos"
 }
