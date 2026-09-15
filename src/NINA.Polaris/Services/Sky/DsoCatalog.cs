@@ -417,12 +417,16 @@ public class DsoCatalog {
                           + "AND size_arcmin IS NOT NULL AND size_arcmin >= $minsize)";
                     cmd.Parameters.AddWithValue("$minsize", minSizeNoMag.Value);
                 }
+                // The hand-curated famous objects (scripts/build-named-objects.py, catalog 'Notable':
+                // Phoenix A, TON 618, Hoag's Object...) are mostly fainter than
+                // any cap and are wanted on the map precisely because people
+                // go looking for them; two dozen rows, always in.
                 cmd.CommandText = @"
                     SELECT catalog, catalog_id, name, common_name, type,
                            ra_hours, dec_deg, magnitude, size_arcmin,
                            constellation, aliases
                     FROM objects
-                    WHERE " + notStars + " AND (" + where + ")";
+                    WHERE (" + notStars + " AND (" + where + ")) OR catalog = 'Notable'";
                 cmd.Parameters.AddWithValue("$cap", magCap.Value);
             } else {
                 cmd.CommandText = @"

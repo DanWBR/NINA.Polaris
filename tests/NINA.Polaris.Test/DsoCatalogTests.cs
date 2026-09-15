@@ -156,7 +156,9 @@ public class DsoCatalogTests {
         // Should be enough Messier + a handful of NGC/IC, but not the
         // dim Abell clusters or faint NGC galaxies.
         Assert.That(bright.Count, Is.GreaterThan(50));
-        Assert.That(bright.All(o => (o.Magnitude ?? double.MaxValue) <= 8.0),
+        // The hand-curated 'Notable' rows ride along whatever the cap.
+        Assert.That(bright.Where(o => o.Catalog != "Notable")
+                          .All(o => (o.Magnitude ?? double.MaxValue) <= 8.0),
             Is.True);
     }
 
@@ -216,6 +218,46 @@ public class DsoCatalogTests {
         var hits = await _catalog.SearchAsync(query, 5);
         Assert.That(hits, Is.Not.Empty, query);
         Assert.That(hits[0].Name, Is.EqualTo(expectedName), query);
+    }
+
+    // Famous objects with no NGC / IC / Messier number: "Phoenix A" was
+    // nowhere, on the map or in the search. scripts/build-named-objects.py
+    // carries a hand-curated list under catalog 'Notable'.
+    [TestCase("Phoenix A", "Phoenix A")]
+    [TestCase("Phoenix Cluster", "Phoenix A")]
+    [TestCase("SPT-CL J2344-4243", "Phoenix A")]
+    [TestCase("TON 618", "TON 618")]
+    [TestCase("ton618", "TON 618")]
+    [TestCase("3C 273", "3C 273")]
+    [TestCase("Hoag's Object", "Hoag's Object")]
+    [TestCase("Einstein Cross", "Einstein Cross")]
+    [TestCase("Cygnus X-1", "Cygnus X-1")]
+    [TestCase("Sgr A*", "Sagittarius A*")]
+    [TestCase("Markarian's Chain", "Markarian's Chain")]
+    [TestCase("Cas A", "Cassiopeia A")]
+    [TestCase("Tabby's Star", "Tabby's Star")]
+    [TestCase("Vela Pulsar", "Vela Pulsar")]
+    [TestCase("PSR B1919+21", "PSR B1919+21")]
+    [TestCase("Cygnus A", "Cygnus A")]
+    [TestCase("BL Lac", "BL Lacertae")]
+    [TestCase("Coma Cluster", "Coma Cluster")]
+    [TestCase("Leo Triplet", "Leo Triplet")]
+    [TestCase("LMC", "Large Magellanic Cloud")]
+    [TestCase("Wolf 359", "Wolf 359")]
+    [TestCase("TRAPPIST-1", "TRAPPIST-1")]
+    [TestCase("Hubble Ultra Deep Field", "Hubble Ultra Deep Field")]
+    public async Task SearchAsync_NamedObjects_AreFound(string query, string expectedName) {
+        var hits = await _catalog.SearchAsync(query, 5);
+        Assert.That(hits, Is.Not.Empty, query);
+        Assert.That(hits[0].Name, Is.EqualTo(expectedName), query);
+    }
+
+    /// <summary>Unlike the star tables, the named objects are deep-sky targets
+    /// and belong on the map and in the planning pools.</summary>
+    [Test]
+    public async Task LoadAllAsync_IncludesTheNamedObjects() {
+        var all = await _catalog.LoadAllAsync();
+        Assert.That(all.Any(o => o.Name == "Phoenix A"), Is.True);
     }
 
     /// <summary>"P Cyg" is also a substring of "Alp Cyg" (Deneb), and Deneb is
