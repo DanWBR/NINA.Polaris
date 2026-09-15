@@ -25421,12 +25421,12 @@ function ninaApp() {
             const page = document.querySelector('.tab-panel-equip');
             if (!page || page.dataset.rigsRedesigned === 'true') return;
 
-            const makeSection = (label, className = 'equip-subsystem', open = false) => {
+            const makeSection = (label, className = 'equip-subsystem', open = false, icon = '') => {
                 const section = document.createElement('details');
                 section.className = className;
                 section.open = open;
                 const summary = document.createElement('summary');
-                summary.innerHTML = `<span>${label}</span><small></small>`;
+                summary.innerHTML = `${icon ? `<span class="equip-card-icon" aria-hidden="true">${icon}</span>` : ''}<span>${label}</span><small></small>`;
                 section.appendChild(summary);
                 const body = document.createElement('div');
                 body.className = 'equip-accordion-body';
@@ -25501,12 +25501,12 @@ function ninaApp() {
             connectionPanel?.remove();
 
             const equipment = makeSection('Equipment', 'equip-management-section', true);
-            const telescope = makeSection('Telescope', 'equip-subsystem', true);
-            const camera = makeSection('Camera');
-            const guiding = makeSection('Guiding');
-            const mount = makeSection('Mount');
-            const filterWheel = makeSection('Filter Wheel');
-            const rotator = makeSection('Rotator');
+            const telescope = makeSection('Telescope', 'equip-subsystem', true, '🔭');
+            const camera = makeSection('Camera', 'equip-subsystem', false, '📷');
+            const guiding = makeSection('Guiding', 'equip-subsystem', false, '🔭');
+            const mount = makeSection('Mount', 'equip-subsystem', false, '🔭');
+            const filterWheel = makeSection('Filter Wheel', 'equip-subsystem', false, '⚙️');
+            const rotator = makeSection('Rotator', 'equip-subsystem', false, '🔀');
             const accessories = makeSection('Accessories');
             const auxiliary = makeSection('Auxiliary Telescope');
 
@@ -25529,7 +25529,8 @@ function ninaApp() {
                     const title = group.querySelector(':scope > .equip-group-title')?.textContent.trim();
                     if (!title) return;
                     group.querySelector(':scope > .equip-group-title')?.remove();
-                    const section = makeSection(title);
+                    const auxiliaryIcons = { 'Camera + Lens/Scope': '📷', 'Focus Motor': '🔍' };
+                    const section = makeSection(title, 'equip-subsystem', false, auxiliaryIcons[title]);
                     section.section.classList.add('equip-role-card');
                     while (group.firstChild) section.body.appendChild(group.firstChild);
                     auxiliaryGrid.appendChild(section.section);
@@ -25561,7 +25562,8 @@ function ninaApp() {
                 const card = findCard(title);
                 const body = card?.querySelector(':scope > .equip-card-body');
                 if (!body) return;
-                const accessory = makeSection(title);
+                const accessoryIcons = { 'Flat Panel': '💡', Dome: '🏛️', Weather: '☁️', 'Power Box': '🔌' };
+                const accessory = makeSection(title, 'equip-subsystem', false, accessoryIcons[title]);
                 accessory.section.classList.add('equip-role-card');
                 while (body.firstChild) accessory.body.appendChild(body.firstChild);
                 accessoryGrid.appendChild(accessory.section);

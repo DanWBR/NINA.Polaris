@@ -157,7 +157,7 @@ body.link-offline .preview-pane::after {
     align-items: center;
     gap: 3px;
     padding: 0 4px;
-    font-size: 11px;
+    font-size: 14px;
     line-height: 1;
     white-space: nowrap;
 }
@@ -1185,6 +1185,17 @@ body.link-offline .preview-pane::after {
     margin: 0;
     min-width: 0;
 }
+.equip-role-card > summary {
+    display: list-item;
+    list-style: revert;
+}
+.equip-role-card > summary::marker { color: var(--accent); font-size: 12px; }
+.equip-role-card > summary > .equip-card-icon {
+    float: right;
+    margin-left: 8px;
+    font-size: 15px;
+}
+.equip-role-card > summary > small { float: right; margin: 0; }
 .equip-settings-group {
     padding: 10px 0 14px;
     border-bottom: 1px solid var(--border);
@@ -1198,6 +1209,8 @@ body.link-offline .preview-pane::after {
 .indi-device-card { display: block; }
 .indi-device-card > summary { cursor: pointer; list-style: revert; }
 .indi-device-card > summary::marker { color: var(--accent); font-size: 12px; }
+.indi-device-card-header > span:first-child { order: 3; margin-left: 8px; }
+.indi-device-card-header > span:last-child { order: 2; margin-left: auto !important; }
 .ctrl-editor-grid > details.ctrl-panel-card {
     display: block;
     height: auto !important;
