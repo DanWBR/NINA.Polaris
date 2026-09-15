@@ -252,6 +252,56 @@ public static class SkyEndpoints {
             }));
         });
 
+        // ---- Favourites ----
+        // Starred from the SKY card or imported from a CSV target list; the
+        // planner offers them, Tonight's Best lists them under their own chip.
+        group.MapGet("/favourites", (ProfileService profiles) =>
+            Results.Ok(profiles.Active.Favourites
+                .OrderByDescending(f => f.AddedUtc)
+                .Select(FavouriteDto)));
+
+        group.MapPost("/favourites", (FavouriteRequest req, ProfileService profiles) => {
+            if (string.IsNullOrWhiteSpace(req.Name)) return Results.BadRequest(new { error = "A name is required." });
+            if (req.RaHours is < 0 or >= 24 || req.DecDeg is < -90 or > 90)
+                return Results.BadRequest(new { error = "Coordinates out of range." });
+            var existing = FindFavourite(profiles.Active.Favourites, req.Name, req.RaHours, req.DecDeg);
+            if (existing != null) return Results.Ok(new { added = false, favourite = FavouriteDto(existing) });
+            var fav = new FavouriteTarget {
+                Name = req.Name.Trim(), CommonName = req.CommonName, Type = req.Type,
+                RaHours = req.RaHours, DecDeg = req.DecDeg, Source = req.Source ?? "sky"
+            };
+            profiles.Active.Favourites.Add(fav);
+            profiles.Save();
+            return Results.Ok(new { added = true, favourite = FavouriteDto(fav) });
+        });
+
+        group.MapDelete("/favourites/{id}", (string id, ProfileService profiles) => {
+            var n = profiles.Active.Favourites.RemoveAll(f => f.Id == id);
+            if (n == 0) return Results.NotFound();
+            profiles.Save();
+            return Results.Ok(new { removed = n });
+        });
+
+        // A target list exported as CSV (Telescopius and the like). Duplicates
+        // of what is already starred are skipped, not doubled.
+        group.MapPost("/favourites/import", (FavouriteImportRequest req, ProfileService profiles) => {
+            var parsed = NINA.Polaris.Services.Sky.TargetListCsv.Parse(req.Csv ?? "");
+            int added = 0, duplicates = 0;
+            foreach (var t in parsed.Targets) {
+                if (FindFavourite(profiles.Active.Favourites, t.Name, t.RaHours, t.DecDeg) != null) { duplicates++; continue; }
+                profiles.Active.Favourites.Add(new FavouriteTarget {
+                    Name = t.Name, CommonName = t.CommonName, Type = t.Type,
+                    RaHours = t.RaHours, DecDeg = t.DecDeg, Source = "csv"
+                });
+                added++;
+            }
+            if (added > 0) profiles.Save();
+            return Results.Ok(new {
+                added, duplicates, skipped = parsed.Skipped, errors = parsed.Errors,
+                favourites = profiles.Active.Favourites.OrderByDescending(f => f.AddedUtc).Select(FavouriteDto)
+            });
+        });
+
         // ---- Catalog filters (Sky Atlas) ----
 
         group.MapGet("/catalog/types", (SkyCatalogService catalog) => {
@@ -745,6 +795,27 @@ public static class SkyEndpoints {
                  + Math.Cos(d1) * Math.Cos(d2) * Math.Sin(dRa / 2) * Math.Sin(dRa / 2);
         double c = 2 * Math.Atan2(Math.Sqrt(a), Math.Sqrt(1 - a));
         return c / D2R;
+    }
+
+    public record FavouriteRequest(string Name, double RaHours, double DecDeg,
+        string? CommonName = null, string? Type = null, string? Source = null);
+    public record FavouriteImportRequest(string? Csv);
+
+    private static object FavouriteDto(FavouriteTarget f) => new {
+        id = f.Id, name = f.Name, commonName = f.CommonName, type = f.Type,
+        raHours = f.RaHours, decDeg = f.DecDeg, source = f.Source, addedUtc = f.AddedUtc
+    };
+
+    /// <summary>The same target already starred: same name (case-insensitive)
+    /// or within an arcminute of the same spot.</summary>
+    internal static FavouriteTarget? FindFavourite(IEnumerable<FavouriteTarget> list, string name, double raHours, double decDeg) {
+        foreach (var f in list) {
+            if (string.Equals(f.Name?.Trim(), name?.Trim(), StringComparison.OrdinalIgnoreCase)) return f;
+            double dDec = Math.Abs(f.DecDeg - decDeg);
+            double dRa = Math.Abs(f.RaHours - raHours) * 15.0 * Math.Cos(decDeg * Math.PI / 180.0);
+            if (dDec < 1.0 / 60 && dRa < 1.0 / 60) return f;
+        }
+        return null;
     }
 
     public record SlewAndCenterRequest(double Ra, double Dec, double ToleranceArcsec = 30.0,

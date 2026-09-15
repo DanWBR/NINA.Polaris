@@ -20028,6 +20028,7 @@ function ninaApp() {
                 case 'moon':    return cat === 'moon';
                 case 'comet':   return cat === 'comet';
                 case 'notable': return cat === 'notable';
+                case 'favourite': return cat === 'favourite';
                 case 'dso':     return cat === 'dso';
                 default:        return true;
             }
@@ -20047,6 +20048,7 @@ function ninaApp() {
                 // Quasars, pulsars, black holes, lenses, famous stars: the
                 // hand-curated Notable catalogue, gated by altitude only.
                 { key: 'notable', label: 'Notable' },
+                { key: 'favourite', label: 'Favourites' },
             ];
             const chips = [{ key: 'all', label: 'All' }];
             for (const d of defs) {
@@ -25146,6 +25148,7 @@ function ninaApp() {
         },
 
         async loadPlans() {
+            if (!this.favouritesLoaded) this.loadFavourites();
             try {
                 const r = await this.apiFetch('/api/plan/plans');
                 this.plans = await r.json() || [];
@@ -30319,6 +30322,114 @@ function ninaApp() {
                 this.startSlewCenterPolling();
             } catch (e) {
                 this.toastFail('Rotate failed', e);
+            }
+        },
+
+        // ─── Favourites ─────────────────────────────────────────────────
+        //
+        // A list of targets the operator starred while browsing the sky, or
+        // imported from a target list (Telescopius CSV). Lives in the host
+        // profile like the plans, so it follows the rig, not the browser.
+        favourites: [],
+        favouritesLoaded: false,
+        planAddFavOpen: false,
+
+        async loadFavourites() {
+            try {
+                this.favourites = await this.apiGet('/api/sky/favourites') || [];
+                this.favouritesLoaded = true;
+            } catch (e) { /* offline or not signed in yet; the list stays as it was */ }
+        },
+
+        /// The starred entry for a name or a position (within an arcminute).
+        _favouriteFor(name, raHours, decDeg) {
+            const n = (name || '').trim().toLowerCase();
+            for (const f of this.favourites) {
+                if (n && (f.name || '').trim().toLowerCase() === n) return f;
+                if (Number.isFinite(raHours) && Number.isFinite(decDeg)) {
+                    const dDec = Math.abs(f.decDeg - decDeg);
+                    const dRa = Math.abs(f.raHours - raHours) * 15 * Math.cos(decDeg * Math.PI / 180);
+                    if (dDec < 1 / 60 && dRa < 1 / 60) return f;
+                }
+            }
+            return null;
+        },
+
+        skyInfoIsFavourite() {
+            const i = this.skyInfo;
+            if (!i || !i.visible) return false;
+            return !!this._favouriteFor(i.title, i.raDeg / 15, i.decDeg);
+        },
+
+        /// Star or unstar the object in the SKY card.
+        async skyInfoToggleFavourite() {
+            const i = this.skyInfo;
+            if (!i || !Number.isFinite(i.raDeg) || !Number.isFinite(i.decDeg)) return;
+            const existing = this._favouriteFor(i.title, i.raDeg / 15, i.decDeg);
+            try {
+                if (existing) {
+                    await this.apiFetch(`/api/sky/favourites/${encodeURIComponent(existing.id)}`, { method: 'DELETE' });
+                    this.favourites = this.favourites.filter(f => f.id !== existing.id);
+                    this.toast(this.$t('Removed from favourites'), 'ok');
+                } else {
+                    const resp = await this.apiPost('/api/sky/favourites', {
+                        name: i.title, commonName: null,
+                        type: Array.isArray(i.types) && i.types.length ? i.types[0] : null,
+                        raHours: i.raDeg / 15, decDeg: i.decDeg, source: 'sky'
+                    });
+                    const r = await resp.json();
+                    if (r && r.favourite && r.added) this.favourites.unshift(r.favourite);
+                    this.toast(this.$t('Added to favourites'), 'ok');
+                }
+            } catch (e) {
+                this.toastFail('Favourites', e);
+            }
+        },
+
+        async removeFavourite(f) {
+            try {
+                await this.apiFetch(`/api/sky/favourites/${encodeURIComponent(f.id)}`, { method: 'DELETE' });
+                this.favourites = this.favourites.filter(x => x.id !== f.id);
+            } catch (e) { this.toastFail('Favourites', e); }
+        },
+
+        /// Show a favourite on the sky map.
+        favouriteShowOnMap(f) {
+            this.tab = 'sky';
+            this.$nextTick(() => this.selectSkyTarget({
+                name: f.name, ra: f.raHours, dec: f.decDeg,
+                type: f.type || 'Favourite', commonName: f.commonName || null, aliases: [], magnitude: null
+            }));
+        },
+
+        planAddTargetFromFavourite(f) {
+            this.planAddTargetFromCatalog({
+                name: f.name, commonName: f.commonName, ra: f.raHours, dec: f.decDeg, type: f.type
+            });
+            this.planAddFavOpen = false;
+        },
+
+        /// A target list exported as CSV (Telescopius "Export list", or any
+        /// sheet with name, RA and Dec columns) goes straight into favourites.
+        async importFavouritesCsv(ev) {
+            const file = ev && ev.target && ev.target.files && ev.target.files[0];
+            if (!file) return;
+            try {
+                const csv = await file.text();
+                const resp = await this.apiPost('/api/sky/favourites/import', { csv });
+                const r = await resp.json();
+                if (Array.isArray(r.favourites)) this.favourites = r.favourites;
+                const msg = this.$t('Imported {n} target(s), {d} already starred, {s} skipped',
+                    { n: r.added, d: r.duplicates, s: r.skipped });
+                this.toast(msg, r.added > 0 ? 'ok' : 'warn');
+                if (Array.isArray(r.errors) && r.errors.length) {
+                    console.warn('[Polaris] favourites import:', r.errors);
+                    if (r.added === 0) this.toast(r.errors[0], 'warn');
+                }
+            } catch (e) {
+                this.toastFail('Import failed', e);
+            } finally {
+                try { ev.target.value = ''; } catch (_) { }
             }
         },
 
@@ -41968,6 +42079,7 @@ function ninaApp() {
             const subtitle = obj.subtitle
                 || (obj.types ? obj.types.join(' · ') : '');
 
+            if (!this.favouritesLoaded) this.loadFavourites();
             this.skyInfo = {
                 visible: true,
                 title: obj.name || 'Unknown',

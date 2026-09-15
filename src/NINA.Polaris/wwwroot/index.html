@@ -9587,6 +9587,13 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     :disabled="!skyInfo.title">
                                 Add to Sequence
                             </button>
+                            <!-- Favourites: a list kept on the host for the
+                                 planner and the Tonight's Best chip. -->
+                            <button class="btn btn-sm" :class="skyInfoIsFavourite() ? 'btn-active' : ''"
+                                    @click="skyInfoToggleFavourite()"
+                                    :disabled="!Number.isFinite(skyInfo.raDeg)"
+                                    :title="skyInfoIsFavourite() ? 'Remove from favourites' : 'Add to favourites (available in the planner and under the Favourites chip in Tonight\'s Best)'"
+                                    x-text="skyInfoIsFavourite() ? '★ Favourite' : '☆ Favourite'"></button>
                         </div>
                     </div>
 
@@ -11093,7 +11100,31 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <button class="btn btn-sm" @click="planAddTargetManual()">＋ Manual</button>
                                 <button class="btn btn-sm" @click="planAddTargetFromMount()" title="Add a target at the mount's current pointing, named after the catalogued object there">＋ Mount position</button>
                                 <button class="btn btn-sm" @click="planAddCatalogOpen = !planAddCatalogOpen" :class="{ 'btn-active': planAddCatalogOpen }">＋ Catalog</button>
+                                <button class="btn btn-sm" @click="planAddFavOpen = !planAddFavOpen; if (planAddFavOpen) loadFavourites()" :class="{ 'btn-active': planAddFavOpen }"
+                                        title="Targets starred on the SKY tab or imported from a CSV list">★ Favourites</button>
                                 <button class="btn btn-sm" @click="planFrameInSky()">Frame in SkyAtlas</button>
+                            </div>
+                            <div x-show="planAddFavOpen" class="plan-catalog plan-favourites">
+                                <div class="plan-fav-head">
+                                    <span class="muted" x-show="favourites.length === 0">No favourites yet. Star objects on the SKY tab, or import a target list.</span>
+                                    <span class="muted" x-show="favourites.length > 0" x-text="favourites.length + ' favourite(s)'"></span>
+                                    <label class="btn btn-sm" title="Import a target list exported as CSV (Telescopius: list page, Export). Needs a name, a right ascension and a declination column.">
+                                        Import CSV
+                                        <input type="file" accept=".csv,text/csv,text/plain" style="display:none" @change="importFavouritesCsv($event)">
+                                    </label>
+                                </div>
+                                <div class="plan-cat-results">
+                                    <template x-for="f in favourites" :key="'fav-'+f.id">
+                                        <div class="plan-cat-item plan-fav-item">
+                                            <span @click="planAddTargetFromFavourite(f)" style="flex:1;cursor:pointer">
+                                                <span x-text="f.commonName ? (f.name + ' (' + f.commonName + ')') : f.name"></span>
+                                                <span class="muted" x-text="(f.type || '') + ' · RA ' + (f.raHours||0).toFixed(2) + 'h Dec ' + (f.decDeg||0).toFixed(1) + '°'"></span>
+                                            </span>
+                                            <button class="btn btn-sm" @click.stop="favouriteShowOnMap(f)" title="Show on the sky map">Map</button>
+                                            <button class="btn btn-sm btn-icon btn-danger" @click.stop="removeFavourite(f)" title="Remove from favourites">✕</button>
+                                        </div>
+                                    </template>
+                                </div>
                             </div>
                             <div x-show="planAddCatalogOpen" class="plan-catalog">
                                 <input type="text" x-model="planCatQuery" @input.debounce.300ms="planCatSearch()" placeholder="Search catalog (e.g. M31, NGC 7000)…">

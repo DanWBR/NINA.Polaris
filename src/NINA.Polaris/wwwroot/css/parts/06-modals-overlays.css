@@ -272,6 +272,7 @@
 .tonight-card--dso    { border-left: 3px solid #90caf9; }
 .tonight-card--comet  { border-left: 3px solid #ce93d8; }
 .tonight-card--notable { border-left: 3px solid #ffab91; }
+.tonight-card--favourite { border-left: 3px solid #ffd54f; }
 
 .tonight-thumb {
     width: 80px;

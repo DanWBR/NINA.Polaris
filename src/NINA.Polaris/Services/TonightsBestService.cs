@@ -223,6 +223,28 @@ public class TonightsBestService {
         // have their own chip, and by score they would never make the cut.
         ordered.AddRange(notableItems.OrderByDescending(i => i.Score));
 
+        // Favourites: the operator's own list, under its own chip, gated by
+        // altitude and horizon only, so the answer to "which of my targets
+        // are worth it tonight" is one tap away.
+        var favItems = new List<TonightCandidate>();
+        foreach (var f in _profile.Active.Favourites) {
+            if (f.RaHours is < 0 or >= 24 || f.DecDeg is < -90 or > 90) continue;
+            var (peakAlt, peakAz, peakUtc) = PeakAltitude(f.RaHours, f.DecDeg, nightStart, nightEnd, stepMinutes: 30);
+            if (peakAlt < 30) continue;
+            if (PeakBlockedByHorizon(peakAlt, peakAz)) continue;
+            var (curAlt, curAz) = AltitudeService.RaDecToAltAz(f.RaHours, f.DecDeg, nowUtc, lat, lng);
+            favItems.Add(new TonightCandidate(
+                Category: "Favourite", Name: f.Name, CommonName: f.CommonName, Type: f.Type,
+                RaHours: f.RaHours, DecDeg: f.DecDeg, Magnitude: null, Size: null,
+                SizeMajorArcmin: null, SizeMinorArcmin: null,
+                CurrentAltDeg: Math.Round(curAlt, 1), CurrentAzDeg: Math.Round(curAz, 1),
+                PeakAltDeg: Math.Round(peakAlt, 1), PeakUtc: peakUtc,
+                Score: (int)Math.Round(peakAlt / 90.0 * 40),
+                FitsCameraFov: null, CameraFovWidthArcmin: fov?.WidthArcmin, CameraFovHeightArcmin: fov?.HeightArcmin,
+                Catalog: "Favourite"));
+        }
+        ordered.AddRange(favItems.OrderByDescending(i => i.Score));
+
         // …then append comets unconditionally. They share their own
         // category-filter chip in the UI, so cutting them by the global
         // limit (DSOs dominate the top of the list and would always
