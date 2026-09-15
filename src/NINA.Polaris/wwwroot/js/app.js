@@ -9962,8 +9962,47 @@ function ninaApp() {
             if (!Number.isFinite(s)) s = 1;
             this.dispSaturation = s;
             try { localStorage.setItem('polaris-disp-saturation', String(s)); } catch (_) { }
-            // Re-blit the last frame (raw path re-renders, JPEG path
-            // re-paints the cached decode) so the slider is live.
+            // Saturation is a canvas filter applied at fan-out, so the slider
+            // only needs the last GPU render blitted again. It used to call
+            // applyManualStretch, which re-measures the whole frame and
+            // re-uploads every 16-bit plane to the GPU (150 MB on a 26 MP
+            // colour stack) on EVERY input event of the drag; on a tablet that
+            // took seconds per step and the WebView ran out of memory.
+            this._scheduleRefan();
+        },
+
+        // One repaint per animation frame, whatever the input rate.
+        _scheduleRefan() {
+            if (this._refanPending) return;
+            this._refanPending = true;
+            // rAF is paused while the page is not being drawn (a backgrounded
+            // WebView); the timer makes sure the value still lands.
+            let done = false;
+            const run = () => {
+                if (done) return;
+                done = true;
+                this._refanPending = false;
+                this._refanLastRender();
+            };
+            requestAnimationFrame(run);
+            setTimeout(run, 80);
+        },
+
+        // Blit the last render again with the current display filter. The
+        // offscreen GL canvas still holds the stretched frame; the JPEG path
+        // keeps its decoded image. Only when neither exists is a full
+        // re-stretch needed.
+        _refanLastRender() {
+            const last = this._glLastFanout;
+            if (last && this._glCanvas && this._glCanvas.width === last.w && this._glCanvas.height === last.h) {
+                this._fanOutFrameToCanvases(this._glCanvas, last.w, last.h, last.frameKind);
+                return;
+            }
+            if (!this._lastRawFrame && this._lastJpegFrame) {
+                const src = this._buildJpegDisplayCanvas();
+                if (src) this._paintJpegToCanvases(src, this._lastJpegFrame.frameKind || 0);
+                return;
+            }
             this.applyManualStretch();
         },
         // Canvas-2D filter string for the current setting; '' = skip
@@ -11034,6 +11073,16 @@ function ninaApp() {
             if (!this._initWebGL()) return false;
             const gl = this._gl;
             const isRgb = (channels | 0) === 3 && pixels.length >= width * height * 3;
+            // The stretch sliders re-render the SAME frame many times a second.
+            // Each frame arrives as a fresh array, so identity of the pixel
+            // buffer (plus geometry and layout) says whether the textures on
+            // the GPU already hold it; when they do, only the uniforms change.
+            const texKey = { pixels, width, height, isRgb };
+            const sameTex = !!(this._glTexKey
+                && this._glTexKey.pixels === pixels
+                && this._glTexKey.width === width
+                && this._glTexKey.height === height
+                && this._glTexKey.isRgb === isRgb);
             // GPU surface is an OFFSCREEN canvas, not the LIVE display.
             // _initWebGL() creates it once and attaches the WebGL2
             // context to it. Rendering used to target liveCanvas
@@ -11082,8 +11131,8 @@ function ninaApp() {
                        || Math.floor(cellsY / dec) * 2 > hwMax) dec++;
                 const ocx = Math.floor(cellsX / dec), ocy = Math.floor(cellsY / dec);
                 const tw = ocx * 2, th = ocy * 2;
-                const out = new Uint16Array(tw * th);
-                for (let cy = 0; cy < ocy; cy++) {
+                const out = sameTex ? null : new Uint16Array(tw * th);
+                for (let cy = 0; cy < ocy && out; cy++) {
                     const sy = cy * dec * 2;
                     const s0 = sy * width, s1 = (sy + 1) * width;
                     const d0 = (cy * 2) * tw, d1 = (cy * 2 + 1) * tw;
@@ -11152,6 +11201,7 @@ function ninaApp() {
                               : k === 1 ? this._glTextureG : this._glTextureB;
                     gl.activeTexture(gl.TEXTURE0 + k);
                     gl.bindTexture(gl.TEXTURE_2D, tex);
+                    if (sameTex) return true;
                     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
                     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
                     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -11169,7 +11219,8 @@ function ninaApp() {
                     return true;
                 });
                 gl.activeTexture(gl.TEXTURE0);
-                if (!ok) return false;
+                if (!ok) { this._glTexKey = null; return false; }
+                this._glTexKey = texKey;
                 gl.uniform1i(this._glLocs.channels, 3);
                 gl.uniform1i(this._glLocs.bayer, 0);
                 gl.uniform1f(this._glLocs.sBlack, this.stretchBlack);
@@ -11208,7 +11259,7 @@ function ninaApp() {
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-            try {
+            if (!sameTex) try {
                 gl.getError();   // clear any stale error first
                 gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16UI, width, height, 0,
                     gl.RED_INTEGER, gl.UNSIGNED_SHORT, pixels);
@@ -11220,10 +11271,13 @@ function ninaApp() {
                 if (glErr !== gl.NO_ERROR) {
                     console.warn('R16UI texture upload failed: GL error 0x'
                         + glErr.toString(16) + ' for ' + width + 'x' + height);
+                    this._glTexKey = null;
                     return false;
                 }
+                this._glTexKey = texKey;
             } catch (e) {
                 console.warn('R16UI texture upload failed:', e);
+                this._glTexKey = null;
                 return false;
             }
 
@@ -11761,6 +11815,9 @@ function ninaApp() {
                 this.drawHistogram();   // refresh the histogram mini-panel
                 return;
             }
+            // The GL canvas no longer shows the newest frame; a display-only
+            // repaint must go through the full path until the next GL render.
+            this._glLastFanout = null;
 
             // Build a native-resolution offscreen bitmap once, then fan
             // out to every visible canvas. Previously this drew only
@@ -11879,6 +11936,9 @@ function ninaApp() {
         },
 
         _fanOutFrameToCanvases(src, srcW, srcH, frameKind = 0) {
+            // What the GPU last rendered, so a display-only control (saturation)
+            // can repaint without re-uploading the frame.
+            if (src && src === this._glCanvas) this._glLastFanout = { w: srcW, h: srcH, frameKind };
             const targets = this._canvasIdsForFrameKind(frameKind);
             const skipLive = (src && src.id === 'liveCanvas');   // src IS liveCanvas → don't blit-to-self
             // Diagnostic accumulator. ALWAYS log for non-Live kinds
