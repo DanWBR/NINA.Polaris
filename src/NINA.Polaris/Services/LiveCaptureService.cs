@@ -62,12 +62,15 @@ public sealed class LiveCaptureService {
     public long FrameCount { get; private set; }
     public string? LastError { get; private set; }
 
+    private readonly ProfileService? _profile;
+
     public LiveCaptureService(EquipmentManager equip, LiveStackingService liveStack,
         ImageRelayService relay, CaptureProgressService captureProgress,
         ActiveGuiderProvider guiders, AutoFocusService autoFocus,
         AuxCaptureService aux, CameraReadyGate cameraReady,
         MeridianFlipService meridian, DitherBarrier barrier,
-        ILogger<LiveCaptureService> logger) {
+        ILogger<LiveCaptureService> logger, ProfileService? profile = null) {
+        _profile = profile;
         _equip = equip;
         _liveStack = liveStack;
         _relay = relay;
@@ -197,6 +200,7 @@ public sealed class LiveCaptureService {
                 try {
                     var opts = new CaptureOptions(
                         Gain: Gain > 0 ? Gain : (int?)null,
+                        Offset: RigCaptureDefaults.Offset(_profile),
                         BinX: BinX, BinY: BinX,
                         ImageType: "LIGHT");
                     using (_captureProgress.Begin("live", ExposureSeconds))

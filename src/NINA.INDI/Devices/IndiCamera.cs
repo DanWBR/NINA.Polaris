@@ -52,6 +52,14 @@ public class IndiCamera : ICamera, IDisposable {
     // Last offset applied via CCD_CONTROLS, stamped into FITS metadata when the
     // driver's own BLOB header didn't carry an OFFSET card.
     private int _offset;
+    // Set when the driver may no longer hold the controls we last wrote: a
+    // capture that failed or timed out (indi_asi_ccd restarts the exposure
+    // internally and can re-initialise the camera on the way, which puts the
+    // hardware back at gain 0 / offset 0 while its properties still echo the
+    // old values), and a CONNECTION or CCD_CONTROLS (re)definition. The next
+    // capture then writes gain, offset and binning without consulting the
+    // property snapshot.
+    private volatile bool _resendControls = true;
     // Last non-None CFA pattern observed on CCD_CFA. An OSC sensor's
     // Bayer layout never changes during a session, so once we've seen it
     // we keep it: the INDI property store can transiently lose CCD_CFA
@@ -349,7 +357,7 @@ public class IndiCamera : ICamera, IDisposable {
     /// and sending it triggers a "Property CCD_CONTROLS is not defined"
     /// dispatch error in indiserver's log. Also handles driver-specific
     /// casing, Gain (most), gain (a few), GAIN (rare).</summary>
-    private async Task TrySetGainAsync(int gain, CancellationToken ct) {
+    private async Task TrySetGainAsync(int gain, CancellationToken ct, bool force = false) {
         var ctrl = _client.GetProperty(DeviceName, "CCD_CONTROLS") as IndiNumberProperty;
         if (ctrl == null) return;   // driver doesn't expose CCD_CONTROLS (e.g. CCD Simulator)
         string? key = null;
@@ -358,7 +366,7 @@ public class IndiCamera : ICamera, IDisposable {
         }
         if (key == null) return;   // CCD_CONTROLS exists but no gain element
         var wanted = new Dictionary<string, double> { [key] = gain };
-        if (AlreadyAt(ctrl, wanted)) return;   // already at this gain — don't re-send (see CaptureAsync churn note)
+        if (!force && AlreadyAt(ctrl, wanted)) return;   // already at this gain — don't re-send (see CaptureAsync churn note)
         try {
             await _client.SetNumberAsync(DeviceName, "CCD_CONTROLS", wanted, ct);
         } catch { /* driver rejected the value (out of range?), non-fatal */ }
@@ -369,7 +377,7 @@ public class IndiCamera : ICamera, IDisposable {
     /// the sensor bias pedestal — leaving it at 0 pins the background near
     /// black and clips the left of the histogram; most OSC/CMOS rigs want a
     /// small positive offset (per-rig DefaultOffset).</summary>
-    private async Task TrySetOffsetAsync(int offset, CancellationToken ct) {
+    private async Task TrySetOffsetAsync(int offset, CancellationToken ct, bool force = false) {
         var ctrl = _client.GetProperty(DeviceName, "CCD_CONTROLS") as IndiNumberProperty;
         if (ctrl == null) return;
         string? key = null;
@@ -379,10 +387,24 @@ public class IndiCamera : ICamera, IDisposable {
         if (key == null) return;   // driver has no offset element
         _offset = offset;          // record for the FITS metadata stamp
         var wanted = new Dictionary<string, double> { [key] = offset };
-        if (AlreadyAt(ctrl, wanted)) return;   // already at this offset (see CaptureAsync churn note)
+        if (!force && AlreadyAt(ctrl, wanted)) return;   // already at this offset (see CaptureAsync churn note)
         try {
             await _client.SetNumberAsync(DeviceName, "CCD_CONTROLS", wanted, ct);
         } catch { /* out of range / rejected — non-fatal */ }
+    }
+
+    /// <summary>The offset the driver reports right now (CCD_CONTROLS Offset),
+    /// or null when it has no such element. This is what the sensor is actually
+    /// running at, as opposed to what a caller asked for.</summary>
+    public int? DriverOffset {
+        get {
+            var ctrl = _client.GetProperty(DeviceName, "CCD_CONTROLS") as IndiNumberProperty;
+            if (ctrl == null) return null;
+            foreach (var candidate in new[] { "Offset", "offset", "OFFSET" }) {
+                if (ctrl.Values.TryGetValue(candidate, out var v) && v != null) return (int)Math.Round(v.Value);
+            }
+            return null;
+        }
     }
 
     /// <summary>Tell the driver what kind of frame this is via CCD_FRAME_TYPE
@@ -675,7 +697,10 @@ public class IndiCamera : ICamera, IDisposable {
         return true;
     }
 
-    public async Task SetBinningAsync(int binX, int binY, CancellationToken ct = default) {
+    public Task SetBinningAsync(int binX, int binY, CancellationToken ct = default)
+        => SetBinningAsync(binX, binY, ct, force: false);
+
+    private async Task SetBinningAsync(int binX, int binY, CancellationToken ct, bool force) {
         // Refuse a bin the driver's own CCD_BINNING range excludes. Only bites
         // on drivers that declare a range: indi_asi_ccd publishes min=max=0 and
         // is therefore unvalidatable, which is exactly how a bin of 3 got
@@ -692,7 +717,7 @@ public class IndiCamera : ICamera, IDisposable {
         // calls this on EVERY frame, so on a guide camera at ~2.4s/frame this was
         // ~25 pointless CCD_BINNING writes a minute, forever. See the churn note
         // on CaptureAsync.
-        if (AlreadyAt(_client.GetProperty(DeviceName, "CCD_BINNING") as IndiNumberProperty, wanted)) return;
+        if (!force && AlreadyAt(_client.GetProperty(DeviceName, "CCD_BINNING") as IndiNumberProperty, wanted)) return;
         await _client.SetNumberAsync(DeviceName, "CCD_BINNING", wanted, ct);
 
         // Changing the binning re-scales CCD_FRAME, and the driver re-validates
@@ -821,14 +846,23 @@ public class IndiCamera : ICamera, IDisposable {
         // This is the INDI twin of the ROI/stop-before-start idempotency added to
         // the native SDK cameras (SvbonySdk/Zwo/PlayerOne). That guard shipped on
         // the native side only — while the field failures were worse over INDI.
+        // After a failed capture or a reconnect the snapshot cannot be trusted
+        // (see _resendControls), so this one time every control is written.
+        bool force = _resendControls;
+        _resendControls = false;
         if (opts?.BinX is int bx && opts.BinY is int by) {
-            await SetBinningAsync(bx, by, ct);
+            await SetBinningAsync(bx, by, ct, force);
         }
         if (opts?.Gain is int g) {
-            await TrySetGainAsync(g, ct);
+            await TrySetGainAsync(g, ct, force);
         }
         if (opts?.Offset is int off) {
-            await TrySetOffsetAsync(off, ct);
+            await TrySetOffsetAsync(off, ct, force);
+        } else if (_offset > 0) {
+            // A caller that sets only the gain (LIVE, PREVIEW, solves) still
+            // wants the pedestal the rig was configured with: a fresh driver
+            // config sits at offset 1 and clips the background to black.
+            await TrySetOffsetAsync(_offset, ct, force);
         }
         // Reflect the requested frame kind (Light/Bias/Dark/Flat) on the driver
         // so the returned BLOB is tagged correctly. Defaults to LIGHT when the
@@ -860,6 +894,7 @@ public class IndiCamera : ICamera, IDisposable {
             // A missing BLOB after the deadline is the canonical symptom of a
             // driver that stopped delivering frames (a reconnect won't fix it).
             _exposureInFlight = false;   // gave up on this frame
+            _resendControls = true;      // the driver may have re-initialised the camera
             _client.RaiseBlobTimeout(DeviceName);
             localTcs.TrySetException(new TimeoutException(
                 $"INDI camera {DeviceName} did not deliver a BLOB within " +
@@ -1183,8 +1218,13 @@ public class IndiCamera : ICamera, IDisposable {
                 // Stamp the applied offset when the driver's FITS header had no
                 // OFFSET card (FITSReader defaults it to 0); a driver-authored
                 // value is preserved.
-                if (imageData.MetaData.Camera.Offset == 0 && _offset != 0)
-                    imageData.MetaData.Camera.Offset = _offset;
+                if (imageData.MetaData.Camera.Offset == 0) {
+                    // What the driver says it is running at, so the file tells the
+                    // truth even when the rig asked for something else.
+                    var drv = DriverOffset;
+                    if (drv is > 0) imageData.MetaData.Camera.Offset = drv.Value;
+                    else if (_offset != 0) imageData.MetaData.Camera.Offset = _offset;
+                }
 
                 // FIELD5-CFA: INDI drivers typically do NOT put BAYERPAT
                 // in the FITS BLOB header (the SV405CC indi_svbony_ccd
@@ -1433,6 +1473,11 @@ public class IndiCamera : ICamera, IDisposable {
     private void OnPropertyChanged(string device, IndiProperty prop) {
         if (device != DeviceName) return;
 
+        // A driver that reconnected, restarted, or reloaded its config no
+        // longer holds the controls this object last wrote.
+        if (prop.Name == "CONNECTION" || prop.Name == "CONFIG_PROCESS")
+            _resendControls = true;
+
         // A REFUSED EXPOSURE. The driver answers a CCD_EXPOSURE it will not
         // honour by putting the property into Alert, and says why in separate
         // <message> elements. Nothing used to act on that: the capture went on
@@ -1448,6 +1493,7 @@ public class IndiCamera : ICamera, IDisposable {
             var tcs = _exposureTcs;
             if (tcs != null && !tcs.Task.IsCompleted) {
                 _exposureInFlight = false;
+                _resendControls = true;
                 var why = DriverComplaint();
                 if (string.IsNullOrWhiteSpace(why)) why = prop.Message ?? "";
                 var bounds = ExposureBounds();

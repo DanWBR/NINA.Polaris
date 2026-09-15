@@ -427,6 +427,7 @@ public static class PlateSolveEndpoints {
                 var exposure = request?.Exposure is > 0 ? request!.Exposure!.Value : 3.0;
                 var opts = new CaptureOptions(
                     Gain: request?.Gain,
+                    Offset: RigCaptureDefaults.Offset(profiles),
                     BinX: request?.Binning, BinY: request?.Binning,
                     ImageType: "Light");
                 logger.LogInformation(

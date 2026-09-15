@@ -115,10 +115,14 @@ public class CameraStreamService : IDisposable {
         }
     }
 
+    private readonly ProfileService? _profile;
+
     public CameraStreamService(EquipmentManager equip,
                                ImageRelayService relay,
                                ILogger<CameraStreamService> logger,
-                               CaptureProgressService captureProgress) {
+                               CaptureProgressService captureProgress,
+                               ProfileService? profile = null) {
+        _profile = profile;
         _equip = equip;
         _relay = relay;
         _logger = logger;
@@ -343,6 +347,7 @@ public class CameraStreamService : IDisposable {
             try {
                 var opts = new CaptureOptions(
                     Gain: Gain != cam.Gain ? Gain : null,
+                    Offset: RigCaptureDefaults.Offset(_profile),
                     BinX: BinX, BinY: BinY,
                     ImageType: "STREAM");
                 var sw = System.Diagnostics.Stopwatch.StartNew();

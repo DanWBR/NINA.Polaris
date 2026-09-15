@@ -53,10 +53,13 @@ public class StarTrailService {
     public StarTrailJob? CurrentJob { get; private set; }
     public event Action<StarTrailJob>? JobUpdated;
 
+    private readonly ProfileService? _profile;
+
     public StarTrailService(EquipmentManager equip, ImageRelayService relay,
         CaptureProgressService captureProgress, CameraReadyGate cameraReady,
         ImageWriterService imageWriter, MediaEncodeService mediaEncode,
-        ILogger<StarTrailService> logger) {
+        ILogger<StarTrailService> logger, ProfileService? profile = null) {
+        _profile = profile;
         _equip = equip;
         _relay = relay;
         _captureProgress = captureProgress;
@@ -137,6 +140,7 @@ public class StarTrailService {
                     IImageData image;
                     var opts = new CaptureOptions(
                         Gain: cfg.Gain > 0 ? cfg.Gain : (int?)null,
+                        Offset: RigCaptureDefaults.Offset(_profile),
                         BinX: cfg.Binning, BinY: cfg.Binning,
                         ImageType: "LIGHT");
                     using (_captureProgress.Begin("startrail", cfg.ExposureSeconds))

@@ -268,7 +268,7 @@ public class PolarAlignmentService {
         try {
             image = await GatedCapture(camera,
                 job.Options.ExposureSeconds,
-                new CaptureOptions(Gain: job.Options.Gain, ImageType: "POLAR"),
+                new CaptureOptions(Gain: job.Options.Gain, Offset: RigCaptureDefaults.Offset(_profiles), ImageType: "POLAR"),
                 ct);
         } catch (OperationCanceledException) { throw; }
         catch (Exception ex) {
@@ -450,7 +450,7 @@ public class PolarAlignmentService {
                 SetPhase(job, SolvingPhaseFor(i));
                 var image = await GatedCapture(camera, 
                     job.Options.ExposureSeconds,
-                    new CaptureOptions(Gain: job.Options.Gain, ImageType: "POLAR"),
+                    new CaptureOptions(Gain: job.Options.Gain, Offset: RigCaptureDefaults.Offset(_profiles), ImageType: "POLAR"),
                     ct);
                 if (image == null || image.Properties.Width <= 0 || image.Properties.Height <= 0) {
                     Fail(job, $"Point {i + 1}: camera returned an empty frame.");
@@ -466,7 +466,7 @@ public class PolarAlignmentService {
                         i + 1, result.Error);
                     var retryImage = await GatedCapture(camera, 
                         job.Options.ExposureSeconds * 2.0,
-                        new CaptureOptions(Gain: job.Options.Gain, ImageType: "POLAR"),
+                        new CaptureOptions(Gain: job.Options.Gain, Offset: RigCaptureDefaults.Offset(_profiles), ImageType: "POLAR"),
                         ct);
                     if (retryImage != null && retryImage.Properties.Width > 0) {
                         result = await SolveOnceAsync(retryImage, telescope, ct);
@@ -591,7 +591,7 @@ public class PolarAlignmentService {
                     TimeSpan.FromSeconds(Math.Max(1, job.Options.SettleSeconds)), ct);
                 var anchorImage = await GatedCapture(camera,
                     job.Options.ExposureSeconds,
-                    new CaptureOptions(Gain: job.Options.Gain, ImageType: "POLAR"),
+                    new CaptureOptions(Gain: job.Options.Gain, Offset: RigCaptureDefaults.Offset(_profiles), ImageType: "POLAR"),
                     ct);
                 var anchorSolve = await SolveOnceAsync(anchorImage, telescope, ct);
                 if (anchorSolve.Success) {
@@ -899,7 +899,7 @@ public class PolarAlignmentService {
             SetPhase(job, PolarAlignmentPhase.RudimentaryCapturing);
             var image = await GatedCapture(camera, 
                 job.Options.ExposureSeconds,
-                new CaptureOptions(Gain: job.Options.Gain, ImageType: "POLAR"),
+                new CaptureOptions(Gain: job.Options.Gain, Offset: RigCaptureDefaults.Offset(_profiles), ImageType: "POLAR"),
                 ct);
             if (image == null || image.Properties.Width <= 0 || image.Properties.Height <= 0) {
                 return FailRudimentary(job, "Camera returned an empty frame.");
@@ -919,7 +919,7 @@ public class PolarAlignmentService {
                     solve.Error);
                 var retry = await GatedCapture(camera, 
                     job.Options.ExposureSeconds * 2.0,
-                    new CaptureOptions(Gain: job.Options.Gain, ImageType: "POLAR"),
+                    new CaptureOptions(Gain: job.Options.Gain, Offset: RigCaptureDefaults.Offset(_profiles), ImageType: "POLAR"),
                     ct);
                 if (retry != null && retry.Properties.Width > 0) {
                     solve = await SolveOnceAsync(retry, telescope, ct,
