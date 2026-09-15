@@ -57,6 +57,16 @@ public static class ZwoDiscovery {
     /// wants a genuinely clean scan.</summary>
     public static void ForgetSeen() => Seen.Clear();
 
+    /// <summary>Record a camera this process opened without ever scanning for
+    /// it (a saved rig auto-connects by id at boot), so the union lists it
+    /// alongside whatever a later scan can still see. A remembered model is
+    /// never downgraded to the placeholder name.</summary>
+    public static void Remember(string id, string? model) {
+        if (!int.TryParse(id, out var n)) return;
+        var name = string.IsNullOrWhiteSpace(model) ? $"ASI #{n}" : model;
+        Seen.AddOrUpdate(n, name, (_, old) => old.StartsWith("ASI #", StringComparison.Ordinal) ? name : old);
+    }
+
     /// <summary>The live scan alone, without the remembered union.</summary>
     public static IReadOnlyList<ZwoCameraEntry> Scan() {
         ZwoRegistry.EnsureResolver();

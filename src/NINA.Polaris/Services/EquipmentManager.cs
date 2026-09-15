@@ -438,7 +438,11 @@ public class EquipmentManager : IDisposable {
         // selected with, so the dropdown's :selected match and the saved rig
         // selection still line up. INDI/Alpaca/sim don't open a USB handle, so
         // they fall through to their normal (non-destructive) discovery.
-        if (driver != "indi" && driver != "alpaca" && driver != "sim") {
+        // ZWO is the exception: its SDK hides every other camera while one is
+        // open, so a live-only answer here would show the guide picker nothing
+        // but the imaging camera. ZwoDiscovery keeps a union of everything this
+        // process has seen; the live ones are overlaid below.
+        if (driver != "indi" && driver != "alpaca" && driver != "sim" && driver != "zwo-sdk") {
             var live = new List<DiscoveredCamera>();
             if (Camera != null && Camera.IsConnected && CameraDriver == driver
                 && !string.IsNullOrEmpty(CameraDeviceId)) {
@@ -500,11 +504,20 @@ public class EquipmentManager : IDisposable {
                 // to be told that rather than handed a short list: the guide
                 // picker came up without the second camera and no explanation
                 // at all (field, 2026-08-13). See ZwoDiscovery for the measurement.
+                var liveIds = new Dictionary<string, string>(StringComparer.Ordinal);
+                if (Camera is { IsConnected: true } && CameraDriver == driver && !string.IsNullOrEmpty(CameraDeviceId))
+                    liveIds[CameraDeviceId] = Camera.DeviceName;
+                if (GuideCamera is { IsConnected: true } && GuideCameraDriver == driver && !string.IsNullOrEmpty(GuideCameraDeviceId))
+                    liveIds.TryAdd(GuideCameraDeviceId, GuideCamera.DeviceName);
+                if (AuxCamera is { IsConnected: true } && AuxCameraDriver == driver && !string.IsNullOrEmpty(AuxCameraDeviceId))
+                    liveIds.TryAdd(AuxCameraDeviceId, AuxCamera.DeviceName);
+                foreach (var kv in liveIds) NINA.Camera.ZwoSdk.ZwoDiscovery.Remember(kv.Key, kv.Value);
                 return NINA.Camera.ZwoSdk.ZwoDiscovery.Enumerate()
                     .Select(e => new DiscoveredCamera(
-                        e.Id, e.Model,
-                        e.Present ? e.Info
-                                  : "hidden by the SDK while another ZWO camera is open"))
+                        e.Id, liveIds.TryGetValue(e.Id, out var liveName) ? liveName : e.Model,
+                        liveIds.ContainsKey(e.Id) ? "connected"
+                            : e.Present ? e.Info
+                            : "hidden by the SDK while another ZWO camera is open"))
                     .ToList();
             } catch (Exception ex) {
                 _logger.LogWarning(ex, "ZWO SDK discovery failed");
