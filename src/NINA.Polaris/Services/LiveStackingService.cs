@@ -353,12 +353,20 @@ public class LiveStackingService {
     /// quarter-budget. Reserve room for the OS and the rest of Polaris instead,
     /// and let the stack have what is genuinely left.
     ///
+    /// The reserve is what the rest of the host needs while a stack runs: the
+    /// kernel, indiserver and its drivers, a plate solve on a 26 MP frame (a
+    /// few hundred MB of ASTAP on its own), the storage push. On an OrangePi
+    /// 5 Pro (3910 MiB) a 768 MiB reserve let a 26 MP colour stack through at
+    /// 1:1 with 43 MiB to spare on paper, and the kernel OOM-killed the process
+    /// at 2.5 GiB RSS during the session. So the reserve is 1.25 GiB or a
+    /// quarter of RAM, whichever is larger: that board now gets 1:2, a 5 GiB
+    /// host still gets 1:1 (measured 3096 MiB peak against a 3840 MiB budget).
+    ///
     /// Deliberately not tighter than that: with a real floor in the estimate a
-    /// strict budget would refuse every option on a 2 GiB board, and no small
-    /// board has been benched yet. Better to advertise an honest number than
-    /// to block a resolution that may well run.</summary>
+    /// strict budget would refuse every option on a 2 GiB board. Better to
+    /// advertise an honest number than to block a resolution that may well run.</summary>
     internal static long StackBudgetBytes(long totalRamBytes) {
-        long reserve = Math.Max(768L * 1024 * 1024, totalRamBytes / 100 * 15);
+        long reserve = Math.Max(1280L * 1024 * 1024, totalRamBytes / 4);
         return Math.Max(96L * 1024 * 1024, totalRamBytes - reserve);
     }
 
