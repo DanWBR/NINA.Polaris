@@ -25421,6 +25421,22 @@ function ninaApp() {
             const page = document.querySelector('.tab-panel-equip');
             if (!page || page.dataset.rigsRedesigned === 'true') return;
 
+            // Original, ASIAIR-inspired single-colour equipment glyphs avoid
+            // platform-dependent emoji artwork while keeping this UI compact.
+            const cardIcons = {
+                telescope: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h13l2 4H6zM12 11v6m0 0-4 5m4-5 4 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+                camera: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 7l1.5-2h5L16 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>',
+                guiding: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+                mount: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v7m8-7v7M8 5h8M8 12h8m-4 0v7m0 0-4 3m4-3 4 3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+                filterWheel: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="6.5" r="1" fill="currentColor"/><circle cx="17" cy="10" r="1" fill="currentColor"/><circle cx="15" cy="16" r="1" fill="currentColor"/><circle cx="9" cy="17" r="1" fill="currentColor"/><circle cx="6.5" cy="10" r="1" fill="currentColor"/></svg>',
+                rotator: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a7 7 0 1 0 1 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M18 4v4h-4M6 20v-4h4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="2" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>',
+                flat: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="6" width="14" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 12h8m-4-3v6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+                dome: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18h16M6 18v-5a6 6 0 0112 0v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+                weather: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.5 3.5a8.5 8.5 0 10.5 15A7 7 0 0115.5 3.5z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="5" cy="5" r="1" fill="currentColor"/><circle cx="4" cy="13" r=".8" fill="currentColor"/><circle cx="8" cy="19" r=".9" fill="currentColor"/><circle cx="19" cy="17" r=".8" fill="currentColor"/></svg>',
+                power: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v5m6-5v5M7 9h10v4a5 5 0 01-10 0V9zm5 9v3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+                focuser: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><text x="12" y="14.8" text-anchor="middle" fill="currentColor" font-family="system-ui, sans-serif" font-size="7.6" font-weight="700">EAF</text></svg>'
+            };
+
             const makeSection = (label, className = 'equip-subsystem', open = false, icon = '') => {
                 const section = document.createElement('details');
                 section.className = className;
@@ -25501,19 +25517,18 @@ function ninaApp() {
             connectionPanel?.remove();
 
             const equipment = makeSection('Equipment', 'equip-management-section', true);
-            const telescope = makeSection('Telescope', 'equip-subsystem', true, '🔭');
-            const camera = makeSection('Camera', 'equip-subsystem', false, '📷');
-            const guiding = makeSection('Guiding', 'equip-subsystem', false, '🔭');
-            const mount = makeSection('Mount', 'equip-subsystem', false, '🔭');
-            const filterWheel = makeSection('Filter Wheel', 'equip-subsystem', false, '⚙️');
-            const rotator = makeSection('Rotator', 'equip-subsystem', false, '🔀');
+            const telescope = makeSection('Telescope', 'equip-subsystem', true, cardIcons.telescope);
+            const camera = makeSection('Camera', 'equip-subsystem', false, cardIcons.camera);
+            const focuser = makeSection('Focuser', 'equip-subsystem', false, cardIcons.focuser);
+            const guiding = makeSection('Guiding', 'equip-subsystem', false, cardIcons.guiding);
+            const mount = makeSection('Mount', 'equip-subsystem', false, cardIcons.mount);
+            const filterWheel = makeSection('Filter Wheel', 'equip-subsystem', false, cardIcons.filterWheel);
+            const rotator = makeSection('Rotator', 'equip-subsystem', false, cardIcons.rotator);
             const accessories = makeSection('Accessories');
             const auxiliary = makeSection('Auxiliary Telescope');
 
             moveCardBody('Main Telescope', telescope.body);
-            // The primary focuser remains with its telescope settings; the
-            // Guiding Focuser below is the dedicated guide-scope focuser.
-            moveCardBody('Main Scope Focus Motor', telescope.body);
+            moveCardBody('Main Scope Focus Motor', focuser.body);
             moveCardBody('Main Camera', camera.body);
             const cameraControls = document.getElementById('camera-controls-panel');
             if (cameraControls) camera.body.appendChild(cameraControls);
@@ -25529,7 +25544,7 @@ function ninaApp() {
                     const title = group.querySelector(':scope > .equip-group-title')?.textContent.trim();
                     if (!title) return;
                     group.querySelector(':scope > .equip-group-title')?.remove();
-                    const auxiliaryIcons = { 'Camera + Lens/Scope': '📷', 'Focus Motor': '🔍' };
+                    const auxiliaryIcons = { 'Camera + Lens/Scope': cardIcons.camera, 'Focus Motor': cardIcons.focuser };
                     const section = makeSection(title, 'equip-subsystem', false, auxiliaryIcons[title]);
                     section.section.classList.add('equip-role-card');
                     while (group.firstChild) section.body.appendChild(group.firstChild);
@@ -25562,7 +25577,7 @@ function ninaApp() {
                 const card = findCard(title);
                 const body = card?.querySelector(':scope > .equip-card-body');
                 if (!body) return;
-                const accessoryIcons = { 'Flat Panel': '💡', Dome: '🏛️', Weather: '☁️', 'Power Box': '🔌' };
+                const accessoryIcons = { 'Flat Panel': cardIcons.flat, Dome: cardIcons.dome, Weather: cardIcons.weather, 'Power Box': cardIcons.power };
                 const accessory = makeSection(title, 'equip-subsystem', false, accessoryIcons[title]);
                 accessory.section.classList.add('equip-role-card');
                 while (body.firstChild) accessory.body.appendChild(body.firstChild);
@@ -25573,7 +25588,7 @@ function ninaApp() {
 
             const roleGrid = document.createElement('div');
             roleGrid.className = 'equip-role-grid';
-            [telescope, camera, guiding, mount, filterWheel, rotator].forEach(role => {
+            [telescope, camera, focuser, guiding, mount, filterWheel, rotator].forEach(role => {
                 role.section.classList.add('equip-role-card');
                 roleGrid.appendChild(role.section);
             });

@@ -8536,7 +8536,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <template x-for="dev in indiPropsFilteredDevices()" :key="dev.name">
                             <details class="indi-device-card">
                                 <summary class="indi-device-card-header">
-                                    <span>🔌</span>
+                                    <span class="indi-device-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 9h8M8 13h5M8 17h3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
                                     <span x-text="dev.name"></span>
                                     <span class="text-muted" style="font-weight:400;font-size:11px;margin-left:auto;"
                                           x-text="dev.propertyCount + ' props'"></span>

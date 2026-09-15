@@ -1193,7 +1193,14 @@ body.link-offline .preview-pane::after {
 .equip-role-card > summary > .equip-card-icon {
     float: right;
     margin-left: 8px;
-    font-size: 15px;
+    width: 18px;
+    height: 18px;
+    color: var(--text-secondary);
+}
+.equip-role-card > summary > .equip-card-icon svg {
+    display: block;
+    width: 18px;
+    height: 18px;
 }
 .equip-role-card > summary > small { float: right; margin: 0; }
 .equip-settings-group {
@@ -1211,6 +1218,8 @@ body.link-offline .preview-pane::after {
 .indi-device-card > summary::marker { color: var(--accent); font-size: 12px; }
 .indi-device-card-header > span:first-child { order: 3; margin-left: 8px; }
 .indi-device-card-header > span:last-child { order: 2; margin-left: auto !important; }
+.indi-device-icon { width: 18px; height: 18px; color: var(--text-secondary); }
+.indi-device-icon svg { display: block; width: 18px; height: 18px; }
 .ctrl-editor-grid > details.ctrl-panel-card {
     display: block;
     height: auto !important;
