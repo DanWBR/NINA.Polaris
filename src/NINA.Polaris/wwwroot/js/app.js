@@ -25489,9 +25489,6 @@ function ninaApp() {
             keepVisible(alpacaConnection);
 
             const drivers = makeSection('Drivers', 'equip-management-section equip-drivers-section', true);
-            drivers.section.addEventListener('toggle', () => {
-                if (drivers.section.open) drivers.section.querySelectorAll('details').forEach(detail => { detail.open = true; });
-            });
             const indi = makeSection('Indi', 'equip-driver-source', true);
             const ascom = makeSection('ASCOM / Alpaca', 'equip-driver-source');
             const connection = makeSection('Connection', 'equip-driver-source', true);
@@ -25518,10 +25515,10 @@ function ninaApp() {
 
             const equipment = makeSection('Equipment', 'equip-management-section', true);
             const telescope = makeSection('Telescope', 'equip-subsystem', true, cardIcons.telescope);
-            const camera = makeSection('Camera', 'equip-subsystem', false, cardIcons.camera);
+            const camera = makeSection('Camera', 'equip-subsystem', true, cardIcons.camera);
             const focuser = makeSection('Focuser', 'equip-subsystem', false, cardIcons.focuser);
             const guiding = makeSection('Guiding', 'equip-subsystem', false, cardIcons.guiding);
-            const mount = makeSection('Mount', 'equip-subsystem', false, cardIcons.mount);
+            const mount = makeSection('Mount', 'equip-subsystem', true, cardIcons.mount);
             const filterWheel = makeSection('Filter Wheel', 'equip-subsystem', false, cardIcons.filterWheel);
             const rotator = makeSection('Rotator', 'equip-subsystem', false, cardIcons.rotator);
             const accessories = makeSection('Accessories');
@@ -25538,19 +25535,15 @@ function ninaApp() {
             const auxiliaryCard = findCard('Auxiliary Camera System');
             const auxiliaryBody = auxiliaryCard?.querySelector(':scope > .equip-card-body');
             if (auxiliaryBody) {
-                const auxiliaryGrid = document.createElement('div');
-                auxiliaryGrid.className = 'equip-role-grid';
                 Array.from(auxiliaryBody.querySelectorAll(':scope > .equip-group')).forEach(group => {
                     const title = group.querySelector(':scope > .equip-group-title')?.textContent.trim();
                     if (!title) return;
                     group.querySelector(':scope > .equip-group-title')?.remove();
                     const auxiliaryIcons = { 'Camera + Lens/Scope': cardIcons.camera, 'Focus Motor': cardIcons.focuser };
                     const section = makeSection(title, 'equip-subsystem', false, auxiliaryIcons[title]);
-                    section.section.classList.add('equip-role-card');
                     while (group.firstChild) section.body.appendChild(group.firstChild);
-                    auxiliaryGrid.appendChild(section.section);
+                    auxiliary.body.appendChild(section.section);
                 });
-                auxiliary.body.appendChild(auxiliaryGrid);
                 auxiliaryCard.remove();
             }
 
@@ -25588,11 +25581,11 @@ function ninaApp() {
 
             const roleGrid = document.createElement('div');
             roleGrid.className = 'equip-role-grid';
-            [telescope, camera, focuser, guiding, mount, filterWheel, rotator].forEach(role => {
+            [telescope, camera, mount, focuser, guiding, filterWheel, rotator, auxiliary].forEach(role => {
                 role.section.classList.add('equip-role-card');
                 roleGrid.appendChild(role.section);
             });
-            equipment.body.append(roleGrid, accessories.section, auxiliary.section);
+            equipment.body.append(roleGrid, accessories.section);
             page.querySelector('.equip-scroll')?.remove();
             page.querySelector('.equip-accessories')?.remove();
             page.querySelector('#rigs-legacy-tabstrip')?.remove();

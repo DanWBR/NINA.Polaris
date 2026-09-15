@@ -1202,6 +1202,18 @@ body.link-offline .preview-pane::after {
     width: 18px;
     height: 18px;
 }
+.equip-subsystem > summary > .equip-card-icon {
+    float: right;
+    margin-left: 8px;
+    width: 18px;
+    height: 18px;
+    color: var(--text-secondary);
+}
+.equip-subsystem > summary > .equip-card-icon svg {
+    display: block;
+    width: 18px;
+    height: 18px;
+}
 .equip-role-card > summary > small { float: right; margin: 0; }
 .equip-settings-group {
     padding: 10px 0 14px;
