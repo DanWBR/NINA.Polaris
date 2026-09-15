@@ -361,7 +361,8 @@ public class SlewCenterService {
                     ?? throw new InvalidOperationException("Camera disconnected before the solve frame");
                 var imageData = await CameraCaptureGate.RunAsync(() => camera.CaptureAsync(
                     solveExposure,
-                    new NINA.Image.Interfaces.CaptureOptions(Gain: solveGain, BinX: 1, BinY: 1, ImageType: "SOLVE"),
+                    new NINA.Image.Interfaces.CaptureOptions(Gain: solveGain, Offset: RigCaptureDefaults.Offset(_profiles),
+                        BinX: 1, BinY: 1, ImageType: "SOLVE"),
                     ct), ct);
 
                 var tempFits = Path.Combine(Path.GetTempPath(),

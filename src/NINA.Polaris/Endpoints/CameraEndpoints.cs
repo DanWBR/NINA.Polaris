@@ -198,9 +198,15 @@ public static class CameraEndpoints {
                 // 0 and sit there (the bug: "preview shutter stuck at 0"). The
                 // acquire timeout (running exposure + 60s slack) frees the UI if
                 // the holder wedges in the driver instead of hanging forever.
+                // Gain from the capture bar and the rig's offset ride along, so a
+                // preview snap runs the sensor the way the rig is configured.
+                var mainOpts = new NINA.Image.Interfaces.CaptureOptions(
+                    Gain: request.Gain > 0 ? request.Gain : null,
+                    Offset: RigCaptureDefaults.Offset(profileSvc),
+                    ImageType: "LIGHT");
                 imageData = await CameraCaptureGate.RunAsync(async () => {
                     using (captureProgress.Begin(captureSource, request.Exposure))
-                        return await equip.Camera.CaptureAsync(request.Exposure);
+                        return await equip.Camera.CaptureAsync(request.Exposure, mainOpts);
                 }, acquireTimeout: TimeSpan.FromSeconds(Math.Max(request.Exposure, 1) + 60));
 
                 // PREVIEW tab: opt-in disk save under {rig}/snaps/.

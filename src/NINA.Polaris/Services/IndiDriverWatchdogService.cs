@@ -348,7 +348,15 @@ public class IndiDriverWatchdogService : IHostedService {
         // is at its defaults, and on the SV405CC the Cooler control defaults to OFF
         // — so a camera that had been holding 0°C came back with a dead TEC and
         // warmed up unnoticed for the rest of the session.
-        if (reconnected) RestoreCoolerAfterReconnect(device);
+        if (reconnected) {
+            // The client auto-dispatches CONFIG_LOAD about 1.5 s after a connect,
+            // and a config saved with the cooler off would switch it straight
+            // back off under a restore sent now. Restore after that has landed.
+            _ = Task.Run(async () => {
+                await Task.Delay(TimeSpan.FromSeconds(4));
+                RestoreCoolerAfterReconnect(device);
+            });
+        }
         Record(device, label, reconnected ? "restarted+reconnected" : "restarted-reconnect-failed");
         if (reconnected) {
             _notify.Push("info",

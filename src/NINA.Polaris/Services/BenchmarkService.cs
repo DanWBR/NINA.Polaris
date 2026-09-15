@@ -503,7 +503,7 @@ public class BenchmarkService {
 
         int frames = Math.Clamp(req.CameraFrames, 1, 30);
         double exposure = Math.Clamp(req.CameraExposure, 0.0, 60.0);
-        var opts = new CaptureOptions(Gain: req.CameraGain, ImageType: "LIGHT");
+        var opts = new CaptureOptions(Gain: req.CameraGain, Offset: RigCaptureDefaults.Offset(_profiles), ImageType: "LIGHT");
         var times = new List<double>(frames);
         int w = 0, h = 0;
         long bytes = 0;
