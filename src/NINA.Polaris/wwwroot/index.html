@@ -5893,9 +5893,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
             </div>
 
             <!-- EQUIPMENT MANAGEMENT -->
-            <div x-show="tab === 'equip'" class="tab-panel tab-panel-equip">
+            <div x-show="tab === 'equip'" class="tab-panel tab-panel-equip"
+                 x-init="$nextTick(() => redesignRigsPage())">
                 <div class="panel-header">
-                    Equipment
+                    Rigs
                 </div>
 
                 <!-- Driver-host connection lives ABOVE the sub-tabstrip so
@@ -5922,7 +5923,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                          port picker already lives in the INDI Control Panel, but
                          operators with two USB-serial devices (a power box + the
                          mount) never found it. Surface a direct jump here. -->
-                    <button class="btn btn-sm" @click="equipTab = 'indi-cp'; indiPropsLoad()"
+                    <button class="btn btn-sm" @click="indiPropsLoad()"
                             title="Assign each USB-serial device (mount, focuser, power box) to its stable by-id port, so two serial devices never swap at reboot">⚙ Serial ports</button>
                     <button class="btn btn-sm" @click="refreshDevices()"
                             title="Re-enumerate INDI devices">⟳ Refresh</button>
@@ -6017,7 +6018,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <div x-show="alpaca.showDetails && alpaca.servers.length > 0"
                              style="margin-top:14px;display:flex;flex-direction:column;gap:10px">
                             <template x-for="srv in alpaca.servers" :key="srv.host + ':' + srv.port">
-                                <div class="equip-card">
+                                <div class="equip-settings-group">
                                     <div class="equip-card-header">
                                         <span class="equip-card-icon">🌐</span>
                                         <span class="equip-card-title" x-text="srv.serverName || (srv.host + ':' + srv.port)"></span>
@@ -6078,7 +6079,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      Same pattern as the GUIDE tab's Control / PHD2 GUI
                      tabstrip. The connection strip above is shared by all
                      three sub-tabs. -->
-                <div class="video-tabstrip">
+                <div id="rigs-legacy-tabstrip" class="video-tabstrip">
                     <button class="video-tab" :class="{ active: equipTab === 'equipment' }"
                             @click="equipTab = 'equipment'">Equipment</button>
                     <button class="video-tab" :class="{ active: equipTab === 'indi-web' }"
@@ -6097,7 +6098,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 </div>
 
                 <!-- ===== Equipment subtab ===== -->
-                <div x-show="equipTab === 'equipment'">
+                <div id="rigs-legacy-equipment">
 
                 <!-- Rig (equipment profile) selector -->
                 <div class="rig-bar" data-tour="rigs-connect">
@@ -8269,7 +8270,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      so the iframe gets the full panel height to work
                      with instead of being cramped under the role
                      cards. -->
-                <div x-show="equipTab === 'indi-web'" class="indi-web-subtab">
+                <div id="indi-web-panel" x-show="true" class="indi-web-subtab">
                     <div class="indi-web-wrap" style="padding:12px 16px;">
 
                         <!-- Status strip + lifecycle buttons -->
@@ -8431,7 +8432,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      in real time, so the UI just renders + edits the
                      existing state. Works on any OS, any distro, via Relay,
                      mobile-friendly. -->
-                <div x-show="equipTab === 'indi-cp'" class="indi-props-subtab"
+                <div id="indi-control-panel" x-show="true" class="indi-props-subtab"
                      style="padding:12px 16px;">
 
                     <!-- Top strip: connection state + device picker +
@@ -8533,13 +8534,13 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                          the Equipment cards. -->
                     <div class="indi-props-grid">
                         <template x-for="dev in indiPropsFilteredDevices()" :key="dev.name">
-                            <div class="indi-device-card">
-                                <div class="indi-device-card-header">
+                            <details class="indi-device-card">
+                                <summary class="indi-device-card-header">
                                     <span>🔌</span>
                                     <span x-text="dev.name"></span>
                                     <span class="text-muted" style="font-weight:400;font-size:11px;margin-left:auto;"
                                           x-text="dev.propertyCount + ' props'"></span>
-                                </div>
+                                </summary>
                                 <div class="indi-device-card-body">
                                     <template x-for="groupKey in indiPropsGroupKeys(dev)" :key="groupKey">
                                         <div class="indi-group">
@@ -8661,7 +8662,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         </div>
                                     </template>
                                 </div>
-                            </div>
+                            </details>
                         </template>
                     </div>
 
@@ -8672,7 +8673,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 </div><!-- /.indi-props-subtab -->
 
                 <!-- ===== Native camera controls subtab ===== -->
-                <div x-show="equipTab === 'cam-ctrl'" class="indi-props-subtab"
+                <div id="camera-controls-panel" x-show="true" class="indi-props-subtab"
                      style="padding:12px 16px;">
 
                     <!-- Top strip: camera picker (ONLY when both the main and
@@ -8813,7 +8814,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 </div><!-- /.cam-ctrl subtab -->
 
                 <!-- ===== Control Panels subtab (editor) ===== -->
-                <div x-show="equipTab === 'panels'" class="ctrl-panels-editor">
+                <div id="control-panels-panel" x-show="true" class="ctrl-panels-editor">
                     <p class="hint" style="margin:0 0 14px">
                         Build floating control panels for the active rig: group live equipment
                         readouts, switches and inputs into cards you can move, resize and watch on

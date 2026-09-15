@@ -1704,7 +1704,7 @@ function ninaApp() {
         // Driven by VideoRecordingService + PlanetaryStackerService on the
         // server; the WS status feed populates videoRecording / videoStack.
         videoTab: 'capture',       // 'capture' | 'process'
-        equipTab: 'equipment',     // 'equipment' | 'indi-web' | 'panels' (RIGS sub-tabstrip)
+        equipTab: 'equipment',     // 'equipment' | 'indi' | 'alpaca' | 'panels' (RIGS sub-tabstrip)
         // Property Control Panels: raw WS equipment snapshot for readouts,
         // editor state, and live caches for the poll-backed sources.
         equipmentRaw: {},
@@ -25352,6 +25352,312 @@ function ninaApp() {
             return this.accessoryCount() > 0;
         },
 
+        // RIGS accordion summaries deliberately read saved profile values first.
+        // A device can be configured while its driver is offline or still
+        // enumerating, so discovery and connection must never decide whether the
+        // assignment itself is shown.
+        equipmentSectionState(section) {
+            const rig = this.rigs?.find(r => r.id === this.activeRigId) || {};
+            const entries = (() => {
+                switch (section) {
+                    case 'main': return [
+                        ['Camera', rig.camera, rig.cameraDriver],
+                        ['Focuser', rig.focuser, rig.focuserDriver],
+                        ['Filter wheel', rig.filterWheel, rig.filterWheelDriver],
+                        ['Rotator', rig.rotator, rig.rotatorDriver]
+                    ];
+                    case 'aux': return [
+                        ['Camera', rig.auxCamera, rig.auxCameraDriver],
+                        ['Focuser', rig.auxFocuser, rig.auxFocuserDriver]
+                    ];
+                    case 'guiding': return [
+                        ['Guide camera', rig.guideCamera, rig.guideCameraDriver],
+                        ['Guide focuser', rig.guideFocuser, rig.guideFocuserDriver]
+                    ];
+                    case 'mount': return [['Mount', rig.telescope, rig.telescopeDriver]];
+                    case 'rotator': return [['Rotator', rig.rotator, rig.rotatorDriver]];
+                    case 'accessories': return [
+                        ['Flat panel', rig.flatDevice, 'indi'], ['Dome', rig.dome, 'indi'],
+                        ['Weather', rig.weather, 'indi'], ['Power box', rig.switch, rig.switchDriver]
+                    ];
+                    default: return [];
+                }
+            })().filter(([, id]) => !!id);
+            const connected = {
+                main: !!(this.selectedCamera || this.focusConnected || this.filterWheel?.connected || this.rotator?.connected),
+                aux: !!this.auxCameraConnected,
+                guiding: !!this.guider?.guideCameraConnected,
+                mount: !!this.mount?.connected,
+                rotator: !!this.rotator?.connected,
+                accessories: !!(this.flatDevice?.connected || this.dome?.connected || this.weather?.connected || this.powerBox?.connected)
+            }[section];
+            const indiSaved = entries.some(([, , driver]) => (driver || 'indi') === 'indi');
+            const indiAvailable = this.indiConnected && entries.some(([, id, driver]) =>
+                (driver || 'indi') === 'indi' && this.devices.some(d => d.name === id));
+            const configured = entries.length > 0 || (section === 'main' && !!rig.focalLengthMm);
+            return {
+                configured, connected, entries,
+                status: !configured ? 'Not configured'
+                    : connected ? 'Connected'
+                    : indiSaved && !this.indiConnected ? 'Configured · INDI offline'
+                    : indiSaved && !indiAvailable ? 'Configured · availability not checked'
+                    : 'Configured · disconnected'
+            };
+        },
+
+        equipmentSectionSummary(section) {
+            const state = this.equipmentSectionState(section);
+            if (!state.configured) return state.status;
+            const saved = state.entries.map(([role, id, driver]) =>
+                `${role}: ${id}${driver ? ` via ${driver.toUpperCase()}` : ''}`).join(' · ');
+            return saved ? `${saved} · ${state.status}` : state.status;
+        },
+
+        // Rebuild the legacy RIGS grid into the operator-facing accordion
+        // hierarchy.  The existing controls are moved, not copied, so Alpine
+        // bindings and device actions remain the originals and no duplicate
+        // cards can be displayed.
+        redesignRigsPage() {
+            const page = document.querySelector('.tab-panel-equip');
+            if (!page || page.dataset.rigsRedesigned === 'true') return;
+
+            const makeSection = (label, className = 'equip-subsystem', open = false) => {
+                const section = document.createElement('details');
+                section.className = className;
+                section.open = open;
+                const summary = document.createElement('summary');
+                summary.innerHTML = `<span>${label}</span><small></small>`;
+                section.appendChild(summary);
+                const body = document.createElement('div');
+                body.className = 'equip-accordion-body';
+                section.appendChild(body);
+                return { section, body };
+            };
+            const findCard = title => Array.from(page.querySelectorAll('.equip-card')).find(card =>
+                card.querySelector(':scope > .equip-card-header .equip-card-title')?.textContent.trim() === title);
+            const moveCardBody = (title, destination) => {
+                const card = findCard(title);
+                const body = card?.querySelector(':scope > .equip-card-body');
+                if (!body) return;
+                while (body.firstChild) destination.appendChild(body.firstChild);
+                card.remove();
+            };
+            const namedGroup = (label, source) => {
+                const group = document.createElement('section');
+                group.className = 'equip-settings-group';
+                const heading = document.createElement('h4');
+                heading.textContent = label;
+                group.appendChild(heading);
+                while (source.firstChild) group.appendChild(source.firstChild);
+                return group;
+            };
+
+            const rigBar = page.querySelector('.rig-bar');
+            const connectionPanel = page.querySelector('.equip-conn-panel');
+            const prompt = connectionPanel?.querySelector('.equip-connect-prompt');
+            const connectionStrip = connectionPanel?.querySelector('.equip-connection-strip');
+            const sourceTabs = prompt?.querySelector('.equip-source-tabs');
+            const promptChildren = prompt ? Array.from(prompt.children) : [];
+            const indiConnection = promptChildren.find(node => node !== sourceTabs &&
+                node.getAttribute?.('x-show')?.includes("equipSource === 'indi'"));
+            const alpacaConnection = promptChildren.find(node => node !== sourceTabs &&
+                node.getAttribute?.('x-show')?.includes("equipSource === 'alpaca'"));
+            const keepVisible = node => {
+                if (!node) return;
+                node.removeAttribute('x-show');
+                node.style.removeProperty('display');
+                node._x_doShow?.();
+            };
+            sourceTabs?.remove();
+            keepVisible(indiConnection);
+            keepVisible(alpacaConnection);
+
+            const drivers = makeSection('Drivers', 'equip-management-section equip-drivers-section', true);
+            drivers.section.addEventListener('toggle', () => {
+                if (drivers.section.open) drivers.section.querySelectorAll('details').forEach(detail => { detail.open = true; });
+            });
+            const indi = makeSection('Indi', 'equip-driver-source', true);
+            const ascom = makeSection('ASCOM / Alpaca', 'equip-driver-source');
+            const connection = makeSection('Connection', 'equip-driver-source', true);
+            const controls = makeSection('Controls', 'equip-driver-source');
+            const webManager = makeSection('Indi WebManager', 'equip-driver-source');
+            const controlPanels = makeSection('Control Panels', 'equip-driver-source');
+            controls.section.addEventListener('toggle', () => {
+                if (controls.section.open) this.indiPropsLoad();
+            });
+            webManager.section.addEventListener('toggle', () => {
+                if (webManager.section.open) this.indiWebStatusRefresh();
+            });
+            [connectionStrip, indiConnection].filter(Boolean).forEach(node => connection.body.appendChild(node));
+            const indiControls = document.getElementById('indi-control-panel');
+            const indiWebManager = document.getElementById('indi-web-panel');
+            const customControlPanels = document.getElementById('control-panels-panel');
+            if (indiControls) controls.body.appendChild(indiControls);
+            if (indiWebManager) webManager.body.appendChild(indiWebManager);
+            if (customControlPanels) controlPanels.body.appendChild(customControlPanels);
+            indi.body.append(connection.section, controls.section, webManager.section, controlPanels.section);
+            if (alpacaConnection) ascom.body.appendChild(alpacaConnection);
+            drivers.body.append(indi.section, ascom.section);
+            connectionPanel?.remove();
+
+            const equipment = makeSection('Equipment', 'equip-management-section', true);
+            const telescope = makeSection('Telescope', 'equip-subsystem', true);
+            const camera = makeSection('Camera');
+            const guiding = makeSection('Guiding');
+            const mount = makeSection('Mount');
+            const filterWheel = makeSection('Filter Wheel');
+            const rotator = makeSection('Rotator');
+            const accessories = makeSection('Accessories');
+            const auxiliary = makeSection('Auxiliary Telescope');
+
+            moveCardBody('Main Telescope', telescope.body);
+            // The primary focuser remains with its telescope settings; the
+            // Guiding Focuser below is the dedicated guide-scope focuser.
+            moveCardBody('Main Scope Focus Motor', telescope.body);
+            moveCardBody('Main Camera', camera.body);
+            const cameraControls = document.getElementById('camera-controls-panel');
+            if (cameraControls) camera.body.appendChild(cameraControls);
+            moveCardBody('Telescope Mount', mount.body);
+            moveCardBody('Filter Wheel', filterWheel.body);
+            moveCardBody('Rotator', rotator.body);
+            moveCardBody('Auxiliary Camera System', auxiliary.body);
+
+            const guidingCard = findCard('Guiding System');
+            const guidingBody = guidingCard?.querySelector(':scope > .equip-card-body');
+            if (guidingBody) {
+                const groups = Array.from(guidingBody.querySelectorAll(':scope > .equip-group'));
+                const groupFor = title => groups.find(group =>
+                    group.querySelector(':scope > .equip-group-title')?.textContent.trim() === title);
+                [['Guide Camera', 'Camera'], ['Guide Scope', 'Scope'], ['Focuser', 'Focus Motor']].forEach(([label, original]) => {
+                    const source = groupFor(original);
+                    if (!source) return;
+                    source.querySelector(':scope > .equip-group-title')?.remove();
+                    const detail = makeSection(label, 'equip-subsystem');
+                    detail.body.appendChild(namedGroup(label, source));
+                    guiding.body.appendChild(detail.section);
+                });
+                guidingCard.remove();
+            }
+
+            ['Flat Panel', 'Dome', 'Weather', 'Power Box'].forEach(title => {
+                const card = findCard(title);
+                const body = card?.querySelector(':scope > .equip-card-body');
+                if (!body) return;
+                accessories.body.appendChild(namedGroup(title, body));
+                card.remove();
+            });
+
+            const roleGrid = document.createElement('div');
+            roleGrid.className = 'equip-role-grid';
+            [telescope, camera, guiding, mount, filterWheel, rotator].forEach(role => {
+                role.section.classList.add('equip-role-card');
+                roleGrid.appendChild(role.section);
+            });
+            equipment.body.append(roleGrid, accessories.section, auxiliary.section);
+            page.querySelector('.equip-scroll')?.remove();
+            page.querySelector('.equip-accessories')?.remove();
+            page.querySelector('#rigs-legacy-tabstrip')?.remove();
+            page.querySelector('#rigs-legacy-equipment')?.remove();
+
+            // Keep rig actions visible above both Drivers and Equipment.
+            if (rigBar) page.appendChild(rigBar);
+            page.append(drivers.section, equipment.section);
+            if (this.camCtrlAny()) this.camCtrlLoad();
+            this.ctrlLoadCatalog(this.ctrl.catalogSource);
+            page.dataset.rigsRedesigned = 'true';
+        },
+
+        // The existing Web Manager and property browser stay intact but belong
+        // inside the INDI driver disclosure, not as peer pages to Equipment.
+        composeDriversPanels() {
+            const indi = document.getElementById('driver-indi-content');
+            if (!indi || indi.dataset.composed === 'true') return;
+            ['indi-web-panel', 'indi-control-panel', 'control-panels-panel'].forEach(id => {
+                const panel = document.getElementById(id);
+                if (panel) indi.appendChild(panel);
+            });
+            this.ctrlLoadCatalog(this.ctrl.catalogSource);
+            indi.dataset.composed = 'true';
+        },
+
+        // Keep the legacy main-camera/optics card and the later focuser/filter
+        // controls in one Main Telescope accordion without duplicating their
+        // established Alpine bindings. DOM relocation is deliberately limited
+        // to presentation; it neither selects nor connects any equipment.
+        mergeMainTelescopeDevices() {
+            const main = document.getElementById('equip-main-telescope');
+            const legacy = document.getElementById('equip-main-telescope-devices');
+            const target = main?.querySelector('.equip-subsystem-grid');
+            const source = legacy?.querySelector('.equip-subsystem-grid');
+            if (!target || !source || legacy.dataset.merged === 'true') return;
+            Array.from(source.children).forEach(node => target.appendChild(node));
+            legacy.dataset.merged = 'true';
+            legacy.remove();
+            this.promoteEquipmentCardsToAccordions();
+        },
+
+        // Existing role controls are intentionally left intact, but their old
+        // card wrappers become native disclosure widgets. This avoids copying
+        // hundreds of bindings while ensuring the rendered UI has accordions,
+        // not a second layer of non-collapsible cards.
+        promoteEquipmentCardsToAccordions() {
+            document.querySelectorAll('.equip-subsystem-grid > .equip-card, .equip-accessories-grid > .equip-card')
+                .forEach(card => {
+                    if (card.tagName === 'DETAILS') return;
+                    const header = card.querySelector(':scope > .equip-card-header');
+                    if (!header) return;
+                    const details = document.createElement('details');
+                    details.className = card.className + ' equip-device-accordion';
+                    details.open = card.querySelector('.equip-status-dot.connected') !== null;
+                    const summary = document.createElement('summary');
+                    summary.className = header.className;
+                    while (header.firstChild) summary.appendChild(header.firstChild);
+                    details.appendChild(summary);
+                    while (card.firstChild) details.appendChild(card.firstChild);
+                    card.replaceWith(details);
+                });
+            this.organizeEquipmentSections();
+        },
+
+        // Put the existing role controls into the exact operator-facing
+        // hierarchy without changing their device bindings.
+        organizeEquipmentSections() {
+            const telescope = document.getElementById('equip-main-telescope');
+            const telescopeGrid = telescope?.querySelector(':scope > .equip-subsystem-grid');
+            if (telescope && telescopeGrid && !document.getElementById('equip-camera-section')) {
+                const camera = Array.from(telescopeGrid.children).find(node =>
+                    node.querySelector?.('.equip-card-title')?.textContent.trim() === 'Main Camera');
+                if (camera) {
+                    const section = document.createElement('details');
+                    section.id = 'equip-camera-section';
+                    section.className = 'equip-subsystem';
+                    const summary = document.createElement('summary');
+                    summary.innerHTML = '<span>Camera</span><small></small>';
+                    section.appendChild(summary);
+                    const grid = document.createElement('div');
+                    grid.className = 'equip-subsystem-grid';
+                    grid.appendChild(camera);
+                    section.appendChild(grid);
+                    telescope.after(section);
+                }
+            }
+            const rotator = document.querySelector('.equip-rotator-subsystem');
+            const accessories = document.querySelector('.equip-accessories');
+            if (rotator && accessories && rotator.parentElement !== accessories.parentElement) {
+                accessories.parentElement?.insertBefore(rotator, accessories);
+            }
+            const guiding = Array.from(document.querySelectorAll('.equip-subsystem')).find(section =>
+                section.querySelector(':scope > summary > span')?.textContent.trim() === 'Guiding');
+            const guideBody = guiding?.querySelector('.equip-card-body');
+            if (guideBody) {
+                const order = ['Guide Camera', 'Guide Scope', 'Focuser'];
+                Array.from(guideBody.querySelectorAll(':scope > .equip-group'))
+                    .sort((a, b) => order.indexOf(a.querySelector('.equip-group-title')?.textContent.trim())
+                        - order.indexOf(b.querySelector('.equip-group-title')?.textContent.trim()))
+                    .forEach(group => guideBody.appendChild(group));
+            }
+        },
+
         async saveCurrentSelectionsToRig() {
             const rig = this.rigs.find(r => r.id === this.activeRigId);
             if (!rig) return;
@@ -45365,7 +45671,7 @@ function ninaApp() {
                 this._indiPropsTimer = null;
             }
             if (!this.indiProps.autoRefresh) return;
-            if (this.tab !== 'equip' || this.equipTab !== 'indi-cp') return;
+            if (this.tab !== 'equip') return;
             this._indiPropsTimer = setTimeout(() => this.indiPropsLoad(), 2000);
         },
 

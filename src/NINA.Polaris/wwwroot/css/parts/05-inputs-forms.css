@@ -1111,6 +1111,11 @@ body.link-offline .preview-pane::after {
 .tab-panel-equip {
     display: flex;
     flex-direction: column;
+    /* RIGS is now a document-length accordion page. Let the shell own the
+       scroll position instead of trapping it in the legacy INDI tab/card. */
+    height: auto;
+    min-height: 100%;
+    flex: 0 0 auto;
 }
 
 /* Framed panel wrapping the driver-host connection block (connected
@@ -1127,6 +1132,115 @@ body.link-offline .preview-pane::after {
        overflow:hidden the connect controls get clipped to an empty box.
        Pin the panel so it always keeps its natural height. */
     flex: 0 0 auto;
+}
+
+/* RIGS separates driver services from saved equipment subsystems. */
+.equip-management-section,
+.equip-subsystem {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-secondary);
+    margin: 10px 0;
+    overflow: hidden;
+}
+.equip-management-section > summary,
+.equip-subsystem > summary {
+    display: flex; align-items: center; gap: 10px; cursor: pointer;
+    list-style: none; padding: 11px 14px; background: rgba(0, 0, 0, .14);
+}
+.equip-management-section > summary::-webkit-details-marker,
+.equip-subsystem > summary::-webkit-details-marker { display: none; }
+.equip-management-section > summary::before,
+.equip-subsystem > summary::before { content: '▸'; color: var(--accent); }
+.equip-management-section[open] > summary::before,
+.equip-subsystem[open] > summary::before { transform: rotate(90deg); }
+.equip-management-section > summary > span,
+.equip-subsystem > summary > span { font-weight: 700; }
+.equip-management-section > summary small,
+.equip-subsystem > summary small { margin-left: auto; color: var(--text-muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.equip-drivers-section > .equip-conn-panel { margin: 0; border: 0; border-radius: 0; }
+.equip-driver-source { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 8px; }
+.equip-driver-source > summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--text-primary); }
+.equip-driver-source > summary small { margin-left: 8px; font-weight: 400; color: var(--text-muted); }
+.equip-accordion-body { padding: 10px 14px 14px; }
+.equip-management-section > .equip-accordion-body { padding: 8px; }
+.equip-role-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+.equip-role-card {
+    margin: 0;
+    min-width: 0;
+}
+.equip-settings-group {
+    padding: 10px 0 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 11px;
+}
+.equip-settings-group:last-child { border-bottom: 0; }
+.equip-settings-group h4 { margin: 0; font-size: 12px; color: var(--text-primary); }
+.indi-device-card { display: block; }
+.indi-device-card > summary { cursor: pointer; list-style: none; }
+.indi-device-card > summary::-webkit-details-marker { display: none; }
+.indi-device-card > summary::before { content: '▸'; color: var(--accent); margin-right: 6px; }
+.indi-device-card[open] > summary::before { display: inline-block; transform: rotate(90deg); }
+/* The old INDI Control Panel was a peer tab, so each device card scrolled
+   internally. It now lives inside RIGS: expand it into the page so Equipment
+   remains reachable with the normal page scroll. */
+.tab-panel-equip .indi-props-subtab,
+.tab-panel-equip .indi-device-card-body {
+    overflow: visible;
+    max-height: none;
+}
+.equip-subsystem { margin: 0; min-width: 0; }
+.equip-subsystem-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 8px; padding: 8px; }
+.equip-subsystem-grid > .equip-card { min-width: 0; }
+.equip-scroll.equip-grid { display: flex; gap: 8px; }
+.equip-accessories { width: 100%; }
+/* The accordion is the surface. Legacy card elements remain only as stable
+   binding containers while their borders, minimum heights, and header bands
+   are flattened inside the reorganized equipment view. */
+.tab-panel-equip .equip-subsystem-grid > .equip-card,
+.tab-panel-equip .equip-accessories-grid > .equip-card {
+    min-height: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
+}
+.tab-panel-equip details.equip-device-accordion {
+    min-height: 0;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    background: rgba(0, 0, 0, .08);
+    overflow: hidden;
+}
+.tab-panel-equip details.equip-device-accordion > summary {
+    cursor: pointer;
+    list-style: none;
+}
+.tab-panel-equip details.equip-device-accordion > summary::-webkit-details-marker { display: none; }
+.tab-panel-equip details.equip-device-accordion > summary::before { content: '▸'; color: var(--accent); }
+.tab-panel-equip details.equip-device-accordion[open] > summary::before { transform: rotate(90deg); }
+.tab-panel-equip .equip-subsystem-grid > .equip-card > .equip-card-header,
+.tab-panel-equip .equip-accessories-grid > .equip-card > .equip-card-header {
+    padding: 8px 0;
+    background: transparent;
+    border-bottom: 1px solid var(--border);
+}
+.tab-panel-equip .equip-subsystem-grid > .equip-card > .equip-card-body,
+.tab-panel-equip .equip-accessories-grid > .equip-card > .equip-card-body {
+    padding: 10px 0 14px;
+    overflow: visible;
+}
+@media (max-width: 640px) {
+    .equip-management-section > summary small, .equip-subsystem > summary small { max-width: 58vw; }
+    .equip-subsystem-grid { grid-template-columns: minmax(0, 1fr); }
+    .equip-role-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 .equip-connect-prompt {
@@ -2358,7 +2472,6 @@ body.link-offline .preview-pane::after {
     border-radius: 3px;
 }
 .cert-modal-frame .hint { font-size: 12px; }
-
 /* A gphoto DSLR whose driver has no sensor geometry cannot take a frame, so
    this is a blocker and not a hint. Warning-toned, with the padding every new
    surface gets, and it wraps on a phone rather than pushing the button off. */
