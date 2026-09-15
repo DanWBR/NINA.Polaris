@@ -78,6 +78,20 @@ public class StackMemoryEstimateTests {
             "1:2 roda de fato nessa placa; o orcamento nao pode recusar");
     }
 
+    /// <summary>A 4 GiB board (OrangePi 5 Pro, 3910 MiB) with a 26 MP OSC was
+    /// let through at 1:1 with 43 MiB of paper slack and got OOM-killed at
+    /// 2.5 GiB RSS mid-session (2026-09-14). Auto must pick 1:2 there, and
+    /// still 1:1 on the 5 GiB host where 1:1 was measured to run.</summary>
+    [Test]
+    public void AutoHalvesA26MpColourStackOnAFourGigBoard() {
+        long fourGig = 3910L * Mib;
+        Assert.That(LiveStackingService.ResolveAutoBinning(6248L * 4176, colour: true, fourGig), Is.EqualTo(2));
+        long fiveGig = 5L * 1024 * Mib + 100 * Mib;
+        Assert.That(LiveStackingService.ResolveAutoBinning(6248L * 4176, colour: true, fiveGig), Is.EqualTo(1));
+        // An 11.7 MP OSC (the other field rig) still stacks 1:1 on 4 GiB.
+        Assert.That(LiveStackingService.ResolveAutoBinning(4144L * 2822, colour: true, fourGig), Is.EqualTo(1));
+    }
+
     [Test]
     public void AutoPicksAResolutionItsOwnEstimateAllows() {
         foreach (var ramGib in new[] { 2, 4, 8, 16 }) {
