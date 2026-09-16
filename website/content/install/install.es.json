@@ -121,7 +121,7 @@
         "polaris": "0.98.102 (2026-09-16)",
         "size": "2.53 GB (.7z)",
         "access": "https://orangepizero3.local:5000/",
-        "note": "La entrada más barata. Con 1,5 GB de RAM va bien para captura, guiado y plate solving; el live stacking de un sensor grande y las herramientas de IA pondrán a prueba tu paciencia. Esta placa no tiene aceleración por GPU, así que la IA corre en la CPU. Extrae el .7z y graba el .img en una tarjeta SD con HDD Raw Copy Tool, balenaEtcher o Rufus. Contraseña de acceso: polaris1234."
+        "note": "La entrada más barata. Con 1,5 GB de RAM va bien para captura, guiado y plate solving; el live stacking de un sensor grande y las herramientas de IA pondrán a prueba tu paciencia. Esta placa no tiene aceleración por GPU, así que la IA corre en la CPU. Extrae el .7z y graba el .img en una tarjeta SD con HDD Raw Copy Tool, balenaEtcher o Rufus. Contraseña de acceso: polaris."
       },
       {
         "device": "Orange Pi 4 Pro",
@@ -132,7 +132,7 @@
         "polaris": "0.98.102 (2026-09-16)",
         "size": "2.53 GB (.7z)",
         "access": "https://polaris-opi4pro-1.local:5000/",
-        "note": "La que comprar si tienes dudas. Unos 50 US$, bastante más rápida que una Pi 4 y el mejor equilibrio entre precio y capacidad de esta lista. Extrae el .7z y graba el .img en el almacenamiento interno de la placa con HDD Raw Copy Tool, balenaEtcher o Rufus. Contraseña de acceso: polaris1234."
+        "note": "La que comprar si tienes dudas. Unos 50 US$, bastante más rápida que una Pi 4 y el mejor equilibrio entre precio y capacidad de esta lista. Extrae el .7z y graba el .img en el almacenamiento interno de la placa con HDD Raw Copy Tool, balenaEtcher o Rufus. Contraseña de acceso: polaris."
       },
       {
         "device": "Orange Pi 5 Pro",

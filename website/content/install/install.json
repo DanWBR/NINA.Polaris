@@ -121,7 +121,7 @@
         "polaris": "0.98.102 (2026-09-16)",
         "size": "2.53 GB (.7z)",
         "access": "https://orangepizero3.local:5000/",
-        "note": "The cheapest way in. With 1.5 GB of RAM it handles capture, guiding and plate solving fine; live stacking a large sensor and the AI tools will test your patience. There is no GPU acceleration on this board, so the AI tools run on the CPU. Extract the .7z and write the .img to an SD card with HDD Raw Copy Tool, balenaEtcher or Rufus. Login password: polaris1234."
+        "note": "The cheapest way in. With 1.5 GB of RAM it handles capture, guiding and plate solving fine; live stacking a large sensor and the AI tools will test your patience. There is no GPU acceleration on this board, so the AI tools run on the CPU. Extract the .7z and write the .img to an SD card with HDD Raw Copy Tool, balenaEtcher or Rufus. Login password: polaris."
       },
       {
         "device": "Orange Pi 4 Pro",
@@ -132,7 +132,7 @@
         "polaris": "0.98.102 (2026-09-16)",
         "size": "2.53 GB (.7z)",
         "access": "https://polaris-opi4pro-1.local:5000/",
-        "note": "The one to buy if you are not sure. Around US$50, comfortably quicker than a Pi 4, and the best balance of price and capability here. Extract the .7z and write the .img to the board's internal storage with HDD Raw Copy Tool, balenaEtcher or Rufus. Login password: polaris1234."
+        "note": "The one to buy if you are not sure. Around US$50, comfortably quicker than a Pi 4, and the best balance of price and capability here. Extract the .7z and write the .img to the board's internal storage with HDD Raw Copy Tool, balenaEtcher or Rufus. Login password: polaris."
       },
       {
         "device": "Orange Pi 5 Pro",

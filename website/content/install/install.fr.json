@@ -121,7 +121,7 @@
         "polaris": "0.98.102 (2026-09-16)",
         "size": "2.53 GB (.7z)",
         "access": "https://orangepizero3.local:5000/",
-        "note": "L'entrée de gamme la moins chère. Avec 1,5 Go de RAM elle assure l'acquisition, l'autoguidage et l'astrométrie ; le live stacking d'un grand capteur et les outils IA mettront votre patience à l'épreuve. Cette carte n'a pas d'accélération GPU, l'IA tourne donc sur le processeur. Extrayez le .7z et écrivez le .img sur une carte SD avec HDD Raw Copy Tool, balenaEtcher ou Rufus. Mot de passe : polaris1234."
+        "note": "L'entrée de gamme la moins chère. Avec 1,5 Go de RAM elle assure l'acquisition, l'autoguidage et l'astrométrie ; le live stacking d'un grand capteur et les outils IA mettront votre patience à l'épreuve. Cette carte n'a pas d'accélération GPU, l'IA tourne donc sur le processeur. Extrayez le .7z et écrivez le .img sur une carte SD avec HDD Raw Copy Tool, balenaEtcher ou Rufus. Mot de passe : polaris."
       },
       {
         "device": "Orange Pi 4 Pro",
@@ -132,7 +132,7 @@
         "polaris": "0.98.102 (2026-09-16)",
         "size": "2.53 GB (.7z)",
         "access": "https://polaris-opi4pro-1.local:5000/",
-        "note": "Celle à prendre en cas de doute. Environ 50 US$, nettement plus rapide qu'une Pi 4, et le meilleur rapport prix/capacité de cette liste. Extrayez le .7z et écrivez le .img sur le stockage interne de la carte avec HDD Raw Copy Tool, balenaEtcher ou Rufus. Mot de passe : polaris1234."
+        "note": "Celle à prendre en cas de doute. Environ 50 US$, nettement plus rapide qu'une Pi 4, et le meilleur rapport prix/capacité de cette liste. Extrayez le .7z et écrivez le .img sur le stockage interne de la carte avec HDD Raw Copy Tool, balenaEtcher ou Rufus. Mot de passe : polaris."
       },
       {
         "device": "Orange Pi 5 Pro",
