@@ -4893,5 +4893,6 @@
   "none": "nenhum",
   "Notes saved": "Anotações salvas",
   "Copied as Markdown": "Copiado como Markdown",
-  "Clipboard not available": "Área de transferência indisponível"
+  "Clipboard not available": "Área de transferência indisponível",
+  "Polaris has not come back on the new version yet. The install keeps running on the host: wait a minute and reload the page. If the old version is still running, check /tmp/polaris-update.log on the host.": "O Polaris ainda não voltou na versão nova. A instalação continua rodando no host: espere um minuto e recarregue a página. Se a versão antiga ainda estiver rodando, veja /tmp/polaris-update.log no host."
 }

@@ -4893,5 +4893,6 @@
   "none": "aucun",
   "Notes saved": "Notes enregistrées",
   "Copied as Markdown": "Copié en Markdown",
-  "Clipboard not available": "Presse-papiers indisponible"
+  "Clipboard not available": "Presse-papiers indisponible",
+  "Polaris has not come back on the new version yet. The install keeps running on the host: wait a minute and reload the page. If the old version is still running, check /tmp/polaris-update.log on the host.": "Polaris n'est pas encore revenu sur la nouvelle version. L'installation continue sur l'hôte : attendez une minute et rechargez la page. Si l'ancienne version tourne toujours, consultez /tmp/polaris-update.log sur l'hôte."
 }
