@@ -279,15 +279,6 @@ public static class PlateSolveEndpoints {
                     image.Properties.Width, image.Properties.Height);
             }
 
-            // The background solve follows every captured frame; a dark, flat
-            // or bias has no sky in it. An explicit solve from the operator
-            // still runs on whatever the preview holds.
-            var latestType = (image.MetaData?.Exposure?.ImageType ?? "").Trim().ToUpperInvariant();
-            if (request?.Silent == true && latestType is "DARK" or "BIAS" or "FLAT" or "DARKFLAT") {
-                return Results.Ok(new { success = false, skipped = true,
-                    error = $"Latest frame is a {latestType}; nothing to solve." });
-            }
-
             if (!solver.IsAvailable) {
                 return Results.BadRequest(new {
                     error = "No plate solver configured / installed."
