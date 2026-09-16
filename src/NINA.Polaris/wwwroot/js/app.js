@@ -45964,15 +45964,18 @@ function ninaApp() {
             }
         },
         async _pollUpdateComplete(oldVersion, startedAt) {
-            // Give it up to 3 minutes; the service restart + dotnet warmup on a
-            // Pi can take a while. Poll every 4s, tolerating the connection
-            // refusals that happen mid-restart.
+            // Give it up to 8 minutes: unpacking a 150 MB package on an SD
+            // card, the old service's stop timeout and dotnet warm-up on a Pi
+            // add up. Poll every 4s, tolerating the connection refusals that
+            // happen mid-restart. The install runs in its own systemd unit, so
+            // giving up here never stops it.
             const elapsed = Date.now() - startedAt;
-            if (elapsed > 3 * 60 * 1000) {
+            if (elapsed > 8 * 60 * 1000) {
                 this.update.installing = false;
                 this._updProgStop();
-                this.update.error = 'Update is taking longer than expected. '
-                    + 'It may still be installing: reload the page in a moment.';
+                this.update.error = 'Polaris has not come back on the new version yet. '
+                    + 'The install keeps running on the host: wait a minute and reload the page. '
+                    + 'If the old version is still running, check /tmp/polaris-update.log on the host.';
                 return;
             }
             try {

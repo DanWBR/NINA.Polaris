@@ -41,7 +41,11 @@ After you click install:
    automatically. **Leave the page open** - it refreshes itself.
 
 The whole thing takes anywhere from a few seconds to a couple of minutes on a
-Pi (service restart + .NET warm-up).
+Pi (unpacking the package on an SD card, service restart, .NET warm-up). The
+package installs on its own first; optional extras it recommends (ffmpeg, the
+python stack, PHD2, Siril) are fetched afterwards, one by one, once the new
+version is already running, so a slow mirror or a missing package never holds
+the update itself.
 
 ---
 
@@ -135,8 +139,13 @@ The install runs in its own systemd unit (its own cgroup) so it survives the
 
 - **"Not authorized to install the update."** - the PolicyKit rule is
   missing; reinstall the `.deb` to restore it.
-- **Update seems stuck** - give it up to ~3 minutes; if the page never
-  reloads, refresh manually. The install log is at `/tmp/polaris-update.log`.
+- **Update seems stuck** - the browser waits up to 8 minutes for the new
+  version, then tells you to reload. The install keeps running on the host
+  either way: wait a minute, refresh, and check the version in the status
+  bar. If the old version is still running, read `/tmp/polaris-update.log`
+  and `journalctl -u polaris-self-update -u polaris -n 200`, or finish by
+  hand with `sudo apt-get install -y --allow-downgrades
+  /home/polaris/.cache/polaris-update.deb` (or the downloaded `.deb`).
 - **No badge appears** - you're not on a `.deb` install, you're already on the
   latest version, or there's no internet to query GitHub. The check is cached
   for 30 minutes.
