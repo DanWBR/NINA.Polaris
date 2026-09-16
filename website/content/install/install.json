@@ -280,7 +280,7 @@
       "color": "#0891b2",
       "summary": "Install Ubuntu with its own installer (it partitions the SSD properly and uses all of it), then run one command. This adds everything the ready-to-flash image has and the .deb alone does not: INDI with third-party drivers, PHD2, astrometry.net, ASTAP with the d80 database, and Polaris itself. It is the very script the image is built from, so the two cannot drift apart.",
       "steps": "curl -fsSL https://raw.githubusercontent.com/DanWBR/NINA.Polaris/master/scripts/install-polaris-linux.sh | sudo bash",
-      "notes": "No 13 GB image to write to an internal disk. Add --addon to install the software on a machine you already use, without creating the polaris user, autologin, hostname or sleep policy. Pick an Ubuntu LTS (24.04 recommended; 22.04 and 26.04 also work) or a derivative of one such as Lubuntu 24.04 or Linux Mint 22: the INDI PPA builds the third-party drivers only for those series, and on an interim release such as 25.04 or 25.10 the script has to fall back to the core INDI drivers."
+      "notes": "No 13 GB image to write to an internal disk. Add --addon to install the software on a machine you already use, without creating the polaris user, autologin, hostname or sleep policy. Pick Ubuntu 26.04 LTS or a derivative of it for the full INDI driver set: since August 2026 the INDI PPA builds INDI only for 26.04. On 24.04 or 22.04 the script still works, installing Ubuntu's own INDI plus the third-party drivers the Ubuntu archive carries (ZWO, EQMod, DSLR, PlayerOne and others), and Polaris drives ZWO, SVBony, PlayerOne, ToupTek and Altair cameras natively without INDI."
     },
     {
       "name": "x86-64 PC (Debian / Ubuntu)",

@@ -28,11 +28,12 @@ ok()  { echo "  ok   $1"; }
 bad() { echo "  FAIL $1"; fails=$((fails + 1)); }
 
 # ---- the helpers, lifted out of the real script ----------------------------
-for fn in apt_recover apt_try_each has_candidate d80_installed d80_on_disk \n          system_codename ubuntu_codename ppa_retarget phd2_unsatisfiable           indi_ppa_covers indi_fallback_hint; do
+for fn in apt_recover apt_try_each has_candidate d80_installed d80_on_disk \n          system_codename ubuntu_codename ppa_retarget phd2_unsatisfiable           indi_ppa_covers indi_archive_drivers indi_fallback_hint; do
     sed -n "/^${fn}()[ {]/,/^}/p" "$SRC" >> "$WORK/helpers.sh"
 done
 sed -n '/^apt_recover(){/p' "$SRC" >> "$WORK/helpers.sh"
 sed -n '/^INDI_PPA_SERIES=/p' "$SRC" >> "$WORK/helpers.sh"
+sed -n '/^INDI_ARCHIVE_DRIVERS=/,/"$/p' "$SRC" >> "$WORK/helpers.sh"
 note_fail() { NOTED+=("$*"); }
 # shellcheck disable=SC1090,SC1091
 . "$WORK/helpers.sh"
@@ -152,28 +153,37 @@ printf 'ID=ubuntu\nUBUNTU_CODENAME=noble\n' > "$OS_RELEASE"
 [ "$(ubuntu_codename)" = "$(system_codename)" ] \
     && ok "plain Ubuntu: the two agree" || bad "plain Ubuntu disagreed"
 
-echo "== indi_fallback_hint: names the release and the ones the PPA covers =="
-indi_ppa_covers noble    && ok "noble is covered"    || bad "noble not covered"
-indi_ppa_covers jammy    && ok "jammy is covered"    || bad "jammy not covered"
-indi_ppa_covers plucky   && bad "plucky must not be covered" || ok "plucky is not covered"
+echo "== indi_fallback_hint: names the release, what the archive gives instead, and the way out =="
+# The INDI PPA dropped 22.04 and 24.04 on 2026-08-25 (Launchpad); only 26.04 is served.
+indi_ppa_covers resolute && ok "resolute is covered"  || bad "resolute not covered"
+indi_ppa_covers noble    && bad "noble must not be covered (PPA dropped it)" || ok "noble is not covered"
+indi_ppa_covers jammy    && bad "jammy must not be covered (PPA dropped it)" || ok "jammy is not covered"
 indi_ppa_covers ""       && bad "empty must not be covered"  || ok "empty is not covered"
 
-export SYS_CODENAME=plucky
-printf 'ID=ubuntu
-UBUNTU_CODENAME=plucky
-' > "$OS_RELEASE"
-hint="$(indi_fallback_hint)"
-grep -q "based on 'plucky', which is not one of them" <<<"$hint"     && ok "the machine's own series is named" || bad "hint: $hint"
-grep -q "noble (24.04)" <<<"$hint"     && ok "the covered series are listed" || bad "hint lacks the series list"
-grep -q "Ubuntu 24.04 LTS" <<<"$hint"     && ok "points at the LTS" || bad "hint lacks the LTS suggestion"
-grep -q "indi-bin" <<<"$hint"     && ok "says what it falls back to" || bad "hint lacks indi-bin"
+# Ubuntu's own archive on 24.04: these third-party drivers exist, the rest do not.
+MISSING="indi-full indi-3rdparty-drivers libindi1 indi-svbony indi-toupbase indi-qhy indi-atik indi-mi indi-qsi indi-webcam indi-celestronaux indi-avalon indi-gpsnmea"
+drivers="$(indi_archive_drivers)"
+[ "$drivers" = "indi-asi indi-eqmod indi-gphoto indi-playerone indi-sx indi-gpsd indi-aagcloudwatcher-ng indi-apogee indi-fli indi-sbig indi-dsi indi-duino" ]     && ok "archive drivers: only the ones with a candidate, in list order" || bad "archive drivers: $drivers"
 
 export SYS_CODENAME=noble
 printf 'ID=ubuntu
 UBUNTU_CODENAME=noble
 ' > "$OS_RELEASE"
 hint="$(indi_fallback_hint)"
-grep -q "was the PPA added above" <<<"$hint"     && ok "on a covered series it blames the PPA step instead" || bad "hint: $hint"
+grep -q "based on 'noble', which the PPA no longer serves" <<<"$hint" && ok "the machine's own series is named" || bad "hint: $hint"
+grep -q "only" <<<"$hint" && grep -q "resolute (26.04)" <<<"$hint" && ok "the served series is listed" || bad "hint lacks the series"
+grep -q "from the PPA on 2026-08-25" <<<"$hint" && ok "says why 24.04 gets nothing" || bad "hint lacks the removal note"
+grep -q "indi-asi indi-eqmod indi-gphoto" <<<"$hint" && ok "lists the archive drivers it installs instead" || bad "hint lacks the driver list"
+grep -q "native drivers" <<<"$hint" && ok "mentions the native camera drivers" || bad "hint lacks the native-driver note"
+grep -q "Ubuntu 26.04 LTS" <<<"$hint" && ok "points at 26.04" || bad "hint lacks the 26.04 suggestion"
+
+export SYS_CODENAME=resolute
+printf 'ID=ubuntu
+UBUNTU_CODENAME=resolute
+' > "$OS_RELEASE"
+hint="$(indi_fallback_hint)"
+grep -q "was the PPA added above" <<<"$hint"     && ok "on a served series it blames the PPA step instead" || bad "hint: $hint"
+MISSING=""
 
 echo "== ppa_retarget: rewrites the suite, and only for the named PPA =="
 APT_SOURCES_DIR="$WORK/sources.list.d"; mkdir -p "$APT_SOURCES_DIR"
@@ -210,7 +220,11 @@ case "$1" in
     echo "  Candidate: 1.0"
     ;;
   depends)
-    [ "$2" = phd2 ] && echo "  Depends: libindi1"
+    # apt-cache prints an unresolvable dependency in angle brackets.
+    if [ "$2" = phd2 ]; then
+        for m in $MISSING; do [ "$m" = libindi1 ] && { echo "  Depends: <libindi1>"; exit 0; }; done
+        echo "  Depends: libindi1"
+    fi
     ;;
 esac
 exit 0
@@ -218,7 +232,7 @@ STUB
 chmod +x "$BIN/apt-cache"
 
 MISSING="libindi1"
-phd2_unsatisfiable && ok  "phd2 skipped when libindi1 is unavailable" \
+phd2_unsatisfiable && ok  "phd2 skipped when libindi1 is unavailable (<libindi1> form)" \
                    || bad "phd2 would still be attempted without libindi1"
 MISSING=""
 phd2_unsatisfiable && bad "phd2 skipped even though libindi1 is there" \

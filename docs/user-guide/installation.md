@@ -85,9 +85,12 @@ cd polaris-linux-arm64
 ```
 
 It runs in the foreground. Wire up your own systemd unit if you want it to
-survive reboots, and an `indiserver` (`sudo apt install indi-bin indi-full`,
-or your distro's equivalent) for equipment control; the embedded INDI Drivers
-Manager needs [indiwebmanager](https://github.com/knro/indiwebmanager).
+survive reboots, and an `indiserver` for equipment control (`sudo apt install
+indi-bin`; on Ubuntu 26.04 add `indi-3rdparty-drivers` from the INDI PPA, on
+24.04 and 22.04 the PPA no longer builds INDI, so add the third-party drivers
+the Ubuntu archive carries, such as `indi-asi indi-eqmod indi-gphoto`); the
+embedded INDI Drivers Manager needs
+[indiwebmanager](https://github.com/knro/indiwebmanager).
 
 ---
 
