@@ -12,6 +12,7 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using NINA.Polaris.Services;
 using NINA.Polaris.Services.Studio;
 
 namespace NINA.Polaris.Endpoints;
@@ -62,6 +63,25 @@ public static class StudioEndpoints {
         // Aggregate stats, total light frames, total exposure (h),
         // distinct targets / filters. Used by the toolbar header.
         g.MapGet("/stats", (FrameLibraryService svc) => Results.Ok(svc.GetStats()));
+
+        // ---- Night log ----
+        // Nights are built from the indexed frames; the first call after the
+        // library gained its night-log columns rescans so they are filled.
+        g.MapGet("/sessions", async (FrameLibraryService lib, SessionLogService sessions, bool? rescan, CancellationToken ct) => {
+            if (rescan == true || lib.NeedsNightLogRescan) {
+                await lib.RescanAsync(ct);
+                lib.MarkNightLogRescanDone();
+            }
+            return Results.Ok(sessions.ListNights());
+        });
+
+        g.MapGet("/sessions/{night}", (string night, SessionLogService sessions) => {
+            var d = sessions.GetNight(night);
+            return d == null ? Results.NotFound() : Results.Ok(d);
+        });
+
+        g.MapPut("/sessions/{night}/notes", (string night, SessionNote note, SessionLogService sessions) =>
+            Results.Ok(sessions.SaveNote(night, note)));
 
         // --- ST-2: viewer / stretch / stats / export ----------------
 

@@ -560,6 +560,7 @@ builder.Services.AddSingleton<CometElementsUpdater>();
 builder.Services.AddHostedService<CometElementsRefreshWorker>();
 builder.Services.AddSingleton<TonightsBestService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.FrameLibraryService>();
+builder.Services.AddSingleton<NINA.Polaris.Services.Studio.SessionLogService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.FrameProcessingService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.MasterFrameService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.CalibrationService>();

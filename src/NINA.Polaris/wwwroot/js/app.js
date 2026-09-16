@@ -2724,7 +2724,102 @@ function ninaApp() {
             this.studioTab = name;
             try { localStorage.setItem('polaris-studio-tab', name); } catch (_) { }
             if (name === 'autoworkflow') { try { this.workflowLoadList(); } catch (_) { } }
+            if (name === 'sessions') { try { this.sessionsLoad(false); } catch (_) { } }
         },
+
+        // ─── Night log (Studio > Sessions) ───────────────────────────────
+        //
+        // Every night the library knows about, built from the FITS headers
+        // (target, filter, exposure, gain, offset, sensor temperature, guiding
+        // RMS, focus, ambient), plus the operator's own seeing, transparency
+        // and notes kept on the profile. The calibration table says which
+        // darks, bias and flats in the library match each set of lights.
+        sessions: { list: [], loading: false, selected: null, detail: null, note: { seeing: null, transparency: null, notes: '' }, saving: false },
+
+        async sessionsLoad(rescan) {
+            this.sessions.loading = true;
+            try {
+                this.sessions.list = await this.apiGet('/api/studio/sessions' + (rescan ? '?rescan=true' : '')) || [];
+                if (this.sessions.selected && !this.sessions.list.some(n => n.night === this.sessions.selected)) {
+                    this.sessions.selected = null; this.sessions.detail = null;
+                }
+                if (!this.sessions.selected && this.sessions.list.length) this.sessionsOpen(this.sessions.list[0].night);
+            } catch (e) {
+                this.toastFail('Sessions', e);
+            } finally {
+                this.sessions.loading = false;
+            }
+        },
+
+        async sessionsOpen(night) {
+            this.sessions.selected = night;
+            this.sessions.detail = null;
+            try {
+                const d = await this.apiGet('/api/studio/sessions/' + encodeURIComponent(night));
+                this.sessions.detail = d;
+                this.sessions.note = {
+                    seeing: d.note?.seeing ?? null,
+                    transparency: d.note?.transparency ?? null,
+                    notes: d.note?.notes || ''
+                };
+            } catch (e) { this.toastFail('Sessions', e); }
+        },
+
+        async sessionsSaveNote() {
+            const night = this.sessions.selected;
+            if (!night) return;
+            this.sessions.saving = true;
+            try {
+                const n = this.sessions.note;
+                const resp = await this.apiFetch('/api/studio/sessions/' + encodeURIComponent(night) + '/notes', {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ night, seeing: n.seeing || null, transparency: n.transparency || null, notes: n.notes || '' })
+                });
+                const saved = await resp.json();
+                if (this.sessions.detail) this.sessions.detail.note = saved;
+                const row = this.sessions.list.find(x => x.night === night);
+                if (row) { row.seeing = saved.seeing; row.transparency = saved.transparency; row.hasNotes = !!(saved.notes && saved.notes.trim()); }
+                this.toast(this.$t('Notes saved'), 'ok');
+            } catch (e) { this.toastFail('Notes', e); }
+            finally { this.sessions.saving = false; }
+        },
+
+        _sessionsTime(iso) {
+            if (!iso) return '';
+            try { return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); } catch (_) { return ''; }
+        },
+
+        /// The night as a Markdown report on the clipboard, for a notebook or
+        /// a forum post.
+        async sessionsCopyMarkdown() {
+            const d = this.sessions.detail; if (!d) return;
+            const s = d.summary;
+            const L = [];
+            L.push(`# Night of ${s.night}`);
+            if (s.start) L.push(`${this._sessionsTime(s.start)} to ${this._sessionsTime(s.end)}`);
+            for (const e of d.equipment) L.push(`- ${[e.camera, e.telescope, e.focalLen ? e.focalLen + ' mm' : ''].filter(Boolean).join(' on ')}`);
+            const env = [];
+            if (d.ambientTempMin != null) env.push(`ambient ${d.ambientTempMin} to ${d.ambientTempMax} C`);
+            if (d.humidityMean != null) env.push(`humidity ${d.humidityMean}%`);
+            if (d.skyBrightnessMean != null) env.push(`sky ${d.skyBrightnessMean} mag/arcsec2`);
+            if (s.ccdTempMin != null) env.push(`sensor ${s.ccdTempMin} to ${s.ccdTempMax} C`);
+            if (env.length) L.push(env.join(', '));
+            const n = d.note || {};
+            if (n.seeing || n.transparency) L.push(`Seeing ${n.seeing || '-'}/5, transparency ${n.transparency || '-'}/5`);
+            if (n.notes) L.push('', n.notes);
+            L.push('', `## Targets (${s.lights} lights, ${s.integrationHours} h)`);
+            for (const t of d.targets) {
+                L.push(`### ${t.target}: ${t.frames} frames, ${t.integrationMin} min` + (t.guideRmsMean != null ? `, guiding ${t.guideRmsMean}" RMS (max ${t.guideRmsMax}")` : ''));
+                for (const f of t.filters) L.push(`- ${f.filter}: ${f.frames} x ${f.exposuresSec.join('/')} s = ${f.integrationMin} min (gain ${f.gain.join('/')}, bin ${f.binning.join('/')})`);
+            }
+            if (d.calibration.length) {
+                L.push('', '## Calibration in the library');
+                for (const c of d.calibration) L.push(`- ${c.filter} ${c.exposureSec} s gain ${c.gain} offset ${c.offset} bin ${c.binning}: darks ${c.darks}, bias ${c.biases}, flats ${c.flats}` + (c.flatsNight ? ` (${c.flatsNight})` : ''));
+            }
+            try { await navigator.clipboard.writeText(L.join('\n')); this.toast(this.$t('Copied as Markdown'), 'ok'); }
+            catch (_) { this.toast(this.$t('Clipboard not available'), 'warn'); }
+        },
+
 
         // ===== Auto Workflow (AWF) =====================================
         // A saveable, linear post-processing pipeline applied to a source

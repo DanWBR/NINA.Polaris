@@ -12394,6 +12394,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             @click="setStudioTab('nightscape')">Nightscape Stack</button>
                     <button class="studio-subtab" :class="{ active: studioTab === 'autoworkflow' }"
                             @click="setStudioTab('autoworkflow')">Auto Workflow</button>
+                    <button class="studio-subtab" :class="{ active: studioTab === 'sessions' }"
+                            @click="setStudioTab('sessions')">Sessions</button>
                 </div>
 
                 <!-- Full-width tabbed panes. files-left = Files; the aside on
@@ -13280,6 +13282,127 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                          The sky is stacked aligned on the stars, the foreground
                          stays put, and they meet at a hand-drawn horizon line.
                          Capture is done in Autorun/Live; this is the editing. -->
+                    <!-- Night log: one page per observing night, read from the
+                         frames' headers plus the operator's own notes. -->
+                    <div class="files-right-pane stack-pane sessions-pane" x-show="studioTab === 'sessions'">
+                        <div class="stack-header">
+                            <h3 class="stack-title">Sessions</h3>
+                            <button class="btn btn-sm" @click="sessionsLoad(true)" :disabled="sessions.loading"
+                                    title="Re-read every frame's header into the library, then rebuild the nights">
+                                <span x-text="sessions.loading ? 'Scanning…' : 'Rescan'"></span>
+                            </button>
+                            <button class="btn btn-sm" @click="sessionsCopyMarkdown()" :disabled="!sessions.detail"
+                                    title="Copy this night as a Markdown report">Copy as Markdown</button>
+                        </div>
+                        <p class="stack-intro" style="font-size:12.5px;color:var(--text-muted);margin:0 0 12px;padding:0 2px">
+                            Every night in the frame library: what was shot, on what, how the guiding and the sensor behaved,
+                            and which darks, bias and flats in the library match each set of lights. Add seeing, transparency
+                            and notes per night.
+                        </p>
+                        <div class="sessions-split">
+                            <div class="sessions-list">
+                                <div class="muted" x-show="!sessions.loading && sessions.list.length === 0">No nights yet. Frames saved by Polaris are indexed here after a rescan.</div>
+                                <template x-for="n in sessions.list" :key="'night-'+n.night">
+                                    <div class="sessions-row" :class="{ selected: sessions.selected === n.night }" @click="sessionsOpen(n.night)">
+                                        <div class="sessions-row-head">
+                                            <strong x-text="n.night"></strong>
+                                            <span class="muted" x-text="n.lights + ' lights · ' + n.integrationHours + ' h'"></span>
+                                            <span class="sessions-rating" x-show="n.seeing || n.transparency"
+                                                  x-text="'S' + (n.seeing || '-') + ' T' + (n.transparency || '-')"></span>
+                                            <span x-show="n.hasNotes" title="Has notes">✎</span>
+                                        </div>
+                                        <div class="muted sessions-row-sub" x-text="n.targets.join(', ')"></div>
+                                        <div class="muted sessions-row-sub" x-text="n.cameras.concat(n.telescopes).join(' · ')"></div>
+                                    </div>
+                                </template>
+                            </div>
+                            <div class="sessions-detail" x-show="sessions.detail">
+                                <template x-if="sessions.detail">
+                                    <div>
+                                        <h4 class="sessions-h">
+                                            <span x-text="'Night of ' + sessions.detail.summary.night"></span>
+                                            <span class="muted" x-show="sessions.detail.summary.start"
+                                                  x-text="_sessionsTime(sessions.detail.summary.start) + ' to ' + _sessionsTime(sessions.detail.summary.end)"></span>
+                                        </h4>
+                                        <div class="sessions-facts">
+                                            <template x-for="(e, i) in sessions.detail.equipment" :key="'eq'+i">
+                                                <span x-text="[e.camera, e.telescope, e.focalLen ? e.focalLen.toFixed(0) + ' mm' : ''].filter(Boolean).join(' on ')"></span>
+                                            </template>
+                                            <span x-show="sessions.detail.summary.ccdTempMin != null" x-text="'Sensor ' + sessions.detail.summary.ccdTempMin + ' to ' + sessions.detail.summary.ccdTempMax + ' °C'"></span>
+                                            <span x-show="sessions.detail.ambientTempMin != null" x-text="'Ambient ' + sessions.detail.ambientTempMin + ' to ' + sessions.detail.ambientTempMax + ' °C'"></span>
+                                            <span x-show="sessions.detail.humidityMean != null" x-text="'Humidity ' + sessions.detail.humidityMean + '%'"></span>
+                                            <span x-show="sessions.detail.skyBrightnessMean != null" x-text="'Sky ' + sessions.detail.skyBrightnessMean + ' mag/arcsec²'"></span>
+                                            <span x-show="sessions.detail.summary.guideRmsMean != null" x-text="'Guiding ' + sessions.detail.summary.guideRmsMean + '&quot; RMS'"></span>
+                                        </div>
+
+                                        <div class="sessions-notes">
+                                            <label>Seeing
+                                                <select class="input-sm" x-model.number="sessions.note.seeing">
+                                                    <option :value="null">-</option>
+                                                    <option :value="1">1 poor</option><option :value="2">2</option><option :value="3">3 average</option><option :value="4">4</option><option :value="5">5 excellent</option>
+                                                </select>
+                                            </label>
+                                            <label>Transparency
+                                                <select class="input-sm" x-model.number="sessions.note.transparency">
+                                                    <option :value="null">-</option>
+                                                    <option :value="1">1 poor</option><option :value="2">2</option><option :value="3">3 average</option><option :value="4">4</option><option :value="5">5 excellent</option>
+                                                </select>
+                                            </label>
+                                            <label class="sessions-notes-text">Notes
+                                                <textarea class="input-sm" rows="3" x-model="sessions.note.notes"
+                                                          placeholder="Dew, wind, moon, what went wrong, what to redo…"></textarea>
+                                            </label>
+                                            <button class="btn btn-sm btn-primary" @click="sessionsSaveNote()" :disabled="sessions.saving">Save notes</button>
+                                        </div>
+
+                                        <h5 class="sessions-h">Targets</h5>
+                                        <template x-for="t in sessions.detail.targets" :key="'st-'+t.target">
+                                            <div class="sessions-target">
+                                                <div class="sessions-target-head">
+                                                    <strong x-text="t.target"></strong>
+                                                    <span class="muted" x-text="_sessionsTime(t.start) + ' to ' + _sessionsTime(t.end) + ' · ' + t.frames + ' frames · ' + t.integrationMin + ' min'"></span>
+                                                    <span class="muted" x-show="t.guideRmsMean != null" x-text="'guiding ' + t.guideRmsMean + '&quot; RMS, max ' + t.guideRmsMax + '&quot;'"></span>
+                                                    <span class="muted" x-show="t.focusPosMin != null" x-text="'focus ' + t.focusPosMin + (t.focusPosMax !== t.focusPosMin ? ' to ' + t.focusPosMax : '')"></span>
+                                                    <span class="muted" x-show="t.pierSides.length" x-text="'pier ' + t.pierSides.join('/')"></span>
+                                                </div>
+                                                <table class="sessions-table">
+                                                    <thead><tr><th>Filter</th><th>Frames</th><th>Exposure</th><th>Integration</th><th>Gain</th><th>Bin</th></tr></thead>
+                                                    <tbody>
+                                                        <template x-for="f in t.filters" :key="'sf-'+t.target+f.filter">
+                                                            <tr>
+                                                                <td x-text="f.filter"></td>
+                                                                <td x-text="f.frames"></td>
+                                                                <td x-text="f.exposuresSec.join(' / ') + ' s'"></td>
+                                                                <td x-text="f.integrationMin + ' min'"></td>
+                                                                <td x-text="f.gain.join('/')"></td>
+                                                                <td x-text="f.binning.join('/')"></td>
+                                                            </tr>
+                                                        </template>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </template>
+
+                                        <h5 class="sessions-h" x-show="sessions.detail.calibration.length">Calibration in the library</h5>
+                                        <table class="sessions-table" x-show="sessions.detail.calibration.length">
+                                            <thead><tr><th>Lights</th><th>Darks</th><th>Bias</th><th>Flats</th></tr></thead>
+                                            <tbody>
+                                                <template x-for="(c, i) in sessions.detail.calibration" :key="'cal'+i">
+                                                    <tr>
+                                                        <td x-text="c.lights + ' × ' + c.filter + ' ' + c.exposureSec + ' s, gain ' + c.gain + ', offset ' + c.offset + ', bin ' + c.binning + (c.ccdTemp != null ? ', ' + c.ccdTemp + ' °C' : '')"></td>
+                                                        <td :class="c.darks ? 'ok' : 'text-warn'" x-text="c.darks ? c.darks + (c.darksNights.length ? ' (' + c.darksNights.join(', ') + ')' : '') : 'none'"></td>
+                                                        <td :class="c.biases ? 'ok' : 'text-warn'" x-text="c.biases ? c.biases : 'none'"></td>
+                                                        <td :class="c.flats ? 'ok' : 'text-warn'" x-text="c.flats ? c.flats + (c.flatsNight ? ' (' + c.flatsNight + ')' : '') : 'none'"></td>
+                                                    </tr>
+                                                </template>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="files-right-pane stack-pane" x-show="studioTab === 'nightscape'">
                         <div class="stack-header">
                             <h3 class="stack-title">Nightscape Stack</h3>

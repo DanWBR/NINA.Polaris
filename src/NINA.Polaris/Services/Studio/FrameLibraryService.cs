@@ -108,7 +108,38 @@ public class FrameLibraryService {
             CREATE INDEX IF NOT EXISTS idx_frames_date   ON frames(date_obs);
         ";
         cmd.ExecuteNonQuery();
+
+        // Night-log columns, added after the table existed: what the session
+        // view needs beyond the browser's four (camera, scope, sensor and
+        // ambient temperatures, binning, guiding, focus, pier side, sky).
+        // ALTER TABLE ADD COLUMN is the only migration SQLite offers, so each
+        // is added when missing and the next rescan fills them in.
+        var have = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        using (var cols = c.CreateCommand()) {
+            cols.CommandText = "PRAGMA table_info(frames)";
+            using var r = cols.ExecuteReader();
+            while (r.Read()) have.Add(r.GetString(1));
+        }
+        foreach (var (name, type) in NightLogColumns) {
+            if (have.Contains(name)) continue;
+            using var alter = c.CreateCommand();
+            alter.CommandText = $"ALTER TABLE frames ADD COLUMN {name} {type}";
+            alter.ExecuteNonQuery();
+            NeedsNightLogRescan = true;
+        }
     }
+
+    private static readonly (string, string)[] NightLogColumns = {
+        ("camera", "TEXT"), ("telescope", "TEXT"), ("focal_len", "REAL"), ("ccd_temp", "REAL"),
+        ("binning", "INTEGER"), ("guide_rms", "REAL"), ("guide_peak", "REAL"), ("focus_pos", "INTEGER"),
+        ("focus_temp", "REAL"), ("ambient_temp", "REAL"), ("humidity", "REAL"), ("pier_side", "TEXT"),
+        ("sky_brightness", "REAL"), ("date_loc", "TEXT"),
+    };
+
+    /// <summary>True when columns were just added and the rows on disk carry
+    /// nothing in them yet; the first Sessions request triggers a rescan.</summary>
+    public bool NeedsNightLogRescan { get; private set; }
+    public void MarkNightLogRescanDone() => NeedsNightLogRescan = false;
 
     /// <summary>
     /// Walk the active profile's image output dir for .fits files,
@@ -261,14 +292,32 @@ public class FrameLibraryService {
         var height     = HeaderInt(headers, "NAXIS2", 0);
         var bayer      = HeaderString(headers, "BAYERPAT", "");
         var dateObs    = HeaderString(headers, "DATE-OBS", "");
+        var camera     = HeaderString(headers, "INSTRUME", HeaderString(headers, "CAMERAID", ""));
+        var telescope  = HeaderString(headers, "TELESCOP", "");
+        var focalLen   = HeaderDouble(headers, "FOCALLEN", 0);
+        var ccdTemp    = HeaderNullableDouble(headers, "CCD-TEMP");
+        var binning    = HeaderInt(headers, "XBINNING", 1);
+        var guideRms   = HeaderNullableDouble(headers, "GUIDRMS");
+        var guidePeak  = HeaderNullableDouble(headers, "GUIDPEAK");
+        var focusPos   = HeaderNullableDouble(headers, "FOCUSPOS") ?? HeaderNullableDouble(headers, "FOCPOS");
+        var focusTemp  = HeaderNullableDouble(headers, "FOCUSTEM") ?? HeaderNullableDouble(headers, "FOCTEMP");
+        var ambient    = HeaderNullableDouble(headers, "AMBTEMP");
+        var humidity   = HeaderNullableDouble(headers, "HUMIDITY");
+        var pierSide   = HeaderString(headers, "PIERSIDE", "");
+        var skyBright  = HeaderNullableDouble(headers, "SKYBRGHT") ?? HeaderNullableDouble(headers, "MPSAS");
+        var dateLoc    = HeaderString(headers, "DATE-LOC", "");
 
         using var cmd = c.CreateCommand();
         cmd.CommandText = @"
             INSERT INTO frames (path, file_name, image_type, filter, target, exposure_sec,
                                 gain, offset_val, width, height, bayer, date_obs,
-                                file_size, indexed_at)
+                                file_size, indexed_at,
+                                camera, telescope, focal_len, ccd_temp, binning, guide_rms, guide_peak,
+                                focus_pos, focus_temp, ambient_temp, humidity, pier_side, sky_brightness, date_loc)
             VALUES ($path, $name, $type, $filter, $target, $exp,
-                    $gain, $offset, $w, $h, $bayer, $dt, $sz, $idx)
+                    $gain, $offset, $w, $h, $bayer, $dt, $sz, $idx,
+                    $camera, $telescope, $focal, $ccdtemp, $bin, $grms, $gpeak,
+                    $fpos, $ftemp, $amb, $hum, $pier, $sky, $dloc)
             ON CONFLICT(path) DO UPDATE SET
                 image_type=excluded.image_type,
                 filter=excluded.filter,
@@ -281,7 +330,12 @@ public class FrameLibraryService {
                 bayer=excluded.bayer,
                 date_obs=excluded.date_obs,
                 file_size=excluded.file_size,
-                indexed_at=excluded.indexed_at;
+                indexed_at=excluded.indexed_at,
+                camera=excluded.camera, telescope=excluded.telescope, focal_len=excluded.focal_len,
+                ccd_temp=excluded.ccd_temp, binning=excluded.binning, guide_rms=excluded.guide_rms,
+                guide_peak=excluded.guide_peak, focus_pos=excluded.focus_pos, focus_temp=excluded.focus_temp,
+                ambient_temp=excluded.ambient_temp, humidity=excluded.humidity, pier_side=excluded.pier_side,
+                sky_brightness=excluded.sky_brightness, date_loc=excluded.date_loc;
         ";
         cmd.Parameters.AddWithValue("$path",   path);
         cmd.Parameters.AddWithValue("$name",   fi.Name);
@@ -297,7 +351,50 @@ public class FrameLibraryService {
         cmd.Parameters.AddWithValue("$dt",     dateObs);
         cmd.Parameters.AddWithValue("$sz",     fi.Length);
         cmd.Parameters.AddWithValue("$idx",    DateTime.UtcNow.ToString("o"));
+        cmd.Parameters.AddWithValue("$camera", camera);
+        cmd.Parameters.AddWithValue("$telescope", telescope);
+        cmd.Parameters.AddWithValue("$focal",  focalLen);
+        cmd.Parameters.AddWithValue("$ccdtemp", (object?)ccdTemp ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$bin",    binning);
+        cmd.Parameters.AddWithValue("$grms",   (object?)guideRms ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$gpeak",  (object?)guidePeak ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$fpos",   focusPos.HasValue ? (object)(int)Math.Round(focusPos.Value) : DBNull.Value);
+        cmd.Parameters.AddWithValue("$ftemp",  (object?)focusTemp ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$amb",    (object?)ambient ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$hum",    (object?)humidity ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$pier",   pierSide);
+        cmd.Parameters.AddWithValue("$sky",    (object?)skyBright ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$dloc",   dateLoc);
         cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>Every indexed frame with the night-log columns, for the
+    /// session view to group. The library on a field host is thousands of
+    /// rows at most, so one pass is cheaper than a query per night.</summary>
+    public IReadOnlyList<NightLogFrame> AllForNightLog() {
+        var list = new List<NightLogFrame>();
+        if (!File.Exists(_dbPath)) return list;
+        using var c = new SqliteConnection(ConnString); c.Open();
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = @"SELECT path, image_type, filter, target, exposure_sec, gain, offset_val,
+                                   binning, bayer, date_obs, date_loc, camera, telescope, focal_len,
+                                   ccd_temp, guide_rms, guide_peak, focus_pos, focus_temp,
+                                   ambient_temp, humidity, pier_side, sky_brightness
+                            FROM frames";
+        using var r = cmd.ExecuteReader();
+        while (r.Read()) {
+            double? D(int i) => r.IsDBNull(i) ? null : r.GetDouble(i);
+            string S(int i) => r.IsDBNull(i) ? "" : r.GetString(i);
+            list.Add(new NightLogFrame(
+                Path: S(0), ImageType: S(1), Filter: S(2), Target: S(3),
+                ExposureSec: D(4) ?? 0, Gain: r.IsDBNull(5) ? 0 : r.GetInt32(5),
+                Offset: r.IsDBNull(6) ? 0 : r.GetInt32(6), Binning: r.IsDBNull(7) ? 1 : r.GetInt32(7),
+                Bayer: S(8), DateObs: S(9), DateLoc: S(10), Camera: S(11), Telescope: S(12),
+                FocalLen: D(13) ?? 0, CcdTemp: D(14), GuideRms: D(15), GuidePeak: D(16),
+                FocusPos: r.IsDBNull(17) ? null : r.GetInt32(17), FocusTemp: D(18),
+                AmbientTemp: D(19), Humidity: D(20), PierSide: S(21), SkyBrightness: D(22)));
+        }
+        return list;
     }
 
     /// <summary>UNIF-4: batch lookup by absolute path. Returns a
@@ -517,6 +614,9 @@ public class FrameLibraryService {
     private static int HeaderInt(IDictionary<string, FITSHeaderCard> h, string key, int def) =>
         h.TryGetValue(key, out var c) && int.TryParse(c.Value, System.Globalization.NumberStyles.Integer,
             System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : def;
+    private static double? HeaderNullableDouble(IDictionary<string, FITSHeaderCard> h, string key) =>
+        h.TryGetValue(key, out var c) && double.TryParse(c.Value, System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : null;
     private static double HeaderDouble(IDictionary<string, FITSHeaderCard> h, string key, double def) =>
         h.TryGetValue(key, out var c) && double.TryParse(c.Value, System.Globalization.NumberStyles.Float,
             System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : def;
@@ -530,6 +630,13 @@ public record FrameRow(int Id, string Path, string FileName,
                        double ExposureSec, int Gain, int Offset,
                        int Width, int Height, string Bayer,
                        string DateObs, long FileSize);
+/// <summary>One indexed frame as the night log sees it.</summary>
+public record NightLogFrame(string Path, string ImageType, string Filter, string Target,
+                            double ExposureSec, int Gain, int Offset, int Binning, string Bayer,
+                            string DateObs, string DateLoc, string Camera, string Telescope, double FocalLen,
+                            double? CcdTemp, double? GuideRms, double? GuidePeak, int? FocusPos, double? FocusTemp,
+                            double? AmbientTemp, double? Humidity, string PierSide, double? SkyBrightness);
+
 public record StudioStats(int TotalLights, double TotalExposureHours,
                           int DistinctTargets, int DistinctFilters);
 public record FrameMeta(string ImageType, string Filter, string Target,
