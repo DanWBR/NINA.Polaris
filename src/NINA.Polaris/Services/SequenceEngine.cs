@@ -330,6 +330,7 @@ public class SequenceEngine {
             State = State.ToString().ToLowerInvariant(),
             Items = Items.Select((item, i) => new SequenceItemStatus {
                 Name = item.Name,
+                ImageType = item.ImageType,
                 Exposure = item.Exposure,
                 Count = item.Count,
                 Completed = i < CurrentItemIndex ? item.Count :
@@ -598,6 +599,7 @@ public class SequenceEngine {
 
                         // Populate exposure-level metadata before saving / relaying
                         imageData.MetaData.Exposure.ExposureTime = item.Exposure;
+                        imageData.MetaData.Exposure.ImageType = imageType;
                         if (!string.IsNullOrEmpty(item.Filter))
                             imageData.MetaData.Exposure.Filter = item.Filter;
                         // Leave a LIGHT frame's target name UNSET so SaveImage's
