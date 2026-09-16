@@ -98,7 +98,11 @@ public class HostMetricsService : BackgroundService {
         // First sample skipped, TotalProcessorTime delta needs a
         // reference window, so we wait one interval before the first
         // valid emit.
-        await Task.Delay(SampleInterval, stoppingToken);
+        try {
+            await Task.Delay(SampleInterval, stoppingToken);
+        } catch (OperationCanceledException) {
+            return;
+        }
 
         // Seed Latest immediately with the device info so the first
         // status broadcast (which may happen before the first sample
