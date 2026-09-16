@@ -198,6 +198,20 @@ public class SequenceEngineDitherTests {
     }
 
     [Test]
+    public void GetStatus_ItemsCarryTheImageType() {
+        // The client reads the active item's type off the status block to
+        // hold the background plate solve while a calibration set runs.
+        var engine = MakeEngine();
+        engine.LoadSequence(new List<SequenceItem> {
+            new() { Name = "M 42",  Exposure = 60,  Count = 10 },
+            new() { Name = "Darks", Exposure = 60,  Count = 20, ImageType = "DARK" }
+        });
+        var status = engine.GetStatus();
+        Assert.That(status.Items[0].ImageType, Is.EqualTo("LIGHT"));
+        Assert.That(status.Items[1].ImageType, Is.EqualTo("DARK"));
+    }
+
+    [Test]
     public void LoadSequence_DoesNotResetDitherConfig() {
         var engine = MakeEngine();
         engine.Dither = new DitherSettings { Enabled = true, Pixels = 7.5, EveryNFrames = 4 };

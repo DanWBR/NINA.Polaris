@@ -20583,6 +20583,13 @@ function ninaApp() {
             const firstObservation = ss.lastMarker === null;
             ss.lastMarker = marker;
             if (firstObservation) return;             // don't solve on first sight
+            // A dark, flat or bias item in AUTORUN has no sky to solve.
+            if (this.seqState === 'running' && !this.liveStackEnabled) {
+                const st = this.seqStatus || {};
+                const cur = Array.isArray(st.items) ? st.items[st.currentItemIndex] : null;
+                const t = ((cur && cur.imageType) || 'LIGHT').toUpperCase();
+                if (t !== 'LIGHT') return;
+            }
             this._maybeSilentSolve();
         },
 

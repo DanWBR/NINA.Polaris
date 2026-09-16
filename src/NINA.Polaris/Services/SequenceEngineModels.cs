@@ -105,6 +105,7 @@ public class SequenceStatus {
 
 public class SequenceItemStatus {
     public string Name { get; set; } = "";
+    public string ImageType { get; set; } = "LIGHT";
     public double Exposure { get; set; }
     public int Count { get; set; }
     public int Completed { get; set; }

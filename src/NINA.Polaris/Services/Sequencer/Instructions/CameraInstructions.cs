@@ -135,13 +135,18 @@ public class TakeExposureInstruction : SequenceInstruction {
             NINA.Image.Interfaces.IImageData image =
                 await CaptureFrameWithRetryAsync(ctx, capOpts, ct);
 
+            var imageType = string.IsNullOrWhiteSpace(ImageType) ? "LIGHT" : ImageType.Trim().ToUpperInvariant();
             image.MetaData.Exposure.ExposureTime = ExposureSeconds;
+            image.MetaData.Exposure.ImageType = imageType;
             if (!string.IsNullOrEmpty(Filter)) image.MetaData.Exposure.Filter = Filter;
             if (!string.IsNullOrEmpty(TargetName)) image.MetaData.Target.Name = TargetName;
 
-            ctx.ImageWriter.SaveImage(image, targetName: TargetName, imageType: ImageType, gain: Gain ?? 0);
+            ctx.ImageWriter.SaveImage(image, targetName: TargetName, imageType: imageType, gain: Gain ?? 0);
 
-            if (ctx.LiveStack.IsRunning) {
+            // Only lights go into the stack; a dark, flat or bias is saved and
+            // shown on the AUTORUN preview.
+            bool isLight = imageType is not ("DARK" or "BIAS" or "FLAT" or "DARKFLAT");
+            if (ctx.LiveStack.IsRunning && isLight) {
                 await ctx.LiveStack.AddFrameAsync(image, ct);
             } else {
                 // Sequence capture → AUTORUN preview canvas only, never LIVE.
