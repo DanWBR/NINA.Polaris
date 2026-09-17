@@ -529,9 +529,32 @@ public class FileBrowserService {
         var full = Path.GetFullPath(userPath);
         if (mustExist && !File.Exists(full) && !Directory.Exists(full))
             throw new FileNotFoundException(full);
+        // Validate and return the canonical target, not necessarily the requested path.
+        full = ResolveExistingPath(full);
         if (IsBlocked(full))
             throw new UnauthorizedAccessException($"Path is blocked: {full}");
         return full;
+    }
+
+    private static string ResolveExistingPath(string fullPath) {
+        var current = Path.GetPathRoot(fullPath)
+                      ?? throw new ArgumentException("Path has no root", nameof(fullPath));
+        var components = fullPath[current.Length..]
+            .Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+                StringSplitOptions.RemoveEmptyEntries);
+
+        foreach (var component in components) {
+            var candidate = Path.Combine(current, component);
+            if (File.Exists(candidate) || Directory.Exists(candidate)) {
+                FileSystemInfo info = Directory.Exists(candidate)
+                    ? new DirectoryInfo(candidate)
+                    : new FileInfo(candidate);
+                current = info.ResolveLinkTarget(returnFinalTarget: true)?.FullName ?? candidate;
+            } else {
+                current = candidate;
+            }
+        }
+        return current;
     }
 
     private string ResolveSafeDestination(string userPath) {
@@ -540,9 +563,10 @@ public class FileBrowserService {
         if (string.IsNullOrWhiteSpace(userPath))
             throw new ArgumentException("Empty destination", nameof(userPath));
         var full = Path.GetFullPath(userPath);
-        if (IsBlocked(full))
-            throw new UnauthorizedAccessException($"Destination is blocked: {full}");
-        return full;
+        var canonical = ResolveExistingPath(full);
+        if (IsBlocked(canonical))
+            throw new UnauthorizedAccessException($"Destination is blocked: {canonical}");
+        return canonical;
     }
 
     public static bool IsBlocked(string fullPath) {
