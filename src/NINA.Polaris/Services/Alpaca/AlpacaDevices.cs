@@ -283,9 +283,25 @@ public class AlpacaFilterWheel : IFilterWheel {
 }
 
 // ---- Rotator ----------------------------------------------------------------
-public class AlpacaRotator {
+public class AlpacaRotator : IRotator {
     private readonly AlpacaClient _c;
+    private string _deviceName = "Alpaca Rotator";
     public AlpacaRotator(string host, int port, int n = 0) { _c = new(host, port, "rotator", n); }
+
+    /// <summary>Construct from the <c>host:port[:deviceNumber]</c> identity
+    /// stored by Alpaca discovery in equipment profiles.</summary>
+    public static AlpacaRotator FromDeviceId(string deviceId) {
+        var parts = (deviceId ?? "").Split(':');
+        if (parts.Length < 2)
+            throw new ArgumentException($"Alpaca device id '{deviceId}' must be host:port[:deviceNumber].",
+                nameof(deviceId));
+        var host = parts[0];
+        var port = int.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture);
+        var dev = parts.Length >= 3 && int.TryParse(parts[2],
+            System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : 0;
+        return new AlpacaRotator(host, port, dev);
+    }
 
     public Task<bool> GetConnectedAsync(CancellationToken ct = default) => Safe(_c.GetAsync<bool>("connected", ct));
     public Task SetConnectedAsync(bool v, CancellationToken ct = default) =>
@@ -302,6 +318,22 @@ public class AlpacaRotator {
     public Task SyncAsync(double degrees, CancellationToken ct = default) =>
         _c.PutAsync("sync", new() { ["Position"] = degrees.ToString(System.Globalization.CultureInfo.InvariantCulture) }, ct);
     public Task HaltAsync(CancellationToken ct = default) => _c.PutAsync("halt", null, ct);
+
+    // ---- IRotator surface ----
+    public string DeviceName => _deviceName;
+    public bool IsConnected => GetConnectedAsync().GetAwaiter().GetResult();
+    public double Position => GetPositionAsync().GetAwaiter().GetResult();
+    public bool IsMoving => GetIsMovingAsync().GetAwaiter().GetResult();
+    public bool IsReversed => GetReverseAsync().GetAwaiter().GetResult();
+
+    public async Task ConnectAsync(CancellationToken ct = default) {
+        await SetConnectedAsync(true, ct);
+        _deviceName = (await GetNameAsync(ct)) ?? _deviceName;
+    }
+    public Task DisconnectAsync(CancellationToken ct = default) => SetConnectedAsync(false, ct);
+    public Task MoveToAsync(double degrees, CancellationToken ct = default) => MoveAbsoluteAsync(degrees, ct);
+    public Task ReverseAsync(bool reversed, CancellationToken ct = default) => SetReverseAsync(reversed, ct);
+    public Task AbortAsync(CancellationToken ct = default) => HaltAsync(ct);
 
     private static async Task<bool> Safe(Task<bool> t)     { try { return await t; }   catch { return false; } }
     private static async Task<int> Safe(Task<int> t)       { try { return await t; }   catch { return 0; } }

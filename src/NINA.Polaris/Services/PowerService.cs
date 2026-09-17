@@ -237,7 +237,11 @@ public class PowerService {
             _logger.LogWarning("Cannot resolve executable path for re-exec; exiting only");
             return;
         }
-        var wd = AppContext.BaseDirectory;
+        // Preserve the original working directory. In a `dotnet run` process,
+        // AppContext.BaseDirectory is the bin output folder and does not carry
+        // the source tree's wwwroot; using it for the child makes
+        // IWebHostEnvironment.WebRootPath null on the first restart.
+        var wd = Environment.CurrentDirectory;
         // Forward the original CLI args (skip element 0 = the exe itself).
         var args = Environment.GetCommandLineArgs().Skip(1).ToArray();
         try {

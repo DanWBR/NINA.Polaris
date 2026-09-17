@@ -175,6 +175,10 @@ public static class EquipmentEndpoints {
                 // unlike the primary devices, deselecting these is a
                 // legitimate operation.
                 r.Rotator = update.Rotator;
+                if (!string.IsNullOrWhiteSpace(update.RotatorDriver))
+                    r.RotatorDriver = update.RotatorDriver;
+                r.RotatorMaxAngle = update.RotatorMaxAngle is 90 or 180 or 360
+                    ? update.RotatorMaxAngle : 360;
                 r.FlatDevice = update.FlatDevice;
                 r.Dome = update.Dome;
                 r.Weather = update.Weather;
