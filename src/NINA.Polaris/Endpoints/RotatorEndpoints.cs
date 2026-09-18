@@ -20,7 +20,7 @@ public static class RotatorEndpoints {
     public static void MapRotatorEndpoints(this WebApplication app) {
         var group = app.MapGroup("/api/rotator");
 
-        group.MapGet("/status", (EquipmentManager equip) => {
+        group.MapGet("/status", async (EquipmentManager equip, ProfileService profiles, CancellationToken ct) => {
             if (equip.Rotator == null)
                 return Results.Ok(new {
                     connected = false,
@@ -29,19 +29,25 @@ public static class RotatorEndpoints {
                     reversed = false
                 });
 
+            await equip.Rotator.RefreshAsync(ct);
             var pos = equip.Rotator.Position;
             return Results.Ok(new {
                 connected = equip.Rotator.IsConnected,
                 name = equip.Rotator.DeviceName,
                 position = double.IsNaN(pos) ? 0.0 : pos,
                 moving = equip.Rotator.IsMoving,
-                reversed = equip.Rotator.IsReversed
+                reversed = equip.Rotator.IsReversed,
+                maxAngle = profiles.ActiveEquipmentProfile?.RotatorMaxAngle ?? 360
             });
         });
 
-        group.MapPost("/move", async (EquipmentManager equip, MoveRotatorRequest request) => {
+        group.MapPost("/move", async (EquipmentManager equip, ProfileService profiles, MoveRotatorRequest request) => {
             if (equip.Rotator == null)
                 return Results.BadRequest(new { error = "No rotator selected" });
+            var maxAngle = RotatorRange.NormalizeMaximum(
+                profiles.ActiveEquipmentProfile?.RotatorMaxAngle ?? 360);
+            if (!RotatorRange.Allows(request.Angle, maxAngle))
+                return Results.BadRequest(new { error = RotatorRange.Error(maxAngle) });
 
             await equip.Rotator.MoveToAsync(request.Angle);
             return Results.Ok(new { status = "moving", target = request.Angle });
@@ -63,9 +69,29 @@ public static class RotatorEndpoints {
             return Results.Ok(new { status = "stopped" });
         });
 
-        group.MapPost("/select/{deviceName}", (EquipmentManager equip, string deviceName) => {
-            equip.SelectRotator(deviceName);
-            return Results.Ok(new { selected = deviceName });
+        group.MapPost("/select/{deviceName}", (EquipmentManager equip, string deviceName, string? driver) => {
+            try {
+                equip.SelectRotator(driver ?? "indi", deviceName);
+                return Results.Ok(new { selected = deviceName, driver = driver ?? "indi" });
+            } catch (NotSupportedException ex) {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
+        group.MapGet("/discover", (EquipmentManager equip, string? driver) => {
+            var d = (driver ?? "indi").Trim().ToLowerInvariant();
+            if (d == "alpaca") return Results.Ok(equip.GetDiscoveredRotatorsFor("alpaca"));
+            return Results.Ok(equip.GetDeviceNames().Select(n => new DiscoveredCamera(n, n, n)).ToList());
+        });
+
+        group.MapGet("/drivers", (EquipmentManager equip) => {
+            var alpacaCount = equip.GetDiscoveredRotatorsFor("alpaca").Count;
+            return Results.Ok(new List<CameraDriverInfo> {
+                new("indi", "INDI", true, "Any rotator the running INDI server exposes."),
+                new("alpaca", "Alpaca (ASCOM)", alpacaCount > 0,
+                    alpacaCount > 0 ? $"ASCOM-over-HTTP rotators. {alpacaCount} discovered."
+                                    : "Run Alpaca Discover in RIGS first to populate this list."),
+            });
         });
 
         group.MapPost("/connect", async (EquipmentManager equip) => {
