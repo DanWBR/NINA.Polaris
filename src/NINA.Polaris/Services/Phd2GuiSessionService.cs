@@ -13,6 +13,9 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using System.Diagnostics;
+using System.Linq;
+using System.IO;
+using System.Collections.Generic;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 
@@ -325,6 +328,12 @@ public class Phd2GuiSessionService : BackgroundService {
             await ProbeHealthAsync(ct);   // refreshes SessionRunning + Phd2Running
             if (SessionRunning) portUp = true;
             if (SessionRunning && Phd2Running) {
+                if (!await WaitForPhd2Async(0, 4000, ct)) {
+                    _logger.LogWarning("xpra :{Display} up but PHD2 exited seconds after starting; launching it directly",
+                        DisplayNumber);
+                    await LaunchPhd2DirectlyAsync(ct);
+                    return true;
+                }
                 _logger.LogInformation("xpra :{Display} ready (port {Port} + PHD2 up)",
                     DisplayNumber, BindPort);
                 LastError = null;
@@ -344,10 +353,10 @@ public class Phd2GuiSessionService : BackgroundService {
             }
         }
         if (portUp) {
-            // Session exists so the UI can still attach + offer Relaunch PHD2,
-            // but flag that the guide GUI itself never came up.
-            LastError = "xpra session is up but PHD2 did not start — use Relaunch PHD2.";
-            _logger.LogWarning("{Error}", LastError);
+            // Session exists so the UI can still attach. Try PHD2 directly on
+            // the display, which either brings it up or says why it will not.
+            _logger.LogWarning("xpra :{Display} up but PHD2 never appeared; launching it directly", DisplayNumber);
+            await LaunchPhd2DirectlyAsync(ct);
             return true;
         }
         LastError = "xpra start succeeded but TCP probe never responded";
@@ -390,13 +399,120 @@ public class Phd2GuiSessionService : BackgroundService {
         // accidentally matching. The banner in the UI also ORs this
         // with phd2.connected so a missed detection no longer
         // silently lies to the operator anyway.
+        // `-a` lists the command line so xpra's own processes, whose
+        // arguments name phd2 (`start :100 --start=phd2`, `control :100
+        // start-child phd2`), can be dropped from the match.
         try {
-            var res = await RunCommandAsync("pgrep", "-f \"\\bphd2(\\.bin)?\\b\"", ct, timeoutMs: 2000);
-            Phd2Running = res.exitCode == 0 && !string.IsNullOrWhiteSpace(res.stdout);
+            var res = await RunCommandAsync("pgrep", "-af \"\\bphd2(\\.bin)?\\b\"", ct, timeoutMs: 2000);
+            Phd2Running = res.exitCode == 0 && res.stdout
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Any(l => !l.Contains("xpra", StringComparison.Ordinal));
         } catch {
             Phd2Running = false;
         }
         return SessionRunning;
+    }
+
+    /// <summary>
+    /// True once a phd2 process has been seen and is still there
+    /// <paramref name="holdMs"/> later. A process that shows up and is gone a
+    /// second later is a PHD2 that died on startup, not a running one.
+    /// </summary>
+    private async Task<bool> WaitForPhd2Async(int appearMs, int holdMs, CancellationToken ct) {
+        var seen = Phd2Running && appearMs == 0;
+        for (int t = 0; t < appearMs && !seen; t += 500) {
+            try { await Task.Delay(500, ct); } catch (TaskCanceledException) { return false; }
+            await ProbeHealthAsync(ct);
+            seen = Phd2Running;
+        }
+        if (!seen) return false;
+        for (int t = 0; t < holdMs; t += 1000) {
+            try { await Task.Delay(1000, ct); } catch (TaskCanceledException) { return false; }
+            await ProbeHealthAsync(ct);
+            if (!Phd2Running) return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Runs when xpra's start-child produced no lasting phd2 process: launch
+    /// PHD2 directly on the session display with its output captured. If it
+    /// stays up it becomes the session's PHD2; if it exits, its exit code and
+    /// last output lines (plus what xpra's log says about the child) go to
+    /// <see cref="LastError"/> so the panel shows why.
+    /// </summary>
+    private async Task<bool> LaunchPhd2DirectlyAsync(CancellationToken ct) {
+        var which = await RunCommandAsync("which", "phd2", ct, timeoutMs: 3000);
+        if (which.exitCode != 0 || string.IsNullOrWhiteSpace(which.stdout)) {
+            LastError = "PHD2 is not installed on the host. Install it with: sudo apt install phd2";
+            _logger.LogWarning("{Error}", LastError);
+            return false;
+        }
+        var psi = new ProcessStartInfo {
+            FileName = "phd2",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        psi.Environment["DISPLAY"] = $":{DisplayNumber}";
+        var tail = new Queue<string>();
+        void Keep(string? line) {
+            if (string.IsNullOrWhiteSpace(line)) return;
+            lock (tail) { tail.Enqueue(line.Trim()); while (tail.Count > 4) tail.Dequeue(); }
+        }
+        Process p;
+        try {
+            p = new Process { StartInfo = psi, EnableRaisingEvents = true };
+            p.OutputDataReceived += (_, e) => Keep(e.Data);
+            p.ErrorDataReceived += (_, e) => Keep(e.Data);
+            p.Start();
+            p.BeginOutputReadLine();
+            p.BeginErrorReadLine();
+        } catch (Exception ex) {
+            LastError = $"PHD2 could not be launched: {ex.Message}";
+            _logger.LogWarning("{Error}", LastError);
+            return false;
+        }
+        _logger.LogInformation("PHD2 launched directly on :{Display} (pid {Pid}) after xpra start-child left no process",
+            DisplayNumber, p.Id);
+        var exit = p.WaitForExitAsync(ct);
+        try { await Task.WhenAny(exit, Task.Delay(6000, ct)); } catch (TaskCanceledException) { return false; }
+        if (!p.HasExited) {
+            await ProbeHealthAsync(ct);
+            LastError = null;
+            _logger.LogInformation("PHD2 is up on :{Display} (direct launch, pid {Pid})", DisplayNumber, p.Id);
+            return true;
+        }
+        string lines;
+        lock (tail) lines = string.Join(" | ", tail);
+        var xpraSays = await XpraLogSaysAboutPhd2Async(ct);
+        LastError = $"PHD2 exits right after launch (exit code {p.ExitCode})."
+            + (lines.Length > 0 ? $" Output: {lines}" : " It printed nothing.")
+            + (xpraSays.Length > 0 ? $" xpra log: {xpraSays}" : "");
+        _logger.LogWarning("{Error}", LastError);
+        return false;
+    }
+
+    /// <summary>Last lines of the xpra session log that mention phd2, joined; empty when none.</summary>
+    private async Task<string> XpraLogSaysAboutPhd2Async(CancellationToken ct) {
+        var runtimeDir = Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR");
+        var home = Environment.GetEnvironmentVariable("HOME") ?? "";
+        var candidates = new[] {
+            runtimeDir is null ? null : Path.Combine(runtimeDir, "xpra", $":{DisplayNumber}.log"),
+            Path.Combine(home, ".xpra", $":{DisplayNumber}.log")
+        };
+        foreach (var f in candidates) {
+            if (f is null || !File.Exists(f)) continue;
+            try {
+                var res = await RunCommandAsync("tail", $"-n 60 \"{f}\"", ct, timeoutMs: 3000);
+                var hits = res.stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                    .Where(l => l.Contains("phd2", StringComparison.OrdinalIgnoreCase))
+                    .Select(l => l.Trim()).TakeLast(3).ToList();
+                if (hits.Count > 0) return string.Join(" | ", hits);
+            } catch { }
+        }
+        return "";
     }
 
     /// <summary>
@@ -429,19 +545,16 @@ public class Phd2GuiSessionService : BackgroundService {
             _logger.LogWarning("{Error}", LastError);
             return false;
         }
-        // Give PHD2 up to 15 s to register a process so the UI can pin
-        // success without polling.
-        for (int i = 0; i < 30; i++) {
-            try { await Task.Delay(500, ct); } catch (TaskCanceledException) { return false; }
-            await ProbeHealthAsync(ct);
-            if (Phd2Running) {
-                LastError = null;
-                _logger.LogInformation("PHD2 relaunch confirmed (process visible)");
-                return true;
-            }
+        // Up to 15 s for a phd2 process to appear, then 4 s more to be sure
+        // it stays: a process that is gone a second later is PHD2 dying on
+        // startup, and the direct launch below captures why.
+        if (await WaitForPhd2Async(15000, 4000, ct)) {
+            LastError = null;
+            _logger.LogInformation("PHD2 relaunch confirmed (process up for 4 s)");
+            return true;
         }
-        LastError = "PHD2 relaunch dispatched to xpra but no phd2 process appeared";
-        return false;
+        _logger.LogWarning("xpra start-child phd2 left no lasting process; launching PHD2 directly");
+        return await LaunchPhd2DirectlyAsync(ct);
     }
 
     private static async Task<(int exitCode, string stdout, string stderr)>

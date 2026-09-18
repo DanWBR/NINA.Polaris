@@ -41199,10 +41199,11 @@ function ninaApp() {
                 const r = await this.apiPostJson('/api/guider/gui-session/relaunch-phd2');
                 if (r.phd2Running) {
                     this.toast('PHD2 relaunched inside session', 'ok');
+                } else if (r.error) {
+                    // The host tried xpra's start-child and then PHD2
+                    // directly; the message says what PHD2 printed.
+                    this.toast(r.error, 'error');
                 } else {
-                    // The relaunch may still be settling (xpra dispatch +
-                    // process spawn lag); don't hard-fail. Reload once the
-                    // proxy serves again.
                     this.toast('Relaunching PHD2…', 'info');
                 }
                 // Reload the iframe only after xpra is serving the fresh
