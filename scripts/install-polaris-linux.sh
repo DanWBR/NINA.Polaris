@@ -197,31 +197,52 @@ ppa_add() {
     ppa_retarget "$ppa" "$(ubuntu_codename)" "$(system_codename)"
 }
 
-# The Ubuntu series for which ppa:mutlaqja/ppa publishes indi-full (INDI server,
-# core and every third-party driver, prebuilt). Interim releases such as 25.04
-# and 25.10 get nothing, and on them apt reports indi-full with no candidate.
-# Checked against Launchpad on 2026-09-14; refresh when a new LTS appears.
-INDI_PPA_SERIES="focal (20.04) jammy (22.04) noble (24.04) resolute (26.04)"
+# The Ubuntu series for which ppa:mutlaqja/ppa publishes INDI itself (libindi1,
+# indi-bin and, from 2.2 on, indi-3rdparty-drivers in place of indi-full).
+# Checked on Launchpad on 2026-09-16: only 26.04. The 22.04 and 24.04 builds,
+# indi-full included, were deleted from the PPA on 2026-08-25, so on those
+# releases apt reports indi-full with no candidate even with the PPA added.
+# Refresh this when the PPA changes again.
+INDI_PPA_SERIES="resolute (26.04)"
 
 indi_ppa_covers() {
     case " $INDI_PPA_SERIES " in *" $1 "*) return 0;; esac
     return 1
 }
 
+# Third-party INDI drivers that Ubuntu's own archive carries (built against
+# the indi-bin it ships, 1.9.9 on 24.04). Older than the PPA's, but ZWO
+# cameras and the EAF, EQMod mounts, DSLRs and PlayerOne cameras do work with
+# them. The ones with a candidate here are installed next to indi-bin.
+INDI_ARCHIVE_DRIVERS="indi-asi indi-eqmod indi-gphoto indi-playerone indi-svbony indi-toupbase indi-qhy
+    indi-sx indi-gpsd indi-gpsnmea indi-aagcloudwatcher-ng indi-apogee indi-fli indi-sbig indi-dsi
+    indi-duino indi-celestronaux indi-avalon indi-atik indi-mi indi-qsi indi-webcam"
+
+indi_archive_drivers() {
+    local p out=""
+    for p in $INDI_ARCHIVE_DRIVERS; do has_candidate "$p" && out="$out $p"; done
+    echo "${out# }"
+}
+
 # What to tell someone whose release the INDI PPA does not cover: which
-# release they are on, which ones have a build, and the shortest way out.
+# release they are on, what they get instead, and the shortest way out.
 indi_fallback_hint() {
     local have; have="$(ubuntu_codename)"
-    echo "  indi-full has no candidate here: the INDI PPA publishes it for Ubuntu"
-    echo "  $INDI_PPA_SERIES,"
+    echo "  indi-full has no candidate here. The INDI PPA currently publishes INDI only"
+    echo "  for Ubuntu $INDI_PPA_SERIES; its 22.04 and 24.04 packages were removed"
+    echo "  from the PPA on 2026-08-25."
     if [ -n "$have" ] && ! indi_ppa_covers "$have"; then
-        echo "  and this system is based on '$have', which is not one of them."
+        echo "  This system is based on '$have', which the PPA no longer serves."
     else
-        echo "  and apt could not see it on this system (was the PPA added above?)."
+        echo "  This system is based on '$have', which the PPA should serve, yet apt"
+        echo "  could not see it (was the PPA added above?)."
     fi
-    echo "  Falling back to indi-bin: core drivers only, third-party ones will be missing."
-    echo "  For the full driver set, install on Ubuntu 24.04 LTS (noble) or a"
-    echo "  derivative of it such as Lubuntu 24.04 or Linux Mint 22, then rerun this script."
+    echo "  Falling back to the INDI that Ubuntu itself ships (indi-bin) plus the"
+    echo "  third-party drivers in the Ubuntu archive: $(indi_archive_drivers)"
+    echo "  Cameras from ZWO, SVBony, PlayerOne, ToupTek and Altair also run through"
+    echo "  Polaris' own native drivers, without INDI."
+    echo "  For the full, current INDI driver set, install on Ubuntu 26.04 LTS"
+    echo "  (resolute) or a derivative of it, then rerun this script."
 }
 
 # PHD2 is in no Ubuntu release: it exists only in ppa:pch/phd2, and that build
@@ -233,7 +254,8 @@ indi_fallback_hint() {
 # 2026-09-07.
 phd2_unsatisfiable() {
     has_candidate phd2 || return 1
-    apt-cache depends phd2 2>/dev/null | grep -qi 'depends:[[:space:]]*libindi1' || return 1
+    # apt-cache depends prints a dependency it cannot resolve as <libindi1>.
+    apt-cache depends phd2 2>/dev/null | grep -qiE 'depends:[[:space:]]*<?libindi1' || return 1
     ! has_candidate libindi1
 }
 
@@ -385,16 +407,19 @@ apt-get update || note_fail "apt update (ppa)"
 # ---------------------------------------------------------------------------
 banner "INDI + PHD2 + SSH + astrometry"
 
-# indi-full is a PPA package, not an Ubuntu archive one. When the PPA carries
-# nothing for this release, or add-apt-repository failed above, fall back to
-# the indiserver the distribution itself ships: core drivers only, but a
-# working INDI instead of none at all.
+# indi-full is a PPA package, not an Ubuntu archive one, and from INDI 2.2 the
+# PPA ships indi-3rdparty-drivers in its place. When the PPA carries nothing
+# for this release, or add-apt-repository failed above, fall back to the
+# indiserver the distribution itself ships plus whatever third-party drivers
+# its archive has: a working INDI instead of none at all.
 INDI_PKG=indi-full
 if ! has_candidate indi-full; then
-    if has_candidate indi-bin; then
-        INDI_PKG=indi-bin
+    if has_candidate indi-3rdparty-drivers; then
+        INDI_PKG="indi-bin indi-3rdparty-drivers"
+    elif has_candidate indi-bin; then
+        INDI_PKG="indi-bin $(indi_archive_drivers)"
         indi_fallback_hint
-        note_fail "indi-full unavailable for Ubuntu '$(ubuntu_codename)' (PPA covers $INDI_PPA_SERIES); installed indi-bin, third-party INDI drivers missing"
+        note_fail "indi-full unavailable for Ubuntu '$(ubuntu_codename)' (the INDI PPA currently serves only $INDI_PPA_SERIES); installed Ubuntu's own indi-bin with: $(indi_archive_drivers)"
     else
         INDI_PKG=""
         note_fail "no INDI package available (neither indi-full nor indi-bin)"

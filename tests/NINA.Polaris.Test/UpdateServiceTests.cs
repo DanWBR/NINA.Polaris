@@ -13,7 +13,9 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Threading;
 using Microsoft.Extensions.Configuration;
@@ -129,6 +131,94 @@ public class UpdateServiceTests {
         var (ok, error) = await svc.InstallVersionAsync("0.84.5", CancellationToken.None);
         Assert.That(ok, Is.False);
         Assert.That(error, Is.Not.Null.And.Not.Empty);
+    }
+
+    // ---- GitHub answering slowly or not at all ------------------------------
+
+    private static UpdateService MakeSupported(ScriptedHandler handler) {
+        var profiles = new ProfileService(new ConfigurationBuilder().Build(),
+            NullLogger<ProfileService>.Instance);
+        return new UpdateService(NullLogger<UpdateService>.Instance,
+            new HandlerFactory(handler), profiles) { SupportedOverride = true };
+    }
+
+    private static string LatestReleaseJson() =>
+        "{\"tag_name\":\"v99.0.0\",\"name\":\"v99.0.0\",\"prerelease\":false,"
+        + "\"html_url\":\"https://example.test/rel\",\"published_at\":\"2026-09-18T00:00:00Z\",\"body\":\"\","
+        + "\"assets\":[{\"name\":\"polaris_99.0.0_" + UpdateService.DpkgArch + ".deb\","
+        + "\"browser_download_url\":\"https://example.test/polaris.deb\",\"size\":123}]}";
+
+    [Test]
+    public async System.Threading.Tasks.Task CheckAsync_reports_a_timeout_instead_of_throwing() {
+        // HttpClient.Timeout surfaces as TaskCanceledException, which used to
+        // escape CheckAsync as if the caller had cancelled and turned the
+        // install POST into an HTTP 500.
+        var handler = new ScriptedHandler(_ => throw new TaskCanceledException(
+            "The request was canceled due to the configured HttpClient.Timeout of 15 seconds elapsing."));
+        var svc = MakeSupported(handler);
+
+        var r = await svc.CheckAsync(force: true, CancellationToken.None);
+
+        Assert.That(r.UpdateAvailable, Is.False);
+        Assert.That(r.Error, Does.Contain("did not answer"));
+    }
+
+    [Test]
+    public void CheckAsync_still_propagates_the_callers_cancellation() {
+        using var cts = new CancellationTokenSource();
+        var handler = new ScriptedHandler(_ => { cts.Cancel(); throw new OperationCanceledException(cts.Token); });
+        var svc = MakeSupported(handler);
+
+        Assert.ThrowsAsync<OperationCanceledException>(
+            async () => await svc.CheckAsync(force: true, cts.Token));
+    }
+
+    [Test]
+    public async System.Threading.Tasks.Task InstallAsync_uses_the_last_offered_update_when_the_fresh_check_fails() {
+        // The badge came from a good check; GitHub then times out on the check
+        // the install repeats. The install must go on to the download (which
+        // here answers 404, proving the check was passed) rather than stop.
+        var calls = 0;
+        var handler = new ScriptedHandler(req => {
+            calls++;
+            if (req.RequestUri!.Host == "api.github.com") {
+                if (calls == 1) return Json(LatestReleaseJson());
+                throw new TaskCanceledException("HttpClient.Timeout elapsed");
+            }
+            return new HttpResponseMessage(System.Net.HttpStatusCode.NotFound);
+        });
+        var svc = MakeSupported(handler);
+
+        var first = await svc.CheckAsync(force: true, CancellationToken.None);
+        Assert.That(first.UpdateAvailable, Is.True, first.Error);
+
+        var (ok, error) = await svc.InstallAsync(CancellationToken.None);
+
+        Assert.That(ok, Is.False);
+        Assert.That(error, Is.EqualTo("Download failed: HTTP 404"));
+        Assert.That(handler.Requested.Any(u => u.Contains("polaris.deb")), Is.True,
+            "the download was never attempted: " + string.Join(", ", handler.Requested));
+    }
+
+    private static HttpResponseMessage Json(string body) => new(System.Net.HttpStatusCode.OK) {
+        Content = new StringContent(body, System.Text.Encoding.UTF8, "application/json")
+    };
+
+    private sealed class ScriptedHandler : HttpMessageHandler {
+        private readonly Func<HttpRequestMessage, HttpResponseMessage> _script;
+        public List<string> Requested { get; } = new();
+        public ScriptedHandler(Func<HttpRequestMessage, HttpResponseMessage> script) { _script = script; }
+        protected override System.Threading.Tasks.Task<HttpResponseMessage> SendAsync(
+                HttpRequestMessage request, CancellationToken cancellationToken) {
+            Requested.Add(request.RequestUri!.ToString());
+            return System.Threading.Tasks.Task.FromResult(_script(request));
+        }
+    }
+
+    private sealed class HandlerFactory : IHttpClientFactory {
+        private readonly HttpMessageHandler _handler;
+        public HandlerFactory(HttpMessageHandler handler) { _handler = handler; }
+        public System.Net.Http.HttpClient CreateClient(string name) => new(_handler, disposeHandler: false);
     }
 
     private sealed class ThrowingHttpClientFactory : IHttpClientFactory {

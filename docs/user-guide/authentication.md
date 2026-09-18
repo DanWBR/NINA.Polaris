@@ -85,37 +85,45 @@ wizard still works.
 
 ## Forgot the password
 
-Recovery is by SSH (or any way to edit files on the Pi). There is
-no email-based reset, no security questions, nothing automatic.
+Recovery is by editing the active profile on the host. There is no
+email-based reset, no security questions, nothing automatic. Clearing the
+two password fields makes the first-run wizard appear again on the next
+visit, and you set a new password there. Restarting also logs out every
+browser session.
+
+**Linux / SBC (`.deb` install)**, over SSH:
 
 ```bash
 ssh polaris@polaris-pi.local
-nano ~/.config/NINA.Polaris/profiles/active.json
-```
-
-Find the lines:
-
-```json
-  "AuthPasswordHash": "...some-base64...",
-  "AuthPasswordSalt": "...some-base64...",
-```
-
-Set both to empty strings:
-
-```json
-  "AuthPasswordHash": "",
-  "AuthPasswordSalt": "",
-```
-
-Save + restart the service:
-
-```bash
+sed -i 's/"authPasswordHash": *"[^"]*"/"authPasswordHash": ""/; s/"authPasswordSalt": *"[^"]*"/"authPasswordSalt": ""/' ~/.config/NINA.Polaris/profiles/active.json
 sudo systemctl restart polaris.service
 ```
 
-Next browser hit triggers the first-run wizard again - set a new
-password there. All previous sessions are invalidated by the
-restart.
+**Windows** (portable `.zip`): close Polaris first (the console window, or
+the tray icon if you run it that way), then in PowerShell:
+
+```powershell
+$p = "$env:LOCALAPPDATA\NINA.Polaris\profiles\active.json"
+(Get-Content $p -Raw) -replace '"authPasswordHash":\s*"[^"]*"', '"authPasswordHash": ""' -replace '"authPasswordSalt":\s*"[^"]*"', '"authPasswordSalt": ""' | Set-Content $p -Encoding utf8
+```
+
+Start Polaris again and open it in the browser.
+
+By hand, the file is `~/.config/NINA.Polaris/profiles/active.json` on
+Linux and `%LOCALAPPDATA%\NINA.Polaris\profiles\active.json` on Windows.
+Find the lines:
+
+```json
+  "authPasswordHash": "...some-base64...",
+  "authPasswordSalt": "...some-base64...",
+```
+
+and set both to empty strings:
+
+```json
+  "authPasswordHash": "",
+  "authPasswordSalt": "",
+```
 
 ## How it works under the hood
 
