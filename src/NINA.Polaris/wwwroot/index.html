@@ -952,7 +952,7 @@
                          :class="(planStatus && planStatus?.active) ? (planStatus?.engineState === 'running' ? 'ok' : 'warn') : 'idle'">
                         <span class="home-status-label">Plan</span>
                         <strong x-text="(planStatus && planStatus?.active)
-                            ? (planStatus?.phase === 'ending' ? 'ENDING' : 'RUNNING') : 'IDLE'"></strong>
+                            ? (planStatus?.phase === 'ending' ? 'ENDING' : (planStatus?.holding ? 'HOLDING' : 'RUNNING')) : 'IDLE'"></strong>
                         <span class="home-status-sub" x-show="planStatus && planStatus?.active">
                             <span x-show="planStatus && planStatus?.currentTarget" x-text="planStatus?.currentTarget"></span>
                             <span x-show="planStatus && planStatus?.totalFrames > 0"
@@ -10930,6 +10930,19 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 + ' frames done). Already-captured frames are kept.'">
                         ▶ Resume <span x-text="'(' + (planStatus?.resumeDoneFrames || 0) + '/' + (planStatus?.resumeTotalFrames || 0) + ')'"></span>
                     </button>
+                    <div class="plan-hold" x-show="planIsRunning() && planStatus?.holding" x-cloak>
+                        <strong>Holding</strong>
+                        <span x-text="planStatus?.holdReason || 'Guide star lost'"></span>
+                        <span x-show="planStatus?.holdNextRetryUtc">
+                            <span>Next attempt</span> <span x-text="planStatus?.holdAttempts || 0"></span>
+                            <span>at</span> <span x-text="planHoldRetryLocal()"></span>.
+                            <span>Tracking is off until the target is back.</span>
+                        </span>
+                    </div>
+                    <div class="plan-skipped" x-show="planIsRunning() && planStatus?.skippedTargets?.length" x-cloak>
+                        <span>Skipped:</span>
+                        <span x-text="(planStatus?.skippedTargets || []).join(', ')"></span>
+                    </div>
                     <div class="plan-runbar-bars">
                         <div class="plan-pbar">
                             <div class="plan-pbar-head">

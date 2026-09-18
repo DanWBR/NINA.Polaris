@@ -45,6 +45,19 @@ public class DeepSkyObjectContainer : SequenceContainer {
     /// </summary>
     public bool CenterOnStart { get; set; } = true;
 
+    /// <summary>"HH:mm" UTC end of this target's time window, when it has one.
+    /// A guide-loss hold gives the target up once this passes.</summary>
+    public string? WindowEndUtc { get; set; }
+
+    /// <summary>"HH:mm" UTC start of the next target's window, when that one
+    /// has a window. A hold gives this target up once that time arrives.</summary>
+    public string? NextTargetStartUtc { get; set; }
+
+    /// <summary>Whether anything follows this target in the plan. Without a
+    /// window, a held target with a successor is given up after a fixed number
+    /// of attempts; the last target keeps trying until the plan ends.</summary>
+    public bool HasNextTarget { get; set; }
+
     public override IReadOnlyList<string> Validate() {
         var errors = new List<string>(base.Validate());
         if (string.IsNullOrWhiteSpace(Target))
@@ -57,6 +70,15 @@ public class DeepSkyObjectContainer : SequenceContainer {
     }
 
     public override async Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) {
+        ctx.CurrentTarget = this;
+        try {
+            await ExecuteTargetAsync(ctx, ct);
+        } finally {
+            if (ReferenceEquals(ctx.CurrentTarget, this)) ctx.CurrentTarget = null;
+        }
+    }
+
+    private async Task ExecuteTargetAsync(SequenceContext ctx, CancellationToken ct) {
         if (CenterOnStart) {
             ctx.Logger.LogInformation("DSO container '{Target}': Slew & Center → RA={Ra}h Dec={Dec}°",
                 Target, RaHours, DecDeg);

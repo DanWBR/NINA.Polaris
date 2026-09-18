@@ -208,6 +208,7 @@ public class PlanRunnerService : IHostedService {
 
     public PlanStatus GetStatus() {
         lock (_lock) {
+            var hold = _active != null && _phase == Phase.Main ? _engine.Hold : null;
             // Progress: walk the live engine tree (Main phase) so the two
             // progress bars can show current-target + whole-plan completion.
             // The plan runs on AdvancedSequenceEngine, whose global frame
@@ -260,8 +261,26 @@ public class PlanRunnerService : IHostedService {
                 CanResume: canResume,
                 ResumePlanName: canResume ? _resumePlan!.Name : null,
                 ResumeDoneFrames: canResume && _resumeDoc != null ? CountDone(_resumeDoc.Root) : 0,
-                ResumeTotalFrames: canResume && _resumeDoc != null ? CountFrames(_resumeDoc.Root) : 0);
+                ResumeTotalFrames: canResume && _resumeDoc != null ? CountFrames(_resumeDoc.Root) : 0,
+                Holding: hold != null && (hold.Active || hold.Requested),
+                HoldReason: hold?.Reason,
+                HoldAttempts: hold?.Attempts ?? 0,
+                HoldNextRetryUtc: hold?.Active == true ? hold.NextRetryUtc : null,
+                HoldSinceUtc: hold?.Active == true ? hold.SinceUtc : null,
+                SkippedTargets: _active != null && _phase == Phase.Main ? SkippedTargets(_engine.Document.Root) : new());
         }
+    }
+
+    /// <summary>Targets a guide-loss hold gave up on, in plan order, with why.</summary>
+    private static List<string> SkippedTargets(ISequenceEntity root) {
+        var list = new List<string>();
+        if (root is not SequenceContainer c) return list;
+        foreach (var item in c.Items) {
+            if (item is DeepSkyObjectContainer dso && dso.Status == SequenceEntityStatus.Skipped
+                    && !string.IsNullOrEmpty(dso.Error))
+                list.Add(dso.Name);
+        }
+        return list;
     }
 
     /// <summary>Recursively sum the frame counts of every TakeExposure
@@ -462,4 +481,10 @@ public record PlanStatus(
     bool CanResume = false,
     string? ResumePlanName = null,
     int ResumeDoneFrames = 0,
-    int ResumeTotalFrames = 0);
+    int ResumeTotalFrames = 0,
+    bool Holding = false,
+    string? HoldReason = null,
+    int HoldAttempts = 0,
+    DateTime? HoldNextRetryUtc = null,
+    DateTime? HoldSinceUtc = null,
+    List<string>? SkippedTargets = null);

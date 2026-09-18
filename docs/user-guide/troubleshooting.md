@@ -249,7 +249,10 @@ Flip panel → *Safety guard*, on by default):
   trips purely on time past the meridian.
 - **Guide circuit breaker** - stops the session after *N* consecutive
   lost-star failures with no recovery (default 20) instead of looping
-  forever.
+  forever. Under a running PLAN it does not end the session: the target
+  is parked (guider stopped, tracking off) and the plan retries it on a
+  schedule or moves on to the next target, see
+  [When the guide star goes away](plan.md#when-the-guide-star-goes-away).
 
 On a trip Polaris turns **tracking off** (ending the winding), aborts
 the sequence/LIVE run, and shows a red banner with a **Dismiss**

@@ -58,6 +58,19 @@ public class AdvancedSequenceEngine {
     /// <summary>Set while the run is in progress (so the UI can show abort reason).</summary>
     public string? AbortReason { get; private set; }
 
+    /// <summary>The current run's guide-loss hold, for status; null when idle.</summary>
+    public SequenceHoldState? Hold => State == AdvancedSequenceState.Running ? _ctx?.Hold : null;
+
+    /// <summary>Ask the running sequence to park its target and retry on a
+    /// schedule (see <see cref="GuideLossHold"/>). Ignored when idle.</summary>
+    public bool RequestHold(string reason) {
+        var ctx = _ctx;
+        if (State != AdvancedSequenceState.Running || ctx == null) return false;
+        ctx.Hold.Request(reason);
+        _logger.LogWarning("Hold requested: {Reason}", reason);
+        return true;
+    }
+
     public AdvancedSequenceEngine(IServiceProvider services, SequenceTemplateStore templates,
         ILogger<AdvancedSequenceEngine> logger) {
         _services = services;
@@ -197,6 +210,12 @@ public class AdvancedSequenceEngine {
         } catch (OperationCanceledException) {
             Document.Root.Status = SequenceEntityStatus.Skipped;
             _logger.LogInformation("Sequence cancelled");
+        } catch (TargetSkippedException ex) {
+            // A hold gave up outside any target container (a plain ADV run):
+            // there is nothing to move on to, so the run ends here, not as a failure.
+            Document.Root.Status = SequenceEntityStatus.Skipped;
+            AbortReason = ex.Message;
+            _logger.LogWarning("Sequence ended by a hold: {Why}", ex.Message);
         } catch (Exception ex) {
             Document.Root.Status = SequenceEntityStatus.Failed;
             Document.Root.Error = ex.Message;

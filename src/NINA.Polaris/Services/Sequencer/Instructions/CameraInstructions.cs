@@ -119,6 +119,7 @@ public class TakeExposureInstruction : SequenceInstruction {
 
         for (int i = CompletedCount; i < Count; i++) {
             ct.ThrowIfCancellationRequested();
+            await ctx.HoldIfRequestedAsync(ct);
 
             // Wait for the camera to be ready before EACH frame, then capture with
             // a wait-and-retry on failure. Previously this loop had no try/catch at

@@ -33,6 +33,8 @@ public class RestoreGuidingTrigger : SequenceTrigger {
 
     public override Task<bool> ShouldFireAsync(SequenceContext ctx, CancellationToken ct) {
         if (!ctx.Guider.IsConnected) return Task.FromResult(false);
+        // A guide-loss hold owns the guider until the target is back or given up.
+        if (ctx.Hold.Requested || ctx.Hold.Active) return Task.FromResult(false);
 
         var seenKey = $"RestoreGuiding:{Id}:wasGuiding";
         if (ctx.Guider.IsGuiding) {

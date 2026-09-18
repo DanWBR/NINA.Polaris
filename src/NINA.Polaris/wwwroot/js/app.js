@@ -25614,6 +25614,13 @@ function ninaApp() {
             } catch (e) { this.toastFail('Resume failed', e); }
         },
 
+        // Local wall-clock of the hold's next attempt, for the PLAN run bar.
+        planHoldRetryLocal() {
+            const t = this.planStatus && this.planStatus.holdNextRetryUtc;
+            if (!t) return '';
+            const d = new Date(t);
+            return isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        },
         planIsRunning() { return !!(this.planStatus && this.planStatus.active); },
         planChipLabel() {
             const s = this.planStatus;

@@ -4894,5 +4894,12 @@
   "Notes saved": "Notes enregistrées",
   "Copied as Markdown": "Copié en Markdown",
   "Clipboard not available": "Presse-papiers indisponible",
-  "Polaris has not come back on the new version yet. The install keeps running on the host: wait a minute and reload the page. If the old version is still running, check /tmp/polaris-update.log on the host.": "Polaris n'est pas encore revenu sur la nouvelle version. L'installation continue sur l'hôte : attendez une minute et rechargez la page. Si l'ancienne version tourne toujours, consultez /tmp/polaris-update.log sur l'hôte."
+  "Polaris has not come back on the new version yet. The install keeps running on the host: wait a minute and reload the page. If the old version is still running, check /tmp/polaris-update.log on the host.": "Polaris n'est pas encore revenu sur la nouvelle version. L'installation continue sur l'hôte : attendez une minute et rechargez la page. Si l'ancienne version tourne toujours, consultez /tmp/polaris-update.log sur l'hôte.",
+  "Holding": "En attente",
+  "Skipped:": "Ignorés :",
+  "HOLDING": "EN ATTENTE",
+  "Next attempt": "Prochaine tentative",
+  "at": "à",
+  "Tracking is off until the target is back.": "Le suivi reste coupé jusqu'au retour de la cible.",
+  "Guide star lost": "Étoile guide perdue"
 }

@@ -4275,5 +4275,12 @@
   "Notes saved": "",
   "Copied as Markdown": "",
   "Clipboard not available": "",
-  "Polaris has not come back on the new version yet. The install keeps running on the host: wait a minute and reload the page. If the old version is still running, check /tmp/polaris-update.log on the host.": ""
+  "Polaris has not come back on the new version yet. The install keeps running on the host: wait a minute and reload the page. If the old version is still running, check /tmp/polaris-update.log on the host.": "",
+  "Holding": "",
+  "Skipped:": "",
+  "HOLDING": "",
+  "Next attempt": "",
+  "at": "",
+  "Tracking is off until the target is back.": "",
+  "Guide star lost": ""
 }

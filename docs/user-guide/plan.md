@@ -104,6 +104,32 @@ When the plan finishes (or reaches its end condition), Polaris can:
 - The plan status (waiting-for-start / running / current target) is mirrored
   on the HOME dashboard and in the top status bar.
 
+### When the guide star goes away
+
+Clouds, or a target sliding behind a roof or a tree, make the guider lose
+its star again and again. In LIVE and AUTORUN the mount safety guard's
+circuit breaker ends the session after *N* consecutive failures (see
+[troubleshooting](troubleshooting.md)). A plan reacts differently, because
+the sky usually comes back and there is more of the night to use:
+
+1. The guard still does the safe part at once: guiding stops and
+   **tracking goes off**, so nothing winds the cabling while the sky is
+   blocked. Nothing is latched and no re-home is demanded.
+2. The plan finishes the exposure in flight, then **holds**: it waits
+   3 minutes, then 5, 10 and 15 (repeating 15), and at each attempt turns
+   tracking on, runs Slew & Center on the target and starts guiding. When
+   guiding locks again the exposures continue where they stopped; when it
+   does not, the target is parked again and the next wait begins.
+3. The target is **given up** and the plan moves on to the next one when
+   its own time window closes, when the next target's window opens, or,
+   for a target without a window that has something after it, after 4
+   attempts (about 35 minutes). The last target of the plan keeps trying
+   until the plan's end condition.
+
+The run bar shows **Holding** with the reason and the time of the next
+attempt, HOME shows HOLDING, and targets that were given up are listed as
+**Skipped**. The end-of-session actions run as usual when the plan ends.
+
 ---
 
 ## Notes & current limits
