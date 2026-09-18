@@ -405,6 +405,66 @@ public static class SkyEndpoints {
             });
         });
 
+        // ---- Satellite TLEs (ISS, Tiangong, the brightest artificial satellites) ----
+
+        group.MapGet("/satellites/status", (SatelliteTleService sats) => Results.Ok(new {
+            count = sats.Count,
+            source = sats.Source,                   // "bundled" or "celestrak"
+            fetchedAtUtc = sats.FetchedAtUtc,       // null while on the bundled set
+            latestEpochUtc = sats.LatestEpochUtc,
+            // Age of the orbits themselves, which is what decides accuracy:
+            // the bundled set is dated by its TLE epochs, a download by its epochs too.
+            ageDays = sats.LatestEpochUtc is { } e
+                ? Math.Max(0, (DateTime.UtcNow - e).TotalDays) : (double?)null
+        }));
+
+        group.MapPost("/satellites/refresh", async (SatelliteTleUpdater updater,
+                                                    SatelliteTleService sats,
+                                                    CancellationToken ct) => {
+            try {
+                var n = await updater.RefreshAsync(ct);
+                return Results.Ok(new {
+                    ok = true, count = n, source = sats.Source, fetchedAtUtc = sats.FetchedAtUtc,
+                    latestEpochUtc = sats.LatestEpochUtc
+                });
+            } catch (Exception ex) {
+                return Results.Ok(new {
+                    ok = false, error = ex.Message, count = sats.Count,
+                    source = sats.Source, fetchedAtUtc = sats.FetchedAtUtc
+                });
+            }
+        });
+
+        // For a client that has internet when the host does not: fetch these,
+        // concatenate the bodies and POST them to /satellites/import.
+        group.MapGet("/satellites/source", () => Results.Ok(new {
+            urls = new[] { SatelliteTleUpdater.VisualUrl, SatelliteTleUpdater.StationsUrl }
+        }));
+
+        group.MapPost("/satellites/import", async (HttpRequest req, SatelliteTleUpdater updater,
+                                                   SatelliteTleService sats, ILoggerFactory loggerFactory) => {
+            var log = loggerFactory.CreateLogger("SatelliteImport");
+            string body;
+            using (var reader = new StreamReader(req.Body)) {
+                var buffer = new char[2 * 1024 * 1024];   // both groups together are ~30 KB
+                var read = await reader.ReadBlockAsync(buffer, 0, buffer.Length);
+                body = new string(buffer, 0, read);
+            }
+            if (string.IsNullOrWhiteSpace(body))
+                return Results.BadRequest(new { error = "Empty body" });
+            try {
+                var n = updater.Import(body);
+                log.LogInformation("Imported {Count} satellite TLEs from a client", n);
+                return Results.Ok(new {
+                    ok = true, count = n, source = sats.Source, fetchedAtUtc = sats.FetchedAtUtc,
+                    latestEpochUtc = sats.LatestEpochUtc
+                });
+            } catch (Exception ex) {
+                log.LogWarning(ex, "Client satellite import failed");
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
         // ---- Comet orbital elements ----
 
         // What the ephemeris is working from, so the UI can say how old it is

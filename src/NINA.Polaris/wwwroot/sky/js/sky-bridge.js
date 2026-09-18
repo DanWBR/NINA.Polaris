@@ -1635,6 +1635,16 @@
                     if (ln && ln.ecliptic) ln.ecliptic.visible = !!msg.visible;
                 } catch (e) { console.warn('[Sky] ecliptic toggle failed:', e); }
                 break;
+            case 'set-satellites':
+                // Parent toggle for artificial satellites (points + labels).
+                try {
+                    var sm = stel.core && stel.core.satellites;
+                    if (sm) {
+                        sm.visible = !!msg.visible;
+                        sm.hints_visible = !!msg.visible;
+                    }
+                } catch (e) { console.warn('[Sky] satellites toggle failed:', e); }
+                break;
             case 'set-dss-visible':
                 // Parent toggle for the background imagery HiPS (DSS by
                 // default). Turn off when offline (no network) or when the
@@ -2018,6 +2028,16 @@
                         url: SKYDATA_BASE + 'surveys/sso/sun',
                         key: 'sun'
                     });
+                    // Artificial satellites (ISS, Tiangong, the brightest
+                    // hundred): TLEs the engine propagates itself. The host
+                    // serves this path from its freshest set and forbids
+                    // caching; the query string keeps any proxy honest.
+                    if (core.satellites) {
+                        core.satellites.addDataSource({
+                            url: SKYDATA_BASE + 'tle_satellite.jsonl.gz?v=' + Date.now(),
+                            key: 'jsonl/sat'
+                        });
+                    }
                     console.log('[Sky] data sources registered (base: ' + SKYDATA_BASE + ')');
                 } catch (dsErr) {
                     console.error('[Sky] addDataSource failed:', dsErr);

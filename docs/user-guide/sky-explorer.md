@@ -14,7 +14,8 @@ binocular range), the NGC/IC/Messier DSO catalog as labelled markers, IAU
 **constellation lines + names** (on by default - the stick-figure overlay
 you'd expect), the 88 western constellation **figure illustrations**
 (toggleable artwork), a low-res Milky Way panorama, plus sun / moon /
-planets / asteroids / comets.
+planets and their major moons / asteroids / comets / the ISS and the
+brightest artificial satellites.
 
 **Real deep-sky imagery** (the "I can actually see the nebula/galaxy"
 background, like ASIAIR) comes from a **HiPS survey**. **DSS Color** is
@@ -177,6 +178,39 @@ common names like "Andromeda"). Matches show as result cards with:
 - **Constellation**
 
 Click a result → it overlays on the map, centred + highlighted.
+
+## Satellites: the ISS and the brightest hundred
+
+The map draws the ISS, Tiangong and the roughly 150 satellites in
+CelesTrak's "visual" group (the ones bright enough to see by eye: Hubble,
+Envisat, Terra, the big rocket bodies). The engine propagates their orbits
+itself (SGP4) from the TLE set the host serves; search "ISS", "Tiangong" or
+"Hubble" to find one, and clicking a satellite locks the view on it so you can
+watch a pass. A satellite reads magnitude 99 while it is below the horizon
+or in the Earth's shadow.
+
+The 🚀 **Satellites** pill in the toolbar hides them. The choice is
+remembered on this browser.
+
+Orbits go stale in days, not months: a week after its epoch the ISS is about
+a degree off. A snapshot ships in the release, the host downloads a fresh set
+from CelesTrak once a day when it has internet, and the **Tonight's Best**
+tab shows the age of what the map is using ("Satellites: 156 from CelesTrak,
+orbits from today") with an **Update** button. In the mobile app the update
+also works when only the phone has internet: the app fetches the elements
+and hands them to the host. After an update the map reloads, since the
+engine reads the orbits once at start.
+
+`scripts/fetch-satellite-tles.py` refreshes the snapshot that goes into a
+release.
+
+## Moons of Jupiter and Saturn
+
+Zoom in on Jupiter and the four Galilean moons are drawn in their true
+positions (with shadow transits), labelled once the zoom is high enough not
+to crowd the planet; Saturn's major moons the same. They are searchable by
+name: "Io", "Europa", "Ganymede", "Callisto", "Titan". This is the map only;
+**Center on body** and the planner know the planets, not their moons.
 
 ## Filters
 

@@ -282,6 +282,7 @@ Usually one of:
   '${XPRA_SESSION_DIR}'`: an Xorg-dummy override written for xpra 4 on an
   xpra 3 host. Remove or rename `/etc/xpra/conf.d/99-polaris-xorg-dummy.conf`
   and open the tab again; the Polaris package does this on its next install.
+- The panel says `PHD2 not running inside session` while the xpra desktop (wallpaper only) shows: PHD2 exits on startup. Click **Relaunch PHD2**; Polaris asks xpra for it, then runs `phd2` itself on the session display and prints its exit code and last output lines in the panel, or `PHD2 is not installed on the host` when the binary is missing. To see the same by hand: `DISPLAY=:100 phd2`.
 - On xpra 4 or newer, Xorg-dummy config not switched (see
   `docs/phd2-gui-embedding.md` Step 2, `/etc/xpra/conf.d/55_server_x11.conf`)
 - xpra password set, browser session storage doesn't have it, open

@@ -558,6 +558,9 @@ builder.Services.AddSingleton<CometElementsUpdater>();
 // Keeps the comet elements current when the host has internet; silent and
 // non-blocking when it does not (the usual case in the field).
 builder.Services.AddHostedService<CometElementsRefreshWorker>();
+builder.Services.AddSingleton<SatelliteTleService>();
+builder.Services.AddSingleton<SatelliteTleUpdater>();
+builder.Services.AddHostedService<SatelliteTleRefreshWorker>();
 builder.Services.AddSingleton<TonightsBestService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.FrameLibraryService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Studio.SessionLogService>();
@@ -966,6 +969,27 @@ contentTypes.Mappings[".eph"] = "application/octet-stream";
             app.Logger.LogWarning(ex, "Failed to serve downloaded DSS tile {Path}", full);
             if (!ctx.Response.HasStarted) ctx.Response.StatusCode = 500;
         }
+    });
+}
+
+// SATELLITES: the sky engine reads its TLEs from this one path. Serve the
+// downloaded set from the data directory when there is one, the bundled
+// snapshot otherwise, and never let the browser cache it: the file changes
+// daily and a stale copy puts the ISS degrees off.
+{
+    var sats = app.Services.GetRequiredService<NINA.Polaris.Services.SatelliteTleService>();
+    var tlePath = "/sky/data/skydata/" + NINA.Polaris.Services.SatelliteTleService.FileName;
+    app.Use(async (ctx, next) => {
+        if (!HttpMethods.IsGet(ctx.Request.Method)
+            || !string.Equals(ctx.Request.Path.Value, tlePath, StringComparison.Ordinal)) {
+            await next();
+            return;
+        }
+        var file = sats.CurrentPath;
+        if (!File.Exists(file)) { await next(); return; }
+        ctx.Response.Headers["Cache-Control"] = "no-cache";
+        ctx.Response.ContentType = "application/octet-stream";
+        await ctx.Response.SendFileAsync(file);
     });
 }
 
