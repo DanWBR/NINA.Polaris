@@ -52,10 +52,25 @@ sudo apt install \
 Polaris probes `xpra --version` on startup and lights up the GUIDE tab's
 "PHD2 GUI" panel automatically when xpra is detected.
 
-### 2. Configure xpra to use Xorg-dummy (not Xvfb)
+### 2. Configure xpra to use Xorg-dummy (not Xvfb), xpra 4 or newer only
 
-PHD2 is a wxWidgets app, not GTK. It runs reliably under Xorg-dummy but
-has glitches under the Xvfb default. Edit
+Check the version first:
+
+```bash
+xpra --version
+```
+
+On **xpra 3.x** (Ubuntu 22.04, Debian bookworm, the published Orange Pi
+images) skip this step and keep the Xvfb default: the stanza below uses
+`${XPRA_SESSION_DIR}`, which xpra 3 does not define, so xpra tries to
+create a directory literally named `${XPRA_SESSION_DIR}` under `/`, fails
+with "Permission denied", and the session never comes up (the PHD2 tab
+reports that the window took too long to start). The Polaris package
+retires such an override on install when it finds one in
+`/etc/xpra/conf.d/99-polaris-xorg-dummy.conf`.
+
+On xpra 4 or newer, PHD2 (a wxWidgets app, not GTK) runs more reliably
+under Xorg-dummy than under Xvfb. Edit
 `/etc/xpra/conf.d/55_server_x11.conf`:
 
 ```bash

@@ -260,6 +260,22 @@ BRLTTY
             echo "polaris: reloaded USB udev rules (camera access + drive auto-mount)"
         fi
 
+        # ---- 5d. xpra: retire the Xorg-dummy override on xpra 3 ----
+        # The published Orange Pi images carried a hand-written
+        # /etc/xpra/conf.d/99-polaris-xorg-dummy.conf that points Xorg's log
+        # and config at ${XPRA_SESSION_DIR}. That variable exists from xpra 4
+        # on; the xpra 3.1 those images ship leaves it unexpanded, tries to
+        # create a directory literally named '${XPRA_SESSION_DIR}' under / and
+        # dies before the display exists, so the embedded PHD2 window never
+        # opened ("PHD2 GUI took too long", Discord 2026-09-18). Without the
+        # override xpra falls back to the distribution's Xvfb line, which
+        # works. Only touched when the file carries that variable, so a
+        # deliberate, working override is left alone.
+        XPRA_OVERRIDE=/etc/xpra/conf.d/99-polaris-xorg-dummy.conf
+        if [ -f "$XPRA_OVERRIDE" ] && grep -q 'XPRA_SESSION_DIR' "$XPRA_OVERRIDE" 2>/dev/null; then
+            mv -f "$XPRA_OVERRIDE" "$XPRA_OVERRIDE.disabled" 2>/dev/null                 && echo "polaris: disabled $XPRA_OVERRIDE (unusable with this xpra; Xvfb is used instead)"
+        fi
+
         # ---- 6. systemd ----
         if [ -d /run/systemd/system ]; then
             systemctl daemon-reload
