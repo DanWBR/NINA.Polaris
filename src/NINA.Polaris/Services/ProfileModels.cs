@@ -1330,6 +1330,10 @@ public class AutoFocusSettings {
     /// <summary>Curve fitting method: TRENDLINES | PARABOLIC | TRENDPARABOLIC
     /// | HYPERBOLIC | TRENDHYPERBOLIC (default).</summary>
     public string Method { get; set; } = "TRENDHYPERBOLIC";
+    /// <summary>What the sweep measures: HFR (stars), CONTRAST_LAPLACE or
+    /// CONTRAST_SOBEL (edge response of the frame, for scenes without stars:
+    /// daylight tests, Moon, planets).</summary>
+    public string Metric { get; set; } = "HFR";
 
     /// <summary>Minimum R² the fits used by <see cref="Method"/> must reach
     /// (including BOTH trendline arms for TREND* methods). 0 disables.</summary>

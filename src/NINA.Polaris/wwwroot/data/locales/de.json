@@ -4901,5 +4901,12 @@
   "Next attempt": "Nächster Versuch",
   "at": "um",
   "Tracking is off until the target is back.": "Die Nachführung bleibt aus, bis das Ziel zurück ist.",
-  "Guide star lost": "Leitstern verloren"
+  "Guide star lost": "Leitstern verloren",
+  "Metric": "Metrik",
+  "Star HFR": "Stern-HFR",
+  "Contrast (Laplace)": "Kontrast (Laplace)",
+  "Contrast (Sobel)": "Kontrast (Sobel)",
+  "Last contrast:": "Letzter Kontrast:",
+  "What each sweep point measures. Star HFR needs stars and fits a V-curve. Contrast measures the edge detail of the whole frame and needs no stars: use it in daylight on a distant object, on the Moon or a planet, or when a bright sky drowns the stars. Laplace is the more sensitive near focus; Sobel is the steadier on a noisy frame.": "Was jeder Messpunkt des Durchlaufs misst. Stern-HFR braucht Sterne und passt eine V-Kurve an. Kontrast misst das Kantendetail des ganzen Bildes und braucht keine Sterne: tagsüber an einem fernen Objekt, am Mond oder einem Planeten, oder wenn ein heller Himmel die Sterne verschluckt. Laplace ist nahe am Fokus empfindlicher; Sobel ist bei Rauschen stabiler.",
+  "Curve model that determines the focus position. TrendHyperbolic (default): weighted hyperbola cross-validated against the trendline intersection, the NINA desktop recommendation. A contrast metric always fits a parabola.": "Kurvenmodell, das die Fokusposition bestimmt. TrendHyperbolic (Standard): gewichtete Hyperbel, gegen den Schnittpunkt der Trendlinien geprüft, die Empfehlung von NINA Desktop. Eine Kontrastmetrik passt immer eine Parabel an."
 }

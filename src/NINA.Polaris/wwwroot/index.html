@@ -3112,7 +3112,15 @@
                                 </template>
                             </select>
                         </label>
-                        <label title="How many stars the sweep measures, tracked across every point so they are the SAME physical stars. 1 (default) follows the single brightest one, which is what ASIAIR does: the whole-frame average moves with whichever stars the detector finds at each position, not with the focus. 0 = use all detected stars.">Top stars
+                        <label title="What each sweep point measures. Star HFR needs stars and fits a V-curve. Contrast measures the edge detail of the whole frame and needs no stars: use it in daylight on a distant object, on the Moon or a planet, or when a bright sky drowns the stars. Laplace is the more sensitive near focus; Sobel is the steadier on a noisy frame.">Metric
+                            <select class="input-sm" x-model="afParams.metric"
+                                    :disabled="autoFocus.state === 'running'">
+                                <option value="HFR">Star HFR</option>
+                                <option value="CONTRAST_LAPLACE">Contrast (Laplace)</option>
+                                <option value="CONTRAST_SOBEL">Contrast (Sobel)</option>
+                            </select>
+                        </label>
+                        <label x-show="afParams.metric === 'HFR'" title="How many stars the sweep measures, tracked across every point so they are the SAME physical stars. 1 (default) follows the single brightest one, which is what ASIAIR does: the whole-frame average moves with whichever stars the detector finds at each position, not with the focus. 0 = use all detected stars.">Top stars
                             <input type="number" x-model.number="afParams.useBrightestStars" min="0" max="50" step="1" class="input-sm"
                                    :disabled="autoFocus.state === 'running'">
                         </label>
@@ -3138,9 +3146,9 @@
                             <input type="number" x-model.number="afParams.stepSize" min="1" step="1" class="input-sm"
                                    :disabled="autoFocus.state === 'running'">
                         </label>
-                        <label title="Curve model that determines the focus position. TrendHyperbolic (default): weighted hyperbola cross-validated against the trendline intersection, the NINA desktop recommendation.">Fit
+                        <label title="Curve model that determines the focus position. TrendHyperbolic (default): weighted hyperbola cross-validated against the trendline intersection, the NINA desktop recommendation. A contrast metric always fits a parabola.">Fit
                             <select class="input-sm" x-model="afParams.method"
-                                    :disabled="autoFocus.state === 'running'">
+                                    :disabled="autoFocus.state === 'running' || afParams.metric !== 'HFR'">
                                 <option value="TRENDHYPERBOLIC">Trend + Hyperbolic</option>
                                 <option value="HYPERBOLIC">Hyperbolic</option>
                                 <option value="TRENDLINES">Trendlines</option>
@@ -3152,7 +3160,7 @@
                             <input type="number" x-model.number="afParams.framesPerPoint" min="1" max="10" step="1" class="input-sm"
                                    :disabled="autoFocus.state === 'running'">
                         </label>
-                        <label>Min Stars
+                        <label x-show="afParams.metric === 'HFR'">Min Stars
                             <input type="number" x-model.number="afParams.minStars" min="1" step="1" class="input-sm"
                                    :disabled="autoFocus.state === 'running'">
                         </label>
@@ -3220,7 +3228,8 @@
                                  exceed the nominal ("12/11"). Grow the shown total with it so the
                                  fraction stays valid and the bar never overfills. -->
                             <span>Sample <strong x-text="(autoFocus.currentSampleIndex + 1) + ' / ' + Math.max(autoFocus.steps, autoFocus.currentSampleIndex + 1)"></strong></span>
-                            <span x-show="autoFocus.lastHfr">Last HFR: <strong x-text="autoFocus.lastHfr?.toFixed(2)"></strong></span>
+                            <span x-show="autoFocus.lastHfr && autoFocus.metric === 'HFR'">Last HFR: <strong x-text="autoFocus.lastHfr?.toFixed(2)"></strong></span>
+                            <span x-show="autoFocus.lastContrast && autoFocus.metric !== 'HFR'">Last contrast: <strong x-text="Math.round(autoFocus.lastContrast || 0)"></strong></span>
                             <span x-show="autoFocus.lastStarCount">Stars: <strong x-text="autoFocus.lastStarCount"></strong></span>
                         </div>
                     </div>
@@ -3265,7 +3274,8 @@
                         <div class="af-preview-badge"
                              x-show="autoFocus.state === 'running' && autoFocus.currentPosition">
                             pos <strong x-text="autoFocus.currentPosition"></strong>
-                            <span x-show="autoFocus.lastHfr"> · HFR <strong x-text="autoFocus.lastHfr?.toFixed(2)"></strong></span>
+                            <span x-show="autoFocus.lastHfr && autoFocus.metric === 'HFR'"> · HFR <strong x-text="autoFocus.lastHfr?.toFixed(2)"></strong></span>
+                            <span x-show="autoFocus.lastContrast && autoFocus.metric !== 'HFR'"> · contrast <strong x-text="Math.round(autoFocus.lastContrast || 0)"></strong></span>
                             <span x-show="autoFocus.lastStarCount"> · ★ <strong x-text="autoFocus.lastStarCount"></strong></span>
                         </div>
                     </div>

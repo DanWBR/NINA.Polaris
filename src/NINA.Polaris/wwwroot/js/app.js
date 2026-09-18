@@ -4848,6 +4848,9 @@ function ninaApp() {
             binning: 1,
             framesPerPoint: 1,
             method: 'TRENDHYPERBOLIC',
+            // HFR (stars) or CONTRAST_LAPLACE / CONTRAST_SOBEL (edge detail of
+            // the frame: daylight, Moon, planets).
+            metric: 'HFR',
             minStars: 5,
             backlashIn: 0,
             backlashOut: 0,
@@ -23786,6 +23789,13 @@ function ninaApp() {
             // these points; this brings the chart visual into
             // agreement with the math.
             const finitePts = pts.filter(p => Number.isFinite(p.hfr) && p.hfr > 0);
+            // A contrast sweep is fitted in "fit space" (log of the inverse
+            // contrast), a bowl like HFR, so the same curve machinery draws it;
+            // only the axis label changes.
+            try {
+                const contrastRun = (this.autoFocus.metric || 'HFR') !== 'HFR';
+                c.options.scales.y.title.text = contrastRun ? 'Contrast (inverted, lower = sharper)' : 'HFR';
+            } catch (e) { /* chart options may not be built yet */ }
             // Inliers (used by the fit) and spurious points the robust fit
             // ignored get separate datasets so the X markers stand out.
             // Three kinds of point, three datasets: coarse sweep samples that
@@ -32311,6 +32321,7 @@ function ninaApp() {
             this.afParams.binning = af.binning ?? 1;
             this.afParams.framesPerPoint = af.framesPerPoint ?? 1;
             this.afParams.method = af.method || 'TRENDHYPERBOLIC';
+            this.afParams.metric = af.metric || 'HFR';
             this.afParams.minStars = af.minStars ?? 5;
             this.afParams.backlashIn = af.backlashIn ?? 0;
             this.afParams.backlashOut = af.backlashOut ?? 0;
@@ -32330,6 +32341,7 @@ function ninaApp() {
                 binning: Math.max(1, Math.min(4, parseInt(this.afParams.binning) || 1)),
                 framesPerPoint: parseInt(this.afParams.framesPerPoint) || 1,
                 method: this.afParams.method || 'TRENDHYPERBOLIC',
+                metric: this.afParams.metric || 'HFR',
                 minStars: parseInt(this.afParams.minStars) || 5,
                 backlashIn: parseInt(this.afParams.backlashIn) || 0,
                 backlashOut: parseInt(this.afParams.backlashOut) || 0,
