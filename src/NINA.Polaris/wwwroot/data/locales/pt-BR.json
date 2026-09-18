@@ -4909,5 +4909,16 @@
   "Last contrast:": "Último contraste:",
   "What each sweep point measures. Star HFR needs stars and fits a V-curve. Contrast measures the edge detail of the whole frame and needs no stars: use it in daylight on a distant object, on the Moon or a planet, or when a bright sky drowns the stars. Laplace is the more sensitive near focus; Sobel is the steadier on a noisy frame.": "O que cada ponto da varredura mede. HFR das estrelas precisa de estrelas e ajusta uma curva em V. Contraste mede o detalhe de bordas do frame inteiro e não precisa de estrelas: use de dia num objeto distante, na Lua ou num planeta, ou quando um céu claro afoga as estrelas. Laplace é o mais sensível perto do foco; Sobel é o mais estável num frame ruidoso.",
   "Curve model that determines the focus position. TrendHyperbolic (default): weighted hyperbola cross-validated against the trendline intersection, the NINA desktop recommendation. A contrast metric always fits a parabola.": "Modelo de curva que determina a posição de foco. TrendHyperbolic (padrão): hipérbole ponderada validada contra a interseção das linhas de tendência, a recomendação do NINA desktop. Uma métrica de contraste sempre ajusta uma parábola.",
-  "The PHD2 window is taking too long to start. Try Restart, and check the message in the panel.": "A janela do PHD2 está demorando para iniciar. Tente Restart e veja a mensagem no painel."
+  "The PHD2 window is taking too long to start. Try Restart, and check the message in the panel.": "A janela do PHD2 está demorando para iniciar. Tente Restart e veja a mensagem no painel.",
+  "Satellites: bundled list of {n}": "Satélites: lista embutida de {n}",
+  "Satellites: bundled list of {n}, orbits {d} days old": "Satélites: lista embutida de {n}, órbitas com {d} dias",
+  "Satellites: {n} from CelesTrak, orbits from today": "Satélites: {n} do CelesTrak, órbitas de hoje",
+  "Satellites: {n} from CelesTrak, orbits from yesterday": "Satélites: {n} do CelesTrak, órbitas de ontem",
+  "Satellites: {n} from CelesTrak, orbits {d} days old": "Satélites: {n} do CelesTrak, órbitas com {d} dias",
+  "Satellite orbits updated ({n})": "Órbitas dos satélites atualizadas ({n})",
+  "Could not reach CelesTrak; keeping the current orbits": "Não foi possível acessar o CelesTrak; mantendo as órbitas atuais",
+  "Toggle artificial satellites: the ISS, Tiangong and the brightest satellites, from CelesTrak orbital elements": "Ativar/desativar satélites artificiais: a ISS, a Tiangong e os satélites mais brilhantes, a partir dos elementos orbitais do CelesTrak",
+  "Download current satellite orbital elements from CelesTrak (needs internet on the host)": "Baixar os elementos orbitais atuais dos satélites do CelesTrak (precisa de internet no host)",
+  "Satellites: bundled list of {n}, orbits from today": "Satélites: lista embutida de {n}, órbitas de hoje",
+  "Satellites: bundled list of {n}, orbits from yesterday": "Satélites: lista embutida de {n}, órbitas de ontem"
 }

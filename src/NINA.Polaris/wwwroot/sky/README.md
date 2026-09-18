@@ -49,7 +49,7 @@ See the header comment in `js/sky-bridge.js` for the canonical contract.
 Summary:
 
 - Parent → iframe: `set-observer`, `set-time`, `look-at`, `search`,
-  `get-center`, `set-fov-overlays`, `set-drag-mode`.
+  `get-center`, `set-fov-overlays`, `set-drag-mode`, `set-satellites`.
 - Iframe → parent: `ready`, `search-result`, `center`, `map-click`,
   `webgl-unavailable`.
 

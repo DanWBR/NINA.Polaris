@@ -976,6 +976,9 @@ function ninaApp() {
         // Pushed via the set-ecliptic bridge msg and re-applied whenever the
         // engine (re)loads. Persisted to localStorage, so a saved choice wins.
         skyEclipticVisible: true,
+        // SKY artificial satellites (ISS, Tiangong, the brightest hundred).
+        // Pushed via set-satellites and re-applied on engine (re)load.
+        skySatellitesVisible: true,
         // SKY constellations: stick-figure lines (on by default, matching the
         // engine) and the bundled IAU western illustration art (off — it's
         // pretty but busy). Both pushed via the set-constellations bridge msg
@@ -2451,6 +2454,11 @@ function ninaApp() {
         // { count, source: 'bundled'|'jpl', fetchedAtUtc, ageDays }
         cometStatus: null,
         cometRefreshing: false,
+        // Same for the satellite TLEs the SKY map propagates. A TLE ages in
+        // days, not months: the ISS is a degree off a week after its epoch.
+        // { count, source: 'bundled'|'celestrak', fetchedAtUtc, latestEpochUtc, ageDays }
+        satelliteStatus: null,
+        satelliteRefreshing: false,
 
         // ── Editor (Lightroom-style) state. The .edits subtree mirrors
         // the EditParams record on the server; we always send it whole on
@@ -5537,6 +5545,13 @@ function ninaApp() {
             if (eclSaved !== null) this.skyEclipticVisible = eclSaved === '1';
             this.$watch('skyEclipticVisible', (v) => {
                 localStorage.setItem('nina-sky-ecliptic', v ? '1' : '0');
+            });
+
+            // Satellites toggle, same pattern.
+            const satSaved = localStorage.getItem('nina-sky-satellites');
+            if (satSaved !== null) this.skySatellitesVisible = satSaved === '1';
+            this.$watch('skySatellitesVisible', (v) => {
+                localStorage.setItem('nina-sky-satellites', v ? '1' : '0');
             });
 
             // Constellation lines + figure artwork toggles, same pattern.
@@ -13111,6 +13126,11 @@ function ninaApp() {
             this._skySendMessage({ type: 'set-ecliptic', visible: this.skyEclipticVisible });
         },
 
+        toggleSkySatellites() {
+            this.skySatellitesVisible = !this.skySatellitesVisible;
+            this._skySendMessage({ type: 'set-satellites', visible: this.skySatellitesVisible });
+        },
+
         // SKY constellation stick-figure lines + labels.
         toggleSkyConstLines() {
             this.skyConstLines = !this.skyConstLines;
@@ -13151,6 +13171,11 @@ function ninaApp() {
                 // Re-apply the ecliptic choice (engine resets lines on reload).
                 if (this.skyEclipticVisible) {
                     this._skySendMessage({ type: 'set-ecliptic', visible: true });
+                }
+                // Satellites are on in the engine by default; only an off
+                // choice needs pushing.
+                if (!this.skySatellitesVisible) {
+                    this._skySendMessage({ type: 'set-satellites', visible: false });
                 }
                 // Re-apply constellation lines + figures. Always pushed (not
                 // just when on) so the bridge also forces show_only_pointed
@@ -18947,6 +18972,108 @@ function ninaApp() {
 
         // ─── Tonight's Best (/api/sky/tonights-best) ─────────────────────
 
+        // --- Satellite TLEs (ISS, Tiangong, the brightest artificial satellites) ---
+
+        async loadSatelliteStatus() {
+            try {
+                this.satelliteStatus = await this.apiGet('/api/sky/satellites/status');
+            } catch (e) {
+                this.satelliteStatus = null;
+            }
+        },
+
+        satelliteTlesLabel() {
+            const s = this.satelliteStatus;
+            if (!s || !s.count) return '';
+            const d = s.ageDays == null ? null : Math.round(s.ageDays);
+            if (s.source !== 'celestrak') {
+                if (d == null) return this._t('Satellites: bundled list of {n}', { n: s.count });
+                if (d <= 0) return this._t('Satellites: bundled list of {n}, orbits from today', { n: s.count });
+                if (d === 1) return this._t('Satellites: bundled list of {n}, orbits from yesterday', { n: s.count });
+                return this._t('Satellites: bundled list of {n}, orbits {d} days old', { n: s.count, d });
+            }
+            if (d == null || d <= 0) return this._t('Satellites: {n} from CelesTrak, orbits from today', { n: s.count });
+            if (d === 1) return this._t('Satellites: {n} from CelesTrak, orbits from yesterday', { n: s.count });
+            return this._t('Satellites: {n} from CelesTrak, orbits {d} days old', { n: s.count, d });
+        },
+
+        // Stale once the ISS could be visibly off: a few days for a TLE.
+        satelliteTlesStale() {
+            const s = this.satelliteStatus;
+            if (!s || !s.count) return false;
+            return s.source !== 'celestrak' || (s.ageDays != null && s.ageDays > 3);
+        },
+
+        async refreshSatelliteTles() {
+            if (this.satelliteRefreshing) return;
+            this.satelliteRefreshing = true;
+            try {
+                let j = null;
+                try {
+                    const r = await this.apiPost('/api/sky/satellites/refresh', {});
+                    j = await r.json();
+                } catch (e) { j = null; }
+                if (!j || !j.ok) {
+                    const relayed = await this._satelliteRelayViaDevice();
+                    if (relayed) j = relayed;
+                }
+                if (j && j.ok) {
+                    this.satelliteStatus = {
+                        count: j.count, source: j.source,
+                        fetchedAtUtc: j.fetchedAtUtc, latestEpochUtc: j.latestEpochUtc, ageDays: 0
+                    };
+                    this.toast(this._t('Satellite orbits updated ({n})', { n: j.count }), 'ok');
+                    // The engine reads the TLE file once, at boot.
+                    this._skyReboot();
+                } else {
+                    this.toast(this._t('Could not reach CelesTrak; keeping the current orbits'), 'warn');
+                }
+            } catch (e) {
+                this.toast(this._t('Could not reach CelesTrak; keeping the current orbits'), 'warn');
+            } finally {
+                this.satelliteRefreshing = false;
+            }
+        },
+
+        // Both CelesTrak groups fetched over this device's connection and
+        // handed to the host as one body. Null when there is no native shell
+        // to fetch through (a plain browser cannot: CelesTrak sets no CORS header).
+        async _satelliteRelayViaDevice() {
+            if (window.parent === window) return null;
+            let urls;
+            try {
+                const src = await this.apiGet('/api/sky/satellites/source');
+                urls = src && src.urls;
+            } catch (e) { return null; }
+            if (!urls || !urls.length) return null;
+            const parts = [];
+            for (const u of urls) {
+                const body = await this._nativeFetchText(u);
+                if (body) parts.push(body);
+            }
+            if (!parts.length) return null;
+            this.toast(this._t('Fetched on this device; sending to the host'), 'ok');
+            try {
+                const r = await this.apiPost('/api/sky/satellites/import', null, {
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: parts.join('\n')
+                });
+                return await r.json();
+            } catch (e) {
+                return null;
+            }
+        },
+
+        // Reload the sky engine. Its data sources are read once at boot, so
+        // fresh TLEs only show after a reload; the :src binding on #skyFrame
+        // goes through about:blank and back.
+        _skyReboot() {
+            if (this.skySuspended) return;   // not loaded; it boots fresh anyway
+            this.skySuspended = true;
+            this._skyBridgeReady = false;
+            this.$nextTick(() => { this.skySuspended = false; });
+        },
+
         // --- Comet orbital elements ---
 
         async loadCometStatus() {
@@ -19101,6 +19228,7 @@ function ninaApp() {
             this._tonightLastKey = lat + ',' + lng;
             // Cheap, and it tells the operator how old the comet elements are.
             this.loadCometStatus();
+            this.loadSatelliteStatus();
             this.tonight.loading = true;
             this.tonight.error = '';
             this.tonight.errorCard = '';

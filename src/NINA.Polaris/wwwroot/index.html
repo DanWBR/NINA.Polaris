@@ -9077,6 +9077,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <button class="btn btn-sm" @click="toggleSkyEcliptic()"
                             :class="skyEclipticVisible ? 'btn-active' : ''"
                             title="Toggle the ecliptic: the plane of the solar system, where the Sun, Moon and planets travel">☀️ Ecliptic</button>
+                    <!-- Artificial satellites: the ISS, Tiangong and the
+                         brightest hundred, propagated by the engine from TLEs. -->
+                    <button class="btn btn-sm" @click="toggleSkySatellites()"
+                            :class="skySatellitesVisible ? 'btn-active' : ''"
+                            title="Toggle artificial satellites: the ISS, Tiangong and the brightest satellites, from CelesTrak orbital elements">🚀 Satellites</button>
                     <!-- Constellation stick-figure lines + labels. -->
                     <button class="btn btn-sm" @click="toggleSkyConstLines()"
                             :class="skyConstLines ? 'btn-active' : ''"
@@ -10250,6 +10255,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             :disabled="cometRefreshing"
                             x-text="cometRefreshing ? 'Updating...' : 'Update'"
                             title="Download current comet orbital elements from JPL (needs internet on the host)"></button>
+                </div>
+                <!-- Same for the satellite TLEs behind the SKY map's ISS. -->
+                <div class="tonight-comet-note" x-show="satelliteTlesLabel()" x-cloak>
+                    <span :class="{ stale: satelliteTlesStale() }" x-text="satelliteTlesLabel()"></span>
+                    <button class="btn btn-xs" @click="refreshSatelliteTles()"
+                            :disabled="satelliteRefreshing"
+                            x-text="satelliteRefreshing ? 'Updating...' : 'Update'"
+                            title="Download current satellite orbital elements from CelesTrak (needs internet on the host)"></button>
                 </div>
 
                 <!-- Card list -->
