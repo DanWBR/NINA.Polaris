@@ -50,6 +50,9 @@ public class UpdateService {
     private DateTime _cachedAtUtc = DateTime.MinValue;
     private string _cachedChannel = "stable";
     private static readonly TimeSpan CacheTtl = TimeSpan.FromMinutes(30);
+    /// <summary>Budget for one GitHub API call. Small payloads, but a field host
+    /// on a slow link or with sluggish DNS has taken longer than 15 s.</summary>
+    private static readonly TimeSpan CheckTimeout = TimeSpan.FromSeconds(30);
 
     public UpdateService(ILogger<UpdateService> logger, IHttpClientFactory httpFactory,
             ProfileService profiles) {
@@ -67,9 +70,12 @@ public class UpdateService {
     /// <summary>True only on a Linux .deb install (systemd + /opt/polaris). The
     /// self-update flow assumes the packaged layout + service.</summary>
     public bool IsSupported =>
-        OperatingSystem.IsLinux()
+        SupportedOverride ?? (OperatingSystem.IsLinux()
         && File.Exists("/opt/polaris/NINA.Polaris")
-        && Directory.Exists("/run/systemd/system");
+        && Directory.Exists("/run/systemd/system"));
+
+    /// <summary>Tests only: pretend to be (or not be) a .deb install.</summary>
+    internal bool? SupportedOverride { get; set; }
 
     /// <summary>Running version as a comparable 4-part System.Version.</summary>
     public static Version CurrentVersion {
@@ -125,7 +131,7 @@ public class UpdateService {
         };
         try {
             var http = _httpFactory.CreateClient();
-            http.Timeout = TimeSpan.FromSeconds(15);
+            http.Timeout = CheckTimeout;
             // Stable = GitHub's "latest" (which excludes pre-releases). Preview =
             // the releases LIST, from which we take the newest build that has an
             // asset for this arch, INCLUDING pre-releases (GitHub lists newest
@@ -196,8 +202,13 @@ public class UpdateService {
                     _logger.LogDebug(ex, "Update changelog fetch failed");
                 }
             }
-        } catch (OperationCanceledException) {
+        } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
             throw;
+        } catch (OperationCanceledException) {
+            // HttpClient.Timeout surfaces as TaskCanceledException too; that is
+            // GitHub not answering, not the caller giving up.
+            _logger.LogDebug("Update check timed out after {S} s", CheckTimeout.TotalSeconds);
+            result.Error = $"GitHub did not answer within {CheckTimeout.TotalSeconds:0} s.";
         } catch (Exception ex) {
             _logger.LogDebug(ex, "Update check failed");
             result.Error = ex.Message;
@@ -206,9 +217,17 @@ public class UpdateService {
     }
 
     private UpdateCheckResult CacheAndReturn(UpdateCheckResult r) {
-        lock (_cacheLock) { _cached = r; _cachedAtUtc = DateTime.UtcNow; _cachedChannel = r.Channel; }
+        lock (_cacheLock) {
+            _cached = r; _cachedAtUtc = DateTime.UtcNow; _cachedChannel = r.Channel;
+            if (r.UpdateAvailable && !string.IsNullOrEmpty(r.AssetUrl)) _lastOffered = r;
+        }
         return r;
     }
+
+    /// <summary>The most recent check that found an installable update, kept
+    /// separately from the 30-minute cache so an install can proceed on it when
+    /// the fresh check right before the download fails.</summary>
+    private UpdateCheckResult? _lastOffered;
 
     /// <summary>Strip a leading 'v' from a release tag (v3.3.0.1042 → 3.3.0.1042).</summary>
     private static string? NormalizeTag(string? tag) =>
@@ -271,7 +290,7 @@ public class UpdateService {
         var list = new List<UpdateRelease>();
         try {
             var http = _httpFactory.CreateClient();
-            http.Timeout = TimeSpan.FromSeconds(15);
+            http.Timeout = CheckTimeout;
             var url = $"https://api.github.com/repos/{Repo}/releases?per_page={max}";
             using var req = new HttpRequestMessage(HttpMethod.Get, url);
             req.Headers.UserAgent.ParseAdd("NINA.Polaris-Updater");
@@ -314,7 +333,7 @@ public class UpdateService {
                 });
             }
             lock (_releasesCacheLock) { _cachedReleases = list; _releasesCachedAtUtc = DateTime.UtcNow; }
-        } catch (OperationCanceledException) {
+        } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
             throw;
         } catch (Exception ex) {
             _logger.LogDebug(ex, "Release list fetch failed");
@@ -428,8 +447,19 @@ public class UpdateService {
         if (!IsSupported) return (false, "Self-update is only available on a Linux .deb install.");
 
         var check = await CheckAsync(force: true, ct);
-        if (!check.UpdateAvailable || string.IsNullOrEmpty(check.AssetUrl))
-            return (false, check.Error ?? "No update available to install.");
+        if (!check.UpdateAvailable || string.IsNullOrEmpty(check.AssetUrl)) {
+            // The badge the operator clicked came from an earlier successful
+            // check; a transient GitHub failure now should not cancel the install.
+            UpdateCheckResult? offered;
+            lock (_cacheLock) offered = _lastOffered;
+            if (check.Error != null && offered != null && offered.Channel == check.Channel) {
+                _logger.LogInformation("Update: fresh check failed ({Err}); installing the last offered {Tag}",
+                    check.Error, offered.LatestVersion);
+                check = offered;
+            } else {
+                return (false, check.Error ?? "No update available to install.");
+            }
+        }
 
         var (dlOk, dlErr) = await DownloadAndStageAsync(check.AssetUrl!, check.AssetName, ct);
         if (!dlOk) return (false, dlErr);
