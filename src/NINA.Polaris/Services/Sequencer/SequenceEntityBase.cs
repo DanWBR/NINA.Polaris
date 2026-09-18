@@ -198,6 +198,18 @@ public abstract class SequenceContainer : SequenceEntityBase, IErrorHandlingEnti
                 item.Status = SequenceEntityStatus.Skipped;
                 item.FinishedAt = DateTime.UtcNow;
                 throw;
+            } catch (TargetSkippedException ex) {
+                // A guide-loss hold gave the target up. The target container
+                // absorbs it and the plan goes on with the next item; anything
+                // below the container just passes it upward.
+                item.Status = SequenceEntityStatus.Skipped;
+                item.Error = ex.Message;
+                item.FinishedAt = DateTime.UtcNow;
+                if (item is Containers.DeepSkyObjectContainer) {
+                    ctx.Logger.LogWarning("Target '{Name}' skipped: {Why}", item.Name, ex.Message);
+                    return ChildOutcome.Continue;
+                }
+                throw;
             } catch (Exception ex) {
                 last = ex;
                 item.Error = ex.Message;
@@ -260,6 +272,7 @@ public abstract class SequenceContainer : SequenceEntityBase, IErrorHandlingEnti
                 if (gateConditions && !await AllConditionsHoldAsync(ctx, ct))
                     return;
 
+                await ctx.HoldIfRequestedAsync(ct);
                 await EvaluateTriggersAsync(ctx, ct);
                 if (ctx.AbortRequested) return;
 

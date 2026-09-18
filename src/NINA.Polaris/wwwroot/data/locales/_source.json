@@ -4273,5 +4273,20 @@
   "Notes saved": "",
   "Copied as Markdown": "",
   "Clipboard not available": "",
-  "Polaris has not come back on the new version yet. The install keeps running on the host: wait a minute and reload the page. If the old version is still running, check /tmp/polaris-update.log on the host.": ""
+  "Polaris has not come back on the new version yet. The install keeps running on the host: wait a minute and reload the page. If the old version is still running, check /tmp/polaris-update.log on the host.": "",
+  "Holding": "",
+  "Skipped:": "",
+  "HOLDING": "",
+  "Next attempt": "",
+  "at": "",
+  "Tracking is off until the target is back.": "",
+  "Guide star lost": "",
+  "Metric": "",
+  "Star HFR": "",
+  "Contrast (Laplace)": "",
+  "Contrast (Sobel)": "",
+  "Last contrast:": "",
+  "What each sweep point measures. Star HFR needs stars and fits a V-curve. Contrast measures the edge detail of the whole frame and needs no stars: use it in daylight on a distant object, on the Moon or a planet, or when a bright sky drowns the stars. Laplace is the more sensitive near focus; Sobel is the steadier on a noisy frame.": "",
+  "Curve model that determines the focus position. TrendHyperbolic (default): weighted hyperbola cross-validated against the trendline intersection, the NINA desktop recommendation. A contrast metric always fits a parabola.": "",
+  "The PHD2 window is taking too long to start. Try Restart, and check the message in the panel.": ""
 }

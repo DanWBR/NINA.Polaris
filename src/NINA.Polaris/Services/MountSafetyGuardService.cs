@@ -13,6 +13,7 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using NINA.Core.Enum;
+using NINA.Polaris.Services.Sequencer;
 
 namespace NINA.Polaris.Services;
 
@@ -45,6 +46,7 @@ public class MountSafetyGuardService : BackgroundService {
     private readonly LiveCaptureService _liveCapture;
     private readonly LiveStackingService _liveStack;
     private readonly MeridianFlipService _meridian;
+    private readonly AdvancedSequenceEngine _adv;
     private readonly ILogger<MountSafetyGuardService> _logger;
 
     private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(15);
@@ -143,7 +145,8 @@ public class MountSafetyGuardService : BackgroundService {
     public MountSafetyGuardService(
             EquipmentManager equip, ProfileService profile, ActiveGuiderProvider guiders,
             SequenceEngine sequence, LiveCaptureService liveCapture, LiveStackingService liveStack,
-            MeridianFlipService meridian, ILogger<MountSafetyGuardService> logger) {
+            MeridianFlipService meridian, AdvancedSequenceEngine adv,
+            ILogger<MountSafetyGuardService> logger) {
         _equip = equip;
         _profile = profile;
         _guiders = guiders;
@@ -151,6 +154,7 @@ public class MountSafetyGuardService : BackgroundService {
         _liveCapture = liveCapture;
         _liveStack = liveStack;
         _meridian = meridian;
+        _adv = adv;
         _logger = logger;
     }
 
@@ -227,6 +231,7 @@ public class MountSafetyGuardService : BackgroundService {
 
     private bool SessionActive =>
         _sequence.State == SequenceState.Running
+        || _adv.State == AdvancedSequenceState.Running
         || _liveCapture.IsRunning
         || _liveStack.IsRunning;
 
@@ -330,11 +335,48 @@ public class MountSafetyGuardService : BackgroundService {
 
         // ---- Guard 2: guiding circuit breaker ----
         if (ShouldTripBreaker(_consecutiveGuideFailures, s.MaxConsecutiveGuideFailures)) {
+            // Under a PLAN (advanced sequence) a lost star is more often a cloud
+            // or a roof edge than a fault: park the target safely and let the
+            // plan retry on its own schedule, or move on to the next target.
+            // The same protection (guider stopped, tracking off) applies; only
+            // the "end the session" part is left to the plan.
+            if (_adv.State == AdvancedSequenceState.Running) {
+                var hold = _adv.Hold;
+                if (hold != null && (hold.Active || hold.Requested)) {
+                    // The plan is already on it; alerts raised by its own retry
+                    // attempts must not pile up into a second hold.
+                    _consecutiveGuideFailures = 0;
+                    return;
+                }
+                await HoldPlanAsync(
+                    $"Guider lost the star {_consecutiveGuideFailures} times in a row with no " +
+                    $"recovery (limit {s.MaxConsecutiveGuideFailures}).", ct);
+                return;
+            }
             await TripAsync(
                 $"Guider lost the star {_consecutiveGuideFailures} times in a row with no " +
                 $"recovery (limit {s.MaxConsecutiveGuideFailures}) — stopping the session.",
                 s, ct);
         }
+    }
+
+    /// <summary>The plan-time counterpart of a breaker trip: stop the guider,
+    /// tracking off, hand the wait-and-retry to the running plan. Not a trip:
+    /// nothing is latched and no re-home is demanded, since the plan will slew
+    /// again on its own when it retries.</summary>
+    private async Task HoldPlanAsync(string reason, CancellationToken ct) {
+        _logger.LogWarning("MOUNT SAFETY HOLD (plan): {Reason}", reason);
+        _consecutiveGuideFailures = 0;
+        try {
+            var g = _guiders.Active;
+            if (g.IsConnected) await g.StopAsync(ct);
+        } catch (Exception ex) { _logger.LogWarning(ex, "Safety hold: guider stop failed"); }
+        var scope = _equip.Telescope;
+        if (scope != null && scope.IsConnected) {
+            try { await scope.SetTrackingAsync(false, ct); }
+            catch (Exception ex) { _logger.LogWarning(ex, "Safety hold: stop-tracking failed"); }
+        }
+        _adv.RequestHold(reason);
     }
 
     /// <summary>
@@ -454,6 +496,7 @@ public class MountSafetyGuardService : BackgroundService {
 
         // 1. Abort the running session(s) so nothing re-commands the mount.
         try { _sequence.Stop(); } catch (Exception ex) { _logger.LogWarning(ex, "Safety: sequence stop failed"); }
+        try { _adv.Stop(); } catch (Exception ex) { _logger.LogWarning(ex, "Safety: plan stop failed"); }
         try { _liveCapture.Stop(); } catch (Exception ex) { _logger.LogWarning(ex, "Safety: live capture stop failed"); }
         try { _liveStack.Stop(); } catch (Exception ex) { _logger.LogWarning(ex, "Safety: live stack stop failed"); }
 

@@ -238,6 +238,18 @@ position. Polaris:
   is fine for most DSO setups; planetary uses 50-500ms.
 - **Min Stars**, minimum stars required for a valid HFR sample. 5
   is sane; bump to 20 for crowded fields where HFR is noisy.
+- **Metric** (Advanced), what each sample measures. **Star HFR** is the
+  stellar V-curve and needs stars. **Contrast (Laplace)** and
+  **Contrast (Sobel)** measure the edge detail of the whole frame and
+  need no stars: use them to focus in daylight on a distant object, on
+  the Moon or a planet, or when a bright sky drowns the stars. The
+  sweep, backlash, refinement and the worse-than-start gate work the
+  same; the fit is always a parabola, the chart's Y axis becomes the
+  inverted contrast (lower is sharper, so the bowl shape stays), and
+  the readout shows the raw contrast. Laplace responds more to fine
+  detail and is the sharper of the two near focus; Sobel is steadier
+  on a noisy frame. Use a short exposure that does not saturate the
+  scene, and keep the crop on the part of the frame that holds detail.
 - **Backlash**, overshoot in steps when reversing direction. 0 for
   belt-driven focusers; use your focuser's published backlash for
   geared ones.

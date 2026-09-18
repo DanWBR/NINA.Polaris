@@ -105,8 +105,10 @@ public class PlanCompilerService {
         }
 
         // ---- Targets ----
-        foreach (var t in plan.Targets) {
-            if (!t.Enabled) continue;
+        var enabled = plan.Targets.Where(t => t.Enabled).ToList();
+        for (int ti = 0; ti < enabled.Count; ti++) {
+            var t = enabled[ti];
+            var next = ti + 1 < enabled.Count ? enabled[ti + 1] : null;
             bool timed = t.ScheduleMode == PlanScheduleMode.TimeWindow;
 
             // Per-target start gate (time-window mode): wait until the start
@@ -128,7 +130,13 @@ public class PlanCompilerService {
                 RaHours = t.RaHours,
                 DecDeg = t.DecDeg,
                 Rotation = t.Rotation,
-                CenterOnStart = true
+                CenterOnStart = true,
+                // What a guide-loss hold needs to decide when to give this
+                // target up and let the plan move on.
+                WindowEndUtc = timed && !string.IsNullOrWhiteSpace(t.EndAtUtc) ? t.EndAtUtc : null,
+                NextTargetStartUtc = next is { ScheduleMode: PlanScheduleMode.TimeWindow }
+                                     && !string.IsNullOrWhiteSpace(next.StartAtUtc) ? next.StartAtUtc : null,
+                HasNextTarget = next != null
             };
             if (t.FirstDelaySec > 0) {
                 dso.Items.Add(new WaitForTimeInstruction {

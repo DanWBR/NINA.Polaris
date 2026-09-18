@@ -125,6 +125,100 @@ public class SequenceContext {
     /// <summary>Reason recorded with the abort, surfaced to the UI.</summary>
     public string? AbortReason { get; set; }
 
+    /// <summary>Guide-loss hold requested by the mount safety guard and honoured
+    /// by the sequence at frame and step boundaries (see <see cref="GuideLossHold"/>).</summary>
+    public SequenceHoldState Hold { get; } = new();
+
+    /// <summary>The target container currently executing, so a hold knows what
+    /// to re-point at and when to give it up. Set by the container itself.</summary>
+    public Containers.DeepSkyObjectContainer? CurrentTarget { get; set; }
+
+    /// <summary>
+    /// Honour a pending hold. Called between frames and between steps. Returns
+    /// once the target is back (guiding again) or throws
+    /// <see cref="TargetSkippedException"/> when the plan should move on. A
+    /// no-op when nothing was requested.
+    /// </summary>
+    public async Task HoldIfRequestedAsync(CancellationToken ct) {
+        var target = CurrentTarget;
+        if (!Hold.TakeRequest(target?.Target)) return;
+        var reason = Hold.Reason ?? "guide star lost";
+        Logger.LogWarning("Hold: {Reason}. Target '{Target}' is parked; retrying on a schedule.",
+            reason, target?.Target ?? "(none)");
+
+        DateTime? windowEnd = target != null ? GuideLossHold.ResolveTimeOfDay(target.WindowEndUtc, RunStartedAt) : null;
+        DateTime? nextStart = target != null ? GuideLossHold.ResolveTimeOfDay(target.NextTargetStartUtc, RunStartedAt) : null;
+        bool hasNext = target?.HasNextTarget ?? false;
+
+        try {
+            for (int attempt = 1; ; attempt++) {
+                var delay = GuideLossHold.DelayFor(attempt);
+                Hold.Waiting(attempt, DateTime.UtcNow + delay);
+                Logger.LogInformation("Hold: attempt {N} in {Min:0} min", attempt, delay.TotalMinutes);
+                await Task.Delay(delay, ct);
+
+                var decision = GuideLossHold.Decide(attempt, DateTime.UtcNow, windowEnd, nextStart, hasNext);
+                if (decision != HoldDecision.Retry) {
+                    var why = GuideLossHold.SkipReason(decision, attempt - 1);
+                    Logger.LogWarning("Hold: giving up target '{Target}': {Why}", target?.Target, why);
+                    throw new TargetSkippedException($"Skipped: {why}");
+                }
+
+                if (await TryResumeTargetAsync(target, ct)) {
+                    Logger.LogInformation("Hold: target '{Target}' is back after {N} attempt(s); resuming",
+                        target?.Target, attempt);
+                    return;
+                }
+                await ParkForHoldAsync(ct);
+            }
+        } finally {
+            Hold.Clear();
+        }
+    }
+
+    /// <summary>One attempt to get the target back: tracking on, re-center on
+    /// it, start guiding. False when any of those does not come through, in
+    /// which case the caller parks again and waits.</summary>
+    private async Task<bool> TryResumeTargetAsync(Containers.DeepSkyObjectContainer? target, CancellationToken ct) {
+        var scope = Equipment.Telescope;
+        if (scope == null || !scope.IsConnected) { Logger.LogWarning("Hold: no mount connected"); return false; }
+        try { await scope.SetTrackingAsync(true, ct); }
+        catch (Exception ex) { Logger.LogWarning(ex, "Hold: tracking on failed"); return false; }
+
+        if (target != null) {
+            var job = SlewCenter.StartJob(target.RaHours, target.DecDeg);
+            while (true) {
+                ct.ThrowIfCancellationRequested();
+                var st = SlewCenter.GetJob(job.Id);
+                if (st == null || st.State == SlewCenterState.Failed || st.State == SlewCenterState.Cancelled) {
+                    Logger.LogInformation("Hold: re-center did not succeed ({State}: {Err})", st?.State, st?.Error);
+                    return false;
+                }
+                if (st.State == SlewCenterState.Centered) break;
+                await Task.Delay(500, ct);
+            }
+        }
+
+        var guider = Guider;
+        if (guider == null || !guider.IsConnected) return true;   // unguided plan: pointing is all it needs
+        try { await guider.StartGuidingAsync(ct: ct); }
+        catch (Exception ex) { Logger.LogInformation(ex, "Hold: start guiding failed"); return false; }
+        if (!guider.IsGuiding) {
+            Logger.LogInformation("Hold: guider did not lock ({State})", guider.AppState);
+            return false;
+        }
+        return true;
+    }
+
+    /// <summary>Between attempts the target stays parked: guider stopped and
+    /// tracking off, so nothing winds the cabling while the sky is blocked.</summary>
+    private async Task ParkForHoldAsync(CancellationToken ct) {
+        try { var g = Guider; if (g != null && g.IsConnected) await g.StopAsync(ct); }
+        catch (Exception ex) { Logger.LogDebug(ex, "Hold: guider stop failed"); }
+        try { var s = Equipment.Telescope; if (s != null && s.IsConnected) await s.SetTrackingAsync(false, ct); }
+        catch (Exception ex) { Logger.LogWarning(ex, "Hold: tracking off failed"); }
+    }
+
     public SequenceContext(
         EquipmentManager equipment,
         ImageRelayService relay,

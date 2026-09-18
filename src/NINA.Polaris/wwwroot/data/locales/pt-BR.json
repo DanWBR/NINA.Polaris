@@ -4892,5 +4892,20 @@
   "Notes saved": "Anotações salvas",
   "Copied as Markdown": "Copiado como Markdown",
   "Clipboard not available": "Área de transferência indisponível",
-  "Polaris has not come back on the new version yet. The install keeps running on the host: wait a minute and reload the page. If the old version is still running, check /tmp/polaris-update.log on the host.": "O Polaris ainda não voltou na versão nova. A instalação continua rodando no host: espere um minuto e recarregue a página. Se a versão antiga ainda estiver rodando, veja /tmp/polaris-update.log no host."
+  "Polaris has not come back on the new version yet. The install keeps running on the host: wait a minute and reload the page. If the old version is still running, check /tmp/polaris-update.log on the host.": "O Polaris ainda não voltou na versão nova. A instalação continua rodando no host: espere um minuto e recarregue a página. Se a versão antiga ainda estiver rodando, veja /tmp/polaris-update.log no host.",
+  "Holding": "Em espera",
+  "Skipped:": "Pulados:",
+  "HOLDING": "EM ESPERA",
+  "Next attempt": "Próxima tentativa",
+  "at": "às",
+  "Tracking is off until the target is back.": "O rastreamento fica desligado até o alvo voltar.",
+  "Guide star lost": "Estrela de guiagem perdida",
+  "Metric": "Métrica",
+  "Star HFR": "HFR das estrelas",
+  "Contrast (Laplace)": "Contraste (Laplace)",
+  "Contrast (Sobel)": "Contraste (Sobel)",
+  "Last contrast:": "Último contraste:",
+  "What each sweep point measures. Star HFR needs stars and fits a V-curve. Contrast measures the edge detail of the whole frame and needs no stars: use it in daylight on a distant object, on the Moon or a planet, or when a bright sky drowns the stars. Laplace is the more sensitive near focus; Sobel is the steadier on a noisy frame.": "O que cada ponto da varredura mede. HFR das estrelas precisa de estrelas e ajusta uma curva em V. Contraste mede o detalhe de bordas do frame inteiro e não precisa de estrelas: use de dia num objeto distante, na Lua ou num planeta, ou quando um céu claro afoga as estrelas. Laplace é o mais sensível perto do foco; Sobel é o mais estável num frame ruidoso.",
+  "Curve model that determines the focus position. TrendHyperbolic (default): weighted hyperbola cross-validated against the trendline intersection, the NINA desktop recommendation. A contrast metric always fits a parabola.": "Modelo de curva que determina a posição de foco. TrendHyperbolic (padrão): hipérbole ponderada validada contra a interseção das linhas de tendência, a recomendação do NINA desktop. Uma métrica de contraste sempre ajusta uma parábola.",
+  "The PHD2 window is taking too long to start. Try Restart, and check the message in the panel.": "A janela do PHD2 está demorando para iniciar. Tente Restart e veja a mensagem no painel."
 }

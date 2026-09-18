@@ -154,7 +154,8 @@ public class AutoFocusService {
                 Points = new List<AutoFocusPoint>(),
                 StartedAt = DateTime.UtcNow,
                 Mode = "vcurve",
-                Method = options.Method.ToString()
+                Method = options.Method.ToString(),
+                Metric = AutoFocusMetricParser.Name(options.Metric)
             };
         }
 
@@ -385,8 +386,11 @@ public class AutoFocusService {
                 }
 
                 if (initialHfr > 0 && finalHfr is > 0 && o.MaxHfrRatio > 0
-                        && finalHfr.Value > initialHfr * o.MaxHfrRatio) {
-                    lastReason = $"final HFR {finalHfr:F2} worse than initial {initialHfr:F2} (>{o.MaxHfrRatio:0.##}x)";
+                        && WorseThanStart(o.Metric, initialHfr, finalHfr.Value, o.MaxHfrRatio)) {
+                    lastReason = o.Metric == AutoFocusMetric.StarHfr
+                        ? $"final HFR {finalHfr:F2} worse than initial {initialHfr:F2} (>{o.MaxHfrRatio:0.##}x)"
+                        : $"final contrast {ContrastMeasure.FromFitSpace(finalHfr.Value):F0} worse than initial "
+                          + $"{ContrastMeasure.FromFitSpace(initialHfr):F0} (<1/{o.MaxHfrRatio:0.##})";
                     _logger.LogWarning("AF attempt {N}/{Max} rejected: {Reason}", attempt, o.Attempts, lastReason);
                     if (attempt < o.Attempts) continue;
                     throw new InvalidOperationException($"Auto-focus result worse than start ({lastReason})");
@@ -571,6 +575,7 @@ public class AutoFocusService {
                 HFR = measure,
                 HfrError = stdev,
                 StarCount = starCount,
+                Contrast = o.Metric == AutoFocusMetric.StarHfr || measure <= 0 ? 0 : ContrastMeasure.FromFitSpace(measure),
                 Refinement = true
             };
             Progress = Progress with {
@@ -621,7 +626,8 @@ public class AutoFocusService {
             Position = logicalPos,
             HFR = measure,
             HfrError = stdev,
-            StarCount = starCount
+            StarCount = starCount,
+            Contrast = o.Metric == AutoFocusMetric.StarHfr || measure <= 0 ? 0 : ContrastMeasure.FromFitSpace(measure)
         };
         // Copy-on-write: the WS status broadcaster and the REST status
         // endpoint serialize Progress.Points concurrently with this loop.
@@ -679,6 +685,7 @@ public class AutoFocusService {
                     StarX = m.FrameWidth > 0 ? m.StarX / m.FrameWidth : 0,
                     StarY = m.FrameHeight > 0 ? m.StarY / m.FrameHeight : 0,
                     StarHfr = m.Measure,
+                    LastContrast = m.Contrast,
                     FrameWidth = m.FrameWidth, FrameHeight = m.FrameHeight
                 };
             }
@@ -793,6 +800,23 @@ public class AutoFocusService {
             detScale = 2;
         }
 
+        // Contrast metric: no stars needed. The edge response of the whole
+        // (cropped) frame stands in for the star size; it is carried through
+        // the V-curve machinery in fit space, a bowl with its minimum at focus,
+        // and shown to the operator as the raw contrast.
+        if (o.Metric != AutoFocusMetric.StarHfr) {
+            var method = o.Metric == AutoFocusMetric.ContrastSobel ? ContrastMethod.Sobel : ContrastMethod.Laplace;
+            double contrast = ContrastMeasure.Measure(data, width, height, method);
+            if (contrast <= 0) {
+                _logger.LogDebug("Contrast measurement is zero (flat frame), point soft-rejected");
+                return new FrameMeasurement(0, 1000, 0, 0, 0, frameW, frameH, 0);
+            }
+            double y = ContrastMeasure.ToFitSpace(contrast);
+            // A fixed relative error: the convolution's own scatter is not a
+            // measure of uncertainty, so every point weighs the same in the fit.
+            return new FrameMeasurement(y, Math.Max(0.02 * y, 0.01), 0, 0, 0, frameW, frameH, contrast);
+        }
+
         var detected = detector.Detect(data, width, height);
 
         // The star-count gate asks "is this frame usable", so it counts what the
@@ -880,7 +904,19 @@ public class AutoFocusService {
     /// sits in the frame the browser is being shown.</summary>
     private readonly record struct FrameMeasurement(
         double Measure, double Stdev, int StarCount,
-        double StarX, double StarY, int FrameWidth, int FrameHeight);
+        double StarX, double StarY, int FrameWidth, int FrameHeight,
+        double Contrast = 0);
+
+    /// <summary>The confirmation gate: did the run end worse than it started by
+    /// more than <paramref name="ratio"/>? HFR compares directly. A contrast
+    /// point lives in fit space (log of the inverse contrast), where a drop of
+    /// the contrast by the same factor is a fixed offset of ln(ratio).</summary>
+    public static bool WorseThanStart(AutoFocusMetric metric, double initial, double final, double ratio) {
+        if (ratio <= 0 || initial <= 0 || final <= 0) return false;
+        return metric == AutoFocusMetric.StarHfr
+            ? final > initial * ratio
+            : final - initial > Math.Log(ratio);
+    }
 
     /// <summary>Robust per-frame central HFR: sigma-clip the per-star HFRs
     /// around their median (MAD-scaled, floored so a genuinely tight frame
@@ -1223,6 +1259,8 @@ public class AutoFocusRequest {
     public int? FramesPerPoint { get; set; }
     /// <summary>TRENDLINES | PARABOLIC | TRENDPARABOLIC | HYPERBOLIC | TRENDHYPERBOLIC.</summary>
     public string? Method { get; set; }
+    /// <summary>HFR | CONTRAST_LAPLACE | CONTRAST_SOBEL. What the sweep measures.</summary>
+    public string? Metric { get; set; }
     /// <summary>Centered crop ratio for AF frames (1 = full frame).</summary>
     public double? InnerCropRatio { get; set; }
     /// <summary>Track only the N brightest stars across the sweep (0 = all).</summary>
@@ -1245,6 +1283,9 @@ public sealed record AutoFocusRunOptions {
     public int Binning { get; init; } = 1;
     public int FramesPerPoint { get; init; } = 1;
     public AFCurveFittingMethod Method { get; init; } = AFCurveFittingMethod.TrendHyperbolic;
+    /// <summary>What each sweep point measures. Contrast metrics need no stars
+    /// and always fit a parabola (their fit-space curve is one).</summary>
+    public AutoFocusMetric Metric { get; init; } = AutoFocusMetric.StarHfr;
     public double RSquaredThreshold { get; init; } = 0.7;
     public int Attempts { get; init; } = 2;
     public double MaxHfrRatio { get; init; } = 1.15;
@@ -1284,13 +1325,19 @@ public sealed record AutoFocusRunOptions {
             ?? req?.PointsPerSide
             ?? (req?.Steps is int s ? Math.Max(2, s / 2) : p.OffsetSteps);
 
+        var metric = AutoFocusMetricParser.Parse(req?.Metric ?? p.Metric);
         return new AutoFocusRunOptions {
             StepSize = Math.Max(1, req?.StepSize ?? p.StepSize),
             OffsetSteps = Math.Clamp(offsetSteps, 1, 10),
             ExposureSeconds = req?.ExposureSeconds ?? p.ExposureSeconds,
             Binning = Math.Clamp(req?.Binning ?? p.Binning, 1, 4),
             FramesPerPoint = Math.Clamp(req?.FramesPerPoint ?? p.FramesPerPoint, 1, 10),
-            Method = AutoFocusFitting.ParseMethod(req?.Method ?? p.Method),
+            Metric = metric,
+            // A contrast peak is a parabola in fit space; the hyperbola and the
+            // trendlines describe a star disc growing with defocus, not this.
+            Method = metric == AutoFocusMetric.StarHfr
+                ? AutoFocusFitting.ParseMethod(req?.Method ?? p.Method)
+                : AFCurveFittingMethod.Parabolic,
             RSquaredThreshold = Math.Clamp(req?.RSquaredThreshold ?? p.RSquaredThreshold, 0, 1),
             Attempts = Math.Clamp(req?.Attempts ?? p.Attempts, 1, 5),
             MaxHfrRatio = Math.Max(0, req?.MaxHfrRatio ?? p.MaxHfrRatio),
@@ -1312,12 +1359,40 @@ public sealed record AutoFocusRunOptions {
     }
 }
 
+/// <summary>What an auto-focus sweep measures on each frame.</summary>
+public enum AutoFocusMetric {
+    /// <summary>Star half-flux radius, the stellar V-curve.</summary>
+    StarHfr,
+    /// <summary>Edge response (Laplacian of Gaussian) of the whole frame:
+    /// daylight tests, Moon, planets, landscapes.</summary>
+    ContrastLaplace,
+    /// <summary>Edge response (gradient kernel) of the whole frame.</summary>
+    ContrastSobel
+}
+
+public static class AutoFocusMetricParser {
+    public static AutoFocusMetric Parse(string? name) => (name ?? "").Trim().ToUpperInvariant() switch {
+        "CONTRAST_LAPLACE" or "CONTRASTLAPLACE" or "LAPLACE" => AutoFocusMetric.ContrastLaplace,
+        "CONTRAST_SOBEL" or "CONTRASTSOBEL" or "SOBEL" => AutoFocusMetric.ContrastSobel,
+        _ => AutoFocusMetric.StarHfr
+    };
+    public static string Name(AutoFocusMetric m) => m switch {
+        AutoFocusMetric.ContrastLaplace => "CONTRAST_LAPLACE",
+        AutoFocusMetric.ContrastSobel => "CONTRAST_SOBEL",
+        _ => "HFR"
+    };
+}
+
 public record AutoFocusProgress {
     public int Steps { get; init; }
     public int CurrentSampleIndex { get; init; } = -1;
     public int CurrentPosition { get; init; }
     public double LastHfr { get; init; }
     public int LastStarCount { get; init; }
+    /// <summary>What the sweep measures: HFR | CONTRAST_LAPLACE | CONTRAST_SOBEL.</summary>
+    public string Metric { get; init; } = "HFR";
+    /// <summary>Raw contrast of the last frame (contrast metrics only).</summary>
+    public double LastContrast { get; init; }
     public List<AutoFocusPoint> Points { get; init; } = new();
     public DateTime StartedAt { get; init; }
     /// <summary>Current attempt number (1-based) when the quality gate triggers
@@ -1350,7 +1425,11 @@ public record AutoFocusProgress {
 
 public class AutoFocusPoint {
     public int Position { get; set; }
+    /// <summary>The fitted quantity: star HFR, or for a contrast metric the
+    /// fit-space value (log of the inverse contrast), a bowl like HFR.</summary>
     public double HFR { get; set; }
+    /// <summary>Raw contrast of the point (contrast metrics only, else 0).</summary>
+    public double Contrast { get; set; }
     /// <summary>1-sigma uncertainty of <see cref="HFR"/> (stdev across stars,
     /// pooled over frames). 1000 marks a soft-rejected no-stars sample.</summary>
     public double HfrError { get; set; }

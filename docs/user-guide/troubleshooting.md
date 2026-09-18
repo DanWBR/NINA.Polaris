@@ -249,7 +249,10 @@ Flip panel → *Safety guard*, on by default):
   trips purely on time past the meridian.
 - **Guide circuit breaker** - stops the session after *N* consecutive
   lost-star failures with no recovery (default 20) instead of looping
-  forever.
+  forever. Under a running PLAN it does not end the session: the target
+  is parked (guider stopped, tracking off) and the plan retries it on a
+  schedule or moves on to the next target, see
+  [When the guide star goes away](plan.md#when-the-guide-star-goes-away).
 
 On a trip Polaris turns **tracking off** (ending the winding), aborts
 the sequence/LIVE run, and shows a red banner with a **Dismiss**
@@ -269,14 +272,18 @@ xpra list
 # Can you connect locally?
 curl http://localhost:14600/
 
-# Logs from the xpra session
-cat ~/.xpra/:100.log
+# Logs from the xpra session (xpra 3: /run/user/<uid>/xpra, xpra 4+: ~/.xpra)
+cat /run/user/$(id -u)/xpra/:100.log 2>/dev/null || cat ~/.xpra/:100.log
 ```
 
 Usually one of:
 
-- Xorg-dummy config not switched (see `docs/phd2-gui-embedding.md`
-  Step 2, `/etc/xpra/conf.d/55_server_x11.conf`)
+- The log ends in `failed to create the Xorg log directory
+  '${XPRA_SESSION_DIR}'`: an Xorg-dummy override written for xpra 4 on an
+  xpra 3 host. Remove or rename `/etc/xpra/conf.d/99-polaris-xorg-dummy.conf`
+  and open the tab again; the Polaris package does this on its next install.
+- On xpra 4 or newer, Xorg-dummy config not switched (see
+  `docs/phd2-gui-embedding.md` Step 2, `/etc/xpra/conf.d/55_server_x11.conf`)
 - xpra password set, browser session storage doesn't have it, open
   the iframe URL in a new tab once + type the password (xpra
   remembers it in sessionStorage from there)
