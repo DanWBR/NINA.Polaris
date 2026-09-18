@@ -41105,7 +41105,17 @@ function ninaApp() {
                 if (!s.supportedOs || !s.supportedArch || !s.xpraInstalled) return;
 
                 if (!s.running) {
-                    try { await this.apiPost('/api/guider/gui-session/start'); } catch (e) { }
+                    // The server starts xpra (up to 30 s) and then waits for
+                    // PHD2 to appear (up to 20 s): the default 15 s fetch
+                    // budget cut that off and lost the error it came back with.
+                    try {
+                        const r = await this.apiPost('/api/guider/gui-session/start', null, { timeout: 70000 });
+                        const j = await r.json().catch(() => null);
+                        if (j && j.error) {
+                            if (this.phd2GuiSession) this.phd2GuiSession.lastError = j.error;
+                            this.toast(j.error, 'warn');
+                        }
+                    } catch (e) { /* the status polls below carry on */ }
                 }
 
                 let relaunched = false;
@@ -41140,7 +41150,7 @@ function ninaApp() {
                     }
                     await new Promise(r => setTimeout(r, 1500));
                 }
-                this.toast('PHD2 GUI demorou a iniciar: tente Restart', 'warn');
+                this.toast('The PHD2 window is taking too long to start. Try Restart, and check the message in the panel.', 'warn');
             } finally {
                 this.phd2GuiStarting = false;
                 this._phd2GuiEnsuring = false;
