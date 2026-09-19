@@ -135,6 +135,7 @@ public sealed class CaptureStatusContributor : IStatusContributor {
                 alignmentPoints = videoStacker.CurrentJob.AlignmentPointCount,
                 outputPath = videoStacker.CurrentJob.OutputPath,
                 error = videoStacker.CurrentJob.Error,
+                completedAt = videoStacker.CurrentJob.CompletedAt,
                 done = videoStacker.CurrentJob.Phase
                     is NINA.Polaris.Services.Planetary.StackPhase.Ok
                     or NINA.Polaris.Services.Planetary.StackPhase.Fail

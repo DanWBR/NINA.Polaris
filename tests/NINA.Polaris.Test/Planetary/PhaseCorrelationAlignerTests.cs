@@ -123,5 +123,38 @@ public class PhaseCorrelationAlignerTests {
                 f[y * w + x] = (ushort)(dx * dx + dy * dy <= r * r ? 3900 : 40);
             }
         Assert.That(CentroidAligner.FillFraction(f, w, h), Is.LessThan(0.6));
+        Assert.That(CentroidAligner.BorderFraction(f, w, h), Is.EqualTo(0.0));
+        Assert.That(CentroidAligner.FillsFrame(f, w, h), Is.False);
+    }
+
+    [Test]
+    public void FillsFrame_TerminatorWithBrightRim_IsSurface() {
+        // The 2026-09-18 Moon clips: surface at ~4500 with rim highlights at
+        // ~14000 every few pixels, running off the top and left edges; shadow
+        // at ~900 over the lower right; one crater rim at 35000. That rim sets
+        // the peak, so the fill fraction reads ~0.1 and the old rule took the
+        // frame for a small planet; the perimeter says otherwise.
+        const int w = 256, h = 256;
+        var f = new ushort[w * h];
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++)
+                f[y * w + x] = (ushort)(x + y < 300 ? ((x + y) % 4 == 0 ? 14000 : 4500) : 900);
+        for (int y = 40; y < 50; y++) for (int x = 40; x < 50; x++) f[y * w + x] = 35000;
+        Assert.That(CentroidAligner.FillFraction(f, w, h), Is.LessThan(0.6));
+        Assert.That(CentroidAligner.BorderFraction(f, w, h), Is.GreaterThan(0.1));
+        Assert.That(CentroidAligner.FillsFrame(f, w, h), Is.True);
+    }
+
+    [Test]
+    public void FillsFrame_PlanetNearTheEdge_StaysBounded() {
+        // A planet whose disc stops short of the border keeps centroid alignment.
+        const int w = 200, h = 200, r = 30;
+        var f = new ushort[w * h];
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++) {
+                int dx = x - 40, dy = y - 160;
+                f[y * w + x] = (ushort)(dx * dx + dy * dy <= r * r ? 3900 : 40);
+            }
+        Assert.That(CentroidAligner.FillsFrame(f, w, h), Is.False);
     }
 }

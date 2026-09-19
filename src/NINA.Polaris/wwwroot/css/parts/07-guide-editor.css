@@ -2060,3 +2060,58 @@
     font-weight: 600 !important;
     color: var(--text-primary);
 }
+
+/* Process tab: clip preview with the surface reference box on top.
+   Portrait stacks the preview under the controls; landscape puts the
+   controls on the left and the preview on the right at full height. */
+.video-process-form {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+.video-process-preview {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    margin-top: 10px;
+}
+.video-ref-wrap {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    flex: 0 1 auto;
+    min-height: 0;
+    line-height: 0;
+    touch-action: none;
+    user-select: none;
+}
+.video-ref-wrap img {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    border-radius: 6px;
+    -webkit-user-drag: none;
+}
+.video-ref-box {
+    position: absolute;
+    box-sizing: border-box;
+    border: 2px solid #2ecc71;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+    cursor: move;
+    pointer-events: none;
+}
+@media (orientation: portrait), (max-width: 760px) {
+    .video-ref-wrap img { max-height: 60vh; }
+}
+@media (orientation: landscape) and (min-width: 761px) {
+    .video-process-pane { flex-direction: row; gap: 14px; overflow: hidden; }
+    .video-process-form { flex: 1 1 0; overflow-y: auto; min-height: 0; }
+    .video-process-preview { flex: 0 1 auto; max-width: 55%; margin-top: 0; height: 100%; }
+    .video-process-preview .video-ref-wrap { flex: 1 1 auto; }
+    .video-process-preview .hint { flex: 0 0 auto; }
+}

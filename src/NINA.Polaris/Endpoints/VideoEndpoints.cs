@@ -193,6 +193,9 @@ public static class VideoEndpoints {
                 OutputDir: outDir,
                 KeepPercent: req.KeepPercent ?? 50,
                 OutputName: req.OutputName ?? "stack",
+                Target: req.Target is "planet" or "surface" ? req.Target : "auto",
+                RefCenterX: req.RefCenterX,
+                RefCenterY: req.RefCenterY,
                 AlignmentPoints: req.AlignmentPoints ?? true,
                 ApHalfBox: Math.Clamp((req.ApBoxSize ?? 48) / 2, 8, 128),
                 ApSearchWidth: Math.Clamp(req.ApSearchWidth ?? 14, 6, 60),
@@ -296,6 +299,32 @@ public static class VideoEndpoints {
                     perFrameStretch: req.AutoContrast ?? false, hdr: req.AutoHdr ?? false),
                 cfg);
             return Results.Accepted($"/api/video/timelapse/{job.Id}", new { jobId = job.Id });
+        });
+
+        // Clip geometry for the Process tab (frame size, count) and one frame
+        // rendered as JPEG, so the operator can place the surface reference box.
+        group.MapGet("/ser-info", (FileBrowserService browser, string path) => {
+            string ser;
+            try { ser = browser.ResolveSafe(path, mustExist: true); }
+            catch (Exception ex) { return Results.BadRequest(new { error = ex.Message }); }
+            try {
+                using var reader = new SerFileReader(ser);
+                return Results.Ok(new { width = reader.Width, height = reader.Height, frames = reader.FrameCount,
+                                        color = reader.ColorMode.ToString(), bitDepth = reader.BitDepth });
+            } catch (Exception ex) { return Results.BadRequest(new { error = "Could not open SER: " + ex.Message }); }
+        });
+
+        group.MapGet("/ser-frame", (FileBrowserService browser, string path, int? index, int? maxDim) => {
+            string ser;
+            try { ser = browser.ResolveSafe(path, mustExist: true); }
+            catch (Exception ex) { return Results.BadRequest(new { error = ex.Message }); }
+            try {
+                using var reader = new SerFileReader(ser);
+                if (reader.FrameCount <= 0) return Results.BadRequest(new { error = "Empty clip" });
+                int i = Math.Clamp(index ?? reader.FrameCount / 2, 0, reader.FrameCount - 1);
+                var jpeg = new SerFrameSource(reader).RenderJpeg(i, Math.Clamp(maxDim ?? 1024, 64, 4000), quality: 85);
+                return Results.File(jpeg, "image/jpeg");
+            } catch (Exception ex) { return Results.BadRequest(new { error = "Could not render frame: " + ex.Message }); }
         });
 
         // Convert a recorded SER clip to MP4 (reuses the same encoder; MP4-only,
@@ -433,6 +462,11 @@ public static class VideoEndpoints {
         string? OutputDir = null,
         double? KeepPercent = null,
         string? OutputName = null,
+        /// <summary>"planet" | "surface"; omitted = auto-detect.</summary>
+        string? Target = null,
+        /// <summary>Surface mode: centre of the reference box, frame pixels.</summary>
+        int? RefCenterX = null,
+        int? RefCenterY = null,
         /// <summary>PLANETAP: local registration on an alignment-point mesh.
         /// Omitted = on. Box/search in pixels, percent of frames kept per
         /// point, structure threshold as a fraction of the best point (0..1),

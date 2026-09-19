@@ -117,4 +117,40 @@ public static class CentroidAligner {
         for (int i = 0; i < pixels.Length; i++) if (pixels[i] > threshold) above++;
         return (double)above / pixels.Length;
     }
+
+    /// <summary>Fraction of the frame's perimeter that clears the target
+    /// threshold. A bounded planet on sky never reaches the edge (0); a lunar
+    /// surface close-up runs off every side of the frame.</summary>
+    public static double BorderFraction(ushort[] pixels, int width, int height) {
+        if (pixels == null || pixels.Length != width * height || width < 3 || height < 3)
+            return 0.0;
+        ushort peak = 0;
+        ushort background = ushort.MaxValue;
+        for (int i = 0; i < pixels.Length; i++) { var v = pixels[i]; if (v > peak) peak = v; }
+        for (int i = 0; i < pixels.Length; i += 97) { var v = pixels[i]; if (v < background) background = v; }
+        if (peak <= background) return 0.0;
+        double threshold = background + ThresholdFraction * (peak - background);
+        long above = 0, total = 0;
+        for (int x = 0; x < width; x++) {
+            total += 2;
+            if (pixels[x] > threshold) above++;
+            if (pixels[(height - 1) * width + x] > threshold) above++;
+        }
+        for (int y = 1; y < height - 1; y++) {
+            total += 2;
+            if (pixels[y * width] > threshold) above++;
+            if (pixels[y * width + width - 1] > threshold) above++;
+        }
+        return (double)above / total;
+    }
+
+    /// <summary>True when the target is not bounded by sky inside the frame, so
+    /// its centroid says nothing about where it is: the frame is mostly target
+    /// (<see cref="FillFraction"/>) or the target runs off the edges
+    /// (<see cref="BorderFraction"/>). The second test matters on a lunar
+    /// terminator: a bright crater rim sets the peak so high that most of the
+    /// surface falls under the threshold and the fill fraction alone reads the
+    /// frame as a small planet.</summary>
+    public static bool FillsFrame(ushort[] pixels, int width, int height)
+        => FillFraction(pixels, width, height) >= 0.6 || BorderFraction(pixels, width, height) >= 0.1;
 }
