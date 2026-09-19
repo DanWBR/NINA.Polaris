@@ -46,8 +46,15 @@ public sealed class PhaseCorrelationAligner {
     private readonly double[] _curRe, _curIm;   // reused per-frame work buffers
 
     public int RoiSize => _n;
+    public int RoiX => _ox;
+    public int RoiY => _oy;
 
-    public PhaseCorrelationAligner(ushort[] reference, int width, int height) {
+    /// <param name="roiCenterX">Centre of the region the correlation keys on,
+    /// in frame pixels; null = the frame centre. The region is clamped inside
+    /// the frame, so a centre near an edge slides the box rather than
+    /// shrinking it.</param>
+    public PhaseCorrelationAligner(ushort[] reference, int width, int height,
+                                   int? roiCenterX = null, int? roiCenterY = null) {
         if (reference == null || reference.Length != width * height)
             throw new ArgumentException("reference size mismatch");
         _w = width;
@@ -56,8 +63,8 @@ public sealed class PhaseCorrelationAligner {
         while (n > m) n >>= 1;           // largest power of two ≤ min(w,h), capped 512
         if (n < 8) n = 8;
         _n = n;
-        _ox = (width - _n) / 2;
-        _oy = (height - _n) / 2;
+        _ox = Math.Clamp((roiCenterX ?? width / 2) - _n / 2, 0, width - _n);
+        _oy = Math.Clamp((roiCenterY ?? height / 2) - _n / 2, 0, height - _n);
         _win1d = Hann(_n);
         _refRe = new double[_n * _n]; _refIm = new double[_n * _n];
         _curRe = new double[_n * _n]; _curIm = new double[_n * _n];

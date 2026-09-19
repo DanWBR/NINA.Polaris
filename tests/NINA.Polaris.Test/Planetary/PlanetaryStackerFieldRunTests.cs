@@ -14,7 +14,7 @@ namespace NINA.Polaris.Test.Planetary;
 /// Field harness, not a unit test: runs the planetary stacker on a real SER
 /// named by POLARIS_SER and writes the stack next to it (or to
 /// POLARIS_STACK_OUT). Explicit so the normal suite never touches the disk.
-///   POLARIS_SER=E:\clip.ser POLARIS_KEEP=45 dotnet test --filter Name~PlanetaryStackerFieldRun
+///   POLARIS_SER=E:\clip.ser POLARIS_KEEP=45 [POLARIS_TARGET=surface POLARIS_REF_X= POLARIS_REF_Y=] dotnet test --filter Name~PlanetaryStackerFieldRun
 /// </summary>
 [TestFixture]
 public class PlanetaryStackerFieldRunTests {
@@ -35,7 +35,10 @@ public class PlanetaryStackerFieldRunTests {
         int box = int.TryParse(Environment.GetEnvironmentVariable("POLARIS_AP_BOX"), out var bx) ? bx : 48;
         double apPct = double.TryParse(Environment.GetEnvironmentVariable("POLARIS_AP_PERCENT"), out var ap2) ? ap2 : 10;
         bool dewarp = Environment.GetEnvironmentVariable("POLARIS_AP_DEWARP") != "0";
-        var job = svc.StartJob(new StackConfig(ser!, outDir, keep, name,
+        string target = Environment.GetEnvironmentVariable("POLARIS_TARGET") ?? "auto";   // planet | surface | auto
+        int? refX = int.TryParse(Environment.GetEnvironmentVariable("POLARIS_REF_X"), out var rx) ? rx : null;
+        int? refY = int.TryParse(Environment.GetEnvironmentVariable("POLARIS_REF_Y"), out var ry) ? ry : null;
+        var job = svc.StartJob(new StackConfig(ser!, outDir, keep, name, Target: target, RefCenterX: refX, RefCenterY: refY,
             AlignmentPoints: ap, ApHalfBox: Math.Max(8, box / 2), ApFramePercent: apPct, ApDeWarp: dewarp));
         await job.Task!;
         sw.Stop();

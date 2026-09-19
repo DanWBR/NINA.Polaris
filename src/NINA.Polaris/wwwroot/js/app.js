@@ -1755,6 +1755,20 @@ function ninaApp() {
             rescaleBits: '',      // '' = auto-detect; else 12 / 14
             rescaling: false,
             keepPercent: 50,
+            // Stack type, as in ASIVideoStack: 'planet' (centroid registration
+            // of a disc on sky) or 'surface' (Moon/Sun close-up, registered on
+            // the reference box the operator drags over the preview).
+            stackType: (() => { try { return localStorage.getItem('polaris.video.stackType') || 'planet'; } catch (e) { return 'planet'; } })(),
+            previewUrl: '',
+            previewLoaded: false,
+            previewScale: 0,        // displayed px per frame px (set when the preview lays out)
+            previewOffX: 0,         // image position inside its wrapper (it is centred there)
+            previewOffY: 0,
+            // Finished job the operator moved on from (picked another clip):
+            // the WS status keeps repeating it, so it is filtered out here.
+            dismissedStackId: null,
+            serInfo: null,          // { width, height, frames } of the selected clip
+            refBox: { cx: 0, cy: 0, size: 512 },   // frame pixels
             // PLANETAP: alignment-point registration (PlanetarySystemStacker style)
             ap: { enabled: true, box: 48, search: 14, percent: 10, structure: 4, reference: 5, dewarp: true },
             normalizeLevels: true,
@@ -5064,6 +5078,8 @@ function ninaApp() {
             // straight through so the wheel, the nudge buttons and the inline
             // edit all land on the driver.
             this.$watch('video.offset', () => this.videoSetOffset());
+            this.$watch('video.processSerPath', () => this.videoLoadPreview());
+            this.$watch('video.stackType', v => { try { localStorage.setItem('polaris.video.stackType', v); } catch (e) { /* private mode */ } });
             // Clear the sticky DSLR/cooler classification when the selected
             // camera (driver or device) changes, so a gphoto→astro swap doesn't
             // keep stale ISO/temperature controls until the next connect.
@@ -28799,10 +28815,14 @@ function ninaApp() {
         async videoStartStack() {
             if (!this.video.processSerPath) return;
             try {
+                const surface = this.video.stackType === 'surface';
                 const r = await this.apiPostJson('/api/video/stack/start', {
                     serPath: this.video.processSerPath,
                     keepPercent: this.video.keepPercent,
                     outputName: this.video.outputName,
+                    target: surface ? 'surface' : 'planet',
+                    refCenterX: surface ? Math.round(this.video.refBox.cx) : null,
+                    refCenterY: surface ? Math.round(this.video.refBox.cy) : null,
                     alignmentPoints: !!this.video.ap.enabled,
                     apBoxSize: Number(this.video.ap.box) || 48,
                     apSearchWidth: Number(this.video.ap.search) || 14,
@@ -28818,6 +28838,72 @@ function ninaApp() {
                 this.toast(`Stack started (job ${r.jobId?.slice?.(0, 8) || ''}…)`, 'info');
             } catch (e) { this.toastFail('Stack failed', e); }
         },
+        // ---- Process tab preview + surface reference box --------------------
+        async videoLoadPreview() {
+            const path = this.video.processSerPath;
+            // Another clip: the previous job's progress, result and quality
+            // chart belong to the old one.
+            if (this.videoStack?.done) { this.video.dismissedStackId = this.videoStack.id; this.videoStack = null; }
+            this.video.qualities = []; this.video.qualitiesJobId = null;
+            this.video.previewLoaded = false;
+            this.video.previewUrl = '';
+            this.video.serInfo = null;
+            if (!path) return;
+            try {
+                const info = await this.apiGet('/api/video/ser-info?path=' + encodeURIComponent(path));
+                this.video.serInfo = info;
+                // Same box the aligner uses: the largest power of two up to 512
+                // that fits the frame, centred until the operator moves it.
+                let n = 512; const m = Math.min(info.width, info.height);
+                while (n > m) n >>= 1;
+                this.video.refBox = { cx: info.width / 2, cy: info.height / 2, size: n };
+                this.video.previewUrl = this.authUrl('/api/video/ser-frame?path=' + encodeURIComponent(path) + '&maxDim=1024');
+            } catch (e) { this.toastFail('Could not open the clip', e, 'warn'); }
+        },
+        videoRefImgLoaded() {
+            this.video.previewLoaded = true;
+            this._videoRefMeasure();
+            if (!this._videoRefResize) {
+                this._videoRefResize = () => this._videoRefMeasure();
+                window.addEventListener('resize', this._videoRefResize);
+            }
+        },
+        // Displayed pixels per frame pixel, kept in reactive state because an
+        // element's clientWidth is not something Alpine can watch.
+        _videoRefMeasure() {
+            const img = this.$refs.videoRefImg, info = this.video.serInfo;
+            this.video.previewScale = (img && info && img.clientWidth) ? img.clientWidth / info.width : 0;
+            this.video.previewOffX = img ? img.offsetLeft : 0;
+            this.video.previewOffY = img ? img.offsetTop : 0;
+        },
+        _videoRefScale() { return this.video.previewScale || 0; },
+        videoRefBoxStyle() {
+            const k = this._videoRefScale(); if (!k || !this.video.previewLoaded) return 'display:none';
+            const b = this.video.refBox, half = b.size / 2;
+            return `left:${this.video.previewOffX + (b.cx - half) * k}px; top:${this.video.previewOffY + (b.cy - half) * k}px; `
+                 + `width:${b.size * k}px; height:${b.size * k}px`;
+        },
+        videoRefDragStart(ev) {
+            if (this.video.stackType !== 'surface' || !this.video.previewLoaded) return;
+            if (this.videoStack && !this.videoStack.done) return;
+            ev.preventDefault();
+            this._videoRefDrag = true;
+            ev.currentTarget.setPointerCapture?.(ev.pointerId);
+            this.videoRefDragMove(ev);
+        },
+        videoRefDragMove(ev) {
+            if (!this._videoRefDrag) return;
+            this._videoRefMeasure();
+            const k = this._videoRefScale(); if (!k) return;
+            const rect = this.$refs.videoRefImg.getBoundingClientRect();
+            const info = this.video.serInfo, half = this.video.refBox.size / 2;
+            // The box follows the pointer and stays inside the frame, the way
+            // the aligner clamps it.
+            const cx = Math.min(info.width - half, Math.max(half, (ev.clientX - rect.left) / k));
+            const cy = Math.min(info.height - half, Math.max(half, (ev.clientY - rect.top) / k));
+            this.video.refBox.cx = cx; this.video.refBox.cy = cy;
+        },
+        videoRefDragEnd() { this._videoRefDrag = false; },
         async videoAbortStack() {
             if (!this.videoStack?.id) return;
             try { await this.apiPost(`/api/video/stack/${this.videoStack.id}/abort`); }
@@ -29056,11 +29142,15 @@ function ninaApp() {
         // When a stack finishes OK, offer (once per job) to open the generated
         // FITS in the Studio editor (FILES → Edit). One-shot via the job id so
         // repeated status ticks don't re-prompt.
+        _pageLoadedAt: Date.now(),
         async _maybePromptStackDone() {
             const j = this.videoStack;
             if (!j || j.phase !== 'Ok' || !j.outputPath) return;
             if (this._stackDonePromptedId === j.id) return;
             this._stackDonePromptedId = j.id;
+            // A job that ended before this page loaded was already offered
+            // (or is hours old): the status just replays it after a reload.
+            if (j.completedAt && new Date(j.completedAt).getTime() < this._pageLoadedAt) return;
             const name = (j.outputPath.split(/[\\/]/).pop()) || j.outputPath;
             const ok = await this._confirmAsync(
                 `Stacked image saved:\n\n${name}\n\nOpen it in the Studio editor?`,
@@ -47577,9 +47667,15 @@ function ninaApp() {
             if (msg.keepCentered) this.keepCentered = msg.keepCentered;
             if (msg.videoRecording) this.videoRecording = msg.videoRecording;
             if (msg.videoStack !== undefined) {
-                this.videoStack = msg.videoStack;  // null when idle
-                this._maybeFetchStackQualities();
-                this._maybePromptStackDone();
+                const vs = msg.videoStack;
+                if (vs && vs.done && vs.id === this.video.dismissedStackId) {
+                    // The operator picked another clip after this job ended.
+                    if (this.videoStack) this.videoStack = null;
+                } else {
+                    this.videoStack = vs;  // null when idle
+                    this._maybeFetchStackQualities();
+                    this._maybePromptStackDone();
+                }
             }
             if (msg.mediaEncode !== undefined) {
                 this.mediaEncode = msg.mediaEncode;  // null when idle

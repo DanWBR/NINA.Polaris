@@ -32,7 +32,7 @@ namespace NINA.Polaris.Services.Timelapse;
 ///   correlation (<see cref="PhaseCorrelationAligner"/>). Right for a
 ///   frame-filling lunar/solar SURFACE close-up, where there is no clean limb.
 /// - <b>auto</b>: resolve to stabilize when the first frame fills the frame
-///   (<see cref="CentroidAligner.FillFraction"/> &gt;= 0.6), else center.
+///   (<see cref="CentroidAligner.FillsFrame"/>), else center.
 /// </summary>
 public sealed class FrameAligner {
     public enum Mode { Off, Auto, Center, Stabilize }
@@ -107,7 +107,7 @@ public sealed class FrameAligner {
     public (int dx, int dy) Offset(ushort[] lum, int width, int height, int index) {
         if (_mode == Mode.Auto) {
             // Resolve once, on the first frame we see, by how much it fills.
-            _mode = CentroidAligner.FillFraction(lum, width, height) >= 0.6
+            _mode = CentroidAligner.FillsFrame(lum, width, height)
                 ? Mode.Stabilize : Mode.Center;
         }
 

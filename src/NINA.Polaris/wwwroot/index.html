@@ -4420,6 +4420,9 @@
                      canvas+sidebar layout of .video-pane (which is flex-row and
                      would lay these control rows out side-by-side / centred). -->
                 <div x-show="videoTab === 'process'" class="video-process-pane">
+                  <!-- Landscape: controls on the left, the clip preview filling
+                       the height on the right (.video-process-form / -preview). -->
+                  <div class="video-process-form">
                     <div class="control-row" style="margin-bottom:10px">
                         <label style="flex:1">SER file
                             <select x-model="video.processSerPath" class="input-sm">
@@ -4473,12 +4476,27 @@
                         For older clips that open with a bright colour cast in ZWO ASIVideoStack or FireCapture. Writes a corrected full-range copy named -fixed16.ser beside the original and selects it. New recordings are already correct.
                     </p>
 
-                    <div class="control-row">
-                        <label>Keep top
+                    <div class="control-row" style="flex-wrap:wrap; gap:8px 18px; align-items:center">
+                        <span>Stack type</span>
+                        <label style="display:flex; align-items:center; gap:6px">
+                            <input type="radio" value="planet" x-model="video.stackType"
+                                   :disabled="videoStack && !videoStack?.done"> Planet
+                        </label>
+                        <label style="display:flex; align-items:center; gap:6px">
+                            <input type="radio" value="surface" x-model="video.stackType"
+                                   :disabled="videoStack && !videoStack?.done"> Moon and Sun surface
+                        </label>
+                    </div>
+                    <div class="control-row" style="align-items:center">
+                        <label style="display:flex; align-items:center; gap:8px; flex:1; min-width:0">Stack percent
+                            <input type="range" min="1" max="100" step="1" x-model.number="video.keepPercent"
+                                   class="slider" style="flex:1" :disabled="videoStack && !videoStack?.done">
                             <input type="number" x-model.number="video.keepPercent"
-                                   min="1" max="100" step="5" class="input-sm" style="width:70px"
+                                   min="1" max="100" step="5" class="input-sm" style="width:64px"
                                    :disabled="videoStack && !videoStack?.done"> %
                         </label>
+                    </div>
+                    <div class="control-row" style="flex-wrap:wrap; gap:8px 14px; align-items:center">
                         <label>Output name
                             <input type="text" x-model="video.outputName" class="input-sm" style="width:120px"
                                    :disabled="videoStack && !videoStack?.done">
@@ -4491,64 +4509,6 @@
                         </button>
                         <button class="btn btn-danger" @click="videoAbortStack()"
                                 :disabled="!videoStack || videoStack?.done">Abort</button>
-                    </div>
-                    <!-- PLANETAP: local registration on a mesh of alignment points,
-                         after PlanetarySystemStacker. The mesh needs a target a few
-                         boxes wide; a tiny disc falls back to the single global
-                         registration on its own. -->
-                    <div class="control-row" style="flex-wrap:wrap; gap:10px 14px; align-items:center">
-                        <label style="display:flex; align-items:center; gap:6px">
-                            <input type="checkbox" x-model="video.ap.enabled" :disabled="videoStack && !videoStack?.done">
-                            Alignment points
-                        </label>
-                        <label :title="$t('Size of the square each point is matched in, in pixels. Larger boxes are steadier, smaller ones follow the seeing more closely.')">Box
-                            <input type="number" x-model.number="video.ap.box" min="16" max="256" step="8" class="input-sm" style="width:64px"
-                                   :disabled="!video.ap.enabled || (videoStack && !videoStack?.done)"> px
-                        </label>
-                        <label :title="$t('How far a point may move between frames.')">Search
-                            <input type="number" x-model.number="video.ap.search" min="6" max="60" step="2" class="input-sm" style="width:58px"
-                                   :disabled="!video.ap.enabled || (videoStack && !videoStack?.done)"> px
-                        </label>
-                        <label :title="$t('Best frames kept at each point, chosen by local sharpness. Lower is sharper, higher is smoother.')">Per point
-                            <input type="number" x-model.number="video.ap.percent" min="1" max="100" step="5" class="input-sm" style="width:58px"
-                                   :disabled="!video.ap.enabled || (videoStack && !videoStack?.done)"> %
-                        </label>
-                        <label :title="$t('Points with less structure than this fraction of the best point are dropped.')">Structure
-                            <input type="number" x-model.number="video.ap.structure" min="0" max="100" step="1" class="input-sm" style="width:58px"
-                                   :disabled="!video.ap.enabled || (videoStack && !videoStack?.done)"> %
-                        </label>
-                        <label :title="$t('Best frames averaged into the reference the mesh is built on.')">Reference
-                            <input type="number" x-model.number="video.ap.reference" min="1" max="100" step="1" class="input-sm" style="width:58px"
-                                   :disabled="!video.ap.enabled || (videoStack && !videoStack?.done)"> %
-                        </label>
-                        <label :title="$t('Channel balance for a colour stack. Auto measures the object and pulls it toward neutral; manual applies the gains you set, with green fixed at 1.')">White balance
-                            <select x-model="video.stackWb" class="input-sm" style="width:96px"
-                                    :disabled="videoStack && !videoStack?.done">
-                                <option value="off">Off</option>
-                                <option value="auto">Auto</option>
-                                <option value="manual">Manual</option>
-                            </select>
-                        </label>
-                        <label x-show="video.stackWb === 'manual'">R gain
-                            <input type="number" x-model.number="video.stackWbR" min="0.1" max="10" step="0.05"
-                                   class="input-sm" style="width:64px"
-                                   :disabled="videoStack && !videoStack?.done">
-                        </label>
-                        <label x-show="video.stackWb === 'manual'">B gain
-                            <input type="number" x-model.number="video.stackWbB" min="0.1" max="10" step="0.05"
-                                   class="input-sm" style="width:64px"
-                                   :disabled="videoStack && !videoStack?.done">
-                        </label>
-                        <label style="display:flex; align-items:center; gap:6px"
-                               :title="$t('Subtract the camera black level and rescale the stack to the full range. Off writes the raw stacked levels, which usually look blown once stretched.')">
-                            <input type="checkbox" x-model="video.normalizeLevels" :disabled="videoStack && !videoStack?.done">
-                            Normalize levels
-                        </label>
-                        <label style="display:flex; align-items:center; gap:6px"
-                               :title="$t('Follow the seeing at each point with its own shift. Off keeps the per point frame selection but stacks with the global shift only.')">
-                            <input type="checkbox" x-model="video.ap.dewarp" :disabled="!video.ap.enabled || (videoStack && !videoStack?.done)">
-                            Local shifts
-                        </label>
                         <button class="btn btn-sm" @click="serToMp4(video.processSerPath)"
                                 :disabled="!video.processSerPath || (mediaEncode && !mediaEncode?.done) || !timelapse.ffmpegAvailable"
                                 :title="timelapse.ffmpegAvailable ? 'Convert this SER clip to a playable MP4' : 'MP4 needs ffmpeg installed on the host'">
@@ -4614,6 +4574,25 @@
                     <div class="stats-bar" x-show="videoStack?.phase === 'Fail'" style="margin-top:10px">
                         <span class="text-err">✗ <span x-text="videoStack?.error"></span></span>
                     </div>
+                  </div><!-- /.video-process-form -->
+                    <!-- Frame preview. In surface mode the green box is the
+                         reference the whole clip is registered on (drag it onto
+                         a crater or the terminator), as in ASIVideoStack. -->
+                  <div class="video-process-preview" x-show="video.processSerPath">
+                        <div x-ref="videoRefWrap" class="video-ref-wrap"
+                             @pointerdown="videoRefDragStart($event)" @pointermove="videoRefDragMove($event)"
+                             @pointerup="videoRefDragEnd()" @pointercancel="videoRefDragEnd()">
+                            <img :src="video.previewUrl" x-ref="videoRefImg" @load="videoRefImgLoaded()"
+                                 draggable="false" alt="">
+                            <div class="video-ref-box" x-show="video.stackType === 'surface' && video.previewLoaded"
+                                 :style="videoRefBoxStyle()"></div>
+                        </div>
+                        <p class="hint" x-show="video.stackType === 'surface'"
+                           x-text="$t('Drag the green box onto a feature with clear detail (a crater, the terminator). Every frame is aligned on it.')"></p>
+                        <p class="hint" x-show="video.stackType === 'planet'"
+                           x-text="$t('The planet is aligned on its centroid, so it must be surrounded by sky on every frame.')"></p>
+                  </div>
+
                 </div>
 
                 <!-- ===== Tab 3: Time-lapse ===== -->

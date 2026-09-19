@@ -40,49 +40,42 @@ For the Moon at high mag:
 
 ## Process sub-tab
 
-Lucky imaging stack pipeline. Drives the `PlanetaryStackerService`.
+Lucky imaging stack, the same two choices as ASIVideoStack.
 
-1. **SER file** dropdown, populated from `{ImageOutputDir}/planetary/`
-   recursively. ⟳ Refresh button.
-2. **Keep top X%**, quality cutoff (default 50%). Picks the sharpest
-   X% of frames for stacking. Smaller = sharper but noisier.
-3. **Output name**, base filename for the stacked result
-4. **▶ Stack**, kicks the job
+1. **SER file**: recordings under `{ImageOutputDir}/planetary/`, or any
+   folder you put in *Scan folder*. Picking a clip shows one frame of it.
+2. **Stack type**
+   - **Planet**: a disc surrounded by sky (Jupiter, Saturn, Mars, the whole
+     Moon in a wide field). Frames are registered on the disc's centroid.
+   - **Moon and Sun surface**: a close-up with surface running off the
+     edges. A green box appears on the preview: drag it onto a feature
+     with clear detail (a crater, the terminator) and every frame is
+     registered on that box by phase correlation. The box is 512 px on
+     the frame, or the largest power of two that fits a smaller clip.
+   Pick the wrong one and the stack comes out smeared along the drift
+   direction: the centroid of a frame full of surface never moves, so
+   nothing gets aligned.
+3. **Stack percent**: the sharpest X% of frames go into the stack.
+   Lower is sharper and noisier.
+4. **Output name**, then **Stack**. **Abort** cancels mid-job.
 
-### 7-phase pipeline
+The choice of stack type is remembered on this browser.
 
-Status bar shows phase live:
+### Pipeline
 
-1. **Reading**, opens the SER, lists frames
-2. **Analyzing**, Laplacian variance per frame (parallelizable;
-   typical RPi 4: 1000 frames × 800×600 × 16-bit ≈ 30s)
-3. **Ranking**, sort by quality desc, take top KeepPercent
-4. **Aligning**, brightest-region centroid + parabolic sub-pixel
-   refinement per kept frame
-5. **Stacking**, mean stack with per-pixel count, output uint16
-6. **Writing**, FITS to `planetary/{target}/stacked/`
-7. **Ok / Fail**
+The status bar shows the phase live: **Reading**, **Analyzing** (sharpness
+per frame), **Ranking**, **Aligning**, **Stacking**, **Writing**, then
+**Ok** or **Fail**. Sharpness is the variance of the Laplacian on the
+blurred luminance of each frame, so it ranks seeing rather than noise or
+the Bayer pattern.
 
-**Abort** button cancels mid-job.
-
-## Quality metric (Laplacian variance)
-
-Variance of the 3×3 Laplacian filter applied to the centred ROI of
-each frame. Standard sharpness metric (Pertuz et al. 2013).
-
-Higher = sharper. The cutoff slider lets you discard atmospheric-blur
-frames; pick aggressive (top 20%) for best detail, or lenient (top
-80%) for low-noise but slightly softer output.
-
-## Alignment
-
-Brightest-pixel centroid + parabolic refinement on a 5×5 neighborhood.
-Works for bright targets (Moon, Jupiter, Mars, Saturn body).
-
-**Limitation**: Saturn rings or other extended sources don't have a
-single brightness peak, alignment shifts can drift. Workaround: stack
-with smaller batches per processing pass; future versions will add
-thresholded centroid + better alignment for extended objects.
+After the global registration the stack is refined on a mesh of
+alignment points (PlanetarySystemStacker style): each point keeps its own
+best frames and its own local shift, which is what follows the seeing
+across a large disc or a lunar surface. On a target too small for a mesh
+the single global registration is used. The API exposes the mesh settings
+(`/api/video/stack/start`: `alignmentPoints`, `apBoxSize`, `apFramePercent`
+and friends); the tab keeps the defaults.
 
 ## Output
 

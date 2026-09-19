@@ -155,8 +155,14 @@ public class PlanetaryStackerService {
             // precision. A frame-filling target (Moon/Sun surface) has no
             // centroid to speak of: keep phase correlation on its luminance.
             var refPlanes = PlanetaryFrames.Split(reader.ReadFrameAsUshort(picked[0]), reader.Width, reader.Height, bayer);
-            bool surface = Math.Min(reader.Width, reader.Height) >= 128
-                && CentroidAligner.FillFraction(ToUshort(refPlanes.Lum), reader.Width, reader.Height) >= 0.6;
+            // The operator's choice wins (Planet / Moon and Sun surface, as in
+            // ASIVideoStack); "auto" falls back to the frame test, which a
+            // terminator with a bright crater rim can fool.
+            bool surface = Math.Min(reader.Width, reader.Height) >= 128 && job.Config.Target switch {
+                "surface" => true,
+                "planet" => false,
+                _ => CentroidAligner.FillsFrame(ToUshort(refPlanes.Lum), reader.Width, reader.Height)
+            };
             // Global shift of EVERY frame onto the best frame: centroid offsets
             // for a bounded planet, phase correlation on the blurred luminance
             // for a frame-filling surface (PLANETAP-SURFACE: computed for all
@@ -168,7 +174,9 @@ public class PlanetaryStackerService {
                 _logger.LogInformation(
                     "Planetary align: frame-filling target -> phase correlation ({N} frames)", reader.FrameCount);
                 var refB = ToUshort(PlanetaryFrames.Blur7(refPlanes.Lum, reader.Width, reader.Height));
-                var pc = new PhaseCorrelationAligner(refB, reader.Width, reader.Height);
+                var pc = new PhaseCorrelationAligner(refB, reader.Width, reader.Height,
+                                                     job.Config.RefCenterX, job.Config.RefCenterY);
+                _logger.LogInformation("Planetary align: reference box {N}px at ({X},{Y})", pc.RoiSize, pc.RoiX, pc.RoiY);
                 for (int i = 0; i < reader.FrameCount; i++) {
                     ct.ThrowIfCancellationRequested();
                     if (i == picked[0]) continue;
@@ -511,6 +519,14 @@ public record StackConfig(
     string OutputDir,
     double KeepPercent = 50,
     string OutputName = "stack",
+    /// <summary>"planet" (bounded disc on sky: centroid registration),
+    /// "surface" (Moon/Sun close-up: phase correlation on the reference box)
+    /// or "auto" (decide from the sharpest frame).</summary>
+    string Target = "auto",
+    /// <summary>Centre of the reference box the surface registration keys on,
+    /// in frame pixels; null = frame centre.</summary>
+    int? RefCenterX = null,
+    int? RefCenterY = null,
     /// <summary>PLANETAP: register locally on a mesh of alignment points
     /// (PlanetarySystemStacker style) when the target is large enough for a
     /// mesh; otherwise the single global registration is used.</summary>

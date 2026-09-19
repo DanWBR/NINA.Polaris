@@ -4920,5 +4920,10 @@
   "Toggle artificial satellites: the ISS, Tiangong and the brightest satellites, from CelesTrak orbital elements": "Künstliche Satelliten ein-/ausblenden: die ISS, Tiangong und die hellsten Satelliten, aus den Bahnelementen von CelesTrak",
   "Download current satellite orbital elements from CelesTrak (needs internet on the host)": "Aktuelle Bahnelemente der Satelliten von CelesTrak herunterladen (Host braucht Internet)",
   "Satellites: bundled list of {n}, orbits from today": "Satelliten: mitgelieferte Liste mit {n}, Bahnen von heute",
-  "Satellites: bundled list of {n}, orbits from yesterday": "Satelliten: mitgelieferte Liste mit {n}, Bahnen von gestern"
+  "Satellites: bundled list of {n}, orbits from yesterday": "Satelliten: mitgelieferte Liste mit {n}, Bahnen von gestern",
+  "Stack type": "Stack-Typ",
+  "Moon and Sun surface": "Mond- und Sonnenoberfläche",
+  "Stack percent": "Stack-Anteil",
+  "Drag the green box onto a feature with clear detail (a crater, the terminator). Every frame is aligned on it.": "Ziehen Sie den grünen Rahmen auf eine Stelle mit klarem Detail (ein Krater, der Terminator). Alle Bilder werden darauf ausgerichtet.",
+  "The planet is aligned on its centroid, so it must be surrounded by sky on every frame.": "Der Planet wird über seinen Schwerpunkt ausgerichtet, er muss also auf jedem Bild von Himmel umgeben sein."
 }
