@@ -14337,7 +14337,9 @@ function ninaApp() {
         _assistantUiSettings() {
             return {
                 font: this.uiFont || 'atkinson',
-                zoom: Number(this.uiZoom) || 1,
+                // The chat iframe lives inside the zoomed body and inherits the
+                // scale; telling it the zoom made it scale twice.
+                zoom: 1,
                 padScale: Number(this.padScale) || 100,
             };
         },
@@ -14667,44 +14669,58 @@ function ninaApp() {
         },
         _assistantPanelStyle() {
             const vw = window.innerWidth, vh = window.innerHeight;
+            // Every length below is measured in viewport px (innerWidth, clientX)
+            // but the panel is laid out inside the zoomed <body>, where a px is
+            // z px on screen: divide, as the launcher does, or a docked panel at
+            // 1.3 runs 30% past the window edge and hides its composer.
+            const z = this._assistantEffZoom();
+            const px = (v) => (v / z) + 'px';
             if (vw <= 480) {
                 // Phone default = full-width bottom sheet (CSS). Once the user
                 // drags the header it becomes a movable floating window (this
                 // inline geometry outranks the @media bottom-sheet rules).
                 const gm = this.asst.panel;
                 if (this.asst.mobileFree && gm) return {
-                    left: gm.left + 'px', top: gm.top + 'px', width: gm.w + 'px', height: gm.h + 'px',
+                    left: px(gm.left), top: px(gm.top), width: px(gm.w), height: px(gm.h),
                     right: 'auto', bottom: 'auto', maxWidth: 'none', maxHeight: 'none',
                     borderRadius: 'var(--radius, 10px)',
                 };
                 return {};
             }
-            // Docked to an edge: fill that side.
+            // Docked to an edge: fill that side. The dock width/height the user
+            // chose is a screen size, so it stays put when the UI zoom changes.
             const d = this.asst.dock;
             if (d === 'left' || d === 'right') {
                 const w = Math.min(this.asst.dockW, vw - 60);
-                const s = { top: '0', bottom: '0', height: vh + 'px', width: w + 'px',
+                const s = { top: '0', bottom: '0', height: px(vh), width: px(w),
                             maxHeight: 'none', maxWidth: 'none', borderRadius: '0' };
                 if (d === 'left') { s.left = '0'; s.right = 'auto'; } else { s.right = '0'; s.left = 'auto'; }
                 return s;
             }
             if (d === 'bottom') {
                 const h = Math.min(this.asst.dockH, vh - 60);
-                return { left: '0', right: '0', bottom: '0', top: 'auto', width: vw + 'px', height: h + 'px',
+                return { left: '0', right: '0', bottom: '0', top: 'auto', width: px(vw), height: px(h),
                          maxHeight: 'none', maxWidth: 'none', borderRadius: '0' };
             }
             // Floating: a geometry the user set by dragging/resizing wins over auto-placement.
             const g = this.asst.panel;
             if (g) return {
-                left: g.left + 'px', top: g.top + 'px', width: g.w + 'px', height: g.h + 'px',
+                left: px(g.left), top: px(g.top), width: px(g.w), height: px(g.h),
                 right: 'auto', bottom: 'auto', maxHeight: 'none', maxWidth: 'none',
             };
             const p = this.asst.pos;
-            // Don't reposition if the user never dragged the launcher.
-            if (!p) return {};
             const sz = 56, gap = 10;
             const Wp = Math.min(400, vw - 2 * gap);
             const Hp = Math.min(560, vh - 120);
+            // Launcher never dragged: the CSS corner placement, but written in
+            // screen px like everything else (the stylesheet's right:20px and
+            // max-height:calc(100vh - 120px) are scaled by the body zoom too, so
+            // at 1.3 the panel ran 122 px past the top edge).
+            if (!p) {
+                if (z === 1) return {};
+                return { right: px(20), bottom: px(88), left: 'auto', top: 'auto',
+                         width: px(Wp), height: px(Hp), maxWidth: 'none', maxHeight: 'none' };
+            }
             // Prefer opening above the launcher; fall back to below; then clamp.
             let top = p.top - Hp - gap;
             if (top < gap) top = p.top + sz + gap;
@@ -14712,7 +14728,7 @@ function ninaApp() {
             // Align the panel's right edge with the launcher's, then clamp on-screen.
             let left = p.left + sz - Wp;
             left = Math.max(gap, Math.min(left, vw - gap - Wp));
-            return { left: left + 'px', top: top + 'px', right: 'auto', bottom: 'auto', width: Wp + 'px' };
+            return { left: px(left), top: px(top), right: 'auto', bottom: 'auto', width: px(Wp) };
         },
         // Inset the whole Polaris shell when the assistant is docked to an edge, so
         // the docked panel DISPLACES the UI instead of floating over it. <body> is a
@@ -14724,9 +14740,12 @@ function ninaApp() {
             if (!a || !a.open || a.dock === 'float') return {};
             const vw = window.innerWidth, vh = window.innerHeight;
             if (vw <= 480) return {};   // phone = bottom sheet, never push
-            if (a.dock === 'left')   return { paddingLeft:  Math.min(a.dockW, vw - 60) + 'px' };
-            if (a.dock === 'right')  return { paddingRight: Math.min(a.dockW, vw - 60) + 'px' };
-            if (a.dock === 'bottom') return { paddingBottom: Math.min(a.dockH, vh - 60) + 'px' };
+            // Same px-to-zoomed-frame conversion as the panel, so the inset
+            // matches the panel exactly.
+            const z = this._assistantEffZoom();
+            if (a.dock === 'left')   return { paddingLeft:  (Math.min(a.dockW, vw - 60) / z) + 'px' };
+            if (a.dock === 'right')  return { paddingRight: (Math.min(a.dockW, vw - 60) / z) + 'px' };
+            if (a.dock === 'bottom') return { paddingBottom: (Math.min(a.dockH, vh - 60) / z) + 'px' };
             return {};
         },
         assistantDragStart(ev) {
