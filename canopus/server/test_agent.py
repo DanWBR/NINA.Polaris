@@ -241,6 +241,21 @@ def test_final_answer_is_kept_in_history():
     assert [m["type"] for m in out].count("done") == 2
 
 
+def test_provider_tool_call_ids_are_kept_and_deduplicated():
+    # The history records the provider's own id (OpenAI wants its call_* ids
+    # back; Anthropic needs the tool_use id to replay the reply). A repeated id
+    # (the mock always says "mock-1") gets a fresh one.
+    h = Harness()
+    calls = [ToolCall(id="toolu_1", name="get_status", arguments={}),
+             ToolCall(id="toolu_1", name="get_weather", arguments={}),
+             ToolCall(id="", name="get_altitude", arguments={"name": "M42"})]
+    asyncio.run(h.session._execute(calls, None))
+    tool_calls = h.session._messages[-4]["tool_calls"]
+    ids = [c["id"] for c in tool_calls]
+    assert ids[0] == "toolu_1" and ids[1] != "toolu_1" and ids[2].startswith("c")
+    assert [m["tool_call_id"] for m in h.session._messages[-3:]] == ids
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):

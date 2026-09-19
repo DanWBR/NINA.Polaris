@@ -132,8 +132,8 @@
       ]
     }
   ],
-  "backendsTitle": "Trois façons de l'utiliser",
-  "backendsLede": "Un assistant, à vous de choisir. Les trois fonctionnent de la même manière et respectent les mêmes règles de sécurité, avec validation préalable. Choisissez-en un dans les paramètres, sous « Assistant ».",
+  "backendsTitle": "Quatre façons de l'utiliser",
+  "backendsLede": "Un assistant, à vous de choisir. Les quatre fonctionnent de la même manière et respectent les mêmes règles de sécurité, avec validation préalable. Choisissez-en un dans les paramètres, sous « Assistant ».",
   "backends": [
     {
       "icon": "☁️",
@@ -227,6 +227,35 @@
         {
           "label": "Confidentialité.",
           "text": "Fonctionne localement ; aucune donnée ne quitte votre ordinateur. Si vous configurez l'option « bureau » pour qu'elle pointe vers un terminal distant, ce service accède à vos messages selon ses propres conditions."
+        }
+      ]
+    },
+    {
+      "icon": "🔑",
+      "color": "#d97706",
+      "title": "Votre propre clé API",
+      "tag": "Un modèle de pointe avec votre clé Anthropic ou OpenAI, sans abonnement.",
+      "intro": "L'assistant s'exécute sur votre hôte Polaris et envoie vos messages à Anthropic, OpenAI ou tout serveur compatible OpenAI avec la clé que vous avez configurée.",
+      "items": [
+        {
+          "label": "Coût.",
+          "text": "Ce que le fournisseur facture sur votre clé par jeton. Polaris ne facture rien."
+        },
+        {
+          "label": "Tourne sur.",
+          "text": "Les serveurs du fournisseur ; l'agent tourne sur votre hôte Polaris, donc chaque téléphone et tablette de votre réseau l'utilise et la clé se configure une seule fois."
+        },
+        {
+          "label": "Minimum.",
+          "text": "Une clé API et internet sur l'hôte. Pour un serveur compatible OpenAI, son URL de base et un modèle capable d'appeler des outils."
+        },
+        {
+          "label": "Recommandé.",
+          "text": "Un modèle Claude ou GPT récent. Un modèle avec vision permet à Canopus de regarder vos images."
+        },
+        {
+          "label": "Confidentialité.",
+          "text": "Vos messages et les images sur lesquelles vous posez des questions vont au fournisseur choisi selon ses conditions. La clé reste sur l'hôte et n'atteint jamais le navigateur."
         }
       ]
     }
@@ -430,7 +459,7 @@
     }
   ],
   "howTitle": "Comment ça marche ?",
-  "howLede": "Canopus propose ; vous validez ; votre navigateur exécute l'action validée sur votre Polaris local via le réseau local. Le « cerveau » peut se trouver à trois endroits différents (le cloud, votre hôte Polaris ou l'appareil que vous utilisez), mais il ne communique jamais directement avec votre télescope.",
+  "howLede": "Canopus propose ; vous validez ; votre navigateur exécute l'action validée sur votre Polaris local via le réseau local. Le « cerveau » peut se trouver à quatre endroits différents (le cloud, votre hôte Polaris, l'appareil que vous utilisez ou un fournisseur que vous payez avec votre propre clé API), mais il ne communique jamais directement avec votre télescope.",
   "how": [
     {
       "label": "Choisissez le cerveau.",
@@ -449,7 +478,7 @@
     "price": "US$4.99",
     "period": "par mois",
     "trial": "Essai gratuit de 7 jours",
-    "note": "Les tarifs s'appliquent au backend cloud. Les backends sur serveur et sur appareil sont gratuits. Formule unique à tarif forfaitaire ; résiliation possible à tout moment, l'accès reste valable jusqu'à la fin de la période payée."
+    "note": "Les tarifs s'appliquent au backend cloud. Les backends sur serveur et sur appareil sont gratuits ; avec votre propre clé API, vous payez directement le fournisseur. Formule unique à tarif forfaitaire ; résiliation possible à tout moment, l'accès reste valable jusqu'à la fin de la période payée."
   },
   "ctaText": "L'assistant est facultatif et son utilisation est soumise à une adhésion volontaire, avec des backends hors ligne gratuits ; Polaris reste quant à lui gratuit et open source.",
   "ctaButton": "Obtenir Polaris",

@@ -272,6 +272,7 @@ class AgentSession:
         self._pending_plan: list[ToolCall] | None = None
         self._pending_plan_text: str | None = None
         self._counter = 0
+        self._used_call_ids: set[str] = set()
         self._busy = False
         self._turn_times: list[float] = []   # recent user-turn timestamps (rate limit)
         # Rule-based real-time watcher over the forwarded rig snapshots. Emits
@@ -281,6 +282,15 @@ class AgentSession:
     def _next_id(self) -> str:
         self._counter += 1
         return f"c{self._counter}"
+
+    def _call_id(self, c: ToolCall) -> str:
+        """The id the tool call is recorded under in the history. The provider's
+        own id is kept when it gave one (OpenAI hands its call_* ids back;
+        Anthropic needs the tool_use id to replay the reply that carried it),
+        with a fresh one for a repeat (the mock always says "mock-1")."""
+        oid = c.id if c.id and c.id not in self._used_call_ids else self._next_id()
+        self._used_call_ids.add(oid)
+        return oid
 
     def set_locale(self, locale: str | None) -> None:
         """Match the Polaris UI language so the LLM answers in it."""
@@ -438,7 +448,7 @@ class AgentSession:
         self._pending_plan = None
         if not calls:
             return
-        oai = [self._oai_call(self._next_id(), c) for c in calls]
+        oai = [self._oai_call(self._call_id(c), c) for c in calls]
         self._messages.append({"role": "assistant", "content": self._pending_plan_text or None, "tool_calls": oai})
         for spec, c in zip(oai, calls):
             self._messages.append({"role": "tool", "tool_call_id": spec["id"],
@@ -446,7 +456,7 @@ class AgentSession:
         await self._run_loop()
 
     async def _execute(self, calls: list[ToolCall], text: str | None) -> None:
-        oai = [self._oai_call(self._next_id(), c) for c in calls]
+        oai = [self._oai_call(self._call_id(c), c) for c in calls]
         self._messages.append({"role": "assistant", "content": text or None, "tool_calls": oai})
         for spec, c in zip(oai, calls):
             res = await self._exec_tool(spec["id"], c)

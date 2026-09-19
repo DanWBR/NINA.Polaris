@@ -38,10 +38,17 @@ namespace NINA.Polaris.Services.External;
 /// AutoStart toggle (default OFF — the model is heavy), and a clear reason string
 /// when the host can't run it.
 /// </summary>
+/// <summary>Which brain the agent process talks to. Local = llama-server on
+/// this host (the "On this host" backend); Api = the user's own Anthropic /
+/// OpenAI / OpenAI-compatible key (the "Cloud API with your key" backend). One
+/// agent process, one mode at a time.</summary>
+public enum CanopusMode { Local, Api }
+
 public sealed class CanopusServerService : BackgroundService {
     private readonly IConfiguration _config;
     private readonly IWebHostEnvironment _env;
     private readonly CanopusModelService _models;
+    private readonly CanopusApiConfigService _api;
     private readonly ILogger<CanopusServerService> _logger;
 
     private Process? _llama;
@@ -51,16 +58,19 @@ public sealed class CanopusServerService : BackgroundService {
     public int AgentPort { get; }
     public bool LlamaRunning { get; private set; }
     public bool AgentRunning { get; private set; }
-    public bool Running => LlamaRunning && AgentRunning;
+    /// <summary>Mode of the running (or last started) agent.</summary>
+    public CanopusMode Mode { get; private set; } = CanopusMode.Local;
+    public bool Running => AgentRunning && (Mode == CanopusMode.Api || LlamaRunning);
     public string? LastError { get; private set; }
     public DateTime? LastHealthCheckAt { get; private set; }
 
     public CanopusServerService(IConfiguration config, IWebHostEnvironment env,
-                                CanopusModelService models,
+                                CanopusModelService models, CanopusApiConfigService api,
                                 ILogger<CanopusServerService> logger) {
         _config = config;
         _env = env;
         _models = models;
+        _api = api;
         _logger = logger;
         LlamaPort = _config.GetValue("Canopus:LlamaPort", 8791);
         AgentPort = _config.GetValue("Canopus:AgentPort", 8790);
@@ -89,6 +99,14 @@ public sealed class CanopusServerService : BackgroundService {
     public bool RuntimePresent => _models.RuntimePresent
         || File.Exists(_models.LlamaServerPath); // an override may point outside the data dir
 
+    /// <summary>Null when the host can start the given mode; otherwise a short,
+    /// user-facing reason (what to install / download / configure).</summary>
+    public string? UnavailableReasonFor(CanopusMode mode) {
+        if (!ServerDirPresent)
+            return "Canopus server files are missing from this install.";
+        return mode == CanopusMode.Api ? _api.Validate() : UnavailableReason;
+    }
+
     /// <summary>Null when the host can start the local tier; otherwise a short,
     /// user-facing reason (what to install / download) shown in Settings.</summary>
     public string? UnavailableReason {
@@ -112,10 +130,16 @@ public sealed class CanopusServerService : BackgroundService {
         try { await Task.Delay(TimeSpan.FromSeconds(4), stoppingToken); }
         catch (TaskCanceledException) { return; }
 
-        if (_config.GetValue("Canopus:AutoStart", false) && UnavailableReason == null) {
-            _logger.LogInformation("CanopusServerService: AutoStart enabled, launching local backend");
-            try { await StartAsync(stoppingToken); }
-            catch (Exception ex) { _logger.LogWarning(ex, "Canopus auto-start failed"); }
+        // Canopus:AutoStart launches the agent at boot; Canopus:AutoStartMode
+        // ("local" default, "api") says which brain.
+        if (_config.GetValue("Canopus:AutoStart", false)) {
+            var mode = string.Equals(_config.GetValue<string?>("Canopus:AutoStartMode", null), "api",
+                                     StringComparison.OrdinalIgnoreCase) ? CanopusMode.Api : CanopusMode.Local;
+            if (UnavailableReasonFor(mode) == null) {
+                _logger.LogInformation("CanopusServerService: AutoStart enabled, launching the {Mode} backend", mode);
+                try { await StartAsync(mode, stoppingToken); }
+                catch (Exception ex) { _logger.LogWarning(ex, "Canopus auto-start failed"); }
+            }
         }
 
         while (!stoppingToken.IsCancellationRequested) {
@@ -134,19 +158,62 @@ public sealed class CanopusServerService : BackgroundService {
     // the hosted lifecycle still runs via the base StartAsync -> ExecuteAsync
     // through IHostedService; this overload is what the endpoints call to launch
     // the child processes on demand and get a success bool back.
-    public new async Task<bool> StartAsync(CancellationToken ct = default) {
+    public new Task<bool> StartAsync(CancellationToken ct = default) => StartAsync(CanopusMode.Local, ct);
+
+    public async Task<bool> StartAsync(CanopusMode mode, CancellationToken ct = default) {
         await _gate.WaitAsync(ct);
         try {
-            var reason = UnavailableReason;
+            var reason = UnavailableReasonFor(mode);
             if (reason != null) { LastError = reason; return false; }
 
-            if (!await StartLlamaAsync(ct)) return false;
-            if (!await StartAgentAsync(ct)) { StopLlama(); return false; }
+            // One agent process, one mode: switching brains restarts it.
+            if (AgentRunning && Mode != mode) {
+                if (_agent == null) {
+                    LastError = "A Canopus agent this host does not own is already listening on port " +
+                                AgentPort + "; stop it to switch backends.";
+                    return false;
+                }
+                _logger.LogInformation("Canopus: switching from {Old} to {New}, restarting the agent", Mode, mode);
+                StopAgent(); StopLlama();
+            }
+            Mode = mode;
+
+            if (mode == CanopusMode.Local && !await StartLlamaAsync(ct)) return false;
+            if (!await StartAgentAsync(mode, ct)) { StopLlama(); return false; }
             LastError = null;
             return true;
         } finally {
             _gate.Release();
         }
+    }
+
+    /// <summary>Stop and start again in the given mode (the API config changed
+    /// while the agent was using it).</summary>
+    public async Task<bool> RestartAsync(CanopusMode mode, CancellationToken ct = default) {
+        await StopAsync();
+        return await StartAsync(mode, ct);
+    }
+
+    /// <summary>Environment the agent process gets, per mode. Pure, so the
+    /// contract with local_server.py / providers_api.py is unit-tested.</summary>
+    public static IReadOnlyDictionary<string, string> BuildAgentEnvironment(CanopusMode mode, int llamaPort,
+                                                                            CanopusApiConfig? api) {
+        var env = new Dictionary<string, string> { ["CANOPUS_BASE_PATH"] = "/canopus" };
+        if (mode == CanopusMode.Api) {
+            api ??= CanopusApiConfig.Default;
+            // Full catalog + full prompt (no CANOPUS_LOCAL_TIER): a frontier model
+            // ingests the 34 tools fine and reads images.
+            env["CANOPUS_API_PROVIDER"] = api.Provider;
+            env["CANOPUS_API_KEY"] = api.ApiKey;
+            env["CANOPUS_API_MODEL"] = api.Model;
+            env["CANOPUS_API_BASE_URL"] = api.BaseUrl;
+        } else {
+            env["CANOPUS_LOCAL_LLM_URL"] = "http://127.0.0.1:" + llamaPort;
+            // Use the reduced catalog + lean system prompt: the small local model can't
+            // ingest the full catalog fast enough on an SBC.
+            env["CANOPUS_LOCAL_TIER"] = "1";
+        }
+        return env;
     }
 
     private async Task<bool> StartLlamaAsync(CancellationToken ct) {
@@ -199,7 +266,7 @@ public sealed class CanopusServerService : BackgroundService {
         return false;
     }
 
-    private async Task<bool> StartAgentAsync(CancellationToken ct) {
+    private async Task<bool> StartAgentAsync(CanopusMode mode, CancellationToken ct) {
         if (await ProbePortAsync(AgentPort, ct)) { AgentRunning = true; return true; }
 
         var psi = new ProcessStartInfo {
@@ -215,14 +282,11 @@ public sealed class CanopusServerService : BackgroundService {
         psi.ArgumentList.Add("127.0.0.1");
         psi.ArgumentList.Add("--port");
         psi.ArgumentList.Add(AgentPort.ToString());
-        psi.Environment["CANOPUS_LOCAL_LLM_URL"] = $"http://127.0.0.1:{LlamaPort}";
-        psi.Environment["CANOPUS_BASE_PATH"] = "/canopus";
-        // Use the reduced catalog + lean system prompt: the small local model can't
-        // ingest the full 29-tool catalog fast enough on an SBC.
-        psi.Environment["CANOPUS_LOCAL_TIER"] = "1";
+        foreach (var kv in BuildAgentEnvironment(mode, LlamaPort, mode == CanopusMode.Api ? _api.Get() : null))
+            psi.Environment[kv.Key] = kv.Value;
 
-        _logger.LogInformation("Spawning Canopus agent: {Py} -m uvicorn local_server:app (cwd {Dir})",
-            PythonPath, ServerDir);
+        _logger.LogInformation("Spawning Canopus agent ({Mode}): {Py} -m uvicorn local_server:app (cwd {Dir})",
+            mode, PythonPath, ServerDir);
         try {
             _agent = Process.Start(psi);
         } catch (Exception ex) {

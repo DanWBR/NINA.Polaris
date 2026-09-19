@@ -22,7 +22,7 @@
     },
     {
       "label": "Cloud or fully offline.",
-      "text": "Run it in the cloud, on your Polaris host, or on your own device. Two of the three are free and never leave your hardware."
+      "text": "Run it in the cloud, on your Polaris host, on your own device, or with your own Anthropic or OpenAI key. Two of the four are free and never leave your hardware."
     }
   ],
   "featuresTitle": "What it does",
@@ -132,8 +132,8 @@
       ]
     }
   ],
-  "backendsTitle": "Three ways to run it",
-  "backendsLede": "One assistant, your choice of brain. All three drive the rig the same way and share the same approve-first safety. Pick one in Settings, Assistant.",
+  "backendsTitle": "Four ways to run it",
+  "backendsLede": "One assistant, your choice of brain. All four drive the rig the same way and share the same approve-first safety. Pick one in Settings, Assistant.",
   "backends": [
     {
       "icon": "☁️",
@@ -227,6 +227,35 @@
         {
           "label": "Privacy.",
           "text": "Runs locally; nothing leaves your machine. If you point the desktop option at a remote endpoint, that service sees your messages under its own terms."
+        }
+      ]
+    },
+    {
+      "icon": "🔑",
+      "color": "#d97706",
+      "title": "Your own API key",
+      "tag": "A frontier model with your Anthropic or OpenAI key, no subscription.",
+      "intro": "The assistant runs on your Polaris host and sends your messages to Anthropic, OpenAI or any OpenAI-compatible server with the key you configured.",
+      "items": [
+        {
+          "label": "Cost.",
+          "text": "Whatever the provider bills to your key per token. Polaris charges nothing."
+        },
+        {
+          "label": "Runs on.",
+          "text": "The provider's servers; the agent runs on your Polaris host, so every phone and tablet on your network uses it and the key is set up once."
+        },
+        {
+          "label": "Minimum.",
+          "text": "An API key and internet on the host. For an OpenAI-compatible server, its base URL and a tool-capable model."
+        },
+        {
+          "label": "Recommended.",
+          "text": "A current Claude or GPT model. A vision-capable model lets Canopus look at your frames."
+        },
+        {
+          "label": "Privacy.",
+          "text": "Your messages and the frames you ask about go to the provider you chose under its terms. The key stays on the host and never reaches the browser."
         }
       ]
     }
@@ -430,7 +459,7 @@
     }
   ],
   "howTitle": "How it works",
-  "howLede": "Canopus proposes; you approve; your browser executes the approved action on your local Polaris over the LAN. The brain can live in three places (the cloud, your Polaris host, or the device you are using), but it never talks to your telescope directly.",
+  "howLede": "Canopus proposes; you approve; your browser executes the approved action on your local Polaris over the LAN. The brain can live in four places (the cloud, your Polaris host, the device you are using, or a provider you pay with your own API key), but it never talks to your telescope directly.",
   "how": [
     {
       "label": "Choose the brain.",
@@ -449,7 +478,7 @@
     "price": "US$4.99",
     "period": "per month",
     "trial": "7-day free trial",
-    "note": "Pricing is for the cloud backend. The on-host and on-device backends are free. Single flat plan; cancel anytime and access continues to the end of the paid period."
+    "note": "Pricing is for the cloud backend. The on-host and on-device backends are free; with your own API key you pay the provider directly. Single flat plan; cancel anytime and access continues to the end of the paid period."
   },
   "ctaText": "The assistant is optional and opt-in, with free offline backends; Polaris itself stays free and open-source.",
   "ctaButton": "Get Polaris",

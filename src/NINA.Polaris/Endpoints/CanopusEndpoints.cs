@@ -19,11 +19,17 @@ using NINA.Polaris.Services.External;
 
 namespace NINA.Polaris.Endpoints;
 
-/// <summary>HTTP surface for the local "On this server (SBC)" Canopus backend:
-/// the Settings assistant panel polls /status, downloads the model+runtime, and
-/// starts/stops the local server. The chat itself is served through the
-/// /canopus/* reverse-proxy, not here.</summary>
+/// <summary>HTTP surface for the host-run Canopus backends: "On this host"
+/// (llama-server + agent) and "Cloud API with your key" (agent only, talking to
+/// Anthropic / OpenAI / an OpenAI-compatible server). The Settings assistant
+/// panel polls /status, downloads the model+runtime, edits the API config and
+/// starts/stops the agent. The chat itself is served through the /canopus/*
+/// reverse-proxy, not here.</summary>
 public static class CanopusEndpoints {
+    // Probes for "Test connection" on the API backend: a model listing with the
+    // stored key. Short timeout; the key never leaves the host.
+    private static readonly HttpClient _apiTestHttp = new() { Timeout = TimeSpan.FromSeconds(20) };
+
     // Reverse-proxy to the "On this device" LLM (Ollama / LM Studio / llama.cpp)
     // so the browser talks same-origin and never needs a CORS grant on that
     // server. Only used when the browser is on the host machine (see the
@@ -33,14 +39,17 @@ public static class CanopusEndpoints {
     public static void MapCanopusEndpoints(this WebApplication app) {
         var g = app.MapGroup("/api/canopus");
 
-        g.MapGet("/status", (CanopusServerService server, CanopusModelService models) =>
+        g.MapGet("/status", (CanopusServerService server, CanopusModelService models, CanopusApiConfigService api) =>
             Results.Ok(new {
                 rid = CanopusModelService.Rid,
                 running = server.Running,
+                mode = server.Mode.ToString().ToLowerInvariant(),
                 llamaRunning = server.LlamaRunning,
                 agentRunning = server.AgentRunning,
+                apiConfigured = api.HasKey,
                 lastError = server.LastError,
-                unavailableReason = server.UnavailableReason,
+                unavailableReason = server.UnavailableReasonFor(server.Mode),
+                localUnavailableReason = server.UnavailableReason,
                 serverDirPresent = server.ServerDirPresent,
                 modelPresent = server.ModelPresent,
                 runtimePresent = server.RuntimePresent,
@@ -48,10 +57,71 @@ public static class CanopusEndpoints {
                 download = models.GetStatus()
             }));
 
-        g.MapPost("/start", async (CanopusServerService server) => {
-            var ok = await server.StartAsync();
-            return ok ? Results.Ok(new { ok = true })
+        // Body optional: {mode: "local"|"api"}; no body = local (the original
+        // SBC strip posts none).
+        g.MapPost("/start", async (HttpRequest http, CanopusServerService server) => {
+            var mode = CanopusMode.Local;
+            if (http.ContentLength > 0 || http.Headers.ContentType.ToString().Contains("json", StringComparison.OrdinalIgnoreCase)) {
+                try {
+                    var req = await http.ReadFromJsonAsync<CanopusStartRequest>();
+                    if (string.Equals(req?.Mode, "api", StringComparison.OrdinalIgnoreCase)) mode = CanopusMode.Api;
+                } catch (System.Text.Json.JsonException) { /* empty or malformed body = local */ }
+            }
+            var ok = await server.StartAsync(mode);
+            return ok ? Results.Ok(new { ok = true, mode = mode.ToString().ToLowerInvariant() })
                       : Results.Conflict(new { error = server.LastError ?? "failed to start" });
+        });
+
+        // ---- "Cloud API with your key" ----------------------------------
+        g.MapGet("/api-config", (CanopusApiConfigService api) => Results.Ok(api.GetPublic()));
+
+        g.MapPost("/api-config", async (CanopusApiConfigUpdate req, CanopusApiConfigService api,
+                                        CanopusServerService server) => {
+            try { api.Update(req); }
+            catch (ArgumentException ex) { return Results.BadRequest(new { error = ex.Message }); }
+            // The agent reads its config from the environment at launch: a change
+            // while it runs on the API needs a restart to take effect.
+            bool restarted = false;
+            if (server.Mode == CanopusMode.Api && server.AgentRunning)
+                restarted = await server.RestartAsync(CanopusMode.Api);
+            return Results.Ok(new { ok = true, restarted, config = api.GetPublic() });
+        });
+
+        g.MapPost("/api-test", async (CanopusApiConfigService api) => {
+            var c = api.Get();
+            var reason = api.Validate();
+            if (reason != null) return Results.Ok(new { ok = false, error = reason });
+            var isAnthropic = c.Provider == "anthropic";
+            var baseUrl = string.IsNullOrWhiteSpace(c.BaseUrl)
+                ? (isAnthropic ? "https://api.anthropic.com" : "https://api.openai.com/v1")
+                : c.BaseUrl.TrimEnd('/');
+            var url = isAnthropic ? baseUrl + "/v1/models?limit=100" : baseUrl + "/models";
+            string host;
+            try { host = new Uri(url).Host; } catch (UriFormatException) { return Results.Ok(new { ok = false, error = "The base URL is not a valid URL." }); }
+            using var msg = new HttpRequestMessage(HttpMethod.Get, url);
+            if (isAnthropic) {
+                msg.Headers.Add("x-api-key", c.ApiKey);
+                msg.Headers.Add("anthropic-version", "2023-06-01");
+            } else {
+                msg.Headers.Authorization = new AuthenticationHeaderValue("Bearer", c.ApiKey);
+            }
+            HttpResponseMessage resp;
+            try { resp = await _apiTestHttp.SendAsync(msg); }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException) {
+                return Results.Ok(new { ok = false, error = $"Could not reach {host}. Check the host's internet connection and the URL." });
+            }
+            using (resp) {
+                var body = await resp.Content.ReadAsStringAsync();
+                if ((int)resp.StatusCode is 401 or 403)
+                    return Results.Ok(new { ok = false, error = "API key rejected." });
+                if (resp.StatusCode == HttpStatusCode.NotFound && !isAnthropic)
+                    return Results.Ok(new { ok = true, models = Array.Empty<string>(), modelFound = (bool?)null,
+                                            note = "The server answered but does not list models." });
+                if (!resp.IsSuccessStatusCode)
+                    return Results.Ok(new { ok = false, error = $"HTTP {(int)resp.StatusCode}: {Excerpt(body)}" });
+                var models = ParseModelIds(body);
+                return Results.Ok(new { ok = true, models, modelFound = models.Length == 0 ? (bool?)null : models.Contains(c.Model) });
+            }
         });
 
         g.MapPost("/stop", async (CanopusServerService server) => {
@@ -234,4 +304,28 @@ public static class CanopusEndpoints {
         } catch { /* no catalog -> empty allowlist (device tier just won't act) */ }
         return allow;
     }
+
+    private static string Excerpt(string body) {
+        var t = body.Replace('\n', ' ').Trim();
+        return t.Length > 200 ? t[..200] : t;
+    }
+
+    /// <summary>Model ids from an OpenAI-style {data:[{id}]} or Anthropic
+    /// {data:[{id}]} listing (both use the same shape).</summary>
+    internal static string[] ParseModelIds(string json) {
+        try {
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            if (!doc.RootElement.TryGetProperty("data", out var data) || data.ValueKind != System.Text.Json.JsonValueKind.Array)
+                return Array.Empty<string>();
+            return data.EnumerateArray()
+                .Select(e => e.TryGetProperty("id", out var id) ? id.GetString() : null)
+                .Where(id => !string.IsNullOrEmpty(id)).Select(id => id!)
+                .Take(200).ToArray();
+        } catch (System.Text.Json.JsonException) {
+            return Array.Empty<string>();
+        }
+    }
+
+    public sealed record CanopusStartRequest(string? Mode);
+
 }

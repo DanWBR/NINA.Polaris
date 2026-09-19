@@ -1,7 +1,8 @@
 # Canopus Assistant: backends and requirements
 
 Canopus is the optional AI assistant built into Polaris. It plans the night, reads
-rig state, drives the rig with your approval, inspects frames (cloud only), and
+rig state, drives the rig with your approval, inspects frames (with a model that
+reads images: the cloud backend or your own API key), and
 answers astrophotography questions, right inside the Polaris web UI. It is opt-in
 and off by default: the open-source Polaris ships a neutral, inactive host, and the
 assistant appears only if you enable it in Settings, Assistant.
@@ -14,7 +15,7 @@ acts on the rig without your confirmation.
 ## Choosing a backend
 
 Canopus is one assistant with a choice of "brain". Pick the backend in Settings,
-Assistant. All three drive the rig the same way, through your browser, so the rest
+Assistant. All four drive the rig the same way, through your browser, so the rest
 of the experience is identical. Your browser is always the bridge: it executes the
 approved action on your local Polaris over the LAN and streams status back, so there
 is no inbound connection to your rig.
@@ -70,6 +71,28 @@ Free and offline, running the model on the machine you are using.
   desktop option at a remote, non-local endpoint, that service sees your messages
   under its own terms.
 
+### Cloud API with your own key
+
+Bring your own Anthropic or OpenAI key, or point Canopus at any OpenAI-compatible
+server (OpenRouter, Groq, an Ollama on another machine), and the assistant runs on
+the Polaris host against that model. A frontier model with the full tool set and
+no Polaris subscription.
+
+- Cost: whatever the provider bills to your key per token. Polaris charges nothing.
+- Runs on: the provider's servers. The agent itself runs on the Polaris host, so
+  any phone or tablet on your network uses it and the key is set up once.
+- Minimum: an API key and an internet connection on the host. For an
+  OpenAI-compatible server, its base URL (the /v1 root) and a tool-capable model.
+- Recommended: a current Claude or GPT model. A vision-capable model lets Canopus
+  look at your frames, the same frame analysis the cloud backend does.
+- Setup: Settings, Assistant, pick "Cloud API with your own key", choose the
+  provider, the model and paste the key, then Test connection and Start. The key is
+  stored on the host only and is never sent to the browser.
+- Shared: the host runs one assistant process. Switching between "On this host"
+  and "Cloud API with your own key" restarts it for every client of that host.
+- Privacy: your messages, and the frames you ask about, go to the provider you
+  chose under its own terms. Polaris keeps nothing.
+
 ## Which one should I use?
 
 - Want the best answers and image analysis, and do not mind a subscription: cloud.
@@ -77,6 +100,8 @@ Free and offline, running the model on the machine you are using.
   host.
 - Have a powerful PC, Mac, or a recent phone and want it free and private: on this
   device.
+- Already pay Anthropic or OpenAI and want their best model with frame analysis,
+  from any device, without a Polaris subscription: cloud API with your own key.
 
 The on-host and on-device backends are text-only and skip frame analysis; the
-cloud backend is the only one that inspects your images.
+cloud backend and a vision-capable model on your own key inspect your images.

@@ -132,8 +132,8 @@
       ]
     }
   ],
-  "backendsTitle": "Drei Möglichkeiten, das Programm auszuführen",
-  "backendsLede": "Ein Assistent, den du selbst auswählen kannst. Alle drei steuern das Fahrzeug auf dieselbe Weise und wenden dieselben Sicherheitsmaßnahmen an, bei denen zunächst eine Genehmigung erforderlich ist. Wähle einen unter „Einstellungen“ > „Assistent“ aus.",
+  "backendsTitle": "Vier Arten, ihn zu betreiben",
+  "backendsLede": "Ein Assistent, den du selbst auswählen kannst. Alle vier steuern die Ausrüstung auf dieselbe Weise und wenden dieselben Sicherheitsmaßnahmen an, bei denen zunächst eine Genehmigung erforderlich ist. Wähle einen unter „Einstellungen“ > „Assistent“ aus.",
   "backends": [
     {
       "icon": "☁️",
@@ -227,6 +227,35 @@
         {
           "label": "Datenschutz.",
           "text": "Wird lokal ausgeführt; es verlassen keine Daten Ihren Rechner. Wenn Sie die Desktop-Option auf einen Remote-Endpunkt verweisen, sieht dieser Dienst Ihre Nachrichten gemäß seinen eigenen Bedingungen."
+        }
+      ]
+    },
+    {
+      "icon": "🔑",
+      "color": "#d97706",
+      "title": "Ihr eigener API-Schlüssel",
+      "tag": "Ein Spitzenmodell mit Ihrem Anthropic- oder OpenAI-Schlüssel, ohne Abo.",
+      "intro": "Der Assistent läuft auf Ihrem Polaris-Host und sendet Ihre Nachrichten mit dem konfigurierten Schlüssel an Anthropic, OpenAI oder einen OpenAI-kompatiblen Server.",
+      "items": [
+        {
+          "label": "Kosten.",
+          "text": "Was der Anbieter pro Token über Ihren Schlüssel abrechnet. Polaris berechnet nichts."
+        },
+        {
+          "label": "Läuft auf.",
+          "text": "Den Servern des Anbieters; der Agent läuft auf Ihrem Polaris-Host, also nutzen ihn alle Telefone und Tablets in Ihrem Netz und der Schlüssel wird einmal eingerichtet."
+        },
+        {
+          "label": "Mindestens.",
+          "text": "Ein API-Schlüssel und Internet auf dem Host. Für einen OpenAI-kompatiblen Server dessen Basis-URL und ein Modell mit Tool-Unterstützung."
+        },
+        {
+          "label": "Empfohlen.",
+          "text": "Ein aktuelles Claude- oder GPT-Modell. Ein Modell mit Bildverständnis lässt Canopus Ihre Aufnahmen ansehen."
+        },
+        {
+          "label": "Datenschutz.",
+          "text": "Ihre Nachrichten und die Aufnahmen, nach denen Sie fragen, gehen an den gewählten Anbieter zu dessen Bedingungen. Der Schlüssel bleibt auf dem Host und erreicht nie den Browser."
         }
       ]
     }
@@ -430,7 +459,7 @@
     }
   ],
   "howTitle": "So funktioniert es",
-  "howLede": "Canopus schlägt etwas vor; Sie stimmen zu; Ihr Browser führt die genehmigte Aktion über das LAN auf Ihrem lokalen Polaris-Rechner aus. Die Steuerung kann an drei Orten angesiedelt sein (in der Cloud, auf Ihrem Polaris-Host oder auf dem von Ihnen verwendeten Gerät), kommuniziert jedoch niemals direkt mit Ihrem Teleskop.",
+  "howLede": "Canopus schlägt etwas vor; Sie stimmen zu; Ihr Browser führt die genehmigte Aktion über das LAN auf Ihrem lokalen Polaris-Rechner aus. Die Steuerung kann an vier Orten angesiedelt sein (in der Cloud, auf Ihrem Polaris-Host, auf dem von Ihnen verwendeten Gerät oder bei einem Anbieter, den Sie mit Ihrem eigenen API-Schlüssel bezahlen), kommuniziert jedoch niemals direkt mit Ihrem Teleskop.",
   "how": [
     {
       "label": "Entscheide dich für das Gehirn.",
@@ -449,7 +478,7 @@
     "price": "US$4.99",
     "period": "pro Monat",
     "trial": "7-tägige kostenlose Testphase",
-    "note": "Die Preise gelten für das Cloud-Backend. Die Backends auf dem Host und auf dem Gerät sind kostenlos. Ein einziger Pauschaltarif; jederzeit kündbar, der Zugriff bleibt bis zum Ende des bezahlten Zeitraums bestehen."
+    "note": "Die Preise gelten für das Cloud-Backend. Die Backends auf dem Host und auf dem Gerät sind kostenlos; mit eigenem API-Schlüssel zahlen Sie direkt beim Anbieter. Ein einziger Pauschaltarif; jederzeit kündbar, der Zugriff bleibt bis zum Ende des bezahlten Zeitraums bestehen."
   },
   "ctaText": "Der Assistent ist optional und nur auf Wunsch verfügbar, mit kostenlosen Offline-Backends; Polaris selbst bleibt kostenlos und Open Source.",
   "ctaButton": "Polaris herunterladen",

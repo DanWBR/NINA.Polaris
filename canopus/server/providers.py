@@ -109,11 +109,20 @@ def get_provider() -> Provider:
     its credentials live OUTSIDE this open repo. ASSISTANT_PROVIDER=mock forces
     the mock even when a local URL or factory is configured.
 
-    Resolution order: mock override -> local llama-server (CANOPUS_LOCAL_LLM_URL)
-    -> private factory (CANOPUS_PROVIDER_FACTORY) -> mock.
+    Resolution order: mock override -> the user's own cloud API key
+    (CANOPUS_API_PROVIDER: Anthropic / OpenAI / OpenAI-compatible, see
+    providers_api) -> local llama-server (CANOPUS_LOCAL_LLM_URL) -> private
+    factory (CANOPUS_PROVIDER_FACTORY) -> mock.
     """
     if os.environ.get("ASSISTANT_PROVIDER", "").lower() == "mock":
         return MockProvider()
+
+    # "Cloud API with your key": the host set the provider env on this process.
+    # A misconfiguration must show in the chat, not fall back to mock replies,
+    # so get_api_provider returns an error-raising provider instead of failing.
+    if os.environ.get("CANOPUS_API_PROVIDER", "").strip():
+        from providers_api import get_api_provider
+        return get_api_provider()
 
     # The local (SBC / on-device) tier: a llama.cpp llama-server on loopback. No
     # keys, no network beyond localhost — so it ships open, in-repo.

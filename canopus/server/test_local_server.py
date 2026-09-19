@@ -85,3 +85,25 @@ if __name__ == "__main__":
             fn()
             print("PASS", name)
     print("ALL PASS")
+
+
+def test_api_mode_manifest_names_the_model_and_skips_warmup(monkeypatch):
+    # "Cloud API with your key": the host sets CANOPUS_API_PROVIDER on the
+    # agent process. Same tier (no subscription gate), the product name says
+    # which brain, and startup must not spend tokens on a warm-up call.
+    import asyncio
+    monkeypatch.setattr(local_server, "API_PROVIDER", "anthropic")
+    monkeypatch.setattr(local_server, "API_MODEL", "claude-sonnet-5")
+    m = client.get("/manifest.json").json()
+    assert m["tier"] == "local" and "subscription" not in m
+    assert m["product"]["name"] == "Canopus Assistant (Claude Sonnet 5)"
+    assert "Anthropic" in m["intro"]["bodyMarkdown"]
+    assert local_server._pretty_model("gpt-5-mini") == "GPT-5 mini"
+    assert local_server._pretty_model("claude-haiku-4-5-20251001") == "Claude Haiku 4.5"
+    calls = []
+    monkeypatch.setattr(local_server, "get_provider", lambda: calls.append(1))
+    local_server._warm["ready"] = False
+    asyncio.run(local_server._warmup_prompt_cache())
+    assert local_server._warm["ready"] is True and calls == []
+    assert client.get("/healthz").json()["provider"] == "anthropic"
+

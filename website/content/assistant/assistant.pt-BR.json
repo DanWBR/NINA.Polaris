@@ -132,8 +132,8 @@
       ]
     }
   ],
-  "backendsTitle": "Três maneiras de executá-lo",
-  "backendsLede": "Um assistente, você escolhe qual. Todos os três operam o equipamento da mesma forma e seguem as mesmas normas de segurança, que exigem aprovação prévia. Escolha um em “Configurações”, “Assistente”.",
+  "backendsTitle": "Quatro formas de rodar",
+  "backendsLede": "Um assistente, você escolhe qual. Todos os quatro operam o equipamento da mesma forma e seguem as mesmas normas de segurança, que exigem aprovação prévia. Escolha um em “Configurações”, “Assistente”.",
   "backends": [
     {
       "icon": "☁️",
@@ -227,6 +227,35 @@
         {
           "label": "Privacidade.",
           "text": "É executado localmente; nada sai do seu computador. Se você configurar a opção de área de trabalho para um terminal remoto, esse serviço visualiza suas mensagens de acordo com suas próprias regras."
+        }
+      ]
+    },
+    {
+      "icon": "🔑",
+      "color": "#d97706",
+      "title": "A sua própria chave de API",
+      "tag": "Um modelo de ponta com a sua chave da Anthropic ou da OpenAI, sem assinatura.",
+      "intro": "O assistente roda no seu host Polaris e envia as suas mensagens à Anthropic, à OpenAI ou a qualquer servidor compatível com OpenAI com a chave que você configurou.",
+      "items": [
+        {
+          "label": "Custo.",
+          "text": "O que o provedor cobrar na sua chave por token. O Polaris não cobra nada."
+        },
+        {
+          "label": "Roda em.",
+          "text": "Nos servidores do provedor; o agente roda no seu host Polaris, então todo celular e tablet da sua rede usa e a chave é configurada uma vez."
+        },
+        {
+          "label": "Mínimo.",
+          "text": "Uma chave de API e internet no host. Para um servidor compatível com OpenAI, a URL base e um modelo com suporte a ferramentas."
+        },
+        {
+          "label": "Recomendado.",
+          "text": "Um modelo Claude ou GPT atual. Um modelo com visão permite ao Canopus olhar os seus frames."
+        },
+        {
+          "label": "Privacidade.",
+          "text": "As suas mensagens e os frames sobre os quais perguntar vão para o provedor escolhido sob os termos dele. A chave fica no host e nunca chega ao navegador."
         }
       ]
     }
@@ -430,7 +459,7 @@
     }
   ],
   "howTitle": "Como funciona",
-  "howLede": "Canopus propõe; você aprova; seu navegador executa a ação aprovada no seu Polaris local pela LAN. O “cérebro” pode estar em três lugares (na nuvem, no seu servidor Polaris ou no dispositivo que você está usando), mas nunca se comunica diretamente com o seu telescópio.",
+  "howLede": "Canopus propõe; você aprova; seu navegador executa a ação aprovada no seu Polaris local pela LAN. O “cérebro” pode estar em quatro lugares (na nuvem, no seu servidor Polaris, no dispositivo que você está usando ou num provedor pago com a sua própria chave de API), mas nunca se comunica diretamente com o seu telescópio.",
   "how": [
     {
       "label": "Escolha o cérebro.",
@@ -449,7 +478,7 @@
     "price": "US$4.99",
     "period": "por mês",
     "trial": "7 dias de teste gratuito",
-    "note": "O preço refere-se ao backend na nuvem. Os backends no servidor e no dispositivo são gratuitos. Plano único com valor fixo; cancele a qualquer momento e o acesso continuará até o final do período pago."
+    "note": "O preço refere-se ao backend na nuvem. Os backends no servidor e no dispositivo são gratuitos; com a sua própria chave de API você paga o provedor diretamente. Plano único com valor fixo; cancele a qualquer momento e o acesso continuará até o final do período pago."
   },
   "ctaText": "O assistente é opcional e de adesão voluntária, com back-ends offline gratuitos; o próprio Polaris continua sendo gratuito e de código aberto.",
   "ctaButton": "Adquira o Polaris",
