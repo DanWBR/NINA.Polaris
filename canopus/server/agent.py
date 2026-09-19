@@ -393,9 +393,10 @@ class AgentSession:
                 # Runaway guard: too many tool-call rounds in one turn. Stop and
                 # hand control back to the user instead of looping (and billing)
                 # indefinitely.
-                await self._send({"v": 1, "type": "assistant", "done": True,
-                                  "text": "I stopped after too many steps in one go. "
-                                          "Tell me how you'd like to continue."})
+                stop_text = ("I stopped after too many steps in one go. "
+                             "Tell me how you'd like to continue.")
+                self._messages.append({"role": "assistant", "content": stop_text})
+                await self._send({"v": 1, "type": "assistant", "done": True, "text": stop_text})
                 await self._send({"v": 1, "type": "done"})
                 return
             result = await self._provider.complete(self._messages, OPENAI_TOOLS)
@@ -406,6 +407,10 @@ class AgentSession:
                 except Exception:
                     pass  # metering must never break the turn
             if not result.tool_calls:
+                # The final answer stays in the history, so the next turn's model
+                # sees its own previous replies and not only the user's side.
+                if result.text:
+                    self._messages.append({"role": "assistant", "content": result.text})
                 await self._send({"v": 1, "type": "assistant", "text": result.text or "", "done": True})
                 await self._send({"v": 1, "type": "done"})
                 return
