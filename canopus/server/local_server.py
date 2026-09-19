@@ -48,6 +48,68 @@ CLIENT_DIR = os.path.join(_HERE, "..", "client")
 # both hit the proxied routes. Empty when running the app standalone on its root.
 BASE_PATH = os.environ.get("CANOPUS_BASE_PATH", "/canopus").rstrip("/")
 
+# "Cloud API with your key" mode: the host set CANOPUS_API_PROVIDER on this
+# process (see providers_api). Same server, same tier, a different brain.
+API_PROVIDER = os.environ.get("CANOPUS_API_PROVIDER", "").strip().lower()
+API_MODEL = os.environ.get("CANOPUS_API_MODEL", "").strip()
+
+_PROVIDER_LABEL = {"anthropic": "Anthropic", "openai": "OpenAI", "compatible": "your OpenAI-compatible server"}
+
+
+def _pretty_model(model: str) -> str:
+    """claude-sonnet-5 -> Claude Sonnet 5, gpt-5-mini -> GPT-5 mini; else as is."""
+    m = model.strip()
+    if not m:
+        return ""
+    parts = m.split("-")
+    if parts[0] == "claude":
+        words: list[str] = []
+        for p in parts[1:]:
+            if p.isdigit() and len(p) == 8:
+                break   # date suffix
+            if p.isdigit() and words and words[-1][-1].isdigit():
+                words[-1] += "." + p   # claude-haiku-4-5 -> Haiku 4.5
+            else:
+                words.append(p if p.isdigit() else p.capitalize())
+        return "Claude " + " ".join(words)
+    if parts[0] == "gpt":
+        return "GPT-" + "-".join(parts[1:2]) + (" " + " ".join(parts[2:]) if len(parts) > 2 else "")
+    return m
+
+
+def _product_name() -> str:
+    if API_PROVIDER:
+        return f"Canopus Assistant ({_pretty_model(API_MODEL) or API_MODEL or _PROVIDER_LABEL.get(API_PROVIDER, API_PROVIDER)})"
+    return "Canopus Assistant (local)"
+
+
+def _intro() -> dict:
+    if API_PROVIDER:
+        who = _PROVIDER_LABEL.get(API_PROVIDER, API_PROVIDER)
+        return {
+            "headline": "Your rig's AI, with your own API key",
+            "bodyMarkdown": f"Canopus runs on this host and sends your messages to {who} "
+                            "with the API key you configured. No subscription. It plans the night, "
+                            "drives the rig with your approval, answers questions and can look at "
+                            "your frames when the model reads images.",
+            "bullets": [
+                "\"What's good tonight? Suggest a plan.\"",
+                "\"How is it going?\"",
+                "\"Look at the current frame.\"",
+            ],
+        }
+    return {
+        "headline": "Your rig's own AI, running locally",
+        "bodyMarkdown": "Canopus runs entirely on this host: no cloud, no account, "
+                        "no subscription. It plans the night, drives the rig with your "
+                        "approval, and answers questions, all offline.",
+        "bullets": [
+            "\"What's good tonight? Suggest a plan.\"",
+            "\"How is it going?\"",
+            "\"Show me focus.\"",
+        ],
+    }
+
 app = FastAPI(title="Canopus Assistant (local)")
 
 # Same-origin in production (served under the Polaris proxy), but allow cross
@@ -105,6 +167,12 @@ async def _warmup_prompt_cache() -> None:
     ~1900-token ingest (~60-70s on an SBC). Best-effort, in the background: it
     doesn't block startup, and llama-server serializes it ahead of the first real
     query so that query then only ingests the short user message."""
+    if API_PROVIDER or os.environ.get("CANOPUS_SKIP_WARMUP"):
+        # A warm-up against a paid API costs tokens for nothing: there is no
+        # prompt cache on our side to prime.
+        _warm["ready"] = True
+        return
+
     async def go() -> None:
         try:
             await get_provider().complete(
@@ -128,19 +196,10 @@ def manifest() -> JSONResponse:
     return JSONResponse({
         "version": 1,
         "tier": "local",
-        "product": {"name": "Canopus Assistant (local)", "tagline": "On-device AI observing companion",
+        "product": {"name": _product_name(),
+                    "tagline": "Cloud model with your own API key" if API_PROVIDER else "On-device AI observing companion",
                     "iconEmoji": "🔭", "iconUrl": f"{BASE_PATH}/img/canopus-icon.png"},
-        "intro": {
-            "headline": "Your rig's own AI, running locally",
-            "bodyMarkdown": "Canopus runs entirely on this host: no cloud, no account, "
-                            "no subscription. It plans the night, drives the rig with your "
-                            "approval, and answers questions, all offline.",
-            "bullets": [
-                "\"What's good tonight? Suggest a plan.\"",
-                "\"How is it going?\"",
-                "\"Show me focus.\"",
-            ],
-        },
+        "intro": _intro(),
         "iframe": {
             "url": f"{BASE_PATH}/app",
             "origin": None,   # same-origin as the Polaris page; host uses its own origin
@@ -168,7 +227,7 @@ app.mount("/img", StaticFiles(directory=os.path.join(CLIENT_DIR, "img")), name="
 
 @app.get("/healthz")
 def healthz() -> dict:
-    return {"ok": True, "tier": "local", "warm": _warm["ready"]}
+    return {"ok": True, "tier": "local", "warm": _warm["ready"], "provider": API_PROVIDER or "local"}
 
 
 @app.websocket("/api/agent")

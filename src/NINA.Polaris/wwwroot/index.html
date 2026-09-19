@@ -16637,6 +16637,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <option value="cloud">Cloud (gpt-5.3-chat, subscription)</option>
                                 <option value="sbc">On this host (local model, where Polaris is running)</option>
                                 <option value="device">On this device (local model, where you are accessing Polaris from)</option>
+                                <option value="api">Cloud API with your own key (Anthropic, OpenAI or compatible)</option>
                             </select>
                         </label>
                         <p class="text-muted" style="font-size:12px; margin-top:6px">
@@ -16644,6 +16645,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             host</em> runs a local model on this Polaris host. <em>On this
                             device</em> runs the agent in your browser against a local LLM
                             (Ollama / LM Studio / llama.cpp) on the computer you're using, fast on a powerful PC/Mac, free and offline, no account needed.
+                            <em>Cloud API with your own key</em> runs the agent on this host against Anthropic, OpenAI or any OpenAI-compatible server, billed by that provider to your key.
                         </p>
                         <p x-show="_isMobileClient()" class="text-muted" style="font-size:12px; margin-top:4px; color:#d29922">
                             On a phone or tablet browser, <em>On this device</em> has no local model to run;
@@ -16654,8 +16656,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                           <div class="settings-card" style="margin-top:10px; padding:12px">
                             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
                                 <span style="width:10px;height:10px;border-radius:50%;display:inline-block"
-                                      :style="(asst.sbc &amp;&amp; asst.sbc.running) ? 'background:#3fb950' : 'background:#7d8590'"></span>
-                                <strong x-text="(asst.sbc &amp;&amp; asst.sbc.running) ? 'Running' : ((asst.sbc &amp;&amp; asst.sbc.modelPresent &amp;&amp; asst.sbc.runtimePresent) ? 'Stopped' : 'Not set up')"></strong>
+                                      :style="_canopusSbcRunning() ? 'background:#3fb950' : 'background:#7d8590'"></span>
+                                <strong x-text="_canopusSbcRunning() ? 'Running' : ((asst.sbc &amp;&amp; asst.sbc.modelPresent &amp;&amp; asst.sbc.runtimePresent) ? 'Stopped' : 'Not set up')"></strong>
                                 <span class="text-muted" style="font-size:12px" x-text="asst.sbc ? ('· ' + asst.sbc.rid) : ''"></span>
                             </div>
 
@@ -16675,16 +16677,82 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <!-- Ready: start / stop the local backend (needs model AND runtime). -->
                             <template x-if="asst.sbc &amp;&amp; asst.sbc.modelPresent &amp;&amp; asst.sbc.runtimePresent">
                               <div style="margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
-                                <button class="btn btn-sm" :disabled="asst.sbcBusy || (asst.sbc &amp;&amp; asst.sbc.running)" @click="_canopusStart()">Start</button>
-                                <button class="btn btn-sm" :disabled="asst.sbcBusy || !(asst.sbc &amp;&amp; asst.sbc.running)" @click="_canopusStop()">Stop</button>
+                                <button class="btn btn-sm" :disabled="asst.sbcBusy || _canopusSbcRunning()" @click="_canopusStart()">Start</button>
+                                <button class="btn btn-sm" :disabled="asst.sbcBusy || !_canopusSbcRunning()" @click="_canopusStop()">Stop</button>
                                 <button class="btn btn-sm" @click="_canopusRefresh()">Refresh</button>
                                 <span class="text-muted" style="font-size:12px" x-show="asst.sbcBusy">working…</span>
                               </div>
                             </template>
 
                             <p style="font-size:12px; margin-top:8px; color:#f85149"
-                               x-show="asst.sbc &amp;&amp; (asst.sbc.lastError || (!asst.sbc.running &amp;&amp; asst.sbc.unavailableReason))"
-                               x-text="asst.sbc ? (asst.sbc.lastError || asst.sbc.unavailableReason) : ''"></p>
+                               x-show="asst.sbc &amp;&amp; (asst.sbc.lastError || (!_canopusSbcRunning() &amp;&amp; asst.sbc.localUnavailableReason))"
+                               x-text="asst.sbc ? (asst.sbc.lastError || asst.sbc.localUnavailableReason) : ''"></p>
+                          </div>
+                        </template>
+
+                        <!-- Cloud API with the user's own key: the host keeps the key
+                             and runs the agent against Anthropic / OpenAI / a compatible
+                             server (full catalog, frame analysis with a vision model). -->
+                        <template x-if="asst.backend === 'api'">
+                          <div class="settings-card" style="margin-top:10px; padding:12px" x-init="_canopusApiLoad()">
+                            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
+                                <span style="width:10px;height:10px;border-radius:50%;display:inline-block"
+                                      :style="_canopusApiRunning() ? 'background:#3fb950' : 'background:#7d8590'"></span>
+                                <strong x-text="_canopusApiRunning() ? 'Running' : (asst.api.hasKey ? 'Stopped' : 'Not set up')"></strong>
+                                <span class="text-muted" style="font-size:12px" x-show="_canopusApiRunning()" x-text="'· ' + asst.api.model"></span>
+                            </div>
+
+                            <label style="display:block; margin-top:10px">
+                                <span class="lbl">Provider</span>
+                                <select class="input" style="width:100%" x-model="asst.api.provider" @change="asst.api.test = null">
+                                    <option value="anthropic">Anthropic (Claude)</option>
+                                    <option value="openai">OpenAI (GPT)</option>
+                                    <option value="compatible">OpenAI-compatible server</option>
+                                </select>
+                            </label>
+                            <label style="display:block; margin-top:8px" x-show="asst.api.provider === 'compatible'">
+                                <span class="lbl">Base URL</span>
+                                <input type="text" class="input" style="width:100%" x-model="asst.api.baseUrl"
+                                       placeholder="https://openrouter.ai/api/v1" autocomplete="off" spellcheck="false">
+                                <span class="text-muted" style="font-size:12px; display:block; margin-top:4px">The /v1 root of the server: OpenRouter https://openrouter.ai/api/v1, Groq https://api.groq.com/openai/v1, an Ollama on the LAN http://192.168.1.10:11434/v1.</span>
+                            </label>
+                            <label style="display:block; margin-top:8px">
+                                <span class="lbl">Model</span>
+                                <input type="text" class="input" style="width:100%" x-model="asst.api.model" list="canopus-api-models"
+                                       :placeholder="(_canopusApiSuggestions()[0]) || 'model id'" autocomplete="off" spellcheck="false">
+                                <datalist id="canopus-api-models">
+                                    <template x-for="m in _canopusApiSuggestions()" :key="m"><option :value="m"></option></template>
+                                </datalist>
+                                <span class="text-muted" style="font-size:12px; display:block; margin-top:4px">Any model id the key can use. A vision-capable model lets Canopus look at your frames.</span>
+                            </label>
+                            <label style="display:block; margin-top:8px">
+                                <span class="lbl">API key</span>
+                                <div style="display:flex; gap:6px; align-items:center">
+                                    <input type="password" class="input" style="flex:1" x-model="asst.api.key"
+                                           autocomplete="new-password" spellcheck="false"
+                                           :placeholder="asst.api.hasKey ? '•••••• (unchanged)' : ''">
+                                    <button class="btn btn-sm" x-show="asst.api.hasKey" @click="_canopusApiClearKey()">Clear key</button>
+                                </div>
+                            </label>
+
+                            <div style="margin-top:10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+                                <button class="btn btn-sm btn-primary" :disabled="asst.api.busy" @click="_canopusApiSave()">Save</button>
+                                <button class="btn btn-sm" :disabled="asst.api.busy || asst.api.test === 'testing'" @click="_canopusApiTest()">Test connection</button>
+                                <button class="btn btn-sm" :disabled="asst.sbcBusy || _canopusApiRunning()" @click="_canopusApiStart()">Start</button>
+                                <button class="btn btn-sm" :disabled="asst.sbcBusy || !_canopusApiRunning()" @click="_canopusStop()">Stop</button>
+                                <button class="btn btn-sm" @click="_canopusRefresh()">Refresh</button>
+                                <span class="text-muted" style="font-size:12px" x-show="asst.sbcBusy || asst.api.busy">working…</span>
+                            </div>
+                            <p style="font-size:12px; margin-top:6px" x-show="asst.api.test === 'testing'" class="text-muted">Testing…</p>
+                            <p style="font-size:12px; margin-top:6px; color:#3fb950" x-show="asst.api.test === 'ok'" x-text="asst.api.testMsg"></p>
+                            <p style="font-size:12px; margin-top:6px; color:#f85149" x-show="asst.api.test === 'error'" x-text="asst.api.testMsg"></p>
+                            <p style="font-size:12px; margin-top:6px; color:#f85149"
+                               x-show="asst.sbc &amp;&amp; asst.sbc.lastError &amp;&amp; !_canopusApiRunning()"
+                               x-text="asst.sbc ? asst.sbc.lastError : ''"></p>
+
+                            <p class="text-muted" style="font-size:12px; margin-top:10px">
+                                The key is stored on this Polaris host only and is never sent to the browser. Your messages and the frames you ask about go to the chosen provider under its terms, billed to your key. This backend is shared by every client of this host: switching it here restarts the assistant for everyone.
+                            </p>
                           </div>
                         </template>
 

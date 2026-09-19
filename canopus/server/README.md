@@ -33,3 +33,26 @@ repo and is not required here:
   via `CANOPUS_PROVIDER_FACTORY="module:factory"`;
 - the FastAPI app, magic-link identity, Stripe billing + entitlements, account
   storage, usage metering, and the Azure infrastructure.
+
+## Cloud API mode (the user's own key)
+
+`providers_api.py` adds `AnthropicProvider` (Messages API) and `OpenAIChatProvider`
+(Chat Completions, also any OpenAI-compatible server). The Polaris host stores the
+key in `{DataDir}/canopus/api-config.json` and launches this server with:
+
+| Variable | Meaning |
+|---|---|
+| `CANOPUS_API_PROVIDER` | `anthropic`, `openai` or `compatible` |
+| `CANOPUS_API_KEY` | the key |
+| `CANOPUS_API_MODEL` | model id |
+| `CANOPUS_API_BASE_URL` | optional; required for `compatible`. The /v1 root for openai and compatible, the host root for anthropic |
+| `CANOPUS_API_MAX_TOKENS` | optional output cap, default 8192 |
+
+No `CANOPUS_LOCAL_TIER`, so the full catalog, the full system prompt and the
+vision tools apply. The startup warm-up is skipped (it would cost tokens). The
+manifest keeps `tier: "local"` and names the model in `product.name`.
+`get_provider()` picks this mode before the local llama-server one.
+
+Anthropic replays the raw content of every tool-use reply (thinking blocks
+included) when the agent sends the history back; the agent keeps provider tool-call
+ids for that reason (`AgentSession._call_id`).

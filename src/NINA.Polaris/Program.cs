@@ -446,6 +446,8 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<NetworkManagerServ
 // processes) uses the same dual registration as IndiWeb so the endpoints resolve
 // the singleton AND the hosted auto-start / health loop runs.
 builder.Services.AddSingleton<NINA.Polaris.Services.External.CanopusModelService>();
+// "Cloud API with your key": provider/model/key, kept out of the profile.
+builder.Services.AddSingleton<NINA.Polaris.Services.External.CanopusApiConfigService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.External.CanopusServerService>();
 builder.Services.AddHostedService(sp =>
     sp.GetRequiredService<NINA.Polaris.Services.External.CanopusServerService>());
@@ -1426,8 +1428,8 @@ app.Map("/canopus/{**rest}", async (HttpContext ctx,
     if (!svc.Running) {
         ctx.Response.StatusCode = 503;
         await ctx.Response.WriteAsJsonAsync(new {
-            error = svc.UnavailableReason
-                ?? "Canopus local backend is not running. POST /api/canopus/start to launch it.",
+            error = svc.UnavailableReasonFor(svc.Mode)
+                ?? "Canopus backend is not running. POST /api/canopus/start to launch it.",
         });
         return;
     }

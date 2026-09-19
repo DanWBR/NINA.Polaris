@@ -119,7 +119,12 @@ function ninaApp() {
             deviceProxyPort: 0,    // the local LLM port the host proxy forwards to
             deviceModel: 'qwen2.5:7b',
             deviceTest: null,     // null | 'testing' | 'ok' | 'error'
-            deviceModels: [],     // models reported by the local server (Test connection)
+            deviceModels: [],
+            // "Cloud API with your key" (Anthropic / OpenAI / OpenAI-compatible):
+            // provider, model and whether a key is stored live on the HOST
+            // (/api/canopus/api-config); `key` only holds what is being typed.
+            api: { provider: 'anthropic', baseUrl: '', model: '', hasKey: false, key: '',
+                   suggestions: {}, loaded: false, busy: false, test: null, testMsg: '' },     // models reported by the local server (Test connection)
             // --- Ollama model manager (device tier) ---
             deviceCatalog: [],    // curated models [{tag,min_vram_gb,size_gb,note,installed,fits,recommended}]
             deviceGpuName: '',     // best-effort GPU name (WebGPU adapter), '' if unknown
@@ -13742,7 +13747,7 @@ function ninaApp() {
         _assistantLoadBackend() {
             let b = 'cloud';
             try { b = localStorage.getItem('polaris.assistant.backend') || 'cloud'; } catch (_) {}
-            if (b !== 'cloud' && b !== 'sbc' && b !== 'device') b = 'cloud';
+            if (b !== 'cloud' && b !== 'sbc' && b !== 'device' && b !== 'api') b = 'cloud';
             this.asst.backend = b;
             try {
                 const u = localStorage.getItem('polaris.assistant.deviceUrl'); if (u) this.asst.deviceUrl = u;
@@ -13784,12 +13789,17 @@ function ninaApp() {
         async _assistantManifestUrl() {
             const b = this.asst.backend;
             if (b === 'device') return '';   // on-device tier: deferred
-            if (b === 'sbc') {
+            if (b === 'sbc' || b === 'api') {
+                // One agent process serves both host-run backends; status.mode
+                // says which brain it has, so an API-mode agent is never shown
+                // as the local one (or the reverse).
+                if (b === 'api') await this._canopusEnsureApiRunning();
                 try {
                     const s = await fetch('/api/canopus/status', { cache: 'no-store' })
                         .then(r => r.ok ? r.json() : null);
                     this.asst.sbc = s || null;
-                    if (s && s.running) return '/canopus/manifest.json';
+                    if (s && s.running && this._canopusModeOf(s) === (b === 'api' ? 'api' : 'local'))
+                        return '/canopus/manifest.json';
                 } catch (_) { this.asst.sbc = null; }
                 return '';   // not running -> stay inert until started from Settings
             }
@@ -13887,7 +13897,7 @@ function ninaApp() {
 
         // Switch the assistant backend from Settings. Persists + re-applies live.
         async _assistantSetBackend(b) {
-            if (b !== 'cloud' && b !== 'sbc' && b !== 'device') return;
+            if (b !== 'cloud' && b !== 'sbc' && b !== 'device' && b !== 'api') return;
             if (this.asst.backend === b) return;
             this.asst.backend = b;
             try { localStorage.setItem('polaris.assistant.backend', b); } catch (_) {}
@@ -13903,7 +13913,8 @@ function ninaApp() {
         async _canopusStart() {
             this.asst.sbcBusy = true;
             try {
-                const r = await this.apiFetch('/api/canopus/start', { method: 'POST' });
+                const r = await this.apiFetch('/api/canopus/start', { method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'local' }) });
                 if (!r.ok) { const j = await r.json().catch(() => ({})); this.toast?.(j.error || 'Failed to start the local assistant', 'error'); }
             } finally { this.asst.sbcBusy = false; }
             await this._canopusRefresh();
@@ -13914,7 +13925,88 @@ function ninaApp() {
             try { await this.apiFetch('/api/canopus/stop', { method: 'POST' }); }
             finally { this.asst.sbcBusy = false; }
             await this._canopusRefresh();
-            if (this.asst.backend === 'sbc') await this._assistantApplyBackend();
+            if (this.asst.backend === 'sbc' || this.asst.backend === 'api') await this._assistantApplyBackend();
+        },
+        // Mode reported by /api/canopus/status ('local' | 'api'); an older host
+        // without the field is local.
+        _canopusModeOf(s) { return (s && s.mode) || 'local'; },
+        _canopusSbcRunning() { const s = this.asst.sbc; return !!(s && s.running && this._canopusModeOf(s) === 'local'); },
+        _canopusApiRunning() { const s = this.asst.sbc; return !!(s && s.running && this._canopusModeOf(s) === 'api'); },
+
+        // ---- "Cloud API with your key" backend controls (Settings) ----
+        async _canopusApiLoad() {
+            try {
+                const j = await this.apiGet('/api/canopus/api-config');
+                Object.assign(this.asst.api, { provider: j.provider || 'anthropic', baseUrl: j.baseUrl || '',
+                    model: j.model || '', hasKey: !!j.hasKey, suggestions: j.suggestions || {}, key: '', loaded: true });
+            } catch (e) { this.asst.api.loaded = true; }
+            await this._canopusRefresh();
+        },
+        _canopusApiSuggestions() {
+            const s = this.asst.api.suggestions || {};
+            return s[this.asst.api.provider] || [];
+        },
+        // Saves provider/base URL/model and, when something was typed, the key.
+        // The host restarts the agent when it is running on the API.
+        async _canopusApiSave(quiet) {
+            const a = this.asst.api;
+            a.busy = true;
+            try {
+                const body = { provider: a.provider, baseUrl: a.baseUrl, model: a.model };
+                if (a.key) body.apiKey = a.key;
+                const r = await this.apiPostJson('/api/canopus/api-config', body);
+                const c = r.config || {};
+                Object.assign(a, { hasKey: !!c.hasKey, key: '' });
+                if (!quiet) this.toast(r.restarted ? this.$t('Assistant restarted with the new settings') : this.$t('Saved'), 'info');
+            } catch (e) { this.toastFail('Could not save the assistant settings', e); }
+            finally { a.busy = false; }
+            await this._canopusRefresh();
+        },
+        async _canopusApiClearKey() {
+            try {
+                await this.apiPostJson('/api/canopus/api-config', { apiKey: '' });
+                this.asst.api.hasKey = false; this.asst.api.key = '';
+            } catch (e) { this.toastFail('Could not clear the key', e); }
+            await this._canopusRefresh();
+        },
+        async _canopusApiTest() {
+            const a = this.asst.api;
+            await this._canopusApiSave(true);
+            a.test = 'testing'; a.testMsg = '';
+            try {
+                const r = await this.apiPostJson('/api/canopus/api-test', {});
+                if (r.ok) {
+                    a.test = 'ok';
+                    const n = (r.models || []).length;
+                    a.testMsg = r.note ? r.note
+                        : (r.modelFound === false ? this.$t('Connected, but the key does not list the model {m}', { m: a.model })
+                        : this.$t('Connected ({n} models available)', { n }));
+                } else { a.test = 'error'; a.testMsg = r.error || 'failed'; }
+            } catch (e) { a.test = 'error'; a.testMsg = (e && e.message) || 'failed'; }
+        },
+        async _canopusApiStart() {
+            await this._canopusApiSave(true);
+            this.asst.sbcBusy = true;
+            try {
+                const r = await this.apiFetch('/api/canopus/start', { method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'api' }) });
+                if (!r.ok) { const j = await r.json().catch(() => ({})); this.toast?.(j.error || 'Failed to start the assistant', 'error'); }
+            } finally { this.asst.sbcBusy = false; }
+            await this._canopusRefresh();
+            if (this.asst.backend === 'api') await this._assistantApplyBackend();
+        },
+        // Called when the api backend is (re)applied: start the agent on the API
+        // if it is not already running that way and a key is stored.
+        async _canopusEnsureApiRunning() {
+            if (!this.asst.api.loaded) await this._canopusApiLoad();
+            const s = await this._canopusRefresh();
+            if (!s || !s.apiConfigured) return;
+            if (s.running && this._canopusModeOf(s) === 'api') return;
+            try {
+                await this.apiFetch('/api/canopus/start', { method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode: 'api' }) });
+            } catch (_) { /* status shows the reason */ }
+            await this._canopusRefresh();
         },
         async _canopusDownload() {
             try { await this.apiFetch('/api/canopus/model/download', { method: 'POST' }); }
@@ -14278,7 +14370,9 @@ function ninaApp() {
         _assistantUiSettings() {
             return {
                 font: this.uiFont || 'atkinson',
-                zoom: Number(this.uiZoom) || 1,
+                // The chat iframe lives inside the zoomed body and inherits the
+                // scale; telling it the zoom made it scale twice.
+                zoom: 1,
                 padScale: Number(this.padScale) || 100,
             };
         },
@@ -14608,44 +14702,58 @@ function ninaApp() {
         },
         _assistantPanelStyle() {
             const vw = window.innerWidth, vh = window.innerHeight;
+            // Every length below is measured in viewport px (innerWidth, clientX)
+            // but the panel is laid out inside the zoomed <body>, where a px is
+            // z px on screen: divide, as the launcher does, or a docked panel at
+            // 1.3 runs 30% past the window edge and hides its composer.
+            const z = this._assistantEffZoom();
+            const px = (v) => (v / z) + 'px';
             if (vw <= 480) {
                 // Phone default = full-width bottom sheet (CSS). Once the user
                 // drags the header it becomes a movable floating window (this
                 // inline geometry outranks the @media bottom-sheet rules).
                 const gm = this.asst.panel;
                 if (this.asst.mobileFree && gm) return {
-                    left: gm.left + 'px', top: gm.top + 'px', width: gm.w + 'px', height: gm.h + 'px',
+                    left: px(gm.left), top: px(gm.top), width: px(gm.w), height: px(gm.h),
                     right: 'auto', bottom: 'auto', maxWidth: 'none', maxHeight: 'none',
                     borderRadius: 'var(--radius, 10px)',
                 };
                 return {};
             }
-            // Docked to an edge: fill that side.
+            // Docked to an edge: fill that side. The dock width/height the user
+            // chose is a screen size, so it stays put when the UI zoom changes.
             const d = this.asst.dock;
             if (d === 'left' || d === 'right') {
                 const w = Math.min(this.asst.dockW, vw - 60);
-                const s = { top: '0', bottom: '0', height: vh + 'px', width: w + 'px',
+                const s = { top: '0', bottom: '0', height: px(vh), width: px(w),
                             maxHeight: 'none', maxWidth: 'none', borderRadius: '0' };
                 if (d === 'left') { s.left = '0'; s.right = 'auto'; } else { s.right = '0'; s.left = 'auto'; }
                 return s;
             }
             if (d === 'bottom') {
                 const h = Math.min(this.asst.dockH, vh - 60);
-                return { left: '0', right: '0', bottom: '0', top: 'auto', width: vw + 'px', height: h + 'px',
+                return { left: '0', right: '0', bottom: '0', top: 'auto', width: px(vw), height: px(h),
                          maxHeight: 'none', maxWidth: 'none', borderRadius: '0' };
             }
             // Floating: a geometry the user set by dragging/resizing wins over auto-placement.
             const g = this.asst.panel;
             if (g) return {
-                left: g.left + 'px', top: g.top + 'px', width: g.w + 'px', height: g.h + 'px',
+                left: px(g.left), top: px(g.top), width: px(g.w), height: px(g.h),
                 right: 'auto', bottom: 'auto', maxHeight: 'none', maxWidth: 'none',
             };
             const p = this.asst.pos;
-            // Don't reposition if the user never dragged the launcher.
-            if (!p) return {};
             const sz = 56, gap = 10;
             const Wp = Math.min(400, vw - 2 * gap);
             const Hp = Math.min(560, vh - 120);
+            // Launcher never dragged: the CSS corner placement, but written in
+            // screen px like everything else (the stylesheet's right:20px and
+            // max-height:calc(100vh - 120px) are scaled by the body zoom too, so
+            // at 1.3 the panel ran 122 px past the top edge).
+            if (!p) {
+                if (z === 1) return {};
+                return { right: px(20), bottom: px(88), left: 'auto', top: 'auto',
+                         width: px(Wp), height: px(Hp), maxWidth: 'none', maxHeight: 'none' };
+            }
             // Prefer opening above the launcher; fall back to below; then clamp.
             let top = p.top - Hp - gap;
             if (top < gap) top = p.top + sz + gap;
@@ -14653,7 +14761,7 @@ function ninaApp() {
             // Align the panel's right edge with the launcher's, then clamp on-screen.
             let left = p.left + sz - Wp;
             left = Math.max(gap, Math.min(left, vw - gap - Wp));
-            return { left: left + 'px', top: top + 'px', right: 'auto', bottom: 'auto', width: Wp + 'px' };
+            return { left: px(left), top: px(top), right: 'auto', bottom: 'auto', width: px(Wp) };
         },
         // Inset the whole Polaris shell when the assistant is docked to an edge, so
         // the docked panel DISPLACES the UI instead of floating over it. <body> is a
@@ -14665,9 +14773,12 @@ function ninaApp() {
             if (!a || !a.open || a.dock === 'float') return {};
             const vw = window.innerWidth, vh = window.innerHeight;
             if (vw <= 480) return {};   // phone = bottom sheet, never push
-            if (a.dock === 'left')   return { paddingLeft:  Math.min(a.dockW, vw - 60) + 'px' };
-            if (a.dock === 'right')  return { paddingRight: Math.min(a.dockW, vw - 60) + 'px' };
-            if (a.dock === 'bottom') return { paddingBottom: Math.min(a.dockH, vh - 60) + 'px' };
+            // Same px-to-zoomed-frame conversion as the panel, so the inset
+            // matches the panel exactly.
+            const z = this._assistantEffZoom();
+            if (a.dock === 'left')   return { paddingLeft:  (Math.min(a.dockW, vw - 60) / z) + 'px' };
+            if (a.dock === 'right')  return { paddingRight: (Math.min(a.dockW, vw - 60) / z) + 'px' };
+            if (a.dock === 'bottom') return { paddingBottom: (Math.min(a.dockH, vh - 60) / z) + 'px' };
             return {};
         },
         assistantDragStart(ev) {

@@ -213,6 +213,49 @@ def test_status_snapshots_emit_proactive_notice():
     assert notice is not None and notice["key"] == "guiding_lost", out
 
 
+def test_final_answer_is_kept_in_history():
+    # A plain-text answer must land in the history as an assistant message and
+    # be visible to the model on the next turn, otherwise the model only ever
+    # sees the user's side of the conversation.
+    from providers import ProviderResult
+
+    class StubProvider:
+        def __init__(self):
+            self.seen = []
+        async def complete(self, messages, tools):
+            self.seen.append([dict(m) for m in messages])
+            return ProviderResult(text=f"reply {len(self.seen)}")
+
+    out = []
+    async def send(m):
+        out.append(m)
+    provider = StubProvider()
+    session = AgentSession(send=send, provider=provider)
+    asyncio.run(session.on_message({"type": "user", "text": "hello"}))
+    assert session._messages[-1] == {"role": "assistant", "content": "reply 1"}
+    asyncio.run(session.on_message({"type": "user", "text": "and then?"}))
+    second = provider.seen[1]
+    assert {"role": "assistant", "content": "reply 1"} in second
+    roles = [m["role"] for m in second if m["role"] != "system"]
+    assert roles == ["user", "assistant", "user"], roles
+    assert [m["type"] for m in out].count("done") == 2
+
+
+def test_provider_tool_call_ids_are_kept_and_deduplicated():
+    # The history records the provider's own id (OpenAI wants its call_* ids
+    # back; Anthropic needs the tool_use id to replay the reply). A repeated id
+    # (the mock always says "mock-1") gets a fresh one.
+    h = Harness()
+    calls = [ToolCall(id="toolu_1", name="get_status", arguments={}),
+             ToolCall(id="toolu_1", name="get_weather", arguments={}),
+             ToolCall(id="", name="get_altitude", arguments={"name": "M42"})]
+    asyncio.run(h.session._execute(calls, None))
+    tool_calls = h.session._messages[-4]["tool_calls"]
+    ids = [c["id"] for c in tool_calls]
+    assert ids[0] == "toolu_1" and ids[1] != "toolu_1" and ids[2].startswith("c")
+    assert [m["tool_call_id"] for m in h.session._messages[-3:]] == ids
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):
