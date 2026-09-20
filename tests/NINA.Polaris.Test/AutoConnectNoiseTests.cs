@@ -102,4 +102,17 @@ public class AutoConnectNoiseTests {
             new SocketException((int)SocketError.TimedOut))), Is.EqualTo("TimedOut"));
         Assert.That(Describe(new OperationCanceledException()), Is.EqualTo("timed out"));
     }
+
+    [TestCase(null, true)]
+    [TestCase("", true)]
+    [TestCase("indi", true)]
+    [TestCase("INDI ", true)]
+    [TestCase("alpaca", false)]
+    [TestCase("ascom-com", false)]
+    public void RigDriverFieldDecidesWhetherTheIndiPresenceCheckApplies(string? driver, bool indi) {
+        // A focuser or filter wheel on Alpaca / ASCOM is not on the INDI device
+        // list; treating it as INDI skipped it at boot as "not present".
+        Assert.That(HardwareAutoConnectService.IsIndiDriver(driver), Is.EqualTo(indi));
+    }
+
 }
