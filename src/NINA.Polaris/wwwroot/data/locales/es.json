@@ -3277,7 +3277,7 @@
   "Sensor": "Sensor",
   "Sensor analysis error:": "Error de análisis del sensor:",
   "Sensor analysis started (this can take a few minutes)": "Se ha iniciado el análisis del sensor (esto puede tardar unos minutos)",
-  "Sensor black-level pedestal (ADU floor). A small positive value stops the shadow/noise tail clipping to 0 and keeps calibration clean. Saved as the rig default (used by AUTORUN/sequences). Typical: a few tens: SV405CC ~30-64.": "Pedestal del nivel de negro del sensor (suelo de la ADU). Un pequeño valor positivo evita que la cola de sombra/ruido se recorte a 0 y mantiene la calibración limpia. Se guarda como valor predeterminado del equipo (utilizado por AUTORUN/secuencias). Valores típicos: unas pocas decenas: SV405CC ~30-64.",
+  "Sensor black-level pedestal (ADU floor). A small positive value stops the shadow/noise tail clipping to 0 and keeps calibration clean. Polaris sends this value to the camera before every capture, so it wins over whatever the driver's own control panel says; set it to 0 to leave the driver's setting alone. Saved as the rig default (used by AUTORUN/sequences). Typical: a few tens: SV405CC ~30-64.": "Pedestal de nivel de negro del sensor (suelo en ADU). Un valor positivo pequeño evita que la cola de sombras/ruido recorte a 0 y mantiene limpia la calibración. Polaris envía este valor a la cámara antes de cada captura, así que prevalece sobre el panel de control del driver; ponlo en 0 para no tocar el ajuste del driver. Se guarda como valor por defecto del rig (usado por AUTORUN/secuencias). Típico: unas decenas: SV405CC ~30-64.",
   "sensor profiles ·": "perfiles de sensor ·",
   "sensor resolution instead of the lighter half-resolution": "la resolución del sensor, en lugar de la resolución media, que es menor",
   "Sent editor edits to Auto Workflow, name it and Save": "Envié las modificaciones del editor al flujo de trabajo automático: le puse un nombre y lo guardé",
@@ -4943,5 +4943,9 @@
   "Connected ({n} models available)": "Conectado ({n} modelos disponibles)",
   "Could not save the assistant settings": "No se pudo guardar la configuración del asistente",
   "Could not clear the key": "No se pudo borrar la clave",
-  "Failed to start the assistant": "No se pudo iniciar el asistente"
+  "Failed to start the assistant": "No se pudo iniciar el asistente",
+  "rig setting, edit in LIVE or PREVIEW": "ajuste del rig, edítalo en LIVE o PREVIEW",
+  "left to the camera driver (rig offset is 0)": "se deja al driver de la cámara (el offset del rig es 0)",
+  "driver": "driver",
+  "Sensor black-level pedestal (ADU floor). Polaris sends this value to the camera before every capture, so it wins over whatever the driver's own control panel says; 0 leaves the driver's setting alone. It is a rig setting: change it in the LIVE or PREVIEW panel's Offset field.": "Pedestal de nivel de negro del sensor (suelo en ADU). Polaris envía este valor a la cámara antes de cada captura, así que prevalece sobre el panel de control del driver; 0 deja el ajuste del driver tal cual. Es un ajuste del rig: cámbialo en el campo Offset del panel LIVE o PREVIEW."
 }

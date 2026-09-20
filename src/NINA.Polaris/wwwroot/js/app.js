@@ -30876,11 +30876,25 @@ function ninaApp() {
             this.$nextTick(() => this.selectSkyTarget(t));
         },
 
-        async slewTo(ra, dec) {
+        async slewTo(ra, dec, force = false) {
             try {
-                await this.apiPost('/api/telescope/slew', { ra, dec });
+                await this.apiPost('/api/telescope/slew', force ? { ra, dec, force: true } : { ra, dec });
                 this.toast('Slewing...', 'info');
             } catch (e) {
+                if (e && e.status === 409) {
+                    let info = {};
+                    try { info = JSON.parse(e.body || '{}'); } catch { /* ignore */ }
+                    const proceed = await this._confirmAsync(
+                        (info.reason || 'The mount could not synchronize its site and time.')
+                            + '\n\nContinue anyway?', {
+                            title: 'Confirm slew',
+                            okLabel: 'Slew anyway',
+                            cancelLabel: 'Cancel',
+                            danger: true
+                        });
+                    if (proceed) return this.slewTo(ra, dec, true);
+                    return;
+                }
                 this.toastFail('Slew failed', e);
             }
         },

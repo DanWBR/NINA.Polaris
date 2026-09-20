@@ -3277,7 +3277,7 @@
   "Sensor": "Sensor",
   "Sensor analysis error:": "Fehler bei der Sensorauswertung:",
   "Sensor analysis started (this can take a few minutes)": "Die Sensoranalyse wurde gestartet (dies kann einige Minuten dauern)",
-  "Sensor black-level pedestal (ADU floor). A small positive value stops the shadow/noise tail clipping to 0 and keeps calibration clean. Saved as the rig default (used by AUTORUN/sequences). Typical: a few tens: SV405CC ~30-64.": "Sensor-Schwarzpegel-Sockel (ADU-Boden). Ein kleiner positiver Wert verhindert, dass der Schatten-/Rauschschwanz auf 0 abgeschnitten wird, und sorgt für eine saubere Kalibrierung. Wird als Standardwert des Messaufbaus gespeichert (wird von AUTORUN/Sequenzen verwendet). Typischer Wert: einige Dutzend: SV405CC ~30-64.",
+  "Sensor black-level pedestal (ADU floor). A small positive value stops the shadow/noise tail clipping to 0 and keeps calibration clean. Polaris sends this value to the camera before every capture, so it wins over whatever the driver's own control panel says; set it to 0 to leave the driver's setting alone. Saved as the rig default (used by AUTORUN/sequences). Typical: a few tens: SV405CC ~30-64.": "Schwarzwert-Sockel des Sensors (ADU-Untergrenze). Ein kleiner positiver Wert verhindert, dass der Schatten-/Rauschanteil auf 0 beschnitten wird, und hält die Kalibrierung sauber. Polaris sendet diesen Wert vor jeder Aufnahme an die Kamera, er hat also Vorrang vor dem Bedienfeld des Treibers; 0 lässt die Treibereinstellung unangetastet. Als Standard des Rigs gespeichert (von AUTORUN/Sequenzen genutzt). Typisch: einige Dutzend: SV405CC ~30-64.",
   "sensor profiles ·": "Sensorprofile ·",
   "sensor resolution instead of the lighter half-resolution": "Sensorauflösung statt der geringeren Halbauflösung",
   "Sent editor edits to Auto Workflow, name it and Save": "Änderungen des Redakteurs an den „Auto-Workflow“ gesendet, benennen und speichern",
@@ -4943,5 +4943,9 @@
   "Connected ({n} models available)": "Verbunden ({n} Modelle verfügbar)",
   "Could not save the assistant settings": "Assistenten-Einstellungen konnten nicht gespeichert werden",
   "Could not clear the key": "Schlüssel konnte nicht gelöscht werden",
-  "Failed to start the assistant": "Assistent konnte nicht gestartet werden"
+  "Failed to start the assistant": "Assistent konnte nicht gestartet werden",
+  "rig setting, edit in LIVE or PREVIEW": "Rig-Einstellung, in LIVE oder PREVIEW ändern",
+  "left to the camera driver (rig offset is 0)": "dem Kameratreiber überlassen (Rig-Offset ist 0)",
+  "driver": "Treiber",
+  "Sensor black-level pedestal (ADU floor). Polaris sends this value to the camera before every capture, so it wins over whatever the driver's own control panel says; 0 leaves the driver's setting alone. It is a rig setting: change it in the LIVE or PREVIEW panel's Offset field.": "Schwarzwert-Sockel des Sensors (ADU-Untergrenze). Polaris sendet diesen Wert vor jeder Aufnahme an die Kamera, er hat also Vorrang vor dem Bedienfeld des Treibers; 0 lässt die Treibereinstellung unangetastet. Es ist eine Rig-Einstellung: ändern Sie sie im Feld Offset des LIVE- oder PREVIEW-Panels."
 }
