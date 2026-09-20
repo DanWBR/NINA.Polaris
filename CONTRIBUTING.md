@@ -190,9 +190,18 @@ looking like one program instead of forty. Two rules protect it:
   existing design system instead of introducing a second one. If the
   pattern you need does not exist yet, say so in the proposal and we
   will design it once, in one place.
+- **The interface is designed by the maintainer.** Pull requests that
+  redesign, rearrange or restyle screens (`wwwroot/index.html`, the CSS
+  parts, the layout side of `app.js`) are not accepted, however good
+  they are. What is welcome is an issue describing the problem: a flow
+  that confuses you, a control you could not find, a screen that breaks
+  on your device. That input shapes the UI; the change itself is made
+  once, in one place. Backend, driver, algorithm and bug-fix PRs are
+  not affected by this rule, and neither is the JS behind a screen when
+  the PR fixes a defect without changing the layout.
 
-Neither rule is about trust. They exist so that nobody builds something
-good and then hears no.
+None of these rules is about trust. They exist so that nobody builds
+something good and then hears no.
 
 ### Interface rules
 
