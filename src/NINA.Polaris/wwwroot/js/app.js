@@ -24497,6 +24497,10 @@ function ninaApp() {
                 this.powerBoxVendorDevices = [];
                 try { this.detectVendorSwitches(); } catch (e) {}
             }
+            // The rig owns the capture offset (see persistOffset), so the
+            // imaging panels show the rig's value rather than whatever this
+            // browser last typed.
+            if (rig.defaultOffset != null) this.offset = rig.defaultOffset;
             if (rig.coolerTargetTemperature != null) this.equipCoolerTarget = rig.coolerTargetTemperature;
             // null = never configured on this rig → 2°C/min default. An explicit 0
             // (ramping deliberately off) must survive, hence != null and not a
@@ -26563,7 +26567,11 @@ function ninaApp() {
                         indiPort: this.settings.indiPort,
                         defaultExposure: this.exposure,
                         defaultGain: this.gain,
-                        defaultOffset: this.offset,
+                        // defaultOffset is NOT sent here: it lives on the rig
+                        // (EquipmentProfile.DefaultOffset) and goes through the
+                        // rig PUT in persistOffset. The profile patch has no
+                        // field for it, so sending it here only looked like it
+                        // saved.
                         defaultBinning: parseInt(this.binning),
                         imageFormat: this.settings.imageFormat,
                         imageOutputDir: this.settings.imageOutputDir,
@@ -33781,6 +33789,18 @@ function ninaApp() {
             if (!Number.isFinite(v)) return;
             this.equipCoolerTarget = Math.min(30, Math.max(-40, v));
             this._persistRigSelection({ coolerTargetTemperature: this.equipCoolerTarget });
+        },
+
+        // The offset every capture uses is the RIG's defaultOffset: each capture
+        // path resolves it through RigCaptureDefaults.Offset, and nothing sends
+        // the client's value per request the way gain is sent. So this field has
+        // to write it to the rig, or it only ever changes the display (issue #26:
+        // the panel showed 300 while every FITS came out at the stored 50).
+        persistOffset() {
+            const v = Number(this.offset);
+            if (!Number.isFinite(v) || v < 0) return;
+            this.offset = Math.round(v);
+            this._persistRigSelection({ defaultOffset: this.offset });
         },
 
         _persistRigSelection(patch) {
