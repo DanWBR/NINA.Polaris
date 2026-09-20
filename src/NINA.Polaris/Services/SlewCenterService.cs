@@ -755,7 +755,7 @@ public class SlewCenterService {
         return m < 0 ? m + 360.0 : m;
     }
 
-    private async Task MoveRotatorBySkyDeltaAsync(NINA.INDI.Devices.IndiRotator rotator,
+    private async Task MoveRotatorBySkyDeltaAsync(IRotator rotator,
             double skyDeltaDeg, SlewCenterJob job, CancellationToken ct) {
         double current = rotator.Position;
         if (double.IsNaN(current))

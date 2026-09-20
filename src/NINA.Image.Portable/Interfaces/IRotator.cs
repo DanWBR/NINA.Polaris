@@ -13,8 +13,9 @@ namespace NINA.Image.Interfaces;
 
 /// <summary>Common surface for mechanical camera rotators.  Keeping this
 /// deliberately small lets INDI and Alpaca devices share the equipment card,
-/// sequencer instruction, and FITS metadata path. State properties are cached;
-/// callers must explicitly refresh a backend that has no push notifications.</summary>
+/// sequencer instruction, and FITS metadata path. State properties are cached
+/// and never perform I/O. Backends without push notifications keep them
+/// eventually current; a caller that requires an immediate value can refresh.</summary>
 public interface IRotator {
     string DeviceName { get; }
     bool IsConnected { get; }
@@ -24,7 +25,8 @@ public interface IRotator {
 
     /// <summary>Refresh the cached state. INDI reads a push-maintained property
     /// tree and completes immediately; Alpaca performs its HTTP reads here,
-    /// never from a synchronous property getter.</summary>
+    /// never from a synchronous property getter. Callers that need a value
+    /// immediately after an operation can refresh explicitly.</summary>
     Task RefreshAsync(CancellationToken ct = default);
     Task ConnectAsync(CancellationToken ct = default);
     Task DisconnectAsync(CancellationToken ct = default);
