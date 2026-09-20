@@ -201,7 +201,12 @@ lifecycle + filter offsets only.
 Beyond the obvious device names, each rig stores:
 
 - **Cooler target temperature** (°C)
-- **Default gain / offset / binning**
+- **Default gain / offset / binning**. Gain and offset are sent to the camera
+  before every capture (LIVE, PREVIEW, AUTORUN, sequences), the same way
+  N.I.N.A. and ASIAIR own them, so they override whatever the driver's own
+  control panel (INDI, ASCOM) was set to. Edit them in the LIVE panel's
+  Gain / Offset fields; they save to the active rig. An offset of 0 means
+  "leave the driver's setting alone".
 - **Focuser step size + backlash**
 - **Main scope** focal length + aperture + brand + model + accessory + factor + required back-focus
 - **Guide scope** focal length + aperture + brand + model
