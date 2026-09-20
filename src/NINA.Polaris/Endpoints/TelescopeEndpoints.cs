@@ -79,11 +79,10 @@ public static class TelescopeEndpoints {
 
             try {
                 // Push the correct UTC + location first so a stale mount clock/site
-                // cannot send the OTA to a physically wrong place. Unlike the
-                // confirm-gated SKY route, this direct endpoint has no Force
-                // override, so never silently proceed when that verification
-                // fails.
-                if (profiles.ActiveEquipmentProfile?.AutoSyncMountBeforeSlew != false) {
+                // cannot send the OTA to a physically wrong place. A confirmed
+                // Force request is the explicit operator override, matching the
+                // SKY and zenith slew paths.
+                if (!request.Force && profiles.ActiveEquipmentProfile?.AutoSyncMountBeforeSlew != false) {
                     var sync = await MountTimeSync.SyncAsync(equip.Telescope, profiles.Active);
                     if (!sync.Ok) {
                         return Results.Json(new {
@@ -656,7 +655,7 @@ public static class TelescopeEndpoints {
         });
     }
 
-    public record SlewRequest(double Ra, double Dec);
+    public record SlewRequest(double Ra, double Dec, bool Force = false);
     public record TrackingRequest(bool Enabled);
     /// <summary>Optional body for POST /slew-zenith. Force=true overrides the
     /// pre-slew safety confirmation (a null or empty body means Force=false).</summary>
