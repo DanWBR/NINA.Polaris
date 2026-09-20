@@ -4945,5 +4945,9 @@
   "Connected ({n} models available)": "Conectado ({n} modelos disponibles)",
   "Could not save the assistant settings": "No se pudo guardar la configuración del asistente",
   "Could not clear the key": "No se pudo borrar la clave",
-  "Failed to start the assistant": "No se pudo iniciar el asistente"
+  "Failed to start the assistant": "No se pudo iniciar el asistente",
+  "rig setting, edit in LIVE or PREVIEW": "ajuste del rig, edítalo en LIVE o PREVIEW",
+  "left to the camera driver (rig offset is 0)": "se deja al driver de la cámara (el offset del rig es 0)",
+  "driver": "driver",
+  "Sensor black-level pedestal (ADU floor). Polaris sends this value to the camera before every capture, so it wins over whatever the driver's own control panel says; 0 leaves the driver's setting alone. It is a rig setting: change it in the LIVE or PREVIEW panel's Offset field.": "Pedestal de nivel de negro del sensor (suelo en ADU). Polaris envía este valor a la cámara antes de cada captura, así que prevalece sobre el panel de control del driver; 0 deja el ajuste del driver tal cual. Es un ajuste del rig: cámbialo en el campo Offset del panel LIVE o PREVIEW."
 }

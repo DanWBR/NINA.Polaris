@@ -4326,5 +4326,9 @@
   "Connected ({n} models available)": "",
   "Could not save the assistant settings": "",
   "Could not clear the key": "",
-  "Failed to start the assistant": ""
+  "Failed to start the assistant": "",
+  "rig setting, edit in LIVE or PREVIEW": "",
+  "left to the camera driver (rig offset is 0)": "",
+  "driver": "",
+  "Sensor black-level pedestal (ADU floor). Polaris sends this value to the camera before every capture, so it wins over whatever the driver's own control panel says; 0 leaves the driver's setting alone. It is a rig setting: change it in the LIVE or PREVIEW panel's Offset field.": ""
 }

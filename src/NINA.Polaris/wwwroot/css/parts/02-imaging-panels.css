@@ -302,6 +302,21 @@
 }
 .autorun-adv-toggle:hover { color: var(--text-primary); border-color: var(--accent); }
 .autorun-adv-toggle.open { border-color: var(--accent); color: var(--text-primary); }
+/* Read-only line above the AUTORUN sequence: the rig offset used by every
+   capture (edited in LIVE / PREVIEW, see issue #27). */
+.autorun-offset-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    border-radius: var(--radius, 8px);
+    background: var(--bg-elevated, rgba(255,255,255,0.04));
+    border: 1px solid var(--border);
+}
+.autorun-offset-line .text-muted { font-size: 11px; }
+.autorun-offset-line .gain-help { margin-left: auto; }
 .autorun-adv-sub {
     margin-left: auto;
     font-weight: 400;

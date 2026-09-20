@@ -4945,5 +4945,9 @@
   "Connected ({n} models available)": "Verbunden ({n} Modelle verfügbar)",
   "Could not save the assistant settings": "Assistenten-Einstellungen konnten nicht gespeichert werden",
   "Could not clear the key": "Schlüssel konnte nicht gelöscht werden",
-  "Failed to start the assistant": "Assistent konnte nicht gestartet werden"
+  "Failed to start the assistant": "Assistent konnte nicht gestartet werden",
+  "rig setting, edit in LIVE or PREVIEW": "Rig-Einstellung, in LIVE oder PREVIEW ändern",
+  "left to the camera driver (rig offset is 0)": "dem Kameratreiber überlassen (Rig-Offset ist 0)",
+  "driver": "Treiber",
+  "Sensor black-level pedestal (ADU floor). Polaris sends this value to the camera before every capture, so it wins over whatever the driver's own control panel says; 0 leaves the driver's setting alone. It is a rig setting: change it in the LIVE or PREVIEW panel's Offset field.": "Schwarzwert-Sockel des Sensors (ADU-Untergrenze). Polaris sendet diesen Wert vor jeder Aufnahme an die Kamera, er hat also Vorrang vor dem Bedienfeld des Treibers; 0 lässt die Treibereinstellung unangetastet. Es ist eine Rig-Einstellung: ändern Sie sie im Feld Offset des LIVE- oder PREVIEW-Panels."
 }

@@ -11125,6 +11125,17 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <div class="autorun-pane" x-show="autorunTab === 'sequence'">
                 <div class="autorun-list-col">
 
+                <!-- The offset every capture below is taken with. It is the
+                     rig setting edited in LIVE / PREVIEW, not per item, and it
+                     overrides the driver's own control panel; shown here so the
+                     value in the FITS header is not a surprise (issue #27). -->
+                <div class="autorun-offset-line" x-show="!cameraUsesIso()">
+                    <span>Offset</span>
+                    <strong x-text="offset > 0 ? offset : 'driver'"></strong>
+                    <span class="text-muted" x-text="offset > 0 ? 'rig setting, edit in LIVE or PREVIEW' : 'left to the camera driver (rig offset is 0)'"></span>
+                    <span class="gain-help" tabindex="0" role="img" aria-label="About offset" title="Sensor black-level pedestal (ADU floor). Polaris sends this value to the camera before every capture, so it wins over whatever the driver's own control panel says; 0 leaves the driver's setting alone. It is a rig setting: change it in the LIVE or PREVIEW panel's Offset field.">?</span>
+                </div>
+
                 <!-- Meridian / Dither / End Events as an underline tab strip
                      (same control style as the LIVE refocus/recenter/dither
                      tabs). One panel shows at a time; the dot in each tab
