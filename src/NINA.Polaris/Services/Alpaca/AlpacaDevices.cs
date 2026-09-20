@@ -283,9 +283,42 @@ public class AlpacaFilterWheel : IFilterWheel {
 }
 
 // ---- Rotator ----------------------------------------------------------------
-public class AlpacaRotator {
+public class AlpacaRotator : IRotator {
     private readonly AlpacaClient _c;
+    private readonly object _stateLock = new();
+    private readonly object _pollLock = new();
+    private string _deviceName = "Alpaca Rotator";
+    private bool _isConnected;
+    private double _position = double.NaN;
+    private bool _isMoving;
+    private bool _isReversed;
+    private CancellationTokenSource? _statePollCts;
+    private const int StatePollLimit = 240;
+    private static readonly TimeSpan StatePollInterval = TimeSpan.FromMilliseconds(500);
     public AlpacaRotator(string host, int port, int n = 0) { _c = new(host, port, "rotator", n); }
+
+    /// <summary>Construct from the <c>host:port[:deviceNumber]</c> identity
+    /// stored by Alpaca discovery in equipment profiles.</summary>
+    public static AlpacaRotator FromDeviceId(string deviceId) {
+        var parts = (deviceId ?? "").Split(':');
+        if (parts.Length is < 2 or > 3 || string.IsNullOrWhiteSpace(parts[0]))
+            throw InvalidDeviceId(deviceId);
+        var host = parts[0];
+        if (!int.TryParse(parts[1], System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out var port)
+            || port is < 1 or > 65535)
+            throw InvalidDeviceId(deviceId);
+        var dev = 0;
+        if (parts.Length == 3 && (!int.TryParse(parts[2],
+                System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out dev)
+            || dev < 0))
+            throw InvalidDeviceId(deviceId);
+        return new AlpacaRotator(host, port, dev);
+    }
+
+    private static ArgumentException InvalidDeviceId(string? deviceId) =>
+        new($"Alpaca device id '{deviceId}' must be host:port[:deviceNumber].", nameof(deviceId));
 
     public Task<bool> GetConnectedAsync(CancellationToken ct = default) => Safe(_c.GetAsync<bool>("connected", ct));
     public Task SetConnectedAsync(bool v, CancellationToken ct = default) =>
@@ -302,6 +335,100 @@ public class AlpacaRotator {
     public Task SyncAsync(double degrees, CancellationToken ct = default) =>
         _c.PutAsync("sync", new() { ["Position"] = degrees.ToString(System.Globalization.CultureInfo.InvariantCulture) }, ct);
     public Task HaltAsync(CancellationToken ct = default) => _c.PutAsync("halt", null, ct);
+
+    // ---- IRotator surface ----
+    public string DeviceName { get { lock (_stateLock) return _deviceName; } }
+    public bool IsConnected { get { lock (_stateLock) return _isConnected; } }
+    public double Position { get { lock (_stateLock) return _position; } }
+    public bool IsMoving { get { lock (_stateLock) return _isMoving; } }
+    public bool IsReversed { get { lock (_stateLock) return _isReversed; } }
+
+    /// <summary>Alpaca does not push property changes. Fetch state explicitly
+    /// when an immediate value is required; connection and movement also start
+    /// a bounded background refresh so cached properties converge without
+    /// blocking a capture or metadata-writing thread.</summary>
+    public async Task RefreshAsync(CancellationToken ct = default) {
+        var connectedTask = _c.GetAsync<bool>("connected", ct);
+        var nameTask = _c.GetAsync<string>("name", ct);
+        var positionTask = _c.GetAsync<double>("position", ct);
+        var movingTask = _c.GetAsync<bool>("ismoving", ct);
+        var reversedTask = _c.GetAsync<bool>("reverse", ct);
+        await Task.WhenAll(connectedTask, nameTask, positionTask, movingTask, reversedTask);
+
+        var connected = await connectedTask;
+        var name = await nameTask;
+        var position = await positionTask;
+        var moving = await movingTask;
+        var reversed = await reversedTask;
+        lock (_stateLock) {
+            _isConnected = connected;
+            _deviceName = name ?? _deviceName;
+            _position = position;
+            _isMoving = moving;
+            _isReversed = reversed;
+        }
+    }
+
+    public async Task ConnectAsync(CancellationToken ct = default) {
+        await SetConnectedAsync(true, ct);
+        await RefreshAsync(ct);
+        StartStatePolling();
+    }
+    public async Task DisconnectAsync(CancellationToken ct = default) {
+        StopStatePolling();
+        await SetConnectedAsync(false, ct);
+        lock (_stateLock) { _isConnected = false; _isMoving = false; }
+    }
+    public async Task MoveToAsync(double degrees, CancellationToken ct = default) {
+        await MoveAbsoluteAsync(degrees, ct);
+        lock (_stateLock) { _isMoving = true; }
+        StartStatePolling();
+    }
+    public async Task ReverseAsync(bool reversed, CancellationToken ct = default) {
+        await SetReverseAsync(reversed, ct);
+        lock (_stateLock) { _isReversed = reversed; }
+    }
+    public async Task AbortAsync(CancellationToken ct = default) {
+        await HaltAsync(ct);
+        StopStatePolling();
+        lock (_stateLock) { _isMoving = false; }
+    }
+
+    private void StartStatePolling() {
+        CancellationTokenSource? previous;
+        CancellationTokenSource current;
+        lock (_pollLock) {
+            previous = _statePollCts;
+            current = new CancellationTokenSource();
+            _statePollCts = current;
+        }
+        previous?.Cancel();
+        _ = PollStateUntilSettledAsync(current.Token);
+    }
+
+    private void StopStatePolling() {
+        CancellationTokenSource? poll;
+        lock (_pollLock) {
+            poll = _statePollCts;
+            _statePollCts = null;
+        }
+        poll?.Cancel();
+    }
+
+    private async Task PollStateUntilSettledAsync(CancellationToken ct) {
+        try {
+            for (var attempt = 0; attempt < StatePollLimit; attempt++) {
+                await RefreshAsync(ct);
+                if (!IsConnected || !IsMoving) return;
+                await Task.Delay(StatePollInterval, ct);
+            }
+        } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
+            // Superseded by a later movement or explicitly disconnected.
+        } catch {
+            // A later explicit refresh reports communication errors to its caller.
+            // Cached state remains available without making property reads throw.
+        }
+    }
 
     private static async Task<bool> Safe(Task<bool> t)     { try { return await t; }   catch { return false; } }
     private static async Task<int> Safe(Task<int> t)       { try { return await t; }   catch { return 0; } }

@@ -1310,6 +1310,10 @@ function ninaApp() {
         equipFocuserChoice: '',
         equipFilterChoice: '',
         equipRotatorChoice: '',
+        rotatorDriver: 'indi',
+        rotatorDrivers: [],
+        rotatorVendorDevices: [],
+        rotatorDiscovering: false,
         equipFlatChoice: '',
         equipDomeChoice: '',
         equipWeatherChoice: '',
@@ -1332,6 +1336,7 @@ function ninaApp() {
         // run is walking the device list sequentially.
         equipBulkBusy: false,
         equipRotatorTarget: 0,
+        rotatorMaxAngle: 360,
         equipFlatBrightness: 128,
         equipDomeTarget: 0,
         equipCameraInfo: { coolerOn: false, binX: 0, binY: 0, bitDepth: 0 },
@@ -5761,6 +5766,7 @@ function ninaApp() {
             this.loadMountDrivers();
             this.loadFocuserDrivers();
             this.loadFilterWheelDrivers();
+            this.loadRotatorDrivers();
             this.loadPowerBoxDrivers();
             this.restoreMountPanel();
             this.restoreCameraPanel();
@@ -24522,6 +24528,13 @@ function ninaApp() {
                 try { this.detectVendorMounts(); } catch (e) {}
             }
             this.equipRotatorChoice = rig.rotator || '';
+            this.rotatorDriver = rig.rotatorDriver || 'indi';
+            this.rotatorMaxAngle = [90, 180, 360].includes(Number(rig.rotatorMaxAngle))
+                ? Number(rig.rotatorMaxAngle) : 360;
+            if (this.rotatorDriver !== 'indi') {
+                this.rotatorVendorDevices = [];
+                try { this.detectVendorRotators(); } catch (e) {}
+            }
             this.equipFlatChoice = rig.flatDevice || '';
             this.equipDomeChoice = rig.dome || '';
             this.equipWeatherChoice = rig.weather || '';
@@ -25394,6 +25407,8 @@ function ninaApp() {
                 filterWheel: this.equipFilterChoice || rig.filterWheel,
                 filterWheelDriver: this.filterWheelDriver || rig.filterWheelDriver || 'indi',
                 rotator: this.equipRotatorChoice || rig.rotator,
+                rotatorDriver: this.rotatorDriver || rig.rotatorDriver || 'indi',
+                rotatorMaxAngle: this.rotatorMaxAngle,
                 flatDevice: this.equipFlatChoice || rig.flatDevice,
                 dome: this.equipDomeChoice || rig.dome,
                 weather: this.equipWeatherChoice || rig.weather,
@@ -29804,6 +29819,7 @@ function ninaApp() {
                 if (this.mountDriver !== 'indi' && this.detectVendorMounts) this.detectVendorMounts();
                 if (this.focuserDriver !== 'indi' && this.detectVendorFocusers) this.detectVendorFocusers();
                 if (this.filterWheelDriver !== 'indi' && this.detectVendorFilterWheels) this.detectVendorFilterWheels();
+                if (this.rotatorDriver !== 'indi' && this.detectVendorRotators) this.detectVendorRotators();
             } catch (e) { }
         },
         // ---- Basic equipment per-role device picker ----
@@ -40774,6 +40790,14 @@ function ninaApp() {
                 }];
             }
         },
+        async loadRotatorDrivers() {
+            try {
+                this.rotatorDrivers = await this.apiGet('/api/rotator/drivers');
+            } catch (e) {
+                this.rotatorDrivers = [{ id: 'indi', name: 'INDI', available: true,
+                    description: 'Any rotator the running INDI server exposes.' }];
+            }
+        },
         // Vendor-side discovery (ASCOM registry). Same call shape as
         // detectVendorCameras. Skip the IndiClient-driven dropdown.
         async detectVendorFocusers() {
@@ -40808,6 +40832,21 @@ function ninaApp() {
                 this.filterWheelDiscovering = false;
             }
         },
+        async detectVendorRotators() {
+            this.rotatorDiscovering = true;
+            try {
+                this.rotatorVendorDevices = await this.apiGet(
+                    `/api/rotator/discover?driver=${encodeURIComponent(this.rotatorDriver)}`) || [];
+                if (this.rotatorVendorDevices.length === 0)
+                    this.toast('No rotators detected for ' + this.rotatorDriver, 'warn');
+            } catch (e) {
+                this.toastFail('Rotator detect failed', e);
+                this.rotatorVendorDevices = [];
+            } finally { this.rotatorDiscovering = false; }
+        },
+        get rotatorDriverInfo() {
+            return this.rotatorDrivers.find(d => d.id === this.rotatorDriver) || null;
+        },
         get focuserDriverInfo() {
             return this.focuserDrivers.find(d => d.id === this.focuserDriver) || null;
         },
@@ -40832,10 +40871,23 @@ function ninaApp() {
         async equipConnectRotator() {
             if (!this.equipRotatorChoice) return;
             try {
-                await this.apiPost(`/api/rotator/select/${encodeURIComponent(this.equipRotatorChoice)}`);
+                const qs = this.rotatorDriver && this.rotatorDriver !== 'indi'
+                    ? `?driver=${encodeURIComponent(this.rotatorDriver)}` : '';
+                await this.apiPost(`/api/rotator/select/${encodeURIComponent(this.equipRotatorChoice)}${qs}`);
                 await this.apiPost('/api/rotator/connect');
-                this.rotator.connected = true;
-                this.rotator.name = this.equipRotatorChoice;
+                // Alpaca reports its physical position on demand rather than
+                // pushing an INDI property vector. Read it immediately so the
+                // card shows the actual CAA angle without waiting for WS poll.
+                const status = await this.apiGet('/api/rotator/status');
+                this.rotator = {
+                    connected: !!status.connected,
+                    name: status.name || this.equipRotatorChoice,
+                    position: status.position,
+                    moving: !!status.moving,
+                    reversed: !!status.reversed
+                };
+                this._persistRigSelection({ rotator: this.equipRotatorChoice,
+                    rotatorDriver: this.rotatorDriver || 'indi' });
                 this.toast('Rotator connected: ' + this.equipRotatorChoice, 'ok');
             } catch (e) {
                 this.toastFail('Rotator connection failed', e);
@@ -48357,6 +48409,7 @@ function ninaApp() {
                     this.mountDrivers = await this.apiGet('/api/telescope/drivers');
                     this.focuserDrivers = await this.apiGet('/api/focuser/drivers');
                     this.filterWheelDrivers = await this.apiGet('/api/filterwheel/drivers');
+                    this.rotatorDrivers = await this.apiGet('/api/rotator/drivers');
                 } catch (_) { /* best-effort; the next tab open will repopulate */ }
             } catch (e) {
                 if (!silent) {
