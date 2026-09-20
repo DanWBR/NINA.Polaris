@@ -279,9 +279,6 @@ public class HardwareAutoConnectService : IHostedService {
             return;
         }
 
-        var available = indiOk
-            ? new HashSet<string>(_indiClient.GetDeviceNames(), StringComparer.OrdinalIgnoreCase)
-            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         // Each entry: friendly name shown in the toast + saved device
         // name from the rig + the bind+connect callback. Camera,
@@ -351,7 +348,12 @@ public class HardwareAutoConnectService : IHostedService {
                 missing++;
                 continue;
             }
-            if (isIndi && !available.Contains(name)) {
+            // Drivers define their devices at their own pace after
+            // getProperties: a focuser that opens a serial port or scans
+            // USB through a vendor SDK shows up seconds after the mount. A
+            // snapshot taken when the first device appeared skipped every
+            // late one as "not present", so wait for each name instead.
+            if (isIndi && !await WaitForIndiDeviceAsync(name, IndiDefineTimeout, ct)) {
                 _notify.Push("warn", $"{label} '{name}' not present on INDI server.");
                 missing++;
                 continue;
@@ -379,6 +381,22 @@ public class HardwareAutoConnectService : IHostedService {
             _notify.Push("ok",
                 $"Rig '{rig.Name}': {connected} connected, {missing} missing, {failed} failed.");
         }
+    }
+
+    /// <summary>How long a rig device gets to be defined by its INDI driver
+    /// before the auto-connect gives up on it.</summary>
+    internal static readonly TimeSpan IndiDefineTimeout = TimeSpan.FromSeconds(20);
+
+    private async Task<bool> WaitForIndiDeviceAsync(string name, TimeSpan timeout, CancellationToken ct) {
+        var deadline = DateTime.UtcNow + timeout;
+        bool Present() => _indiClient.GetDeviceNames().Any(n => string.Equals(n, name, StringComparison.OrdinalIgnoreCase));
+        if (Present()) return true;
+        _logger.LogInformation("Auto-connect: waiting for INDI device '{Name}' to be defined", name);
+        while (DateTime.UtcNow < deadline) {
+            await Task.Delay(250, ct);
+            if (Present()) return true;
+        }
+        return false;
     }
 
     /// <summary>The rig's driver field for a device: null or empty means INDI.</summary>
