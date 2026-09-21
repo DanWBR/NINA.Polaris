@@ -977,6 +977,45 @@ public class EquipmentProfile {
     /// (primary + secondaries). Clamped to [1, 12].</summary>
     public int NativeMaxGuideStars { get; set; } = 8;
 
+    // ----- guide-star selection -----
+    //
+    // The detector's own defaults are tuned for imaging frames, and a guide
+    // camera is a different instrument: small, often binned, sometimes on a
+    // bright sky, with stars a few pixels across. When they do not suit a rig
+    // the result is "no suitable guide star" over a frame the operator can see
+    // stars in, so these are knobs rather than constants. Null = the tuned
+    // default, which is what every existing rig gets.
+
+    /// <summary>Detection threshold in sigma over the frame's noise (median +
+    /// n x MAD). Lower finds fainter stars and more noise; the detector's own
+    /// default is 5. Range [1, 20].</summary>
+    public double? NativeStarSigma { get; set; }
+    /// <summary>Smallest blob, in pixels above the threshold, accepted as a
+    /// star. The default of 5 drops a tight star on an undersampled guide
+    /// scope, which is one way a frame full of stars detects none. Range
+    /// [1, 200].</summary>
+    public int? NativeStarMinSize { get; set; }
+    /// <summary>Largest blob accepted as a star. Range [50, 20000].</summary>
+    public int? NativeStarMaxSize { get; set; }
+    /// <summary>Largest half-flux radius accepted, in pixels. Raise it for a
+    /// soft or defocused guide scope. Range [1, 100].</summary>
+    public double? NativeStarMaxHfd { get; set; }
+    /// <summary>How far from the frame edge a star has to be to be selectable,
+    /// in pixels. It has to leave room for the tracking window, so the
+    /// effective value is never below the search region. Range [0, 200].</summary>
+    public int? NativeStarEdgeMarginPx { get; set; }
+    /// <summary>How far a tap may be from a star and still mean it, in sensor
+    /// pixels. A finger on a downscaled frame is tens of pixels wide, hence 60
+    /// by default. Range [5, 300].</summary>
+    public double? NativeStarTapRadiusPx { get; set; }
+    /// <summary>Let a saturated star be used. Saturation flattens the top of
+    /// the star, which costs centroid precision, so it is avoided when there
+    /// is a choice; refusing outright is worse, since a saturated star still
+    /// guides better than no star. Auto-select warns and uses one when nothing
+    /// else is available, and a tapped star is always honoured. Turning this
+    /// on stops avoiding them in the first place.</summary>
+    public bool? NativeStarAllowSaturated { get; set; }
+
     /// <summary>Guide-camera gain for native guiding. 0 = leave the camera's
     /// current/default gain. Default 40 (a sane mid-gain for common guide cams).</summary>
     public int NativeGuideGain { get; set; } = 40;

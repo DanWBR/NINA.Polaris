@@ -4977,5 +4977,20 @@
   "Framing measurement failed": "Échec de la mesure du cadrage",
   "Framing advice failed": "Échec du calcul de la rotation nécessaire",
   "left to the camera driver": "laissé au pilote de la caméra",
-  "Sensor black-level pedestal (ADU floor) for THIS panel's captures. A small positive value stops the shadow/noise tail clipping to 0 and keeps calibration clean. Polaris sends it to the camera before every capture from this panel, so it wins over the driver's own control panel; 0 means the capture sends nothing and the frame records whatever the driver is set to. Typical: a few tens: SV405CC ~30-64.": "Piédestal de niveau de noir du capteur (plancher en ADU) pour les poses de CE panneau. Une petite valeur positive empêche la queue ombres/bruit d'être écrêtée à 0 et garde une calibration propre. Polaris l'envoie à la caméra avant chaque pose de ce panneau, elle l'emporte donc sur le panneau de contrôle du pilote ; 0 signifie que la pose n'envoie rien et que l'image enregistre ce que le pilote utilise. Typique : quelques dizaines : SV405CC ~30-64."
+  "Sensor black-level pedestal (ADU floor) for THIS panel's captures. A small positive value stops the shadow/noise tail clipping to 0 and keeps calibration clean. Polaris sends it to the camera before every capture from this panel, so it wins over the driver's own control panel; 0 means the capture sends nothing and the frame records whatever the driver is set to. Typical: a few tens: SV405CC ~30-64.": "Piédestal de niveau de noir du capteur (plancher en ADU) pour les poses de CE panneau. Une petite valeur positive empêche la queue ombres/bruit d'être écrêtée à 0 et garde une calibration propre. Polaris l'envoie à la caméra avant chaque pose de ce panneau, elle l'emporte donc sur le panneau de contrôle du pilote ; 0 signifie que la pose n'envoie rien et que l'image enregistre ce que le pilote utilise. Typique : quelques dizaines : SV405CC ~30-64.",
+  "Stop the focuser": "Arrêter le moteur de mise au point",
+  "Focuser stopped": "Moteur de mise au point arrêté",
+  "Focuser stop failed": "Échec de l'arrêt du moteur de mise au point",
+  "Stop the focuser now. Cancels a hold-to-repeat nudge as well as a move already running.": "Arrête le moteur de mise au point maintenant. Annule aussi bien une impulsion répétée (bouton maintenu) qu'un déplacement déjà en cours.",
+  "Star selection": "Sélection des étoiles",
+  "Detection sigma": "Sigma de détection",
+  "Min star size (px)": "Taille minimale d'étoile (px)",
+  "Max star size (px)": "Taille maximale d'étoile (px)",
+  "Max HFD (px)": "HFD maximal (px)",
+  "Edge margin (px)": "Marge du bord (px)",
+  "Tap radius (px)": "Rayon du tap (px)",
+  "Use saturated stars": "Utiliser les étoiles saturées",
+  "Reset to defaults": "Revenir aux valeurs par défaut",
+  "Star selection reset to the defaults": "Sélection des étoiles revenue aux valeurs par défaut",
+  "The detector found no stars in the last frame. Lower the sigma or the minimum size.": "Le détecteur n'a trouvé aucune étoile sur la dernière image. Baissez le sigma ou la taille minimale."
 }

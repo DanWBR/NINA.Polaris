@@ -609,9 +609,9 @@ public sealed partial class NativeGuider {
 
         SetActivity("Selecting");
         int w = img.Properties.Width, h = img.Properties.Height;
-        var stars = NewGuideStarDetector().Detect(img.Data, w, h);
+        var stars = GuideStarDetector().Detect(img.Data, w, h);
 
-        int margin = SearchRegion + 5;
+        int margin = StarEdgeMargin();
         double satGuard = SaturationLevel(img.Properties.BitDepth, img.Properties.SignificantBitDepth, img.Data);
         double minSep = SearchRegion * 3.0;
 
@@ -755,10 +755,10 @@ public sealed partial class NativeGuider {
             var img = await CaptureFullAsync(cam, ct);
             if (img == null) return;
             int w = img.Properties.Width, h = img.Properties.Height;
-            var stars = NewGuideStarDetector().Detect(img.Data, w, h);
+            var stars = GuideStarDetector().Detect(img.Data, w, h);
             double satGuard = SaturationLevel(img.Properties.BitDepth, img.Properties.SignificantBitDepth, img.Data);
             var pick = PickReacquireStar(stars, _lockX, _lockY, ReacquireRadiusPx,
-                                         w, h, SearchRegion + 5, satGuard);
+                                         w, h, StarEdgeMargin(), satGuard);
             if (pick == null) {
                 _logger.LogInformation(
                     "Native guide: re-acquire found no star within {R}px of the lock; still clouded?",

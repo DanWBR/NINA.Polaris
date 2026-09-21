@@ -218,8 +218,11 @@ than to retrofit:
   survives every font on every board.
 - Do not put a `max-width` on dropdowns.
 - When you touch `wwwroot/js/app.js`, run
-  `node scripts/check-missing-methods.mjs`. A `this.something()` with no
-  definition is silent until a user clicks the button.
+  `node scripts/check-missing-methods.mjs`. It reports two things, both of
+  them silent otherwise: a `this.something()` with no definition, which only
+  fails when a user clicks the button, and the same member defined twice in
+  one object literal, where the later one wins and the earlier one is dead
+  code. Three of those had shipped before the check existed.
 
 ## Coding conventions
 

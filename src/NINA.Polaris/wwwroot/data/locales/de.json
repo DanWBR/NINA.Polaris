@@ -4977,5 +4977,20 @@
   "Framing measurement failed": "Messung des Bildfelds fehlgeschlagen",
   "Framing advice failed": "Berechnung der Drehung fehlgeschlagen",
   "left to the camera driver": "dem Kameratreiber überlassen",
-  "Sensor black-level pedestal (ADU floor) for THIS panel's captures. A small positive value stops the shadow/noise tail clipping to 0 and keeps calibration clean. Polaris sends it to the camera before every capture from this panel, so it wins over the driver's own control panel; 0 means the capture sends nothing and the frame records whatever the driver is set to. Typical: a few tens: SV405CC ~30-64.": "Schwarzwert-Sockel des Sensors (ADU-Untergrenze) für die Aufnahmen DIESES Panels. Ein kleiner positiver Wert verhindert, dass der Schatten-/Rauschanteil auf 0 beschnitten wird, und hält die Kalibrierung sauber. Polaris sendet ihn vor jeder Aufnahme aus diesem Panel an die Kamera, er hat also Vorrang vor dem Bedienfeld des Treibers; 0 bedeutet, die Aufnahme sendet nichts und das Bild hält fest, was der Treiber verwendet. Typisch: einige Dutzend: SV405CC ~30-64."
+  "Sensor black-level pedestal (ADU floor) for THIS panel's captures. A small positive value stops the shadow/noise tail clipping to 0 and keeps calibration clean. Polaris sends it to the camera before every capture from this panel, so it wins over the driver's own control panel; 0 means the capture sends nothing and the frame records whatever the driver is set to. Typical: a few tens: SV405CC ~30-64.": "Schwarzwert-Sockel des Sensors (ADU-Untergrenze) für die Aufnahmen DIESES Panels. Ein kleiner positiver Wert verhindert, dass der Schatten-/Rauschanteil auf 0 beschnitten wird, und hält die Kalibrierung sauber. Polaris sendet ihn vor jeder Aufnahme aus diesem Panel an die Kamera, er hat also Vorrang vor dem Bedienfeld des Treibers; 0 bedeutet, die Aufnahme sendet nichts und das Bild hält fest, was der Treiber verwendet. Typisch: einige Dutzend: SV405CC ~30-64.",
+  "Stop the focuser": "Fokusmotor anhalten",
+  "Focuser stopped": "Fokusmotor angehalten",
+  "Focuser stop failed": "Anhalten des Fokusmotors fehlgeschlagen",
+  "Stop the focuser now. Cancels a hold-to-repeat nudge as well as a move already running.": "Hält den Fokusmotor jetzt an. Bricht sowohl einen gehaltenen Wiederhol-Impuls als auch eine laufende Fahrt ab.",
+  "Star selection": "Sternauswahl",
+  "Detection sigma": "Erkennungs-Sigma",
+  "Min star size (px)": "Mindestgröße des Sterns (px)",
+  "Max star size (px)": "Maximalgröße des Sterns (px)",
+  "Max HFD (px)": "Max. HFD (px)",
+  "Edge margin (px)": "Randabstand (px)",
+  "Tap radius (px)": "Tipp-Radius (px)",
+  "Use saturated stars": "Gesättigte Sterne verwenden",
+  "Reset to defaults": "Auf Standard zurücksetzen",
+  "Star selection reset to the defaults": "Sternauswahl auf Standard zurückgesetzt",
+  "The detector found no stars in the last frame. Lower the sigma or the minimum size.": "Der Detektor hat im letzten Bild keine Sterne gefunden. Senken Sie das Sigma oder die Mindestgröße."
 }

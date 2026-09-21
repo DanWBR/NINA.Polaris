@@ -1362,7 +1362,6 @@ function ninaApp() {
         cameraDrivers: [],
         cameraVendorDevices: [],
         cameraDiscovering: false,
-        cameraIso: 800,
         // PHD2-style display gamma for the native guide preview (0.10–3.00,
         // 1.0 = linear default). Persisted in localStorage; sent as ?gamma= on
         // the guide frame.jpg request.
@@ -2330,7 +2329,14 @@ function ninaApp() {
         // forecast is the raw DTO from the backend. weatherDays() /
         // weatherBestWindows() (declared below) derive view-model data
         // on the fly, using SunCalc for sun + moon ephemeris.
-        weather: { forecast: null, loading: false, error: '', errorCard: '', lastFetched: null },
+        //
+        // NOT `weather`: that name belongs to the weather STATION state
+        // above. This was declared as a second `weather:` key in this same
+        // object literal, and being the later one it won, so the station's
+        // defaults never existed and, worse, the status handler's
+        // `this.weather = { ...station fields... }` wiped the fetched
+        // forecast on the next tick.
+        weatherForecast: { forecast: null, loading: false, error: '', errorCard: '', lastFetched: null },
         _weatherLastKey: '',
 
         // Studio (post-processing), ST-1 frame browser + ST-2 viewer
@@ -17286,32 +17292,32 @@ function ninaApp() {
             const lng = this.settings.longitude;
             if (lat == null || lng == null
                 || (Math.abs(lat) < 0.01 && Math.abs(lng) < 0.01)) {
-                this.weather.error = 'Set your observing location in Settings first.';
-                this.weather.errorCard = 'observatory-card';
-                this.weather.forecast = null;
+                this.weatherForecast.error = 'Set your observing location in Settings first.';
+                this.weatherForecast.errorCard = 'observatory-card';
+                this.weatherForecast.forecast = null;
                 return;
             }
             const key = `${lat.toFixed(2)},${lng.toFixed(2)}`;
             // Skip refetch within the cache window unless the caller wants
             // to force (e.g. Refresh button). Backend has its own 15 min
             // cache so even a force-refresh storm is harmless.
-            if (!force && key === this._weatherLastKey && this.weather.forecast?.available) return;
+            if (!force && key === this._weatherLastKey && this.weatherForecast.forecast?.available) return;
             this._weatherLastKey = key;
-            this.weather.loading = true;
-            this.weather.error = '';
-            this.weather.errorCard = '';
+            this.weatherForecast.loading = true;
+            this.weatherForecast.error = '';
+            this.weatherForecast.errorCard = '';
             try {
                 const r = await this.apiGet(`/api/weather/forecast?lat=${lat}&lon=${lng}`);
-                this.weather.forecast = r;
-                this.weather.lastFetched = new Date();
+                this.weatherForecast.forecast = r;
+                this.weatherForecast.lastFetched = new Date();
                 if (!r?.available) {
-                    this.weather.error = r?.error || 'Forecast unavailable';
+                    this.weatherForecast.error = r?.error || 'Forecast unavailable';
                 }
             } catch (e) {
-                this.weather.error = 'Could not reach forecast service';
-                this.weather.forecast = null;
+                this.weatherForecast.error = 'Could not reach forecast service';
+                this.weatherForecast.forecast = null;
             } finally {
-                this.weather.loading = false;
+                this.weatherForecast.loading = false;
             }
         },
 
@@ -17395,7 +17401,7 @@ function ninaApp() {
         // sun + moon ephemeris (SunCalc) and pre-formatted display strings
         // so the template stays declarative.
         weatherDays() {
-            const f = this.weather.forecast;
+            const f = this.weatherForecast.forecast;
             if (!f?.available || !f.slots?.length) return [];
             const lat = this.settings.latitude || 0;
             const lng = this.settings.longitude || 0;
@@ -17488,7 +17494,7 @@ function ninaApp() {
             if (!days.length) return [];
             const lat = this.settings.latitude || 0;
             const lng = this.settings.longitude || 0;
-            const slots = this.weather.forecast.slots
+            const slots = this.weatherForecast.forecast.slots
                 .map(s => ({ ...s, utc: new Date(s.utcStart) }))
                 .sort((a, b) => a.utc - b.utc);
             // "Tonight" = first sunset onward through next sunrise.
@@ -24514,6 +24520,17 @@ function ninaApp() {
             if (rig.previewOffset != null) this.previewOffset = rig.previewOffset;
             if (rig.autorunOffset != null) this.autorunOffset = rig.autorunOffset;
             if (rig.advOffset != null) this.advOffset = rig.advOffset;
+            // Guide-star selection: null stays null, which reads as "default"
+            // in the inputs and on the host.
+            this.starSel = {
+                sigma: rig.nativeStarSigma ?? null,
+                minSize: rig.nativeStarMinSize ?? null,
+                maxSize: rig.nativeStarMaxSize ?? null,
+                maxHfd: rig.nativeStarMaxHfd ?? null,
+                edgeMargin: rig.nativeStarEdgeMarginPx ?? null,
+                tapRadius: rig.nativeStarTapRadiusPx ?? null,
+                allowSaturated: rig.nativeStarAllowSaturated === true
+            };
             // Manual-rotator turn direction: a fact about this optical train,
             // so it lives on the rig (see skyRotFlipDirection).
             this.manualRotatorReverse = rig.manualRotatorReverse === true;
@@ -31876,6 +31893,34 @@ function ninaApp() {
             }
         },
 
+        // Stop the focuser, from any panel that shows focus controls.
+        //
+        // Cancelling the nudge machinery FIRST is the part that matters: the
+        // hold-to-repeat buttons accumulate into focusSliderTarget and commit
+        // one absolute move on release, so aborting the motor while a commit
+        // is still pending would stop it and then immediately send it off
+        // again. Goes to whichever motor the panel's source switch selects
+        // (main / aux / guide), like every other focus action.
+        async focusAbort() {
+            if (this._focusNudgeTimer) { clearTimeout(this._focusNudgeTimer); this._focusNudgeTimer = null; }
+            if (this._focusNudgeInterval) { clearInterval(this._focusNudgeInterval); this._focusNudgeInterval = null; }
+            this._focusNudgePending = false;
+            this.focusSliderDirty = false;
+            try {
+                await this.apiPost(`${this._focuserApiBase()}/abort`);
+                // The motor stopped wherever it got to, so the slider and the
+                // goto box follow the driver instead of a target nobody is
+                // travelling to any more.
+                if (Number.isFinite(this.focusPosition)) {
+                    this.focusSliderTarget = this.focusPosition;
+                    this.focusGotoTarget = this.focusPosition;
+                }
+                this.toast(this.$t('Focuser stopped'), 'ok');
+            } catch (e) {
+                this.toastFail('Focuser stop failed', e);
+            }
+        },
+
         async focusMoveTo(position) {
             try {
                 await this.apiPost(`${this._focuserApiBase()}/move/absolute`, { position });
@@ -31986,10 +32031,6 @@ function ninaApp() {
                 this.focusSliderDirty = false;
             }
             this._wheelRepeatFocus = false;
-        },
-
-        async focusAbort() {
-            try { await this.apiPost(`${this._focuserApiBase()}/abort`); } catch (e) { }
         },
 
         // Software-only recovery from a wedged EAF driver. Cycles
@@ -34113,6 +34154,61 @@ function ninaApp() {
         },
 
         // Native guider per-axis algorithm (axis = 'ra' | 'dec').
+        // ─── Guide-star selection ──────────────────────────────────────
+        //
+        // The detector's defaults are tuned for imaging frames; a guide camera
+        // is a different instrument (small chip, often binned, stars a few
+        // pixels across), and when they do not suit a rig the symptom is "no
+        // suitable guide star" over a frame the operator can see stars in.
+        // Null in any field = the tuned default, which is what every rig
+        // starts with.
+        starSel: {
+            sigma: null, minSize: null, maxSize: null, maxHfd: null,
+            edgeMargin: null, tapRadius: null, allowSaturated: false
+        },
+
+        // The clamps mirror the host's, so a value the UI accepts is a value
+        // the guider will actually use.
+        _starSelLimits: {
+            sigma: [1, 20], minSize: [1, 200], maxSize: [50, 20000],
+            maxHfd: [1, 100], edgeMargin: [0, 200], tapRadius: [5, 300]
+        },
+
+        setStarSel(field, value) {
+            const rigField = {
+                sigma: 'nativeStarSigma', minSize: 'nativeStarMinSize',
+                maxSize: 'nativeStarMaxSize', maxHfd: 'nativeStarMaxHfd',
+                edgeMargin: 'nativeStarEdgeMarginPx', tapRadius: 'nativeStarTapRadiusPx'
+            }[field];
+            if (!rigField) return;
+            const lim = this._starSelLimits[field];
+            let v = Number(value);
+            // An empty field means "back to the default", which is null on the
+            // rig rather than a zero the guider would clamp into nonsense.
+            if (value === '' || value === null || !Number.isFinite(v)) v = null;
+            else v = Math.min(lim[1], Math.max(lim[0], v));
+            this.starSel[field] = v;
+            this._persistRigSelection({ [rigField]: v });
+        },
+
+        setStarSelAllowSaturated(on) {
+            this.starSel.allowSaturated = !!on;
+            this._persistRigSelection({ nativeStarAllowSaturated: !!on });
+        },
+
+        resetStarSel() {
+            this.starSel = {
+                sigma: null, minSize: null, maxSize: null, maxHfd: null,
+                edgeMargin: null, tapRadius: null, allowSaturated: false
+            };
+            this._persistRigSelection({
+                nativeStarSigma: null, nativeStarMinSize: null, nativeStarMaxSize: null,
+                nativeStarMaxHfd: null, nativeStarEdgeMarginPx: null,
+                nativeStarTapRadiusPx: null, nativeStarAllowSaturated: false
+            });
+            this.toast(this.$t('Star selection reset to the defaults'), 'ok');
+        },
+
         setNativeAlgorithm(axis, value) {
             if (axis === 'ra') {
                 this.nativeRaAlgorithm = value || 'hysteresis';
@@ -34472,17 +34568,34 @@ function ninaApp() {
             if (card) card.classList.toggle('is-collapsed');
         },
         // Jump to Settings and open a specific card. Actions elsewhere in
-        // the app (activity-bar chips, prompts) use this to land the user on
-        // the right card ready to act. The accordion starts every card
-        // collapsed, so scrolling alone is not enough: expand it too.
+        // the app (activity-bar chips, error banners, prompts) use this to
+        // land the user on the right card ready to act, so two things have to
+        // be right.
+        //
+        // The card has to be found late. nextTick alone fires before the
+        // settings grid is laid out, and before reorderSettings moves the
+        // node, so an immediate scrollIntoView silently did nothing: retry
+        // until the card is actually on screen.
+        //
+        // And it has to be expanded. The accordion starts every card
+        // collapsed, so scrolling alone lands the user on a shut card with
+        // nothing but its header showing.
         openSettingsCard(id) {
+            if (!id) return;
             this.tab = 'settings';
-            this.$nextTick(() => {
-                const card = id && document.getElementById(id);
-                if (!card) return;
-                card.classList.remove('is-collapsed');
-                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            });
+            let tries = 0;
+            const go = () => {
+                const el = document.getElementById(id);
+                // Expanding does not depend on layout, so do it as soon as the
+                // node exists; only the scroll waits for it to be on screen.
+                if (el) el.classList.remove('is-collapsed');
+                if (el && el.offsetParent !== null) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    return;
+                }
+                if (tries++ < 25) setTimeout(go, 80);
+            };
+            this.$nextTick(() => setTimeout(go, 40));
         },
         // Start every settings card collapsed (called from the grid's x-init).
         // ---- Install to internal disk ----------------------------------

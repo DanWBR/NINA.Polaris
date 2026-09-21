@@ -4358,5 +4358,20 @@
   "Framing measurement failed": "",
   "Framing advice failed": "",
   "left to the camera driver": "",
-  "Sensor black-level pedestal (ADU floor) for THIS panel's captures. A small positive value stops the shadow/noise tail clipping to 0 and keeps calibration clean. Polaris sends it to the camera before every capture from this panel, so it wins over the driver's own control panel; 0 means the capture sends nothing and the frame records whatever the driver is set to. Typical: a few tens: SV405CC ~30-64.": ""
+  "Sensor black-level pedestal (ADU floor) for THIS panel's captures. A small positive value stops the shadow/noise tail clipping to 0 and keeps calibration clean. Polaris sends it to the camera before every capture from this panel, so it wins over the driver's own control panel; 0 means the capture sends nothing and the frame records whatever the driver is set to. Typical: a few tens: SV405CC ~30-64.": "",
+  "Stop the focuser": "",
+  "Focuser stopped": "",
+  "Focuser stop failed": "",
+  "Stop the focuser now. Cancels a hold-to-repeat nudge as well as a move already running.": "",
+  "Star selection": "",
+  "Detection sigma": "",
+  "Min star size (px)": "",
+  "Max star size (px)": "",
+  "Max HFD (px)": "",
+  "Edge margin (px)": "",
+  "Tap radius (px)": "",
+  "Use saturated stars": "",
+  "Reset to defaults": "",
+  "Star selection reset to the defaults": "",
+  "The detector found no stars in the last frame. Lower the sigma or the minimum size.": ""
 }

@@ -2115,3 +2115,20 @@
     .video-process-preview .video-ref-wrap { flex: 1 1 auto; }
     .video-process-preview .hint { flex: 0 0 auto; }
 }
+
+/* Star selection knobs in the GUIDE sidebar: two columns of label-above-input
+   so six numbers fit the narrow rail without any of them being a mystery. */
+.starsel-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 8px;
+    margin-top: 6px;
+}
+.starsel-grid label {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+.starsel-grid input { width: 100%; }

@@ -39,6 +39,15 @@ middle number is the current focuser position; click it to type a
 direct value. The **Step Size** slider sets the jump distance for
 the double arrows, from 1 to 500 steps, persisted per rig.
 
+A red **Stop** sits at the end of the row, and the same button appears
+beside the nudge arrows in the PREVIEW and VIDEO panels and in the phone
+shell's focus pad, so wherever you can start a move you can stop it.
+Unlike the arrows it stays enabled while the motor is running, which is
+the one moment it is worth having, and it also drops a hold-to-repeat
+nudge that has not committed yet: those buttons accumulate and send one
+absolute move on release, so stopping the motor without cancelling that
+would send it straight off again.
+
 An info panel below shows **Temperature**, the focuser-reported
 temperature in degrees Celsius when the hardware supports it (this
 reading drives the LIVE tab's auto-refocus temperature trigger, see

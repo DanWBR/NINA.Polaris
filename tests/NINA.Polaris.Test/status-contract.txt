@@ -121,6 +121,7 @@ guider.profileSync.profileId
 guider.profileSync.profileMissing
 guider.profileSync.rigId
 guider.profileSync.rigName
+guider.starSelection
 guider.vncSession
 guider.vncSession.lastError
 guider.vncSession.listening

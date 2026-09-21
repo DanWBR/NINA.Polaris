@@ -161,6 +161,12 @@
     color:var(--text); font-size:15px; font-weight:700}
 .basic-shell .bs-nudge button:active{background:var(--bs-accent); color:#fff}
 .basic-shell .bs-nudge button:disabled{opacity:.4}
+/* Stop, in the phone shell's focus pad: same square as the arrows, red so it
+   reads as the interruption it is. */
+.basic-shell .bs-nudge .bs-nudgestop{
+    background:rgba(255,93,93,.18); border-color:var(--bs-danger); color:var(--bs-danger);
+    font-size:12px;
+}
 .basic-shell .bs-nudgehide{min-width:26px !important; height:26px !important; background:transparent !important;
     color:var(--bs-muted) !important; font-size:15px !important; align-self:flex-start}
 .basic-shell .bs-focusreopen{position:absolute; right:104px; bottom:56px; z-index:23; height:32px; padding:0 14px;
