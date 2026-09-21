@@ -9343,8 +9343,38 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <button class="btn btn-sm" @click="skyRotClear()"
                                     :disabled="skyTargetRotDeg == null"
                                     title="Drop the chosen angle and show the solved camera angle again">Follow solve</button>
-                            <span class="hint" x-show="!rotator.connected">No rotator: the angle is kept for framing and for PLAN targets.</span>
+                            <span class="hint" x-show="!rotator.connected">No rotator: measure below and turn yours by hand.</span>
                             <span class="hint" x-show="rotator.connected && skyTargetRotDeg != null">Slew &amp; Center will turn the rotator to this angle.</span>
+                        </div>
+
+                        <!-- Manual rotator. No motor to drive, so the operator
+                             is the loop: measure, turn the camera, measure
+                             again. Only shown when there is no rotator to do
+                             it for them. -->
+                        <div class="sky-rot-manual" x-show="!rotator.connected && skyTargetRotDeg != null" x-cloak>
+                            <div class="sky-rot-row">
+                                <button class="btn btn-sm btn-primary" @click="skyRotMeasure()"
+                                        :disabled="skyRotMeasuring"
+                                        title="Plate solve the last frame and work out how far to turn the camera">
+                                    <span x-show="!skyRotMeasuring">Measure framing</span>
+                                    <span x-show="skyRotMeasuring" x-cloak>Measuring…</span>
+                                </button>
+                                <button class="btn btn-sm" @click="skyRotFlipDirection()"
+                                        :disabled="!skyRotAdvice"
+                                        title="Use this when the camera has to go the other way round; the choice is kept with this rig">Other way</button>
+                            </div>
+                            <template x-if="skyRotAdvice">
+                                <div class="sky-rot-advice"
+                                     :class="skyRotAdvice.withinTolerance ? 'is-ok' : ''">
+                                    <strong x-text="skyRotAdviceText()"></strong>
+                                    <span class="text-muted" x-show="!skyRotAdvice.withinTolerance">
+                                        Looking at the back of the camera. Turn it, then measure again.
+                                    </span>
+                                </div>
+                            </template>
+                            <p class="hint" x-show="!skyRotAdvice">
+                                Take a PREVIEW exposure first, then Measure framing.
+                            </p>
                         </div>
                     </div>
 

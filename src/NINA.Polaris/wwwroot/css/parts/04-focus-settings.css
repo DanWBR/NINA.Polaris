@@ -2002,6 +2002,26 @@
 }
 .sky-rot-head strong { font-variant-numeric: tabular-nums; }
 .sky-rot-head .btn { margin-left: auto; }
+/* Manual rotator block inside the framing-rotation panel: the measure /
+   flip buttons and the turn instruction. Padded as its own block so it reads
+   apart from the slider row above it. */
+.sky-rot-manual {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+}
+.sky-rot-advice {
+    margin-top: 6px;
+    padding: 6px 8px;
+    border-radius: var(--radius, 8px);
+    background: var(--bg-elevated, rgba(255,255,255,0.04));
+    border: 1px solid var(--border);
+    font-size: 12px;
+}
+.sky-rot-advice.is-ok { border-color: var(--ok, #37c871); }
+.sky-rot-advice strong { display: block; }
+.sky-rot-advice .text-muted { font-size: 11px; }
+
 .sky-rot-row {
     display: flex;
     align-items: center;

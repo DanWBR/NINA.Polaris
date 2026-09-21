@@ -325,8 +325,38 @@ the wrong way once; the loop notices, reverses, and remembers the
 direction for the rest of the session. A rectangular sensor frames the
 same field either way up, so a difference of 180° counts as done.
 
-Without a rotator the angle is still kept: it is the rotation stored on
-a PLAN target and on targets added to a sequence.
+### Manual rotators
+
+A rotator you turn by hand (a camera rotator ring, a CAA with the motor
+off) cannot be driven by that loop, so you are the loop: Polaris
+measures, you turn, Polaris measures again.
+
+With no rotator connected and a framing angle chosen, the rotation
+panel grows a **Measure framing** button:
+
+1. Take a PREVIEW exposure, or leave the stream running, so there is a
+   frame to solve.
+2. **Measure framing** solves it and answers with something like *Turn
+   the camera 20.0° clockwise*. The direction is as seen looking at the
+   back of the camera.
+3. Turn the camera, then press it again. Repeat until it says the
+   framing is within tolerance (1°).
+
+The direction comes from the parity of the solved field: a star
+diagonal, or any odd number of reflections, reverses which way the sky
+angle runs, and the solve's CD matrix is what reveals that. It cannot
+know which side of the camera you are standing on, though, so if the
+instruction sends you the wrong way, press **Other way**. The choice is
+stored on the rig, so it applies to that optical train from then on. If
+a turn makes the error grow, Polaris flips the direction itself and
+says so.
+
+A Slew & Center from this tab also reports the framing error when no
+rotator is connected. It centres the mount as usual and never fails
+over an angle nothing on the host can change.
+
+The chosen angle is kept either way: it is the rotation stored on a PLAN
+target and on targets added to a sequence.
 
 ## Center on Sun / Moon / planet
 
