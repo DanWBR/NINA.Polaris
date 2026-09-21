@@ -288,6 +288,21 @@ public class ImageWriterService {
     /// operator never filled in).</summary>
     internal static int LargerSensorSide(int a, int b) => Math.Max(a > 0 ? a : 0, b > 0 ? b : 0);
 
+    /// <summary>What belongs in the FITS OFFSET card when the frame's own
+    /// metadata carries none. 0 means "write no card".
+    ///
+    /// The driver's live value wins over the rig's setting, because the rig
+    /// says what Polaris asked for and only the driver knows what the sensor
+    /// ran at. They differ in two real cases: the rig offset is 0, which means
+    /// "leave the driver's setting alone", so the rig has no value to give;
+    /// and the camera has no offset control, where the requested value never
+    /// went anywhere and claiming it in the header is how a frame taken at 300
+    /// came to be labelled 50 (issue #26).</summary>
+    internal static int ResolveHeaderOffset(int? driverOffset, int rigOffset) {
+        if (driverOffset is > 0) return driverOffset.Value;
+        return rigOffset > 0 ? rigOffset : 0;
+    }
+
     /// <summary>True when the delivered frame is smaller than the sensor read.
     /// A zero or negative sensor size means the driver has not published its
     /// geometry, which is not evidence of a crop.</summary>
@@ -454,15 +469,13 @@ public class ImageWriterService {
                 m.Camera.Gain = gcam.Gain;
         }
         // Camera offset, the same gap class as gain: not every driver stamps
-        // OFFSET into the per-frame metadata (and ICamera exposes no live
-        // Offset to read back the way Gain can be), so several save paths
-        // dropped it entirely and the FITS carried no OFFSET card. Fill from
-        // the rig's configured DefaultOffset, which is what actually got
-        // applied at capture. FITSWriter only emits OFFSET when non-zero,
-        // matching the GAIN behaviour.
+        // OFFSET into the per-frame metadata, so several save paths dropped it
+        // entirely and the FITS carried no OFFSET card. FITSWriter only emits
+        // OFFSET when non-zero, matching the GAIN behaviour.
         if (m.Camera.Offset == 0) {
-            var rigOffset = _profile.ActiveEquipmentProfile?.DefaultOffset ?? 0;
-            if (rigOffset > 0) m.Camera.Offset = rigOffset;
+            m.Camera.Offset = ResolveHeaderOffset(
+                _equip.Camera is { IsConnected: true } ocam ? ocam.DriverOffset : null,
+                _profile.ActiveEquipmentProfile?.DefaultOffset ?? 0);
         }
 
         // How the mount tracked DURING this exposure, so the night's subs can

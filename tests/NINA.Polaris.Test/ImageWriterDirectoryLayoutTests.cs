@@ -214,4 +214,37 @@ public class ImageWriterDirectoryLayoutTests {
         // either way, and warning on every frame would be noise.
         Assert.That(ImageWriterService.IsCroppedSensorFrame(3000, 3006, 0, 0), Is.False);
     }
+
+    // ----- FITS OFFSET card (issue #26) -----
+
+    /// <summary>The driver's live value wins: the rig records what Polaris
+    /// asked for, and only the driver knows what the sensor ran at. With the
+    /// rig offset at 0 ("leave the driver's setting alone") the rig has
+    /// nothing to give, and a frame taken at 125 must not be labelled with a
+    /// value nobody applied.</summary>
+    [Test]
+    public void ResolveHeaderOffset_DriverValueWins() {
+        Assert.That(ImageWriterService.ResolveHeaderOffset(125, 0), Is.EqualTo(125));
+        Assert.That(ImageWriterService.ResolveHeaderOffset(125, 50), Is.EqualTo(125),
+            "the rig asked for 50 but the sensor ran at 125");
+    }
+
+    /// <summary>A backend that cannot report its offset (no offset control, a
+    /// DSLR, a disconnected camera) falls back to what the rig asked for,
+    /// which is the old behaviour and still the best guess available.</summary>
+    [Test]
+    public void ResolveHeaderOffset_NoDriverValue_FallsBackToTheRig() {
+        Assert.That(ImageWriterService.ResolveHeaderOffset(null, 50), Is.EqualTo(50));
+        Assert.That(ImageWriterService.ResolveHeaderOffset(0, 50), Is.EqualTo(50),
+            "a driver reporting 0 has no pedestal to report");
+    }
+
+    /// <summary>Nothing known from either side writes no card at all, rather
+    /// than a made-up zero: FITSWriter omits OFFSET when it is 0.</summary>
+    [Test]
+    public void ResolveHeaderOffset_NothingKnown_WritesNoCard() {
+        Assert.That(ImageWriterService.ResolveHeaderOffset(null, 0), Is.EqualTo(0));
+        Assert.That(ImageWriterService.ResolveHeaderOffset(0, 0), Is.EqualTo(0));
+    }
+
 }
