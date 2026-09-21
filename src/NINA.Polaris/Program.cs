@@ -1156,10 +1156,11 @@ app.UseWebSockets();
 // stripped from the iframe URL) AND the WebSocket upgrade that streams
 // PHD2's pixel updates.
 var phd2GuiForwarder = app.Services.GetRequiredService<IHttpForwarder>();
-// Capped at LoopbackProxy.MaxUpstreamConnections, because xpra's listener is
-// listen(5) and the HTML5 client asks for forty files at once: see
-// LoopbackProxy for the measurements and for what an overflow looked like.
+// Gated: xpra's HTTP server is single-threaded behind a listen(5) and the
+// HTML5 client asks for forty files at once. See LoopbackProxy for the
+// measurements and for what the unbounded fan-out looked like.
 var phd2GuiHttpClient = NINA.Polaris.Services.LoopbackProxy.NewInvoker();
+var phd2GuiGate = NINA.Polaris.Services.LoopbackProxy.NewGate();
 app.Map("/phd2-gui/{**rest}", async (HttpContext ctx, Phd2GuiSessionService gui) => {
     if (!gui.IsSupportedOs || !gui.XpraInstalled) {
         ctx.Response.StatusCode = 501;
@@ -1198,7 +1199,7 @@ app.Map("/phd2-gui/{**rest}", async (HttpContext ctx, Phd2GuiSessionService gui)
     ctx.Request.Path = rest;
     var target = $"http://127.0.0.1:{gui.BindPort}";
     await NINA.Polaris.Services.LoopbackProxy.ForwardAsync(
-        phd2GuiForwarder, ctx, target, phd2GuiHttpClient, "xpra");
+        phd2GuiForwarder, ctx, target, phd2GuiHttpClient, "xpra", phd2GuiGate);
 });
 
 // ----- PH2VNC-2: /phd2-vnc-ws WebSocket → TightVNC TCP bridge -----
@@ -1335,9 +1336,10 @@ app.Map("/phd2-vnc-ws", async (HttpContext ctx, Phd2VncSessionService vnc,
 // directly exposed to the network even when Polaris listens on
 // 0.0.0.0.
 var indiWebForwarder = app.Services.GetRequiredService<IHttpForwarder>();
-// Capped like the phd2-gui proxy above: indi-web is a bottle/wsgiref server,
+// Gated like the phd2-gui proxy above: indi-web is a bottle/wsgiref server,
 // single-threaded with the same modest accept queue.
 var indiWebHttpClient = NINA.Polaris.Services.LoopbackProxy.NewInvoker();
+var indiWebGate = NINA.Polaris.Services.LoopbackProxy.NewGate();
 // The forward uses the default transformer, which leaves headers and body
 // untouched. We strip the /indi-web prefix from the request path manually
 // below (HttpContext.Request.Path) instead: indi-web returns asset URLs like
@@ -1376,7 +1378,7 @@ app.Map("/indi-web/{**rest}", async (HttpContext ctx, IndiWebManagerService svc)
     ctx.Request.Path = rest;
     var target = $"http://{svc.BindAddress}:{svc.BindPort}";
     await NINA.Polaris.Services.LoopbackProxy.ForwardAsync(
-        indiWebForwarder, ctx, target, indiWebHttpClient, "indi-web");
+        indiWebForwarder, ctx, target, indiWebHttpClient, "indi-web", indiWebGate);
 });
 
 // ----- CANOPUS: /canopus/* reverse-proxy → local assistant agent -----
@@ -1385,9 +1387,9 @@ app.Map("/indi-web/{**rest}", async (HttpContext ctx, IndiWebManagerService svc)
 // /indi-web proxy: strip the /canopus prefix so the agent sees its own root
 // paths, and the forwarder carries the WebSocket upgrade for /canopus/api/agent.
 var canopusForwarder = app.Services.GetRequiredService<IHttpForwarder>();
-// Uncapped: the agent runs on uvicorn, which accepts connections properly
-// (backlog 2048), so the phd2-gui/indi-web cap would only add queueing. The
-// retry on a dropped connection still applies.
+// Ungated and uncapped: the agent runs on uvicorn, which accepts connections
+// properly (backlog 2048), so the phd2-gui/indi-web gate would only add
+// queueing. The retry on a dropped connection still applies.
 var canopusHttpClient = NINA.Polaris.Services.LoopbackProxy.NewInvoker(
     maxConnections: int.MaxValue);
 app.Map("/canopus/{**rest}", async (HttpContext ctx,
