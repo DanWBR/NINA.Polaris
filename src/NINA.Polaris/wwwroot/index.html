@@ -2779,6 +2779,10 @@
                                 @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()"
                                 @pointercancel="stopFocusNudgeRepeat()"
                                 :title="'Move IN by ' + focusStepFast + ' steps (FAST, hold to repeat)'">&raquo;</button>
+                        <!-- Stop. Deliberately NOT disabled while the motor is
+                             moving, which is the one moment it is needed. -->
+                        <button class="btn btn-danger focus-stop" :disabled="!focusJogConnected"
+                                @click="focusAbort()" title="Stop the focuser now. Cancels a hold-to-repeat nudge as well as a move already running.">&#9632; <span x-text="$t('Stop')"></span></button>
                     </div>
                     <!-- Inline meta strip: SLOW/FAST inputs use
                          label-on-the-left so each occupies ~110 px
@@ -3221,8 +3225,13 @@
                                 :disabled="autoFocus.state === 'running' || (afParams.focuserSource === 'aux' ? (!auxFocuserConnected || !auxCameraConnected) : afParams.focuserSource === 'guide' ? (!guideFocuserConnected || !guider.guideCameraConnected) : (!focusConnected || !selectedCamera))">Start AF</button>
                         <button class="btn btn-danger" @click="abortAutoFocus()"
                                 :disabled="autoFocus.state !== 'running'">Abort AF</button>
+                        <!-- Stops whichever motor the manual Focuser source
+                             points at (focusAbort follows that switch), and is
+                             not gated on the driver reporting movement: after a
+                             wedged move the flag can be stale and the operator
+                             still needs the button. -->
                         <button class="btn btn-danger" @click="focusAbort()"
-                                :disabled="!focusConnected || !focusMoving">Stop Focuser</button>
+                                :disabled="!focusJogConnected">Stop Focuser</button>
                         <button class="btn" @click="saveAfParamsToRig()"
                                 :disabled="autoFocus.state === 'running'"
                                 title="Persist these values as the rig's auto-focus defaults, the sequencer AF instruction and every AF trigger will use them too.">Save as rig default</button>
@@ -3567,6 +3576,11 @@
                                     @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()"
                                     @pointercancel="stopFocusNudgeRepeat()"
                                     :title="'In ' + focusStepFast + ' (fast, hold to repeat)'">&raquo;</button>
+                            <!-- Stop, enabled exactly when the arrows are not:
+                                 while the motor is running. -->
+                            <button class="btn btn-sm btn-danger focus-stop" style="flex:0 0 auto"
+                                    :disabled="!focusJogConnected"
+                                    @click="focusAbort()" title="Stop the focuser now. Cancels a hold-to-repeat nudge as well as a move already running.">&#9632;</button>
                         </div>
                         <!-- Absolute go-to row: label + input + Go, on one line. -->
                         <div class="control-row preview-focus-goto-row" style="display:flex; flex-direction:row; align-items:center; gap:6px; margin-top:4px; flex-wrap:nowrap">
@@ -3983,6 +3997,11 @@
                                     @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()"
                                     @pointercancel="stopFocusNudgeRepeat()"
                                     :title="'In ' + focusStepFast + ' (fast, hold to repeat)'">&raquo;</button>
+                            <!-- Stop, enabled exactly when the arrows are not:
+                                 while the motor is running. -->
+                            <button class="btn btn-sm btn-danger focus-stop" style="flex:0 0 auto"
+                                    :disabled="!focusJogConnected"
+                                    @click="focusAbort()" title="Stop the focuser now. Cancels a hold-to-repeat nudge as well as a move already running.">&#9632;</button>
                             </div>
                         </details>
 
@@ -21366,6 +21385,9 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             <div class="bs-pos bs-num"><div class="bs-pk">POSITION</div><div class="bs-pv" x-text="focusPosition ?? '--'"></div></div>
             <button title="In slow" :disabled="autoFocus.state==='running'" @pointerdown.prevent="startFocusNudgeRepeat(focusStepSlow)" @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()">&rsaquo;</button>
             <button title="In fast" :disabled="autoFocus.state==='running'" @pointerdown.prevent="startFocusNudgeRepeat(focusStepFast)" @pointerup="stopFocusNudgeRepeat()" @pointerleave="stopFocusNudgeRepeat()">&raquo;</button>
+            <!-- Stop. Not gated on the autofocus run, unlike the arrows: a
+                 sweep going the wrong way is exactly when you reach for it. -->
+            <button class="bs-nudgestop" @click="focusAbort()" :title="$t('Stop the focuser')">&#9632;</button>
             <button class="bs-nudgehide" @click="focusOpen=false" title="Hide focus">&times;</button>
         </div>
         <button class="bs-focusreopen" x-show="(basicScreen==='focus' || basicScreen==='video') && !focusOpen" x-cloak @click="focusOpen=true">&#9737; focus</button>

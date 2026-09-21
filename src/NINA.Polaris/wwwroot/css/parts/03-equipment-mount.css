@@ -1875,6 +1875,14 @@
     gap: 12px;
 }
 
+/* The focuser Stop, in the FOCUS stepper and in the PREVIEW / VIDEO nudge
+   rows. Narrow on purpose: it sits beside four arrows that share the width,
+   and it is an interruption rather than one more way to move. */
+.focus-stop {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
 .stepper {
     display: flex;
     align-items: center;

@@ -31882,6 +31882,34 @@ function ninaApp() {
             }
         },
 
+        // Stop the focuser, from any panel that shows focus controls.
+        //
+        // Cancelling the nudge machinery FIRST is the part that matters: the
+        // hold-to-repeat buttons accumulate into focusSliderTarget and commit
+        // one absolute move on release, so aborting the motor while a commit
+        // is still pending would stop it and then immediately send it off
+        // again. Goes to whichever motor the panel's source switch selects
+        // (main / aux / guide), like every other focus action.
+        async focusAbort() {
+            if (this._focusNudgeTimer) { clearTimeout(this._focusNudgeTimer); this._focusNudgeTimer = null; }
+            if (this._focusNudgeInterval) { clearInterval(this._focusNudgeInterval); this._focusNudgeInterval = null; }
+            this._focusNudgePending = false;
+            this.focusSliderDirty = false;
+            try {
+                await this.apiPost(`${this._focuserApiBase()}/abort`);
+                // The motor stopped wherever it got to, so the slider and the
+                // goto box follow the driver instead of a target nobody is
+                // travelling to any more.
+                if (Number.isFinite(this.focusPosition)) {
+                    this.focusSliderTarget = this.focusPosition;
+                    this.focusGotoTarget = this.focusPosition;
+                }
+                this.toast(this.$t('Focuser stopped'), 'ok');
+            } catch (e) {
+                this.toastFail('Focuser stop failed', e);
+            }
+        },
+
         async focusMoveTo(position) {
             try {
                 await this.apiPost(`${this._focuserApiBase()}/move/absolute`, { position });
@@ -31992,10 +32020,6 @@ function ninaApp() {
                 this.focusSliderDirty = false;
             }
             this._wheelRepeatFocus = false;
-        },
-
-        async focusAbort() {
-            try { await this.apiPost(`${this._focuserApiBase()}/abort`); } catch (e) { }
         },
 
         // Software-only recovery from a wedged EAF driver. Cycles
