@@ -2,10 +2,11 @@
 
 Everything else in this handbook is free and open source. **Canopus
 Assistant** is an optional AI companion that rides inside the Polaris web
-interface. It comes in three flavours: one paid cloud tier, whose
-subscription revenue funds the ongoing development of Polaris itself, and
-two free tiers that run entirely on your own hardware. All three are
-strictly opt-in. Polaris ships with the assistant switched off, never
+interface. It comes in four flavours: one paid cloud tier, whose
+subscription revenue funds the ongoing development of Polaris itself; two
+free tiers that run entirely on your own hardware; and one that points
+Polaris at a commercial AI provider with an API key of your own, billed by
+that provider rather than by us. All four are strictly opt-in. Polaris ships with the assistant switched off, never
 depends on it, and works exactly the same whether or not you ever turn it
 on. This chapter explains what it does, how to choose and enable a
 backend, and, just as importantly, what it does *not* do with your data or
@@ -19,9 +20,11 @@ first.
 
 ## What it can do {#sec-assistant-capabilities}
 
-Every backend shares the same core jobs. The cloud tier adds a few that
-need either a vision-capable model or more horsepower than a small local
-model has; those are called out below.
+Every backend shares the same core jobs. Some need either a vision-capable
+model or more horsepower than a small local model has; those are called
+out below. Where this chapter says "cloud tier" it means the subscription
+one, and where a capability needs a frontier model, the bring-your-own-key
+backend reaches it too.
 
 **It plans the night.** Tell it what you feel like shooting, "a nebula
 that's up now", "something for a two-hour window", "narrowband from a
@@ -47,18 +50,19 @@ guiding, exposure and histograms, filters, polar alignment
 drawing on a knowledge base that includes this very handbook. Available on
 every backend.
 
-**It looks at your images (cloud tier).** Ask "is this frame any good?"
-and it inspects the current frame, focus and star shape, trailing,
-gradients, framing, and tells you what to fix. It can also grade a folder
-of subs and drive the STUDIO stacking and post-processing tools
+**It looks at your images (cloud tier, or your own key).** Ask "is this
+frame any good?" and it inspects the current frame, focus and star shape,
+trailing, gradients, framing, and tells you what to fix. It can also grade
+a folder of subs and drive the STUDIO stacking and post-processing tools
 (@sec-studio) on your behalf, again as reviewable steps. Frame analysis
-needs a vision-capable model, so it runs on the cloud tier only; the two
-local tiers are text only.
+needs a vision-capable model: the subscription tier has one, the
+bring-your-own-key backend has one as long as the model you name can see
+images, and the two local tiers are text only.
 
 ## Choosing a backend {#sec-assistant-backends}
 
 You pick where the assistant runs in **Settings, Assistant**. There are
-three choices, and the picker labels each by what runs it:
+four choices, and the picker labels each by what runs it:
 
 - **Cloud (subscription).** The most capable option, and the only one that
   can look at your frames. The AI runs on our servers (gpt-5.3-chat on
@@ -88,9 +92,25 @@ three choices, and the picker labels each by what runs it:
   different machine, needs the LLM server to allow the Polaris page's
   origin.
 
+- **Cloud API with your own key.** Polaris runs the agent on the host and
+  calls a commercial AI provider with a key you supply: **Anthropic
+  (Claude)**, **OpenAI (GPT)**, or any **OpenAI-compatible server**
+  (OpenRouter, Groq, an Ollama on the LAN, anything that speaks the same
+  protocol at a `/v1` root). You get a frontier model, the full tool
+  catalogue, and frame analysis when the model you name can see images,
+  with no Polaris subscription; you pay the provider directly for what you
+  use, at their prices. This is the option for someone who already has an
+  API account.
+
+  Because the host makes the calls, the key is configured once and every
+  phone, tablet and laptop on the network gets the same assistant. It also
+  means the **host** needs internet access, which is the one practical
+  difference from the subscription tier (see @sec-assistant-architecture).
+
 The two local tiers are free and keep every message on your own hardware.
-The cloud tier is the only paid one, and the only one whose revenue funds
-Polaris.
+The subscription tier is the only one whose revenue funds Polaris; the
+bring-your-own-key tier costs you whatever your provider charges and
+nothing to us.
 
 ::: {.callout-note}
 On a phone or tablet **browser**, "On this device" has no local model to
@@ -109,6 +129,26 @@ follow the short setup shown in the card: download the on-host model, or
 point Polaris at your local LLM and pick a model. The assistant's floating
 button appears straight away; there is no account to create and nothing to
 pay.
+
+For **Cloud API with your own key**, the card grows a short form:
+
+1. Pick the **Provider**. For an OpenAI-compatible server, fill in the
+   **Base URL** as well: the `/v1` root, such as
+   `https://openrouter.ai/api/v1` or `http://192.168.1.10:11434/v1`.
+2. Name the **Model**. The field suggests current ids for the provider you
+   picked, and takes any id your key can use. A vision-capable model is
+   what lets Canopus look at your frames.
+3. Paste the **API key** and press **Save**. The key is stored on the
+   Polaris host, in a file only the Polaris user can read, and is never
+   sent back to a browser: the card shows only whether a key is present,
+   and offers **Clear key** to remove it.
+4. **Test connection** asks the provider which models your key can see and
+   reports whether the one you named is among them, which catches a typo
+   or a wrong key before you are mid-session. **Start** brings the
+   assistant up.
+
+Switching backends restarts the assistant for every client of this host,
+because the host runs one agent at a time.
 
 For the **cloud tier**, the assistant also surfaces as a small, dismissible
 badge in the bottom-right corner of the interface. The flow from there is
@@ -132,8 +172,8 @@ never appears at all.
 
 ## How it works {#sec-assistant-architecture}
 
-There are two architectures, depending on the backend, and both share the
-same safety and privacy model.
+There are three architectures, depending on the backend, and all of them
+share the same safety and privacy model.
 
 **Cloud tier.** Three parts fit together:
 
@@ -161,6 +201,14 @@ Prompts and replies never leave your hardware. The same "browser is the
 bridge" model still applies for actions: proposed tool calls run against
 your local Polaris through the session you are logged into.
 
+**Your own key.** The agent loop runs on the Polaris host, as it does for
+"On this host", but instead of a small local model it calls your
+provider's API over the internet. Tool calls therefore run on the host
+directly, without the browser in the middle, which is simpler but inverts
+the internet requirement: here the **host** needs to reach the provider,
+and a rig on an offline field network cannot use this backend. Your key
+never leaves the host, and no part of this involves our cloud service.
+
 ## Staying in control {#sec-assistant-safety}
 
 This applies to every backend. Read-only questions, "what's up tonight?",
@@ -177,8 +225,10 @@ autopilot you have to trust blindly.
 
 ## Your account and subscription {#sec-assistant-account}
 
-This section applies to the cloud tier only; the two free local backends
-have no account and nothing to pay.
+This section applies to the subscription cloud tier only. The two local
+backends have no account and nothing to pay, and the bring-your-own-key
+backend has no account with us either: your account, your billing and your
+usage limits are the provider's, and you manage them there.
 
 The cloud tier is a flat monthly subscription (US$4.99 per month at the
 time of writing; the current price is always shown on the subscribe
@@ -200,6 +250,13 @@ There is no account, no cloud, and no third-party AI provider. Your
 messages, the model, and every reply stay on the Polaris host or on the
 device you are browsing from.
 
+With **your own key**, nothing goes through us at all: the host talks
+straight to the provider you chose, so your messages, and any frame the
+assistant looks at, are handled under **that provider's** terms and
+retention policy, not ours. Worth reading them once if the field matters
+to you. The key sits on the host with owner-only permissions and is never
+handed to a browser.
+
 On the **cloud tier**, the assistant is designed to need very little about
 you. It does not upload or store your images. When it "looks at a frame",
 the analysis happens against your local Polaris, and only the *result*,
@@ -212,9 +269,11 @@ intro screen and hosted alongside the service.
 
 ## Why the cloud tier is a separate product {#sec-assistant-boundary}
 
-Polaris is licensed under the AGPLv3, which is what keeps it free and open,
-and the two local backends are part of that open codebase. The cloud tier
-is the one closed, commercial piece, and it is kept cleanly separable on
+Polaris is licensed under the AGPLv3, which is what keeps it free and open.
+The two local backends and the bring-your-own-key one are part of that open
+codebase: the provider adapters ship with Polaris, so anyone can read
+exactly what is sent to Anthropic or OpenAI on their behalf. The
+subscription cloud tier is the one closed, commercial piece, and it is kept cleanly separable on
 purpose: it runs as an entirely separate service and only ever talks to
 Polaris through the same public web API that any other client uses.
 Nothing in open-source Polaris contains the cloud tier's product logic; the

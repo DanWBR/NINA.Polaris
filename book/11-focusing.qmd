@@ -215,6 +215,28 @@ the intersection?) over the numeric value.
 **No camera capture, "Start loop" disabled.** Connect a camera in
 the RIGS tab first (@sec-rigs).
 
+## Which metric to focus on
+
+**Metric**, on the FOCUS panel and saved per rig, decides what each
+sweep point measures.
+
+- **Star HFR** is the default and the right answer on a dark sky: half
+  flux radius shrinks to a minimum at focus and the sweep fits the
+  V-curve everybody recognises. It needs stars, and enough of them to
+  pass the **Min Stars** gate.
+- **Contrast (Laplace)** and **Contrast (Sobel)** measure the edge detail
+  of the whole frame instead. There is nothing to detect and no star
+  gate: it works in daylight on a distant object, on the Moon or a
+  planet, and on a bright sky that drowns the stars, which is exactly
+  where HFR has nothing to work with. Laplace is the more sensitive close
+  to focus; Sobel is the steadier on a noisy frame. Both always fit a
+  parabola.
+
+Picking a contrast metric hides the star-count fields, since they no
+longer apply, and the readouts and the chart axis switch to contrast.
+Coarse focus on the Moon at dusk, then a star-HFR run when the sky is
+dark, is a sensible way to use both.
+
 ## Auto-focus: the V-curve
 
 Click **Start AF** to run a symmetric sweep around the current
@@ -226,8 +248,10 @@ position. Polaris:
    a geared focuser when it reverses direction; overshooting and
    coming back takes it up);
 3. at each position, moves the focuser, waits for it to settle,
-   captures an exposure, detects stars, and computes the median HFR
-   (frames with fewer than **Min Stars** stars are dropped);
+   captures an exposure and measures the frame with the chosen
+   **Metric** (below): the median HFR of the detected stars, dropping
+   frames with fewer than **Min Stars** of them, or the contrast of the
+   whole frame, which needs no stars at all;
 4. fits a parabola through the valid (position, HFR) samples;
 5. moves to the parabola's vertex, the best focus;
 6. reverts to the start position on cancel or failure.

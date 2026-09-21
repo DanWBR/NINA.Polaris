@@ -7,7 +7,7 @@ fragmented Markdown pages under `docs/` into one coherent narrative.
 ## Status
 
 All chapters and appendices are consolidated: the preface, chapters
-01 to 31, and appendices 90 to 93 are finished book prose. Each file
+01 to 32, and appendices 90 to 93 are finished book prose. Each file
 ends with a `<!-- consolidated from: ... -->` comment naming the
 `docs/` sources it replaced. Where those sources contradicted the
 code, the book follows the code and the trailing comment records the
@@ -23,9 +23,21 @@ window, simulator settings, PREVIEW tab, ADV tri-pane, file browser,
 Combine dialog, EDITOR).
 
 No `<!-- TODO cite: ... -->` markers remain; every citation in the
-72-entry bibliography is resolved. Before any print run, verify the
-entries against ADS or the publisher, per the policy at the top of
+bibliography is resolved. Before any print run, verify the entries
+against ADS or the publisher, per the policy at the top of
 `references.bib`.
+
+The book cites code paths, UI labels and defaults, so it ages with the
+application rather than with the calendar. A review after a run of
+feature releases is worth more than a periodic one: the drift shows up
+as a chapter that describes controls the UI no longer has, and a reader
+cannot tell that from prose that is merely incomplete. The last such
+pass covered v0.98.25 to v0.98.114 (the fourth assistant backend, the
+planetary stack type and alignment points, framing rotation and manual
+rotators, satellites, favourites, the night log, the nightscape stack,
+the autofocus contrast metric, the guide-loss hold, flips on the plan
+timeline, the first-run wizard, the offline site picker, who owns gain
+and offset).
 
 ## Building
 

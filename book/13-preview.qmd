@@ -13,6 +13,11 @@ committing to a save.
   planetary or focus tests; 5 to 30 s suits deep-sky framing.
 - **Gain**: camera gain. The units depend on the driver; ZWO
   cameras typically use 0 to 600, QHY similar.
+- **Offset**: the sensor's black-level pedestal, in ADU. This is a rig
+  setting: editing it here saves it to the active rig and it is sent to
+  the camera before every capture, here and everywhere else, so it wins
+  over the driver's own control panel. Set it to 0 to leave the driver's
+  value alone (@sec-rig-gain-offset).
 - **Bin**: 1x1, 2x2, or 4x4 (binning merges neighbouring pixels into
   one for a brighter, smaller image).
 - **Filter**: shown only when a filter wheel is connected; the wheel

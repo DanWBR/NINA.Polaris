@@ -181,6 +181,38 @@ hotspot). WiFi passwords are stored by NetworkManager itself in
 `/etc/NetworkManager/system-connections/`, root-owned; Polaris does
 not copy them anywhere.]
 
+### Turning WiFi off while the cable is in
+
+**Settings, Network, Turn WiFi off while a network cable is connected**,
+off by default, exists because of a failure that looks like something
+else entirely.
+
+A host with an Ethernet address and a WiFi address on the **same subnet**
+answers ARP for either address out of either interface. Your browser can
+therefore end up holding the wrong hardware address for the address it is
+talking to, and when the WiFi then hiccups, a re-association, a lost DHCP
+lease, the session you opened over the cable stalls with no error at all:
+the interface simply stops answering. Field case: a rig on Ethernet
+`192.168.3.133` plus WiFi `192.168.3.136`, the WiFi lease dropped for
+four minutes, and the video stream in the browser died mid-session while
+the host itself never restarted and its log showed nothing wrong. "It
+rebooted" is the natural conclusion, and it is the wrong one.
+
+With the option on, Polaris parks the radio once the cable has held an
+IPv4 address for about 20 seconds, and brings it back the moment the
+cable stops carrying one, with no grace period, including right after a
+Polaris restart, because it reads the radio's real state rather than
+trusting a flag of its own. It leaves the hotspot alone while a phone or
+tablet is still associated with it, and the auto-hotspot fallback and
+auto station reconnect (@sec-wifi-modes) stand down while the radio is
+parked so nothing fights over it.
+
+Two things to know. Ticking the box from a browser that reached the host
+over WiFi will cut that session, so reconnect on the wired address. And
+Polaris refuses to enable it when there is no wired address yet, since
+parking the radio then would leave a headless rig with no way in. While
+the option is off, Polaris never touches the radio at all.
+
 ## Finding the host by name {#sec-mdns}
 
 The URLs in this book use names like `polaris-pi.local` rather than
