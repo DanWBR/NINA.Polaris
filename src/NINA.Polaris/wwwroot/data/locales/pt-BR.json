@@ -4949,5 +4949,14 @@
   "rig setting, edit in LIVE or PREVIEW": "ajuste do rig, edite em LIVE ou PREVIEW",
   "left to the camera driver (rig offset is 0)": "deixado para o driver da câmera (offset do rig é 0)",
   "driver": "driver",
-  "Sensor black-level pedestal (ADU floor). Polaris sends this value to the camera before every capture, so it wins over whatever the driver's own control panel says; 0 leaves the driver's setting alone. It is a rig setting: change it in the LIVE or PREVIEW panel's Offset field.": "Pedestal de nível de preto do sensor (piso em ADU). O Polaris envia este valor à câmera antes de cada captura, então ele prevalece sobre o painel de controle do driver; 0 deixa o ajuste do driver como está. É um ajuste do rig: altere no campo Offset do painel LIVE ou PREVIEW."
+  "Sensor black-level pedestal (ADU floor). Polaris sends this value to the camera before every capture, so it wins over whatever the driver's own control panel says; 0 leaves the driver's setting alone. It is a rig setting: change it in the LIVE or PREVIEW panel's Offset field.": "Pedestal de nível de preto do sensor (piso em ADU). O Polaris envia este valor à câmera antes de cada captura, então ele prevalece sobre o painel de controle do driver; 0 deixa o ajuste do driver como está. É um ajuste do rig: altere no campo Offset do painel LIVE ou PREVIEW.",
+  "Turn WiFi off while a network cable is connected": "Desligar o WiFi enquanto houver cabo de rede conectado",
+  "Two interfaces on the same network can stall connections. The radio comes back on as soon as the cable is unplugged.": "Duas interfaces na mesma rede podem travar conexões. O rádio volta a ligar assim que o cabo for desconectado.",
+  "Ethernet connected": "Cabo conectado",
+  "WiFi radio off, this host is on the cable": "Rádio WiFi desligado, este host está no cabo",
+  "Connect the network cable first: with no wired address this would leave the host unreachable.": "Conecte o cabo de rede primeiro: sem endereço no cabo isso deixaria o host inacessível.",
+  "Could not change the WiFi setting": "Não foi possível alterar o ajuste de WiFi",
+  "Saved. The radio goes off once the cable has held an address for a few seconds.": "Salvo. O rádio desliga quando o cabo mantiver um endereço por alguns segundos.",
+  "WiFi radio back on.": "Rádio WiFi ligado de novo.",
+  "Lost contact with the host while changing the WiFi setting. Reconnect on the wired address to continue.": "Contato com o host perdido ao alterar o ajuste de WiFi. Reconecte pelo endereço do cabo para continuar."
 }

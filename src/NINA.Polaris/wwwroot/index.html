@@ -15841,6 +15841,37 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     <span class="text-muted" style="font-size: 11px">Pick the radio that serves the hotspot (e.g. an external USB antenna).</span>
                                 </div>
                             </template>
+                            <!-- Wired preference. Two interfaces on one subnet
+                                 is an ARP-flux trap (the host answers for the
+                                 wired address out of the radio), so a WiFi
+                                 hiccup stalls sessions opened over the cable.
+                                 The radio comes back the moment the cable
+                                 stops carrying an address, including right
+                                 after a restart. -->
+                            <div class="network-wired-line">
+                                <label class="network-wired-toggle">
+                                    <input type="checkbox"
+                                           :checked="network?.wifiOffWhenWired"
+                                           :disabled="networkSwitching"
+                                           @change="networkSetWifiOffWhenWired($event.target.checked)">
+                                    <span>Turn WiFi off while a network cable is connected</span>
+                                </label>
+                                <p class="text-muted" style="font-size: 11px; margin: 4px 0 0; max-width:560px">
+                                    Two interfaces on the same network can stall connections.
+                                    The radio comes back on as soon as the cable is unplugged.
+                                </p>
+                                <template x-if="network?.wired">
+                                    <p class="text-muted" style="font-size: 11px; margin: 4px 0 0">
+                                        <span>Ethernet connected</span>:
+                                        <code x-text="(network?.wiredInterface || '') + ' ' + (network?.wiredIp || '')"></code>
+                                    </p>
+                                </template>
+                                <template x-if="network?.parkedForWired">
+                                    <p class="text-warn" style="font-size: 11px; margin: 4px 0 0">
+                                        WiFi radio off, this host is on the cable
+                                    </p>
+                                </template>
+                            </div>
                             <div class="control-row actions" style="margin-top: 8px">
                                 <button class="btn btn-primary"
                                         @click="networkOpenSwitchDialog()"

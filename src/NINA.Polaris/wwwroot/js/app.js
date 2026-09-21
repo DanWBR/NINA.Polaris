@@ -44235,6 +44235,47 @@ function ninaApp() {
             }
         },
 
+        // Wired preference: park the WiFi radio while the cable carries an
+        // address. Host-owned (it lives on the profile), so the checkbox
+        // reads straight off the WS block rather than keeping a local
+        // mirror that could disagree with the host.
+        async networkSetWifiOffWhenWired(enabled) {
+            // Enabling with no wired address would strand a headless rig:
+            // the radio goes down and nothing replaces it. The host-side
+            // watchdog only ever parks the radio once the cable holds an
+            // address, so this guard just says so up front.
+            if (enabled && !this.network?.wired) {
+                this.toast('Connect the network cable first: with no wired address this would leave the host unreachable.', 'warn');
+                return;
+            }
+            this.networkSwitching = true;
+            try {
+                const resp = await this.apiPost('/api/network/wifi-off-when-wired',
+                    null, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ enabled: !!enabled })
+                    });
+                const r = await resp.json();
+                if (r && r.ok === false) {
+                    this.toast(r.error || 'Could not change the WiFi setting', 'warn');
+                } else if (r && r.parkedForWired) {
+                    this.toast('WiFi radio off, this host is on the cable', 'ok');
+                } else if (enabled) {
+                    this.toast('Saved. The radio goes off once the cable has held an address for a few seconds.', 'ok');
+                } else {
+                    this.toast('WiFi radio back on.', 'ok');
+                }
+            } catch (e) {
+                // Enabling this from a browser that came in over the WiFi
+                // tears down this very socket, by design. A dead call is
+                // the expected outcome there, not a failure to report.
+                this.toast('Lost contact with the host while changing the WiFi setting. Reconnect on the wired address to continue.', 'warn');
+            } finally {
+                this.networkSwitching = false;
+            }
+        },
+
         async networkSaveHotspotCredentials() {
             const ssid = (this.networkHotspot.ssid || '').trim();
             const password = this.networkHotspot.password || '';

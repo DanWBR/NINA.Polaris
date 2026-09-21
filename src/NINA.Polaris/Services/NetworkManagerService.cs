@@ -77,6 +77,34 @@ public class NetworkManagerService : BackgroundService {
     /// hotspot mode without the user having asked for it.</summary>
     public bool HotspotFallbackEngaged { get; private set; }
 
+    // ----- wired preference (WiFi off while the cable is in) -----
+
+    /// <summary>User setting: park the WiFi radio while the wired link
+    /// carries an address. Lives on the profile, so it is host-wide and
+    /// survives a restart rather than being per browser.</summary>
+    public bool WifiOffWhenWired => _profiles.Active.WifiOffWhenWired;
+
+    /// <summary>The radio state nmcli reports, not our intent. Read every
+    /// tick so a radio that was already off (we parked it before a
+    /// restart, or the operator switched it off) is handled the same
+    /// way.</summary>
+    public bool WifiRadioOff { get; private set; }
+
+    /// <summary>A wired interface NetworkManager calls connected.</summary>
+    public bool WiredConnected { get; private set; }
+    public string? WiredInterface { get; private set; }
+    public string? WiredIp { get; private set; }
+
+    /// <summary>First tick of the current "wired link has an IPv4"
+    /// episode. The radio is only parked once the cable has held that
+    /// address for the grace window, so plugging in does not knock the
+    /// rig off the air mid-DHCP. Null while there is no wired IP.</summary>
+    private DateTime? _wiredUpSince;
+    private readonly TimeSpan _wiredGrace;
+    // The "AP still has clients" hold is logged once per episode, not on
+    // every 5 s tick.
+    private bool _wiredHoldLogged;
+
     // ----- auto hotspot fallback watchdog state -----
     private readonly TimeSpan _fallbackGrace;
     private readonly string _hotspotPsk;
@@ -135,6 +163,11 @@ public class NetworkManagerService : BackgroundService {
         _stationAutoReconnect = _config.GetValue("Network:StationAutoReconnect", true);
         var retrySec = Math.Max(30, _config.GetValue("Network:StationRetrySeconds", 60));
         _stationRetryGrace = TimeSpan.FromSeconds(retrySec);
+        // Wired grace floored at 10 s: long enough for the cable's DHCP to
+        // settle, short enough that the operator sees the radio go down
+        // while still looking at the Settings card.
+        var wiredSec = Math.Max(10, _config.GetValue("Network:WifiOffWhenWiredSeconds", 20));
+        _wiredGrace = TimeSpan.FromSeconds(wiredSec);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken) {
@@ -163,6 +196,11 @@ public class NetworkManagerService : BackgroundService {
         while (!stoppingToken.IsCancellationRequested) {
             try { await RefreshSnapshotAsync(stoppingToken); }
             catch (Exception ex) { _logger.LogDebug(ex, "Network snapshot refresh failed"); }
+            // Before the two AP watchdogs: while the radio is parked for
+            // the cable, neither of them should be trying to put it back
+            // on the air.
+            try { await EvaluateWiredPreferenceAsync(stoppingToken); }
+            catch (Exception ex) { _logger.LogDebug(ex, "Wired preference evaluation failed"); }
             try { await EvaluateHotspotFallbackAsync(stoppingToken); }
             catch (Exception ex) { _logger.LogDebug(ex, "Hotspot fallback evaluation failed"); }
             try { await EvaluateStationReconnectAsync(stoppingToken); }
@@ -339,7 +377,12 @@ public class NetworkManagerService : BackgroundService {
     // ----- snapshot -----
 
     public async Task<NetworkSnapshot> GetSnapshotAsync(CancellationToken ct = default) {
-        if (HasWifiInterface) await RefreshSnapshotAsync(ct);
+        if (HasWifiInterface) {
+            await RefreshSnapshotAsync(ct);
+            // The card shows the wired link whether or not the policy is on,
+            // so the operator can see what ticking the box would do.
+            await RefreshWiredStateAsync(ct);
+        }
         return new NetworkSnapshot(
             SupportedOs: IsSupportedOs,
             NmcliInstalled: NmcliInstalled,
@@ -353,7 +396,13 @@ public class NetworkManagerService : BackgroundService {
             LastError: LastError,
             UnsupportedReason: UnsupportedReason,
             AutoHotspotFallback: AutoHotspotFallback,
-            HotspotFallbackEngaged: HotspotFallbackEngaged);
+            HotspotFallbackEngaged: HotspotFallbackEngaged,
+            WifiOffWhenWired: WifiOffWhenWired,
+            WifiRadioOff: WifiRadioOff,
+            WifiParkedForWired: WifiParkedForWired,
+            Wired: WiredConnected,
+            WiredInterface: WiredInterface,
+            WiredIp: WiredIp);
     }
 
     private async Task RefreshSnapshotAsync(CancellationToken ct) {
@@ -642,6 +691,174 @@ public class NetworkManagerService : BackgroundService {
         return SwitchResult.Success(CurrentIp);
     }
 
+    // ----- wired preference: WiFi off while the cable is in -----
+
+    /// <summary>True when the radio is down and it is this policy holding
+    /// it down, which is what silences the two AP watchdogs and what the
+    /// Settings card explains to the operator.</summary>
+    public bool WifiParkedForWired => WifiRadioOff && WifiOffWhenWired && WiredConnected;
+
+    /// <summary>Turn the policy on or off. Acts at once instead of waiting
+    /// for the next tick, and turning it off always puts the radio back on
+    /// air: the operator ticking the box off wants their WiFi back, and
+    /// after that the watchdog stops touching the radio at all.</summary>
+    public async Task<SwitchResult> SetWifiOffWhenWiredAsync(bool enabled, CancellationToken ct = default) {
+        if (!IsSupportedOs)  return SwitchResult.Fail("OS not supported");
+        if (!NmcliInstalled) return SwitchResult.Fail("nmcli not installed");
+        _profiles.UpdateSettings(p => p.WifiOffWhenWired = enabled);
+        _wiredUpSince = null;
+        _wiredHoldLogged = false;
+        if (!enabled) {
+            await RefreshWiredStateAsync(ct);
+            if (WifiRadioOff) {
+                var res = await SetWifiRadioAsync(true, ct);
+                if (!res) return SwitchResult.Fail(LastError ?? "could not turn the WiFi radio back on");
+            }
+            await RefreshSnapshotAsync(ct);
+            return SwitchResult.Success(CurrentIp);
+        }
+        await EvaluateWiredPreferenceAsync(ct);
+        return SwitchResult.Success(WifiParkedForWired ? WiredIp : CurrentIp);
+    }
+
+    /// <summary>Once per snapshot tick: park the radio when the cable has
+    /// carried an address for the grace window, and bring it back the
+    /// moment the cable stops carrying one. Only ever runs the radio while
+    /// the policy is on, so a radio the operator switched off themselves is
+    /// left alone.</summary>
+    private async Task EvaluateWiredPreferenceAsync(CancellationToken ct) {
+        if (!NmcliInstalled || !HasWifiInterface) return;
+        if (!WifiOffWhenWired && !WifiRadioOff) {
+            // Nothing to watch and nothing parked: skip the two nmcli
+            // calls on the overwhelmingly common path.
+            _wiredUpSince = null;
+            return;
+        }
+        await RefreshWiredStateAsync(ct);
+        var now = DateTime.UtcNow;
+        var wiredWithIp = WiredConnected && !string.IsNullOrWhiteSpace(WiredIp);
+        if (wiredWithIp) _wiredUpSince ??= now;
+        else { _wiredUpSince = null; _wiredHoldLogged = false; }
+
+        if (ShouldUnparkWifi(WifiOffWhenWired, WifiRadioOff, wiredWithIp)) {
+            // No grace on the way back: with the cable gone the radio is
+            // the only way anyone reaches this host.
+            _logger.LogInformation(
+                "NetworkManagerService: wired link is gone, turning the WiFi radio back on.");
+            if (await SetWifiRadioAsync(true, ct)) await RefreshSnapshotAsync(ct);
+            return;
+        }
+
+        if (!ShouldParkWifiForWired(WifiOffWhenWired, WifiRadioOff, wiredWithIp,
+                _wiredUpSince, now, _wiredGrace, _suppressFallbackUntil))
+            return;
+
+        // Never cut the people who are on the AP right now. The cable is a
+        // path for the host, not for the tablet associated with our hotspot.
+        if (CurrentMode == WifiMode.Hotspot && await ApHasAssociatedClientsAsync(ct)) {
+            if (!_wiredHoldLogged) {
+                _logger.LogInformation(
+                    "NetworkManagerService: wired link is up but the hotspot still has clients, " +
+                    "keeping the radio on.");
+                _wiredHoldLogged = true;
+            }
+            return;
+        }
+
+        _logger.LogInformation(
+            "NetworkManagerService: wired link {Iface} has carried {Ip} for {Sec:n0}s, " +
+            "turning the WiFi radio off (WifiOffWhenWired).",
+            WiredInterface, WiredIp, (now - _wiredUpSince!.Value).TotalSeconds);
+        if (await SetWifiRadioAsync(false, ct)) {
+            HotspotFallbackEngaged = false;
+            _disconnectedSince = null;
+            await RefreshSnapshotAsync(ct);
+        }
+    }
+
+    /// <summary>nmcli radio on/off, with the result folded into
+    /// <see cref="WifiRadioOff"/> so the next decision reads the state we
+    /// actually achieved rather than the one we asked for.</summary>
+    private async Task<bool> SetWifiRadioAsync(bool on, CancellationToken ct) {
+        var res = await RunCommandAsync("nmcli", on ? "radio wifi on" : "radio wifi off",
+            ct, timeoutMs: 10000);
+        if (res.exitCode != 0) {
+            LastError = $"nmcli radio wifi {(on ? "on" : "off")} failed: {res.stderr.Trim()}";
+            _logger.LogWarning("NetworkManagerService: {Err}", LastError);
+            return false;
+        }
+        WifiRadioOff = !on;
+        if (on) LastError = null;
+        return true;
+    }
+
+    /// <summary>Read the radio switch and the wired link. Two cheap nmcli
+    /// calls plus one for the address, run only when the policy is on or
+    /// something is parked.</summary>
+    private async Task RefreshWiredStateAsync(CancellationToken ct) {
+        try {
+            var radio = await RunCommandAsync("nmcli", "radio wifi", ct, timeoutMs: 5000);
+            WifiRadioOff = ParseRadioDisabled(radio.stdout);
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "wifi radio state read failed");
+        }
+        try {
+            var dev = await RunCommandAsync("nmcli", "-t -f DEVICE,TYPE,STATE device status", ct);
+            WiredInterface = ParseConnectedWiredInterface(dev.stdout);
+            WiredConnected = WiredInterface != null;
+            if (!WiredConnected) { WiredIp = null; return; }
+            var ip = await RunCommandAsync("nmcli",
+                $"-t -f IP4.ADDRESS device show {Shell(WiredInterface!)}", ct);
+            WiredIp = ParseFirstIp4(ip.stdout);
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "wired link state read failed");
+        }
+    }
+
+    /// <summary>"enabled" / "disabled" from <c>nmcli radio wifi</c>. Anything
+    /// unrecognised counts as enabled: never report a radio as off on a
+    /// parse miss, or the watchdog would keep switching a live radio on.</summary>
+    internal static bool ParseRadioDisabled(string nmcliStdout)
+        => nmcliStdout.Trim().StartsWith("disabled", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>First wired device NetworkManager calls connected, from
+    /// <c>nmcli -t -f DEVICE,TYPE,STATE device status</c>. Types beyond plain
+    /// ethernet ("gsm", "wifi", "loopback", bridges) are ignored; a cable
+    /// that is merely plugged in but never got past "connecting" does not
+    /// count, because it is not a path to anywhere yet.</summary>
+    internal static string? ParseConnectedWiredInterface(string nmcliStdout) {
+        foreach (var line in nmcliStdout.Split('\n', StringSplitOptions.RemoveEmptyEntries)) {
+            var parts = SplitNmcliTerse(line);
+            if (parts.Length < 3) continue;
+            if (!parts[1].Equals("ethernet", StringComparison.OrdinalIgnoreCase)) continue;
+            if (!parts[2].Equals("connected", StringComparison.OrdinalIgnoreCase)) continue;
+            if (string.IsNullOrWhiteSpace(parts[0])) continue;
+            return parts[0];
+        }
+        return null;
+    }
+
+    /// <summary>Pure gate for parking the radio, so the timing rule is
+    /// testable without nmcli. Park only when the policy is on, the radio is
+    /// still up, the cable holds an address, no manual switch is in flight,
+    /// and that address has held for the grace window.</summary>
+    internal static bool ShouldParkWifiForWired(
+            bool enabled, bool radioOff, bool wiredWithIp,
+            DateTime? wiredUpSince, DateTime now, TimeSpan grace, DateTime suppressUntil) {
+        if (!enabled) return false;
+        if (radioOff) return false;
+        if (!wiredWithIp) return false;
+        if (now < suppressUntil) return false;
+        if (wiredUpSince == null) return false;
+        return now - wiredUpSince.Value >= grace;
+    }
+
+    /// <summary>Pure gate for the way back. Only unpark a radio while the
+    /// policy owns it: a radio the operator switched off with the policy
+    /// disabled is theirs, not ours.</summary>
+    internal static bool ShouldUnparkWifi(bool enabled, bool radioOff, bool wiredWithIp)
+        => enabled && radioOff && !wiredWithIp;
+
     // ----- auto hotspot fallback watchdog -----
 
     /// <summary>Called once per snapshot tick. When WiFi has been
@@ -654,6 +871,9 @@ public class NetworkManagerService : BackgroundService {
     /// the AP up on its own.</summary>
     private async Task EvaluateHotspotFallbackAsync(CancellationToken ct) {
         if (!AutoHotspotFallback || !NmcliInstalled || !HasWifiInterface) return;
+        // The radio is off on purpose while the cable is in. "No WiFi" is
+        // the intended state then, not an outage to rescue.
+        if (WifiParkedForWired) { _disconnectedSince = null; return; }
         var now = DateTime.UtcNow;
 
         // Connected (station link or AP serving clients) => healthy.
@@ -822,6 +1042,7 @@ public class NetworkManagerService : BackgroundService {
     /// via the same try-and-revert as the manual switch.</summary>
     private async Task EvaluateStationReconnectAsync(CancellationToken ct) {
         if (!NmcliInstalled || !HasWifiInterface) return;
+        if (WifiParkedForWired) return;   // radio is off for the cable
         var now = DateTime.UtcNow;
         if (!ShouldAttemptStationReconnect(_stationAutoReconnect, HotspotFallbackEngaged,
                 CurrentMode, now, _lastStationRetryAt, _stationRetryGrace, _suppressFallbackUntil))
@@ -1087,4 +1308,10 @@ public record NetworkSnapshot(
     string? LastError,
     string? UnsupportedReason,
     bool AutoHotspotFallback = true,
-    bool HotspotFallbackEngaged = false);
+    bool HotspotFallbackEngaged = false,
+    bool WifiOffWhenWired = false,
+    bool WifiRadioOff = false,
+    bool WifiParkedForWired = false,
+    bool Wired = false,
+    string? WiredInterface = null,
+    string? WiredIp = null);

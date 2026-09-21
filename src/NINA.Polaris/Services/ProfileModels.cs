@@ -40,6 +40,15 @@ public class UserProfile {
     /// alongside the site coordinates.</summary>
     public string? HotspotWifiInterface { get; set; }
 
+    /// <summary>Turn the WiFi radio off while the host has a working wired
+    /// connection, and back on as soon as the cable is gone. Off by default.
+    /// Two interfaces on one subnet is an ARP-flux trap: the host answers
+    /// ARP for the wired address out of the wireless interface, so a WiFi
+    /// hiccup silently stalls sessions that were opened over the cable.
+    /// Managed by <see cref="NetworkManagerService"/>, which only ever
+    /// touches the radio while this is on.</summary>
+    public bool WifiOffWhenWired { get; set; }
+
     /// <summary>Automatically pull the host clock onto this client's clock when
     /// they differ by more than an hour (an RTC-less SBC that booted with no
     /// network time). On by default; users can turn it off in Settings. Absent

@@ -98,6 +98,42 @@ In Station mode you will see a **Switch back to Hotspot** button in
 the same panel. Click it, then reconnect your phone/laptop to
 `Polaris-Hotspot-XXXX` to keep using Polaris.
 
+## Turning WiFi off while the cable is in
+
+**Settings → Network → Turn WiFi off while a network cable is
+connected.** Off by default.
+
+A host with both interfaces on the same subnet answers ARP for its
+wired address out of the wireless interface and vice versa, so your
+browser can end up holding the wrong MAC for the address it is
+talking to. When the WiFi then hiccups (a re-association, a lost DHCP
+lease) the session opened over the cable stalls with no error: the UI
+simply freezes, which looks exactly like Polaris restarting. Field
+case: a rig on Ethernet `192.168.3.133` plus WiFi `192.168.3.136`,
+the WiFi lease dropped for four minutes, and the video stream in the
+browser died mid-session while the host itself never restarted.
+
+With the option on:
+
+- the radio goes off once the cable has held an IPv4 address for
+  about 20 seconds (`Network:WifiOffWhenWiredSeconds`),
+- it comes back on the moment the cable stops carrying one, with no
+  grace period, including right after a Polaris restart,
+- the hotspot is left alone while a phone or tablet is still
+  associated with it, and
+- the auto hotspot fallback and auto station reconnect stand down
+  while the radio is parked, so nothing fights over the radio.
+
+Unticking the box always puts the radio back on the air. While the
+option is off Polaris never touches the radio, so a radio you
+switched off yourself stays off.
+
+Two things worth knowing. Ticking the box from a browser that reached
+the host over WiFi will cut that session: reconnect on the wired
+address. And Polaris refuses to enable it when there is no wired
+address yet, because parking the radio then would leave a headless rig
+with no way in.
+
 ## Changing the hotspot SSID or password
 
 The defaults are public knowledge, so change them if your Pi will
