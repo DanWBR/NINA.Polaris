@@ -181,6 +181,7 @@ function ninaApp() {
         offset: 50,
         previewOffset: 50,
         autorunOffset: 50,
+        advOffset: 50,
         binning: '1',
         liveActive: false,
         looping: false,
@@ -24512,6 +24513,7 @@ function ninaApp() {
             if (rig.defaultOffset != null) this.offset = rig.defaultOffset;
             if (rig.previewOffset != null) this.previewOffset = rig.previewOffset;
             if (rig.autorunOffset != null) this.autorunOffset = rig.autorunOffset;
+            if (rig.advOffset != null) this.advOffset = rig.advOffset;
             // Manual-rotator turn direction: a fact about this optical train,
             // so it lives on the rig (see skyRotFlipDirection).
             this.manualRotatorReverse = rig.manualRotatorReverse === true;
@@ -33980,6 +33982,13 @@ function ninaApp() {
             if (!Number.isFinite(v) || v < 0) return;
             this.autorunOffset = Math.round(v);
             this._persistRigSelection({ autorunOffset: this.autorunOffset });
+        },
+
+        persistAdvOffset() {
+            const v = Number(this.advOffset);
+            if (!Number.isFinite(v) || v < 0) return;
+            this.advOffset = Math.round(v);
+            this._persistRigSelection({ advOffset: this.advOffset });
         },
 
         _persistRigSelection(patch) {

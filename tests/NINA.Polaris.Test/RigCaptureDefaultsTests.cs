@@ -27,11 +27,13 @@ namespace NINA.Polaris.Test;
 [TestFixture]
 public class RigCaptureDefaultsTests {
 
-    private static ProfileService Profile(int? live = null, int? preview = null, int? autorun = null) {
+    private static ProfileService Profile(int? live = null, int? preview = null,
+            int? autorun = null, int? adv = null) {
         var p = new ProfileService(new ConfigurationBuilder().Build(), NullLogger<ProfileService>.Instance);
         p.ActiveEquipmentProfile!.DefaultOffset = live;
         p.ActiveEquipmentProfile!.PreviewOffset = preview;
         p.ActiveEquipmentProfile!.AutorunOffset = autorun;
+        p.ActiveEquipmentProfile!.AdvOffset = adv;
         return p;
     }
 
@@ -59,20 +61,30 @@ public class RigCaptureDefaultsTests {
         Assert.That(RigCaptureDefaults.AutorunOffset(null), Is.Null);
     }
 
-    /// <summary>The three are independent. A shared value was the bug: typing
+    [Test]
+    public void AdvOffset_FollowsTheAdvPanel() {
+        Assert.That(RigCaptureDefaults.AdvOffset(Profile(adv: 12)), Is.EqualTo(12));
+        Assert.That(RigCaptureDefaults.AdvOffset(Profile(adv: 0)), Is.Null);
+        Assert.That(RigCaptureDefaults.AdvOffset(Profile(adv: null)), Is.Null);
+        Assert.That(RigCaptureDefaults.AdvOffset(null), Is.Null);
+    }
+
+    /// <summary>The four are independent. A shared value was the bug: typing
     /// one number in PREVIEW changed what a live stack or a whole sequence
     /// would use, silently.</summary>
     [Test]
     public void EachPanelReadsOnlyItsOwnField() {
-        var p = Profile(live: 10, preview: 20, autorun: 30);
+        var p = Profile(live: 10, preview: 20, autorun: 30, adv: 40);
         Assert.That(RigCaptureDefaults.Offset(p), Is.EqualTo(10));
         Assert.That(RigCaptureDefaults.PreviewOffset(p), Is.EqualTo(20));
         Assert.That(RigCaptureDefaults.AutorunOffset(p), Is.EqualTo(30));
+        Assert.That(RigCaptureDefaults.AdvOffset(p), Is.EqualTo(40));
 
         // And one panel at zero does not drag the others down with it.
-        var mixed = Profile(live: 0, preview: 20, autorun: 0);
+        var mixed = Profile(live: 0, preview: 20, autorun: 0, adv: 40);
         Assert.That(RigCaptureDefaults.Offset(mixed), Is.Null);
         Assert.That(RigCaptureDefaults.PreviewOffset(mixed), Is.EqualTo(20));
         Assert.That(RigCaptureDefaults.AutorunOffset(mixed), Is.Null);
+        Assert.That(RigCaptureDefaults.AdvOffset(mixed), Is.EqualTo(40));
     }
 }

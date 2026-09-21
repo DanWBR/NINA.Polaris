@@ -46,4 +46,12 @@ public static class RigCaptureDefaults {
         var v = profiles?.ActiveEquipmentProfile?.AutorunOffset;
         return v is > 0 ? v : null;
     }
+
+    /// <summary>The ADV panel's offset, same contract. An instruction that
+    /// pins its own offset outranks it: that field is per exposure, this one
+    /// is the panel's default for the ones that do not.</summary>
+    public static int? AdvOffset(ProfileService? profiles) {
+        var v = profiles?.ActiveEquipmentProfile?.AdvOffset;
+        return v is > 0 ? v : null;
+    }
 }
