@@ -4956,5 +4956,7 @@
   "Could not change the WiFi setting": "Impossible de modifier le réglage WiFi",
   "Saved. The radio goes off once the cable has held an address for a few seconds.": "Enregistré. La radio se coupe une fois que le câble garde une adresse pendant quelques secondes.",
   "WiFi radio back on.": "Radio WiFi rallumée.",
-  "Lost contact with the host while changing the WiFi setting. Reconnect on the wired address to continue.": "Contact perdu avec l'hôte pendant la modification du réglage WiFi. Reconnectez-vous sur l'adresse filaire pour continuer."
+  "Lost contact with the host while changing the WiFi setting. Reconnect on the wired address to continue.": "Contact perdu avec l'hôte pendant la modification du réglage WiFi. Reconnectez-vous sur l'adresse filaire pour continuer.",
+  "Field": "Terrain",
+  "Back to field mode": "Revenir au mode terrain"
 }

@@ -1,6 +1,6 @@
 /* ============================================================
    Basic (phone-only) field mode -- an ASIAIR-style curated shell.
-   Everything here is scoped under .basic-shell / .basic-return and
+   Everything here is scoped under .basic-shell / .nav-field and
    only renders when the app is in basic mode (phones only), so the
    desktop and tablet layouts are untouched.
    ============================================================ */
@@ -394,6 +394,8 @@ body.basic-active .hostdlg-card{height:auto; max-height:100%}
 .basic-shell :focus-visible{outline:2px solid var(--bs-accent2); outline-offset:2px}
 
 /* return-to-field pill, shown on a phone that escaped to the full UI */
-.basic-return{position:fixed; left:12px; bottom:10px; z-index:790;
-    height:32px; padding:0 16px; border-radius:16px; background:rgba(76,141,255,.92); color:#fff;
-    border:0; font-weight:700; font-size:13px; font-family:inherit; box-shadow:0 6px 20px rgba(0,0,0,.4)}
+/* Return to field mode. Was a fixed pill at bottom-left, which on a phone
+   overlapped the first buttons of the nav strip (Home, Rigs) and took their
+   taps; it is the strip's first button now. Accent tint because it is an
+   action, not a tab, and nothing ever marks it active. */
+.nav-btn.nav-field, .nav-btn.nav-field:hover{color:var(--accent)}

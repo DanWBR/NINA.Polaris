@@ -788,6 +788,17 @@
                  (Adv) → post-process (Studio) → plan ahead
                  (Tonight, Weather) → manage files (Files) → config
                  (Settings). -->
+            <!-- Back to field mode, phones only and first in the strip. It
+                 used to be a floating pill at bottom-left, which on a phone
+                 sat right on top of the first nav buttons and ate the taps
+                 meant for Home and Rigs. Ahead of everything else it covers
+                 nothing, and the strip scrolls sideways so it costs the other
+                 tabs no room. -->
+            <button class="nav-btn nav-field" x-show="deviceIsPhone && !basicMode" x-cloak
+                    @click="basicSetPref('auto')" title="Back to field mode">
+                <svg viewBox="0 0 24 24" width="22" height="22"><rect x="7" y="2" width="10" height="20" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M11 19h2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                <span class="nav-label">Field</span>
+            </button>
             <button class="nav-btn" :class="{ active: tab === 'home' }" @click="tab = 'home'" title="Home">
                 <svg viewBox="0 0 24 24" width="22" height="22"><path d="M3 12l9-9 9 9v9a2 2 0 01-2 2h-4v-7H10v7H6a2 2 0 01-2-2v-9z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
                 <span class="nav-label">Home</span>
@@ -21627,10 +21638,6 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
 
     </div>
     </template>
-
-    <!-- Return to field mode from the full UI, phones only. -->
-    <button class="basic-return" x-show="deviceIsPhone && !basicMode" x-cloak
-            @click="basicSetPref('auto')">&#128241; Field mode</button>
 
     <!-- ASIAIR-style floating guiding overlay: translucent, read-only,
          always-on-top mini graph. Draggable by its header, corner-resizable,
