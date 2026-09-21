@@ -133,6 +133,58 @@ equipment's calibration; other saved ones stay.
   optionally Dec), *Recalibrate*, or *Do nothing*. **Reverse Dec after flip**
   toggles the Dec-pulse reversal used by *Mirror*.
 
+## Star selection
+
+The star detector has sensible defaults, tuned for imaging frames. A guide
+camera is a different instrument, though: a small chip, often binned, sometimes a
+bright sky, and stars only a few pixels across. When the defaults do not suit
+one, the symptom is "no suitable guide star" over a frame you can plainly see
+stars in. The **Star selection** group in the GUIDE sidebar exposes the
+detector's knobs so you can argue with it. Leave a field blank for the default;
+values are stored per rig, and **Reset to defaults** clears all of them.
+
+- **Detection sigma** (default 5) - how far above the frame's noise floor a pixel
+  has to be to count, measured in robust standard deviations (median + n x MAD).
+  Lower it to find fainter stars, at the cost of picking up noise. This is the
+  first knob to reach for when nothing is found.
+- **Min star size (px)** (default 5) - the smallest blob accepted as a star.
+  Lower it when a tight star on a short, undersampled guide scope is being
+  dropped; raise it to ignore hot pixels and cosmic-ray hits.
+- **Max star size (px)** (default 6000) - the largest blob accepted. The guider
+  runs a much higher cap than the imaging detector on purpose: a bright guide
+  star with a wide skirt is exactly what you want to guide on.
+- **Max HFD (px)** (default 50) - the largest half-flux diameter accepted. Raise
+  it for a soft or slightly defocused guide scope.
+- **Edge margin (px)** - how far from the frame edge a star has to be. The
+  guider never goes below the tracking window's own size, so the search window
+  always stays inside the frame.
+- **Tap radius (px)** (default 60) - how far your tap may land from a star and
+  still be taken to mean that star. Raise it on a phone, lower it in a crowded
+  field.
+- **Use saturated stars** - see below.
+
+The line under the group heading reports what the last selection actually saw,
+for example "14 found, 11 usable, 3 saturated", so tuning is not guesswork.
+
+### Saturated stars
+
+A saturated star has a flat-topped core, which costs centroid precision, so the
+guider prefers an unsaturated one when it has the choice. That is the whole of
+it: saturation is a preference, never a refusal.
+
+- Auto-select picks an unsaturated star when one is available, and otherwise
+  warns and uses a saturated one anyway.
+- A star you tap is always honoured. If it is saturated you get a warning that
+  says so, and a suggestion to lower the guide gain or exposure.
+- **Use saturated stars** stops the preference entirely, so the brightest star
+  wins regardless.
+
+Saturation is only judged when the driver reports the significant bit depth, or
+when the frame genuinely contains the container's maximum sample. If neither
+holds, the full scale is unknown and no star is called saturated. Guessing it
+from the frame's brightest pixel is circular, and it used to flag the brightest
+star in every frame, which is usually the one you were pointing at.
+
 ## Live view, Star Profile, graph
 
 - **Guide frame** with the lock crosshair + star markers.

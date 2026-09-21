@@ -5578,6 +5578,63 @@
                                @change="setNativeMultiStar($event.target.checked)">
                         <span style="font-size:12px">Multi-star guiding</span>
                     </label>
+                    <!-- Star selection. These are the detector's knobs, and
+                         they are knobs because the defaults are tuned for
+                         imaging frames: on a guide camera the same numbers can
+                         report "no suitable guide star" over a frame the
+                         operator can plainly see stars in. Blank = default. -->
+                    <div class="guide-side-title" style="margin-top:12px"
+                         x-text="$t('Star selection')"></div>
+                    <p class="hint" x-show="guider.starSelection"
+                       x-text="guider.starSelection"></p>
+                    <div class="starsel-grid">
+                        <label><span x-text="$t('Detection sigma')"></span>
+                            <input type="number" min="1" max="20" step="0.5" class="input-sm"
+                                   :value="starSel.sigma" placeholder="5"
+                                   @change="setStarSel('sigma', $event.target.value)"
+                                   title="Threshold over the frame noise (median + n x MAD). Lower finds fainter stars, and more noise. Default 5.">
+                        </label>
+                        <label><span x-text="$t('Min star size (px)')"></span>
+                            <input type="number" min="1" max="200" step="1" class="input-sm"
+                                   :value="starSel.minSize" placeholder="5"
+                                   @change="setStarSel('minSize', $event.target.value)"
+                                   title="Smallest blob accepted as a star. Lower it when a tight star on an undersampled guide scope is being dropped. Default 5.">
+                        </label>
+                        <label><span x-text="$t('Max star size (px)')"></span>
+                            <input type="number" min="50" max="20000" step="100" class="input-sm"
+                                   :value="starSel.maxSize" placeholder="6000"
+                                   @change="setStarSel('maxSize', $event.target.value)"
+                                   title="Largest blob accepted as a star. Default 6000.">
+                        </label>
+                        <label><span x-text="$t('Max HFD (px)')"></span>
+                            <input type="number" min="1" max="100" step="1" class="input-sm"
+                                   :value="starSel.maxHfd" placeholder="50"
+                                   @change="setStarSel('maxHfd', $event.target.value)"
+                                   title="Largest half-flux diameter accepted. Raise it for a soft or slightly defocused guide scope. Default 50.">
+                        </label>
+                        <label><span x-text="$t('Edge margin (px)')"></span>
+                            <input type="number" min="0" max="200" step="5" class="input-sm"
+                                   :value="starSel.edgeMargin" placeholder="auto"
+                                   @change="setStarSel('edgeMargin', $event.target.value)"
+                                   title="How far from the frame edge a star has to be. Never less than the tracking window, so the window stays in frame.">
+                        </label>
+                        <label><span x-text="$t('Tap radius (px)')"></span>
+                            <input type="number" min="5" max="300" step="5" class="input-sm"
+                                   :value="starSel.tapRadius" placeholder="60"
+                                   @change="setStarSel('tapRadius', $event.target.value)"
+                                   title="How far a tap may land from a star and still mean it. Default 60 sensor pixels.">
+                        </label>
+                    </div>
+                    <label class="equip-driver-row" style="margin-top:6px; gap:6px; cursor:pointer"
+                           title="Saturation flattens the top of a star, which costs centroid precision, so a saturated star is avoided when there is a choice. It is never a refusal: auto-select warns and uses one when nothing else is available, and a star you tap is always honoured. Tick this to stop avoiding them at all.">
+                        <input type="checkbox" :checked="starSel.allowSaturated"
+                               @change="setStarSelAllowSaturated($event.target.checked)">
+                        <span style="font-size:12px" x-text="$t('Use saturated stars')"></span>
+                    </label>
+                    <div class="control-row" style="margin-top:6px">
+                        <button class="btn btn-sm" @click="resetStarSel()"
+                                x-text="$t('Reset to defaults')"></button>
+                    </div>
                     </div><!-- /group: guiding parameters -->
                     <div x-show="guideSideTab === 'settings'" class="guide-group">
                     <div class="guide-side-title">Meridian flip</div>

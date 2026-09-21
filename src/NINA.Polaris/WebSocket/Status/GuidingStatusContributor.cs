@@ -118,6 +118,10 @@ public sealed class GuidingStatusContributor : IStatusContributor {
                 backend = activeGuider.Backend,
                 connected = true,
                 appState = activeGuider.AppState,
+                // What the last star selection saw ("14 found, 11 usable,
+                // 3 saturated"), so tuning the selection knobs is not
+                // guesswork. Native guider only; null elsewhere.
+                starSelection = (activeGuider as NativeGuider)?.LastStarSelection,
                 guiding = activeGuider.IsGuiding,
                 calibrating = activeGuider.IsCalibrating,
                 paused = activeGuider.IsPaused,

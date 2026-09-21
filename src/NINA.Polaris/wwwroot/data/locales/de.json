@@ -4983,5 +4983,16 @@
   "Stop the focuser": "Fokusmotor anhalten",
   "Focuser stopped": "Fokusmotor angehalten",
   "Focuser stop failed": "Anhalten des Fokusmotors fehlgeschlagen",
-  "Stop the focuser now. Cancels a hold-to-repeat nudge as well as a move already running.": "Hält den Fokusmotor jetzt an. Bricht sowohl einen gehaltenen Wiederhol-Impuls als auch eine laufende Fahrt ab."
+  "Stop the focuser now. Cancels a hold-to-repeat nudge as well as a move already running.": "Hält den Fokusmotor jetzt an. Bricht sowohl einen gehaltenen Wiederhol-Impuls als auch eine laufende Fahrt ab.",
+  "Star selection": "Sternauswahl",
+  "Detection sigma": "Erkennungs-Sigma",
+  "Min star size (px)": "Mindestgröße des Sterns (px)",
+  "Max star size (px)": "Maximalgröße des Sterns (px)",
+  "Max HFD (px)": "Max. HFD (px)",
+  "Edge margin (px)": "Randabstand (px)",
+  "Tap radius (px)": "Tipp-Radius (px)",
+  "Use saturated stars": "Gesättigte Sterne verwenden",
+  "Reset to defaults": "Auf Standard zurücksetzen",
+  "Star selection reset to the defaults": "Sternauswahl auf Standard zurückgesetzt",
+  "The detector found no stars in the last frame. Lower the sigma or the minimum size.": "Der Detektor hat im letzten Bild keine Sterne gefunden. Senken Sie das Sigma oder die Mindestgröße."
 }

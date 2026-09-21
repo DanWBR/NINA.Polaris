@@ -4983,5 +4983,16 @@
   "Stop the focuser": "Arrêter le moteur de mise au point",
   "Focuser stopped": "Moteur de mise au point arrêté",
   "Focuser stop failed": "Échec de l'arrêt du moteur de mise au point",
-  "Stop the focuser now. Cancels a hold-to-repeat nudge as well as a move already running.": "Arrête le moteur de mise au point maintenant. Annule aussi bien une impulsion répétée (bouton maintenu) qu'un déplacement déjà en cours."
+  "Stop the focuser now. Cancels a hold-to-repeat nudge as well as a move already running.": "Arrête le moteur de mise au point maintenant. Annule aussi bien une impulsion répétée (bouton maintenu) qu'un déplacement déjà en cours.",
+  "Star selection": "Sélection des étoiles",
+  "Detection sigma": "Sigma de détection",
+  "Min star size (px)": "Taille minimale d'étoile (px)",
+  "Max star size (px)": "Taille maximale d'étoile (px)",
+  "Max HFD (px)": "HFD maximal (px)",
+  "Edge margin (px)": "Marge du bord (px)",
+  "Tap radius (px)": "Rayon du tap (px)",
+  "Use saturated stars": "Utiliser les étoiles saturées",
+  "Reset to defaults": "Revenir aux valeurs par défaut",
+  "Star selection reset to the defaults": "Sélection des étoiles revenue aux valeurs par défaut",
+  "The detector found no stars in the last frame. Lower the sigma or the minimum size.": "Le détecteur n'a trouvé aucune étoile sur la dernière image. Baissez le sigma ou la taille minimale."
 }

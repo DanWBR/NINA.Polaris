@@ -202,6 +202,15 @@ public static class EquipmentEndpoints {
                 if (update.PreviewOffset.HasValue) r.PreviewOffset = update.PreviewOffset.Value;
                 if (update.AutorunOffset.HasValue) r.AutorunOffset = update.AutorunOffset.Value;
                 if (update.AdvOffset.HasValue) r.AdvOffset = update.AdvOffset.Value;
+                // Guide-star selection. Nullable throughout: absent leaves the
+                // stored choice alone, and null means "the tuned default".
+                if (update.NativeStarSigma.HasValue) r.NativeStarSigma = update.NativeStarSigma;
+                if (update.NativeStarMinSize.HasValue) r.NativeStarMinSize = update.NativeStarMinSize;
+                if (update.NativeStarMaxSize.HasValue) r.NativeStarMaxSize = update.NativeStarMaxSize;
+                if (update.NativeStarMaxHfd.HasValue) r.NativeStarMaxHfd = update.NativeStarMaxHfd;
+                if (update.NativeStarEdgeMarginPx.HasValue) r.NativeStarEdgeMarginPx = update.NativeStarEdgeMarginPx;
+                if (update.NativeStarTapRadiusPx.HasValue) r.NativeStarTapRadiusPx = update.NativeStarTapRadiusPx;
+                if (update.NativeStarAllowSaturated.HasValue) r.NativeStarAllowSaturated = update.NativeStarAllowSaturated;
                 if (update.DefaultBinning.HasValue) r.DefaultBinning = update.DefaultBinning.Value;
                 // FIELD-2: per-rig Bayer mosaic override. Treat empty /
                 // whitespace as null ("Auto") so the UI <select> with

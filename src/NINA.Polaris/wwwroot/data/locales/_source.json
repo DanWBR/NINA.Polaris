@@ -4364,5 +4364,16 @@
   "Stop the focuser": "",
   "Focuser stopped": "",
   "Focuser stop failed": "",
-  "Stop the focuser now. Cancels a hold-to-repeat nudge as well as a move already running.": ""
+  "Stop the focuser now. Cancels a hold-to-repeat nudge as well as a move already running.": "",
+  "Star selection": "",
+  "Detection sigma": "",
+  "Min star size (px)": "",
+  "Max star size (px)": "",
+  "Max HFD (px)": "",
+  "Edge margin (px)": "",
+  "Tap radius (px)": "",
+  "Use saturated stars": "",
+  "Reset to defaults": "",
+  "Star selection reset to the defaults": "",
+  "The detector found no stars in the last frame. Lower the sigma or the minimum size.": ""
 }

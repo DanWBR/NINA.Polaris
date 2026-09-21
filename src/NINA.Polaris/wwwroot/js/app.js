@@ -24548,6 +24548,17 @@ function ninaApp() {
             if (rig.previewOffset != null) this.previewOffset = rig.previewOffset;
             if (rig.autorunOffset != null) this.autorunOffset = rig.autorunOffset;
             if (rig.advOffset != null) this.advOffset = rig.advOffset;
+            // Guide-star selection: null stays null, which reads as "default"
+            // in the inputs and on the host.
+            this.starSel = {
+                sigma: rig.nativeStarSigma ?? null,
+                minSize: rig.nativeStarMinSize ?? null,
+                maxSize: rig.nativeStarMaxSize ?? null,
+                maxHfd: rig.nativeStarMaxHfd ?? null,
+                edgeMargin: rig.nativeStarEdgeMarginPx ?? null,
+                tapRadius: rig.nativeStarTapRadiusPx ?? null,
+                allowSaturated: rig.nativeStarAllowSaturated === true
+            };
             // Manual-rotator turn direction: a fact about this optical train,
             // so it lives on the rig (see skyRotFlipDirection).
             this.manualRotatorReverse = rig.manualRotatorReverse === true;
@@ -34128,6 +34139,61 @@ function ninaApp() {
         },
 
         // Native guider per-axis algorithm (axis = 'ra' | 'dec').
+        // ─── Guide-star selection ──────────────────────────────────────
+        //
+        // The detector's defaults are tuned for imaging frames; a guide camera
+        // is a different instrument (small chip, often binned, stars a few
+        // pixels across), and when they do not suit a rig the symptom is "no
+        // suitable guide star" over a frame the operator can see stars in.
+        // Null in any field = the tuned default, which is what every rig
+        // starts with.
+        starSel: {
+            sigma: null, minSize: null, maxSize: null, maxHfd: null,
+            edgeMargin: null, tapRadius: null, allowSaturated: false
+        },
+
+        // The clamps mirror the host's, so a value the UI accepts is a value
+        // the guider will actually use.
+        _starSelLimits: {
+            sigma: [1, 20], minSize: [1, 200], maxSize: [50, 20000],
+            maxHfd: [1, 100], edgeMargin: [0, 200], tapRadius: [5, 300]
+        },
+
+        setStarSel(field, value) {
+            const rigField = {
+                sigma: 'nativeStarSigma', minSize: 'nativeStarMinSize',
+                maxSize: 'nativeStarMaxSize', maxHfd: 'nativeStarMaxHfd',
+                edgeMargin: 'nativeStarEdgeMarginPx', tapRadius: 'nativeStarTapRadiusPx'
+            }[field];
+            if (!rigField) return;
+            const lim = this._starSelLimits[field];
+            let v = Number(value);
+            // An empty field means "back to the default", which is null on the
+            // rig rather than a zero the guider would clamp into nonsense.
+            if (value === '' || value === null || !Number.isFinite(v)) v = null;
+            else v = Math.min(lim[1], Math.max(lim[0], v));
+            this.starSel[field] = v;
+            this._persistRigSelection({ [rigField]: v });
+        },
+
+        setStarSelAllowSaturated(on) {
+            this.starSel.allowSaturated = !!on;
+            this._persistRigSelection({ nativeStarAllowSaturated: !!on });
+        },
+
+        resetStarSel() {
+            this.starSel = {
+                sigma: null, minSize: null, maxSize: null, maxHfd: null,
+                edgeMargin: null, tapRadius: null, allowSaturated: false
+            };
+            this._persistRigSelection({
+                nativeStarSigma: null, nativeStarMinSize: null, nativeStarMaxSize: null,
+                nativeStarMaxHfd: null, nativeStarEdgeMarginPx: null,
+                nativeStarTapRadiusPx: null, nativeStarAllowSaturated: false
+            });
+            this.toast(this.$t('Star selection reset to the defaults'), 'ok');
+        },
+
         setNativeAlgorithm(axis, value) {
             if (axis === 'ra') {
                 this.nativeRaAlgorithm = value || 'hysteresis';

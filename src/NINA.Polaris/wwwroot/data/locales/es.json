@@ -4983,5 +4983,16 @@
   "Stop the focuser": "Parar el enfocador",
   "Focuser stopped": "Enfocador detenido",
   "Focuser stop failed": "Fallo al detener el enfocador",
-  "Stop the focuser now. Cancels a hold-to-repeat nudge as well as a move already running.": "Detiene el enfocador ahora. Cancela tanto un nudge repetido (botón mantenido) como un movimiento ya en curso."
+  "Stop the focuser now. Cancels a hold-to-repeat nudge as well as a move already running.": "Detiene el enfocador ahora. Cancela tanto un nudge repetido (botón mantenido) como un movimiento ya en curso.",
+  "Star selection": "Selección de estrellas",
+  "Detection sigma": "Sigma de detección",
+  "Min star size (px)": "Tamaño mínimo de estrella (px)",
+  "Max star size (px)": "Tamaño máximo de estrella (px)",
+  "Max HFD (px)": "HFD máximo (px)",
+  "Edge margin (px)": "Margen del borde (px)",
+  "Tap radius (px)": "Radio del toque (px)",
+  "Use saturated stars": "Usar estrellas saturadas",
+  "Reset to defaults": "Volver a los valores por defecto",
+  "Star selection reset to the defaults": "Selección de estrellas restablecida a los valores por defecto",
+  "The detector found no stars in the last frame. Lower the sigma or the minimum size.": "El detector no encontró estrellas en el último fotograma. Baja el sigma o el tamaño mínimo."
 }
