@@ -4977,5 +4977,7 @@
   "Turn direction back to normal for this rig": "Sentido de giro de volta ao normal para este rig",
   "Set a framing angle first": "Defina primeiro um ângulo de enquadramento",
   "Framing measurement failed": "Falha ao medir o enquadramento",
-  "Framing advice failed": "Falha ao calcular o giro necessário"
+  "Framing advice failed": "Falha ao calcular o giro necessário",
+  "left to the camera driver": "deixado para o driver da câmera",
+  "Sensor black-level pedestal (ADU floor) for THIS panel's captures. A small positive value stops the shadow/noise tail clipping to 0 and keeps calibration clean. Polaris sends it to the camera before every capture from this panel, so it wins over the driver's own control panel; 0 means the capture sends nothing and the frame records whatever the driver is set to. Typical: a few tens: SV405CC ~30-64.": "Pedestal de nível de preto do sensor (piso em ADU) para as capturas DESTE painel. Um valor positivo pequeno evita que a cauda de sombra/ruído corte em 0 e mantém a calibração limpa. O Polaris envia este valor à câmera antes de cada captura deste painel, então ele prevalece sobre o painel de controle do driver; 0 significa que a captura não envia nada e o frame registra o que o driver estiver usando. Típico: algumas dezenas: SV405CC ~30-64."
 }

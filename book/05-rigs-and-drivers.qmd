@@ -287,28 +287,35 @@ Beyond the obvious device names, each rig persists:
 
 Worth spelling out, because it surprises people arriving from a
 driver-centric workflow: **Polaris owns gain and offset**, the way
-N.I.N.A. and ASIAIR do. The values in the LIVE panel's Gain and Offset
-fields save to the active rig, and are sent to the camera before every
-capture, in LIVE, PREVIEW, AUTORUN and sequences alike. Whatever the
-driver's own control panel (INDI, ASCOM) was set to is overwritten each
-time an exposure starts.
+N.I.N.A. and ASIAIR do. They are sent to the camera before every capture,
+and whatever the driver's own control panel (INDI, ASCOM) was set to is
+overwritten each time an exposure starts.
 
 That push exists for a reason: a freshly created INDI driver
 configuration sits at offset 1, which clips the shadow end of an IMX571
-sensor's histogram to black, and the field reports that produced were of
+sensor's histogram to black, and the field reports it produced were of
 lights that looked like darks.
 
-An **offset of 0** means "leave the driver's setting alone". Polaris then
-sends nothing, and the camera keeps whatever you set in its own panel.
-The FITS OFFSET card in that case records what the **driver** reports it
-is running at, so the file still tells the truth about the pedestal; a
-camera whose driver advertises no offset control at all gets no OFFSET
-card, because there would be nothing true to write in it.
+**Offset is per panel.** LIVE, PREVIEW and AUTORUN each have their own
+Offset field, and a capture obeys the field of the panel it came from: a
+framing snap and a live stack are different jobs and do not have to agree
+about the pedestal. All three save to the active rig, so they survive a
+reload and follow the rig rather than the browser. Captures with no panel
+of their own, the plate solve, autofocus, polar alignment and the video
+stream, use the LIVE value.
 
-Two practical consequences. Change the offset in LIVE, not in the INDI
-control panel, or your change is overwritten on the next exposure. And if
-you deliberately manage the offset in the driver, set the rig's offset to
-0, which is the one value that tells Polaris to keep its hands off.
+**An offset of 0 means "read the driver".** That panel's captures send
+nothing, the camera keeps whatever you set in its own control panel, and
+the frame's FITS OFFSET card records what the driver reports it is
+running at. The card always describes the capture that took the frame:
+the value that capture applied, or the driver's value when it applied
+none. A camera whose driver advertises no offset control at all gets no
+OFFSET card, because there would be nothing true to write in it.
+
+So there are two coherent ways to work, and the rig's field picks
+between them per panel: type the pedestal you want into the panel and let
+Polaris own it, or set that panel to 0 and manage the offset in the
+driver.
 
 ## The telescope and accessory catalogs
 

@@ -4977,5 +4977,7 @@
   "Turn direction back to normal for this rig": "Drehrichtung für dieses Rig wieder normal",
   "Set a framing angle first": "Legen Sie zuerst einen Bildfeldwinkel fest",
   "Framing measurement failed": "Messung des Bildfelds fehlgeschlagen",
-  "Framing advice failed": "Berechnung der Drehung fehlgeschlagen"
+  "Framing advice failed": "Berechnung der Drehung fehlgeschlagen",
+  "left to the camera driver": "dem Kameratreiber überlassen",
+  "Sensor black-level pedestal (ADU floor) for THIS panel's captures. A small positive value stops the shadow/noise tail clipping to 0 and keeps calibration clean. Polaris sends it to the camera before every capture from this panel, so it wins over the driver's own control panel; 0 means the capture sends nothing and the frame records whatever the driver is set to. Typical: a few tens: SV405CC ~30-64.": "Schwarzwert-Sockel des Sensors (ADU-Untergrenze) für die Aufnahmen DIESES Panels. Ein kleiner positiver Wert verhindert, dass der Schatten-/Rauschanteil auf 0 beschnitten wird, und hält die Kalibrierung sauber. Polaris sendet ihn vor jeder Aufnahme aus diesem Panel an die Kamera, er hat also Vorrang vor dem Bedienfeld des Treibers; 0 bedeutet, die Aufnahme sendet nichts und das Bild hält fest, was der Treiber verwendet. Typisch: einige Dutzend: SV405CC ~30-64."
 }

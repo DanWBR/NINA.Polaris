@@ -4358,5 +4358,7 @@
   "Turn direction back to normal for this rig": "",
   "Set a framing angle first": "",
   "Framing measurement failed": "",
-  "Framing advice failed": ""
+  "Framing advice failed": "",
+  "left to the camera driver": "",
+  "Sensor black-level pedestal (ADU floor) for THIS panel's captures. A small positive value stops the shadow/noise tail clipping to 0 and keeps calibration clean. Polaris sends it to the camera before every capture from this panel, so it wins over the driver's own control panel; 0 means the capture sends nothing and the frame records whatever the driver is set to. Typical: a few tens: SV405CC ~30-64.": ""
 }

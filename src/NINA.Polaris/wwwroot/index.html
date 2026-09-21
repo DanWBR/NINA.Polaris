@@ -1340,7 +1340,7 @@
                             <td><label>Offset</label></td>
                             <td><input type="number" x-model.number="offset" step="1" min="0" class="input-sm"
                                    @change="persistOffset()"></td>
-                            <td><span class="gain-help" tabindex="0" role="img" aria-label="About offset" title="Sensor black-level pedestal (ADU floor). A small positive value stops the shadow/noise tail clipping to 0 and keeps calibration clean. Polaris sends this value to the camera before every capture, so it wins over whatever the driver's own control panel says; set it to 0 to leave the driver's setting alone. Saved as the rig default (used by AUTORUN/sequences). Typical: a few tens: SV405CC ~30-64.">?</span></td>
+                            <td><span class="gain-help" tabindex="0" role="img" aria-label="About offset" title="Sensor black-level pedestal (ADU floor) for THIS panel's captures. A small positive value stops the shadow/noise tail clipping to 0 and keeps calibration clean. Polaris sends it to the camera before every capture from this panel, so it wins over the driver's own control panel; 0 means the capture sends nothing and the frame records whatever the driver is set to. Typical: a few tens: SV405CC ~30-64.">?</span></td>
                         </tr>
                         </tbody>
                         </table>
@@ -3453,16 +3453,17 @@
                                    :disabled="preview.busy"></td>
                             <td></td>
                         </tr>
-                        <!-- Offset: same rig black-level pedestal shown in LIVE
-                             (bound to the shared `offset` state → rig default).
-                             Hidden for DSLR/ISO cameras, like Gain. -->
+                        <!-- Offset: this panel's own pedestal. Snaps from here
+                             send THIS value, not LIVE's, so a framing snap and
+                             a live stack can differ. Hidden for DSLR/ISO
+                             cameras, like Gain. -->
                         <tr x-show="!previewUsesIso() && !previewAuxUsesIso()">
                             <td><label>Offset</label></td>
-                            <td><input type="number" x-model.number="offset"
+                            <td><input type="number" x-model.number="previewOffset"
                                    step="1" min="0" class="input-sm"
-                                   @change="persistOffset()"
+                                   @change="persistPreviewOffset()"
                                    :disabled="preview.busy"></td>
-                            <td><span class="gain-help" tabindex="0" role="img" aria-label="About offset" title="Sensor black-level pedestal (ADU floor). A small positive value stops the shadow/noise tail clipping to 0 and keeps calibration clean. Polaris sends this value to the camera before every capture, so it wins over whatever the driver's own control panel says; set it to 0 to leave the driver's setting alone. Saved as the rig default (used by AUTORUN/sequences). Typical: a few tens: SV405CC ~30-64.">?</span></td>
+                            <td><span class="gain-help" tabindex="0" role="img" aria-label="About offset" title="Sensor black-level pedestal (ADU floor) for THIS panel's captures. A small positive value stops the shadow/noise tail clipping to 0 and keeps calibration clean. Polaris sends it to the camera before every capture from this panel, so it wins over the driver's own control panel; 0 means the capture sends nothing and the frame records whatever the driver is set to. Typical: a few tens: SV405CC ~30-64.">?</span></td>
                         </tr>
                         </tbody>
                         </table>
@@ -11172,11 +11173,17 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      rig setting edited in LIVE / PREVIEW, not per item, and it
                      overrides the driver's own control panel; shown here so the
                      value in the FITS header is not a surprise (issue #27). -->
+                <!-- The offset every item of this sequence is taken with. Its
+                     own field, so a run is not at the mercy of whatever was
+                     last typed in LIVE (issue #27, then #26). -->
                 <div class="autorun-offset-line" x-show="!cameraUsesIso()">
                     <span>Offset</span>
-                    <strong x-text="offset > 0 ? offset : 'driver'"></strong>
-                    <span class="text-muted" x-text="offset > 0 ? 'rig setting, edit in LIVE or PREVIEW' : 'left to the camera driver (rig offset is 0)'"></span>
-                    <span class="gain-help" tabindex="0" role="img" aria-label="About offset" title="Sensor black-level pedestal (ADU floor). Polaris sends this value to the camera before every capture, so it wins over whatever the driver's own control panel says; 0 leaves the driver's setting alone. It is a rig setting: change it in the LIVE or PREVIEW panel's Offset field.">?</span>
+                    <input type="number" x-model.number="autorunOffset"
+                           step="1" min="0" class="input-sm" style="width:80px"
+                           @change="persistAutorunOffset()">
+                    <span class="text-muted" x-show="!(autorunOffset > 0)"
+                          x-text="$t('left to the camera driver')"></span>
+                    <span class="gain-help" tabindex="0" role="img" aria-label="About offset" title="Sensor black-level pedestal (ADU floor) for THIS panel's captures. A small positive value stops the shadow/noise tail clipping to 0 and keeps calibration clean. Polaris sends it to the camera before every capture from this panel, so it wins over the driver's own control panel; 0 means the capture sends nothing and the frame records whatever the driver is set to. Typical: a few tens: SV405CC ~30-64.">?</span>
                 </div>
 
                 <!-- Meridian / Dither / End Events as an underline tab strip

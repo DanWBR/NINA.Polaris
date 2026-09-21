@@ -172,7 +172,15 @@ function ninaApp() {
         // DefaultOffset). A near-zero offset clips the shadow/noise tail (SV405CC
         // native default black level is ~0); a small positive value fixes that
         // and keeps calibration clean.
+        // Offset is per panel: each capturing panel sends its own value, so a
+        // framing snap and a live stack do not have to agree about the
+        // pedestal. `offset` is LIVE's (and the fallback for captures with no
+        // panel: solve, autofocus, polar, stream); the other two belong to
+        // PREVIEW and AUTORUN. 0 in any of them means "send nothing, the
+        // driver's value stands". All three live on the rig.
         offset: 50,
+        previewOffset: 50,
+        autorunOffset: 50,
         binning: '1',
         liveActive: false,
         looping: false,
@@ -5062,8 +5070,10 @@ function ninaApp() {
                 if (le !== null && le !== '' && !isNaN(parseFloat(le))) this.exposure = parseFloat(le);
                 const lg = localStorage.getItem('polaris.live.gain');
                 if (lg !== null && lg !== '' && !isNaN(parseInt(lg, 10))) this.gain = parseInt(lg, 10);
-                const lo = localStorage.getItem('polaris.live.offset');
-                if (lo !== null && lo !== '' && !isNaN(parseInt(lo, 10))) this.offset = parseInt(lo, 10);
+                // Offset is deliberately NOT seeded from localStorage: the rig
+                // owns it (three panel fields on the rig), and a browser value
+                // restored on top is how the field came to show 300 while every
+                // capture went out at the stored 50 (issue #26).
                 const lb = localStorage.getItem('polaris.live.binning');
                 if (lb) this.binning = lb;
                 const gg = localStorage.getItem('polaris.guide.gamma');
@@ -5072,7 +5082,6 @@ function ninaApp() {
             } catch (e) { /* private mode; ignore */ }
             this.$watch('exposure', v => { try { localStorage.setItem('polaris.live.exposure', String(v)); } catch (e) {} });
             this.$watch('gain', v => { try { localStorage.setItem('polaris.live.gain', String(v)); } catch (e) {} });
-            this.$watch('offset', v => { try { localStorage.setItem('polaris.live.offset', String(v)); } catch (e) {} });
             this.$watch('binning', v => { try { localStorage.setItem('polaris.live.binning', String(v)); } catch (e) {} });
             // VIDEO: push exposure/gain to a live stream as they change (the
             // controls stay enabled while streaming), debounced so dragging the
@@ -24535,6 +24544,8 @@ function ninaApp() {
             // imaging panels show the rig's value rather than whatever this
             // browser last typed.
             if (rig.defaultOffset != null) this.offset = rig.defaultOffset;
+            if (rig.previewOffset != null) this.previewOffset = rig.previewOffset;
+            if (rig.autorunOffset != null) this.autorunOffset = rig.autorunOffset;
             // Manual-rotator turn direction: a fact about this optical train,
             // so it lives on the rig (see skyRotFlipDirection).
             this.manualRotatorReverse = rig.manualRotatorReverse === true;
@@ -33943,6 +33954,23 @@ function ninaApp() {
             if (!Number.isFinite(v) || v < 0) return;
             this.offset = Math.round(v);
             this._persistRigSelection({ defaultOffset: this.offset });
+        },
+
+        // One writer per panel field. The value every capture uses is the
+        // RIG's, so the field has to reach it or it only changes the display
+        // (issue #26).
+        persistPreviewOffset() {
+            const v = Number(this.previewOffset);
+            if (!Number.isFinite(v) || v < 0) return;
+            this.previewOffset = Math.round(v);
+            this._persistRigSelection({ previewOffset: this.previewOffset });
+        },
+
+        persistAutorunOffset() {
+            const v = Number(this.autorunOffset);
+            if (!Number.isFinite(v) || v < 0) return;
+            this.autorunOffset = Math.round(v);
+            this._persistRigSelection({ autorunOffset: this.autorunOffset });
         },
 
         _persistRigSelection(patch) {
