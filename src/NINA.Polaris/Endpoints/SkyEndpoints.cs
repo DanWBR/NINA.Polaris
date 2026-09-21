@@ -114,6 +114,12 @@ public static class SkyEndpoints {
                 targetRotation = job.TargetRotation,
                 rotationError = job.RotationErrorDeg,
                 rotatorMoves = job.RotatorMoves,
+                // Set only when no rotator was connected: the framing angle
+                // was measured rather than driven, so these say how far the
+                // operator turns a manual rotator, and which way.
+                manualRotationTurnDeg = job.ManualRotationTurnDeg,
+                manualRotationDirection = job.ManualRotationDirection,
+                manualRotationMirrored = job.ManualRotationMirrored,
                 scale = job.Scale,
                 error = job.Error
             });

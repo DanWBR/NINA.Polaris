@@ -515,6 +515,12 @@ public class EquipmentProfile {
     /// string = "None" (default).</summary>
     public string AttachedFilter { get; set; } = "";
     public string? Rotator { get; set; }
+    /// <summary>Manual rotator: turn the camera the other way round from what
+    /// the solve's parity implies. A fact about this optical train (how many
+    /// reflections it has, which side the operator stands on) rather than
+    /// about the browser asking, so it rides on the rig. Null = not set,
+    /// which reads as false. See <see cref="ManualRotatorAdvice"/>.</summary>
+    public bool? ManualRotatorReverse { get; set; }
     public string? FlatDevice { get; set; }
     public string? Dome { get; set; }
     public string? Weather { get; set; }

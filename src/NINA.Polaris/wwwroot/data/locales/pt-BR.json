@@ -4958,5 +4958,22 @@
   "WiFi radio back on.": "Rádio WiFi ligado de novo.",
   "Lost contact with the host while changing the WiFi setting. Reconnect on the wired address to continue.": "Contato com o host perdido ao alterar o ajuste de WiFi. Reconecte pelo endereço do cabo para continuar.",
   "Field": "Campo",
-  "Back to field mode": "Voltar ao modo de campo"
+  "Back to field mode": "Voltar ao modo de campo",
+  "No rotator: measure below and turn yours by hand.": "Sem rotator: meça abaixo e gire o seu na mão.",
+  "Measure framing": "Medir enquadramento",
+  "Measuring…": "Medindo…",
+  "Other way": "Ao contrário",
+  "Looking at the back of the camera. Turn it, then measure again.": "Olhando a câmera por trás. Gire e meça de novo.",
+  "Take a PREVIEW exposure first, then Measure framing.": "Faça uma exposição no PREVIEW e depois meça o enquadramento.",
+  "Turn the camera {d}° clockwise": "Gire a câmera {d}° no sentido horário",
+  "Turn the camera {d}° counter-clockwise": "Gire a câmera {d}° no sentido anti-horário",
+  "Framing is within tolerance, nothing to turn": "Enquadramento dentro da tolerância, nada a girar",
+  "Framing reached": "Enquadramento alcançado",
+  "Could not measure the framing: {e}": "Não foi possível medir o enquadramento: {e}",
+  "That made it worse, so the direction is now reversed for this rig.": "Isso piorou, então o sentido agora está invertido para este rig.",
+  "Turn direction reversed for this rig": "Sentido de giro invertido para este rig",
+  "Turn direction back to normal for this rig": "Sentido de giro de volta ao normal para este rig",
+  "Set a framing angle first": "Defina primeiro um ângulo de enquadramento",
+  "Framing measurement failed": "Falha ao medir o enquadramento",
+  "Framing advice failed": "Falha ao calcular o giro necessário"
 }

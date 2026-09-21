@@ -4339,5 +4339,22 @@
   "WiFi radio back on.": "",
   "Lost contact with the host while changing the WiFi setting. Reconnect on the wired address to continue.": "",
   "Field": "",
-  "Back to field mode": ""
+  "Back to field mode": "",
+  "No rotator: measure below and turn yours by hand.": "",
+  "Measure framing": "",
+  "Measuring…": "",
+  "Other way": "",
+  "Looking at the back of the camera. Turn it, then measure again.": "",
+  "Take a PREVIEW exposure first, then Measure framing.": "",
+  "Turn the camera {d}° clockwise": "",
+  "Turn the camera {d}° counter-clockwise": "",
+  "Framing is within tolerance, nothing to turn": "",
+  "Framing reached": "",
+  "Could not measure the framing: {e}": "",
+  "That made it worse, so the direction is now reversed for this rig.": "",
+  "Turn direction reversed for this rig": "",
+  "Turn direction back to normal for this rig": "",
+  "Set a framing angle first": "",
+  "Framing measurement failed": "",
+  "Framing advice failed": ""
 }

@@ -87,8 +87,63 @@ public static class RotatorEndpoints {
                 ct => equip.Rotator.DisconnectAsync(ct),
                 () => Results.Ok(new { status = "disconnected" }));
         });
+
+        // Manual rotator: how far to turn the camera by hand, and which way,
+        // to reach the framing angle set on the SKY map. Pure arithmetic over
+        // a solve the caller already has, so it needs neither a camera nor a
+        // rotator: with a manual one the operator IS the loop (measure, turn,
+        // measure again) and this is one step of it. The reverse override
+        // comes from the active rig rather than the request, so every client
+        // of this host is told the same direction.
+        group.MapPost("/framing-advice", (FramingAdviceRequest request, ProfileService profiles) => {
+            // Both angles are required rather than defaulted: a body missing
+            // them would otherwise answer "0 to 0, nothing to turn", which
+            // reads as a measurement the caller never made.
+            if (request?.TargetRotationDeg is not double target
+                    || request.SolvedRotationDeg is not double solved)
+                return Results.BadRequest(new { error = "targetRotationDeg + solvedRotationDeg required" });
+            if (!double.IsFinite(target) || !double.IsFinite(solved))
+                return Results.BadRequest(new { error = "targetRotationDeg and solvedRotationDeg must be finite" });
+
+            var advice = ManualRotatorAdvice.Compute(
+                target, solved,
+                request.Cd11, request.Cd12, request.Cd21, request.Cd22,
+                // The caller's live toggle wins over the stored one. The UI
+                // writes the rig through a debounced patch, so a measurement
+                // taken right after "other way" would otherwise be answered
+                // from the value the host has not been told about yet, and the
+                // instruction would flip back under the operator's hands.
+                reverse: request.Reverse ?? profiles.ActiveEquipmentProfile?.ManualRotatorReverse == true,
+                toleranceDeg: request.ToleranceDeg ?? ManualRotatorAdvice.DefaultToleranceDeg);
+
+            return Results.Ok(new {
+                solvedPa = advice.SolvedPa,
+                targetPa = advice.TargetPa,
+                deltaDeg = advice.DeltaDeg,
+                turnDeg = advice.TurnDeg,
+                direction = advice.Direction,
+                withinTolerance = advice.WithinTolerance,
+                mirrored = advice.Mirrored,
+                reversed = advice.Reversed
+            });
+        });
     }
 
     public record MoveRotatorRequest(double Angle);
     public record ReverseRequest(bool Reversed);
+    /// <summary>Body for /framing-advice. The CD matrix is optional: it
+    /// carries the field's parity, which sets the default turn direction.
+    /// Without it the advice assumes an unmirrored train, and the rig's
+    /// reverse flag is what corrects a wrong guess.</summary>
+    public record FramingAdviceRequest(
+        double? TargetRotationDeg,
+        double? SolvedRotationDeg,
+        double? Cd11 = null,
+        double? Cd12 = null,
+        double? Cd21 = null,
+        double? Cd22 = null,
+        double? ToleranceDeg = null,
+        /// <summary>Override the rig's stored turn direction for this answer.
+        /// Absent = use the rig's.</summary>
+        bool? Reverse = null);
 }

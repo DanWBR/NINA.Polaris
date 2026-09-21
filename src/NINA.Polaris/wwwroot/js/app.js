@@ -24501,6 +24501,9 @@ function ninaApp() {
             // imaging panels show the rig's value rather than whatever this
             // browser last typed.
             if (rig.defaultOffset != null) this.offset = rig.defaultOffset;
+            // Manual-rotator turn direction: a fact about this optical train,
+            // so it lives on the rig (see skyRotFlipDirection).
+            this.manualRotatorReverse = rig.manualRotatorReverse === true;
             if (rig.coolerTargetTemperature != null) this.equipCoolerTarget = rig.coolerTargetTemperature;
             // null = never configured on this rig → 2°C/min default. An explicit 0
             // (ramping deliberately off) must survive, hence != null and not a
@@ -30691,11 +30694,147 @@ function ninaApp() {
             try { this._pushSkyFovOverlays && this._pushSkyFovOverlays(); } catch (_) { }
         },
 
-        /// Sky angle to send with a Slew & Center from the SKY tab, or
-        /// nothing when there is no rotator to act on it.
+        /// Sky angle to send with a Slew & Center from the SKY tab. Sent
+        /// whether or not a rotator is connected: with one the loop turns it,
+        /// with none the job still measures the framing error and reports how
+        /// far to turn a manual rotator by hand (it never fails the job over
+        /// an angle nothing on the host can change).
         _skyRotForSlew() {
-            if (!Number.isFinite(this.skyTargetRotDeg) || !this.rotator?.connected) return {};
+            if (!Number.isFinite(this.skyTargetRotDeg)) return {};
             return { rotation: this.skyTargetRotDeg };
+        },
+
+        // ─── Manual rotator: measure, turn by hand, measure again ───────
+        //
+        // A motorised rotator is driven by the Slew & Center loop. A manual
+        // one (a camera rotator ring, a CAA turned by hand) cannot be, so the
+        // operator closes the loop: Measure solves the current frame, says how
+        // far and which way to turn, and is pressed again after each turn
+        // until the framing is inside tolerance.
+        manualRotatorReverse: false,
+        skyRotAdvice: null,        // last answer from /api/rotator/framing-advice
+        skyRotMeasuring: false,
+        _skyRotLastTurn: null,     // |turn| of the previous measure, for the auto-flip
+
+        skyRotTolerance: 1.0,
+
+        /// One measurement: solve the latest frame, then ask the host how far
+        /// to turn. Needs a frame on the relay, which any PREVIEW exposure or
+        /// a running stream provides.
+        async skyRotMeasure() {
+            if (!Number.isFinite(this.skyTargetRotDeg)) {
+                this.toast('Set a framing angle first', 'warn');
+                return;
+            }
+            if (this.skyRotMeasuring) return;
+            this.skyRotMeasuring = true;
+            this.filesSolveLog = '';
+            this.filesSolveLiveActive = true;
+            try {
+                const body = {};
+                if (this.mount?.connected
+                        && Number.isFinite(this.mount.ra)
+                        && Number.isFinite(this.mount.dec)) {
+                    body.hintRa = this.mount.ra;
+                    body.hintDec = this.mount.dec;
+                }
+                const resp = await this.apiPost('/api/platesolve/solve-latest', body,
+                    { timeout: 180000 });
+                const r = await resp.json();
+                if (!r || !r.success) {
+                    this.toast(this.$t('Could not measure the framing: {e}',
+                        { e: (r && r.error) || 'plate solve failed' }), 'warn');
+                    return;
+                }
+                // Keep the blue box honest about where the camera actually is.
+                try { this._applySolvedFrame(r); } catch (e) { }
+                let advice = await this._skyRotAdvice(r);
+                if (!advice) return;
+
+                // Auto-flip, the same trick the motorised path uses: if the
+                // turn we asked for made things worse, the direction was
+                // backwards for this optical train. Remember that on the rig
+                // so the next measure, and the next session, get it right.
+                const prev = this._skyRotLastTurn;
+                if (prev != null && advice.turnDeg > prev + 2) {
+                    await this._skyRotSetReverse(!this.manualRotatorReverse, true);
+                    advice = await this._skyRotAdvice(r) || advice;
+                    this.toast('That made it worse, so the direction is now reversed for this rig.', 'warn');
+                }
+                this._skyRotLastTurn = advice.turnDeg;
+                if (advice.withinTolerance) {
+                    this.toast('Framing reached', 'ok');
+                }
+            } catch (e) {
+                this.toastFail('Framing measurement failed', e);
+            } finally {
+                this.skyRotMeasuring = false;
+                this.filesSolveLiveActive = false;
+            }
+        },
+
+        /// Ask the host to turn one solve into a turn instruction. Server side
+        /// so the parity rule and the rig's reverse flag live in one place.
+        async _skyRotAdvice(solve) {
+            try {
+                const resp = await this.apiPost('/api/rotator/framing-advice', {
+                    targetRotationDeg: this.skyTargetRotDeg,
+                    solvedRotationDeg: solve.rotationDeg,
+                    cd11: solve.cd11, cd12: solve.cd12,
+                    cd21: solve.cd21, cd22: solve.cd22,
+                    toleranceDeg: this.skyRotTolerance,
+                    // Our live toggle, not the rig's stored one: the rig save
+                    // is debounced, and an answer from the stale value would
+                    // flip the instruction back right after "other way".
+                    reverse: this.manualRotatorReverse
+                });
+                const a = await resp.json();
+                this.skyRotAdvice = a;
+                this.manualRotatorReverse = a?.reversed === true;
+                return a;
+            } catch (e) {
+                this.toastFail('Framing advice failed', e);
+                return null;
+            }
+        },
+
+        /// Persist the turn direction on the rig. `silent` while auto-flipping,
+        /// which announces itself with its own message.
+        async _skyRotSetReverse(v, silent) {
+            this.manualRotatorReverse = !!v;
+            try { await this._persistRigSelection({ manualRotatorReverse: !!v }); }
+            catch (e) { /* the advice still answers; the flag just will not stick */ }
+            if (!silent) {
+                this.toast(v ? 'Turn direction reversed for this rig'
+                             : 'Turn direction back to normal for this rig', 'ok');
+            }
+        },
+
+        /// "It says clockwise but mine goes the other way." One tap, kept per
+        /// rig, and the current instruction flips with it.
+        async skyRotFlipDirection() {
+            await this._skyRotSetReverse(!this.manualRotatorReverse, false);
+            const a = this.skyRotAdvice;
+            if (a && a.direction && a.direction !== 'none') {
+                this.skyRotAdvice = Object.assign({}, a, {
+                    direction: a.direction === 'cw' ? 'ccw' : 'cw',
+                    reversed: this.manualRotatorReverse
+                });
+            }
+            this._skyRotLastTurn = null;   // the learning restarts from here
+        },
+
+        /// "Turn the camera 23.4° clockwise", or the done message. Built here
+        /// so the template stays declarative and the strings stay whole for
+        /// the translators.
+        skyRotAdviceText() {
+            const a = this.skyRotAdvice;
+            if (!a) return '';
+            if (a.withinTolerance) return this.$t('Framing is within tolerance, nothing to turn');
+            const deg = (a.turnDeg ?? 0).toFixed(1);
+            return a.direction === 'ccw'
+                ? this.$t('Turn the camera {d}° counter-clockwise', { d: deg })
+                : this.$t('Turn the camera {d}° clockwise', { d: deg });
         },
 
         /// Turn the camera to the chosen angle where the mount already

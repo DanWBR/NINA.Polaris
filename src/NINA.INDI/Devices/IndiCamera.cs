@@ -196,10 +196,10 @@ public class IndiCamera : ICamera, IDisposable {
         }
     }
 
-    // INDI cameras don't surface gain in a standardised property, the
-    // CCD_CONTROLS group varies by driver (gain / Gain / GAIN). Plumb a
-    // best-effort read here and return 0 when nothing matches.
-    public int Gain => (int)_client.GetNumber(DeviceName, "CCD_CONTROLS", "Gain");
+    // INDI cameras don't surface gain in a standardised property: the element
+    // name, its casing and even the property it sits in vary by driver (see
+    // ResolveControl). Best-effort read, 0 when nothing matches.
+    public int Gain => (int)Math.Round(GainElement()?.Value ?? 0);
 
     // ISO is not part of the INDI CCD spec; dedicated astronomy cameras report
     // analogue gain instead and never publish CCD_ISO, so IsoOptions stays
@@ -343,11 +343,58 @@ public class IndiCamera : ICamera, IDisposable {
         get { var el = GainElement(); return el != null && el.Max > el.Min ? (int)el.Max : 0; }
     }
 
-    private IndiNumberElement? GainElement() {
+    private IndiNumberElement? GainElement() => ResolveControl("Gain", "CCD_GAIN")?.Element;
+
+    /// <summary>
+    /// Find a named control on this camera, whichever way its driver spells it.
+    ///
+    /// There is no standard here. indi_asi_ccd puts Gain and Offset in
+    /// <c>CCD_CONTROLS</c> under those exact names; other drivers prefix the
+    /// element (<c>TC_OFFSET</c>) and keep the plain word in the LABEL, which
+    /// is what their control panel shows and therefore what the operator calls
+    /// it; others again give the control a property of its own
+    /// (<c>CCD_OFFSET</c>, <c>CCD_GAIN</c>). Matching only on the element name
+    /// inside CCD_CONTROLS made a miss indistinguishable from "this camera has
+    /// no offset": the write was skipped in silence and
+    /// <see cref="DriverOffset"/> read null, so a frame taken with the rig
+    /// offset at 0 carried no OFFSET card at all even though the driver was
+    /// running at one (issue #26, ToupTek ATR2600C).
+    ///
+    /// Name first, so every driver that works today keeps its exact
+    /// behaviour; then the label; then a suffixed name.
+    /// </summary>
+    private (string Property, string Key, IndiNumberElement Element)? ResolveControl(
+            string canonical, string ownProperty) {
         var ctrl = _client.GetProperty(DeviceName, "CCD_CONTROLS") as IndiNumberProperty;
-        if (ctrl == null) return null;
-        foreach (var k in new[] { "Gain", "gain", "GAIN" })
-            if (ctrl.Values.TryGetValue(k, out var el)) return el;
+        if (FindControlElement(ctrl, canonical) is { } inControls)
+            return ("CCD_CONTROLS", inControls.Key, inControls.Element);
+
+        var own = _client.GetProperty(DeviceName, ownProperty) as IndiNumberProperty;
+        if (FindControlElement(own, canonical) is { } inOwn)
+            return (ownProperty, inOwn.Key, inOwn.Element);
+        // A dedicated property with exactly one element can only be the
+        // control it is named after, whatever that element is called.
+        if (own is { Values.Count: 1 }) {
+            var only = own.Values.First();
+            return (ownProperty, only.Key, only.Value);
+        }
+        return null;
+    }
+
+    /// <summary>The element-matching rule, pure so the driver spellings can be
+    /// pinned in tests: exact name in the casings drivers use, then an exact
+    /// label, then a <c>PREFIX_NAME</c> element.</summary>
+    internal static (string Key, IndiNumberElement Element)? FindControlElement(
+            IndiNumberProperty? prop, string canonical) {
+        if (prop == null || prop.Values.Count == 0) return null;
+        foreach (var k in new[] { canonical, canonical.ToLowerInvariant(), canonical.ToUpperInvariant() })
+            if (prop.Values.TryGetValue(k, out var el)) return (k, el);
+        foreach (var kv in prop.Values)
+            if (string.Equals(kv.Value.Label?.Trim(), canonical, StringComparison.OrdinalIgnoreCase))
+                return (kv.Key, kv.Value);
+        foreach (var kv in prop.Values)
+            if (kv.Key.EndsWith("_" + canonical, StringComparison.OrdinalIgnoreCase))
+                return (kv.Key, kv.Value);
         return null;
     }
 
@@ -358,52 +405,45 @@ public class IndiCamera : ICamera, IDisposable {
     /// dispatch error in indiserver's log. Also handles driver-specific
     /// casing, Gain (most), gain (a few), GAIN (rare).</summary>
     private async Task TrySetGainAsync(int gain, CancellationToken ct, bool force = false) {
-        var ctrl = _client.GetProperty(DeviceName, "CCD_CONTROLS") as IndiNumberProperty;
-        if (ctrl == null) return;   // driver doesn't expose CCD_CONTROLS (e.g. CCD Simulator)
-        string? key = null;
-        foreach (var candidate in new[] { "Gain", "gain", "GAIN" }) {
-            if (ctrl.Values.ContainsKey(candidate)) { key = candidate; break; }
-        }
-        if (key == null) return;   // CCD_CONTROLS exists but no gain element
-        var wanted = new Dictionary<string, double> { [key] = gain };
-        if (!force && AlreadyAt(ctrl, wanted)) return;   // already at this gain — don't re-send (see CaptureAsync churn note)
+        // Driver doesn't advertise a gain control anywhere (e.g. the CCD
+        // Simulator, which publishes no CCD_CONTROLS at all; writing it
+        // there logs "Property CCD_CONTROLS is not defined" in indiserver).
+        if (ResolveControl("Gain", "CCD_GAIN") is not { } ctl) return;
+        var wanted = new Dictionary<string, double> { [ctl.Key] = gain };
+        // AlreadyAt compares against the vector we are about to write, which
+        // is the one the element came from.
+        var vec = _client.GetProperty(DeviceName, ctl.Property) as IndiNumberProperty;
+        if (!force && AlreadyAt(vec, wanted)) return;   // don't re-send (see CaptureAsync churn note)
         try {
-            await _client.SetNumberAsync(DeviceName, "CCD_CONTROLS", wanted, ct);
+            await _client.SetNumberAsync(DeviceName, ctl.Property, wanted, ct);
         } catch { /* driver rejected the value (out of range?), non-fatal */ }
     }
 
-    /// <summary>Write offset into CCD_CONTROLS only when the driver advertises
-    /// it. Same casing tolerance as gain (Offset / offset / OFFSET). Offset is
-    /// the sensor bias pedestal — leaving it at 0 pins the background near
-    /// black and clips the left of the histogram; most OSC/CMOS rigs want a
-    /// small positive offset (per-rig DefaultOffset).</summary>
+    /// <summary>Write the offset wherever this driver keeps it (see
+    /// <see cref="ResolveControl"/>). Offset is the sensor bias pedestal —
+    /// leaving it at 0 pins the background near black and clips the left of
+    /// the histogram; most OSC/CMOS rigs want a small positive offset (per-rig
+    /// DefaultOffset).</summary>
     private async Task TrySetOffsetAsync(int offset, CancellationToken ct, bool force = false) {
-        var ctrl = _client.GetProperty(DeviceName, "CCD_CONTROLS") as IndiNumberProperty;
-        if (ctrl == null) return;
-        string? key = null;
-        foreach (var candidate in new[] { "Offset", "offset", "OFFSET" }) {
-            if (ctrl.Values.ContainsKey(candidate)) { key = candidate; break; }
-        }
-        if (key == null) return;   // driver has no offset element
+        if (ResolveControl("Offset", "CCD_OFFSET") is not { } ctl) return;
         _offset = offset;          // record for the FITS metadata stamp
-        var wanted = new Dictionary<string, double> { [key] = offset };
-        if (!force && AlreadyAt(ctrl, wanted)) return;   // already at this offset (see CaptureAsync churn note)
+        var wanted = new Dictionary<string, double> { [ctl.Key] = offset };
+        var vec = _client.GetProperty(DeviceName, ctl.Property) as IndiNumberProperty;
+        if (!force && AlreadyAt(vec, wanted)) return;   // already at this offset
         try {
-            await _client.SetNumberAsync(DeviceName, "CCD_CONTROLS", wanted, ct);
+            await _client.SetNumberAsync(DeviceName, ctl.Property, wanted, ct);
         } catch { /* out of range / rejected — non-fatal */ }
     }
 
-    /// <summary>The offset the driver reports right now (CCD_CONTROLS Offset),
-    /// or null when it has no such element. This is what the sensor is actually
-    /// running at, as opposed to what a caller asked for.</summary>
+    /// <summary>The offset the driver reports right now, or null when this
+    /// camera advertises no offset control at all. This is what the sensor is
+    /// actually running at, as opposed to what a caller asked for, and it is
+    /// what the FITS OFFSET card carries when the rig leaves the offset to the
+    /// driver (issue #26).</summary>
     public int? DriverOffset {
         get {
-            var ctrl = _client.GetProperty(DeviceName, "CCD_CONTROLS") as IndiNumberProperty;
-            if (ctrl == null) return null;
-            foreach (var candidate in new[] { "Offset", "offset", "OFFSET" }) {
-                if (ctrl.Values.TryGetValue(candidate, out var v) && v != null) return (int)Math.Round(v.Value);
-            }
-            return null;
+            var el = ResolveControl("Offset", "CCD_OFFSET")?.Element;
+            return el == null ? null : (int)Math.Round(el.Value);
         }
     }
 

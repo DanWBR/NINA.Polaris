@@ -4958,5 +4958,22 @@
   "WiFi radio back on.": "WLAN-Funkmodul wieder an.",
   "Lost contact with the host while changing the WiFi setting. Reconnect on the wired address to continue.": "Kontakt zum Host beim Ändern der WLAN-Einstellung verloren. Verbinden Sie sich über die Kabeladresse neu.",
   "Field": "Feld",
-  "Back to field mode": "Zurück zum Feldmodus"
+  "Back to field mode": "Zurück zum Feldmodus",
+  "No rotator: measure below and turn yours by hand.": "Kein Rotator: unten messen und den eigenen von Hand drehen.",
+  "Measure framing": "Bildfeld messen",
+  "Measuring…": "Messe…",
+  "Other way": "Andersherum",
+  "Looking at the back of the camera. Turn it, then measure again.": "Blick auf die Rückseite der Kamera. Drehen, dann erneut messen.",
+  "Take a PREVIEW exposure first, then Measure framing.": "Erst eine PREVIEW-Aufnahme machen, dann das Bildfeld messen.",
+  "Turn the camera {d}° clockwise": "Kamera {d}° im Uhrzeigersinn drehen",
+  "Turn the camera {d}° counter-clockwise": "Kamera {d}° gegen den Uhrzeigersinn drehen",
+  "Framing is within tolerance, nothing to turn": "Bildfeld innerhalb der Toleranz, nichts zu drehen",
+  "Framing reached": "Bildfeld erreicht",
+  "Could not measure the framing: {e}": "Bildfeld konnte nicht gemessen werden: {e}",
+  "That made it worse, so the direction is now reversed for this rig.": "Das hat es verschlechtert, die Richtung ist für dieses Rig nun umgekehrt.",
+  "Turn direction reversed for this rig": "Drehrichtung für dieses Rig umgekehrt",
+  "Turn direction back to normal for this rig": "Drehrichtung für dieses Rig wieder normal",
+  "Set a framing angle first": "Legen Sie zuerst einen Bildfeldwinkel fest",
+  "Framing measurement failed": "Messung des Bildfelds fehlgeschlagen",
+  "Framing advice failed": "Berechnung der Drehung fehlgeschlagen"
 }
