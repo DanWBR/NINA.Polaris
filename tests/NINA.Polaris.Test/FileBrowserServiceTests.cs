@@ -169,8 +169,8 @@ public class FileBrowserServiceTests {
         if (!OperatingSystem.IsLinux())
             Assert.Ignore("Symbolic-link test requires Linux");
 
-        var link = Path.Combine(_tmp, "etc-link");
-        Directory.CreateSymbolicLink(link, "/etc");
+        var link = Path.Combine(_tmp, "ssh-link");
+        Directory.CreateSymbolicLink(link, "/etc/ssh");
 
         Assert.That(
             async () => await _svc.WriteTextAsync(

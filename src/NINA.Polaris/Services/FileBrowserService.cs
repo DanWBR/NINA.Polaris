@@ -525,13 +525,12 @@ public class FileBrowserService {
         if (string.IsNullOrWhiteSpace(userPath))
             throw new ArgumentException("Empty path", nameof(userPath));
         // Path.GetFullPath collapses .. segments and normalises
-        // separators. We work on the canonical form everywhere.
+        // separators. We validate the canonical target but keep the
+        // caller's requested path so relative roots continue to work.
         var full = Path.GetFullPath(userPath);
         if (mustExist && !File.Exists(full) && !Directory.Exists(full))
             throw new FileNotFoundException(full);
-        // Validate and return the canonical target, not necessarily the requested path.
-        full = ResolveExistingPath(full);
-        if (IsBlocked(full))
+        if (IsBlocked(ResolveExistingPath(full)))
             throw new UnauthorizedAccessException($"Path is blocked: {full}");
         return full;
     }
@@ -563,10 +562,9 @@ public class FileBrowserService {
         if (string.IsNullOrWhiteSpace(userPath))
             throw new ArgumentException("Empty destination", nameof(userPath));
         var full = Path.GetFullPath(userPath);
-        var canonical = ResolveExistingPath(full);
-        if (IsBlocked(canonical))
-            throw new UnauthorizedAccessException($"Destination is blocked: {canonical}");
-        return canonical;
+        if (IsBlocked(ResolveExistingPath(full)))
+            throw new UnauthorizedAccessException($"Destination is blocked: {full}");
+        return full;
     }
 
     public static bool IsBlocked(string fullPath) {
