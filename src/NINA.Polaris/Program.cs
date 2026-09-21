@@ -1156,17 +1156,10 @@ app.UseWebSockets();
 // stripped from the iframe URL) AND the WebSocket upgrade that streams
 // PHD2's pixel updates.
 var phd2GuiForwarder = app.Services.GetRequiredService<IHttpForwarder>();
-var phd2GuiHttpClient = new HttpMessageInvoker(new SocketsHttpHandler {
-    UseProxy = false,
-    AllowAutoRedirect = false,
-    AutomaticDecompression = System.Net.DecompressionMethods.None,
-    UseCookies = false,
-    EnableMultipleHttp2Connections = true,
-    ActivityHeadersPropagator = new Yarp.ReverseProxy.Forwarder.ReverseProxyPropagator(
-        System.Diagnostics.DistributedContextPropagator.Current),
-    ConnectTimeout = TimeSpan.FromSeconds(5),
-});
-var phd2GuiTransform = HttpTransformer.Default;
+// Capped at LoopbackProxy.MaxUpstreamConnections, because xpra's listener is
+// listen(5) and the HTML5 client asks for forty files at once: see
+// LoopbackProxy for the measurements and for what an overflow looked like.
+var phd2GuiHttpClient = NINA.Polaris.Services.LoopbackProxy.NewInvoker();
 app.Map("/phd2-gui/{**rest}", async (HttpContext ctx, Phd2GuiSessionService gui) => {
     if (!gui.IsSupportedOs || !gui.XpraInstalled) {
         ctx.Response.StatusCode = 501;
@@ -1204,15 +1197,8 @@ app.Map("/phd2-gui/{**rest}", async (HttpContext ctx, Phd2GuiSessionService gui)
     if (string.IsNullOrEmpty(rest)) rest = "/";
     ctx.Request.Path = rest;
     var target = $"http://127.0.0.1:{gui.BindPort}";
-    var err = await phd2GuiForwarder.SendAsync(ctx, target, phd2GuiHttpClient,
-        ForwarderRequestConfig.Empty, phd2GuiTransform);
-    // Only write a 502 if nothing was sent yet: a mid-stream forwarder error
-    // (client aborted, upstream dropped) means the response already started, and
-    // setting StatusCode then throws "response has already started".
-    if (err != ForwarderError.None && !ctx.Response.HasStarted) {
-        ctx.Response.StatusCode = 502;
-        await ctx.Response.WriteAsync($"xpra proxy error: {err}");
-    }
+    await NINA.Polaris.Services.LoopbackProxy.ForwardAsync(
+        phd2GuiForwarder, ctx, target, phd2GuiHttpClient, "xpra");
 });
 
 // ----- PH2VNC-2: /phd2-vnc-ws WebSocket → TightVNC TCP bridge -----
@@ -1349,22 +1335,14 @@ app.Map("/phd2-vnc-ws", async (HttpContext ctx, Phd2VncSessionService vnc,
 // directly exposed to the network even when Polaris listens on
 // 0.0.0.0.
 var indiWebForwarder = app.Services.GetRequiredService<IHttpForwarder>();
-var indiWebHttpClient = new HttpMessageInvoker(new SocketsHttpHandler {
-    UseProxy = false,
-    AllowAutoRedirect = false,
-    AutomaticDecompression = System.Net.DecompressionMethods.None,
-    UseCookies = false,
-    EnableMultipleHttp2Connections = true,
-    ActivityHeadersPropagator = new Yarp.ReverseProxy.Forwarder.ReverseProxyPropagator(
-        System.Diagnostics.DistributedContextPropagator.Current),
-    ConnectTimeout = TimeSpan.FromSeconds(5),
-});
-// Default transformer leaves headers / body untouched. We strip
-// the /indi-web prefix from the request path manually below
-// (HttpContext.Request.Path) before calling SendAsync — indi-web
-// returns asset URLs like /static/app.css that need to resolve
-// to the upstream root, not /indi-web/static/app.css.
-var indiWebTransform = HttpTransformer.Default;
+// Capped like the phd2-gui proxy above: indi-web is a bottle/wsgiref server,
+// single-threaded with the same modest accept queue.
+var indiWebHttpClient = NINA.Polaris.Services.LoopbackProxy.NewInvoker();
+// The forward uses the default transformer, which leaves headers and body
+// untouched. We strip the /indi-web prefix from the request path manually
+// below (HttpContext.Request.Path) instead: indi-web returns asset URLs like
+// /static/app.css that need to resolve to the upstream root, not
+// /indi-web/static/app.css.
 app.Map("/indi-web/{**rest}", async (HttpContext ctx, IndiWebManagerService svc) => {
     if (!svc.IsSupportedOs) {
         ctx.Response.StatusCode = 501;
@@ -1397,12 +1375,8 @@ app.Map("/indi-web/{**rest}", async (HttpContext ctx, IndiWebManagerService svc)
     }
     ctx.Request.Path = rest;
     var target = $"http://{svc.BindAddress}:{svc.BindPort}";
-    var err = await indiWebForwarder.SendAsync(ctx, target, indiWebHttpClient,
-        ForwarderRequestConfig.Empty, indiWebTransform);
-    if (err != ForwarderError.None && !ctx.Response.HasStarted) {
-        ctx.Response.StatusCode = 502;
-        await ctx.Response.WriteAsync($"indi-web proxy error: {err}");
-    }
+    await NINA.Polaris.Services.LoopbackProxy.ForwardAsync(
+        indiWebForwarder, ctx, target, indiWebHttpClient, "indi-web");
 });
 
 // ----- CANOPUS: /canopus/* reverse-proxy → local assistant agent -----
@@ -1411,17 +1385,11 @@ app.Map("/indi-web/{**rest}", async (HttpContext ctx, IndiWebManagerService svc)
 // /indi-web proxy: strip the /canopus prefix so the agent sees its own root
 // paths, and the forwarder carries the WebSocket upgrade for /canopus/api/agent.
 var canopusForwarder = app.Services.GetRequiredService<IHttpForwarder>();
-var canopusHttpClient = new HttpMessageInvoker(new SocketsHttpHandler {
-    UseProxy = false,
-    AllowAutoRedirect = false,
-    AutomaticDecompression = System.Net.DecompressionMethods.None,
-    UseCookies = false,
-    EnableMultipleHttp2Connections = true,
-    ActivityHeadersPropagator = new Yarp.ReverseProxy.Forwarder.ReverseProxyPropagator(
-        System.Diagnostics.DistributedContextPropagator.Current),
-    ConnectTimeout = TimeSpan.FromSeconds(5),
-});
-var canopusTransform = HttpTransformer.Default;
+// Uncapped: the agent runs on uvicorn, which accepts connections properly
+// (backlog 2048), so the phd2-gui/indi-web cap would only add queueing. The
+// retry on a dropped connection still applies.
+var canopusHttpClient = NINA.Polaris.Services.LoopbackProxy.NewInvoker(
+    maxConnections: int.MaxValue);
 app.Map("/canopus/{**rest}", async (HttpContext ctx,
         NINA.Polaris.Services.External.CanopusServerService svc) => {
     if (!svc.Running) {
@@ -1447,12 +1415,8 @@ app.Map("/canopus/{**rest}", async (HttpContext ctx,
     if (string.IsNullOrEmpty(rest)) rest = "/";
     ctx.Request.Path = rest;
     var target = $"http://127.0.0.1:{svc.AgentPort}";
-    var err = await canopusForwarder.SendAsync(ctx, target, canopusHttpClient,
-        ForwarderRequestConfig.Empty, canopusTransform);
-    if (err != ForwarderError.None && !ctx.Response.HasStarted) {
-        ctx.Response.StatusCode = 502;
-        await ctx.Response.WriteAsync($"canopus proxy error: {err}");
-    }
+    await NINA.Polaris.Services.LoopbackProxy.ForwardAsync(
+        canopusForwarder, ctx, target, canopusHttpClient, "canopus");
 });
 
 // Equipment endpoints
