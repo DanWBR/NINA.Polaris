@@ -96,12 +96,13 @@ public class TakeExposureInstruction : SequenceInstruction {
         // driver actually receives gain / offset / binning / frame-type / filter
         // — previously the tree sequencer only set binning and captured with
         // defaults, so gain and the CCD_FRAME_TYPE tag were never applied.
-        // Offset falls back to the rig's DefaultOffset (bias pedestal) when the
-        // instruction doesn't pin one.
-        var rigOffset = ctx.Profiles.ActiveEquipmentProfile?.DefaultOffset ?? 0;
+        // Offset falls back to the ADV panel's own field when the instruction
+        // does not pin one: each capturing panel carries its own pedestal, and
+        // this is the tree sequencer's (issue #26).
+        var advOffset = RigCaptureDefaults.AdvOffset(ctx.Profiles);
         var capOpts = new NINA.Image.Interfaces.CaptureOptions(
             Gain: Gain,
-            Offset: Offset ?? (rigOffset > 0 ? rigOffset : (int?)null),
+            Offset: Offset ?? advOffset,
             BinX: Binning > 0 ? Binning : (int?)null,
             BinY: Binning > 0 ? Binning : (int?)null,
             ImageType: string.IsNullOrWhiteSpace(ImageType) ? "LIGHT" : ImageType,

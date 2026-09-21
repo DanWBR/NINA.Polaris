@@ -12084,6 +12084,18 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <button class="btn btn-primary" @click="advSeqStart()" :disabled="advSeq.state === 'Running'">▶ Start</button>
                     <button class="btn" @click="advSeqStop()" :disabled="advSeq.state !== 'Running'">⏹ Stop</button>
                     <button class="btn" @click="advSeqValidate()">✓ Validate</button>
+                    <!-- This panel's offset: what an exposure instruction uses
+                         when it does not pin one of its own. Its own field,
+                         like LIVE, PREVIEW and AUTORUN. -->
+                    <label class="advseq-offset" x-show="!cameraUsesIso()">
+                        <span>Offset</span>
+                        <input type="number" x-model.number="advOffset"
+                               step="1" min="0" class="input-sm" style="width:72px"
+                               @change="persistAdvOffset()">
+                        <span class="text-muted" x-show="!(advOffset > 0)"
+                              x-text="$t('left to the camera driver')"></span>
+                        <span class="gain-help" tabindex="0" role="img" aria-label="About offset" title="Sensor black-level pedestal (ADU floor) for THIS panel's captures. A small positive value stops the shadow/noise tail clipping to 0 and keeps calibration clean. Polaris sends it to the camera before every capture from this panel, so it wins over the driver's own control panel; 0 means the capture sends nothing and the frame records whatever the driver is set to. Typical: a few tens: SV405CC ~30-64.">?</span>
+                    </label>
                     <button class="btn" @click="advSeqSaveDoc()">💾 Save tree</button>
                     <button class="btn" @click="advSeqDownloadJson()">⬇ Download JSON</button>
                     <label class="btn" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer">

@@ -296,13 +296,14 @@ configuration sits at offset 1, which clips the shadow end of an IMX571
 sensor's histogram to black, and the field reports it produced were of
 lights that looked like darks.
 
-**Offset is per panel.** LIVE, PREVIEW and AUTORUN each have their own
-Offset field, and a capture obeys the field of the panel it came from: a
-framing snap and a live stack are different jobs and do not have to agree
-about the pedestal. All three save to the active rig, so they survive a
-reload and follow the rig rather than the browser. Captures with no panel
-of their own, the plate solve, autofocus, polar alignment and the video
-stream, use the LIVE value.
+**Offset is per panel.** LIVE, PREVIEW, AUTORUN and ADV each have their
+own Offset field, and a capture obeys the field of the panel it came from:
+a framing snap and a live stack are different jobs and do not have to
+agree about the pedestal. All four save to the active rig, so they survive
+a reload and follow the rig rather than the browser. In ADV an exposure
+instruction may pin its own offset, which outranks the panel's field;
+captures with no panel of their own, the plate solve, autofocus, polar
+alignment and the video stream, use the LIVE value.
 
 **An offset of 0 means "read the driver".** That panel's captures send
 nothing, the camera keeps whatever you set in its own control panel, and

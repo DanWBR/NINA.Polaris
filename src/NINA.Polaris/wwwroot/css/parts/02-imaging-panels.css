@@ -320,6 +320,16 @@
     font-size: 13px;
 }
 
+/* The ADV toolbar's own offset field, so it lines up with the buttons
+   beside it instead of stretching. */
+.advseq-offset {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+}
+.advseq-offset .text-muted { font-size: 11px; }
+
 /* Read-only line above the AUTORUN sequence: the rig offset used by every
    capture (edited in LIVE / PREVIEW, see issue #27). */
 .autorun-offset-line {

@@ -580,6 +580,9 @@ public class EquipmentProfile {
     /// <summary>The AUTORUN panel's offset, used by every item of a running
     /// sequence.</summary>
     public int? AutorunOffset { get; set; }
+    /// <summary>The ADV panel's offset: what a tree-sequencer exposure uses
+    /// when the instruction does not pin one of its own.</summary>
+    public int? AdvOffset { get; set; }
     public int? DefaultBinning { get; set; }
     public int? FocuserStepSize { get; set; }
     public int? FocuserBacklashSteps { get; set; }

@@ -205,12 +205,14 @@ Beyond the obvious device names, each rig stores:
   before every capture, the same way N.I.N.A. and ASIAIR own them, so they
   override whatever the driver's own control panel (INDI, ASCOM) was set to.
 
-  **Offset is per panel.** LIVE, PREVIEW and AUTORUN each have their own
+  **Offset is per panel.** LIVE, PREVIEW, AUTORUN and ADV each have their own
   Offset field and each capture obeys the field of the panel it came from, so
   a framing snap and a live stack do not have to agree about the pedestal.
-  All three save to the active rig (`defaultOffset`, `previewOffset`,
-  `autorunOffset`); captures with no panel of their own (plate solve,
-  autofocus, polar alignment, the video stream) use the LIVE one.
+  All four save to the active rig (`defaultOffset`, `previewOffset`,
+  `autorunOffset`, `advOffset`); an ADV exposure instruction that pins its own
+  offset outranks the panel field, and captures with no panel of their own
+  (plate solve, autofocus, polar alignment, the video stream) use the LIVE
+  one.
 
   **An offset of 0 means "read the driver".** That panel's captures send
   nothing, the camera keeps whatever its own control panel is set to, and the
