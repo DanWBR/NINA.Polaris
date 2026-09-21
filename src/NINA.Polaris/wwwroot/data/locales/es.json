@@ -4958,5 +4958,7 @@
   "Could not change the WiFi setting": "No se pudo cambiar el ajuste de WiFi",
   "Saved. The radio goes off once the cable has held an address for a few seconds.": "Guardado. La radio se apaga cuando el cable mantenga una dirección durante unos segundos.",
   "WiFi radio back on.": "Radio WiFi encendida de nuevo.",
-  "Lost contact with the host while changing the WiFi setting. Reconnect on the wired address to continue.": "Se perdió el contacto con el host al cambiar el ajuste de WiFi. Reconecta por la dirección del cable para continuar."
+  "Lost contact with the host while changing the WiFi setting. Reconnect on the wired address to continue.": "Se perdió el contacto con el host al cambiar el ajuste de WiFi. Reconecta por la dirección del cable para continuar.",
+  "Field": "Campo",
+  "Back to field mode": "Volver al modo de campo"
 }

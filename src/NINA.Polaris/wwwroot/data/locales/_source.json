@@ -4339,5 +4339,7 @@
   "Could not change the WiFi setting": "",
   "Saved. The radio goes off once the cable has held an address for a few seconds.": "",
   "WiFi radio back on.": "",
-  "Lost contact with the host while changing the WiFi setting. Reconnect on the wired address to continue.": ""
+  "Lost contact with the host while changing the WiFi setting. Reconnect on the wired address to continue.": "",
+  "Field": "",
+  "Back to field mode": ""
 }
