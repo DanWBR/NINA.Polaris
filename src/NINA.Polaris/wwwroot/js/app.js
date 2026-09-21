@@ -1365,7 +1365,6 @@ function ninaApp() {
         cameraDrivers: [],
         cameraVendorDevices: [],
         cameraDiscovering: false,
-        cameraIso: 800,
         // PHD2-style display gamma for the native guide preview (0.10–3.00,
         // 1.0 = linear default). Persisted in localStorage; sent as ?gamma= on
         // the guide frame.jpg request.
@@ -2331,7 +2330,14 @@ function ninaApp() {
         // forecast is the raw DTO from the backend. weatherDays() /
         // weatherBestWindows() (declared below) derive view-model data
         // on the fly, using SunCalc for sun + moon ephemeris.
-        weather: { forecast: null, loading: false, error: '', errorCard: '', lastFetched: null },
+        //
+        // NOT `weather`: that name belongs to the weather STATION state
+        // above. This was declared as a second `weather:` key in this same
+        // object literal, and being the later one it won, so the station's
+        // defaults never existed and, worse, the status handler's
+        // `this.weather = { ...station fields... }` wiped the fetched
+        // forecast on the next tick.
+        weatherForecast: { forecast: null, loading: false, error: '', errorCard: '', lastFetched: null },
         _weatherLastKey: '',
 
         // Studio (post-processing), ST-1 frame browser + ST-2 viewer
@@ -17253,32 +17259,32 @@ function ninaApp() {
             const lng = this.settings.longitude;
             if (lat == null || lng == null
                 || (Math.abs(lat) < 0.01 && Math.abs(lng) < 0.01)) {
-                this.weather.error = 'Set your observing location in Settings first.';
-                this.weather.errorCard = 'observatory-card';
-                this.weather.forecast = null;
+                this.weatherForecast.error = 'Set your observing location in Settings first.';
+                this.weatherForecast.errorCard = 'observatory-card';
+                this.weatherForecast.forecast = null;
                 return;
             }
             const key = `${lat.toFixed(2)},${lng.toFixed(2)}`;
             // Skip refetch within the cache window unless the caller wants
             // to force (e.g. Refresh button). Backend has its own 15 min
             // cache so even a force-refresh storm is harmless.
-            if (!force && key === this._weatherLastKey && this.weather.forecast?.available) return;
+            if (!force && key === this._weatherLastKey && this.weatherForecast.forecast?.available) return;
             this._weatherLastKey = key;
-            this.weather.loading = true;
-            this.weather.error = '';
-            this.weather.errorCard = '';
+            this.weatherForecast.loading = true;
+            this.weatherForecast.error = '';
+            this.weatherForecast.errorCard = '';
             try {
                 const r = await this.apiGet(`/api/weather/forecast?lat=${lat}&lon=${lng}`);
-                this.weather.forecast = r;
-                this.weather.lastFetched = new Date();
+                this.weatherForecast.forecast = r;
+                this.weatherForecast.lastFetched = new Date();
                 if (!r?.available) {
-                    this.weather.error = r?.error || 'Forecast unavailable';
+                    this.weatherForecast.error = r?.error || 'Forecast unavailable';
                 }
             } catch (e) {
-                this.weather.error = 'Could not reach forecast service';
-                this.weather.forecast = null;
+                this.weatherForecast.error = 'Could not reach forecast service';
+                this.weatherForecast.forecast = null;
             } finally {
-                this.weather.loading = false;
+                this.weatherForecast.loading = false;
             }
         },
 
@@ -17362,7 +17368,7 @@ function ninaApp() {
         // sun + moon ephemeris (SunCalc) and pre-formatted display strings
         // so the template stays declarative.
         weatherDays() {
-            const f = this.weather.forecast;
+            const f = this.weatherForecast.forecast;
             if (!f?.available || !f.slots?.length) return [];
             const lat = this.settings.latitude || 0;
             const lng = this.settings.longitude || 0;
@@ -17455,7 +17461,7 @@ function ninaApp() {
             if (!days.length) return [];
             const lat = this.settings.latitude || 0;
             const lng = this.settings.longitude || 0;
-            const slots = this.weather.forecast.slots
+            const slots = this.weatherForecast.forecast.slots
                 .map(s => ({ ...s, utc: new Date(s.utcStart) }))
                 .sort((a, b) => a.utc - b.utc);
             // "Tonight" = first sunset onward through next sunrise.
@@ -34552,19 +34558,6 @@ function ninaApp() {
             const card = ev.target.closest('.settings-section');
             if (card) card.classList.toggle('is-collapsed');
         },
-        // Jump to Settings and open a specific card. Actions elsewhere in
-        // the app (activity-bar chips, prompts) use this to land the user on
-        // the right card ready to act. The accordion starts every card
-        // collapsed, so scrolling alone is not enough: expand it too.
-        openSettingsCard(id) {
-            this.tab = 'settings';
-            this.$nextTick(() => {
-                const card = id && document.getElementById(id);
-                if (!card) return;
-                card.classList.remove('is-collapsed');
-                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            });
-        },
         // Start every settings card collapsed (called from the grid's x-init).
         // ---- Install to internal disk ----------------------------------
         //
@@ -34752,15 +34745,30 @@ function ninaApp() {
                 c.classList.add('is-collapsed');
             });
         },
-        // Switch to the Settings tab and scroll a card into view. nextTick
-        // alone fires before the settings grid is laid out (and before
-        // reorderSettings moves the node), so the old inline scrollIntoView
-        // silently did nothing. Retry until the card is actually visible.
+        // Jump to Settings and open a specific card. Actions elsewhere in
+        // the app (activity-bar chips, error banners, prompts) use this to
+        // land the user on the right card ready to act, so two things have to
+        // be right.
+        //
+        // The card has to be found late. nextTick alone fires before the
+        // settings grid is laid out, and before reorderSettings moves the
+        // node, so an immediate scrollIntoView silently did nothing: retry
+        // until the card is actually on screen.
+        //
+        // And it has to be expanded. The accordion starts every card
+        // collapsed, so scrolling alone lands the user on a shut card with
+        // nothing but its header showing. That is what this method used to do
+        // for a while: there were two of these, the later one won, and it was
+        // the one that scrolled without expanding.
         openSettingsCard(id) {
+            if (!id) return;
             this.tab = 'settings';
             let tries = 0;
             const go = () => {
                 const el = document.getElementById(id);
+                // Expanding does not depend on layout, so do it as soon as the
+                // node exists; only the scroll waits for it to be on screen.
+                if (el) el.classList.remove('is-collapsed');
                 if (el && el.offsetParent !== null) {
                     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     return;

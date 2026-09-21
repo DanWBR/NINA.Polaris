@@ -10564,23 +10564,23 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <div class="panel-header">
                     Weather forecast
                     <span class="status-indicator-sm"
-                          :class="weather.loading ? 'warn' : (weather.forecast && weather.forecast.available ? 'ok' : 'idle')"
-                          x-text="weather.loading ? 'loading' : (weather.forecast && weather.forecast.available ? 'live' : 'idle')"></span>
+                          :class="weatherForecast.loading ? 'warn' : (weatherForecast.forecast && weatherForecast.forecast.available ? 'ok' : 'idle')"
+                          x-text="weatherForecast.loading ? 'loading' : (weatherForecast.forecast && weatherForecast.forecast.available ? 'live' : 'idle')"></span>
                     <span class="muted" style="font-size:11px;margin-left:auto"
-                          x-show="weather.lastFetched"
-                          x-text="'Updated ' + weather.lastFetched?.toLocaleTimeString()"></span>
-                    <button class="btn btn-sm" @click="loadWeatherForecast(true)" :disabled="weather.loading">Refresh</button>
+                          x-show="weatherForecast.lastFetched"
+                          x-text="'Updated ' + weatherForecast.lastFetched?.toLocaleTimeString()"></span>
+                    <button class="btn btn-sm" @click="loadWeatherForecast(true)" :disabled="weatherForecast.loading">Refresh</button>
                 </div>
 
                 <!-- Error / no-location states -->
-                <div x-show="weather.error" class="weather-message">
-                    <span x-text="weather.error"></span>
-                    <button class="btn btn-sm" x-show="weather.errorCard" x-cloak
-                            @click="openSettingsCard(weather.errorCard)">Open Settings</button>
+                <div x-show="weatherForecast.error" class="weather-message">
+                    <span x-text="weatherForecast.error"></span>
+                    <button class="btn btn-sm" x-show="weatherForecast.errorCard" x-cloak
+                            @click="openSettingsCard(weatherForecast.errorCard)">Open Settings</button>
                 </div>
 
                 <!-- Best windows tonight callout -->
-                <div x-show="weather.forecast && weatherBestWindows().length" class="weather-window-callout">
+                <div x-show="weatherForecast.forecast && weatherBestWindows().length" class="weather-window-callout">
                     <strong>Tonight's best windows</strong>
                     <ul>
                         <template x-for="w in weatherBestWindows()" :key="w.startMs">
@@ -10593,7 +10593,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         </template>
                     </ul>
                 </div>
-                <div x-show="weather.forecast && weather.forecast.available && !weatherBestWindows().length"
+                <div x-show="weatherForecast.forecast && weatherForecast.forecast.available && !weatherBestWindows().length"
                      class="weather-window-callout weather-window-callout--meh">
                     No high-quality observation windows tonight. Sky conditions look marginal,
                     check per-day breakdown for individual slots.
