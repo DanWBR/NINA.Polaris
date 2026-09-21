@@ -30421,18 +30421,30 @@ function ninaApp() {
             // guard a pointerleave event that fires before any
             // matching pointerdown (e.g. browser hovering a different
             // button during fast keyboard nav) would issue a spurious
-            // abort that could kill an in-progress GoTo slew.
+            // stop that could kill an in-progress GoTo slew.
             if (this._mountJogActive == null) return;
+            const dirMap = { n: 'north', s: 'south', e: 'east', w: 'west' };
+            const dir = dirMap[this._mountJogActive] || this._mountJogActive;
             this._mountJogActive = null;
-            // Use abort, which clears any active MOTION_* switch.
-            // We considered sending explicit MOTION_NORTH=false etc
-            // per spec but it requires per-direction stop endpoints;
-            // abort works on every mount driver we've tested and
-            // also recovers cleanly if the user mashed two buttons
-            // simultaneously (both motions get cancelled at once).
-            try { await this.apiPost('/api/telescope/abort'); }
-            catch (e) { /* abort failures aren't surfaced -- the next
-                           WS tick shows whether the mount stopped */ }
+            // Stop the axis this arrow jogs and nothing else. This used
+            // to be /api/telescope/abort, which on the ZWO AM3 / AM5
+            // driver also stops tracking and cancels a GoTo: a night of
+            // framing taps left the mount parked-still every time.
+            // Escalating fallbacks, because an axis that keeps running
+            // is worse than a cancelled slew: per-direction stop, then
+            // all-axes stop, then abort with a toast.
+            try {
+                await this.apiPost(`/api/telescope/move/${dir}/stop`);
+                return;
+            } catch (e) { /* fall through to the broader stops */ }
+            try {
+                await this.apiPost('/api/telescope/move/stop');
+                return;
+            } catch (e) { /* fall through to abort */ }
+            try {
+                await this.apiPost('/api/telescope/abort');
+                this.toast('Stopping the mount needed a full abort. Check tracking.', 'warn');
+            } catch (e) { /* the next WS tick shows whether the mount stopped */ }
         },
 
         // SLEWRATE: index of the currently-lit rate in mount.slewRates,

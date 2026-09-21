@@ -110,6 +110,16 @@ public interface ITelescope {
     Task MoveWestAsync(CancellationToken ct = default);
     Task StopMotionAsync(CancellationToken ct = default);
 
+    /// <summary>End the jog on one direction's axis and leave every
+    /// other motion the mount has in flight alone. This is what a
+    /// d-pad release calls: a global abort would also cancel a GoTo
+    /// the user started before reaching for the arrows, and on
+    /// LX200-class drivers (ZWO AM3 / AM5) it drops tracking with it.
+    /// Backends without a per-axis stop inherit the all-axes
+    /// <see cref="StopMotionAsync(CancellationToken)"/>.</summary>
+    Task StopMotionAsync(MountJogDirection direction, CancellationToken ct = default)
+        => StopMotionAsync(ct);
+
     /// <summary>Send the mount to its mechanical home position. Most
     /// GoTo mounts have a defined "home" pose (CW down, RA/Dec hard
     /// stops) used for unattended power-up, dawn dew-cap close, polar
@@ -208,6 +218,18 @@ public interface ITelescope {
 /// non-empty, falls back to Name otherwise. <see cref="Active"/> is
 /// the live state read from the property snapshot at call time.</summary>
 public record SlewRateStep(string Name, string Label, bool Active);
+
+/// <summary>One arrow of the manual-jog d-pad. North/South ride the
+/// declination axis (INDI <c>TELESCOPE_MOTION_NS</c>), East/West the
+/// right-ascension one (<c>TELESCOPE_MOTION_WE</c>), which is why a
+/// per-direction stop can halt one axis without touching the
+/// other.</summary>
+public enum MountJogDirection {
+    North,
+    South,
+    East,
+    West
+}
 
 /// <summary>Tracking rate models defined by the INDI
 /// TELESCOPE_TRACK_MODE standard property.</summary>

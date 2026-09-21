@@ -325,6 +325,13 @@ public sealed class AlpacaTelescope : ITelescope, IDisposable {
 
     public Task StopMotionAsync(CancellationToken ct = default) => AbortSlewInternalAsync(ct);
 
+    /// <summary>Nothing to send: the jog is a 500 ms pulse guide that
+    /// has already expired, or is about to, by the time the arrow is
+    /// released. Aborting here would cancel a GoTo the operator
+    /// started before touching the d-pad.</summary>
+    public Task StopMotionAsync(MountJogDirection direction, CancellationToken ct = default)
+        => Task.CompletedTask;
+
     private Task PulseGuideAsync(int direction, int durationMs, CancellationToken ct) {
         if (!_canPulseGuide) return Task.CompletedTask;
         return _client.PutAsync("pulseguide", new Dictionary<string, string> {

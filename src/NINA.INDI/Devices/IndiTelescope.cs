@@ -416,8 +416,35 @@ public class IndiTelescope : ITelescope {
         await _client.SetSwitchAsync(DeviceName, "ON_COORD_SET", payload, ct);
     }
 
+    /// <summary>Clear both motion axes. The INDI way to end a jog is to
+    /// write the MOTION_* elements back to Off (the vectors are
+    /// AtMostOne, so all-Off is the idle state); TELESCOPE_ABORT_MOTION
+    /// is a different command that also cancels a GoTo and, on the
+    /// LX200-derived ZWO AM3 / AM5 driver, stops tracking.</summary>
     public async Task StopMotionAsync(CancellationToken ct = default) {
-        await AbortSlewAsync(ct);
+        var ns = await ClearMotionAxisAsync("TELESCOPE_MOTION_NS", "MOTION_NORTH", "MOTION_SOUTH", ct);
+        var we = await ClearMotionAxisAsync("TELESCOPE_MOTION_WE", "MOTION_WEST", "MOTION_EAST", ct);
+        // A driver with neither motion vector never jogged through the
+        // switches, so abort is the only halt it understands. Better a
+        // cancelled slew than an axis that keeps running.
+        if (!ns && !we) await AbortSlewAsync(ct);
+    }
+
+    public async Task StopMotionAsync(MountJogDirection direction, CancellationToken ct = default) {
+        var cleared = direction is MountJogDirection.North or MountJogDirection.South
+            ? await ClearMotionAxisAsync("TELESCOPE_MOTION_NS", "MOTION_NORTH", "MOTION_SOUTH", ct)
+            : await ClearMotionAxisAsync("TELESCOPE_MOTION_WE", "MOTION_WEST", "MOTION_EAST", ct);
+        if (!cleared) await StopMotionAsync(ct);
+    }
+
+    /// <summary>Write one TELESCOPE_MOTION_* vector back to all-Off.
+    /// Returns false when the driver does not expose that vector, so
+    /// the caller can fall back instead of writing into the void.</summary>
+    private async Task<bool> ClearMotionAxisAsync(string property, string a, string b, CancellationToken ct) {
+        if (_client.GetProperty(DeviceName, property) == null) return false;
+        await _client.SetSwitchAsync(DeviceName, property,
+            new Dictionary<string, bool> { [a] = false, [b] = false }, ct);
+        return true;
     }
 
     /// <summary>Pick a sensible <c>TELESCOPE_SLEW_RATE</c> element
