@@ -12,6 +12,7 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using NINA.Image.Interfaces;
 using NINA.Polaris.Services;
 using NINA.Polaris.Services.Planetary;
 
@@ -468,6 +469,28 @@ public static class TelescopeEndpoints {
             }
         });
 
+        // Release of one d-pad arrow: halt that arrow's axis and nothing
+        // else. /abort is a different thing (an emergency stop that also
+        // cancels a GoTo and, on the ZWO AM3 / AM5 driver, tracking), so
+        // it stays behind the panel's explicit Stop button.
+        group.MapPost("/move/{direction}/stop", async (EquipmentManager equip, string direction) => {
+            if (equip.Telescope == null)
+                return Results.BadRequest(new { error = "No telescope selected" });
+            var dir = ParseJogDirection(direction);
+            if (dir == null)
+                return Results.BadRequest(new { error = $"Unknown direction: {direction}" });
+            try {
+                await equip.Telescope.StopMotionAsync(dir.Value);
+                return Results.Ok(new { status = "stopped", direction = dir.Value.ToString().ToLowerInvariant() });
+            } catch (NotSupportedException ex) {
+                return Results.Json(new { error = ex.Message }, statusCode: 501);
+            } catch (Exception ex) {
+                return Results.Json(new {
+                    error = $"Stop {direction} failed: {ex.Message}"
+                }, statusCode: 500);
+            }
+        });
+
         // SLEWRATE-1: list the driver's TELESCOPE_SLEW_RATE steps for
         // the slider UI. Returns rates ordered the way the driver
         // advertised them (slow-to-fast for indilib mounts) so a
@@ -677,6 +700,19 @@ public static class TelescopeEndpoints {
     /// <summary>Body for POST /tracking-mode. Mode = "sidereal" |
     /// "solar" | "lunar" (case-insensitive). Required field.</summary>
     public record TrackingModeRequest(string Mode);
+
+    /// <summary>Route segment to jog axis. Accepts the long names the
+    /// d-pad sends and the single letters the keyboard shortcuts use.
+    /// Null for anything else, so the endpoint answers 400 instead of
+    /// silently halting an axis the caller did not name.</summary>
+    internal static MountJogDirection? ParseJogDirection(string? direction)
+        => (direction ?? "").Trim().ToLowerInvariant() switch {
+            "north" or "n" => MountJogDirection.North,
+            "south" or "s" => MountJogDirection.South,
+            "east"  or "e" => MountJogDirection.East,
+            "west"  or "w" => MountJogDirection.West,
+            _              => null,
+        };
 
     /// <summary>Poll a predicate at 250 ms cadence until it goes
     /// true or the timeout elapses. Used by /find-home-reset to

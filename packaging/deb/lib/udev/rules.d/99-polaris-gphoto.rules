@@ -1,0 +1,23 @@
+# N.I.N.A. Polaris - keep desktop camera handlers off DSLR bodies.
+#
+# libgphoto2 ships rules that tag every camera it knows with
+# ID_GPHOTO2="1". The desktop's gphoto volume monitor watches udev for that
+# tag and claims the PTP interface the instant a body is plugged in, so
+# indi_gphoto_ccd then gets:
+#
+#   Camera open error (-53): Could not claim the USB device
+#   Can not open camera: Power OK? If camera is auto-mounted as external
+#   disk storage, please unmount it and disable auto-mount.
+#
+# Reported 2026-09-20 with a Canon EOS 1500D on the Raspberry Pi 4 image:
+# the camera appears in lsusb and in the driver list, and every connect
+# attempt fails with no explanation in the UI.
+#
+# Clearing the tag (this file sorts after libgphoto2's own rules, and
+# UDISKS_IGNORE keeps the disk side away too) makes the camera invisible to
+# the desktop handlers while leaving it fully available to libgphoto2
+# itself: indi_gphoto enumerates over libusb and never consults udev.
+#
+# To restore normal desktop behaviour on this host, delete this file and run
+# 'sudo udevadm control --reload-rules'.
+ACTION=="add|change", ENV{ID_GPHOTO2}=="1", ENV{UDISKS_IGNORE}="1", ENV{GPHOTO2_DRIVER}="", ENV{ID_GPHOTO2}=""

@@ -281,11 +281,17 @@ network.lastError
 network.lastRefreshAt
 network.mode
 network.nmcliInstalled
+network.parkedForWired
 network.signal
 network.ssid
 network.supportedOs
 network.unsupportedReason
 network.wifiInterface
+network.wifiOffWhenWired
+network.wifiRadioOff
+network.wired
+network.wiredInterface
+network.wiredIp
 notifications
 plan
 plan.active

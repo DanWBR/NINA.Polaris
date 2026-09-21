@@ -124,7 +124,18 @@ public sealed class EquipmentStatusContributor : IStatusContributor {
                 // reachable. fallbackEngaged tells the UI to
                 // show "Hotspot started automatically".
                 autoHotspotFallback = network.AutoHotspotFallback,
-                fallbackEngaged     = network.HotspotFallbackEngaged
+                fallbackEngaged     = network.HotspotFallbackEngaged,
+                // Wired preference: with wifiOffWhenWired on, the
+                // radio is parked while the cable carries an
+                // address (two interfaces on one subnet is an
+                // ARP-flux trap). parkedForWired is the state the
+                // Settings card explains.
+                wifiOffWhenWired    = network.WifiOffWhenWired,
+                wifiRadioOff        = network.WifiRadioOff,
+                parkedForWired      = network.WifiParkedForWired,
+                wired               = network.WiredConnected,
+                wiredInterface      = network.WiredInterface,
+                wiredIp             = network.WiredIp
             };
 
             // Auto-push of saved images to network storage

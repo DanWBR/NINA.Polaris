@@ -14,6 +14,7 @@
 
 using NUnit.Framework;
 using NINA.Image.Interfaces;
+using NINA.Polaris.Endpoints;
 
 namespace NINA.Polaris.Test;
 
@@ -56,4 +57,71 @@ public class ITelescopeContractTests {
         Assert.That(typeof(ITelescope).IsAssignableFrom(typeof(NINA.INDI.Devices.IndiTelescope)),
             Is.True);
     }
+
+    // ----- per-direction jog stop -----
+
+    /// <summary>The d-pad sends long names and the keyboard shortcuts single
+    /// letters; both reach the same route.</summary>
+    [TestCase("north", MountJogDirection.North)]
+    [TestCase("N", MountJogDirection.North)]
+    [TestCase("south", MountJogDirection.South)]
+    [TestCase("s", MountJogDirection.South)]
+    [TestCase("East", MountJogDirection.East)]
+    [TestCase("e", MountJogDirection.East)]
+    [TestCase(" west ", MountJogDirection.West)]
+    [TestCase("w", MountJogDirection.West)]
+    public void ParseJogDirection_AcceptsBothSpellingsTheUiSends(string raw, MountJogDirection expected) {
+        Assert.That(TelescopeEndpoints.ParseJogDirection(raw), Is.EqualTo(expected));
+    }
+
+    /// <summary>Anything else is a 400, never a silent halt of an axis the
+    /// caller did not name.</summary>
+    [TestCase("stop")]
+    [TestCase("up")]
+    [TestCase("")]
+    [TestCase(null)]
+    public void ParseJogDirection_RejectsAnythingElse(string? raw) {
+        Assert.That(TelescopeEndpoints.ParseJogDirection(raw), Is.Null);
+    }
+
+    private static System.Reflection.MethodInfo? PerDirectionStop(Type t)
+        => t.GetMethods().SingleOrDefault(m => m.Name == nameof(ITelescope.StopMotionAsync)
+            && m.GetParameters().Length == 2
+            && m.GetParameters()[0].ParameterType == typeof(MountJogDirection));
+
+    /// <summary>Releasing one arrow must not go through AbortSlew: on the
+    /// LX200-derived ZWO AM3 / AM5 driver abort also stops tracking and
+    /// cancels a GoTo. These three backends can halt a single axis, so each
+    /// one has to say how instead of inheriting the all-axes default.</summary>
+    [Test]
+    public void IndiAlpacaAndSynScanEachImplementThePerDirectionStop() {
+        var backends = new[] {
+            typeof(NINA.INDI.Devices.IndiTelescope),
+            typeof(NINA.Polaris.Services.Alpaca.AlpacaTelescope),
+            typeof(NINA.Mount.SynScanWifi.SynScanWifiTelescope),
+        };
+        foreach (var t in backends) {
+            var m = PerDirectionStop(t);
+            Assert.That(m, Is.Not.Null, $"{t.Name} has no StopMotionAsync(MountJogDirection)");
+            Assert.That(m!.DeclaringType, Is.EqualTo(t),
+                $"{t.Name} inherits the all-axes stop instead of halting one axis");
+        }
+    }
+
+    /// <summary>And a backend that has nothing to say keeps working: the
+    /// interface default routes it to the all-axes stop.</summary>
+    [Test]
+    public void ABackendWithoutAPerAxisStopFallsBackToTheInterfaceDefault() {
+        Assert.That(PerDirectionStop(typeof(NINA.Polaris.Services.Simulator.Gear.SimMount)),
+            Is.Null, "SimMount declares no override");
+        var declared = typeof(ITelescope).GetMethods()
+            .SingleOrDefault(m => m.Name == nameof(ITelescope.StopMotionAsync)
+                && m.GetParameters().Length == 2
+                && m.GetParameters()[0].ParameterType == typeof(MountJogDirection));
+        Assert.That(declared, Is.Not.Null,
+            "the interface must declare the per-direction stop");
+        Assert.That(declared!.IsAbstract, Is.False,
+            "it must carry a default body, or every backend would have to implement it");
+    }
+
 }

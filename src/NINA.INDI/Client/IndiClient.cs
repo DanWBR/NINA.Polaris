@@ -94,8 +94,10 @@ public class IndiClient : IDisposable {
             // (e.g. gphoto "Error: ... PTP I/O Error", "Bulb capture failed").
             // Surface them in the debug log so a failed capture shows the
             // driver's own reason instead of just a client-side timeout.
-            if (!string.IsNullOrWhiteSpace(msg))
+            if (!string.IsNullOrWhiteSpace(msg)) {
                 DiagLogger.LogInformation("INDI MSG ← {Device}: {Message}", dev, msg);
+                RememberDriverMessage(dev, msg);
+            }
             MessageReceived?.Invoke(dev, msg);
         };
 
@@ -108,6 +110,43 @@ public class IndiClient : IDisposable {
     }
 
     private readonly ConcurrentDictionary<string, bool> _lastConnectionState = new();
+
+    // ----- driver <message> retention -----
+    //
+    // A driver that refuses a CONNECT says why in a <message>, not in the
+    // CONNECTION vector: the ZWO AM5 names the serial port it could not
+    // open, indi_gphoto prints "Camera open error (-53): Could not claim
+    // the USB device". Those lines only ever reached the log, so a camera
+    // that would not connect looked like a silent no-op in the UI. Keeping
+    // the last few per device lets the connect path quote the driver.
+    private const int DriverMessageHistory = 4;
+    private readonly ConcurrentDictionary<string, List<(DateTime At, string Text)>> _driverMessages = new();
+
+    internal void RememberDriverMessage(string device, string message) {
+        if (string.IsNullOrWhiteSpace(device)) return;
+        var list = _driverMessages.GetOrAdd(device, _ => new List<(DateTime, string)>());
+        lock (list) {
+            list.Add((DateTime.UtcNow, message.Trim()));
+            if (list.Count > DriverMessageHistory) list.RemoveRange(0, list.Count - DriverMessageHistory);
+        }
+    }
+
+    /// <summary>The driver's own words about what it is doing wrong, when
+    /// they are fresh enough to be about the operation we just asked for.
+    /// An [ERROR] tagged line wins over plain chatter: indi_gphoto follows
+    /// its error with a friendlier hint, and the error carries the code
+    /// that identifies the fault.</summary>
+    public string? RecentDriverMessage(string device, TimeSpan maxAge) {
+        if (!_driverMessages.TryGetValue(device, out var list)) return null;
+        var cutoff = DateTime.UtcNow - maxAge;
+        lock (list) {
+            var fresh = list.Where(m => m.At >= cutoff).ToList();
+            if (fresh.Count == 0) return null;
+            var err = fresh.LastOrDefault(m =>
+                m.Text.Contains("error", StringComparison.OrdinalIgnoreCase));
+            return err.Text is { Length: > 0 } tagged ? tagged : fresh[^1].Text;
+        }
+    }
 
     /// <summary>Devices WE deliberately connected and have not deliberately
     /// disconnected. Lets us tell a spurious drop (driver died on its own) from
@@ -481,8 +520,86 @@ public class IndiClient : IDisposable {
                 device, delayMs);
             await Task.Delay(delayMs, ct);
         }
-        await SetSwitchAsync(device, "CONNECTION",
-            new Dictionary<string, bool> { ["CONNECT"] = true, ["DISCONNECT"] = false }, ct);
+        var outcome = await AwaitConnectOutcomeAsync(device, () => SetSwitchAsync(device, "CONNECTION",
+            new Dictionary<string, bool> { ["CONNECT"] = true, ["DISCONNECT"] = false }, ct),
+            ConnectOutcomeTimeout, ct);
+
+        if (outcome.Refused) {
+            // The driver said no. Quote it, because the reason is the whole
+            // story: a USB claim, a serial port that moved, a body in the
+            // wrong mode. Throwing here is what puts it in front of the
+            // operator instead of leaving a 200 OK and a device that never
+            // came up.
+            _shouldBeConnected.TryRemove(device, out _);
+            var reason = ConnectRefusalReason(device, outcome.AlertMessage);
+            DiagLogger.LogWarning("INDI device '{Device}' refused CONNECT: {Reason}", device, reason);
+            throw new InvalidOperationException(
+                IndiConnectDiagnostics.RefusalMessage(device, reason));
+        }
+        if (!outcome.Connected) {
+            // No terminal answer inside the window. Deliberately not an
+            // error: shared drivers (one process serving several devices)
+            // can stay quiet on a CONNECT that nonetheless works, and
+            // callers already poll IsConnected.
+            DiagLogger.LogWarning(
+                "INDI device '{Device}': no CONNECTION outcome within {Sec:n0}s, carrying on",
+                device, ConnectOutcomeTimeout.TotalSeconds);
+        }
+    }
+
+    /// <summary>How long a CONNECT gets to resolve to connected or refused
+    /// before we stop waiting. Only ever spent on a device that is failing:
+    /// a working connect answers in well under a second.</summary>
+    public TimeSpan ConnectOutcomeTimeout { get; set; } = TimeSpan.FromSeconds(15);
+
+    /// <summary>Alert text plus the driver's own message, which are two
+    /// different things: the CONNECTION vector's message attribute is
+    /// often empty while the detail arrives as a separate &lt;message&gt;.</summary>
+    private string? ConnectRefusalReason(string device, string? alertMessage) {
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(alertMessage)) parts.Add(alertMessage!.Trim());
+        var driver = RecentDriverMessage(device, TimeSpan.FromSeconds(30));
+        if (!string.IsNullOrWhiteSpace(driver)
+                && (parts.Count == 0
+                    || !parts[0].Contains(driver!, StringComparison.OrdinalIgnoreCase)))
+            parts.Add(driver!);
+        return parts.Count == 0 ? null : string.Join(". ", parts);
+    }
+
+    /// <summary>Wait for a CONNECT to actually land. Unlike
+    /// <see cref="SendAndAwaitAckAsync"/> this cannot settle on the first
+    /// ack: a driver that is about to fail answers Busy first and only
+    /// then Alert, so stopping at the ack would call every refusal a
+    /// success. Terminal states are CONNECT=true (connected) and Alert
+    /// (refused); Busy and a bare Ok are "still working on it".</summary>
+    internal async Task<(bool Connected, bool Refused, string? AlertMessage)>
+        AwaitConnectOutcomeAsync(string device, Func<Task> send, TimeSpan timeout, CancellationToken ct) {
+        var tcs = new TaskCompletionSource<(bool, bool, string?)>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        void OnPropChanged(string evDevice, IndiProperty evProp) {
+            if (!string.Equals(evDevice, device, StringComparison.Ordinal)) return;
+            if (!string.Equals(evProp.Name, "CONNECTION", StringComparison.Ordinal)) return;
+            if (evProp is IndiSwitchProperty sw
+                    && sw.Values.TryGetValue("CONNECT", out var on) && on) {
+                tcs.TrySetResult((true, false, null));
+                return;
+            }
+            if (evProp.State == IndiPropertyState.Alert)
+                tcs.TrySetResult((false, true, evProp.Message));
+        }
+
+        PropertyChanged += OnPropChanged;
+        try {
+            await send();
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeoutCts.CancelAfter(timeout);
+            using var _ = timeoutCts.Token.Register(
+                () => tcs.TrySetResult((false, false, null)));
+            return await tcs.Task.ConfigureAwait(false);
+        } finally {
+            PropertyChanged -= OnPropChanged;
+        }
     }
 
     /// <summary>Mirror of <see cref="ConnectDeviceAsync"/> for the

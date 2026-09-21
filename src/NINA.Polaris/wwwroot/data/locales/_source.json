@@ -4328,5 +4328,14 @@
   "rig setting, edit in LIVE or PREVIEW": "",
   "left to the camera driver (rig offset is 0)": "",
   "driver": "",
-  "Sensor black-level pedestal (ADU floor). Polaris sends this value to the camera before every capture, so it wins over whatever the driver's own control panel says; 0 leaves the driver's setting alone. It is a rig setting: change it in the LIVE or PREVIEW panel's Offset field.": ""
+  "Sensor black-level pedestal (ADU floor). Polaris sends this value to the camera before every capture, so it wins over whatever the driver's own control panel says; 0 leaves the driver's setting alone. It is a rig setting: change it in the LIVE or PREVIEW panel's Offset field.": "",
+  "Turn WiFi off while a network cable is connected": "",
+  "Two interfaces on the same network can stall connections. The radio comes back on as soon as the cable is unplugged.": "",
+  "Ethernet connected": "",
+  "WiFi radio off, this host is on the cable": "",
+  "Connect the network cable first: with no wired address this would leave the host unreachable.": "",
+  "Could not change the WiFi setting": "",
+  "Saved. The radio goes off once the cable has held an address for a few seconds.": "",
+  "WiFi radio back on.": "",
+  "Lost contact with the host while changing the WiFi setting. Reconnect on the wired address to continue.": ""
 }

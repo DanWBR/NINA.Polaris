@@ -4947,5 +4947,14 @@
   "rig setting, edit in LIVE or PREVIEW": "réglage du setup, modifiable dans LIVE ou PREVIEW",
   "left to the camera driver (rig offset is 0)": "laissé au pilote de la caméra (offset du setup à 0)",
   "driver": "pilote",
-  "Sensor black-level pedestal (ADU floor). Polaris sends this value to the camera before every capture, so it wins over whatever the driver's own control panel says; 0 leaves the driver's setting alone. It is a rig setting: change it in the LIVE or PREVIEW panel's Offset field.": "Piédestal de niveau de noir du capteur (plancher en ADU). Polaris envoie cette valeur à la caméra avant chaque capture, elle l'emporte donc sur le panneau de contrôle du pilote ; 0 laisse le réglage du pilote tel quel. C'est un réglage du setup : modifiez-le dans le champ Offset du panneau LIVE ou PREVIEW."
+  "Sensor black-level pedestal (ADU floor). Polaris sends this value to the camera before every capture, so it wins over whatever the driver's own control panel says; 0 leaves the driver's setting alone. It is a rig setting: change it in the LIVE or PREVIEW panel's Offset field.": "Piédestal de niveau de noir du capteur (plancher en ADU). Polaris envoie cette valeur à la caméra avant chaque capture, elle l'emporte donc sur le panneau de contrôle du pilote ; 0 laisse le réglage du pilote tel quel. C'est un réglage du setup : modifiez-le dans le champ Offset du panneau LIVE ou PREVIEW.",
+  "Turn WiFi off while a network cable is connected": "Couper le WiFi tant qu'un câble réseau est branché",
+  "Two interfaces on the same network can stall connections. The radio comes back on as soon as the cable is unplugged.": "Deux interfaces sur le même réseau peuvent bloquer les connexions. La radio se rallume dès que le câble est débranché.",
+  "Ethernet connected": "Câble connecté",
+  "WiFi radio off, this host is on the cable": "Radio WiFi coupée, cet hôte est sur le câble",
+  "Connect the network cable first: with no wired address this would leave the host unreachable.": "Branchez d'abord le câble réseau : sans adresse filaire cela rendrait l'hôte inaccessible.",
+  "Could not change the WiFi setting": "Impossible de modifier le réglage WiFi",
+  "Saved. The radio goes off once the cable has held an address for a few seconds.": "Enregistré. La radio se coupe une fois que le câble garde une adresse pendant quelques secondes.",
+  "WiFi radio back on.": "Radio WiFi rallumée.",
+  "Lost contact with the host while changing the WiFi setting. Reconnect on the wired address to continue.": "Contact perdu avec l'hôte pendant la modification du réglage WiFi. Reconnectez-vous sur l'adresse filaire pour continuer."
 }

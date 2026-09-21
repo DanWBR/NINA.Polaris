@@ -302,6 +302,24 @@
 }
 .autorun-adv-toggle:hover { color: var(--text-primary); border-color: var(--accent); }
 .autorun-adv-toggle.open { border-color: var(--accent); color: var(--text-primary); }
+/* Settings > Network: the "WiFi off while the cable is in" toggle and its
+   explanation. Own padding so it reads as a block of its own between the
+   status row and the mode buttons. */
+.network-wired-line {
+    padding: 8px 10px;
+    margin-top: 10px;
+    border-radius: var(--radius, 8px);
+    background: var(--bg-elevated, rgba(255,255,255,0.04));
+    border: 1px solid var(--border);
+}
+.network-wired-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
 /* Read-only line above the AUTORUN sequence: the rig offset used by every
    capture (edited in LIVE / PREVIEW, see issue #27). */
 .autorun-offset-line {

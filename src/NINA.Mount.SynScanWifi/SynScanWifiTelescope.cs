@@ -265,10 +265,21 @@ public sealed class SynScanWifiTelescope : ITelescope, IDisposable {
     }
     public async Task StopMotionAsync(CancellationToken ct = default) {
         EnsureConnected();
-        // ":Q#" halts every axis. Per-axis stop is ":Qn", ":Qs",
-        // ":Qe", ":Qw" but our manual-jog UI only has a single Stop
-        // button, so the broad-spectrum abort matches that semantic.
+        // ":Q#" halts every axis, which is what the panel's Stop button
+        // means. Releasing a single d-pad arrow goes through the
+        // per-direction overload below instead.
         await _client!.SendOneWayAsync(":Q#", ct);
+    }
+
+    public async Task StopMotionAsync(MountJogDirection direction, CancellationToken ct = default) {
+        EnsureConnected();
+        var cmd = direction switch {
+            MountJogDirection.North => ":Qn#",
+            MountJogDirection.South => ":Qs#",
+            MountJogDirection.East  => ":Qe#",
+            _                       => ":Qw#",
+        };
+        await _client!.SendOneWayAsync(cmd, ct);
     }
 
     private void EnsureConnected() {

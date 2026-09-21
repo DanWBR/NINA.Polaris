@@ -254,6 +254,42 @@ BRLTTY
             pkill -x brltty >/dev/null 2>&1 || true
         fi
 
+        # ---- 5c-2. get the desktop's gphoto handler off DSLR bodies ----
+        # The same class of problem as brltty, one bus over. The desktop's
+        # gphoto volume monitor claims a camera's PTP interface the moment
+        # udev tags it, and indi_gphoto_ccd is then locked out:
+        #
+        #   Camera open error (-53): Could not claim the USB device
+        #   Can not open camera: Power OK? If camera is auto-mounted as
+        #   external disk storage, please unmount it and disable auto-mount.
+        #
+        # Reported 2026-09-20 with a Canon EOS 1500D on the Raspberry Pi 4
+        # image: the body shows up in lsusb and in the driver list, and every
+        # connect fails. /lib/udev/rules.d/99-polaris-gphoto.rules (shipped in
+        # this package) clears the tag the monitor watches for; the mask stops
+        # a session starting it again, and the pkill releases a camera being
+        # held right now.
+        #
+        # It is a user unit, so --global: the mask has to cover whatever
+        # session the desktop brings up, not root's.
+        #
+        # To restore normal desktop camera handling:
+        #   sudo rm /lib/udev/rules.d/99-polaris-gphoto.rules \
+        #           /etc/systemd/user/gvfs-gphoto2-volume-monitor.service
+        if command -v systemctl >/dev/null 2>&1; then
+            systemctl --global mask gvfs-gphoto2-volume-monitor.service >/dev/null 2>&1 || true
+        fi
+        # Belt and braces for a chroot where systemctl cannot reach a bus:
+        # the symlink IS the mask.
+        if [ ! -e /etc/systemd/user/gvfs-gphoto2-volume-monitor.service ]; then
+            mkdir -p /etc/systemd/user
+            ln -sf /dev/null /etc/systemd/user/gvfs-gphoto2-volume-monitor.service 2>/dev/null || true
+        fi
+        if [ -d /run/systemd/system ]; then
+            pkill -f gvfsd-gphoto2 >/dev/null 2>&1 || true
+            pkill -f gvfs-gphoto2-volume-monitor >/dev/null 2>&1 || true
+        fi
+
         if command -v udevadm >/dev/null 2>&1; then
             udevadm control --reload-rules >/dev/null 2>&1 || true
             udevadm trigger >/dev/null 2>&1 || true

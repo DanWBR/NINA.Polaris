@@ -114,9 +114,35 @@ public static class NetworkEndpoints {
                 var res = await net.SetHotspotCredentialsAsync(req.Ssid, req.Password);
                 return Results.Ok(res);
             });
+
+        // Wired preference: park the WiFi radio while the cable carries an
+        // address. Persisted on the profile and applied immediately, so the
+        // answer already carries the resulting state; turning it off always
+        // puts the radio back on the air.
+        group.MapPut("/wifi-off-when-wired",
+            async (NetworkManagerService net, WiredPreferenceRequest req) => {
+                if (!net.IsSupportedOs || !net.NmcliInstalled || !net.HasWifiInterface) {
+                    return Results.Json(
+                        new { error = net.UnsupportedReason ?? "WiFi management not available" },
+                        statusCode: 501);
+                }
+                if (req == null) return Results.BadRequest(new { error = "enabled required" });
+                var res = await net.SetWifiOffWhenWiredAsync(req.Enabled);
+                return Results.Ok(new {
+                    ok             = res.Ok,
+                    error          = res.Error,
+                    enabled        = net.WifiOffWhenWired,
+                    wifiRadioOff   = net.WifiRadioOff,
+                    parkedForWired = net.WifiParkedForWired,
+                    wired          = net.WiredConnected,
+                    wiredInterface = net.WiredInterface,
+                    wiredIp        = net.WiredIp
+                });
+            });
     }
 
     public record StationRequest(string Ssid, string Password);
     public record HotspotCredentialsRequest(string Ssid, string Password);
     public record InterfaceRequest(string Interface);
+    public record WiredPreferenceRequest(bool Enabled);
 }

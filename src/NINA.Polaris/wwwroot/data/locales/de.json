@@ -4947,5 +4947,14 @@
   "rig setting, edit in LIVE or PREVIEW": "Rig-Einstellung, in LIVE oder PREVIEW ändern",
   "left to the camera driver (rig offset is 0)": "dem Kameratreiber überlassen (Rig-Offset ist 0)",
   "driver": "Treiber",
-  "Sensor black-level pedestal (ADU floor). Polaris sends this value to the camera before every capture, so it wins over whatever the driver's own control panel says; 0 leaves the driver's setting alone. It is a rig setting: change it in the LIVE or PREVIEW panel's Offset field.": "Schwarzwert-Sockel des Sensors (ADU-Untergrenze). Polaris sendet diesen Wert vor jeder Aufnahme an die Kamera, er hat also Vorrang vor dem Bedienfeld des Treibers; 0 lässt die Treibereinstellung unangetastet. Es ist eine Rig-Einstellung: ändern Sie sie im Feld Offset des LIVE- oder PREVIEW-Panels."
+  "Sensor black-level pedestal (ADU floor). Polaris sends this value to the camera before every capture, so it wins over whatever the driver's own control panel says; 0 leaves the driver's setting alone. It is a rig setting: change it in the LIVE or PREVIEW panel's Offset field.": "Schwarzwert-Sockel des Sensors (ADU-Untergrenze). Polaris sendet diesen Wert vor jeder Aufnahme an die Kamera, er hat also Vorrang vor dem Bedienfeld des Treibers; 0 lässt die Treibereinstellung unangetastet. Es ist eine Rig-Einstellung: ändern Sie sie im Feld Offset des LIVE- oder PREVIEW-Panels.",
+  "Turn WiFi off while a network cable is connected": "WLAN ausschalten, solange ein Netzwerkkabel angeschlossen ist",
+  "Two interfaces on the same network can stall connections. The radio comes back on as soon as the cable is unplugged.": "Zwei Schnittstellen im selben Netz können Verbindungen blockieren. Das Funkmodul geht wieder an, sobald das Kabel abgezogen ist.",
+  "Ethernet connected": "Kabel verbunden",
+  "WiFi radio off, this host is on the cable": "WLAN-Funkmodul aus, dieser Host hängt am Kabel",
+  "Connect the network cable first: with no wired address this would leave the host unreachable.": "Schließen Sie zuerst das Netzwerkkabel an: ohne Kabeladresse wäre der Host nicht mehr erreichbar.",
+  "Could not change the WiFi setting": "WLAN-Einstellung konnte nicht geändert werden",
+  "Saved. The radio goes off once the cable has held an address for a few seconds.": "Gespeichert. Das Funkmodul schaltet ab, sobald das Kabel einige Sekunden eine Adresse hält.",
+  "WiFi radio back on.": "WLAN-Funkmodul wieder an.",
+  "Lost contact with the host while changing the WiFi setting. Reconnect on the wired address to continue.": "Kontakt zum Host beim Ändern der WLAN-Einstellung verloren. Verbinden Sie sich über die Kabeladresse neu."
 }

@@ -104,8 +104,33 @@ Web Manager UI.
   `gphoto2 --auto-detect` doesn't list it, kill any process that's
   claimed the device, `gvfsd-gphoto2` from GNOME / desktop file
   managers is the usual culprit (`pkill -f gvfsd-gphoto2`).
-- **"Could not claim USB device" errors in `indiserver` logs**:
-  another process is holding the USB handle. Same fix as above.
+- **"Could not claim the USB device" / `Camera open error (-53)`**:
+  another process is holding the PTP interface. On a desktop-based
+  image that is the gphoto volume monitor, which grabs any camera the
+  moment it is plugged in. Polaris quotes this back at you now instead
+  of failing silently: the camera connect reports the driver's own
+  error plus the fix.
+
+  Recover the camera you have in your hands:
+
+  ```
+  pkill -f gvfsd-gphoto2
+  ```
+
+  then connect again. To stop it coming back:
+
+  ```
+  sudo systemctl --global mask gvfs-gphoto2-volume-monitor
+  ```
+
+  Polaris 0.98.111 and newer ship both halves in the `.deb`:
+  `/lib/udev/rules.d/99-polaris-gphoto.rules` clears the `ID_GPHOTO2`
+  tag the monitor watches for, and the postinst masks the unit. The
+  camera stays fully available to libgphoto2 itself, which enumerates
+  over libusb and never consults udev. To restore normal desktop
+  camera handling, delete the rule and the mask
+  (`/etc/systemd/user/gvfs-gphoto2-volume-monitor.service`) and reload
+  udev.
 - **Driver crashes mid-capture**: turn the camera off, unplug the
   cable, plug it back in, power it on. The gphoto state machine can
   get wedged after a USB disconnect.
