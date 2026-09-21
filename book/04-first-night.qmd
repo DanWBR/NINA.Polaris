@@ -26,16 +26,45 @@ mount must make as a target crosses the meridian). On first run a
 location window should appear; fill it in with any of three methods:
 
 - **Address search**: type "Brasília, Brazil" or your city and
-  country, press Enter, and pick the matching result.
+  country, press Enter, and pick the matching result. The search answers
+  from a gazetteer of some 70 000 towns embedded in Polaris itself, so it
+  works on a field network with no internet at all, and adds online
+  results when it can reach them.
+- **Pick on map**: an offline world map you can pan and zoom (wheel or
+  pinch), with town labels, where a tap places the marker. This is the
+  one to use in the field, since it needs nothing but the host.
 - **Browser geolocation**: click **Use my location** (available over
   HTTPS only).
-- **Manual entry**: type latitude and longitude in decimal degrees.
+- **Manual entry**: type latitude, longitude and altitude. The fields
+  take a decimal comma as well as a point, and are parsed when you leave
+  them, so a half-typed number is never read as your position.
 
 If you dismissed that window, open **SETTINGS** and find
 **Observatory location**. Do not skip this: with the location wrong, the SKY tab,
 meridian-flip timing, and tonight's-best altitude rankings are all
 garbage. The glossary entry for local sidereal time (@sec-glossary)
 explains why.
+
+## The first-run wizard
+
+On a fresh install, and before the steps below, Polaris offers to walk
+you through connecting your equipment once the location and WiFi prompts
+are out of the way. Taking the offer is usually faster than the manual
+path, and the manual path is still there if you decline.
+
+The wizard probes for what is actually attached rather than asking you to
+know. On Linux it starts a temporary INDI profile carrying the camera
+family drivers that are installed, reads back the devices that appear,
+resolves them against the USB devices it can see, and assigns
+serial-bridge mounts per port, so a mount on a CH340 adapter is offered
+against the port it is really on. On Windows it fans out to ASCOM and
+Alpaca discovery per role instead. You pick a device for each role,
+it connects them, and on finishing it writes a real profile with
+autostart and auto-connect enabled, starts it, and deletes the temporary
+one. Declining or aborting cleans the temporary profile up too.
+
+It runs once: a server-side flag records that you have been through it,
+so it does not reappear on every browser you open.
 
 ## Step 2: create a rig
 

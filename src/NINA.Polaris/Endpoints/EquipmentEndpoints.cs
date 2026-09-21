@@ -199,6 +199,8 @@ public static class EquipmentEndpoints {
                     r.CoolerRampDegPerMinute = Math.Max(0, update.CoolerRampDegPerMinute.Value);
                 if (update.DefaultGain.HasValue) r.DefaultGain = update.DefaultGain.Value;
                 if (update.DefaultOffset.HasValue) r.DefaultOffset = update.DefaultOffset.Value;
+                if (update.PreviewOffset.HasValue) r.PreviewOffset = update.PreviewOffset.Value;
+                if (update.AutorunOffset.HasValue) r.AutorunOffset = update.AutorunOffset.Value;
                 if (update.DefaultBinning.HasValue) r.DefaultBinning = update.DefaultBinning.Value;
                 // FIELD-2: per-rig Bayer mosaic override. Treat empty /
                 // whitespace as null ("Auto") so the UI <select> with

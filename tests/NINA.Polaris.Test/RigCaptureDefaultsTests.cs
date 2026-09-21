@@ -20,22 +20,59 @@ using NINA.Polaris.Services;
 
 namespace NINA.Polaris.Test;
 
-/// <summary>The offset every main-camera capture carries from the rig: set
-/// means sent, zero or unset means the driver keeps its own.</summary>
+/// <summary>The offset a capture carries from the rig. One field per
+/// capturing panel, because a capture obeys the panel it came from; set means
+/// sent, zero or unset means the driver keeps its own value and the frame's
+/// header records that instead (issue #26).</summary>
 [TestFixture]
 public class RigCaptureDefaultsTests {
 
-    private static ProfileService Profile(int? offset) {
+    private static ProfileService Profile(int? live = null, int? preview = null, int? autorun = null) {
         var p = new ProfileService(new ConfigurationBuilder().Build(), NullLogger<ProfileService>.Instance);
-        p.ActiveEquipmentProfile!.DefaultOffset = offset;
+        p.ActiveEquipmentProfile!.DefaultOffset = live;
+        p.ActiveEquipmentProfile!.PreviewOffset = preview;
+        p.ActiveEquipmentProfile!.AutorunOffset = autorun;
         return p;
     }
 
     [Test]
-    public void Offset_FollowsTheRig() {
-        Assert.That(RigCaptureDefaults.Offset(Profile(50)), Is.EqualTo(50));
-        Assert.That(RigCaptureDefaults.Offset(Profile(0)), Is.Null);
-        Assert.That(RigCaptureDefaults.Offset(Profile(null)), Is.Null);
+    public void Offset_FollowsTheLivePanel() {
+        Assert.That(RigCaptureDefaults.Offset(Profile(live: 50)), Is.EqualTo(50));
+        Assert.That(RigCaptureDefaults.Offset(Profile(live: 0)), Is.Null);
+        Assert.That(RigCaptureDefaults.Offset(Profile(live: null)), Is.Null);
         Assert.That(RigCaptureDefaults.Offset(null), Is.Null);
+    }
+
+    [Test]
+    public void PreviewOffset_FollowsThePreviewPanel() {
+        Assert.That(RigCaptureDefaults.PreviewOffset(Profile(preview: 30)), Is.EqualTo(30));
+        Assert.That(RigCaptureDefaults.PreviewOffset(Profile(preview: 0)), Is.Null);
+        Assert.That(RigCaptureDefaults.PreviewOffset(Profile(preview: null)), Is.Null);
+        Assert.That(RigCaptureDefaults.PreviewOffset(null), Is.Null);
+    }
+
+    [Test]
+    public void AutorunOffset_FollowsTheAutorunPanel() {
+        Assert.That(RigCaptureDefaults.AutorunOffset(Profile(autorun: 64)), Is.EqualTo(64));
+        Assert.That(RigCaptureDefaults.AutorunOffset(Profile(autorun: 0)), Is.Null);
+        Assert.That(RigCaptureDefaults.AutorunOffset(Profile(autorun: null)), Is.Null);
+        Assert.That(RigCaptureDefaults.AutorunOffset(null), Is.Null);
+    }
+
+    /// <summary>The three are independent. A shared value was the bug: typing
+    /// one number in PREVIEW changed what a live stack or a whole sequence
+    /// would use, silently.</summary>
+    [Test]
+    public void EachPanelReadsOnlyItsOwnField() {
+        var p = Profile(live: 10, preview: 20, autorun: 30);
+        Assert.That(RigCaptureDefaults.Offset(p), Is.EqualTo(10));
+        Assert.That(RigCaptureDefaults.PreviewOffset(p), Is.EqualTo(20));
+        Assert.That(RigCaptureDefaults.AutorunOffset(p), Is.EqualTo(30));
+
+        // And one panel at zero does not drag the others down with it.
+        var mixed = Profile(live: 0, preview: 20, autorun: 0);
+        Assert.That(RigCaptureDefaults.Offset(mixed), Is.Null);
+        Assert.That(RigCaptureDefaults.PreviewOffset(mixed), Is.EqualTo(20));
+        Assert.That(RigCaptureDefaults.AutorunOffset(mixed), Is.Null);
     }
 }

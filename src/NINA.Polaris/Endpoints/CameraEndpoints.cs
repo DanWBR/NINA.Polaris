@@ -202,7 +202,9 @@ public static class CameraEndpoints {
                 // preview snap runs the sensor the way the rig is configured.
                 var mainOpts = new NINA.Image.Interfaces.CaptureOptions(
                     Gain: request.Gain > 0 ? request.Gain : null,
-                    Offset: RigCaptureDefaults.Offset(profileSvc),
+                    // This is the PREVIEW panel's snap (and the phone shell's),
+                    // so it obeys the PREVIEW panel's offset field.
+                    Offset: RigCaptureDefaults.PreviewOffset(profileSvc),
                     ImageType: "LIGHT");
                 imageData = await CameraCaptureGate.RunAsync(async () => {
                     using (captureProgress.Begin(captureSource, request.Exposure))

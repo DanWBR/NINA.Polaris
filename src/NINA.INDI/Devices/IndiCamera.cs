@@ -1268,16 +1268,13 @@ public class IndiCamera : ICamera, IDisposable {
                 imageData.MetaData.Camera.BinY = (short)BinY;
                 imageData.MetaData.Camera.PixelSizeX = PixelSizeX;
                 imageData.MetaData.Camera.PixelSizeY = PixelSizeY;
-                // Stamp the applied offset when the driver's FITS header had no
-                // OFFSET card (FITSReader defaults it to 0); a driver-authored
-                // value is preserved.
-                if (imageData.MetaData.Camera.Offset == 0) {
-                    // What the driver says it is running at, so the file tells the
-                    // truth even when the rig asked for something else.
-                    var drv = DriverOffset;
-                    if (drv is > 0) imageData.MetaData.Camera.Offset = drv.Value;
-                    else if (_offset != 0) imageData.MetaData.Camera.Offset = _offset;
-                }
+                // The OFFSET card describes THIS capture: the offset this
+                // capture applied, or, when it applied none because the
+                // panel's field is 0, what the driver is running at. Read here
+                // rather than left to the writer, because the capture is the
+                // only place that knows which of the two happened (issue #26).
+                var appliedOffset = _offset > 0 ? _offset : (DriverOffset ?? 0);
+                if (appliedOffset > 0) imageData.MetaData.Camera.Offset = appliedOffset;
 
                 // FIELD5-CFA: INDI drivers typically do NOT put BAYERPAT
                 // in the FITS BLOB header (the SV405CC indi_svbony_ccd

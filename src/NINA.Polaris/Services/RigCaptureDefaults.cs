@@ -23,9 +23,27 @@ namespace NINA.Polaris.Services;
 /// is 1 (no pedestal, background clipped to black).
 /// </summary>
 public static class RigCaptureDefaults {
-    /// <summary>The rig's DefaultOffset, or null when unset or zero.</summary>
+    /// <summary>The LIVE panel's offset, or null when unset or zero. Null is
+    /// the contract for "do not write an offset to the driver": the capture
+    /// leaves the driver's own value alone and the frame's header records what
+    /// the driver reports (issue #26).
+    ///
+    /// Also the value used by captures that have no panel of their own: the
+    /// plate solve, autofocus, polar alignment and the video stream.</summary>
     public static int? Offset(ProfileService? profiles) {
         var v = profiles?.ActiveEquipmentProfile?.DefaultOffset;
+        return v is > 0 ? v : null;
+    }
+
+    /// <summary>The PREVIEW panel's offset, same contract.</summary>
+    public static int? PreviewOffset(ProfileService? profiles) {
+        var v = profiles?.ActiveEquipmentProfile?.PreviewOffset;
+        return v is > 0 ? v : null;
+    }
+
+    /// <summary>The AUTORUN panel's offset, same contract.</summary>
+    public static int? AutorunOffset(ProfileService? profiles) {
+        var v = profiles?.ActiveEquipmentProfile?.AutorunOffset;
         return v is > 0 ? v : null;
     }
 }

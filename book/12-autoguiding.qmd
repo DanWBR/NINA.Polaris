@@ -214,6 +214,30 @@ image-data packet an INDI camera driver sends) on some drivers can
 still require restarting the INDI driver; that is a
 driver-level wedge, not a Polaris reconnect.
 
+### When guiding gives up during a plan
+
+Losing the star for a moment is routine. Losing it repeatedly, because
+cloud has come in or the mount is being pushed by wind, used to end the
+night: the guiding circuit breaker stopped the guider and the session
+with it, and whatever hours were left went unused.
+
+Under a running PLAN (@sec-night-planner) the breaker now asks for a
+**hold** instead. Polaris stops the guider, turns tracking off so the
+mount is not chasing a target it cannot track, and parks the plan on that
+target. Then it tries again: after 3 minutes, then 5, then 10, then 15,
+each attempt being tracking on, a Slew & Center back onto the target, and
+a fresh start of guiding. A failed attempt parks it again and waits for
+the next slot.
+
+The target is given up, and the plan moves on, when its window closes,
+when the next target's window opens, or after four attempts for a
+windowless target that has a successor. A skipped target is marked as
+such and the plan continues, which is the point: a cloud bank over one
+target is not a reason to lose the ones behind it.
+
+The PLAN run bar and the HOME dashboard show the hold while it lasts,
+with the reason, the attempt count and when the next retry is due.
+
 ### Mount safety
 
 If you press **Start Guiding** (or auto-guide from a restored

@@ -63,7 +63,8 @@ trigger configuration:
   completes.
 
 The flip pauses and resumes whichever guider backend is active, native
-or PHD2, not just PHD2 (@sec-guiding).
+or PHD2, not just PHD2 (@sec-guiding). **View plan** shows where the
+flips will fall before you commit to an order (see @sec-plan-running).
 
 ## Targets
 
@@ -109,11 +110,23 @@ focuser to zero, and shut down the host. The shutdown action is gated
 behind an explicit confirmation, because the device powers off
 completely and must be turned back on physically.
 
-## Running a plan
+## Running a plan {#sec-plan-running}
 
 Before you start, **View plan** draws a whole-night timeline graph
 with elevation curves per target and per-target delays marked, so you
-can sanity-check the order. The Polaris Shutter provides Start and
+can sanity-check the order. It also marks, in amber, every **meridian
+crossing** that falls inside a target's window: on the elevation chart,
+on the Gantt row, in a legend listing each target's flip times, and in a
+Flip column in the summary table. The times come from the sidereal clock
+at your longitude, so they are the real crossings for your site rather
+than a rule of thumb.
+
+Seeing them laid out is what tells you whether the night's order is
+sensible: a target that flips eleven minutes after it starts is a
+different proposition from one that flips at the end, and moving it later
+may be free. If auto meridian flip is off, the view says so with a
+warning, because those markers are then a list of the moments somebody
+has to be awake for. The Polaris Shutter provides Start and
 Stop in the run bar, pinned to the bottom of the panel, alongside
 current-target and total progress bars and the target's elevation
 during capture. The plan status (waiting for start, running, and the

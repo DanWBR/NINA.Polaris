@@ -47,6 +47,41 @@ actions. On the map, the red rectangle is the target framing and the
 blue one is where the mount currently
 points.](images/sky-explorer.jpg){#fig-sky-map}
 
+## Satellites and the major moons
+
+The map is not limited to things that hold still.
+
+**Satellites.** Polaris draws the ISS, Tiangong and the roughly 150
+objects in CelesTrak's "visual" group, the ones bright enough to follow
+by eye: Hubble, Envisat, Terra, the large spent rocket bodies. The map
+engine propagates the orbits itself with SGP4, the standard model these
+element sets are written for, from the TLE (two-line element) set the
+host serves. Search "ISS", "Tiangong" or "Hubble" to find one, and
+clicking a satellite locks the view onto it so you can watch a pass
+unfold. One reading to know: a satellite shows magnitude 99 while it is
+below the horizon or inside the Earth's shadow, which is the map's way of
+saying "up there, but nothing to see".
+
+The 🚀 **Satellites** pill in the toolbar hides them, and the choice
+sticks on that browser.
+
+Orbital elements go stale in days rather than months: a week past its
+epoch, the ISS is about a degree off. A snapshot ships inside each
+release, the host refreshes it from CelesTrak once a day when it has
+internet, and the **Tonight's Best** tab reports the age of what the map
+is actually using ("Satellites: 156 from CelesTrak, orbits from today")
+with an **Update** button beside it. In the mobile app the update also
+works when only the phone has internet: the app fetches the elements and
+hands them to the host. The map reloads after an update, because the
+engine reads the orbits once when it starts.
+
+**Moons.** Zoom in on Jupiter and the four Galilean moons appear in their
+true positions, shadow transits included, labelled once the zoom is high
+enough not to crowd the planet; Saturn's major moons behave the same. They
+are searchable by name ("Io", "Europa", "Ganymede", "Callisto", "Titan").
+This is the map only: **Center on body** and the night planner know the
+planets, not their moons.
+
 ## Offline deep-sky imagery (DSS)
 
 Real deep-sky imagery, the "I can actually see the nebula" background
@@ -157,6 +192,27 @@ roughly 14 500 objects):
 | **Sh2** | 313 | CDS Vizier `VII/20/catalog` (Sharpless 1959) | Public domain |
 | **HCG** | 100 | CDS Vizier `VII/213/groups` (Hickson 1982/89) | Public domain |
 | **AGC** | 767 | CDS Vizier `VII/110A/table3` (Abell-Corwin-Olowin 1989) | Public domain |
+| **HR / Star / WR** | ~9400 | Bright Star Catalogue, IAU star names, Galactic Wolf-Rayet list | Public domain |
+| **Notable** | ~150 | Hand-curated famous objects | Public domain |
+
+Two of those rows are not deep-sky catalogues in the usual sense.
+
+The **star** rows make the naked-eye sky searchable: type "Vega",
+"Albireo", "HR 7001" or a Wolf-Rayet designation and the map takes you
+there, which matters for focusing, collimation and for pointing checks
+rather than for imaging targets.
+
+The **Notable** rows are the objects people ask for by name that no NGC,
+IC or Messier number covers: Phoenix A, TON 618, 3C 273, the Vela pulsar,
+Cygnus X-1, Sagittarius A*, Markarian's Chain, the Leo Triplet, the Coma
+and Perseus clusters, Wolf 359, TRAPPIST-1, the Hubble Deep Fields. They
+are drawn whatever the magnitude cap, since most are far fainter than any
+sensible cap, they carry their own types ("Quasar", "Pulsar", "Black
+Hole", "Gravitational Lens", "Dwarf Galaxy"), and Tonight's Best lists
+them under a **Notable** chip with no brightness gate: every one that
+peaks above 30 degrees tonight, ordered by score. Half of them are
+targets for a photograph of a position rather than of a shape, which is
+its own kind of observing.
 
 The AGC entry is magnitude-trimmed at m10 < 17, keeping the brightest
 roughly 30% of the 2712-cluster catalog; fainter clusters require
@@ -183,9 +239,10 @@ popular NGC entries), so the app still works, but search hits like
 ## Searching for a target
 
 At the top of the tab sit a text input and a **Search** button. Names
-resolve against the bundled catalog (NGC, IC, M, C, Arp, Sh2, HCG,
-AGC, plus common names like "Andromeda"), and you can also enter
-manual RA/Dec coordinates. Matches appear as result cards showing the
+resolve against the bundled catalog (NGC, IC, M, C, Arp, Sh2, HCG, AGC,
+the Notable list, bright stars by name or HR number, plus common names
+like "Andromeda"), satellites and the major moons of Jupiter and Saturn
+by name, and you can also type RA/Dec coordinates directly. Matches appear as result cards showing the
 name with alternate designations, RA/Dec (in J2000, the standard
 reference epoch for sky coordinates), magnitude and
 apparent size in arcminutes, an object-type badge (Galaxy, Nebula,
@@ -255,6 +312,71 @@ rotation and scale, so you know for certain the field and angle the
 aux photo will come out with instead of assuming it matches the
 mount. A toast reports the solved aux rotation.
 
+### Framing rotation
+
+The angle on the red box is the camera's **sky position angle**, 0 with
+north up, the same number a plate solve reports. Normally it follows the
+solve. To choose it instead, click **Rotation** in the toolbar: a slider
+appears beside the box and turns it live, with single-degree nudges and a
+field for typing an angle. **Follow solve** hands the angle back to the
+plate solver.
+
+What happens next depends on what can turn the camera.
+
+**With a rotator on the rig** (@sec-rigs), the chosen angle rides along
+with every Slew & Center from this tab. After each solve the loop turns
+the rotator by the difference and solves again to confirm, until the
+angle is inside half a degree. **Rotate now** does the same without
+moving the mount. The rotator's mechanical angle differs from the sky
+angle by an offset nobody knows in advance, so the first move can go the
+wrong way once; the loop notices that the error grew, reverses, and
+remembers the direction for the rest of the session. A difference of 180
+degrees counts as arrived, because a rectangular sensor frames the same
+field either way up.
+
+**With a rotator you turn by hand**, a camera rotator ring or a motorised
+one with the motor off, that loop cannot run, so you are the loop.
+With no rotator connected and an angle chosen, the panel offers **Measure
+framing**: take a PREVIEW exposure, press it, and Polaris solves the
+frame and answers with an instruction, "turn the camera 20.0 degrees
+clockwise", as seen looking at the back of the camera. Turn it, press it
+again, and repeat until it reports the framing is within a degree.
+
+The direction comes from the parity of the solved field: a star diagonal,
+or any odd number of reflections, reverses which way the sky angle runs,
+and the solve's CD matrix is what reveals that. What it cannot know is
+which side of the camera you are standing on, so if the instruction sends
+you the wrong way, press **Other way**; the choice is stored on the rig
+and applies to that optical train from then on. If a turn makes the error
+grow, Polaris flips the direction itself and says so.
+
+A Slew & Center with no rotator connected still reports the framing
+error. It centres the mount as usual and never fails over an angle
+nothing on the host can change.
+
+The chosen angle is kept either way: it is the rotation stored on a PLAN
+target and on targets added to a sequence.
+
+## Favourites and imported target lists
+
+The target card carries a **Favourite** button. A starred object goes
+into a list kept on the **host**, alongside the plans rather than in the
+browser, so it is there on every tablet and for every rig. Favourites
+then surface in three places: the **Favourites** chip in Tonight's Best,
+which lists every starred target that peaks above 30 degrees tonight with
+its peak time; the **Favourites** button in the PLAN target picker
+(@sec-night-planner); and that panel's **Map** button, which frames the
+object back on the sky map.
+
+The PLAN favourites panel also takes **Import CSV**, for a target list
+exported from Telescopius or assembled in a spreadsheet. The file needs a
+name column and right-ascension and declination columns, in sexagesimal
+or decimal form; the importer recognises both tidy headers ("Catalogue
+Entry", "Right Ascension", "Declination") and plain ones ("name", "ra",
+"dec"). Targets you have already starred, matched by name or by position,
+are skipped, so re-importing a list you have curated does not duplicate
+it.
+
 ## Slew & Center
 
 The big workflow button. With a target selected, click **Slew &
@@ -272,6 +394,22 @@ Center** and Polaris:
 
 A status banner shows the phase live: "Slewing → Capturing → Solving
 → Centering → Centered (12 arcsec error)".
+
+### Going to coordinates you type
+
+Not every target has a catalogue entry: a comet from an ephemeris, a
+position from a paper, a spot a friend read out over the radio. **GoTo
+coordinates**, in the SKY toolbar and on the RIGS mount card, takes a
+pair of coordinates in whatever form you have them, sexagesimal
+(`05:35:17 -05:23:28`, `5h35m17s`, `05 35 17`, with degree marks) or
+decimal, and shows you how it parsed them before anything moves. A bare
+decimal right ascension is read as hours, or as degrees when it passes
+24, when it carries a `d`, or when the unit switch says so.
+
+From the parsed preview you can **Slew & Center**, **Slew Only**, or
+**Show on sky map** to check the field first. The SKY search box accepts
+the same coordinate pair as a target, so pasting one and pressing Search
+is the quick path.
 
 ![Solve & Sync in action: the Plate solver panel streams the solver's
 log live while the map shows the current field-of-view rectangle;

@@ -66,29 +66,67 @@ The Process sub-tab drives the built-in stacker (the
 
 1. The **SER file** dropdown is populated recursively from
    `{ImageOutputDir}/planetary/`, with a **Refresh** button to rescan.
-2. **Keep top X%** is the quality cutoff, default 50%. The stacker
-   picks the sharpest X% of frames; smaller values give a sharper but
-   noisier result.
-3. **Output name** sets the base filename for the stacked result.
-4. **Stack** kicks off the job, and **Abort** cancels it mid-run.
+   You can also point **Scan** at another folder, an NVMe drive full of
+   last week's clips, for instance, and stack from there.
+2. **Stack type** is the one decision that changes how registration
+   works, and it has exactly two answers, the same two ZWO's
+   ASIVideoStack offers:
+   - **Planet** for a bounded disc surrounded by sky: Jupiter, Saturn,
+     Mars, Venus, a small Moon. Frames are registered on the disc's
+     centroid, which needs sky all the way around the target in every
+     frame.
+   - **Moon and Sun surface** for a close-up that fills the frame, where
+     there is no disc to find a centre for. Registration keys on a patch
+     of the image you choose instead (below).
+3. **Stack percent** is the quality cutoff, default 50%. The stacker
+   keeps the sharpest frames up to that fraction; a smaller number gives
+   a sharper but noisier result.
+4. **Output name** sets the base filename for the stacked result.
+5. **Stack** kicks off the job, and **Abort** cancels it mid-run.
+
+Picking a clip loads its first frame into a **preview** beside the form,
+full height on a wide screen. In **Moon and Sun surface** mode a
+**draggable green box** appears on that preview: it is the reference the
+whole clip is registered on, so drag it onto a feature with unambiguous
+detail, a crater rim or the terminator, rather than a flat mare. In
+**Planet** mode the box is hidden, because the centroid does that job.
+
+Selecting a different clip clears the previous run's progress, frame
+chart and result, so what you are looking at always belongs to the clip
+named above it.
+
+::: {.callout-tip}
+## Which type, and why it matters
+Getting this wrong is the most common cause of a blurred stack. A
+full-frame lunar close-up read as a planet gives the centroid nothing
+bounded to lock onto, and it wanders with the seeing: the individual
+frames are sharp, the stack is smeared in one direction. If a stack comes
+out directionally soft, check this setting first.
+:::
 
 ### The seven-phase pipeline
 
 A status bar shows the phase live as the job progresses:
 
 1. **Reading**: opens the SER file and lists its frames.
-2. **Analyzing**: scores every frame's sharpness by computing its
-   Laplacian variance.^[A Laplacian filter responds strongly to fine
-   edges; the variance of its output is high for crisp frames and low
-   for blurry ones.]
+2. **Analyzing**: scores every frame's sharpness. Colour clips are
+   debayered first and scored on luminance, never on the raw mosaic,
+   whose Bayer pattern is itself an edge signal and swamps the real
+   detail. The score is the variance of a Laplacian over a lightly
+   blurred copy of the frame, and each frame's brightness is normalised
+   before scoring so a passing cloud or a gain change cannot pass for
+   sharpness.^[A Laplacian filter responds strongly to fine edges; the
+   variance of its output is high for crisp frames and low for blurry
+   ones. Blurring first, and sampling on a stride, is the approach
+   PlanetarySystemStacker takes, and it makes the metric far less
+   sensitive to noise.]
    This phase parallelizes well; a typical Raspberry Pi 4 takes about
    30 s for 1000 frames of 800x600 16-bit video.
 3. **Ranking**: sorts frames by quality, descending, and takes the
-   top slice set by **Keep top X%**.
-4. **Aligning**: finds the centroid (the brightness-weighted center
-   point) of the brightest region in each kept frame and lines the
-   frames up on it, refined to sub-pixel accuracy with a parabolic
-   fit.
+   top slice set by **Stack percent**.
+4. **Aligning**: lines the kept frames up, by the method **Stack type**
+   chose, and then refines locally on a mesh of alignment points
+   (@sec-planetary-alignment).
 5. **Stacking**: a mean stack with a per-pixel count, producing
    uint16 output (16-bit unsigned integers, the same precision as the
    camera's raw data).
@@ -98,31 +136,63 @@ A status bar shows the phase live as the job progresses:
 
 ## The quality metric
 
-Frame quality is the variance of a 3x3 Laplacian filter applied to
-the centred region of interest (ROI) of each frame, a standard
-sharpness metric [@pertuz2013focus]. Higher variance
-means a sharper frame. The cutoff slider lets you discard
-atmospheric-blur frames: pick an aggressive cut (top 20%) for the best
-detail, or a lenient one (top 80%) for lower noise at the cost of a
-slightly softer result.
+Frame quality is the variance of a Laplacian filter over a blurred copy
+of each frame's luminance, a standard sharpness metric
+[@pertuz2013focus] with the noise-suppression refinement
+PlanetarySystemStacker uses. Higher variance means a sharper frame.
+**Stack percent** lets you discard atmospheric-blur frames: pick an
+aggressive cut (20%) for the best detail, or a lenient one (80%) for
+lower noise at the cost of a slightly softer result.
 
-## Alignment
+Two details matter more than they sound. The metric runs on the
+debayered luminance, so a colour camera is scored on real structure
+rather than on its own Bayer grid; and every frame is normalised for
+brightness first, so the ranking answers "which frames are sharpest",
+not "which frames are brightest".
 
-Alignment uses the brightest-pixel centroid, refined parabolically on
-a 5x5 neighborhood for sub-pixel accuracy. This works well for bright
-targets with a single brightness peak: the Moon, Jupiter, Mars, and
-the body of Saturn.
+## Alignment {#sec-planetary-alignment}
 
-The limitation is extended sources without a single peak, such as
-Saturn's rings, where alignment shifts can drift. The workaround is to
-stack in smaller batches per processing pass; future versions will add
-a thresholded centroid and better alignment for extended objects.
+Registration happens in two stages: one global shift per frame, then a
+local correction on a mesh of points.
+
+**The global shift** is what **Stack type** selects.
+
+- **Planet** finds the disc's centroid, the brightness-weighted centre
+  of the target against the sky, refined to sub-pixel accuracy. Cheap and
+  robust, as long as the disc is surrounded by sky in every frame.
+- **Moon and Sun surface** uses phase correlation [@kuglin1975] on the
+  patch inside the green reference box: the two frames are compared in
+  the frequency domain and the shift that best lines them up falls out of
+  the peak of the correlation. It needs no isolated object at all, which
+  is exactly the case a centroid cannot handle, and it is why a
+  frame-filling lunar clip has to be told it is a surface.
+
+When a clip is left on the automatic setting, Polaris decides from the
+sharpest frame: a frame whose bright pixels fill most of the area, or
+that carries signal right out to the border, is treated as a surface.
+That guess is only a fallback. The reason the choice is a control in the
+first place is that no measurement of one frame is as reliable as you
+knowing what you pointed at.
+
+**The local correction** then splits the frame into a mesh of alignment
+points over the regions that carry structure, in the manner of
+PlanetarySystemStacker, and searches a small shift for each point
+independently. Seeing does not blur a wide field uniformly: one crater
+can be crisp while another, half a frame away, is smeared, and a single
+global shift cannot fix both. Each point also selects its own best
+frames, so the sharpest moments for each part of the image are the ones
+that get stacked there. The mesh is built and tuned automatically; there
+is nothing to configure, and Polaris falls back to the single global
+shift when the target is too small for a useful mesh.
 
 ## Output
 
 The stacked result lands at
 `{ImageOutputDir}/{Rig}/planetary/{target}/stacked/{outputName}_{ts}.fits`
-as a 16-bit mono FITS. Open it in PixInsight, the free Siril
+as a 16-bit FITS: three channels for a colour camera, one for a mono
+one. Colour clips are debayered per frame before stacking, so the file
+comes out as real RGB rather than as a mosaic somebody downstream has to
+interpret. Open it in PixInsight, the free Siril
 [@siril], or
 Photoshop and apply wavelet sharpening (the multi-scale sharpening
 technique planetary imagers favor) and saturation in your

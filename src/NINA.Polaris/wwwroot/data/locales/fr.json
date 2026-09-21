@@ -4975,5 +4975,7 @@
   "Turn direction back to normal for this rig": "Sens de rotation revenu à la normale pour ce setup",
   "Set a framing angle first": "Définissez d'abord un angle de cadrage",
   "Framing measurement failed": "Échec de la mesure du cadrage",
-  "Framing advice failed": "Échec du calcul de la rotation nécessaire"
+  "Framing advice failed": "Échec du calcul de la rotation nécessaire",
+  "left to the camera driver": "laissé au pilote de la caméra",
+  "Sensor black-level pedestal (ADU floor) for THIS panel's captures. A small positive value stops the shadow/noise tail clipping to 0 and keeps calibration clean. Polaris sends it to the camera before every capture from this panel, so it wins over the driver's own control panel; 0 means the capture sends nothing and the frame records whatever the driver is set to. Typical: a few tens: SV405CC ~30-64.": "Piédestal de niveau de noir du capteur (plancher en ADU) pour les poses de CE panneau. Une petite valeur positive empêche la queue ombres/bruit d'être écrêtée à 0 et garde une calibration propre. Polaris l'envoie à la caméra avant chaque pose de ce panneau, elle l'emporte donc sur le panneau de contrôle du pilote ; 0 signifie que la pose n'envoie rien et que l'image enregistre ce que le pilote utilise. Typique : quelques dizaines : SV405CC ~30-64."
 }

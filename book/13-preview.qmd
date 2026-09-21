@@ -13,6 +13,13 @@ committing to a save.
   planetary or focus tests; 5 to 30 s suits deep-sky framing.
 - **Gain**: camera gain. The units depend on the driver; ZWO
   cameras typically use 0 to 600, QHY similar.
+- **Offset**: the sensor's black-level pedestal, in ADU, for snaps taken
+  from *this* panel. LIVE and AUTORUN have their own, so a framing snap
+  can use a different pedestal from a live stack. It saves to the active
+  rig and is sent to the camera before every snap, so it wins over the
+  driver's own control panel; set it to 0 and the snap sends nothing,
+  leaving the driver's value in force and recorded in the header
+  (@sec-rig-gain-offset).
 - **Bin**: 1x1, 2x2, or 4x4 (binning merges neighbouring pixels into
   one for a brighter, smaller image).
 - **Filter**: shown only when a filter wheel is connected; the wheel

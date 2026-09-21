@@ -566,7 +566,9 @@ public class SequenceEngine {
                     // a sensible bias pedestal keeps the background off the
                     // left wall of the histogram. Sent on every frame alongside
                     // gain so the camera isn't left on a stale/zero offset.
-                    var rigOffset = _profile.ActiveEquipmentProfile?.DefaultOffset ?? 0;
+                    // AUTORUN has its own offset field, so a running sequence
+                    // obeys that one rather than the LIVE panel's.
+                    var autorunOffset = RigCaptureDefaults.AutorunOffset(_profile);
                     // AUTORUN-TARGET-NAME: a LIGHT frame never takes a per-item
                     // name. The target does not change across a run, so every
                     // light is named after the most relevant object in the FOV —
@@ -579,7 +581,7 @@ public class SequenceEngine {
                         : null;
                     var capOpts = new NINA.Image.Interfaces.CaptureOptions(
                         Gain: item.Gain > 0 ? item.Gain : (int?)null,
-                        Offset: rigOffset > 0 ? rigOffset : (int?)null,
+                        Offset: autorunOffset,
                         BinX: item.Binning > 0 ? item.Binning : (int?)null,
                         BinY: item.Binning > 0 ? item.Binning : (int?)null,
                         ImageType: imageType,

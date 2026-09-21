@@ -89,6 +89,29 @@ for the Studio root:
 - **Selection bar**: a summary such as "2 files · 124 MB" plus an
   indicator showing the current Studio root.
 
+### Per-frame repair tools
+
+Some defects belong to one frame and to the telescope that took it, not
+to a stack, so the toolbar row also holds single-frame repairs that write
+a new FITS and keep the original. Two are worth knowing about by name.
+
+**Violet halo** removes the out-of-focus violet skirt an ED doublet
+spreads around bright stars, from roughly 6 px outwards. It brings blue
+down towards the other two channels inside the halo only, capped per
+pixel at the mean of that pixel's own red and green, so star cores and
+their colour are left alone. **Halo strength** and **Halo radius** are
+the two knobs; larger focal ratios and brighter stars spread the skirt
+further. Because it corrects a telescope defect, run it on the original
+frame rather than on the output of a star colour repair.
+
+**Star fix** is the separate star colour repair, for cores that came out
+the wrong colour rather than for the skirt around them. The violet stage
+used to live inside it; it is its own tool now, since the two answer
+different faults and reach for different frames.
+
+The same row holds **Crop**, **Compare**, **Wavelets** and the
+**GraXpert** entry point (@sec-ai-cleanup).
+
 ### FITS metadata columns
 
 Above the listing sits a **Show FITS metadata** checkbox, off by

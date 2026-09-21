@@ -44,6 +44,36 @@ opens the single-frame viewer described next. The **Rescan** button
 picks up new files added by the sequence engine or copied in through
 the file browser.
 
+## Sessions: the night log
+
+The frame library knows more about each file than a folder listing can
+show, and the **Sessions** sub-tab turns that into the observing log most
+people otherwise keep by hand, or never keep at all.
+
+Frames are grouped by **local night**, so everything from one session
+lands together no matter which side of midnight it was taken. Open a
+night and you get what was actually shot: per-target and per-filter frame
+counts and integration time, the camera, telescope and focal length, and
+the ranges the night moved through, sensor temperature, focus position
+and temperature, ambient temperature and humidity, guide RMS and peak,
+pier side, sky brightness. The equipment fields come from the FITS
+headers Polaris writes, which is why they are trustworthy: they describe
+the frames, not your memory of them.
+
+Each night also matches the **calibration** it would need: darks by
+camera, gain, offset, binning, exposure and temperature; bias the same
+way; flats by filter, taking the nearest night. So the log answers "can I
+calibrate this?" as well as "what did I get?". Master frames are excluded
+from the counts, since they are products rather than captures.
+
+What the headers cannot record, you add: a short **notes** form per night
+takes seeing, transparency and free text, stored on the host with the
+profile. **Copy as Markdown** puts the whole night on the clipboard for a
+forum post or an observing journal.
+
+If the list looks thin on an older install, the index predates some of
+these fields; **rescan** rebuilds it from the files on disk.
+
 ## The single-frame viewer
 
 The viewer opens on any frame with deep zoom and pan (OpenSeadragon
@@ -559,6 +589,31 @@ Siril is GPLv3-licensed; Polaris invokes it strictly as an external
 command-line program and links or redistributes none of its code.
 The bundled scripts were written from scratch against the Siril
 command reference and carry Polaris's own MPL-2.0 license.
+
+## Nightscape Stack
+
+Everything else in this chapter assumes a tracked telescope. The
+**Nightscape Stack** sub-tab is for the other kind of astrophoto: a
+camera on a fixed tripod, the Milky Way over a landscape, where the sky
+moves between frames and the ground does not.
+
+That is a contradiction no single alignment can resolve, so Polaris
+stacks the frame twice in one pass. The sky is registered on the stars,
+using the same star detector and matcher as the deep-sky path, and
+averaged; the foreground is averaged with no alignment at all, which is
+what keeps the rocks sharp. Then the two are blended along a **horizon
+line you draw** by hand on a preview of your own frame, since no
+algorithm knows where your skyline is as well as you do.
+
+The result is a 16-bit composite, written as both PNG and FITS: the PNG
+for the print or the post, the FITS to carry on processing. A coverage
+check runs on the horizon mask first, so a line drawn badly enough to
+leave part of the frame unaccounted for is caught before the stack.
+
+The capture side lives in AUTORUN, which gained a **Nightscape**
+guidance tab (and the **Star trails** capture that used to sit under
+VIDEO), so the sequence that shoots the frames and the workspace that
+stacks them are one workflow rather than two.
 
 ## Handing off to GraXpert
 
