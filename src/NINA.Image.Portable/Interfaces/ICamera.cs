@@ -68,6 +68,13 @@ public interface ICamera {
     int GainMin => 0;
     int GainMax => 0;
 
+    /// <summary>The offset (sensor bias pedestal) the camera is running at
+    /// right now, or null when this backend cannot report one. Distinct from
+    /// whatever a caller last asked for: with the rig's offset at 0 Polaris
+    /// sends nothing, and this is then the only truthful source for the FITS
+    /// OFFSET card (issue #26).</summary>
+    int? DriverOffset => null;
+
     /// <summary>Does this sensor have a colour filter array?
     ///
     /// Deliberately TRI-STATE, because <see cref="BayerPatternEnum.None"/> on a

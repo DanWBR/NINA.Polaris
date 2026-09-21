@@ -898,11 +898,24 @@ public class IndiCamera : ICamera, IDisposable {
         }
         if (opts?.Offset is int off) {
             await TrySetOffsetAsync(off, ct, force);
-        } else if (_offset > 0) {
-            // A caller that sets only the gain (LIVE, PREVIEW, solves) still
-            // wants the pedestal the rig was configured with: a fresh driver
-            // config sits at offset 1 and clips the background to black.
-            await TrySetOffsetAsync(_offset, ct, force);
+        } else {
+            // No offset asked for means the rig's offset is 0, which is the
+            // documented "leave the driver's setting alone".
+            //
+            // This used to replay the last offset we had applied, on the
+            // theory that a caller passing only the gain still wanted the
+            // rig's pedestal. Every capture site passes the rig's offset
+            // explicitly now (RigCaptureDefaults.Offset), so the replay only
+            // ever fired on hands-off captures, where it re-applied a value
+            // the operator had since abandoned: set 1 in LIVE, switch to 0,
+            // set 125 in the driver's own panel, and every exposure put it
+            // back to 1. Reproduced against the INDI CCD Simulator and fixed
+            // here (issue #26).
+            //
+            // Clearing the record also keeps the FITS honest: nothing was
+            // applied, so nothing is claimed, and the OFFSET card comes from
+            // what the driver reports instead.
+            _offset = 0;
         }
         // Reflect the requested frame kind (Light/Bias/Dark/Flat) on the driver
         // so the returned BLOB is tagged correctly. Defaults to LIGHT when the
