@@ -388,6 +388,15 @@ equipment** display shows the guide camera, mount, aux mount, and AO
 (adaptive-optics unit, if any), so you know what PHD2 thinks it is
 using.
 
+Only one program can have the guide camera open. While Polaris holds
+it through a vendor SDK or Alpaca, the INDI copy of that camera is
+disconnected as soon as anything connects it, and that includes PHD2
+asking for it as an INDI camera. Either disconnect the guide camera in
+the GUIDE tab before handing it over, or set the rig's guider to PHD2,
+in which case Polaris releases its own handle when PHD2 opens the
+camera. A camera that is only selected in the card, and not connected,
+is free: Polaris does not stand in the way of it.
+
 ### Exposure, Dec mode, and guiding controls
 
 The exposure dropdown is populated from PHD2's

@@ -452,7 +452,6 @@ public sealed class AsiSdkCamera : ICamera {
             ApplyExposureGain(exposureSeconds, opts?.Gain, opts?.Offset);
             GetRoi(out var w, out var h);
             var bytes = new byte[(long)w * h * BytesPerPixel()];
-            State = CameraStates.Exposing;
             // Snap (still) mode: ASIStartExposure integrates exactly the
             // configured exposure. The old path used video capture
             // (ASIStartVideoCapture + ASIGetVideoData), which hands back the
@@ -471,6 +470,10 @@ public sealed class AsiSdkCamera : ICamera {
             // instead of at Polaris.
             for (int attempt = 1; ; attempt++) {
               try {
+                // Inside the loop: the finally below leaves the state Idle, so a
+                // retry that did not set it again would expose while reporting
+                // idle to the UI and the status feed.
+                State = CameraStates.Exposing;
                 lock (_sdk) {
                     // Defensive stop before start, mirroring PlayerOne and SVBony: if a
                     // previous capture didn't stop cleanly the SDK still thinks it's
@@ -513,6 +516,14 @@ public sealed class AsiSdkCamera : ICamera {
                 // Reopening resets the ROI/format, so re-assert them for the retry.
                 ApplyRoi();
                 ApplyExposureGain(exposureSeconds, opts?.Gain, opts?.Offset);
+                // And check it came back the same, because the buffer was sized
+                // for the old geometry. ASIGetDataAfterExp is given the length
+                // so it would refuse rather than overrun, but it would refuse
+                // with the SDK's own error instead of saying what happened.
+                GetRoi(out var w2, out var h2);
+                if (w2 != w || h2 != h) throw new InvalidOperationException(
+                    $"ASI reopen changed the frame geometry from {w}x{h} to {w2}x{h2}; "
+                    + "reconnect the camera.", ex);
               }
             }
         }
