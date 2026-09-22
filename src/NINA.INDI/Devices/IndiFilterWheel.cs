@@ -125,6 +125,23 @@ public class IndiFilterWheel : NINA.Image.Interfaces.IFilterWheel {
         // mechanical wheels legitimately take longer than the 5s
         // default ack window to acknowledge (servo windup); the
         // upstream caller polls Position separately for completion.
+
+        // Persist the slot in the driver's own config (debounced).
+        //
+        // INDI drivers save FILTER_SLOT in ~/.indi/<driver>_config.xml, and
+        // IndiClient auto-dispatches CONFIG_LOAD on every CONNECT, which
+        // re-applies that value and MOVES the wheel. Nothing wrote the file
+        // after a filter change, so whatever slot happened to be saved once
+        // became the filter every session started on: a rig left on Ha+ came
+        // back the next night on the slot in the file. Saving here is what
+        // makes "the last filter used" the thing the driver remembers, and it
+        // is the same treatment the serial-port choice gets in
+        // IndiClient.SetDevicePortAsync.
+        //
+        // Deliberately also on the TimedOut path: CONFIG_SAVE stores the
+        // driver's CURRENT property values, so a write that never landed
+        // saves the slot the wheel is really on, not the one we asked for.
+        _client.ScheduleConfigSaveDebounced(DeviceName);
     }
 
     public async Task SetFilterByNameAsync(string filterName, CancellationToken ct = default) {
