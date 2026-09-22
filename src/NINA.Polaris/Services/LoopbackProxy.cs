@@ -14,6 +14,7 @@
 
 using System;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Yarp.ReverseProxy.Forwarder;
@@ -25,14 +26,13 @@ namespace NINA.Polaris.Services;
 /// client (/phd2-gui), indi-web (/indi-web) and the Canopus agent (/canopus).
 ///
 /// The upstreams have something in common that the defaults get wrong. They are
-/// small single-purpose servers on loopback, and they accept connections
-/// modestly: xpra's socket listener, for one, is a flat
+/// small single-threaded servers on loopback, and they serve one request at a
+/// time behind a shallow accept queue: xpra's socket listener is a flat
 /// <c>listener.socket.listen(5)</c>. A browser loading the xpra HTML5 client
 /// asks for roughly forty scripts and stylesheets, and over HTTP/2 it asks for
-/// all of them at once. With an unbounded connection pool the forwarder answers
-/// that by opening forty TCP connections to a listener five deep: the accept
-/// queue overflows, the kernel resets the connections it could not queue, and
-/// those requests come back as
+/// all of them at once. Unbounded, the forwarder answers that by opening forty
+/// TCP connections: the accept queue overflows, the server resets what it
+/// cannot take, and those requests come back as
 /// <see cref="ForwarderError.Request"/> ("connection reset by peer") which the
 /// route turns into a 502.
 ///
@@ -42,25 +42,47 @@ namespace NINA.Polaris.Services;
 /// to open its WebSocket, so no PHD2 window ever arrived. Nothing in the UI
 /// said so, because every individual failure was a 502 on a script tag.
 ///
-/// So the fan-out is capped to what these servers can accept, and a safe
-/// request that still loses its connection before any response is retried once
-/// on a fresh one.</summary>
+/// So requests are gated down to what the upstream answers cleanly, measured
+/// rather than guessed, and one that still loses its connection before any
+/// response is retried on a fresh one. Both halves had to be right: gating
+/// alone still left a few per cent of requests failing, and the first version
+/// of the retry handed YARP a response it had already written a 502 into,
+/// which made it throw and turned a recoverable reset into a 500.</summary>
 internal static class LoopbackProxy {
 
-    /// <summary>At most this many connections to one upstream at a time.
+    /// <summary>How many ordinary requests may be in flight to one upstream.
     ///
-    /// Measured against xpra's backlog of five, loading the twenty largest
-    /// scripts of its HTML5 client on an Orange Pi 5 Pro: four, five and six
-    /// in parallel overflowed the accept queue zero times, eight overflowed it
-    /// once and twelve five times. Six keeps the page loading in parallel,
-    /// stays inside what the listener can queue, and leaves slots free for the
-    /// long-lived WebSocket a panel holds open. Requests past the cap wait in
-    /// the handler instead of becoming connections the upstream will drop.</summary>
-    internal const int MaxUpstreamConnections = 6;
+    /// Measured on an Orange Pi 5 Pro, fetching the twenty largest scripts of
+    /// the xpra HTML5 client through this proxy five times over at each level
+    /// of concurrency: 0 failures in 100 at one request in flight, 0 in 100 at
+    /// two, 2 in 100 at three, 5 in 100 at four, and about one in four lost
+    /// when the browser's whole fan-out went through unbounded. xpra's HTTP
+    /// server is single-threaded behind a <c>listen(5)</c>: past two requests
+    /// at once it resets what it cannot take, and with a wide fan-out the
+    /// accept queue overflows as well.
+    ///
+    /// So two, which is the widest setting the board answers cleanly. Forty
+    /// files two at a time still load in a fraction of a second over
+    /// loopback.</summary>
+    internal const int MaxConcurrentRequests = 2;
 
-    /// <summary>One attempt after the first, and only one: past that, a
-    /// failing upstream should be reported, not hammered.</summary>
-    internal const int MaxAttempts = 2;
+    /// <summary>The connection cap on the handler. Deliberately well above
+    /// <see cref="MaxConcurrentRequests"/>: the gate is what protects the
+    /// upstream, and this only stops a runaway. It must not be the limit,
+    /// because it also counts the connection each upgraded WebSocket holds
+    /// for as long as its panel stays open, and a gate slot spent waiting
+    /// behind those would deadlock the page.</summary>
+    internal const int MaxUpstreamConnections = 16;
+
+    /// <summary>Two retries, not one: a reset is a coin toss at this level of
+    /// concurrency, and a script that 502s breaks the page it belongs to.
+    /// Past that a failing upstream should be reported, not hammered.</summary>
+    internal const int MaxAttempts = 3;
+
+    /// <summary>Waited before a retry, multiplied by the attempt number. Long
+    /// enough for a single-threaded upstream to finish what it was doing,
+    /// short enough to be invisible on a page load.</summary>
+    internal static readonly TimeSpan RetryBackoff = TimeSpan.FromMilliseconds(25);
 
     /// <summary>The invoker every loopback proxy route shares the shape of.
     /// Cookies, redirects and decompression stay off so the proxy is a
@@ -86,6 +108,12 @@ internal static class LoopbackProxy {
         ConnectTimeout = TimeSpan.FromSeconds(5),
     };
 
+    /// <summary>The gate a route holds for its upstream, created once at
+    /// startup and shared by every request to it. A WebSocket upgrade does not
+    /// take a slot: it would hold one for the life of the panel, and it is one
+    /// connection either way.</summary>
+    public static SemaphoreSlim NewGate() => new(MaxConcurrentRequests, MaxConcurrentRequests);
+
     /// <summary>Whether a failed forward may be tried again.
     ///
     /// Three things have to hold. The response must not have started, or there
@@ -102,16 +130,60 @@ internal static class LoopbackProxy {
             || HttpMethods.IsOptions(ctx.Request.Method);
     }
 
-    /// <summary>Forward the request, retrying once when the upstream dropped
-    /// the connection before answering, and write a 502 naming the proxy when
-    /// it still failed and nothing has been sent yet.</summary>
+    /// <summary>A response YARP will accept for a forward. It refuses a
+    /// response that has been touched at all, not just one that has started:
+    /// a status other than 200, any header, or a content length is enough. A
+    /// failed forward leaves exactly that behind, because YARP sets 502
+    /// itself, so a retry has to hand it a pristine response first.
+    ///
+    /// Skipping this was a bug with a worse symptom than the one it was
+    /// fixing: the second SendAsync threw "the request cannot be forwarded,
+    /// the response has already started" and the asset came back 500 instead
+    /// of retrying.</summary>
+    private static void ResetResponse(HttpResponse response) {
+        response.StatusCode = StatusCodes.Status200OK;
+        response.Headers.Clear();
+        response.ContentLength = null;
+    }
+
+    /// <summary>Forward the request, retrying when the upstream dropped the
+    /// connection before answering, and write a 502 naming the proxy when it
+    /// still failed and nothing has been sent yet.</summary>
     public static async Task<ForwarderError> ForwardAsync(
+            IHttpForwarder forwarder, HttpContext ctx, string target,
+            HttpMessageInvoker client, string label, SemaphoreSlim? gate = null) {
+        // An upgrade is exempt: the forward does not return until the socket
+        // closes, so a slot spent here never comes back.
+        var gated = gate is not null && !ctx.WebSockets.IsWebSocketRequest;
+        if (gated) await gate!.WaitAsync(ctx.RequestAborted);
+        try {
+            return await ForwardCoreAsync(forwarder, ctx, target, client, label);
+        } finally {
+            if (gated) gate!.Release();
+        }
+    }
+
+    private static async Task<ForwarderError> ForwardCoreAsync(
             IHttpForwarder forwarder, HttpContext ctx, string target,
             HttpMessageInvoker client, string label) {
         var err = ForwarderError.None;
         for (var attempt = 1; attempt <= MaxAttempts; attempt++) {
-            err = await forwarder.SendAsync(ctx, target, client,
-                ForwarderRequestConfig.Empty, HttpTransformer.Default);
+            if (attempt > 1) {
+                // A reset here means the upstream was momentarily over its
+                // head, so an instant retry can walk into the same wall. The
+                // wait only ever applies to a request that already failed.
+                await Task.Delay(RetryBackoff * (attempt - 1), ctx.RequestAborted);
+                ResetResponse(ctx.Response);
+            }
+            try {
+                err = await forwarder.SendAsync(ctx, target, client,
+                    ForwarderRequestConfig.Empty, HttpTransformer.Default);
+            } catch (InvalidOperationException) {
+                // YARP would not take the response. Nothing useful is left to
+                // try, and it must not surface as an unhandled 500.
+                err = ForwarderError.Request;
+                break;
+            }
             if (!CanRetry(ctx, err)) break;
         }
         // Only write a 502 if nothing was sent yet: a mid-stream forwarder

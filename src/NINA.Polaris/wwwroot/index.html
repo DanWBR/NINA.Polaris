@@ -5774,15 +5774,15 @@
                     <div class="starsel-grid">
                         <label><span x-text="$t('Detection sigma')"></span>
                             <input type="number" min="1" max="20" step="0.5" class="input-sm"
-                                   :value="starSel.sigma" placeholder="5"
+                                   :value="starSel.sigma" placeholder="3.5"
                                    @change="setStarSel('sigma', $event.target.value)"
-                                   title="Threshold over the frame noise (median + n x MAD). Lower finds fainter stars, and more noise. Default 5.">
+                                   title="Threshold over the frame noise (median + n x MAD). Lower finds fainter stars, and more noise. Default 3.5, which suits a short guide exposure.">
                         </label>
                         <label><span x-text="$t('Min star size (px)')"></span>
                             <input type="number" min="1" max="200" step="1" class="input-sm"
-                                   :value="starSel.minSize" placeholder="5"
+                                   :value="starSel.minSize" placeholder="2"
                                    @change="setStarSel('minSize', $event.target.value)"
-                                   title="Smallest blob accepted as a star. Lower it when a tight star on an undersampled guide scope is being dropped. Default 5.">
+                                   title="Smallest blob accepted as a star, counted in pixels of area. A binned guide frame puts a real star on 2x2 pixels, so the default is 2; raise it to ignore hot pixels.">
                         </label>
                         <label><span x-text="$t('Max star size (px)')"></span>
                             <input type="number" min="50" max="20000" step="100" class="input-sm"

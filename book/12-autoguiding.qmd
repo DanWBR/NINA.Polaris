@@ -197,18 +197,23 @@ be argued with. The **Star selection** group in the GUIDE sidebar
 therefore exposes the detector's own knobs. Every field is stored per
 rig, blank means the default, and **Reset to defaults** clears the lot.
 
-**Detection sigma** (default 5) is how far above the frame's noise
+**Detection sigma** (default 3.5) is how far above the frame's noise
 floor a pixel has to be to count, in robust standard deviations
 (median plus n times the MAD, the median absolute deviation). Lowering
 it finds fainter stars and more noise, and it is the first knob to
-reach for when nothing is found at all.
+reach for when nothing is found at all. The imaging detector uses 5,
+which suits a long sub; a one-second guide exposure of a sparse field
+puts its stars a few sigma up, not five.
 
-**Min star size** and **Max star size**, in pixels, are the smallest
-and largest blobs accepted as a star (5 and 6000). Lower the minimum
-when a tight star on a short, undersampled guide scope is being
-dropped, and raise it to ignore hot pixels. The maximum is far higher
-than the imaging detector's on purpose: a bright guide star with a
-wide skirt is exactly what you want to guide on.
+**Min star size** and **Max star size** are the smallest and largest
+blobs accepted as a star, counted in pixels of area (2 and 6000). The
+minimum matters more than it looks: a real star on a binned guide frame
+covers 2x2 pixels, so at the imaging detector's 5 it is thrown away
+before anything else examines it, and a field with half a dozen stars
+you can see on screen detects none at all. Raise it to ignore hot
+pixels, which are a single pixel and excluded at 2 in any case. The
+maximum is far higher than the imaging detector's on purpose: a bright
+guide star with a wide skirt is exactly what you want to guide on.
 
 **Max HFD** (default 50 px) is the largest half-flux diameter
 accepted, so raise it for a soft or slightly defocused guide scope.
