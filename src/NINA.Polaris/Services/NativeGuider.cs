@@ -692,7 +692,22 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     /// stars in, and a constant cannot be argued with.</summary>
     internal static NINA.Image.ImageAnalysis.StarDetector NewGuideStarDetector(
             EquipmentProfile? rig = null) {
-        var d = new NINA.Image.ImageAnalysis.StarDetector { MaxStarSize = 6000 };
+        var d = new NINA.Image.ImageAnalysis.StarDetector {
+            MaxStarSize = 6000,
+            // The stock 5 is a pixel COUNT, and it is sized for an imaging
+            // frame. On a binned guide frame a real star covers 2x2 pixels, so
+            // 4, and it was thrown away before anything else got to look at
+            // it. That is the whole of "the frame plainly has stars in it and
+            // Polaris says it found none": measured on an ASI678MC at bin 2,
+            // f/4 240 mm, a field with half a dozen visible stars detected
+            // ZERO. Two still excludes a single hot pixel (one pixel), and
+            // MinHfr keeps rejecting the tight ones.
+            MinStarSize = 2,
+            // Likewise the threshold: median + n x MAD at n = 5 is tuned for
+            // long imaging subs. A 1 s guide exposure of a sparse field puts
+            // its stars a few sigma over the noise, not five.
+            SigmaThreshold = 3.5,
+        };
         if (rig?.NativeStarSigma is double sig) d.SigmaThreshold = Math.Clamp(sig, 1, 20);
         if (rig?.NativeStarMinSize is int min) d.MinStarSize = Math.Clamp(min, 1, 200);
         if (rig?.NativeStarMaxSize is int max) d.MaxStarSize = Math.Clamp(max, 50, 20000);
@@ -736,11 +751,22 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     /// one.</summary>
     internal static double SaturationLevel(int bitDepth, int significantBits, ushort[] data) {
         double cap = (1L << Math.Clamp(bitDepth <= 0 ? 16 : bitDepth, 1, 16)) - 1;
-        if (significantBits is >= 8 and <= 16) return Math.Min(cap, (1L << significantBits) - 1);
-        // A frame that really does contain the container's maximum sample is
-        // clipped whatever the driver says about depth.
         ushort max = 0;
         foreach (var v in data) if (v > max) max = v;
+
+        if (significantBits is >= 8 and <= 16) {
+            double reported = Math.Min(cap, (1L << significantBits) - 1);
+            // Only if the data actually fits inside it. The ZWO SDK path on an
+            // ASI678MC reports 12 significant bits and then hands over samples
+            // of 13314, so "full scale 4095" called a star at a fifth of the
+            // range saturated and auto-select refused the only star in the
+            // frame. A depth the data walks straight past is not a depth: fall
+            // back to the container, which the samples do fit.
+            if (max <= reported) return reported;
+            return max >= cap ? cap : 0;
+        }
+        // A frame that really does contain the container's maximum sample is
+        // clipped whatever the driver says about depth.
         return max >= cap ? cap : 0;
     }
 
@@ -756,9 +782,23 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     internal static (NINA.Image.ImageAnalysis.DetectedStar? Star, string? Reason) PickStarNear(
             IReadOnlyList<NINA.Image.ImageAnalysis.DetectedStar> stars, double targetX, double targetY,
             int width, int height, int margin, double satLevel, double radius) {
+        // The nearest candidate, but not a speck. At the guider's detection
+        // threshold a couple of adjacent noise pixels can qualify as a star,
+        // and a speck like that sitting a few pixels from the star the
+        // operator actually tapped would win on distance alone and then be
+        // gone on the next frame. So a candidate has to carry a real fraction
+        // of the flux of the best star near the tap to be considered.
+        const double specksFraction = 0.1;
+        double brightestNear = 0;
+        foreach (var s in stars) {
+            double dx = s.X - targetX, dy = s.Y - targetY;
+            if (dx * dx + dy * dy <= radius * radius && s.Flux > brightestNear) brightestNear = s.Flux;
+        }
+
         NINA.Image.ImageAnalysis.DetectedStar? nearest = null;
         double nearestD = double.MaxValue;
         foreach (var s in stars) {
+            if (s.Flux < brightestNear * specksFraction) continue;
             double dx = s.X - targetX, dy = s.Y - targetY;
             double d = Math.Sqrt(dx * dx + dy * dy);
             if (d < nearestD) { nearestD = d; nearest = s; }

@@ -143,13 +143,19 @@ stars in. The **Star selection** group in the GUIDE sidebar exposes the
 detector's knobs so you can argue with it. Leave a field blank for the default;
 values are stored per rig, and **Reset to defaults** clears all of them.
 
-- **Detection sigma** (default 5) - how far above the frame's noise floor a pixel
-  has to be to count, measured in robust standard deviations (median + n x MAD).
-  Lower it to find fainter stars, at the cost of picking up noise. This is the
-  first knob to reach for when nothing is found.
-- **Min star size (px)** (default 5) - the smallest blob accepted as a star.
-  Lower it when a tight star on a short, undersampled guide scope is being
-  dropped; raise it to ignore hot pixels and cosmic-ray hits.
+- **Detection sigma** (default 3.5) - how far above the frame's noise floor a
+  pixel has to be to count, measured in robust standard deviations
+  (median + n x MAD). Lower it to find fainter stars, at the cost of picking up
+  noise. This is the first knob to reach for when nothing is found. The imaging
+  detector uses 5, which is tuned for long subs; a one-second guide exposure of
+  a sparse field puts its stars a few sigma up, not five.
+- **Min star size (px)** (default 2) - the smallest blob accepted as a star,
+  counted in pixels of area rather than diameter. On a binned guide frame a
+  real star covers 2x2 pixels, which is why the guider's default is 2 and not
+  the imaging detector's 5: at 5, a field with half a dozen visible stars can
+  detect none at all. Raise it to ignore hot pixels and cosmic-ray hits; single
+  hot pixels are excluded at 2 anyway, and the half-flux radius guard rejects
+  the tight ones.
 - **Max star size (px)** (default 6000) - the largest blob accepted. The guider
   runs a much higher cap than the imaging detector on purpose: a bright guide
   star with a wide skirt is exactly what you want to guide on.

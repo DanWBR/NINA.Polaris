@@ -78,6 +78,24 @@ public class NativeGuiderStarPickTests {
             "and never above what the container can hold");
     }
 
+    /// <summary>A reported depth the samples walk straight past is not a
+    /// depth. The ZWO SDK path on an ASI678MC reports 12 significant bits and
+    /// then delivers 13314, so full scale 4095 called a star at a fifth of the
+    /// range saturated, and auto-select refused the only star in the frame.
+    /// Fall back to the container, which the samples do fit.</summary>
+    [Test]
+    public void SaturationLevel_DistrustsAReportedDepthTheDataExceeds() {
+        var data = new ushort[100]; data[5] = 13314;
+        Assert.That(NativeGuider.SaturationLevel(16, 12, data), Is.EqualTo(0),
+            "not 4095, and not clipped either: 13314 is nowhere near 65535");
+        Assert.That(NativeGuider.IsSaturated(Star(0, 0, peak: 13314), 0), Is.False);
+
+        // The honest case still stands: data inside the reported depth.
+        var fits = new ushort[100]; fits[5] = 4000;
+        Assert.That(NativeGuider.SaturationLevel(16, 12, fits), Is.EqualTo(4095));
+        Assert.That(NativeGuider.IsSaturated(Star(0, 0, peak: 4095), 4095), Is.True);
+    }
+
     [Test]
     public void IsSaturated_TwelveBitStarAtTheTop() {
         Assert.That(NativeGuider.IsSaturated(Star(0, 0, peak: 4095), 4095), Is.True);
@@ -145,13 +163,26 @@ public class NativeGuiderStarPickTests {
 
     // ----- the operator's knobs -----
 
+    /// <summary>The defaults are the guider's, not the imaging detector's.
+    /// The stock MinStarSize of 5 is a pixel COUNT: a real star on a binned
+    /// guide frame covers 2x2 pixels, so 4, and it was discarded before
+    /// anything else looked at it. A field with half a dozen visible stars
+    /// detected zero on an ASI678MC at bin 2, which is what "the frame plainly
+    /// has stars in it and Polaris found none" was.</summary>
     [Test]
-    public void Detector_DefaultsWhenTheRigSaysNothing() {
+    public void Detector_DefaultsAreSizedForAGuideFrame() {
         var d = NativeGuider.NewGuideStarDetector(null);
-        Assert.That(d.SigmaThreshold, Is.EqualTo(5.0));
-        Assert.That(d.MinStarSize, Is.EqualTo(5));
-        Assert.That(d.MaxStarSize, Is.EqualTo(6000), "the guider's wide-skirt cap, not the stock 200");
-        Assert.That(d.MaxHfr, Is.EqualTo(50));
+        Assert.Multiple(() => {
+            Assert.That(d.MinStarSize, Is.EqualTo(2), "a 2x2 star has to survive");
+            Assert.That(d.MinStarSize, Is.GreaterThan(1), "but a single hot pixel must not");
+            Assert.That(d.SigmaThreshold, Is.EqualTo(3.5),
+                "a 1 s guide exposure puts its stars a few sigma up, not five");
+            Assert.That(d.MaxStarSize, Is.EqualTo(6000),
+                "the guider's wide-skirt cap, not the stock 200");
+            Assert.That(d.MaxHfr, Is.EqualTo(50));
+            Assert.That(d.MinHfr, Is.GreaterThan(0),
+                "the hot-pixel guard is what makes MinStarSize 2 safe");
+        });
     }
 
     /// <summary>The point of the knobs: a rig whose guide camera needs a lower
@@ -190,6 +221,32 @@ public class NativeGuiderStarPickTests {
         Assert.That(high.MinStarSize, Is.EqualTo(200));
         Assert.That(high.MaxStarSize, Is.EqualTo(20000));
         Assert.That(high.MaxHfr, Is.EqualTo(100));
+    }
+
+    /// <summary>The price of a low detection threshold: two adjacent noise
+    /// pixels can qualify as a star. One sitting closer to the tap than the
+    /// star the operator meant would win on distance and then be gone on the
+    /// next frame, so a candidate has to carry a real fraction of the flux
+    /// near the tap.</summary>
+    [Test]
+    public void Tap_IgnoresASpeckNearerThanTheStar() {
+        var stars = new List<DetectedStar> {
+            Star(300, 300, flux: 5000, peak: 900),   // the star tapped
+            Star(303, 301, flux: 40, peak: 120),     // a noise speck, closer
+        };
+        var pick = NativeGuider.PickStarNear(stars, 304, 302, 1000, 1000, 20, 0, 60);
+        Assert.That(pick.Star, Is.Not.Null);
+        Assert.That(pick.Star!.X, Is.EqualTo(300), "the star, not the speck beside it");
+    }
+
+    /// <summary>But a genuinely faint star on its own is still a star: the
+    /// guard is relative to what else is near the tap, not an absolute floor.</summary>
+    [Test]
+    public void Tap_StillTakesAFaintStarWhenItIsTheOnlyOne() {
+        var stars = new List<DetectedStar> { Star(300, 300, flux: 40, peak: 120) };
+        var pick = NativeGuider.PickStarNear(stars, 302, 301, 1000, 1000, 20, 0, 60);
+        Assert.That(pick.Star, Is.Not.Null);
+        Assert.That(pick.Star!.X, Is.EqualTo(300));
     }
 
     [Test]
