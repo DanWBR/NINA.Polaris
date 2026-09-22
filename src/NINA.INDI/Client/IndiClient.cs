@@ -781,6 +781,16 @@ public class IndiClient : IDisposable {
         _configSaveTimers[device] = newTimer;
     }
 
+    /// <summary>Has a debounced CONFIG_SAVE been scheduled for this device?
+    /// Exists so a test can assert that a property write persists the driver's
+    /// config without needing an INDI server on the other end of a socket.</summary>
+    internal bool HasPendingConfigSave(string device)
+        => !string.IsNullOrEmpty(device) && _configSaveTimers.ContainsKey(device);
+
+    /// <summary>How many devices have a debounced CONFIG_SAVE scheduled. Lets
+    /// a test show that a burst of writes coalesces into one save.</summary>
+    internal int PendingConfigSaveCount => _configSaveTimers.Count;
+
     /// <summary>Devices whose guide-loop property writes log at Debug
     /// instead of Information. A native-guider guide camera requests a
     /// frame every ~1-3 s all night long; at Information those writes
