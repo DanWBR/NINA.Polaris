@@ -96,7 +96,7 @@ public class LiveStackTriggers {
     /// <summary>Settle tolerance (px) / min settled time (s) / hard timeout (s),
     /// passed to the guider's dither so the next frame waits for the star to
     /// settle, exactly like the AUTORUN sequencer.</summary>
-    public double DitherSettlePixels { get; set; } = 3.0;
+    public double DitherSettlePixels { get; set; } = 1.5;
     public int DitherSettleTime { get; set; } = 3;
     public int DitherSettleTimeout { get; set; } = 60;
 

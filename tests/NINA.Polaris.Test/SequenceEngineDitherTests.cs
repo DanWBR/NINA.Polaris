@@ -65,6 +65,14 @@ public class SequenceEngineDitherTests {
             barrier, NullLogger<SequenceEngine>.Instance);
     }
 
+    /// <summary>The settle tolerance is asserted as a RELATIONSHIP, not as a
+    /// number. This test used to pin it at 3.0 next to a 5.0 dither and call
+    /// that sensible, which is how a tolerance more than half the dither
+    /// survived review: a rig that then lowered its dither to 3 px kept the
+    /// tolerance at 3, so the settle was satisfied the instant the dither
+    /// landed and guiding resumed with the star still off target (2026-09-21).
+    /// A tolerance that is a fixed fraction of the dither cannot drift into
+    /// that state when either number is edited.</summary>
     [Test]
     public void DitherSettings_Defaults_AreSensible() {
         var s = new DitherSettings();
@@ -72,9 +80,11 @@ public class SequenceEngineDitherTests {
         Assert.That(s.Pixels, Is.EqualTo(5.0));
         Assert.That(s.EveryNFrames, Is.EqualTo(3));
         Assert.That(s.RaOnly, Is.False);
-        Assert.That(s.SettlePixels, Is.EqualTo(3.0));
         Assert.That(s.SettleTime, Is.EqualTo(3));
         Assert.That(s.SettleTimeout, Is.EqualTo(60));
+        Assert.That(s.SettlePixels, Is.LessThanOrEqualTo(s.Pixels / 2),
+            "a settle tolerance near the dither distance settles on arrival");
+        Assert.That(s.SettlePixels, Is.GreaterThan(0), "and it has to be reachable");
     }
 
     [Test]
