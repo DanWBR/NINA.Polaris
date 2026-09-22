@@ -24563,7 +24563,8 @@ function ninaApp() {
                 maxHfd: rig.nativeStarMaxHfd ?? null,
                 edgeMargin: rig.nativeStarEdgeMarginPx ?? null,
                 tapRadius: rig.nativeStarTapRadiusPx ?? null,
-                allowSaturated: rig.nativeStarAllowSaturated === true
+                allowSaturated: rig.nativeStarAllowSaturated === true,
+                mode: rig.nativeStarDetectionMode === 'classic' ? 'classic' : 'tuned'
             };
             // Manual-rotator turn direction: a fact about this optical train,
             // so it lives on the rig (see skyRotFlipDirection).
@@ -34155,7 +34156,9 @@ function ninaApp() {
         // starts with.
         starSel: {
             sigma: null, minSize: null, maxSize: null, maxHfd: null,
-            edgeMargin: null, tapRadius: null, allowSaturated: false
+            edgeMargin: null, tapRadius: null, allowSaturated: false,
+            // 'tuned' (current) or 'classic' (before 14 Sep 2026).
+            mode: 'tuned'
         },
 
         // The clamps mirror the host's, so a value the UI accepts is a value
@@ -34182,6 +34185,15 @@ function ninaApp() {
             this._persistRigSelection({ [rigField]: v });
         },
 
+        setStarSelMode(mode) {
+            const m = mode === 'classic' ? 'classic' : 'tuned';
+            this.starSel.mode = m;
+            this._persistRigSelection({ nativeStarDetectionMode: m });
+            this.toast(m === 'classic'
+                ? this.$t('Star selection: classic method')
+                : this.$t('Star selection: tuned method'), 'ok');
+        },
+
         setStarSelAllowSaturated(on) {
             this.starSel.allowSaturated = !!on;
             this._persistRigSelection({ nativeStarAllowSaturated: !!on });
@@ -34190,12 +34202,14 @@ function ninaApp() {
         resetStarSel() {
             this.starSel = {
                 sigma: null, minSize: null, maxSize: null, maxHfd: null,
-                edgeMargin: null, tapRadius: null, allowSaturated: false
+                edgeMargin: null, tapRadius: null, allowSaturated: false,
+                mode: 'tuned'
             };
             this._persistRigSelection({
                 nativeStarSigma: null, nativeStarMinSize: null, nativeStarMaxSize: null,
                 nativeStarMaxHfd: null, nativeStarEdgeMarginPx: null,
-                nativeStarTapRadiusPx: null, nativeStarAllowSaturated: false
+                nativeStarTapRadiusPx: null, nativeStarAllowSaturated: false,
+                nativeStarDetectionMode: 'tuned'
             });
             this.toast(this.$t('Star selection reset to the defaults'), 'ok');
         },

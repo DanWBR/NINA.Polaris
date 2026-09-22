@@ -584,8 +584,12 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
             // taking a saturated one rather than refusing to guide: a flat top
             // costs centroid precision, no star costs the session.
             int margin = StarEdgeMargin();
-            double satGuard = SaturationLevel(img.Properties.BitDepth, img.Properties.SignificantBitDepth, img.Data);
-            bool allowSat = AllowSaturatedStars();
+            double satGuard = SaturationLevelFor(img);
+            // Classic refuses a saturated star outright, as it did before
+            // 2026-09-14. With the classic level nothing reaches that test in
+            // practice, which is exactly the behaviour being restored.
+            bool classic = IsClassicDetection(Rig);
+            bool allowSat = !classic && AllowSaturatedStars();
             NINA.Image.ImageAnalysis.DetectedStar? best = null, bestSat = null;
             double bestFlux = -1, bestSatFlux = -1;
             int interior = 0, saturated = 0;
@@ -599,7 +603,7 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
                 }
                 if (s.Flux > bestFlux) { bestFlux = s.Flux; best = s; }
             }
-            if (best == null && bestSat != null) {
+            if (best == null && bestSat != null && !classic) {
                 best = bestSat;
                 RaiseAlert($"Every star found is saturated; guiding on the brightest anyway "
                     + $"(peak {bestSat.Peak:F0} of {satGuard:F0}). Lower the guide gain or exposure for better precision.");
@@ -645,8 +649,9 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
         _lastFrame = img; _lastFrameOriginX = 0; _lastFrameOriginY = 0;
         var stars = GuideStarDetector().Detect(img.Data, w, h);
 
-        double satGuard = SaturationLevel(img.Properties.BitDepth, img.Properties.SignificantBitDepth, img.Data);
-        var pick = PickStarNear(stars, targetX, targetY, w, h, StarEdgeMargin(), satGuard, StarTapRadius());
+        double satGuard = SaturationLevelFor(img);
+        var pick = PickStarNear(stars, targetX, targetY, w, h, StarEdgeMargin(), satGuard,
+                                StarTapRadius(), IsClassicDetection(Rig));
         LastStarSelection = $"{stars.Count} found";
         if (pick.Star == null) {
             RaiseAlert(pick.Reason ?? "No star near the tap.");
@@ -690,9 +695,35 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     /// stars only a few pixels across. When the defaults do not suit one, the
     /// symptom is "no suitable guide star" over a frame the operator can see
     /// stars in, and a constant cannot be argued with.</summary>
+    /// <summary>Which star-selection method this rig uses.
+    ///
+    /// The tuned one is the default and the one that gets worked on. Classic is
+    /// the behaviour from before 2026-09-14, kept because that change was a
+    /// regression for at least one rig and an operator in the field needs a way
+    /// back that does not involve downgrading the whole application:
+    ///
+    ///   - the stock detector (5 px of area, 5 sigma, blobs up to 200 px)
+    ///     rather than the guide-sized one
+    ///   - full scale straight from the container depth, so in practice
+    ///     nothing is ever called saturated
+    ///   - a tap locks the nearest star anywhere in the frame, with no radius
+    ///     and no speck guard
+    ///
+    /// The per-rig numeric knobs still override whichever baseline is
+    /// selected; a blank field means that method's own default.</summary>
+    internal const string DetectionModeClassic = "classic";
+
+    internal static bool IsClassicDetection(EquipmentProfile? rig)
+        => string.Equals(rig?.NativeStarDetectionMode, DetectionModeClassic,
+            StringComparison.OrdinalIgnoreCase);
+
     internal static NINA.Image.ImageAnalysis.StarDetector NewGuideStarDetector(
             EquipmentProfile? rig = null) {
-        var d = new NINA.Image.ImageAnalysis.StarDetector {
+        var d = IsClassicDetection(rig)
+            // Stock, exactly as `new StarDetector()` was called before
+            // 2026-09-14: MinStarSize 5, MaxStarSize 200, SigmaThreshold 5.
+            ? new NINA.Image.ImageAnalysis.StarDetector()
+            : new NINA.Image.ImageAnalysis.StarDetector {
             MaxStarSize = 6000,
             // The stock 5 is a pixel COUNT, and it is sized for an imaging
             // frame. On a binned guide frame a real star covers 2x2 pixels, so
@@ -749,6 +780,20 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     /// unknown, callers get 0, and <see cref="IsSaturated"/> answers false.
     /// Better to guide on a genuinely clipped star than to refuse a good
     /// one.</summary>
+    /// <summary>Full scale the way the classic method read it: straight from
+    /// the container depth. A 16-bit frame gives 65535, so the 95% test needs a
+    /// peak of 62258 and effectively never fires. That is the point: before
+    /// 2026-09-14 saturation was not a reason to reject a star, and a rig on
+    /// the classic method gets that back.</summary>
+    internal static double ClassicSaturationLevel(int bitDepth)
+        => (1L << Math.Clamp(bitDepth <= 0 ? 16 : bitDepth, 1, 16)) - 1;
+
+    /// <summary>The saturation level for this rig's method.</summary>
+    private double SaturationLevelFor(IImageData img)
+        => IsClassicDetection(Rig)
+            ? ClassicSaturationLevel(img.Properties.BitDepth)
+            : SaturationLevel(img.Properties.BitDepth, img.Properties.SignificantBitDepth, img.Data);
+
     internal static double SaturationLevel(int bitDepth, int significantBits, ushort[] data) {
         double cap = (1L << Math.Clamp(bitDepth <= 0 ? 16 : bitDepth, 1, 16)) - 1;
         ushort max = 0;
@@ -781,7 +826,23 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     /// saturated, on the edge, or simply not there.</summary>
     internal static (NINA.Image.ImageAnalysis.DetectedStar? Star, string? Reason) PickStarNear(
             IReadOnlyList<NINA.Image.ImageAnalysis.DetectedStar> stars, double targetX, double targetY,
-            int width, int height, int margin, double satLevel, double radius) {
+            int width, int height, int margin, double satLevel, double radius,
+            bool classic = false) {
+        // The classic method: nearest interior star that is not saturated,
+        // anywhere in the frame. No radius, so a tap on empty sky still locks
+        // something, and a saturated star is refused rather than warned about.
+        if (classic) {
+            NINA.Image.ImageAnalysis.DetectedStar? old = null;
+            double oldD = double.MaxValue;
+            foreach (var s in stars) {
+                if (s.X < margin || s.Y < margin || s.X > width - margin || s.Y > height - margin) continue;
+                if (IsSaturated(s, satLevel)) continue;
+                double dx = s.X - targetX, dy = s.Y - targetY;
+                double d = dx * dx + dy * dy;
+                if (d < oldD) { oldD = d; old = s; }
+            }
+            return old == null ? (null, "No suitable star near the click.") : (old, null);
+        }
         // The nearest candidate, but not a speck. At the guider's detection
         // threshold a couple of adjacent noise pixels can qualify as a star,
         // and a speck like that sitting a few pixels from the star the

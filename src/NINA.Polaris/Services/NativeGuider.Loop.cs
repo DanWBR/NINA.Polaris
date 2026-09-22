@@ -570,7 +570,7 @@ public sealed partial class NativeGuider {
         var stars = GuideStarDetector().Detect(img.Data, w, h);
 
         int margin = StarEdgeMargin();
-        double satGuard = SaturationLevel(img.Properties.BitDepth, img.Properties.SignificantBitDepth, img.Data);
+        double satGuard = SaturationLevelFor(img);
         double minSep = SearchRegion * 3.0;
 
         var refs = new List<(double x, double y)> { (_lockX, _lockY) };
@@ -714,7 +714,7 @@ public sealed partial class NativeGuider {
             if (img == null) return;
             int w = img.Properties.Width, h = img.Properties.Height;
             var stars = GuideStarDetector().Detect(img.Data, w, h);
-            double satGuard = SaturationLevel(img.Properties.BitDepth, img.Properties.SignificantBitDepth, img.Data);
+            double satGuard = SaturationLevelFor(img);
             var pick = PickReacquireStar(stars, _lockX, _lockY, ReacquireRadiusPx,
                                          w, h, StarEdgeMargin(), satGuard);
             if (pick == null) {

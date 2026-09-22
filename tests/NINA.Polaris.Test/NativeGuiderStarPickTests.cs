@@ -161,6 +161,109 @@ public class NativeGuiderStarPickTests {
         Assert.That(pick.Reason, Does.Contain("saturated"), "with the cost spelled out");
     }
 
+    // ----- the two methods -----
+
+    [Test]
+    public void Mode_DefaultsToTuned() {
+        Assert.That(NativeGuider.IsClassicDetection(null), Is.False);
+        Assert.That(NativeGuider.IsClassicDetection(new EquipmentProfile()), Is.False);
+        Assert.That(NativeGuider.IsClassicDetection(
+            new EquipmentProfile { NativeStarDetectionMode = "tuned" }), Is.False);
+        Assert.That(NativeGuider.IsClassicDetection(
+            new EquipmentProfile { NativeStarDetectionMode = "anything else" }), Is.False);
+    }
+
+    [Test]
+    public void Mode_ClassicIsRecognisedWhateverTheCasing() {
+        foreach (var v in new[] { "classic", "Classic", "CLASSIC" }) {
+            Assert.That(NativeGuider.IsClassicDetection(
+                new EquipmentProfile { NativeStarDetectionMode = v }), Is.True, v);
+        }
+    }
+
+    /// <summary>Classic is the stock detector, exactly as
+    /// <c>new StarDetector()</c> was called before 2026-09-14: 5 pixels of
+    /// area, 5 sigma, blobs up to 200 px.</summary>
+    [Test]
+    public void Detector_ClassicIsTheStockOne() {
+        var stock = new DetectedStarBaseline();
+        var d = NativeGuider.NewGuideStarDetector(
+            new EquipmentProfile { NativeStarDetectionMode = "classic" });
+        Assert.Multiple(() => {
+            Assert.That(d.MinStarSize, Is.EqualTo(stock.MinStarSize));
+            Assert.That(d.MaxStarSize, Is.EqualTo(stock.MaxStarSize));
+            Assert.That(d.SigmaThreshold, Is.EqualTo(stock.SigmaThreshold));
+        });
+        // And it really is different from the tuned one.
+        var tuned = NativeGuider.NewGuideStarDetector(null);
+        Assert.That(d.MinStarSize, Is.Not.EqualTo(tuned.MinStarSize));
+        Assert.That(d.MaxStarSize, Is.Not.EqualTo(tuned.MaxStarSize));
+    }
+
+    /// <summary>The knobs still override, so the method picks the baseline
+    /// rather than locking the operator out of tuning.</summary>
+    [Test]
+    public void Detector_KnobsStillOverrideInClassic() {
+        var d = NativeGuider.NewGuideStarDetector(new EquipmentProfile {
+            NativeStarDetectionMode = "classic",
+            NativeStarMinSize = 3, NativeStarSigma = 4.0
+        });
+        Assert.That(d.MinStarSize, Is.EqualTo(3));
+        Assert.That(d.SigmaThreshold, Is.EqualTo(4.0));
+        Assert.That(d.MaxStarSize, Is.EqualTo(200), "untouched knobs keep the classic baseline");
+    }
+
+    /// <summary>Classic reads full scale straight off the container, so the
+    /// 95% test needs a peak of 62258 and in practice nothing is ever called
+    /// saturated. That is the behaviour being restored: before 2026-09-14
+    /// saturation never rejected a star.</summary>
+    [Test]
+    public void SaturationLevel_ClassicComesFromTheContainerDepth() {
+        Assert.That(NativeGuider.ClassicSaturationLevel(16), Is.EqualTo(65535));
+        Assert.That(NativeGuider.ClassicSaturationLevel(12), Is.EqualTo(4095));
+        Assert.That(NativeGuider.ClassicSaturationLevel(0), Is.EqualTo(65535), "unknown reads as 16-bit");
+        // The star that the tuned method's old bug rejected sails through.
+        Assert.That(NativeGuider.IsSaturated(Star(0, 0, peak: 13314),
+            NativeGuider.ClassicSaturationLevel(16)), Is.False);
+    }
+
+    /// <summary>Classic has no tap radius: it locks the nearest interior star
+    /// anywhere in the frame, which is why a tap on empty sky used to grab
+    /// something far away instead of saying there was nothing there.</summary>
+    [Test]
+    public void Tap_ClassicLocksTheNearestStarHoweverFar() {
+        var stars = new List<DetectedStar> { Star(900, 900, flux: 500) };
+        var tuned = NativeGuider.PickStarNear(stars, 100, 100, 2000, 2000, 20, 0, 60);
+        Assert.That(tuned.Star, Is.Null, "the tuned method keeps the 60 px radius");
+
+        var classic = NativeGuider.PickStarNear(stars, 100, 100, 2000, 2000, 20, 0, 60,
+            classic: true);
+        Assert.That(classic.Star, Is.Not.Null);
+        Assert.That(classic.Star!.X, Is.EqualTo(900));
+        Assert.That(classic.Reason, Is.Null);
+    }
+
+    /// <summary>And classic refuses a saturated star rather than warning, with
+    /// the message it used to use.</summary>
+    [Test]
+    public void Tap_ClassicRefusesASaturatedStar() {
+        var stars = new List<DetectedStar> { Star(300, 300, peak: 4095) };
+        var pick = NativeGuider.PickStarNear(stars, 302, 301, 1000, 1000, 20, 4095, 60,
+            classic: true);
+        Assert.That(pick.Star, Is.Null);
+        Assert.That(pick.Reason, Does.Contain("No suitable star"));
+    }
+
+    /// <summary>The stock detector's own defaults, so the classic test above
+    /// compares against the library rather than against numbers copied into
+    /// the test.</summary>
+    private sealed class DetectedStarBaseline {
+        private readonly NINA.Image.ImageAnalysis.StarDetector _d = new();
+        public int MinStarSize => _d.MinStarSize;
+        public int MaxStarSize => _d.MaxStarSize;
+        public double SigmaThreshold => _d.SigmaThreshold;
+    }
+
     // ----- the operator's knobs -----
 
     /// <summary>The defaults are the guider's, not the imaging detector's.
