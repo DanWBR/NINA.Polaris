@@ -57,4 +57,61 @@ public class NativeCameraIndiGuardTests {
     public void OnlyTheIndiDriverIsTheIndiDeviceItself(string? driver, bool expected) {
         Assert.That(NativeCameraIndiGuard.IsIndiDriver(driver), Is.EqualTo(expected));
     }
+
+    // ----- Collides: only a camera Polaris has OPEN is Polaris's -----
+
+    private static NativeCameraIndiGuard.CameraSlot Slot(
+        string? driver, string? name, bool connected) => new(driver, name, connected);
+
+    [Test]
+    public void AConnectedVendorSdkCameraCollides() {
+        Assert.That(NativeCameraIndiGuard.Collides("ZWO CCD ASI120MM Mini",
+            new[] { Slot("zwo-sdk", "ZWO ASI120MM Mini", true) }), Is.True);
+    }
+
+    [Test]
+    public void TheFieldCase_SelectedButNotConnected_DoesNotCollide() {
+        // Field session 2026-09-21: the guide camera was picked in the guiding
+        // card and never connected, and an external PHD2 was disconnected from
+        // it every time it opened the camera in INDI.
+        Assert.That(NativeCameraIndiGuard.Collides("ZWO CCD ASI120MM Mini",
+            new[] { Slot("zwo-sdk", "ZWO ASI120MM Mini", false) }), Is.False);
+    }
+
+    [Test]
+    public void AConnectedIndiCameraIsTheIndiCopyItself() {
+        Assert.That(NativeCameraIndiGuard.Collides("ZWO CCD ASI120MM Mini",
+            new[] { Slot("indi", "ZWO CCD ASI120MM Mini", true) }), Is.False);
+    }
+
+    [Test]
+    public void OneConnectedSlotAmongOthersIsEnough() {
+        Assert.That(NativeCameraIndiGuard.Collides("ZWO CCD ASI585MC Pro", new[] {
+            Slot("zwo-sdk", "ZWO ASI120MM Mini", false),
+            Slot("zwo-sdk", "ZWO ASI585MC Pro", true),
+            Slot("indi", "SVBONY SV605CC", true),
+        }), Is.True);
+    }
+
+    [Test]
+    public void ACameraNoSlotHoldsDoesNotCollide() {
+        Assert.That(NativeCameraIndiGuard.Collides("SVBONY SV605CC", new[] {
+            Slot("zwo-sdk", "ZWO ASI585MC Pro", true),
+            Slot("zwo-sdk", "ZWO ASI120MM Mini", true),
+        }), Is.False);
+    }
+
+    [TestCase(null)]
+    [TestCase("")]
+    [TestCase("   ")]
+    public void NoDeviceNameNeverCollides(string? device) {
+        Assert.That(NativeCameraIndiGuard.Collides(device,
+            new[] { Slot("zwo-sdk", "ZWO ASI585MC Pro", true) }), Is.False);
+    }
+
+    [Test]
+    public void NoSlotsNeverCollides() {
+        Assert.That(NativeCameraIndiGuard.Collides("ZWO CCD ASI585MC Pro",
+            System.Array.Empty<NativeCameraIndiGuard.CameraSlot>()), Is.False);
+    }
 }

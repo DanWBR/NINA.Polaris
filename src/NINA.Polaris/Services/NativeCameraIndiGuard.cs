@@ -13,6 +13,7 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using System.Text;
+using NINA.Image.Interfaces;
 using NINA.INDI.Client;
 using NINA.INDI.Protocol;
 
@@ -36,18 +37,29 @@ namespace NINA.Polaris.Services;
 /// it sees it connect in INDI, and <see cref="IndiDriverWatchdogService"/> asks
 /// <see cref="IsNativelyDriven"/> before reconnecting a dropped device, since
 /// its whole job is to put devices back and it would otherwise undo this.
+///
+/// <para>Two rules keep it from claiming a camera nobody in Polaris is using.
+/// A camera is only Polaris's while it is CONNECTED here: one merely picked in
+/// a card is not open, and treating that as a conflict kept an external PHD2
+/// from ever connecting the guide camera. And the guide camera belongs to PHD2,
+/// not to Polaris, whenever the rig's <c>GuiderDriver</c> is <c>phd2</c>: if
+/// Polaris still holds it when PHD2 opens it, Polaris closes its own handle
+/// instead of taking the camera away from the guider the operator chose.</para>
 /// </summary>
 public sealed class NativeCameraIndiGuard : IHostedService {
     private readonly IndiClient _indi;
     private readonly EquipmentManager _equipment;
+    private readonly ProfileService _profiles;
     private readonly NotificationService _notify;
     private readonly ILogger<NativeCameraIndiGuard> _logger;
 
     public NativeCameraIndiGuard(IndiClient indi, EquipmentManager equipment,
+                                 ProfileService profiles,
                                  NotificationService notify,
                                  ILogger<NativeCameraIndiGuard> logger) {
         _indi = indi;
         _equipment = equipment;
+        _profiles = profiles;
         _notify = notify;
         _logger = logger;
     }
@@ -66,6 +78,15 @@ public sealed class NativeCameraIndiGuard : IHostedService {
         if (!string.Equals(prop.Name, "CONNECTION", StringComparison.OrdinalIgnoreCase)) return;
         if (prop is not IndiSwitchProperty sw) return;
         if (!sw.Values.TryGetValue("CONNECT", out var connected) || !connected) return;
+
+        // The operator chose PHD2 as this rig's guider, and the device that just
+        // connected in INDI is the guide camera Polaris still holds open: the
+        // handle to drop is Polaris's own.
+        var guideCam = _equipment.GuideCamera;
+        if (guideCam != null && PhD2OwnsTheGuideCamera && IsOpenInTheGuideSlot(device)) {
+            ReleaseGuideCamera(device, guideCam);
+            return;
+        }
         if (!IsNativelyDriven(device)) return;
 
         // Fire and forget: this runs on the INDI reader thread, and the
@@ -76,8 +97,9 @@ public sealed class NativeCameraIndiGuard : IHostedService {
                     "INDI '{Device}' is the same camera Polaris drives through its vendor SDK; " +
                     "disconnecting it in INDI so the two do not fight over the USB device", device);
                 _notify.Push("warn",
-                    $"{device} was also connected in INDI. Polaris drives it through the vendor " +
-                    "driver, so the INDI copy was disconnected to keep exposures working.", 9000);
+                    $"{device} was also connected in INDI. Polaris has it open through the vendor "
+                    + "driver, so the INDI copy was disconnected to keep exposures working. "
+                    + "Disconnect it in Polaris first to let another program use it.", 9000);
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
                 await _indi.DisconnectDeviceAsync(device, cts.Token);
             } catch (Exception ex) {
@@ -86,18 +108,84 @@ public sealed class NativeCameraIndiGuard : IHostedService {
         });
     }
 
+    /// <summary>Hand the guide camera over: PHD2 guides this rig, so Polaris
+    /// closes its own handle instead of disconnecting the INDI copy PHD2 just
+    /// opened. Same fire-and-forget shape as the disconnect above, and for the
+    /// same reason: this runs on the INDI reader thread.</summary>
+    private void ReleaseGuideCamera(string device, ICamera cam) {
+        _ = Task.Run(async () => {
+            try {
+                _logger.LogWarning(
+                    "INDI '{Device}' is the guide camera Polaris holds through '{Driver}', but this "
+                    + "rig guides with PHD2; releasing it here so PHD2 can drive it",
+                    device, _equipment.GuideCameraDriver);
+                _notify.Push("warn",
+                    $"{device} was opened in INDI while Polaris held it through the vendor driver. "
+                    + "This rig guides with PHD2, so Polaris released the guide camera.", 9000);
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+                await cam.DisconnectAsync(cts.Token);
+            } catch (Exception ex) {
+                _logger.LogWarning(ex, "Could not release the guide camera '{Device}'", device);
+            }
+        });
+    }
+
     /// <summary>True when this INDI device is a camera the rig currently drives
     /// through a vendor SDK, so INDI must not hold it open.</summary>
-    public bool IsNativelyDriven(string indiDevice) {
+    public bool IsNativelyDriven(string indiDevice) => Collides(indiDevice, CurrentSlots());
+
+    /// <summary>The camera slots Polaris owns right now. The guide slot is left
+    /// out while PHD2 guides the rig: that camera is PHD2's to open, and the
+    /// watchdog must stay free to put its INDI copy back.</summary>
+    private IEnumerable<CameraSlot> CurrentSlots() {
+        yield return SlotOf(_equipment.CameraDriver, _equipment.Camera);
+        if (!PhD2OwnsTheGuideCamera)
+            yield return SlotOf(_equipment.GuideCameraDriver, _equipment.GuideCamera);
+        yield return SlotOf(_equipment.AuxCameraDriver, _equipment.AuxCamera);
+    }
+
+    /// <summary>Is this INDI device the camera sitting open in the guide slot
+    /// through a vendor SDK? Asked only in PHD2 mode, where
+    /// <see cref="CurrentSlots"/> no longer reports that slot.</summary>
+    private bool IsOpenInTheGuideSlot(string indiDevice) =>
+        Collides(indiDevice, new[] { SlotOf(_equipment.GuideCameraDriver, _equipment.GuideCamera) });
+
+    /// <summary>True when the rig hands guiding to the external PHD2 process,
+    /// which makes the guide camera PHD2's to open. Mirrors
+    /// <see cref="ActiveGuiderProvider"/>: only an explicit <c>phd2</c> counts,
+    /// so a rig with the field unset stays native.</summary>
+    private bool PhD2OwnsTheGuideCamera {
+        get {
+            try {
+                return string.Equals(_profiles.ActiveEquipmentProfile.GuiderDriver, "phd2",
+                    StringComparison.OrdinalIgnoreCase);
+            } catch {
+                return false;   // no profile yet: nothing has been handed to PHD2
+            }
+        }
+    }
+
+    private static CameraSlot SlotOf(string? driver, ICamera? cam) =>
+        new(driver, cam?.DeviceName, cam is { IsConnected: true });
+
+    /// <summary>One camera slot as the guard sees it: the backend that drives
+    /// it, the name the device reports, and whether Polaris has it OPEN.</summary>
+    public readonly record struct CameraSlot(string? Driver, string? DeviceName, bool Connected);
+
+    /// <summary>Does an INDI device that just connected collide with a camera
+    /// Polaris holds open through a vendor SDK?
+    ///
+    /// <para>Connected is the whole point. A camera only picked in a card is
+    /// not open, and counting it as a conflict cost a field session: an
+    /// external PHD2 was kicked off the guide camera every time it connected,
+    /// merely because that camera was still selected in the guiding card.</para>
+    /// </summary>
+    public static bool Collides(string? indiDevice, IEnumerable<CameraSlot> slots) {
         if (string.IsNullOrWhiteSpace(indiDevice)) return false;
-        foreach (var (driver, cam) in new[] {
-                     (_equipment.CameraDriver, _equipment.Camera),
-                     (_equipment.GuideCameraDriver, _equipment.GuideCamera),
-                     (_equipment.AuxCameraDriver, _equipment.AuxCamera),
-                 }) {
-            if (cam == null) continue;
-            if (IsIndiDriver(driver)) continue;                 // that one IS the INDI copy
-            if (SameCamera(indiDevice, cam.DeviceName)) return true;
+        foreach (var slot in slots) {
+            if (!slot.Connected) continue;                      // selected is not open
+            if (IsIndiDriver(slot.Driver)) continue;            // that one IS the INDI copy
+            if (SameCamera(indiDevice, slot.DeviceName)) return true;
         }
         return false;
     }
