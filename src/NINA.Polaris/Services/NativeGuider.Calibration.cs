@@ -131,8 +131,15 @@ public sealed partial class NativeGuider {
                 _calDetails = BuildCalibrationDetails(process, raPts, decPts, mount);
                 PersistCalibration(process, raPts, decPts);
                 _logger.LogInformation(
-                    "Native calibration complete: xAngle={Xa:F3} xRate={Xr:F5} yAngle={Ya:F3} yRate={Yr:F5}",
-                    _calibration.XAngle, _calibration.XRate, _calibration.YAngle, _calibration.YRate);
+                    "Native calibration complete: xAngle={Xa:F3} xRate={Xr:F5} yAngle={Ya:F3} yRate={Yr:F5}, "
+                    + "RA axis {XaDeg:F1} deg, Dec axis {YaDeg:F1} deg, {Axes:F1} deg apart "
+                    + "(orthogonality error {Ortho:F1} deg), backlash {Backlash} ms",
+                    _calibration.XAngle, _calibration.XRate, _calibration.YAngle, _calibration.YRate,
+                    _calibration.XAngle * 180.0 / Math.PI, _calibration.YAngle * 180.0 / Math.PI,
+                    Math.Abs(NINA.Guider.Portable.MountCoordTransform.NormAngleDeg(
+                        (_calibration.XAngle - _calibration.YAngle) * 180.0 / Math.PI)),
+                    _calibration.OrthogonalityErrorDeg, _calibration.BacklashMs);
+                WarnIfSkewed(_calibration);
             } else {
                 RaiseAlert("Calibration did not complete.");
             }
@@ -152,6 +159,32 @@ public sealed partial class NativeGuider {
     /// <summary>Assemble the "Review Calibration" snapshot (rates in px/sec +
     /// arcsec/sec, angles, steps, geometry, and the measured RA/Dec plot
     /// points) shown in the GUIDE calibration panel.</summary>
+    /// <summary>RA and Dec are orthogonal on the sky, so the two axes a
+    /// calibration measures have to come out about 90 degrees apart on the
+    /// sensor. When they do not, the transform decomposes every error into the
+    /// wrong pair of pulses and the guider fights itself: corrections leak from
+    /// one axis into the other, and the graph looks like bad seeing on a night
+    /// that is fine.
+    ///
+    /// The number was already computed and shown in Calibration details, and
+    /// nothing said a word about it. A calibration measured 26 degrees off
+    /// orthogonal was accepted in silence and guided at 4 arcsec RMS with 15
+    /// arcsec peaks. PHD2 draws the line at 10 degrees, and so do we: the
+    /// calibration is kept, because refusing it would leave the operator with
+    /// nothing, but it says what is wrong and what usually causes it.</summary>
+    internal const double MaxOrthogonalityErrorDeg = 10.0;
+
+    private void WarnIfSkewed(GuideCalibration cal) {
+        double err = cal.OrthogonalityErrorDeg;
+        if (err <= MaxOrthogonalityErrorDeg) return;
+        RaiseAlert($"Calibration is {err:F0} deg from orthogonal (the RA and Dec axes came out "
+            + $"{90.0 - err:F0} deg apart instead of 90). Guiding with it will cross-talk between "
+            + "the axes and the graph will look like bad seeing. Usually the Dec axis: backlash "
+            + $"(measured {cal.BacklashMs:F0} ms here), a cable snag, or the mount still "
+            + "settling when the Dec phase started. Recalibrate on a star nearer the meridian, "
+            + "and if it stays skewed try Dec guide mode North only or South only.");
+    }
+
     private object BuildCalibrationDetails(CalibrationProcess process,
             List<double[]> raPts, List<double[]> decPts, ITelescope mount) {
         var cal = _calibration;

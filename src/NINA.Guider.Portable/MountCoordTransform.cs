@@ -46,9 +46,23 @@ public readonly record struct GuideCalibration(
     public static readonly GuideCalibration Invalid =
         new(0, 0, 0, 0, double.NaN, false);
 
-    /// <summary>Orthogonality error in degrees (ideal axes are 90 deg apart).</summary>
-    public double OrthogonalityErrorDeg =>
-        Math.Abs(MountCoordTransform.NormAngleDeg((XAngle - YAngle) * 180.0 / Math.PI) - 90.0);
+    /// <summary>How far the two measured axes are from perpendicular, in
+    /// degrees. RA and Dec are orthogonal on the sky, so a sound calibration
+    /// comes out near 0 here.
+    ///
+    /// The separation has to be taken unsigned before comparing it with 90.
+    /// Subtracting 90 from the SIGNED difference, as this did, reported 180 for
+    /// a perfectly perpendicular pair whenever the difference landed on -90
+    /// instead of +90, which is half of all calibrations: the number shown in
+    /// Calibration details was meaningless in those cases, and it only looked
+    /// right on the skewed calibration that led to reading it at all.</summary>
+    public double OrthogonalityErrorDeg {
+        get {
+            double sep = Math.Abs(MountCoordTransform.NormAngleDeg(
+                (XAngle - YAngle) * 180.0 / Math.PI));
+            return Math.Abs(sep - 90.0);
+        }
+    }
 }
 
 /// <summary>Pure camera<->mount transforms + pulse-duration math.</summary>
