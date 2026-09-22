@@ -4995,8 +4995,8 @@
   "Reset to defaults": "Revenir aux valeurs par défaut",
   "Star selection reset to the defaults": "Sélection des étoiles revenue aux valeurs par défaut",
   "The detector found no stars in the last frame. Lower the sigma or the minimum size.": "Le détecteur n'a trouvé aucune étoile sur la dernière image. Baissez le sigma ou la taille minimale.",
-  "Tuned for guiding (default)": "Réglé pour le guidage (par défaut)",
-  "Classic (before 14 Sep 2026)": "Classique (avant le 14/09/2026)",
   "Star selection: classic method": "Sélection des étoiles : méthode classique",
-  "Star selection: tuned method": "Sélection des étoiles : méthode réglée"
+  "Star selection: tuned method": "Sélection des étoiles : méthode réglée",
+  "Tuned for guiding": "Réglé pour le guidage",
+  "Classic": "Classique"
 }

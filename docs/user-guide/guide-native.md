@@ -144,10 +144,10 @@ detector's knobs so you can argue with it. Leave a field blank for the default;
 values are stored per rig, and **Reset to defaults** clears all of them.
 
 - **Method** - which star-selection method the rig uses.
-  - *Tuned for guiding* (default): the detector sized for a guide frame
+  - *Tuned for guiding* (the default): the detector sized for a guide frame
     described below, saturation treated as a warning rather than a refusal, and
     a tap that locks the star within the tap radius of your finger.
-  - *Classic (before 14 Sep 2026)*: the behaviour from before that date. The
+  - *Classic*: the behaviour from before 14 September 2026. The
     stock detector (5 px of area, 5 sigma, blobs up to 200 px), full scale read
     straight off the container depth so no star is ever treated as saturated,
     and a tap that locks the nearest star anywhere in the frame with no radius

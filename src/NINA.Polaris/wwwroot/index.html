@@ -5595,9 +5595,9 @@
                         <span x-text="$t('Method')"></span>
                         <select :value="starSel.mode"
                                 @change="setStarSelMode($event.target.value)"
-                                title="Tuned is the current method: a detector sized for a guide frame (2 px of area, 3.5 sigma), saturation treated as a warning, and a tap that locks the star within 60 px of your finger. Classic is the behaviour from before 14 September 2026: the stock detector (5 px of area, 5 sigma, blobs up to 200 px), no star ever treated as saturated, and a tap that locks the nearest star anywhere in the frame. The numeric fields below still override whichever method you pick.">
-                            <option value="tuned" x-text="$t('Tuned for guiding (default)')"></option>
-                            <option value="classic" x-text="$t('Classic (before 14 Sep 2026)')"></option>
+                                title="Tuned: a detector sized for a guide frame (2 px of area, 3.5 sigma), saturation treated as a warning, and a tap that locks the star within the tap radius. Classic: the stock detector (5 px of area, 5 sigma, blobs up to 200 px), no star ever treated as saturated, and a tap that locks the nearest star anywhere in the frame. The numeric fields below still override whichever method you pick.">
+                            <option value="tuned" x-text="$t('Tuned for guiding')"></option>
+                            <option value="classic" x-text="$t('Classic')"></option>
                         </select>
                     </label>
                     <div class="starsel-grid">
