@@ -211,6 +211,7 @@ public static class EquipmentEndpoints {
                 if (update.NativeStarEdgeMarginPx.HasValue) r.NativeStarEdgeMarginPx = update.NativeStarEdgeMarginPx;
                 if (update.NativeStarTapRadiusPx.HasValue) r.NativeStarTapRadiusPx = update.NativeStarTapRadiusPx;
                 if (update.NativeStarAllowSaturated.HasValue) r.NativeStarAllowSaturated = update.NativeStarAllowSaturated;
+                if (update.NativeStarDetectionMode != null) r.NativeStarDetectionMode = update.NativeStarDetectionMode;
                 if (update.DefaultBinning.HasValue) r.DefaultBinning = update.DefaultBinning.Value;
                 // FIELD-2: per-rig Bayer mosaic override. Treat empty /
                 // whitespace as null ("Auto") so the UI <select> with

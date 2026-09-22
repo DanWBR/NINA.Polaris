@@ -4992,5 +4992,9 @@
   "Use saturated stars": "Gesättigte Sterne verwenden",
   "Reset to defaults": "Auf Standard zurücksetzen",
   "Star selection reset to the defaults": "Sternauswahl auf Standard zurückgesetzt",
-  "The detector found no stars in the last frame. Lower the sigma or the minimum size.": "Der Detektor hat im letzten Bild keine Sterne gefunden. Senken Sie das Sigma oder die Mindestgröße."
+  "The detector found no stars in the last frame. Lower the sigma or the minimum size.": "Der Detektor hat im letzten Bild keine Sterne gefunden. Senken Sie das Sigma oder die Mindestgröße.",
+  "Star selection: classic method": "Sternauswahl: klassische Methode",
+  "Star selection: tuned method": "Sternauswahl: abgestimmte Methode",
+  "Tuned for guiding": "Auf Guiding abgestimmt",
+  "Classic": "Klassisch"
 }

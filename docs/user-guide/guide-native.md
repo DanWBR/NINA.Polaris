@@ -143,6 +143,23 @@ stars in. The **Star selection** group in the GUIDE sidebar exposes the
 detector's knobs so you can argue with it. Leave a field blank for the default;
 values are stored per rig, and **Reset to defaults** clears all of them.
 
+- **Method** - which star-selection method the rig uses.
+  - *Tuned for guiding* (the default): the detector sized for a guide frame
+    described below, saturation treated as a warning rather than a refusal, and
+    a tap that locks the star within the tap radius of your finger.
+  - *Classic*: the behaviour from before 14 September 2026. The
+    stock detector (5 px of area, 5 sigma, blobs up to 200 px), full scale read
+    straight off the container depth so no star is ever treated as saturated,
+    and a tap that locks the nearest star anywhere in the frame with no radius
+    and no speck guard.
+
+  The change on 14 September 2026 made the guider read full scale from the
+  frame data, and on cameras that under-report their bit depth that marked the
+  brightest star in every frame as saturated and refused it. That is fixed, but
+  the method is kept selectable: if a rig guided better the old way, pick
+  *Classic* instead of downgrading the whole application. The numeric fields
+  below still override whichever method is selected, and a blank field means
+  that method's own default.
 - **Detection sigma** (default 3.5) - how far above the frame's noise floor a
   pixel has to be to count, measured in robust standard deviations
   (median + n x MAD). Lower it to find fainter stars, at the cost of picking up

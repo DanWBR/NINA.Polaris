@@ -4373,5 +4373,10 @@
   "Use saturated stars": "",
   "Reset to defaults": "",
   "Star selection reset to the defaults": "",
-  "The detector found no stars in the last frame. Lower the sigma or the minimum size.": ""
+  "The detector found no stars in the last frame. Lower the sigma or the minimum size.": "",
+  "Method": "",
+  "Star selection: classic method": "",
+  "Star selection: tuned method": "",
+  "Tuned for guiding": "",
+  "Classic": ""
 }

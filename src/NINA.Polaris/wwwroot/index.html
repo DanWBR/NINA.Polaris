@@ -5771,6 +5771,19 @@
                          x-text="$t('Star selection')"></div>
                     <p class="hint" x-show="guider.starSelection"
                        x-text="guider.starSelection"></p>
+                    <!-- Which method finds and picks the star. Classic is the
+                         behaviour from before the 14 September change, kept so
+                         a rig that guided better with it has a way back
+                         without downgrading the whole application. -->
+                    <label class="starsel-mode">
+                        <span x-text="$t('Method')"></span>
+                        <select :value="starSel.mode"
+                                @change="setStarSelMode($event.target.value)"
+                                title="Tuned: a detector sized for a guide frame (2 px of area, 3.5 sigma), saturation treated as a warning, and a tap that locks the star within the tap radius. Classic: the stock detector (5 px of area, 5 sigma, blobs up to 200 px), no star ever treated as saturated, and a tap that locks the nearest star anywhere in the frame. The numeric fields below still override whichever method you pick.">
+                            <option value="tuned" x-text="$t('Tuned for guiding')"></option>
+                            <option value="classic" x-text="$t('Classic')"></option>
+                        </select>
+                    </label>
                     <div class="starsel-grid">
                         <label><span x-text="$t('Detection sigma')"></span>
                             <input type="number" min="1" max="20" step="0.5" class="input-sm"

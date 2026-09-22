@@ -1016,6 +1016,11 @@ public class EquipmentProfile {
     /// on stops avoiding them in the first place.</summary>
     public bool? NativeStarAllowSaturated { get; set; }
 
+    /// <summary>Star-selection method: null/"tuned" (default) or "classic",
+    /// the behaviour from before 2026-09-14. See
+    /// NativeGuider.DetectionModeClassic.</summary>
+    public string? NativeStarDetectionMode { get; set; }
+
     /// <summary>Guide-camera gain for native guiding. 0 = leave the camera's
     /// current/default gain. Default 40 (a sane mid-gain for common guide cams).</summary>
     public int NativeGuideGain { get; set; } = 40;

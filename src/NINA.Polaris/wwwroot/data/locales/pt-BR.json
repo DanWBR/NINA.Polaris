@@ -4992,5 +4992,9 @@
   "Use saturated stars": "Usar estrelas saturadas",
   "Reset to defaults": "Voltar ao padrão",
   "Star selection reset to the defaults": "Seleção de estrelas de volta ao padrão",
-  "The detector found no stars in the last frame. Lower the sigma or the minimum size.": "O detector não achou estrelas no último frame. Baixe o sigma ou o tamanho mínimo."
+  "The detector found no stars in the last frame. Lower the sigma or the minimum size.": "O detector não achou estrelas no último frame. Baixe o sigma ou o tamanho mínimo.",
+  "Star selection: classic method": "Seleção de estrelas: método clássico",
+  "Star selection: tuned method": "Seleção de estrelas: método ajustado",
+  "Tuned for guiding": "Ajustado para guiagem",
+  "Classic": "Clássico"
 }
