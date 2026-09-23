@@ -459,6 +459,10 @@ builder.Services.AddSingleton<AutoFocusService>();
 // Per-filter focus memory: learns the optimal focuser position per filter from
 // autofocus runs and reuses a still-valid point on a manual filter change.
 builder.Services.AddSingleton<NINA.Polaris.Services.Focus.FilterFocusMemoryService>();
+// Per-filter focus run (FOCUS tab). Singleton because it HOLDS the measured
+// points until the operator applies them: a scoped instance would throw away a
+// sweep between two requests.
+builder.Services.AddSingleton<NINA.Polaris.Services.Focus.FilterFocusSweepService>();
 // UPDGATE: one place that knows whether the host is mid-session, so an
 // action that restarts the process can refuse instead of finding out.
 builder.Services.AddSingleton<HostActivityService>();
@@ -1455,6 +1459,7 @@ app.MapUiStateEndpoints();
 // /api/focus group as future manual-assist sub-features (donut
 // metric, gaussian FWHM fit, ...).
 app.MapFocusEndpoints();
+app.MapFocusSweepEndpoints();
 app.MapMeridianFlipEndpoints();
 // FIELD4-4: PREVIEW-tab one-shot plate solve.
 app.MapPlateSolveEndpoints();

@@ -385,13 +385,58 @@ auto-focus run instead of moving to a guess. The memory is held on the
 server per rig, so it survives reconnects and a browser refresh, and a
 partial rig save never wipes it.
 
-Two habits get the most out of it: run a real auto-focus on each filter
-once at the start of a session so the memory is seeded from that
-night's conditions, and keep the auto re-focus temperature trigger on
-(@sec-live-stacking) so a long drift still forces a genuine pass rather
-than riding an increasingly stale offset.
+Two habits get the most out of it: seed the memory from that night's
+conditions with a real auto-focus on each filter, which the **Filter
+offsets** sub-tab below does in one pass, and keep the auto re-focus
+temperature trigger on (@sec-live-stacking) so a long drift still
+forces a genuine pass rather than riding an increasingly stale offset.
+
+## Measuring every filter in one pass
+
+Seeding that memory by hand is a chore: switch the filter, run
+auto-focus, read the position, work out the delta against the reference
+filter, type it into the rig, repeat. The **Filter offsets** sub-tab of
+the FOCUS tab does the whole set instead, and it is the thing to run
+before the night starts.
+
+It lists the wheel's filters with every one ticked, so you can drop a
+dark slot or a filter you will not use tonight. Start the run and it
+walks them in wheel order: switch the filter, run the same auto-focus
+your rig is already configured for, record where it landed. A filter
+whose auto-focus fails is tried once more, then recorded as failed with
+the reason and the run carries on, so one bad filter does not cost you
+the other five. The button re-runs just those afterwards. The V-curve
+for the filter being measured is live on the Auto V-curve sub-tab the
+whole time.
+
+Nothing is written to the rig while it runs. The table fills in with
+each filter's position, HFR, fit quality and focuser temperature, plus
+the offset it derives against the reference filter, and **Apply to
+rig** is what stores it. That is deliberate: a marginal curve should
+not land in your offsets table because a cloud went past. A row whose
+fit is worse than the quality gate is marked and left unticked, so
+accepting it is a decision rather than an oversight.
+
+The reference filter matters more than it looks. Offsets are stored
+relative to it, and Apply saves your choice as the rig's reference so
+the stored table is the one you approved. Leave it on Automatic and it
+uses the rig's existing reference, a filter named L, or the first
+filter measured, in that order. The run also ends on that filter, at
+the position it measured for it, so the rig is ready to start imaging.
+
+One caveat worth knowing before a long set: offsets are only derived
+between points measured at a comparable temperature. Eight filters is
+around half an hour, and on a cooling night the last of them can end
+up outside the tolerance window, in which case the offset column shows
+the delta with a warning triangle and Apply will not store that one.
+Re-run those filters rather than forcing the number in.
 
 ## Common pitfalls
+
+**The offset column shows a warning triangle.** That filter was
+measured too far from the reference filter's temperature, so the offset
+will not be stored. Re-run that filter and it lands in the same
+thermal window as the rest.
 
 **HFR comes back as 0.** No stars were detected. Increase the
 exposure, and check that you are actually pointed at the sky rather

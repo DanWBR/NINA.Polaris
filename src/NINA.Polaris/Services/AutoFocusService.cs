@@ -426,7 +426,7 @@ public class AutoFocusService {
                 // active filter (MAIN train only) + refresh the learned relative
                 // offsets, so a later filter change can reuse it. Best-effort —
                 // a memory write must never fail an otherwise-good autofocus.
-                if (source == "main") {
+                if (source == "main" && o.RecordFilterMemory) {
                     try {
                         var rig = _profiles.ActiveEquipmentProfile;
                         var wheel = _equip.FilterWheel;
@@ -1269,6 +1269,14 @@ public class AutoFocusRequest {
     public int? BacklashOut { get; set; }
     /// <summary>OVERSHOOT | ABSOLUTE.</summary>
     public string? BacklashModel { get; set; }
+
+    /// <summary>Whether a successful run records its optimum into the rig's
+    /// per-filter focus memory (and refreshes the derived offsets). Null keeps
+    /// the normal behaviour, which is to record. The per-filter sweep passes
+    /// false: it drives one run per filter and holds every result until the
+    /// operator approves them, so a run in the middle of a sweep must not
+    /// change the rig on its own.</summary>
+    public bool? RecordFilterMemory { get; set; }
 }
 
 /// <summary>Fully-resolved run parameters (request overrides applied on top
@@ -1316,6 +1324,10 @@ public sealed record AutoFocusRunOptions {
     /// software crop in MeasureFrame doesn't crop twice.</summary>
     public bool HardwareRoiActive { get; set; }
 
+    /// <summary>Record the optimum into the rig's per-filter focus memory when
+    /// the run succeeds. False only for a run the per-filter sweep owns.</summary>
+    public bool RecordFilterMemory { get; init; } = true;
+
     public static AutoFocusRunOptions Resolve(AutoFocusRequest? req, AutoFocusSettings? profile) {
         var p = profile ?? new AutoFocusSettings();
 
@@ -1354,7 +1366,8 @@ public sealed record AutoFocusRunOptions {
             RefineNearVertex = req?.RefineNearVertex ?? p.RefineNearVertex,
             RefinePoints = Math.Clamp(req?.RefinePoints ?? p.RefinePoints, 3, 8),
             RefineStepSize = Math.Max(0, req?.RefineStepSize ?? p.RefineStepSize),
-            TakeConfirmationFrame = req?.TakeConfirmationFrame ?? true
+            TakeConfirmationFrame = req?.TakeConfirmationFrame ?? true,
+            RecordFilterMemory = req?.RecordFilterMemory ?? true
         };
     }
 }

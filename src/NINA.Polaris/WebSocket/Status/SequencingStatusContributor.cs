@@ -19,24 +19,26 @@ namespace NINA.Polaris.WebSocket.Status;
 /// <summary>
 /// Sequences, plans, and the routines that run inside them.
 ///
-/// Blocks owned: sequence, advSeq, plan, autoFocus, meridianFlip, flatWizard.
+/// Blocks owned: sequence, advSeq, plan, autoFocus, meridianFlip, flatWizard, focusSweep.
 /// </summary>
 public sealed class SequencingStatusContributor : IStatusContributor {
     private readonly NINA.Polaris.Services.Sequencer.AdvancedSequenceEngine _advEngine;
     private readonly AutoFocusService _autoFocus;
     private readonly EquipmentManager _equip;
     private readonly FlatWizardService _flatWizard;
+    private readonly NINA.Polaris.Services.Focus.FilterFocusSweepService _focusSweep;
     private readonly MeridianFlipService _meridianFlip;
     private readonly NINA.Polaris.Services.Plan.PlanRunnerService _planRunner;
     private readonly ProfileService _profile;
     private readonly MountSafetyGuardService _safetyGuard;
     private readonly SequenceEngine _sequence;
 
-    public SequencingStatusContributor(NINA.Polaris.Services.Sequencer.AdvancedSequenceEngine advEngine, AutoFocusService autoFocus, EquipmentManager equip, FlatWizardService flatWizard, MeridianFlipService meridianFlip, NINA.Polaris.Services.Plan.PlanRunnerService planRunner, ProfileService profile, MountSafetyGuardService safetyGuard, SequenceEngine sequence) {
+    public SequencingStatusContributor(NINA.Polaris.Services.Sequencer.AdvancedSequenceEngine advEngine, AutoFocusService autoFocus, EquipmentManager equip, FlatWizardService flatWizard, NINA.Polaris.Services.Focus.FilterFocusSweepService focusSweep, MeridianFlipService meridianFlip, NINA.Polaris.Services.Plan.PlanRunnerService planRunner, ProfileService profile, MountSafetyGuardService safetyGuard, SequenceEngine sequence) {
         _advEngine = advEngine;
         _autoFocus = autoFocus;
         _equip = equip;
         _flatWizard = flatWizard;
+        _focusSweep = focusSweep;
         _meridianFlip = meridianFlip;
         _planRunner = planRunner;
         _profile = profile;
@@ -44,7 +46,7 @@ public sealed class SequencingStatusContributor : IStatusContributor {
         _sequence = sequence;
     }
 
-    public IReadOnlyCollection<string> Keys { get; } = new[] { "sequence", "advSeq", "plan", "autoFocus", "meridianFlip", "flatWizard" };
+    public IReadOnlyCollection<string> Keys { get; } = new[] { "sequence", "advSeq", "plan", "autoFocus", "meridianFlip", "flatWizard", "focusSweep" };
 
     public void Contribute(StatusTick tick) {
         var advEngine = _advEngine;
@@ -196,6 +198,31 @@ public sealed class SequencingStatusContributor : IStatusContributor {
                         totalFramesPerFilter = flatWizard.Progress.TotalFramesPerFilter,
                         framesCaptured = flatWizard.Progress.FramesCaptured,
                         filterResults = flatWizard.Progress.FilterResults
+                    }
+            };
+
+            // Per-filter focus run. The autoFocus block above keeps flowing
+            // while this runs, which is what animates the V-curve on the
+            // neighbouring sub-tab for free.
+            var sweep = _focusSweep;
+            tick.Blocks["focusSweep"] = new {
+                state = sweep.State.ToString().ToLowerInvariant(),
+                lastError = sweep.LastError,
+                hasPendingResults = sweep.HasPendingResults,
+                appliedAt = sweep.AppliedAt,
+                progress = sweep.State == NINA.Polaris.Services.Focus.FilterFocusSweepState.Idle
+                           && sweep.Progress.TotalFilters == 0
+                    ? null
+                    : (object)new {
+                        startedAt = sweep.Progress.StartedAt,
+                        totalFilters = sweep.Progress.TotalFilters,
+                        currentFilterIndex = sweep.Progress.CurrentFilterIndex,
+                        currentFilter = sweep.Progress.CurrentFilter,
+                        phase = sweep.Progress.Phase,
+                        attempt = sweep.Progress.Attempt,
+                        filters = sweep.Progress.Filters,
+                        referenceFilter = sweep.Progress.ReferenceFilter,
+                        results = sweep.Progress.Results
                     }
             };
 

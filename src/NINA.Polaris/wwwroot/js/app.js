@@ -690,6 +690,18 @@ function ninaApp() {
         // hardware (no motor → assist).
         focusTab: 'assist',
 
+        // Filter offsets sub-tab: one autofocus per filter, held here until
+        // the operator applies it. state/phase/results mirror the focusSweep
+        // WS block; selectedFilters / applyFilters / reference are local
+        // picks, so a reconnect never loses what the operator ticked.
+        focusSweep: {
+            state: 'idle', phase: 'idle', lastError: null,
+            startedAt: null, totalFilters: 0, currentFilterIndex: -1,
+            currentFilter: '', attempt: 0, referenceFilter: null,
+            results: [], hasPendingResults: false, appliedAt: null,
+            selectedFilters: [], applyFilters: [], reference: '', busy: false
+        },
+
         // MFOC-1: rolling state for the Manual Assist loop.
         // Samples is a circular buffer of the last 60 captures; each
         // entry is { t, hfr, fwhm, starCount, laplacian }.
@@ -27558,6 +27570,144 @@ function ninaApp() {
             }
         },
 
+        // ----- FOCUS > Filter offsets -----
+
+        // Seed the pick with every filter (decision: all selected by default)
+        // and recover any results the host is still holding, so a browser
+        // reload mid-session does not look like the run never happened.
+        async focusSweepOnTabEnter() {
+            const filters = this.filterWheel.filters || [];
+            if (this.focusSweep.selectedFilters.length === 0)
+                this.focusSweep.selectedFilters = [...filters];
+            if (!this.focusSweep.reference) {
+                const rig = this.rigs?.find(r => r.id === this.activeRigId);
+                this.focusSweep.reference = rig?.autoFocus?.filterOffsetReference || '';
+            }
+            try {
+                const r = await this.apiGet('/api/focus-sweep/result');
+                if (r) {
+                    this.focusSweep.results = r.results || [];
+                    this.focusSweep.hasPendingResults = !!r.hasPendingResults;
+                    this.focusSweep.appliedAt = r.appliedAt || null;
+                    this.focusSweep.referenceFilter = r.reference || null;
+                    this._focusSweepSyncApplyPicks();
+                }
+            } catch (e) { /* nothing measured yet */ }
+        },
+        focusSweepToggleFilter(f) {
+            const i = this.focusSweep.selectedFilters.indexOf(f);
+            if (i >= 0) this.focusSweep.selectedFilters.splice(i, 1);
+            else this.focusSweep.selectedFilters.push(f);
+        },
+        focusSweepSelectAll() {
+            this.focusSweep.selectedFilters = [...(this.filterWheel.filters || [])];
+        },
+        focusSweepClearFilters() {
+            this.focusSweep.selectedFilters = [];
+        },
+        focusSweepToggleApply(f) {
+            const i = this.focusSweep.applyFilters.indexOf(f);
+            if (i >= 0) this.focusSweep.applyFilters.splice(i, 1);
+            else this.focusSweep.applyFilters.push(f);
+        },
+        // Every measured filter is ticked for Apply, except one whose fit is
+        // below the quality gate: a marginal curve should not reach the rig by
+        // inertia, so it has to be ticked by hand.
+        _focusSweepSyncApplyPicks() {
+            this.focusSweep.applyFilters = (this.focusSweep.results || [])
+                .filter(r => r.measured && !r.lowQuality && !r.applied)
+                .map(r => r.filter);
+        },
+        focusSweepFailedFilters() {
+            return (this.focusSweep.results || []).filter(r => !r.measured).map(r => r.filter);
+        },
+        focusSweepStateLabel() {
+            if (this.focusSweep.state === 'running') return 'Running';
+            if (this.focusSweep.phase === 'done') return 'Done';
+            if (this.focusSweep.phase === 'aborted') return 'Stopped';
+            if (this.focusSweep.phase === 'failed') return 'Failed';
+            return 'Idle';
+        },
+        focusSweepPhaseLabel() {
+            switch (this.focusSweep.phase) {
+                case 'switching': return 'Switching filter';
+                case 'focusing': return 'Focusing';
+                case 'retrying': return 'Retrying';
+                case 'parking': return 'Parking on the reference filter';
+                default: return 'Starting';
+            }
+        },
+        focusSweepPercent() {
+            const total = this.focusSweep.totalFilters || 0;
+            if (total <= 0) return 0;
+            const done = Math.max(0, this.focusSweep.currentFilterIndex);
+            return Math.min(100, Math.round((done / total) * 100));
+        },
+        focusSweepTemp(row) {
+            const t = row?.temperatureC;
+            return (t === null || t === undefined || Number.isNaN(t)) ? '--' : t.toFixed(1) + ' C';
+        },
+        focusSweepMemoryEnabled() {
+            const rig = this.rigs?.find(r => r.id === this.activeRigId);
+            return rig?.autoFocus?.filterMemoryEnabled !== false;
+        },
+        async focusSweepStart(only = null, merge = false) {
+            const filters = only || this.focusSweep.selectedFilters;
+            if (!filters || filters.length === 0) {
+                this.toast('Select at least one filter', 'warn');
+                return;
+            }
+            this.focusSweep.busy = true;
+            try {
+                await this.apiPost('/api/focus-sweep/start', { filters, merge });
+                this.toast('Filter focus run started', 'ok');
+            } catch (e) {
+                this.toastFail('Filter focus run', e);
+            } finally {
+                this.focusSweep.busy = false;
+            }
+        },
+        focusSweepRerunFailed() {
+            return this.focusSweepStart(this.focusSweepFailedFilters(), true);
+        },
+        async focusSweepAbort() {
+            try {
+                await this.apiPost('/api/focus-sweep/abort', {});
+                this.toast('Stopping the filter focus run', 'info');
+            } catch (e) {
+                this.toastFail('Filter focus run', e);
+            }
+        },
+        async focusSweepApply() {
+            this.focusSweep.busy = true;
+            try {
+                const body = {
+                    filters: this.focusSweep.applyFilters,
+                    reference: this.focusSweep.reference || null
+                };
+                const r = await this.apiPost('/api/focus-sweep/apply', body);
+                const n = (r?.applied || []).length;
+                this.toast(n + ' filter' + (n === 1 ? '' : 's') + ' saved to the rig', 'ok');
+                await this.focusSweepOnTabEnter();
+                await this.loadRigs();
+            } catch (e) {
+                this.toastFail('Apply filter offsets', e);
+            } finally {
+                this.focusSweep.busy = false;
+            }
+        },
+        async focusSweepDiscard() {
+            try {
+                await this.apiPost('/api/focus-sweep/discard', {});
+                this.focusSweep.results = [];
+                this.focusSweep.applyFilters = [];
+                this.focusSweep.hasPendingResults = false;
+                this.toast('Results discarded', 'info');
+            } catch (e) {
+                this.toastFail('Discard results', e);
+            }
+        },
+
         flatWizardToggleFilter(f) {
             const idx = this.flatWizard.selectedFilters.indexOf(f);
             if (idx >= 0) this.flatWizard.selectedFilters.splice(idx, 1);
@@ -48201,6 +48351,28 @@ function ninaApp() {
                         if (t) this.flatWizard.trained = t;
                     }).catch(() => {});
                 }
+            }
+            if (msg.focusSweep) {
+                const was = this.focusSweep.state;
+                this.focusSweep.state = msg.focusSweep.state || 'idle';
+                this.focusSweep.lastError = msg.focusSweep.lastError || null;
+                this.focusSweep.hasPendingResults = !!msg.focusSweep.hasPendingResults;
+                this.focusSweep.appliedAt = msg.focusSweep.appliedAt || null;
+                const p = msg.focusSweep.progress;
+                if (p) {
+                    this.focusSweep.phase = p.phase || 'idle';
+                    this.focusSweep.startedAt = p.startedAt || null;
+                    this.focusSweep.totalFilters = p.totalFilters || 0;
+                    this.focusSweep.currentFilterIndex = p.currentFilterIndex ?? -1;
+                    this.focusSweep.currentFilter = p.currentFilter || '';
+                    this.focusSweep.attempt = p.attempt || 0;
+                    this.focusSweep.referenceFilter = p.referenceFilter || null;
+                    this.focusSweep.results = p.results || [];
+                }
+                // A run that just finished: tick the rows Apply will use, so
+                // the operator lands on a table that is ready to accept.
+                if (was === 'running' && this.focusSweep.state === 'idle')
+                    this._focusSweepSyncApplyPicks();
             }
             if (msg.sirilJobs) this.sirilActiveJobs = msg.sirilJobs;
             if (msg.graXpertJobs) this.graXpertActiveJobs = msg.graXpertJobs;

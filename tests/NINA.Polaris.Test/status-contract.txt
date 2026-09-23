@@ -95,6 +95,12 @@ flatWizard
 flatWizard.lastError
 flatWizard.progress
 flatWizard.state
+focusSweep
+focusSweep.appliedAt
+focusSweep.hasPendingResults
+focusSweep.lastError
+focusSweep.progress
+focusSweep.state
 graXpertJobs
 guider
 guider.appState

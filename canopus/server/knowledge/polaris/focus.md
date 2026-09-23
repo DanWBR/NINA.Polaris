@@ -308,6 +308,54 @@ Automatic autofocus **during a session** (AUTORUN / LIVE triggers) always
 targets the **main** focuser - the aux/guide trains are manual-focus only
 for now.
 
+## Filter offsets subtab (FOCUS tab)
+
+Third subtab of FOCUS, next to Manual Assist and Auto V-curve. Enabled
+only when a focuser AND a filter wheel are connected. Measures the best
+focus position of every selected filter in one pass, before the night
+starts, so the sequencer can switch filters on offsets instead of
+refocusing.
+
+What it does per filter: switch the wheel, run the SAME auto-focus the
+rig is configured for (no separate focus settings), record where it
+landed. A failure is retried once, then recorded with its reason and the
+run continues to the next filter. The run ends on the reference filter,
+at the position measured for it.
+
+Nothing is written to the rig until the operator presses **Apply to
+rig**. Results are held on the host, so a browser reload does not lose
+them. Apply writes each accepted filter into the rig's per-filter focus
+memory and refreshes the derived `FilterOffsets` table, and it saves the
+chosen reference filter as the rig's reference so the stored offsets
+match the previewed ones.
+
+Controls: `Select all` / `Clear` over the filter checkboxes (all ticked
+by default), `Reference filter` (Automatic, or a specific filter),
+`Start run`, `Stop run`, `Re-run failed`, `Apply to rig`, `Discard
+results`, and a per-row `Go to` that moves the focuser to that filter's
+stored point.
+
+Table columns: Apply (per-row tick), Filter, Position, Offset, HFR, Fit
+quality (R squared), Temperature, Result. Row results are `OK`, `Low
+quality` (measured, but the fit is below the quality gate: left unticked
+for Apply) and `Failed`. Phases shown while running: `Switching filter`,
+`Focusing`, `Retrying`, `Parking on the reference filter`.
+
+Endpoints: `GET /api/focus-sweep/status`, `GET /api/focus-sweep/result`,
+`POST /api/focus-sweep/start` (body `{filters, merge}`),
+`POST /api/focus-sweep/abort`, `POST /api/focus-sweep/apply` (body
+`{filters, reference}`), `POST /api/focus-sweep/discard`. Live state also
+rides the `focusSweep` block of `/ws/status`.
+
+Refused with 409 while a sequence, live stacking, auto-focus or another
+run is going, and with 400 when the camera, focuser or wheel is missing
+or no filter is selected.
+
+Common question: **the offset column shows a warning triangle.** That
+filter was measured outside the rig's temperature tolerance relative to
+the reference filter, so Apply will not store its offset. Re-running
+that filter fixes it.
+
 ## Auto-focus triggers (advanced)
 
 AF doesn't just run on demand, it can be **automatically triggered**
