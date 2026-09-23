@@ -30,8 +30,23 @@ public class TunnelHandler {
     private readonly TenantRegistry _registry;
     private readonly TenantUsageStore _usage;
     private readonly ILogger<TunnelHandler> _logger;
+    private readonly string? _hostnameSuffix;
 
-    public TunnelHandler(TenantRegistry registry, TenantUsageStore usage, ILogger<TunnelHandler> logger) {
+    /// <summary>The name a tenant answers on from outside: its label plus the
+    /// deployment's suffix. Returns the label unchanged when it already carries
+    /// a dot (someone configured a full name) or when no suffix is set (a relay
+    /// serving one host, where the label IS the name).</summary>
+    internal static string PublicHostname(string hostname, string? suffix) {
+        var h = (hostname ?? "").Trim().TrimEnd('.');
+        if (h.Length == 0 || h.Contains('.')) return h;
+        var s = (suffix ?? "").Trim().TrimEnd('.');
+        if (s.Length == 0) return h;
+        return h + (s.StartsWith('.') ? s : "." + s);
+    }
+
+    public TunnelHandler(TenantRegistry registry, TenantUsageStore usage, ILogger<TunnelHandler> logger,
+                         IConfiguration? config = null) {
+        _hostnameSuffix = config?["Proxy:HostnameSuffix"];
         _registry = registry;
         _usage = usage;
         _logger = logger;
@@ -106,7 +121,14 @@ public class TunnelHandler {
         var tunnel = new TenantTunnel(token, hostname, ws, limiter, config);
         _registry.TryRegister(tunnel);
         _logger.LogInformation("Tunnel registered: {Hostname} (token prefix {Prefix})", hostname, Truncate(token, 8));
-        await SendAsync(ws, RelayFrame.Build(RelayFrame.AuthOk, 0, hostname), CancellationToken.None);
+        // Announce an ADDRESS, not a slug. tenants.json holds the bare label
+        // ("sv550") and the domain lives in Proxy:HostnameSuffix, so a host that
+        // takes this value literally builds a link to https://sv550/ , which
+        // goes nowhere. That is what the Polaris relay card printed to the
+        // operator on 2026-09-23. A tenant whose Hostname is already fully
+        // qualified is left alone.
+        await SendAsync(ws, RelayFrame.Build(RelayFrame.AuthOk, 0,
+            PublicHostname(hostname, _hostnameSuffix)), CancellationToken.None);
 
         // ---- 2. Receive loop ----
         try {
