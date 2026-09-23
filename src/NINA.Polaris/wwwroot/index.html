@@ -11750,7 +11750,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <!-- Named autorun sets: save the current schedule under a
                      name and reload it later. Files live server-side under
                      the active profile so they survive restarts and rigs. -->
-                <div class="seq-sets" x-init="loadSeqSets()">
+                <div class="seq-sets" x-init="cardInit(() => loadSeqSets())">
                     <div class="seq-sets-title">Saved sets</div>
                     <div class="control-row" style="gap: 6px; flex-wrap: wrap;">
                         <input type="text" class="input input-sm" style="flex: 1; min-width: 120px;"
@@ -12969,7 +12969,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      the image viewer and in a dropdown on the file toolbar,
                      under two different names. -->
                 <div class="files-actions files-actions-icons files-ai-toolbar files-scripts-toolbar"
-                     x-init="loadScripts()"
+                     x-init="cardInit(() => loadScripts())"
                      x-show="studioScripts().length" x-cloak>
                     <span class="files-ai-label" aria-hidden="true">SIRIL SCRIPTS</span>
                     <template x-for="s in studioScripts()" :key="s.path">
@@ -14715,7 +14715,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      whoever operates the relay (self-hosted or shared). The
                      token is write-only: the GET returns hasToken, never the
                      value. Saving re-establishes the tunnel in place. -->
-                <div class="settings-section" id="relay-card" x-init="loadRelayConfig()">
+                <div class="settings-section" id="relay-card" x-init="cardInit(() => loadRelayConfig())">
                     <h3 data-tour="set-relay"><span class="settings-card-icon">🌐</span>Remote access relay</h3>
                     <p class="hint" style="margin-top:0">
                         Reach Polaris from anywhere through a relay server, with no
@@ -14748,8 +14748,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                               x-text="relayStateLabel()"></span>
                     </div>
                     <p class="hint" style="margin-top:8px" x-show="relayCfg.state === 'connected' && relayCfg.hostname" x-cloak>
-                        Reachable at <a :href="'https://' + relayCfg.hostname + '/'" target="_blank" rel="noopener"
-                                        x-text="'https://' + relayCfg.hostname + '/'"></a>
+                        Reachable at <a :href="relayPublicUrl()" target="_blank" rel="noopener"
+                                        x-text="relayPublicUrl()" x-show="relayPublicUrl()"></a>
+                        <span x-show="!relayPublicUrl()" class="text-muted"
+                              x-text="relayCfg.hostname || ''"></span>
                     </p>
                     <p class="text-warn" style="font-size:12px; margin-top:8px" x-show="relayCfg.lastError" x-cloak
                        x-text="relayCfg.lastError"></p>
@@ -14758,7 +14760,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <!-- Auto-push captured images to network storage (SMB / SFTP /
                      mounted path). Mirrors the capture folder tree onto the
                      target; the local copy is kept. -->
-                <div class="settings-section" id="storage-push-card" x-init="loadStorageConfig()">
+                <div class="settings-section" id="storage-push-card" x-init="cardInit(() => loadStorageConfig())">
                     <h3 data-tour="set-storage"><span class="settings-card-icon">📤</span>Auto-push to network storage</h3>
                     <p class="hint" style="margin-top:0">
                         Copy every saved image to a NAS, network share or SSH box as it's
@@ -15104,7 +15106,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                          higher DSS Color HiPS orders to disk for ASIAIR-grade
                          zoom; baseline order 3 ships in the bundle. -->
                     <div style="border-top:1px solid var(--border); margin-top:18px; padding-top:14px"
-                         x-init="loadDssStatus()">
+                         x-init="cardInit(() => loadDssStatus())">
                         <div style="font-weight:600; margin-bottom:4px" data-tour="set-skyimg">
                             <span class="settings-card-icon">🌌</span>Sky imagery (offline DSS)
                         </div>
@@ -15170,7 +15172,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                          curated core subset (Messier + named showpieces) to stay
                          slim; the full ~215 MB set of per-object photos downloads
                          here, on demand, and is used automatically afterwards. -->
-                    <div class="settings-card" style="margin-top:12px" x-init="loadThumbPackStatus()">
+                    <div class="settings-card" style="margin-top:12px" x-init="cardInit(() => loadThumbPackStatus())">
                         <div style="font-weight:600; margin-bottom:4px">
                             <span class="settings-card-icon">🖼️</span>DSO thumbnail pack
                         </div>
@@ -15486,7 +15488,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 </div>
 
                 <!-- Plate solving: pick the solver + tune speed/accuracy. -->
-                <div class="settings-section" id="platesolve-card" x-init="loadPlateSolveConfig()">
+                <div class="settings-section" id="platesolve-card" x-init="cardInit(() => loadPlateSolveConfig())">
                     <h3 data-tour="set-platesolve"><span class="settings-card-icon">🎯</span>Plate solving</h3>
                     <p class="text-muted" style="font-size:12px; max-width:600px; margin-top:4px">
                         Choose which installed solver to use and how aggressively
@@ -16048,7 +16050,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                          download on Linux, where they aren't bundled in the package.
                          Only shown when applicable (Linux x64/arm64). -->
                     <div style="margin-top:16px; border-top:1px solid var(--border); padding-top:12px"
-                         x-init="loadCameraSdkPackStatus()" x-show="cameraSdkPack.supported" x-cloak>
+                         x-init="cardInit(() => loadCameraSdkPackStatus())" x-show="cameraSdkPack.supported" x-cloak>
                         <h4 style="margin:0 0 4px; font-size:13px" x-text="$t('Native camera SDKs')"></h4>
                         <p class="text-muted" style="font-size:12px; max-width:560px; margin:0"
                            x-text="$t('Install the native USB SDK libraries (ZWO, SVBony, Player One, ToupTek, Altair) so those cameras appear as direct native drivers, in addition to INDI. About 100 MB, downloaded on demand.')"></p>
@@ -16081,7 +16083,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 </div>
 
                 <!-- polarispy script runner (Phase 1: headless scripts). -->
-                <div class="settings-section" id="scripts-card" x-init="loadScripts()">
+                <div class="settings-section" id="scripts-card" x-init="cardInit(() => loadScripts())">
                     <h3><span class="settings-card-icon">🐍</span>Scripts <span style="font-size:11px; color:var(--text-muted); font-weight:400">(beta)</span></h3>
                     <p class="text-muted" style="font-size:12px; max-width:560px; margin-top:4px">
                         Run Python scripts against Polaris's processing engine (polarispy). Bundled
@@ -16454,7 +16456,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </label>
                 </div>
 
-                <div class="settings-section" x-init="loadCacheStats()">
+                <div class="settings-section" x-init="cardInit(() => loadCacheStats())">
                     <h3 data-tour="set-imagecache"><span class="settings-card-icon">🗂</span>Image cache</h3>
                     <p class="hint" style="margin-top:0">
                         Polaris keeps rendered previews + thumbnails on disk so
@@ -17289,7 +17291,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <!-- THUMBPACK-4: on-demand ncnn GPU-Vulkan model pack. Excluded
                          from the package (kept the .deb slim); download here to run
                          BGE/Denoise on the GPU (Adreno/Mali/etc.) instead of CPU. -->
-                    <div class="settings-card" style="margin-top:12px" x-init="loadNcnnPackStatus()">
+                    <div class="settings-card" style="margin-top:12px" x-init="cardInit(() => loadNcnnPackStatus())">
                         <div style="font-weight:600; margin-bottom:4px">
                             <span class="settings-card-icon">⚡</span>Run AI models on the GPU (ncnn-Vulkan)
                         </div>
@@ -17379,7 +17381,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <!-- Factory reset: wipe all profiles/rigs/auth so a
                      clean Raspberry Pi image can ship with no personal
                      or test config. Captured images are NOT touched. -->
-                <div class="settings-section" x-init="loadGpuInfo()">
+                <div class="settings-section" x-init="cardInit(() => loadGpuInfo())">
                     <h3 data-tour="set-gpu"><span class="settings-card-icon">🎛️</span>GPU acceleration (OpenCL)</h3>
                     <p class="hint" style="margin-top:0">
                         Offloads classic image math (debayer, alignment warp,
@@ -17425,7 +17427,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </p>
                 </div>
 
-                <div class="settings-section" x-init="loadBenchmark()">
+                <div class="settings-section" x-init="cardInit(() => loadBenchmark())">
                     <h3 data-tour="set-benchmark"><span class="settings-card-icon">📊</span>Hardware benchmark</h3>
                     <p class="hint" style="margin-top:0">
                         Measures how fast this machine runs the Polaris image

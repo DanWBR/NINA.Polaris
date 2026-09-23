@@ -5384,6 +5384,37 @@ function ninaApp() {
             if (this._authInited) return;
             this._authInited = true;
             this._initCore();
+            this._flushCardInit();
+        },
+
+        // Alpine's x-init fires when the element is parsed, which is BEFORE the
+        // login overlay has been answered. A dozen cards load their data that
+        // way, so on an origin where no token is stored yet every one of those
+        // requests goes out unauthenticated and comes back 401.
+        //
+        // That stayed invisible for a long time because the LAN origin almost
+        // always had a token already, and because most of those loaders swallow
+        // their errors; the plate solve card was the only one that toasted the
+        // failure, which is how it surfaced (field report 2026-09-23, first
+        // login on a relay hostname, where every rig is a brand new origin with
+        // empty storage).
+        //
+        // So a card's loader waits for auth to clear, and runs straight away
+        // when it already has.
+        cardInit(fn) {
+            if (typeof fn !== 'function') return;
+            if (this._authInited || this.auth.authenticated || this.auth.enabled === false) {
+                try { fn(); } catch (e) { /* a card that cannot load is not fatal */ }
+                return;
+            }
+            (this._cardInitQueue = this._cardInitQueue || []).push(fn);
+        },
+        _flushCardInit() {
+            const queued = this._cardInitQueue || [];
+            this._cardInitQueue = [];
+            for (const fn of queued) {
+                try { fn(); } catch (e) { /* as above */ }
+            }
         },
 
         _initCore() {
@@ -31345,6 +31376,29 @@ function ninaApp() {
             this.relayCfg.hostname = r.hostname || null;
             this.relayCfg.lastError = r.lastError || null;
         },
+        // Where this rig answers from outside, as a URL you can actually open.
+        //
+        // The relay announces the tenant's hostname from tenants.json, which in
+        // the deployed configuration is the bare slug ("sv550"): the address is
+        // that plus the relay's own domain. The card used to build the link from
+        // the slug alone and printed "https://sv550/", which goes nowhere. A
+        // hostname that already carries dots is used as it is, so a relay that
+        // announces a fully qualified name keeps working.
+        relayPublicUrl() {
+            const h = (this.relayCfg.hostname || '').trim().replace(/\.$/, '');
+            if (!h) return '';
+            if (h.includes('.')) return 'https://' + h + '/';
+            const base = this.relayBaseHost();
+            return base ? 'https://' + h + '.' + base + '/' : '';
+        },
+        // The relay's own host, taken from the tunnel URL the operator typed.
+        relayBaseHost() {
+            const u = (this.relayCfg.serverUrl || '').trim();
+            if (!u) return '';
+            try { return new URL(u.replace(/^ws/i, 'http')).hostname || ''; }
+            catch (e) { return ''; }
+        },
+
         async loadRelayConfig() {
             try { this._applyRelayStatus(await this.apiGet('/api/system/relay')); }
             catch (e) { /* card shows the defaults */ }
