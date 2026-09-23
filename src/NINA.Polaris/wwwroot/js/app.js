@@ -1248,8 +1248,19 @@ function ninaApp() {
             // chip does not wait: it is the instrument, and an instrument
             // that lags is useless for deciding whether to touch anything.
             alarm: false,
-            incident: null        // { startedAt, worstRttMs, worstAgeMs, failed }
+            incident: null,       // { startedAt, worstRttMs, worstAgeMs, failed }
+            // What is degrading the link: 'network' or 'host'. The frame-age
+            // measurement alone cannot tell a host that stopped emitting from
+            // a network that dropped the frames, and the warning said network
+            // in both cases, which sent a field session looking at WiFi while
+            // the host was simply busy. The host reports what it is doing, so
+            // that is the other half of the answer.
+            cause: 'unknown'
         },
+        // Last hostActivity block. `at` is when it arrived, so a stale report
+        // is not mistaken for current evidence.
+        hostBusy: { busy: false, activity: [], equipmentStalled: false,
+                    equipmentAgeMs: null, at: 0 },
         _linkTimer: null,
         _linkPingTimer: null,
         _linkPingSeq: 0,
@@ -9080,6 +9091,7 @@ function ninaApp() {
                 state = 'slow';
             }
 
+            this.link.cause = this._linkCause(state);
             this._linkSetState(state);
 
             // A busy SBC can push the round trip over the line for a couple of
@@ -9088,6 +9100,40 @@ function ninaApp() {
             // banner, so only a condition that survives 6 s gets one.
             this.link.alarm = this.link.state === 'offline'
                 || (this.link.state === 'slow' && Date.now() - this.link.since >= 6000);
+        },
+
+        // Host or network?
+        //
+        // The socket closing is the one unambiguous network signal: frames stop
+        // AND the connection is gone. While the socket is still open and the
+        // last thing the host said was that it was busy (a recording, the
+        // camera stream, a sequence) or that its own equipment snapshot had
+        // gone stale, the honest reading is that the host is behind, not that
+        // the link is bad. Evidence older than 15 s is not evidence.
+        _linkCause(state) {
+            if (state === 'ok') return 'unknown';
+            if (!this.link.wsUp) return 'network';
+            const fresh = this.hostBusy.at && (Date.now() - this.hostBusy.at) < 15000;
+            if (fresh && (this.hostBusy.busy || this.hostBusy.equipmentStalled)) return 'host';
+            return 'network';
+        },
+        // True when the degradation is the host being busy, for the banner and
+        // the chip to say so instead of naming the network.
+        linkBlamesHost() {
+            return this.link.state !== 'ok' && this.link.cause === 'host';
+        },
+        // "a video recording and the camera stream": the host's own list, so
+        // the operator knows what to wait for.
+        linkHostDoing() {
+            const a = this.hostBusy.activity || [];
+            if (a.length === 0) return this._t('something');
+            if (a.length === 1) return a[0];
+            return a.slice(0, -1).join(', ') + ' ' + this._t('and') + ' ' + a[a.length - 1];
+        },
+
+        // "Working on: a video recording and the camera stream"
+        linkHostBusyWith() {
+            return this._t('Working on: {what}', { what: this.linkHostDoing() });
         },
 
         _linkSetState(state) {
@@ -9193,11 +9239,15 @@ function ninaApp() {
 
         linkTooltip() {
             const L = [];
-            L.push(this.link.state === 'offline'
-                ? this._t('No status from the host right now.')
-                : this.link.state === 'slow'
-                    ? this._t('This browser link to the host is slow.')
-                    : this._t('Link to the host is healthy.'));
+            L.push(this.linkBlamesHost()
+                ? this._t('The host is busy with {what}, so status is late. '
+                          + 'The link itself looks fine.',
+                          { what: this.linkHostDoing() })
+                : this.link.state === 'offline'
+                    ? this._t('No status from the host right now.')
+                    : this.link.state === 'slow'
+                        ? this._t('This browser link to the host is slow.')
+                        : this._t('Link to the host is healthy.'));
             if (this.link.rttMedianMs != null) {
                 L.push(this._t('Round trip: {ms} ms (median of the last 8)',
                                { ms: Math.round(this.link.rttMedianMs) }));
@@ -48351,6 +48401,15 @@ function ninaApp() {
                         if (t) this.flatWizard.trained = t;
                     }).catch(() => {});
                 }
+            }
+            if (msg.hostActivity) {
+                this.hostBusy = {
+                    busy: !!msg.hostActivity.busy,
+                    activity: msg.hostActivity.activity || [],
+                    equipmentStalled: !!msg.hostActivity.equipmentStalled,
+                    equipmentAgeMs: msg.hostActivity.equipmentAgeMs ?? null,
+                    at: Date.now()
+                };
             }
             if (msg.focusSweep) {
                 const was = this.focusSweep.state;

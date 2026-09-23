@@ -5032,5 +5032,11 @@
   "Select at least one filter": "Waehlen Sie mindestens einen Filter",
   "Filter focus run started": "Filter-Fokus-Durchlauf gestartet",
   "Stopping the filter focus run": "Filter-Fokus-Durchlauf wird gestoppt",
-  "Results discarded": "Ergebnisse verworfen"
+  "Results discarded": "Ergebnisse verworfen",
+  "The host is busy right now, not the network.": "Der Host ist gerade beschaeftigt, nicht das Netzwerk.",
+  "Your network is fine and the session keeps running; the panels catch up on their own.": "Ihr Netzwerk ist in Ordnung und die Sitzung laeuft weiter; die Panels holen von selbst auf.",
+  "Working on: {what}": "Beschaeftigt mit: {what}",
+  "The host is busy with {what}, so status is late. The link itself looks fine.": "Der Host ist mit {what} beschaeftigt, daher kommt der Status verspaetet. Die Verbindung selbst sieht gut aus.",
+  "something": "etwas",
+  "and": "und"
 }

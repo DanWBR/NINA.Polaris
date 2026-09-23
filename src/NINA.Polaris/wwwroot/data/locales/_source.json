@@ -4414,5 +4414,11 @@
   "Select at least one filter": "",
   "Filter focus run started": "",
   "Stopping the filter focus run": "",
-  "Results discarded": ""
+  "Results discarded": "",
+  "The host is busy right now, not the network.": "",
+  "Your network is fine and the session keeps running; the panels catch up on their own.": "",
+  "Working on: {what}": "",
+  "The host is busy with {what}, so status is late. The link itself looks fine.": "",
+  "something": "",
+  "and": ""
 }

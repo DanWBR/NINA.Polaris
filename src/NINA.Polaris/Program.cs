@@ -424,6 +424,12 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<IndiWebManagerServ
 // INDI profile assistant: stateless sysfs reader behind /api/indi/detect.
 // Singleton only because it has no per-request state; it holds no handles.
 builder.Services.AddSingleton<UsbScanService>();
+// The equipment block of /ws/status, refreshed on its own thread. Dual
+// registration: the contributor reads Latest, the hosted loop fills it. Every
+// property in that block is a blocking device read, and doing them on a socket
+// or request thread froze the host (field report 2026-09-22).
+builder.Services.AddSingleton<EquipmentSnapshotService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<EquipmentSnapshotService>());
 // Wedged-INDI-driver watchdog: on repeated BLOB timeouts, restart just that
 // driver through indi-web (a device reconnect can't fix a stuck driver). Dual
 // registration so the hosted StartAsync subscribes to IndiClient.BlobTimeout.

@@ -161,6 +161,12 @@ host.processMemoryMB
 host.sampledAt
 host.underVoltageNow
 host.underVoltageOccurred
+hostActivity
+hostActivity.activity
+hostActivity.busy
+hostActivity.equipmentAgeMs
+hostActivity.equipmentRefreshMs
+hostActivity.equipmentStalled
 keepCentered
 keepCentered.lastCorrectionMs
 keepCentered.lastOffsetPx

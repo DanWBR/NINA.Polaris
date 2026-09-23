@@ -5032,5 +5032,11 @@
   "Select at least one filter": "Selecione pelo menos um filtro",
   "Filter focus run started": "Rodada de foco por filtro iniciada",
   "Stopping the filter focus run": "Parando a rodada de foco por filtro",
-  "Results discarded": "Resultados descartados"
+  "Results discarded": "Resultados descartados",
+  "The host is busy right now, not the network.": "O host esta ocupado agora, nao e a rede.",
+  "Your network is fine and the session keeps running; the panels catch up on their own.": "Sua rede esta boa e a sessao continua rodando; os paineis se atualizam sozinhos.",
+  "Working on: {what}": "Fazendo: {what}",
+  "The host is busy with {what}, so status is late. The link itself looks fine.": "O host esta ocupado com {what}, entao o status atrasa. O link em si parece bom.",
+  "something": "alguma coisa",
+  "and": "e"
 }

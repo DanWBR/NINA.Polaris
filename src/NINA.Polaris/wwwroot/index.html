@@ -18758,8 +18758,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
         <span x-show="!power.stopping && (connectionLost || link.state === 'offline')">
             Connection to server lost. Reconnecting...
         </span>
-        <span x-show="!connectionLost && link.state === 'slow'">
+        <span x-show="!connectionLost && link.state === 'slow' && !linkBlamesHost()">
             The network to the host is slow right now.
+        </span>
+        <span x-show="!connectionLost && link.state !== 'offline' && linkBlamesHost()">
+            The host is busy right now, not the network.
         </span>
         <span class="connection-banner-why" x-show="power.stopping">
             Polaris was stopped from the web interface. Start it again on the
@@ -18769,9 +18772,16 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
             Polaris may be down. If it does not come back on its own, start it
             again on the host.
         </span>
-        <span class="connection-banner-why" x-show="!connectionLost && !power.stopping">
+        <span class="connection-banner-why"
+              x-show="!connectionLost && !power.stopping && !linkBlamesHost()">
             The host keeps running the session on its own. This is the link
             between this browser and the host, not your equipment.
+        </span>
+        <span class="connection-banner-why"
+              x-show="!connectionLost && !power.stopping && linkBlamesHost()">
+            Your network is fine and the session keeps running; the panels
+            catch up on their own.
+            <br><span class="text-muted" x-text="linkHostBusyWith()"></span>
         </span>
     </div>
 

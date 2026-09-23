@@ -326,6 +326,35 @@ If the chip is red while the host's WiFi bars are full, move the *client*
 closer to the access point, or reach the host over Ethernet. If both are bad,
 the problem is at the host end or at the access point.
 
+## The warning says slow network but the network is fine
+
+Read the banner: when Polaris can tell, it names the host instead. The chip
+and the banner say **"The host is busy right now, not the network"** and list
+what it is doing (a recording, the camera stream, a sequence). Nothing is
+wrong with your WiFi and nothing needs pressing; the panels catch up on their
+own.
+
+How it can tell: status frames stopping looks identical whether the host went
+quiet or the network dropped them, so the frame age alone cannot answer it.
+The socket can. While the connection is still open and the last frame the host
+sent said it was busy, or that its own equipment snapshot had gone stale, the
+host is the one that is behind. A socket that closed is the network.
+
+Field report 2026-09-22: moving the mount with the video panel's joystick
+while a stream was running froze the host for a few seconds and the client
+painted the amber network warning, which sent the operator looking at WiFi.
+The cause was on the host: the 1 Hz status payload was reading live hardware
+(camera temperature, cooler, focuser temperature) on the thread that served
+the socket, and those reads block. On a ZWO camera each one waits for the
+per-handle SDK lock that the video grab loop re-takes immediately; on an
+Alpaca device each one is an HTTP call with a 15 s timeout. Slow builds then
+made every connected browser start its own, each parking another thread, until
+there was none left to answer the joystick's request. Those reads now happen
+on a thread of their own and the payload is built once at a time, so a slow
+device makes the numbers stale instead of freezing the host. If the equipment
+panel is stale while everything else is responsive, one device is not
+answering; the chip tooltip says how old the snapshot is.
+
 ## See also
 
 - [FAQ](faq.md), quick-answer questions
