@@ -52,9 +52,11 @@ public class PowerService {
     /// <summary>The systemd unit name the .deb installs.</summary>
     private const string SystemdUnit = "polaris.service";
 
-    public PowerService(ILogger<PowerService> logger, IHostApplicationLifetime lifetime) {
+    public PowerService(ILogger<PowerService> logger, IHostApplicationLifetime lifetime,
+                        IHostEnvironment? environment = null) {
         _logger = logger;
         _lifetime = lifetime;
+        _contentRoot = environment?.ContentRootPath;
     }
 
     public bool IsLinux => OperatingSystem.IsLinux();
@@ -68,6 +70,81 @@ public class PowerService {
     public bool CanReboot => IsLinux || IsWindows;
     public bool CanShutdown => IsLinux || IsWindows;
 
+    // ---- Host power guard ----------------------------------------------
+    //
+    // 2026-09-22 and 2026-09-23: a coding session running against a local dev
+    // build POSTed /api/system/shutdown to "stop the dev server" and powered
+    // off the developer's PC. Twice. The endpoint did exactly what it says on
+    // the tin, and that is the problem: on a rig it is the Shut down device
+    // button, and on a workstation it is a foot-gun a single stray request can
+    // pull, mid-session, with work open.
+    //
+    // So a development build refuses to power the machine off or reboot it.
+    // The rig is unaffected: the .deb runs the published build with the
+    // Production environment and no project file anywhere near its content
+    // root, so neither signal fires there. Every path goes through
+    // ScheduleShutdown / ScheduleReboot, which means the plan's end-of-run
+    // shutdown and the scheduled teardown are covered by the same rule.
+
+    /// <summary>Opt out of host power actions on a machine that would
+    /// otherwise allow them.</summary>
+    public const string NoHostPowerVar = "POLARIS_NO_HOST_POWER";
+    /// <summary>Force host power actions back on in a build that looks like a
+    /// development one. For the operator who really does run a dev build on a
+    /// rig; nothing sets it by accident.</summary>
+    public const string AllowHostPowerVar = "POLARIS_ALLOW_HOST_POWER";
+
+    private readonly string? _contentRoot;
+
+    /// <summary>Why powering the host off or rebooting it is refused here, or
+    /// null when it is allowed.</summary>
+    public string? HostPowerRefusal => HostPowerRefusalFor(
+        Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
+            ?? Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT"),
+        LooksLikeSourceCheckout(_contentRoot),
+        Environment.GetEnvironmentVariable(NoHostPowerVar),
+        Environment.GetEnvironmentVariable(AllowHostPowerVar));
+
+    /// <summary>The decision, pure so it can be tested without an environment.
+    /// Order matters: the explicit override wins over everything, then the
+    /// explicit opt-out, then the two "this is a development machine"
+    /// signals.</summary>
+    internal static string? HostPowerRefusalFor(string? environment, bool fromSourceCheckout,
+                                                string? noHostPower, string? allowHostPower) {
+        if (IsTruthy(allowHostPower)) return null;
+        if (IsTruthy(noHostPower))
+            return "Host power actions are switched off here by " + NoHostPowerVar + ".";
+        if (string.Equals(environment, "Development", StringComparison.OrdinalIgnoreCase))
+            return DevRefusal("Polaris is running in the Development environment");
+        if (fromSourceCheckout)
+            return DevRefusal("Polaris is running from a source checkout");
+        return null;
+    }
+
+    private static string DevRefusal(string why) =>
+        why + ", so it will not power this machine off or reboot it. These two "
+        + "actions are DEVICE power, not the Polaris process: to stop Polaris use "
+        + "POST /api/system/stop-app, or Ctrl+C in the terminal running it. Set "
+        + AllowHostPowerVar + "=1 if you really do want a development build to "
+        + "power its host down.";
+
+    private static bool IsTruthy(string? v) =>
+        v != null && (v == "1" || v.Equals("true", StringComparison.OrdinalIgnoreCase)
+                              || v.Equals("yes", StringComparison.OrdinalIgnoreCase)
+                              || v.Equals("on", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>A project file beside the content root means this is a build
+    /// being run out of the tree it was compiled in. A deployed Polaris never
+    /// has one: the .deb ships the publish output.</summary>
+    internal static bool LooksLikeSourceCheckout(string? contentRoot) {
+        if (string.IsNullOrWhiteSpace(contentRoot)) return false;
+        try {
+            return File.Exists(Path.Combine(contentRoot, "NINA.Polaris.csproj"));
+        } catch {
+            return false;
+        }
+    }
+
     public PowerInfo GetInfo() {
         bool autoSupported = false, autoEnabled = false;
         if (IsWindows) {
@@ -79,14 +156,19 @@ public class PowerService {
             autoSupported = UnderSystemd;
             autoEnabled = SystemdEnabled();
         }
+        // Report the guard as a capability, so a development build shows the
+        // two device-power buttons as unavailable instead of offering a click
+        // that comes back 403.
+        var refusal = HostPowerRefusal;
         return new PowerInfo(
             Platform: IsWindows ? "windows" : IsLinux ? "linux" : "other",
             UnderSystemd: UnderSystemd,
             CanRestartApp: true,
-            CanReboot: CanReboot,
-            CanShutdown: CanShutdown,
+            CanReboot: CanReboot && refusal == null,
+            CanShutdown: CanShutdown && refusal == null,
             AutoStartSupported: autoSupported,
-            AutoStartEnabled: autoEnabled);
+            AutoStartEnabled: autoEnabled,
+            HostPowerRefusal: refusal);
     }
 
     // ---- Restart -------------------------------------------------------
@@ -138,9 +220,15 @@ public class PowerService {
     }
 
     // ---- Reboot --------------------------------------------------------
+    /// <summary>Reboot the DEVICE Polaris runs on, not the Polaris process.
+    /// Refused on a development build, see the host power guard above.</summary>
     public PowerActionResult ScheduleReboot() {
         if (!CanReboot)
             return PowerActionResult.Fail("Device reboot is not supported on this platform.", 501);
+        if (HostPowerRefusal is string rebootRefusal) {
+            _logger.LogWarning("Device reboot refused: {Reason}", rebootRefusal);
+            return PowerActionResult.Fail(rebootRefusal, 403);
+        }
         _ = Task.Run(async () => {
             await Task.Delay(700);
             try { await DoRebootAsync(); }
@@ -160,9 +248,15 @@ public class PowerService {
     }
 
     // ---- Shutdown ------------------------------------------------------
+    /// <summary>Power the DEVICE off, not the Polaris process. Refused on a
+    /// development build, see the host power guard above.</summary>
     public PowerActionResult ScheduleShutdown() {
         if (!CanShutdown)
             return PowerActionResult.Fail("Device shutdown is not supported on this platform.", 501);
+        if (HostPowerRefusal is string shutdownRefusal) {
+            _logger.LogWarning("Device shutdown refused: {Reason}", shutdownRefusal);
+            return PowerActionResult.Fail(shutdownRefusal, 403);
+        }
         _ = Task.Run(async () => {
             await Task.Delay(700);
             try { await DoShutdownAsync(); }
@@ -334,7 +428,11 @@ public record PowerInfo(
     bool CanReboot,
     bool CanShutdown,
     bool AutoStartSupported,
-    bool AutoStartEnabled);
+    bool AutoStartEnabled,
+    /// <summary>Why device power is unavailable, when it is. Null on a normal
+    /// rig; set on a development build so the UI can say so rather than
+    /// claiming the platform does not support it.</summary>
+    string? HostPowerRefusal = null);
 
 public record PowerActionResult(bool Ok, string Message, int StatusCode) {
     public static PowerActionResult Okay(string message) => new(true, message, 200);

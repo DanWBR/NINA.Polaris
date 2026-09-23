@@ -1939,6 +1939,10 @@ function ninaApp() {
         power: {
             platform: '', underSystemd: false,
             canRestartApp: true, canReboot: false, canShutdown: false,
+            // Set when the host refuses device power (a development build).
+            // The buttons are already off in that case; this is the reason to
+            // show instead of "not supported on this platform".
+            hostPowerRefusal: null,
             autoStartSupported: false, autoStartEnabled: false,
             restarting: false, stopping: false, rebooting: false, shuttingDown: false, autoStartBusy: false,
             loaded: false
@@ -36199,7 +36203,8 @@ function ninaApp() {
         async rebootDevice() {
             if (this.power.rebooting) return;
             if (!this.power.canReboot) {
-                this.toast('Device reboot is not supported on this platform.', 'warn');
+                this.toast(this.power.hostPowerRefusal
+                    || 'Device reboot is not supported on this platform.', 'warn', 9000);
                 return;
             }
             const ok = await this._confirmAsync(
@@ -36229,7 +36234,8 @@ function ninaApp() {
         async shutdownDevice() {
             if (this.power.shuttingDown) return;
             if (!this.power.canShutdown) {
-                this.toast('Device shutdown is not supported on this platform.', 'warn');
+                this.toast(this.power.hostPowerRefusal
+                    || 'Device shutdown is not supported on this platform.', 'warn', 9000);
                 return;
             }
             const ok = await this._confirmAsync(
