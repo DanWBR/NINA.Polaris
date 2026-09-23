@@ -2832,6 +2832,13 @@
                         Auto V-curve
                         <span x-show="!focusConnected" style="opacity:0.6">·</span>
                     </button>
+                    <button class="video-tab" :class="{ active: focusTab === 'filters' }"
+                            @click="focusTab = 'filters'; focusSweepOnTabEnter()"
+                            :disabled="!focusConnected || !filterWheel.connected"
+                            :title="(focusConnected && filterWheel.connected) ? '' : 'Connect a focuser motor and a filter wheel in RIGS to measure per-filter focus'">
+                        Filter offsets
+                        <span x-show="!focusConnected || !filterWheel.connected" style="opacity:0.6">·</span>
+                    </button>
                 </div>
 
                 <!-- ===== Manual Assist subtab ===== -->
@@ -3302,6 +3309,225 @@
                     </div><!-- /af-bottom-row -->
                 </div>
                 </div><!-- /focusTab === 'vcurve' wrapper -->
+
+                <!-- ===== Filter offsets subtab: one autofocus per filter ===== -->
+                <div x-show="focusTab === 'filters'" class="af-panel-wrapper">
+                <div class="af-panel">
+
+                    <div class="af-header">
+                        <strong>Filter offsets</strong>
+                        <span class="status-indicator-sm"
+                              :class="focusSweep.state === 'running' ? 'running' : (focusSweep.lastError && focusSweep.lastError !== 'Cancelled' ? 'error' : 'idle')"></span>
+                        <span class="text-muted" x-text="focusSweepStateLabel()"></span>
+                        <span class="af-phase" x-show="focusSweep.state === 'running'"
+                              x-text="focusSweepPhaseLabel()"></span>
+                    </div>
+
+                    <p class="hint">
+                        Measures the best focus position for every selected filter,
+                        one auto-focus per filter, using this rig's auto-focus
+                        settings. Nothing is written until you press Apply.
+                    </p>
+
+                    <!-- Pre-flight -->
+                    <details class="focus-group" open>
+                        <summary class="focus-group-head">
+                            <span class="focus-group-title">Pre-flight</span>
+                        </summary>
+                        <div class="flatwiz-preflight">
+                            <div class="flatwiz-preflight-row" :class="selectedCamera ? 'ok' : 'err'">
+                                <span x-text="selectedCamera ? '✓' : '✗'"></span>
+                                <span>Camera:</span>
+                                <strong x-text="selectedCamera || 'not connected'"></strong>
+                            </div>
+                            <div class="flatwiz-preflight-row" :class="focusConnected ? 'ok' : 'err'">
+                                <span x-text="focusConnected ? '✓' : '✗'"></span>
+                                <span>Focuser:</span>
+                                <strong x-text="selectedFocuser || 'not connected'"></strong>
+                            </div>
+                            <div class="flatwiz-preflight-row"
+                                 :class="(filterWheel.connected && filterWheel.filters.length > 0) ? 'ok' : 'err'">
+                                <span x-text="(filterWheel.connected && filterWheel.filters.length > 0) ? '✓' : '✗'"></span>
+                                <span>Filter wheel:</span>
+                                <strong x-show="filterWheel.connected && filterWheel.filters.length > 0"
+                                        x-text="filterWheel.filters.length + ' filter' + (filterWheel.filters.length === 1 ? '' : 's')"></strong>
+                                <strong x-show="!filterWheel.connected || filterWheel.filters.length === 0">not connected</strong>
+                            </div>
+                        </div>
+                        <p class="hint" x-show="!selectedCamera || !focusConnected || !filterWheel.connected"
+                           style="margin-top:8px">
+                            Connect camera, focuser and filter wheel in the
+                            <a href="#" @click.prevent="tab = 'equip'">RIGS</a> tab first.
+                        </p>
+                    </details>
+
+                    <!-- Which filters -->
+                    <details class="focus-group" open x-show="filterWheel.filters.length > 0">
+                        <summary class="focus-group-head">
+                            <span class="focus-group-title">Filters to measure</span>
+                        </summary>
+                        <div class="control-row" style="margin-bottom:6px">
+                            <button class="btn btn-sm" @click="focusSweepSelectAll()">Select all</button>
+                            <button class="btn btn-sm" @click="focusSweepClearFilters()">Clear</button>
+                            <span class="text-muted" style="font-size:11px"
+                                  x-text="focusSweep.selectedFilters.length + ' of ' + filterWheel.filters.length + ' selected'"></span>
+                        </div>
+                        <div class="flatwiz-filter-pick">
+                            <template x-for="f in filterWheel.filters" :key="'fs-' + f">
+                                <label class="flatwiz-filter-chip">
+                                    <input type="checkbox"
+                                           :checked="focusSweep.selectedFilters.includes(f)"
+                                           :disabled="focusSweep.state === 'running'"
+                                           @change="focusSweepToggleFilter(f)">
+                                    <span x-text="f"></span>
+                                </label>
+                            </template>
+                        </div>
+                        <div class="af-params" style="margin-top:10px">
+                            <label title="Every offset is measured against this filter. Leave it automatic to use the rig's reference, a filter named L, or the first one measured.">Reference filter
+                                <select class="input-sm" x-model="focusSweep.reference"
+                                        :disabled="focusSweep.state === 'running'">
+                                    <option value="">Automatic</option>
+                                    <template x-for="f in filterWheel.filters" :key="'fsr-' + f">
+                                        <option :value="f" x-text="f"></option>
+                                    </template>
+                                </select>
+                            </label>
+                        </div>
+                        <p class="hint" style="margin-top:6px">
+                            Offsets are stored relative to this filter, and Apply
+                            saves it as the rig's reference so the stored table
+                            matches what you see here. The run also ends on this
+                            filter, at the position it measured for it.
+                        </p>
+                    </details>
+
+                    <!-- Actions -->
+                    <div class="af-actions">
+                        <button class="btn btn-primary" @click="focusSweepStart()"
+                                :disabled="focusSweep.state === 'running' || focusSweep.busy
+                                           || !selectedCamera || !focusConnected
+                                           || !filterWheel.connected
+                                           || focusSweep.selectedFilters.length === 0">
+                            Start run
+                        </button>
+                        <button class="btn btn-danger" @click="focusSweepAbort()"
+                                :disabled="focusSweep.state !== 'running'">
+                            Stop run
+                        </button>
+                        <button class="btn btn-sm" @click="focusSweepRerunFailed()"
+                                :disabled="focusSweep.state === 'running' || focusSweepFailedFilters().length === 0"
+                                :title="'Measure only the filters that failed'">
+                            Re-run failed
+                        </button>
+                        <button class="btn btn-primary" @click="focusSweepApply()"
+                                :disabled="focusSweep.state === 'running' || focusSweep.busy
+                                           || !focusSweep.hasPendingResults">
+                            Apply to rig
+                        </button>
+                        <button class="btn btn-sm" @click="focusSweepDiscard()"
+                                :disabled="focusSweep.state === 'running' || focusSweep.results.length === 0">
+                            Discard results
+                        </button>
+                    </div>
+
+                    <p class="text-danger" style="font-size:12px"
+                       x-show="focusSweep.lastError && focusSweep.lastError !== 'Cancelled'"
+                       x-text="focusSweep.lastError"></p>
+
+                    <!-- Progress -->
+                    <div class="af-progress" x-show="focusSweep.state === 'running'">
+                        <div class="af-progress-bar">
+                            <div class="af-progress-fill"
+                                 :style="'width:' + focusSweepPercent() + '%'"></div>
+                        </div>
+                        <div class="text-muted" style="font-size:12px">
+                            <span x-text="'Filter ' + (focusSweep.currentFilterIndex + 1) + ' / ' + focusSweep.totalFilters"></span>
+                            <span x-show="focusSweep.currentFilter" x-text="' · ' + focusSweep.currentFilter"></span>
+                            <span x-show="focusSweep.attempt > 1" x-text="' · attempt ' + focusSweep.attempt"></span>
+                            <a href="#" @click.prevent="focusTab = 'vcurve'" style="margin-left:6px">See the curve</a>
+                        </div>
+                    </div>
+
+                    <!-- Results -->
+                    <details class="focus-group" open>
+                        <summary class="focus-group-head">
+                            <span class="focus-group-title">Measured points</span>
+                        </summary>
+                        <div x-show="focusSweep.results.length === 0" class="text-muted"
+                             style="font-size:12px">
+                            No results yet. Start a run to measure every selected filter.
+                        </div>
+                        <table class="flatwiz-trained-table" x-show="focusSweep.results.length > 0">
+                            <thead>
+                                <tr>
+                                    <th>Apply</th>
+                                    <th>Filter</th>
+                                    <th>Position</th>
+                                    <th>Offset</th>
+                                    <th>HFR</th>
+                                    <th>Fit quality</th>
+                                    <th>Temperature</th>
+                                    <th>Result</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="row in focusSweep.results" :key="'fsrow-' + row.filter">
+                                    <tr>
+                                        <td>
+                                            <input type="checkbox" :disabled="!row.measured"
+                                                   :checked="focusSweep.applyFilters.includes(row.filter)"
+                                                   @change="focusSweepToggleApply(row.filter)">
+                                        </td>
+                                        <td x-text="row.filter"></td>
+                                        <td><strong x-show="row.measured" x-text="row.position"></strong>
+                                            <span x-show="!row.measured" class="text-muted">--</span></td>
+                                        <td>
+                                            <span x-show="row.offset !== null && row.offset !== undefined"
+                                                  x-text="(row.offset > 0 ? '+' : '') + row.offset"></span>
+                                            <span x-show="row.offset === null || row.offset === undefined"
+                                                  class="text-muted">--</span>
+                                            <span class="text-warn" x-show="row.offset !== null && !row.offsetDerived"
+                                                  :title="row.offsetWarning">⚠</span>
+                                        </td>
+                                        <td x-text="row.hfr ? row.hfr.toFixed(2) : '--'"></td>
+                                        <td x-text="row.rSquared ? row.rSquared.toFixed(2) : '--'"></td>
+                                        <td x-text="focusSweepTemp(row)"></td>
+                                        <td>
+                                            <span x-show="row.measured && !row.lowQuality" class="text-ok">OK</span>
+                                            <span x-show="row.measured && row.lowQuality" class="text-warn"
+                                                  :title="row.warning">Low quality</span>
+                                            <span x-show="!row.measured" class="text-danger"
+                                                  :title="row.error">Failed</span>
+                                            <span x-show="row.applied" class="text-muted" style="font-size:11px">saved</span>
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-sm" x-show="row.measured"
+                                                    :disabled="focusSweep.state === 'running'"
+                                                    @click="applyStoredFocus(row.filter)"
+                                                    :title="'Move the focuser to the stored point for this filter'">
+                                                Go to
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                        <p class="hint" x-show="focusSweep.hasPendingResults" style="margin-top:8px">
+                            Nothing has been written to the rig yet. Apply stores
+                            these positions and the offsets derived from them.
+                        </p>
+                        <p class="hint" x-show="focusSweep.results.length > 0 && !focusSweepMemoryEnabled()"
+                           style="margin-top:6px">
+                            Per-filter focus memory is off for this rig, so the
+                            points will be stored but not used on a filter change
+                            until you turn it on in RIGS.
+                        </p>
+                    </details>
+
+                </div>
+                </div><!-- /focusTab === 'filters' wrapper -->
             </div>
 
             <!-- PREVIEW, snap test shots with optional save -->
@@ -18779,8 +19005,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
         <span x-show="!power.stopping && (connectionLost || link.state === 'offline')">
             Connection to server lost. Reconnecting...
         </span>
-        <span x-show="!connectionLost && link.state === 'slow'">
+        <span x-show="!connectionLost && link.state === 'slow' && !linkBlamesHost()">
             The network to the host is slow right now.
+        </span>
+        <span x-show="!connectionLost && link.state !== 'offline' && linkBlamesHost()">
+            The host is busy right now, not the network.
         </span>
         <span class="connection-banner-why" x-show="power.stopping">
             Polaris was stopped from the web interface. Start it again on the
@@ -18790,9 +19019,16 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
             Polaris may be down. If it does not come back on its own, start it
             again on the host.
         </span>
-        <span class="connection-banner-why" x-show="!connectionLost && !power.stopping">
+        <span class="connection-banner-why"
+              x-show="!connectionLost && !power.stopping && !linkBlamesHost()">
             The host keeps running the session on its own. This is the link
             between this browser and the host, not your equipment.
+        </span>
+        <span class="connection-banner-why"
+              x-show="!connectionLost && !power.stopping && linkBlamesHost()">
+            Your network is fine and the session keeps running; the panels
+            catch up on their own.
+            <br><span class="text-muted" x-text="linkHostBusyWith()"></span>
         </span>
     </div>
 

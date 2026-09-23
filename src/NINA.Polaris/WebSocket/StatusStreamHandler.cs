@@ -61,6 +61,14 @@ public static class StatusStreamHandler {
     private static byte[]? _statusCacheBytes;
     private static long _statusCacheTick = -1;
     private static long _sharedDebugCursor;
+    // Single flight. The per-tick cache above only helps while builds are FAST:
+    // the moment one is slow, every client misses the cache for that tick and
+    // starts its own build, each one parking a thread pool thread on whatever
+    // is slow. That is a pile-up that feeds itself, and it is how a busy host
+    // ran out of threads to answer a joystick POST with (field report
+    // 2026-09-22). One build at a time; everybody else serves the previous
+    // payload, which is a second old at worst.
+    private static bool _statusBuildInFlight;
 
     public static async Task Handle(HttpContext context) {
         if (!context.WebSockets.IsWebSocketRequest) {
@@ -108,29 +116,44 @@ public static class StatusStreamHandler {
                     long tick = DateTime.UtcNow.Ticks / StatusInterval.Ticks;
                     byte[]? payload = null;
                     long localDebugCursor = 0;
+                    bool buildIsMine = false;
                     lock (_statusCacheLock) {
-                        if (_statusCacheTick == tick && _statusCacheBytes != null)
+                        if (_statusCacheTick == tick && _statusCacheBytes != null) {
                             payload = _statusCacheBytes;
-                        else
+                        } else if (_statusBuildInFlight) {
+                            // Someone is already building this tick. Send the
+                            // last payload instead of starting a second build:
+                            // a value one tick old beats another blocked thread.
+                            payload = _statusCacheBytes;
+                        } else {
+                            _statusBuildInFlight = true;
+                            buildIsMine = true;
                             localDebugCursor = _sharedDebugCursor;
+                        }
                     }
-                    if (payload == null) {
-                    var status = builder.Build(ref localDebugCursor);
+                    if (buildIsMine) {
+                        try {
+                            var status = builder.Build(ref localDebugCursor);
+                            payload = JsonSerializer.SerializeToUtf8Bytes(status, JsonOpts);
+                            lock (_statusCacheLock) {
+                                _statusCacheBytes = payload;
+                                _statusCacheTick = tick;
+                                // Advance the shared cursor monotonically; if two
+                                // clients raced this tick they both built, take the
+                                // furthest. Long read/write under the lock is also
+                                // what keeps the cursor torn-free on 32-bit ARM.
+                                if (localDebugCursor > _sharedDebugCursor)
+                                    _sharedDebugCursor = localDebugCursor;
+                            }
+                        } finally {
+                            lock (_statusCacheLock) _statusBuildInFlight = false;
+                        }
+                    }
 
-                    payload = JsonSerializer.SerializeToUtf8Bytes(status, JsonOpts);
-                    lock (_statusCacheLock) {
-                        _statusCacheBytes = payload;
-                        _statusCacheTick = tick;
-                        // Advance the shared cursor monotonically; if two
-                        // clients raced this tick they both built, take the
-                        // furthest. Long read/write under the lock is also
-                        // what keeps the cursor torn-free on 32-bit ARM.
-                        if (localDebugCursor > _sharedDebugCursor)
-                            _sharedDebugCursor = localDebugCursor;
-                    }
-                    }
-
-                    await SendBytesAsync(ws, payload!, sendGate, cts.Token);
+                    // Nothing to send only on the very first tick, when another
+                    // client's build has not finished yet.
+                    if (payload != null)
+                        await SendBytesAsync(ws, payload, sendGate, cts.Token);
                     await Task.Delay(StatusInterval, cts.Token);
                 } catch (OperationCanceledException) {
                     break;

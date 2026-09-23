@@ -347,15 +347,28 @@ export.
     "LogLevel": {
       "Default": "Information"
     }
+  },
+  "Server": {
+    "Https": { "Enabled": true, "Port": 5000 },
+    "Http": { "Enabled": true, "Port": 5080, "RedirectToHttps": true }
   }
 }
 ```
+
+On macOS, the app automatically loads `appsettings.MacOS.json`, which
+overrides the production ports to HTTPS `5001` and HTTP `5081` because macOS
+may reserve port `5000`. Edit that file in a macOS deployment to choose
+different ports.
 
 ### Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ASPNETCORE_URLS` | `http://0.0.0.0:5000` | Listen address and port |
+| `Server__Https__Port` | `5000` (`5001` on macOS) | HTTPS listener port |
+| `Server__Http__Port` | `5080` (`5081` on macOS) | HTTP listener port |
+| `Server__Https__Enabled` | `true` | Enable the HTTPS listener |
+| `Server__Http__Enabled` | `true` | Enable the HTTP listener |
+| `Server__Http__RedirectToHttps` | `true` | Redirect HTTP requests to HTTPS |
 | `DOTNET_gcServer` | `0` | Use Workstation GC (saves RAM on RPi) |
 | `Indi__Host` | `localhost` | INDI server hostname |
 | `Indi__Port` | `7624` | INDI server port |
@@ -373,6 +386,32 @@ export.
 | `PlateSolve__PlateSolve3Path` | (none) | PlateSolve3.exe path |
 | `PlateSolve__SolveFieldPath` | `/usr/bin/solve-field` | Local Astrometry.net binary |
 | `PlateSolve__AstrometryApiKey` | (none) | nova.astrometry.net API key |
+
+### Server lifecycle
+
+The authenticated Power controls use these endpoints:
+
+| Method | Endpoint | Behavior |
+|--------|----------|----------|
+| `POST` | `/api/system/stop-app` | Stops only the Polaris process; the host remains running. |
+| `POST` | `/api/system/restart-app` | Restarts Polaris. |
+| `POST` | `/api/system/reboot` | **DEVICE POWER.** Reboots the whole machine on supported Linux/Windows deployments. |
+| `POST` | `/api/system/shutdown` | **DEVICE POWER.** Powers the whole machine off on supported Linux/Windows deployments. |
+
+The last two are the **device**, not the Polaris process. A development build
+refuses them with `403` and says so in `GET /api/system/power`
+(`hostPowerRefusal`, and both capabilities report false), because two coding
+sessions called `/shutdown` to "stop the dev server" and switched off the
+developer's PC. Use `/api/system/stop-app` to stop Polaris itself. The refusal
+covers every path to device power, including the end-of-plan shutdown and the
+scheduled teardown, and `POLARIS_ALLOW_HOST_POWER=1` overrides it for a
+development build genuinely running a rig. `POLARIS_NO_HOST_POWER=1` switches
+device power off anywhere.
+
+macOS exposes only the Polaris process controls. After `/api/system/stop-app`
+is requested from the web interface, the browser stops reconnecting and tells
+the user to start Polaris again from the terminal. Linux/Raspberry Pi retains
+the host reboot and shutdown controls.
 | `Mdns__Enabled` / `Mdns__InstanceName` | `true` / `nina-<hostname>` | mDNS announcer |
 | `Relay__Enabled` | `false` | Enable reverse-tunnel client |
 | `Relay__ServerUrl` | (none) | e.g. `wss://relay.example.com/_tunnel` |

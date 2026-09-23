@@ -24,14 +24,16 @@ namespace NINA.Polaris.WebSocket.Status;
 public sealed class EquipmentStatusContributor : IStatusContributor {
     private readonly CameraStreamService _cameraStream;
     private readonly EquipmentManager _equip;
+    private readonly EquipmentSnapshotService _snapshot;
     private readonly NINA.Polaris.Services.Planetary.KeepCenteredService _keepCentered;
     private readonly NetworkManagerService _network;
     private readonly NINA.Polaris.Services.Simulator.SimulatorService _simulator;
     private readonly UsbDriveWatcherService _usbWatcher;
 
-    public EquipmentStatusContributor(CameraStreamService cameraStream, EquipmentManager equip, NINA.Polaris.Services.Planetary.KeepCenteredService keepCentered, NetworkManagerService network, NINA.Polaris.Services.Simulator.SimulatorService simulator, UsbDriveWatcherService usbWatcher) {
+    public EquipmentStatusContributor(CameraStreamService cameraStream, EquipmentManager equip, EquipmentSnapshotService snapshot, NINA.Polaris.Services.Planetary.KeepCenteredService keepCentered, NetworkManagerService network, NINA.Polaris.Services.Simulator.SimulatorService simulator, UsbDriveWatcherService usbWatcher) {
         _cameraStream = cameraStream;
         _equip = equip;
+        _snapshot = snapshot;
         _keepCentered = keepCentered;
         _network = network;
         _simulator = simulator;
@@ -48,7 +50,16 @@ public sealed class EquipmentStatusContributor : IStatusContributor {
         var simulator = _simulator;
         var usbWatcher = _usbWatcher;
 
-            tick.Blocks["equipment"] = equip.GetEquipmentStatus();
+            // Served from the snapshot thread, never read from the devices
+            // here: every property in this block is a blocking call (an SDK
+            // lock the video grab loop keeps barging, a 15 s Alpaca HTTP
+            // read), and doing it on the socket's thread is what froze the
+            // host on 2026-09-22. See EquipmentSnapshotService.
+            //
+            // The direct call is the cold-start path only: the first tick can
+            // land before the snapshot thread has produced anything, and at
+            // that point nothing is streaming and nothing is contended.
+            tick.Blocks["equipment"] = _snapshot.Latest ?? equip.GetEquipmentStatus();
 
             // Auxiliary camera capture loop status (running + frames
             // saved this session + a no-output-folder warning).

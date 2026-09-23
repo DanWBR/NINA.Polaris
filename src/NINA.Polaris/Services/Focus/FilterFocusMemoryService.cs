@@ -50,17 +50,20 @@ public sealed class FilterFocusMemoryService {
     private readonly AutoFocusService _autoFocus;
     private readonly SequenceEngine _sequence;
     private readonly LiveStackingService _liveStack;
+    private readonly FilterFocusSweepService _sweep;
     private readonly ILogger<FilterFocusMemoryService> _logger;
 
     public FilterFocusMemoryService(EquipmentManager equip, ProfileService profiles,
                                     AutoFocusService autoFocus, SequenceEngine sequence,
                                     LiveStackingService liveStack,
+                                    FilterFocusSweepService sweep,
                                     ILogger<FilterFocusMemoryService> logger) {
         _equip = equip;
         _profiles = profiles;
         _autoFocus = autoFocus;
         _sequence = sequence;
         _liveStack = liveStack;
+        _sweep = sweep;
         _logger = logger;
     }
 
@@ -70,7 +73,12 @@ public sealed class FilterFocusMemoryService {
     private bool RunActive =>
         _autoFocus.State == AutoFocusState.Running
         || _sequence.State == SequenceState.Running
-        || _liveStack.IsRunning;
+        || _liveStack.IsRunning
+        // A per-filter run owns the wheel and the focuser for its whole
+        // duration, including the gaps between filters where autofocus reads
+        // Idle. Without this, moving the wheel from the FILTER card mid-run
+        // would move the focuser to a remembered point under the sweep.
+        || _sweep.State == FilterFocusSweepState.Running;
 
     /// <summary>Decide + act on a filter change to <paramref name="targetFilter"/>
     /// (the effective filter name). Best-effort: any hardware failure is logged
@@ -173,13 +181,21 @@ public sealed class FilterFocusMemoryService {
 
     /// <summary>Record an autofocus result for a filter and refresh the derived
     /// relative offsets. Static so <see cref="AutoFocusService"/> can call it
-    /// inside a profile mutation without taking a dependency on this service.</summary>
+    /// inside a profile mutation without taking a dependency on this service.
+    ///
+    /// <para><paramref name="utc"/> is when the point was MEASURED, which for a
+    /// single run is now and is why it defaults to now. The per-filter sweep
+    /// passes the real time instead: it writes a whole set at once, minutes
+    /// after the early filters were measured, and the freshness clock
+    /// (FilterMemoryMaxAgeHours) plus the freshest-anchor choice both read this
+    /// field.</para></summary>
     public static void RecordAndRecompute(EquipmentProfile rig, string filter, int position,
-                                          double temperatureC, string? focuserName, double? hfr, double tolC) {
+                                          double temperatureC, string? focuserName, double? hfr, double tolC,
+                                          DateTime? utc = null) {
         rig.FilterFocusMemory[filter] = new FilterFocusMemory {
             Position = position,
             TemperatureC = temperatureC,
-            Utc = DateTime.UtcNow,
+            Utc = utc ?? DateTime.UtcNow,
             FocuserName = focuserName,
             Hfr = hfr
         };

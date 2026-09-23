@@ -584,6 +584,10 @@ public static class SystemEndpoints {
                 : Results.Json(new { ok = false, error = r.Message }, statusCode: r.StatusCode);
         });
 
+        // DEVICE POWER, not the Polaris process: this reboots the whole
+        // machine (systemctl reboot / shutdown /r). To restart or stop Polaris
+        // itself use /restart-app or /stop-app above. Refused with 403 on a
+        // development build; see PowerService's host power guard.
         group.MapPost("/reboot", (PowerService power) => {
             var r = power.ScheduleReboot();
             return r.Ok
@@ -591,6 +595,11 @@ public static class SystemEndpoints {
                 : Results.Json(new { ok = false, error = r.Message }, statusCode: r.StatusCode);
         });
 
+        // DEVICE POWER, not the Polaris process: this powers the whole
+        // machine off (systemctl poweroff / shutdown /s). Two coding sessions
+        // called it to "stop the dev server" and switched off the developer's
+        // PC, which is why a development build now refuses it with 403. To
+        // stop Polaris itself use /stop-app above.
         group.MapPost("/shutdown", (PowerService power) => {
             var r = power.ScheduleShutdown();
             return r.Ok

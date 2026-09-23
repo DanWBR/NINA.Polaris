@@ -425,6 +425,12 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<IndiWebManagerServ
 // INDI profile assistant: stateless sysfs reader behind /api/indi/detect.
 // Singleton only because it has no per-request state; it holds no handles.
 builder.Services.AddSingleton<UsbScanService>();
+// The equipment block of /ws/status, refreshed on its own thread. Dual
+// registration: the contributor reads Latest, the hosted loop fills it. Every
+// property in that block is a blocking device read, and doing them on a socket
+// or request thread froze the host (field report 2026-09-22).
+builder.Services.AddSingleton<EquipmentSnapshotService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<EquipmentSnapshotService>());
 // Wedged-INDI-driver watchdog: on repeated BLOB timeouts, restart just that
 // driver through indi-web (a device reconnect can't fix a stuck driver). Dual
 // registration so the hosted StartAsync subscribes to IndiClient.BlobTimeout.
@@ -460,6 +466,10 @@ builder.Services.AddSingleton<AutoFocusService>();
 // Per-filter focus memory: learns the optimal focuser position per filter from
 // autofocus runs and reuses a still-valid point on a manual filter change.
 builder.Services.AddSingleton<NINA.Polaris.Services.Focus.FilterFocusMemoryService>();
+// Per-filter focus run (FOCUS tab). Singleton because it HOLDS the measured
+// points until the operator applies them: a scoped instance would throw away a
+// sweep between two requests.
+builder.Services.AddSingleton<NINA.Polaris.Services.Focus.FilterFocusSweepService>();
 // UPDGATE: one place that knows whether the host is mid-session, so an
 // action that restarts the process can refuse instead of finding out.
 builder.Services.AddSingleton<HostActivityService>();
@@ -1458,6 +1468,7 @@ app.MapUiStateEndpoints();
 // /api/focus group as future manual-assist sub-features (donut
 // metric, gaussian FWHM fit, ...).
 app.MapFocusEndpoints();
+app.MapFocusSweepEndpoints();
 app.MapMeridianFlipEndpoints();
 // FIELD4-4: PREVIEW-tab one-shot plate solve.
 app.MapPlateSolveEndpoints();
