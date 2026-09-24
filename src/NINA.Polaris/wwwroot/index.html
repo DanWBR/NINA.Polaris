@@ -8626,6 +8626,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     :disabled="indiWeb.busy || !indiWeb.status?.running">
                                 ■ Stop
                             </button>
+                            <button class="btn btn-sm" @click="indiWebRestart()"
+                                    :disabled="indiWeb.busy || !indiWeb.status?.running"
+                                    title="Stop and start indi-web. Every driver reconnects, and a driver installed since the last start shows up.">
+                                <span aria-hidden="true">↻</span> Restart
+                            </button>
                             <button class="btn btn-sm" @click="indiWebStatusRefresh(); indiWebEnsureIframe(true)"
                                     :disabled="indiWeb.busy"
                                     title="Refresh status and reload the panel">

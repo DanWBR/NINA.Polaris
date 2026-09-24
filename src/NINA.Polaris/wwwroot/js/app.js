@@ -45807,6 +45807,35 @@ function ninaApp() {
             }
         },
 
+        // Restart indi-web. Every driver goes down and comes back with it,
+        // which is exactly what you want after installing a driver package:
+        // indi-web reads the driver catalogue once, at startup, so a newly
+        // installed driver is invisible until it runs again.
+        async indiWebRestart() {
+            if (this.indiWeb.busy) return;
+            const ok = await this._confirmAsync(
+                this.$t('Restarting INDI stops every running driver and starts them again. '
+                      + 'The mount, camera and focuser reconnect, which takes a few seconds. '
+                      + 'Do this when you are not in the middle of an exposure.'),
+                { title: this.$t('Restart INDI'), okLabel: this.$t('Restart'), cancelLabel: this.$t('Cancel') });
+            if (!ok) return;
+            this.indiWeb.busy = true;
+            try {
+                const r = await this.apiPostJson('/api/indi/web/restart');
+                if (r?.running) {
+                    this.toast(this.$t('INDI restarted'), 'ok');
+                } else {
+                    this.toast(this.$t('Restart failed') + ': ' + (r?.error || this.$t('unknown')), 'error');
+                }
+            } catch (e) {
+                this.toastFail(this.$t('Restart failed'), e);
+            } finally {
+                this.indiWeb.busy = false;
+                await this.indiWebStatusRefresh();
+                this.indiWebEnsureIframe(true);
+            }
+        },
+
         // Status pill: maps the status snapshot to a green / amber /
         // red label so the <details> summary surfaces the state
         // without having to open it.

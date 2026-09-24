@@ -5088,5 +5088,10 @@
   "Auto-push to network or cloud storage": "Envoi automatique vers un stockage reseau ou cloud",
   "Automatically copy saved frames to a NAS, an SSH box or a cloud account as they are written.": "Copie automatiquement les images enregistrees vers un NAS, un serveur SSH ou un compte cloud au fil de l'ecriture.",
   "Looking for rclone on this host...": "Recherche de rclone sur cet hote...",
-  "This rclone is older than 1.63, so an aborted upload can leave a partial file under its final name at the destination. The next send replaces it, because the sizes differ.": "Ce rclone est anterieur a 1.63, donc un envoi interrompu peut laisser un fichier partiel sous son nom final a destination. L'envoi suivant le remplace, car les tailles different."
+  "This rclone is older than 1.63, so an aborted upload can leave a partial file under its final name at the destination. The next send replaces it, because the sizes differ.": "Ce rclone est anterieur a 1.63, donc un envoi interrompu peut laisser un fichier partiel sous son nom final a destination. L'envoi suivant le remplace, car les tailles different.",
+  "Restart INDI": "Redemarrer INDI",
+  "INDI restarted": "INDI redemarre",
+  "Restart failed": "Echec du redemarrage",
+  "Restarting INDI stops every running driver and starts them again. The mount, camera and focuser reconnect, which takes a few seconds. Do this when you are not in the middle of an exposure.": "Redemarrer INDI arrete tous les pilotes en cours et les relance. La monture, la camera et le focuser se reconnectent, ce qui prend quelques secondes. Faites-le hors d'une pose en cours.",
+  "Stop and start indi-web. Every driver reconnects, and a driver installed since the last start shows up.": "Arrete et relance indi-web. Tous les pilotes se reconnectent, et un pilote installe depuis le dernier demarrage apparait."
 }

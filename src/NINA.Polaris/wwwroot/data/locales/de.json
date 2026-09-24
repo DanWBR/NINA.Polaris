@@ -5088,5 +5088,10 @@
   "Auto-push to network or cloud storage": "Automatischer Upload in Netzwerk- oder Cloud-Speicher",
   "Automatically copy saved frames to a NAS, an SSH box or a cloud account as they are written.": "Kopiert gespeicherte Frames automatisch beim Schreiben auf ein NAS, einen SSH-Server oder ein Cloud-Konto.",
   "Looking for rclone on this host...": "Suche nach rclone auf diesem Host...",
-  "This rclone is older than 1.63, so an aborted upload can leave a partial file under its final name at the destination. The next send replaces it, because the sizes differ.": "Dieses rclone ist aelter als 1.63, daher kann ein abgebrochener Upload eine unvollstaendige Datei unter ihrem endgueltigen Namen am Ziel hinterlassen. Der naechste Versand ersetzt sie, weil die Groessen abweichen."
+  "This rclone is older than 1.63, so an aborted upload can leave a partial file under its final name at the destination. The next send replaces it, because the sizes differ.": "Dieses rclone ist aelter als 1.63, daher kann ein abgebrochener Upload eine unvollstaendige Datei unter ihrem endgueltigen Namen am Ziel hinterlassen. Der naechste Versand ersetzt sie, weil die Groessen abweichen.",
+  "Restart INDI": "INDI neu starten",
+  "INDI restarted": "INDI neu gestartet",
+  "Restart failed": "Neustart fehlgeschlagen",
+  "Restarting INDI stops every running driver and starts them again. The mount, camera and focuser reconnect, which takes a few seconds. Do this when you are not in the middle of an exposure.": "Ein Neustart von INDI stoppt alle laufenden Treiber und startet sie erneut. Montierung, Kamera und Fokussierer verbinden sich neu, was einige Sekunden dauert. Tun Sie das nicht mitten in einer Belichtung.",
+  "Stop and start indi-web. Every driver reconnects, and a driver installed since the last start shows up.": "Stoppt und startet indi-web. Alle Treiber verbinden sich neu, und ein seit dem letzten Start installierter Treiber taucht auf."
 }
