@@ -26,8 +26,10 @@ namespace NINA.Polaris.Services.External;
 ///   1. Explicit configured path (profile setting / CLI flag override)
 ///   2. OS-specific list of well-known install dirs (Program Files,
 ///      /usr/bin, /Applications, etc.)
-///   3. PATH environment variable (Linux/macOS, Windows uses PATHEXT
-///      so we explicitly suffix .exe in the candidate list instead)
+///   3. PATH environment variable. On Windows the name is suffixed
+///      with .exe, because PATH entries there hold bare names and a
+///      winget or choco install lands in a shim directory that is on
+///      PATH and nowhere near Program Files.
 ///
 /// First hit wins. Returns null when nothing exists so callers can
 /// gate UI ("not installed" banner) on a single check.
@@ -45,7 +47,7 @@ public static class BinaryLocator {
     /// <param name="windowsCandidates">Absolute paths to check on Windows.</param>
     /// <param name="linuxCandidates">Absolute paths to check on Linux/BSD.</param>
     /// <param name="macCandidates">Absolute paths to check on macOS.</param>
-    /// <param name="pathLookupName">Binary name to look up via $PATH (Unix only). Pass null to skip PATH search.</param>
+    /// <param name="pathLookupName">Binary name to look up via $PATH, without an extension. Pass null to skip PATH search.</param>
     public static string? Find(string? configuredPath,
                                 string[] windowsCandidates,
                                 string[] linuxCandidates,
@@ -58,7 +60,7 @@ public static class BinaryLocator {
             if (File.Exists(c)) return c;
         }
 
-        if (!string.IsNullOrEmpty(pathLookupName) && !OperatingSystem.IsWindows()) {
+        if (!string.IsNullOrEmpty(pathLookupName)) {
             foreach (var c in PathLookup(pathLookupName)) {
                 if (File.Exists(c)) return c;
             }
@@ -86,9 +88,13 @@ public static class BinaryLocator {
             list.Add(new("Well-known install path", c, File.Exists(c)));
         }
 
-        if (!string.IsNullOrEmpty(pathLookupName) && !OperatingSystem.IsWindows()) {
+        // Only PATH hits that exist are listed. PATH is long and mostly
+        // irrelevant, and a diagnostic table of forty misses buries the
+        // well-known paths that actually tell the operator where to put
+        // the binary.
+        if (!string.IsNullOrEmpty(pathLookupName)) {
             foreach (var c in PathLookup(pathLookupName)) {
-                list.Add(new("$PATH", c, File.Exists(c)));
+                if (File.Exists(c)) list.Add(new("$PATH", c, true));
             }
         }
 
@@ -103,9 +109,17 @@ public static class BinaryLocator {
 
     private static IEnumerable<string> PathLookup(string binaryName) {
         var path = Environment.GetEnvironmentVariable("PATH") ?? "";
+        var name = OperatingSystem.IsWindows() && !binaryName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+            ? binaryName + ".exe"
+            : binaryName;
         foreach (var dir in path.Split(Path.PathSeparator)) {
             if (string.IsNullOrWhiteSpace(dir)) continue;
-            yield return Path.Combine(dir, binaryName);
+            // A malformed PATH entry (quotes, a stray character) would
+            // otherwise take the whole lookup down with it.
+            string candidate;
+            try { candidate = Path.Combine(dir.Trim('"'), name); }
+            catch (ArgumentException) { continue; }
+            yield return candidate;
         }
     }
 }

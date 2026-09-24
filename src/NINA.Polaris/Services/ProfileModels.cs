@@ -237,7 +237,7 @@ public class UserProfile {
     public int    StoragePushLinkSharePercent { get; set; } =
         NINA.Polaris.Services.Storage.TransferPacer.DefaultSharePercent;
 
-    public string StorageKind { get; set; } = "smb";   // smb | sftp | local
+    public string StorageKind { get; set; } = "smb";   // smb | sftp | local | rclone
     public string StorageHost { get; set; } = "";        // host or IP (smb/sftp)
     public int    StoragePort { get; set; } = 0;          // 0 => provider default (445 smb / 22 sftp)
     public string StorageShare { get; set; } = "";        // SMB share name (no slashes)
@@ -246,6 +246,30 @@ public class UserProfile {
     public string StorageUsername { get; set; } = "";
     public string StoragePassword { get; set; } = "";
     public string? StorageLastTestResult { get; set; }    // last "Test connection" outcome
+
+    // ---- Cloud storage (the "rclone" kind) ----
+    //
+    // Polaris does not speak Drive, OneDrive or Dropbox itself: it drives the
+    // rclone binary, which already owns those protocols, their OAuth and their
+    // resumable uploads. Nothing here is a credential. The tokens live in
+    // {DataDir}/rclone/rclone.conf, mode 600, which Polaris never reads and
+    // never returns, because GET /api/system/profile hands the whole profile to
+    // any authenticated client.
+
+    /// <summary>rclone remote to upload to, by name. Empty = none chosen.</summary>
+    public string StorageRemoteName { get; set; } = "";
+    /// <summary>Upload speed cap in rclone syntax ("2M"), empty = unlimited.
+    /// Replaces the link-share percentage for this kind: a duty cycle needs a
+    /// transfer loop we own, and rclone owns its own.</summary>
+    public string StorageBandwidthLimit { get; set; } = "";
+    /// <summary>Bumped on every remote change so a queued upload notices that
+    /// the credentials behind its connection were replaced.</summary>
+    public int    StorageRemoteRevision { get; set; }
+    /// <summary>Offload everything a run wrote when the run finishes.</summary>
+    public bool   StoragePushOnSessionEnd { get; set; }
+    /// <summary>Explicit path to the rclone binary. Empty = look on PATH and in
+    /// the usual install locations.</summary>
+    public string? RclonePath { get; set; }
 
     // External post-processing tools (Siril + GraXpert). Empty/null
     // means "auto-detect" via BinaryLocator; set explicitly to

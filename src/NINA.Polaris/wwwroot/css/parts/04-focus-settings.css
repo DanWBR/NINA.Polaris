@@ -1197,6 +1197,33 @@
 .storage-form label > .lbl { font-size: 12px; white-space: nowrap; }
 .storage-form label > .input { width: 100%; }
 
+/* The rclone remote setup panel, which sits below the storage form and
+   is not part of its grid. Same shape: label above the control, control
+   full width, so the two halves of the card do not disagree. */
+.rclone-setup {
+    margin: 12px 0;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+.rclone-setup label {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+.rclone-setup label > .lbl { font-size: 12px; }
+.rclone-setup .input,
+.rclone-setup textarea { width: 100%; }
+.rclone-setup code {
+    flex: 1;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: var(--bg-tertiary);
+    overflow-x: auto;
+}
+
 /* Paragraphs and helper lines in settings, same as labels.
    Without this rule a default <p> picks up the user-agent's larger
    body-derived size. */

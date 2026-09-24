@@ -25,10 +25,22 @@ public interface IStorageTargetFactory {
 /// instances that <see cref="StoragePushService"/> disposes on drop.
 /// </summary>
 public sealed class StorageTargetFactory : IStorageTargetFactory {
+    private readonly NINA.Polaris.Services.External.RcloneService _rclone;
+    private readonly ILoggerFactory _loggers;
+
+    public StorageTargetFactory(NINA.Polaris.Services.External.RcloneService rclone,
+                                ILoggerFactory loggers) {
+        _rclone = rclone;
+        _loggers = loggers;
+    }
+
     public IStorageTarget Create(string kind) => (kind ?? "").Trim().ToLowerInvariant() switch {
         "smb"   => new SmbStorageTarget(),
         "sftp"  => new SftpStorageTarget(),
         "local" => new LocalStorageTarget(),
+        // One kind for every cloud provider: which one it is belongs to the
+        // rclone remote, not to Polaris.
+        "rclone" => new RcloneStorageTarget(_rclone, _loggers.CreateLogger<RcloneStorageTarget>()),
         var k   => throw new NotSupportedException($"Unknown storage kind: '{k}'")
     };
 }

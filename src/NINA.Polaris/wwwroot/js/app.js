@@ -1879,7 +1879,19 @@ function ninaApp() {
             // Share of the uplink the push may take. It used to take all of it,
             // and the browser sharing that link was told the connection had
             // dropped, several times per pushed frame.
-            linkSharePercent: 50
+            linkSharePercent: 50,
+            // Cloud (the rclone kind). remoteName and bandwidthLimit are the
+            // form; the rest describes the host's rclone and is read-only.
+            remoteName: '', bandwidthLimit: '', pushOnSessionEnd: false,
+            remotes: [], rcloneAvailable: false, rcloneVersion: '', rcloneCandidates: []
+        },
+        // Setting up a remote. Separate from the form above because it is a
+        // one-off flow whose fields mean nothing once the remote exists.
+        rcloneSetup: {
+            open: false, busy: false, error: '',
+            type: 'drive', name: '', paste: '', command: '',
+            url: '', host: '', user: '', pass: '',
+            accessKey: '', secretKey: '', endpoint: '', region: ''
         },
         storagePushStatus: {
             enabled: false, kind: 'smb', connected: false, queued: 0,
@@ -31458,7 +31470,11 @@ function ninaApp() {
                 s.username = d.username || '';
                 s.hasPassword = !!d.hasPassword;
                 s.linkSharePercent = d.linkSharePercent || 50;
+                s.remoteName = d.remoteName || '';
+                s.bandwidthLimit = d.bandwidthLimit || '';
+                s.pushOnSessionEnd = !!d.pushOnSessionEnd;
                 s.password = '';   // never round-tripped; blank = keep stored
+                if (s.kind === 'rclone') { try { await this.loadRcloneInfo(); } catch (e) { } }
                 if (d.lastTestResult) { s.testResult = d.lastTestResult; }
                 // PERSIST (#638): the form now reflects the server; saves may fire.
                 this._storageLoaded = true;
@@ -31486,8 +31502,15 @@ function ninaApp() {
                 const r = await (await this.apiPut('/api/storage/config', {
                     enabled: s.enabled, kind: s.kind, host: s.host, port: Number(s.port) || 0,
                     share: s.share, basePath: s.basePath, domain: s.domain,
-                    username: s.username, password: s.password,
-                    linkSharePercent: Number(s.linkSharePercent) || 50
+                    username: s.username,
+                    // null keeps the stored password. The endpoint now treats an
+                    // empty string as "clear it", which is what finally makes a
+                    // password removable, so an untouched field must send null
+                    // and not "".
+                    password: s.password.length > 0 ? s.password : null,
+                    linkSharePercent: Number(s.linkSharePercent) || 50,
+                    remoteName: s.remoteName, bandwidthLimit: s.bandwidthLimit,
+                    pushOnSessionEnd: !!s.pushOnSessionEnd
                 })).json();
                 if (r && r.ok) {
                     if (s.password) s.hasPassword = true;
@@ -31500,6 +31523,129 @@ function ninaApp() {
                 this.toastFail('Save failed', e, 'warn');
             }
         },
+        // ----- Cloud storage (rclone) -----
+
+        // What this host knows about rclone: is it installed, where we looked,
+        // and which remotes exist. All static between operator actions, so it is
+        // a REST read and not part of the 1 Hz status frame.
+        async loadRcloneInfo() {
+            try {
+                const d = await this.apiGet('/api/storage/rclone');
+                const s = this.storagePush;
+                s.rcloneAvailable = !!d.available;
+                s.rcloneVersion = d.version || '';
+                s.rcloneCandidates = d.candidates || [];
+                s.remotes = d.remotes || [];
+                // The <option> list is built from s.remotes, so a value set
+                // before the list existed leaves the select showing
+                // "(choose a remote)" while the profile says otherwise.
+                // Re-assign once the options are in the DOM.
+                const keep = s.remoteName;
+                if (keep) {
+                    s.remoteName = '';
+                    this.$nextTick(() => { s.remoteName = keep; });
+                }
+            } catch (e) {
+                this.storagePush.rcloneAvailable = false;
+            }
+        },
+        rcloneSetupNeedsBrowser() {
+            return ['drive', 'onedrive', 'dropbox'].includes(this.rcloneSetup.type);
+        },
+        async openRcloneSetup() {
+            const r = this.rcloneSetup;
+            r.open = !r.open;
+            r.error = '';
+            if (r.open) await this.refreshAuthorizeCommand();
+        },
+        // The command is built on the host so the provider id in the
+        // instructions cannot drift from the one the endpoint accepts.
+        async refreshAuthorizeCommand() {
+            if (!this.rcloneSetupNeedsBrowser()) { this.rcloneSetup.command = ''; return; }
+            try {
+                const d = await this.apiGet('/api/storage/rclone/authorize-command?type='
+                                            + encodeURIComponent(this.rcloneSetup.type));
+                this.rcloneSetup.command = d?.command || '';
+            } catch (e) {
+                this.rcloneSetup.command = 'rclone authorize "' + this.rcloneSetup.type + '"';
+            }
+        },
+        async copyAuthorizeCommand() {
+            try {
+                await navigator.clipboard.writeText(this.rcloneSetup.command || '');
+                this.toast('Command copied', 'ok');
+            } catch (e) {
+                this.toast('Could not copy. Select the command and copy it by hand.', 'warn');
+            }
+        },
+        async createRcloneRemote() {
+            const r = this.rcloneSetup;
+            r.busy = true; r.error = '';
+            try {
+                const body = { name: r.name, type: r.type };
+                if (this.rcloneSetupNeedsBrowser()) {
+                    body.paste = r.paste;
+                } else {
+                    const v = {};
+                    if (r.type === 'webdav') { v.url = r.url; v.vendor = 'nextcloud'; v.user = r.user; v.pass = r.pass; }
+                    if (r.type === 'sftp')   { v.host = r.host; v.user = r.user; v.pass = r.pass; }
+                    if (r.type === 's3')     {
+                        v.provider = 'Other';
+                        v.access_key_id = r.accessKey; v.secret_access_key = r.secretKey;
+                        if (r.endpoint) v.endpoint = r.endpoint;
+                        if (r.region) v.region = r.region;
+                    }
+                    body.values = v;
+                }
+                const res = await (await this.apiPost('/api/storage/rclone/remotes', body)).json();
+                if (res && res.ok) {
+                    this.toast('Remote created', 'ok');
+                    r.open = false;
+                    r.paste = ''; r.pass = ''; r.secretKey = '';
+                    this.storagePush.remoteName = res.name || r.name;
+                    await this.loadRcloneInfo();
+                    await this.saveStorageConfig();
+                } else {
+                    r.error = (res && res.error) || 'Could not create the remote.';
+                }
+            } catch (e) {
+                r.error = this._mountErrorText ? this._mountErrorText(e) : String(e);
+            } finally {
+                r.busy = false;
+            }
+        },
+        async deleteRcloneRemote(name) {
+            if (!name) return;
+            const ok = await this._confirmAsync(
+                'Remove the remote "' + name + '"? Files already uploaded stay where they are.',
+                { title: 'Delete remote', okLabel: 'Delete', cancelLabel: 'Cancel', danger: true });
+            if (!ok) return;
+            try {
+                await this.apiFetch('/api/storage/rclone/remotes/' + encodeURIComponent(name),
+                                    { method: 'DELETE' });
+                if (this.storagePush.remoteName === name) this.storagePush.remoteName = '';
+                await this.loadRcloneInfo();
+                this.toast('Remote removed', 'ok');
+            } catch (e) {
+                this.toastFail('Could not remove the remote', e);
+            }
+        },
+        // FILES: send the selected folder to whatever the storage card points
+        // at. The local copy stays; this only queues copies.
+        async filesSendToCloud() {
+            const paths = this.files.selectedPaths || [];
+            if (paths.length !== 1) { this.toast('Select one folder to send.', 'warn'); return; }
+            try {
+                const res = await (await this.apiPost('/api/storage/push-folder',
+                                                      { path: paths[0] })).json();
+                const n = (res && res.queued) || 0;
+                this.toast(n > 0 ? ('Queued ' + n + ' file(s) for upload.') : 'Nothing new to upload.',
+                           n > 0 ? 'ok' : 'info');
+            } catch (e) {
+                this.toastFail('Send to cloud', e);
+            }
+        },
+
         async testStorageConnection() {
             const s = this.storagePush;
             // Persist first so the server tests the values shown on screen.
@@ -35075,7 +35221,7 @@ function ninaApp() {
                 ['Image processing', ['gpu acceleration (opencl)', 'external tools', 'image cache', 'image output', 'colour calibration data', 'scripts (beta)']],
                 ['Network & security',  ['authentication', 'https certificate',
                     'https endpoints (for webgpu + multi-thread wasm)', 'network (wifi)', 'remote terminal',
-                    'auto-push to network storage']],
+                    'auto-push to network or cloud storage', 'remote access relay']],
                 ['System & maintenance', ['debug logging', 'diagnostics', 'hardware benchmark',
                     'reset everything to factory defaults', 'software update', 'power',
                     'backup & restore', 'scheduled shutdown']],

@@ -369,6 +369,9 @@ builder.Services.AddSingleton<ImageWriterService>();
 // factory hands out a fresh connection-owning adapter per connect cycle.
 builder.Services.AddSingleton<NINA.Polaris.Services.Storage.IStorageTargetFactory,
     NINA.Polaris.Services.Storage.StorageTargetFactory>();
+// rclone: the cloud destinations of the storage push. Singleton because it
+// owns the config path and the binary lookup cache, not a connection.
+builder.Services.AddSingleton<NINA.Polaris.Services.External.RcloneService>();
 builder.Services.AddSingleton<StoragePushService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<StoragePushService>());
 builder.Services.AddSingleton<UsbDriveWatcherService>();
