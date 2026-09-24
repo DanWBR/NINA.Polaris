@@ -12655,6 +12655,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <span class="files-icon">⬇</span>
                         <span class="files-icon-label">Download</span>
                     </button>
+                    <button class="btn btn-sm btn-icon"
+                            @click="filesSendToCloud()"
+                            :disabled="files.selectedPaths.length !== 1"
+                            title="Upload the selected folder to the storage target. The local copy stays."
+                            aria-label="Send to storage">
+                        <span class="files-icon">&#9729;</span>
+                        <span class="files-icon-label">Send to cloud</span>
+                    </button>
                     <span class="files-actions-sep" aria-hidden="true"></span>
                     <button class="btn btn-sm btn-icon"
                             @click="filesCopy()"
@@ -14763,8 +14771,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <div class="settings-section" id="storage-push-card" x-init="cardInit(() => loadStorageConfig())">
                     <h3 data-tour="set-storage"><span class="settings-card-icon">📤</span>Auto-push to network storage</h3>
                     <p class="hint" style="margin-top:0">
-                        Copy every saved image to a NAS, network share or SSH box as it's
-                        written, mirroring the capture folder tree. The local copy stays put.
+                        Copy every saved image to a NAS, network share, SSH box or cloud
+                        account as it's written, mirroring the capture folder tree. The local
+                        copy stays put.
                     </p>
                     <label class="chk" style="display:flex; align-items:center; gap:8px; margin-bottom:12px">
                         <input type="checkbox" x-model="storagePush.enabled" @change="saveStorageConfig()">
@@ -14776,9 +14785,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <option value="smb">SMB / CIFS (NAS, Windows share)</option>
                                 <option value="sftp">SFTP (SSH)</option>
                                 <option value="local">Mounted / local folder</option>
+                                <option value="rclone">Cloud (Drive, OneDrive, Dropbox, Nextcloud, S3)</option>
                             </select>
                         </label>
-                        <label x-show="storagePush.kind !== 'local'"><span class="lbl">Host</span>
+                        <label x-show="storagePush.kind !== 'local' && storagePush.kind !== 'rclone'"><span class="lbl">Host</span>
                             <input class="input input-sm" type="text" x-model="storagePush.host" placeholder="192.168.0.50">
                         </label>
                         <label x-show="storagePush.kind === 'smb'"><span class="lbl">Share</span>
@@ -14793,22 +14803,48 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <label x-show="storagePush.kind === 'smb'"><span class="lbl">Domain <span class="text-muted">(optional)</span></span>
                             <input class="input input-sm" type="text" x-model="storagePush.domain" placeholder="WORKGROUP">
                         </label>
-                        <label x-show="storagePush.kind !== 'local'"><span class="lbl">Username</span>
+                        <label x-show="storagePush.kind !== 'local' && storagePush.kind !== 'rclone'"><span class="lbl">Username</span>
                             <input class="input input-sm" type="text" x-model="storagePush.username" autocomplete="off">
                         </label>
-                        <label x-show="storagePush.kind !== 'local'"><span class="lbl">Password</span>
+                        <label x-show="storagePush.kind !== 'local' && storagePush.kind !== 'rclone'"><span class="lbl">Password</span>
                             <input class="input input-sm" type="password" x-model="storagePush.password"
                                    autocomplete="new-password"
                                    :placeholder="storagePush.hasPassword ? '•••••• (unchanged)' : ''">
                         </label>
-                        <label x-show="storagePush.kind !== 'local'"><span class="lbl">Port <span class="text-muted">(0 = default)</span></span>
+                        <label x-show="storagePush.kind !== 'local' && storagePush.kind !== 'rclone'"><span class="lbl">Port <span class="text-muted">(0 = default)</span></span>
                             <input class="input input-sm" type="number" min="0" max="65535" x-model.number="storagePush.port">
+                        </label>
+                        <!-- Cloud: Polaris drives rclone, which owns the provider
+                             protocols and their sign in. The account lives in
+                             rclone's own config, never in the Polaris profile. -->
+                        <label x-show="storagePush.kind === 'rclone' && storagePush.rcloneAvailable"><span class="lbl">Cloud remote</span>
+                            <select class="input input-sm" x-model="storagePush.remoteName">
+                                <option value="">(choose a remote)</option>
+                                <template x-for="r in storagePush.remotes" :key="'rem-' + r.name">
+                                    <option :value="r.name" x-text="r.name + ' (' + r.type + ')'"></option>
+                                </template>
+                            </select>
+                        </label>
+                        <label x-show="storagePush.kind === 'rclone' && storagePush.rcloneAvailable"><span class="lbl">Remote folder</span>
+                            <input class="input input-sm" type="text" x-model="storagePush.basePath" placeholder="astro">
+                        </label>
+                        <label x-show="storagePush.kind === 'rclone' && storagePush.rcloneAvailable"
+                               title="An absolute cap on the upload, because a duty cycle needs a transfer loop Polaris owns and rclone owns its own. Pick something below your upload speed so the session stays responsive.">
+                            <span class="lbl">Upload speed limit</span>
+                            <select class="input input-sm" x-model="storagePush.bandwidthLimit">
+                                <option value="">Unlimited</option>
+                                <option value="500k">500 kB/s</option>
+                                <option value="1M">1 MB/s</option>
+                                <option value="2M">2 MB/s</option>
+                                <option value="5M">5 MB/s</option>
+                                <option value="10M">10 MB/s</option>
+                            </select>
                         </label>
                         <!-- The push and the browser share one uplink on a
                              wireless rig. Unpaced, a frame on its way to the NAS
                              took all of it and the link watchdog reported a lost
                              connection several times per frame. -->
-                        <label x-show="storagePush.kind !== 'local'"
+                        <label x-show="storagePush.kind !== 'local' && storagePush.kind !== 'rclone'"
                                title="How much of the network link the background upload may use. The browser is on the same link on a wireless rig, so an upload at full speed makes the live view stall and the connection warning appear. 100% removes the pacing, which is right when the storage has its own wired path.">
                             <span class="lbl">Link share <span class="text-muted">(100% = no pacing)</span></span>
                             <select class="input input-sm" x-model.number="storagePush.linkSharePercent">
@@ -14819,6 +14855,134 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             </select>
                         </label>
                     </div>
+                    <div x-show="storagePush.kind === 'rclone' && !storagePush.rcloneAvailable" x-cloak
+                         style="margin-top:10px">
+                        <p class="text-warn" style="font-size:12px">rclone is not installed on this host.</p>
+                        <p class="hint">Cloud uploads are handled by rclone, which Polaris runs for you. Install it and this card picks it up.</p>
+                        <p class="hint"><code>sudo apt install rclone</code></p>
+                        <details style="margin-top:6px">
+                            <summary class="text-muted" style="font-size:12px">Where Polaris looked for rclone</summary>
+                            <table class="flatwiz-trained-table" style="margin-top:6px">
+                                <tbody>
+                                    <template x-for="c in storagePush.rcloneCandidates" :key="'rc-' + c.path">
+                                        <tr>
+                                            <td x-text="c.exists ? 'found' : 'not here'"></td>
+                                            <td x-text="c.description"></td>
+                                            <td><code x-text="c.path"></code></td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </details>
+                    </div>
+                    <div x-show="storagePush.kind === 'rclone' && storagePush.rcloneAvailable" x-cloak
+                         style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:10px">
+                        <button class="btn btn-sm" @click="openRcloneSetup()">Set up a remote</button>
+                        <button class="btn btn-sm" @click="loadRcloneInfo()">Refresh remotes</button>
+                        <button class="btn btn-sm" @click="deleteRcloneRemote(storagePush.remoteName)"
+                                :disabled="!storagePush.remoteName">Delete remote</button>
+                        <span class="text-muted" style="font-size:11px" x-text="storagePush.rcloneVersion"></span>
+                    </div>
+                    <p class="hint" x-show="storagePush.kind === 'rclone' && storagePush.rcloneAvailable && storagePush.remotes.length === 0"
+                       x-cloak>No remotes configured yet.</p>
+
+                    <!-- Setting up a remote on a host with no browser. The sign
+                         in happens on the operator's own computer and the result
+                         is carried across; see RcloneConfigPaste for the two
+                         shapes people bring back. -->
+                    <div class="settings-subpanel" x-show="rcloneSetup.open" x-cloak x-transition
+                         style="margin-top:10px; padding:10px; border:1px solid var(--border); border-radius:8px">
+                        <h5 style="margin:0 0 8px">Set up a cloud remote</h5>
+                        <label style="display:block; margin-bottom:8px"><span class="lbl">Provider</span>
+                            <select class="input input-sm" x-model="rcloneSetup.type" style="width:100%">
+                                <option value="drive">Google Drive</option>
+                                <option value="onedrive">Microsoft OneDrive</option>
+                                <option value="dropbox">Dropbox</option>
+                                <option value="webdav">Nextcloud / WebDAV</option>
+                                <option value="sftp">SFTP (SSH)</option>
+                                <option value="s3">S3 compatible</option>
+                            </select>
+                        </label>
+                        <label style="display:block; margin-bottom:8px"><span class="lbl">Remote name</span>
+                            <input class="input input-sm" type="text" x-model="rcloneSetup.name"
+                                   placeholder="gdrive" style="width:100%">
+                        </label>
+                        <p class="hint">Use letters, numbers, dash, dot and underscore. No spaces or colons.</p>
+
+                        <!-- Providers that need a browser -->
+                        <div x-show="rcloneSetupNeedsBrowser()" x-cloak>
+                            <p class="hint">This host has no browser, so the provider sign in happens on your computer.</p>
+                            <p class="hint">1. On a computer with a browser, install rclone and run:</p>
+                            <div style="display:flex; gap:8px; align-items:center; margin:4px 0">
+                                <code x-text="rcloneSetup.command" style="flex:1"></code>
+                                <button class="btn btn-sm" @click="copyAuthorizeCommand()">Copy command</button>
+                            </div>
+                            <p class="hint">2. Sign in when the browser opens, then copy everything rclone prints.</p>
+                            <p class="hint">3. Paste it below and press Create remote.</p>
+                            <p class="hint" x-show="rcloneSetup.type === 'onedrive'" x-cloak>
+                                For OneDrive, run rclone config on your computer and paste the whole
+                                section it writes: the sign in alone does not carry the drive id.
+                            </p>
+                            <textarea class="input input-sm" rows="4" style="width:100%"
+                                      x-model="rcloneSetup.paste"
+                                      placeholder="Paste the rclone output, or the remote block from your rclone.conf"></textarea>
+                        </div>
+
+                        <!-- Providers that only need a form -->
+                        <div x-show="!rcloneSetupNeedsBrowser()" x-cloak>
+                            <label x-show="rcloneSetup.type === 'webdav'" style="display:block; margin-bottom:8px">
+                                <span class="lbl">WebDAV URL</span>
+                                <input class="input input-sm" type="text" x-model="rcloneSetup.url"
+                                       placeholder="https://cloud.example.com/remote.php/dav/files/you/" style="width:100%">
+                            </label>
+                            <label x-show="rcloneSetup.type === 'sftp'" style="display:block; margin-bottom:8px">
+                                <span class="lbl">Server</span>
+                                <input class="input input-sm" type="text" x-model="rcloneSetup.host"
+                                       placeholder="192.168.0.50" style="width:100%">
+                            </label>
+                            <label x-show="rcloneSetup.type !== 's3'" style="display:block; margin-bottom:8px">
+                                <span class="lbl">Username</span>
+                                <input class="input input-sm" type="text" x-model="rcloneSetup.user"
+                                       autocomplete="off" style="width:100%">
+                            </label>
+                            <label x-show="rcloneSetup.type !== 's3'" style="display:block; margin-bottom:8px">
+                                <span class="lbl">Password</span>
+                                <input class="input input-sm" type="password" x-model="rcloneSetup.pass"
+                                       autocomplete="new-password" style="width:100%">
+                            </label>
+                            <template x-if="rcloneSetup.type === 's3'">
+                                <div>
+                                    <label style="display:block; margin-bottom:8px"><span class="lbl">Access key ID</span>
+                                        <input class="input input-sm" type="text" x-model="rcloneSetup.accessKey" style="width:100%">
+                                    </label>
+                                    <label style="display:block; margin-bottom:8px"><span class="lbl">Secret access key</span>
+                                        <input class="input input-sm" type="password" x-model="rcloneSetup.secretKey"
+                                               autocomplete="new-password" style="width:100%">
+                                    </label>
+                                    <label style="display:block; margin-bottom:8px"><span class="lbl">Endpoint</span>
+                                        <input class="input input-sm" type="text" x-model="rcloneSetup.endpoint"
+                                               placeholder="s3.eu-central-1.amazonaws.com" style="width:100%">
+                                    </label>
+                                    <label style="display:block; margin-bottom:8px"><span class="lbl">Region</span>
+                                        <input class="input input-sm" type="text" x-model="rcloneSetup.region" style="width:100%">
+                                    </label>
+                                </div>
+                            </template>
+                        </div>
+
+                        <div style="display:flex; gap:8px; align-items:center; margin-top:8px">
+                            <button class="btn btn-primary btn-sm" @click="createRcloneRemote()"
+                                    :disabled="rcloneSetup.busy">Create remote</button>
+                            <button class="btn btn-sm" @click="rcloneSetup.open = false">Cancel</button>
+                            <span class="text-danger" style="font-size:12px" x-show="rcloneSetup.error"
+                                  x-cloak x-text="rcloneSetup.error"></span>
+                        </div>
+                    </div>
+                    <label class="chk" style="display:flex; align-items:center; gap:8px; margin-top:10px">
+                        <input type="checkbox" x-model="storagePush.pushOnSessionEnd" @change="saveStorageConfig()">
+                        Upload the session folder when a run finishes
+                    </label>
+                    <p class="hint">The local copy always stays on this host. Uploading never deletes anything.</p>
                     <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:12px">
                         <button class="btn btn-primary" @click="saveStorageConfig()">Save</button>
                         <button class="btn" @click="testStorageConnection()" :disabled="storagePush.testing">

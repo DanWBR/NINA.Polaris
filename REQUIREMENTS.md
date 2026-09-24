@@ -258,8 +258,11 @@ others work fully offline.
 | SKY tab DSS imagery | High-res deep-sky tiles when zoomed in | CDS Strasbourg [Aladin](https://aladin.cds.unistra.fr) HiPS server (free, public) |
 | Astrometry.net online solver | Plate-solve fallback | nova.astrometry.net (free, API key) |
 | Relay public access | Anywhere-on-internet access to a LAN Polaris | Your VPS (you host) |
+| Cloud storage push | Uploading finished data to Drive, OneDrive, Dropbox, Nextcloud/WebDAV or S3 | Your own cloud account, through [rclone](https://rclone.org) (`Recommends:` in the .deb) |
 
-All have graceful offline fallbacks. The home page works at the airlock of a Mars colony.
+All have graceful offline fallbacks. The cloud push queues instead of
+erroring, and the local copy always stays on the host. The home page
+works at the airlock of a Mars colony.
 
 ---
 

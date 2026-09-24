@@ -171,6 +171,81 @@ long-running ZIP download can hit the proxy's read timeout and abort.
 Give the proxy a long read timeout, or download over the direct LAN
 connection on port 5000, which has no such limit.
 
+## Sending data off the host {#sec-storage-push}
+
+Everything above moves data by hand. Polaris can also do it by
+itself: **Settings -> Storage push** copies every saved frame to a
+NAS over SMB, to another machine over SFTP, to a mounted folder, or
+to a cloud account, rebuilding the same folder tree at the far end.
+
+**The local copy always stays on the host.** The push is a copy and
+never a move; nothing is deleted at either end. A failed upload can
+cost you time, never data.
+
+The queue runs in the background with two lanes, one for images and
+one for the much heavier video and SER files, so a 4 GB planetary
+capture does not park the night's lights behind it. A frame is
+written under a temporary name and renamed once complete, so a
+half-copied file is never mistaken for a finished one. Repeated
+failures trip a breaker rather than retrying forever; **Retry
+failed** clears it once the destination is back. **Backfill** walks
+the capture folder and queues whatever the destination does not
+already have.
+
+On the LAN kinds, **Link share** caps how much of the network link
+the push may take, so the browser watching the session over that same
+link stays usable.
+
+### Cloud accounts
+
+Choose the **Cloud** kind for Google Drive, OneDrive, Dropbox,
+Nextcloud or WebDAV, SFTP and S3-compatible storage. The provider
+protocols and their sign in are handled by
+[rclone](https://rclone.org), which Polaris runs for you. It is a
+recommended package on a `.deb` install, so it is usually already
+there; if it is not, the card says so, lists every path it searched,
+and names the package:
+
+```bash
+sudo apt install rclone
+```
+
+Your cloud account never enters the Polaris profile. rclone keeps it
+in its own configuration file inside the Polaris data directory,
+readable only by the account Polaris runs as, and Polaris only ever
+writes it through rclone itself.
+
+Authorising a headless host takes one detour, because the Pi has no
+browser to sign in with:
+
+1. **Set up a remote**, pick the provider, and give it a short name.
+2. On a computer that does have a browser, install rclone and run the
+   command the card shows, for example `rclone authorize "drive"`.
+3. Sign in when the browser opens. rclone prints a block of text.
+4. Paste it back into Polaris and press **Create remote**.
+
+OneDrive is the one exception: the sign in alone does not carry the
+drive id, so run `rclone config` on your computer instead and paste
+the whole section it writes into your desktop `rclone.conf`. The
+paste box accepts either shape.
+
+Because rclone runs its own transfer loop, the Link share control
+cannot reach it. The cloud kind gets a hard **Upload speed limit**
+instead. Pick something below your actual upload speed and the
+session, the preview and the guiding stay responsive while a night
+goes up.
+
+### When it uploads
+
+- **As each frame is saved**, which is the default.
+- **When a run finishes**, if *Upload the session folder when a run
+  finishes* is on. This catches the files that a live stack, a plate
+  solve or a Studio step wrote without saving a new frame, which the
+  per-frame push never sees.
+- **On demand**, from this tab: select exactly one folder and press
+  **Send to cloud**. Only what the destination is missing is queued,
+  so sending the same night twice costs nothing.
+
 ## Switching the Studio root
 
 Navigate to any folder and click **Set as Studio root** (the
