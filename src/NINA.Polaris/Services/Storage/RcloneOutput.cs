@@ -131,7 +131,11 @@ public static class RcloneOutput {
         // 0 = done, 9 = nothing to transfer because the destination already
         // matches, which is exactly the idempotent skip we want.
         0 or 9 => new RcloneExit(true, false, null),
-        1 => new RcloneExit(false, false, "rclone rejected the command (this is a Polaris bug)."),
+        // 1 is documented as "syntax or usage error", but rclone also returns
+        // it when it cannot build the file system at all, which is what a
+        // wrong URL or a bad credential looks like. The caller prefers
+        // rclone's own message; this is only the fallback.
+        1 => new RcloneExit(false, false, "rclone refused the command. Usually a wrong remote, URL or credential."),
         2 => new RcloneExit(false, true, "rclone reported an error."),
         3 => new RcloneExit(false, false, "The folder does not exist on the remote."),
         4 => new RcloneExit(false, false, "The file was gone before it could be uploaded."),

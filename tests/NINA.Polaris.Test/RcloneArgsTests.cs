@@ -67,12 +67,13 @@ public class RcloneArgsTests {
     [Test]
     public void Copy_PutsTheConfigFirstAndTheDestinationAfterTheSource() {
         var a = RcloneArgs.Copy(Cfg, Rclone(), @"C:\cap\rig\a.fits", "rig/a.fits");
+        var verb = a.IndexOf("copyto");
         Assert.Multiple(() => {
             Assert.That(a[0], Is.EqualTo("--config"));
             Assert.That(a[1], Is.EqualTo(Cfg));
-            Assert.That(a[2], Is.EqualTo("copyto"));
-            Assert.That(a[3], Is.EqualTo(@"C:\cap\rig\a.fits"), "the local path is passed through as it is");
-            Assert.That(a[4], Is.EqualTo("gdrive:astro/rig/a.fits"));
+            Assert.That(verb, Is.GreaterThan(1), "the verb comes after the global flags");
+            Assert.That(a[verb + 1], Is.EqualTo(@"C:\cap\rig\a.fits"), "the local path is passed through as it is");
+            Assert.That(a[verb + 2], Is.EqualTo("gdrive:astro/rig/a.fits"));
         });
     }
 
@@ -138,6 +139,26 @@ public class RcloneArgsTests {
                      RcloneArgs.ConfigDelete(Cfg, "gdrive")
                  }) {
             Assert.That(Pair(args, "--config"), Is.EqualTo(Cfg));
+        }
+    }
+
+    [Test]
+    public void EveryCommandAsksForJsonLogging() {
+        // The failure message the operator reads is parsed out of the log, and
+        // only the JSON form is parseable. Without this on the probe commands,
+        // a wrong WebDAV URL surfaced as "rclone rejected the command" with
+        // rclone's actual explanation thrown away.
+        var cfg = Rclone();
+        foreach (var args in new[] {
+                     RcloneArgs.Copy(Cfg, cfg, "/a", "a"),
+                     RcloneArgs.ListJson(Cfg, cfg),
+                     RcloneArgs.Lsd(Cfg, cfg),
+                     RcloneArgs.ListRemotes(Cfg),
+                     RcloneArgs.About(Cfg, "gdrive"),
+                     RcloneArgs.Version(Cfg),
+                     RcloneArgs.ConfigDelete(Cfg, "gdrive")
+                 }) {
+            Assert.That(args.Count(a => a == "--use-json-log"), Is.EqualTo(1));
         }
     }
 

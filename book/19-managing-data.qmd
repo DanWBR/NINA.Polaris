@@ -210,6 +210,10 @@ and names the package:
 sudo apt install rclone
 ```
 
+On a Windows host, `winget install Rclone.Rclone` does the same job.
+Polaris also looks along PATH, so it finds the binary wherever the
+package manager put it.
+
 Your cloud account never enters the Polaris profile. rclone keeps it
 in its own configuration file inside the Polaris data directory,
 readable only by the account Polaris runs as, and Polaris only ever

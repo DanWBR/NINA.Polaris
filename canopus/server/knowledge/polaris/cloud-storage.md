@@ -51,11 +51,13 @@ protocols, the OAuth sign in and the token refresh. Polaris runs one
 package, so it usually comes along:
 
 ```
-sudo apt install rclone
+sudo apt install rclone          # Linux
+winget install Rclone.Rclone     # Windows host
 ```
 
 If it is missing, the Storage push card says so and lists every path
-it looked in.
+it looked in. Polaris also searches PATH, so a winget, choco or
+Homebrew install is found wherever it landed.
 
 Polaris keeps rclone's configuration in its own data directory,
 `{DataDir}/rclone/rclone.conf`, mode 0600, and passes `--config` on
@@ -137,6 +139,7 @@ point is mirroring that tree.
 | "unknown remote" on the first upload | the remote name in the card does not match `rclone listremotes` |
 | Test says the folder will be created | normal, the remote folder does not exist yet |
 | Uploads stop, queue frozen | the breaker tripped; fix the destination and press Retry failed |
+| A `.part` file left at the destination | an aborted upload; rclone writes to a partial name and renames on success, so the truncated copy never takes the real name. Delete it at the far end when it bothers you, Polaris never deletes anything on the remote |
 | OneDrive remote authorises but uploads fail | created from `rclone authorize` alone, so it carries no drive id; recreate it from a full `rclone config` section |
 
 ## See also

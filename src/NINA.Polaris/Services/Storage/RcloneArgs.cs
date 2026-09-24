@@ -117,8 +117,13 @@ public static class RcloneArgs {
 
     /// <summary>Common to every invocation: the explicit config path, so a
     /// root-owned ~/.config/rclone/rclone.conf can never shadow ours.</summary>
+    // --use-json-log on EVERY command, not just the copy: a failure line is
+    // only parseable when it is JSON, and the plain-text form left the Test
+    // button reporting "rclone rejected the command" for an ordinary wrong
+    // URL. --config is explicit because a service account's HOME is not the
+    // operator's.
     private static List<string> Base(string configPath) =>
-        new() { "--config", configPath };
+        new() { "--config", configPath, "--use-json-log" };
 
     /// <summary>Copy ONE file to an exact destination name.
     ///
@@ -139,8 +144,7 @@ public static class RcloneArgs {
         args.Add("copyto");
         args.Add(localPath);
         args.Add(Fs(cfg.RemoteName, cfg.BasePath, relPath));
-        args.Add("--use-json-log");          // machine-readable stats on stderr
-        args.Add("--stats"); args.Add("1s");
+        args.Add("--stats"); args.Add("1s");   // machine-readable stats on stderr
         args.Add("--stats-log-level"); args.Add("NOTICE");
         args.Add("--transfers"); args.Add("1");
         args.Add("--checkers"); args.Add("2");

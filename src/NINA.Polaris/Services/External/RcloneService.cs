@@ -61,32 +61,34 @@ public sealed class RcloneService {
         }
     }
 
+    // One list, two callers: the lookup and the "where we looked" table
+    // must never disagree.
+    private static readonly string[] WindowsCandidates = [
+        @"C:\Program Files\rclone\rclone.exe",
+        @"C:\ProgramData\chocolatey\bin\rclone.exe",
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                     "Programs", "rclone", "rclone.exe"),
+        // winget, the usual Windows install, leaves a shim here. PATH
+        // finds it for a desktop run; this also covers a service whose
+        // PATH is not the operator's.
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                     "Microsoft", "WinGet", "Links", "rclone.exe")
+    ];
+    private static readonly string[] LinuxCandidates =
+        ["/usr/bin/rclone", "/usr/local/bin/rclone", "/snap/bin/rclone"];
+    private static readonly string[] MacCandidates =
+        ["/opt/homebrew/bin/rclone", "/usr/local/bin/rclone"];
+
     private string? Locate() => BinaryLocator.Find(
         _profiles.Active?.RclonePath,
-        windowsCandidates: new[] {
-            @"C:\Program Files\rclone\rclone.exe",
-            @"C:\ProgramData\chocolatey\bin\rclone.exe",
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                         "Programs", "rclone", "rclone.exe")
-        },
-        linuxCandidates: new[] { "/usr/bin/rclone", "/usr/local/bin/rclone", "/snap/bin/rclone" },
-        macCandidates: new[] { "/opt/homebrew/bin/rclone", "/usr/local/bin/rclone" },
-        pathLookupName: "rclone");
+        WindowsCandidates, LinuxCandidates, MacCandidates, pathLookupName: "rclone");
 
     /// <summary>Every place we looked, so the card can show the operator where
     /// to drop the binary instead of just saying no.</summary>
     public IReadOnlyList<BinaryLocator.Candidate> EnumerateBinaryCandidates() =>
         BinaryLocator.Enumerate(
             _profiles.Active?.RclonePath,
-            new[] {
-                @"C:\Program Files\rclone\rclone.exe",
-                @"C:\ProgramData\chocolatey\bin\rclone.exe",
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                             "Programs", "rclone", "rclone.exe")
-            },
-            new[] { "/usr/bin/rclone", "/usr/local/bin/rclone", "/snap/bin/rclone" },
-            new[] { "/opt/homebrew/bin/rclone", "/usr/local/bin/rclone" },
-            "rclone");
+            WindowsCandidates, LinuxCandidates, MacCandidates, "rclone");
 
     /// <summary>The version string, or null when rclone is not installed or did
     /// not answer. Display only.</summary>
