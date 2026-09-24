@@ -5086,5 +5086,7 @@
   "Select one folder to send.": "Selecione uma pasta para enviar.",
   "Nothing new to upload.": "Nada novo para enviar.",
   "Auto-push to network or cloud storage": "Envio automatico para armazenamento de rede ou nuvem",
-  "Automatically copy saved frames to a NAS, an SSH box or a cloud account as they are written.": "Copia automaticamente os frames salvos para um NAS, um servidor SSH ou uma conta na nuvem conforme sao gravados."
+  "Automatically copy saved frames to a NAS, an SSH box or a cloud account as they are written.": "Copia automaticamente os frames salvos para um NAS, um servidor SSH ou uma conta na nuvem conforme sao gravados.",
+  "Looking for rclone on this host...": "Procurando o rclone neste host...",
+  "This rclone is older than 1.63, so an aborted upload can leave a partial file under its final name at the destination. The next send replaces it, because the sizes differ.": "Este rclone e anterior a 1.63, entao um envio abortado pode deixar um arquivo parcial com o nome final no destino. O proximo envio substitui, porque os tamanhos diferem."
 }

@@ -37,6 +37,7 @@ public sealed class RcloneStorageTarget : IStorageTarget {
     private readonly RcloneService _rclone;
     private readonly ILogger<RcloneStorageTarget> _logger;
     private StorageConfig? _cfg;
+    private bool _partialSuffix;
 
     public RcloneStorageTarget(RcloneService rclone, ILogger<RcloneStorageTarget> logger) {
         _rclone = rclone;
@@ -52,14 +53,17 @@ public sealed class RcloneStorageTarget : IStorageTarget {
     /// connection after every failure, so a round trip here would be paid again
     /// on every retry, and a connectivity problem belongs to the first upload
     /// where the breaker can see it. The Test button does the real probe.</para></summary>
-    public Task ConnectAsync(StorageConfig cfg, CancellationToken ct) {
+    public async Task ConnectAsync(StorageConfig cfg, CancellationToken ct) {
         if (!_rclone.IsAvailable)
             throw new InvalidOperationException(
                 "rclone is not installed on this host, so cloud uploads cannot run.");
         if (!RcloneArgs.IsValidRemoteName(cfg.RemoteName, out var why))
             throw new InvalidOperationException(why!);
+        // Resolved once here rather than per upload. Ubuntu packages rclone
+        // 1.60, which does not know --partial-suffix and fails the whole
+        // command over the unknown flag.
+        _partialSuffix = await _rclone.SupportsPartialSuffixAsync(ct);
         _cfg = cfg;
-        return Task.CompletedTask;
     }
 
     public async Task UploadAsync(string localPath, string relPath, CancellationToken ct,
@@ -68,7 +72,7 @@ public sealed class RcloneStorageTarget : IStorageTarget {
         var exe = _rclone.BinaryPath
             ?? throw new InvalidOperationException("rclone is not installed on this host.");
 
-        var args = RcloneArgs.Copy(_rclone.ConfigPath, cfg, localPath, relPath);
+        var args = RcloneArgs.Copy(_rclone.ConfigPath, cfg, localPath, relPath, _partialSuffix);
         var psi = new ProcessStartInfo {
             FileName = exe,
             RedirectStandardOutput = true,

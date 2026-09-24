@@ -167,4 +167,31 @@ public class RcloneOutputTests {
         Assert.That(r.Retryable, Is.EqualTo(retryable));
         if (!ok) Assert.That(r.Message, Is.Not.Null.And.Not.Empty);
     }
+
+    // ---- version ----
+
+    [TestCase("rclone v1.60.1-DEV", 1, 60, 1)]
+    [TestCase("rclone v1.75.1", 1, 75, 1)]
+    [TestCase("rclone v1.63.0-beta.7204.efd5b6b0d", 1, 63, 0)]
+    [TestCase("rclone v1.70", 1, 70, 0)]
+    public void ParseVersion_ReadsTheFirstLineRclonePrints(string line, int maj, int min, int patch) {
+        Assert.That(RcloneOutput.ParseVersion(line), Is.EqualTo(new Version(maj, min, patch)));
+    }
+
+    [TestCase(null)]
+    [TestCase("")]
+    [TestCase("command not found")]
+    public void ParseVersion_IsNullWhenItIsNotAVersionLine(string? line) {
+        Assert.That(RcloneOutput.ParseVersion(line), Is.Null);
+    }
+
+    [Test]
+    public void PartialSuffixNeedsOneSixtyThree() {
+        // Ubuntu packages 1.60, where the flag does not exist and an unknown
+        // flag fails the whole upload.
+        Assert.That(RcloneOutput.ParseVersion("rclone v1.60.1-DEV"),
+                    Is.LessThan(RcloneOutput.PartialSuffixSince));
+        Assert.That(RcloneOutput.ParseVersion("rclone v1.63.0"),
+                    Is.GreaterThanOrEqualTo(RcloneOutput.PartialSuffixSince));
+    }
 }

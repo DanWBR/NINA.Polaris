@@ -138,8 +138,13 @@ public static class RcloneArgs {
     /// consecutive failures; rclone's own defaults would spend minutes per file
     /// against a dead remote and hide the failures the breaker exists to
     /// catch.</para></summary>
+    /// <param name="partialSuffix">Only for rclone 1.63 and newer, which is
+    /// where the flag was added. Ubuntu still packages 1.60, and an unknown
+    /// flag fails the whole command, so an old rclone uploads without it and
+    /// loses only the partial-name guarantee.</param>
     public static List<string> Copy(string configPath, StorageConfig cfg,
-                                    string localPath, string relPath) {
+                                    string localPath, string relPath,
+                                    bool partialSuffix = true) {
         var args = Base(configPath);
         args.Add("copyto");
         args.Add(localPath);
@@ -154,7 +159,9 @@ public static class RcloneArgs {
         args.Add("--timeout"); args.Add("5m");
         // Honoured by backends that support partial uploads; object stores only
         // publish the object once it is complete, so they are atomic anyway.
-        args.Add("--partial-suffix"); args.Add(StoragePath.PartialSuffix);
+        if (partialSuffix) {
+            args.Add("--partial-suffix"); args.Add(StoragePath.PartialSuffix);
+        }
         // One file into a folder that may hold thousands: without this rclone
         // lists the destination directory first, which is a real API call per
         // frame on Drive.

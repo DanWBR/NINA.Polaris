@@ -1884,7 +1884,11 @@ function ninaApp() {
             // Cloud (the rclone kind). remoteName and bandwidthLimit are the
             // form; the rest describes the host's rclone and is read-only.
             remoteName: '', bandwidthLimit: '', pushOnSessionEnd: false,
-            remotes: [], rcloneAvailable: false, rcloneVersion: '', rcloneCandidates: []
+            remotes: [], rcloneAvailable: false, rcloneVersion: '', rcloneCandidates: [],
+            // Three states, not two: "not asked yet" is not "not installed".
+            // The card used to answer the question before anyone asked it,
+            // and told operators with rclone on the host that they had none.
+            rcloneChecked: false, rclonePartialUploads: true
         },
         // Setting up a remote. Separate from the form above because it is a
         // one-off flow whose fields mean nothing once the remote exists.
@@ -31540,6 +31544,7 @@ function ninaApp() {
                 const s = this.storagePush;
                 s.rcloneAvailable = !!d.available;
                 s.rcloneVersion = d.version || '';
+                s.rclonePartialUploads = d.partialUploads !== false;
                 s.rcloneCandidates = d.candidates || [];
                 s.remotes = d.remotes || [];
                 // The <option> list is built from s.remotes, so a value set
@@ -31553,6 +31558,18 @@ function ninaApp() {
                 }
             } catch (e) {
                 this.storagePush.rcloneAvailable = false;
+            } finally {
+                // Asked and answered, either way. Only now may the card say
+                // the binary is missing.
+                this.storagePush.rcloneChecked = true;
+            }
+        },
+        // The protocol select changed. Probe the host the first time Cloud is
+        // picked, because the config load only probes when the SAVED kind is
+        // already the cloud one.
+        onStorageKindChange() {
+            if (this.storagePush.kind === 'rclone' && !this.storagePush.rcloneChecked) {
+                this.loadRcloneInfo();
             }
         },
         rcloneSetupNeedsBrowser() {

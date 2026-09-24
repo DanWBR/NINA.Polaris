@@ -101,6 +101,31 @@ public sealed class RcloneService {
         return string.IsNullOrEmpty(first) ? null : first;
     }
 
+    // Spawning rclone once per upload just to ask its version would double the
+    // process count, and the binary does not change under a running Polaris.
+    private Version? _version;
+    private string? _versionedBinary;
+
+    /// <summary>The parsed version, probed once per binary. Null when rclone is
+    /// missing or did not answer.</summary>
+    public async Task<Version?> SemanticVersionAsync(CancellationToken ct = default) {
+        var exe = BinaryPath;
+        if (exe == null) return null;
+        if (_versionedBinary == exe) return _version;
+        var parsed = RcloneOutput.ParseVersion(await VersionAsync(ct));
+        _version = parsed;
+        _versionedBinary = exe;
+        return parsed;
+    }
+
+    /// <summary>Whether this rclone understands --partial-suffix. Unknown
+    /// counts as no: a flag it does not know fails the whole command, while
+    /// leaving the flag out only costs the partial-name guarantee.</summary>
+    public async Task<bool> SupportsPartialSuffixAsync(CancellationToken ct = default) {
+        var v = await SemanticVersionAsync(ct);
+        return v != null && v >= RcloneOutput.PartialSuffixSince;
+    }
+
     /// <summary>The configured remotes. A local file read, so it is safe to call
     /// from a request and it works with no network.</summary>
     public async Task<IReadOnlyList<(string Name, string Type)>> ListRemotesAsync(

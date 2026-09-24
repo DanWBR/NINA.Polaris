@@ -13,6 +13,7 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace NINA.Polaris.Services.Storage;
 
@@ -102,6 +103,25 @@ public static class RcloneOutput {
             return null;
         }
     }
+
+    /// <summary>The version out of rclone's first line, "rclone v1.60.1-DEV"
+    /// or "rclone v1.75.1". Null when the line is not one of those, which the
+    /// caller must read as "assume the older behaviour", never as "modern".
+    /// </summary>
+    public static Version? ParseVersion(string? versionLine) {
+        if (string.IsNullOrWhiteSpace(versionLine)) return null;
+        var m = Regex.Match(versionLine, @"v(\d+)\.(\d+)(?:\.(\d+))?");
+        if (!m.Success) return null;
+        int major = int.Parse(m.Groups[1].Value);
+        int minor = int.Parse(m.Groups[2].Value);
+        int patch = m.Groups[3].Success ? int.Parse(m.Groups[3].Value) : 0;
+        return new Version(major, minor, patch);
+    }
+
+    /// <summary>--partial-suffix landed in rclone 1.63. Ubuntu still ships
+    /// 1.60, where an unknown flag fails the command outright, so the flag is
+    /// only safe once we know the version is new enough.</summary>
+    public static readonly Version PartialSuffixSince = new(1, 63);
 
     /// <summary>Parse <c>listremotes --long</c>, whose lines are
     /// <c>name:{spaces}type</c>.</summary>
