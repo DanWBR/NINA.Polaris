@@ -51,6 +51,7 @@ public class SequenceEngine {
     private readonly ImageWriterService _imageWriter;
     private readonly ProfileService _profile;
     private readonly ILogger<SequenceEngine> _logger;
+    private readonly StoragePushService? _storagePush;
 
     private CancellationTokenSource? _cts;
     private readonly SemaphoreSlim _pauseGate = new(1, 1);
@@ -106,6 +107,7 @@ public class SequenceEngine {
         CameraReadyGate cameraReady,
         DitherBarrier barrier,
         ILogger<SequenceEngine> logger,
+        StoragePushService? storagePush = null,
         GuideRunawayGuard? guideGuard = null,
         NotificationService? notify = null) {
         _guideGuard = guideGuard;
@@ -125,6 +127,7 @@ public class SequenceEngine {
         _cameraReady = cameraReady;
         _barrier = barrier;
         _logger = logger;
+        _storagePush = storagePush;
 
         // Restore the ACTIVE rig's schedule so it survives a host restart, and
         // reload whenever the active rig changes so each rig keeps its own
@@ -722,6 +725,11 @@ public class SequenceEngine {
 
             // Natural completion always fires the end-actions.
             await RunEndActionsAsync(triggeredByStop: false);
+
+            // ...and, when the operator asked for it, sends the night's output
+            // to the storage target. Fire and forget inside the service.
+            try { _storagePush?.OffloadSessionAsync(StartedAt ?? DateTime.UtcNow); }
+            catch (Exception ex) { _logger.LogWarning(ex, "Session offload could not start"); }
 
         } catch (OperationCanceledException) {
             _logger.LogInformation("Sequence cancelled");

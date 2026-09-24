@@ -44,6 +44,11 @@ public sealed class StoragePushService : BackgroundService {
     private readonly ProfileService _profile;
     private readonly IStorageTargetFactory _factory;
     private readonly ILogger<StoragePushService> _logger;
+    private readonly NotificationService? _notify;
+    private readonly object _offloadGate = new();
+    private DateTime? _lastOffloadUtc;
+    /// <summary>How close two end-of-run signals have to be to count as one run.</summary>
+    private static readonly TimeSpan OffloadDebounce = TimeSpan.FromMinutes(2);
 
     private readonly Lane _images;
     private readonly Lane _videos;
@@ -81,12 +86,14 @@ public sealed class StoragePushService : BackgroundService {
 
     public StoragePushService(ImageWriterService writer, VideoRecordingService video,
                               ProfileService profile, IStorageTargetFactory factory,
-                              ILogger<StoragePushService> logger) {
+                              ILogger<StoragePushService> logger,
+                              NotificationService? notify = null) {
         _writer = writer;
         _video = video;
         _profile = profile;
         _factory = factory;
         _logger = logger;
+        _notify = notify;
         _images = new Lane(this, "images");
         _videos = new Lane(this, "video");
     }
@@ -118,34 +125,69 @@ public sealed class StoragePushService : BackgroundService {
     /// (and we don't pay a per-file round-trip to discover each one). Falls back
     /// to enqueue-all when the backend can't list cheaply; the per-file upload
     /// skip is still the correctness backstop. Returns how many were queued.</summary>
-    public async Task<int> Backfill(CancellationToken ct = default) {
-        if (!Enabled) return 0;
-        var root = _profile.Active.ImageOutputDir;
-        if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root)) return 0;
+    public Task<int> Backfill(CancellationToken ct = default) =>
+        EnqueueTree(_profile.Active?.ImageOutputDir ?? "", null, ct);
 
-        // One-shot pre-scan of the target (separate connection from the lanes).
+    /// <summary>Queue every file under <paramref name="folder"/> that the target
+    /// does not already have at the same size.
+    ///
+    /// <para>One walk behind three things: the "Sync past sessions" button, the
+    /// end-of-run offload, and "Send to cloud" on a folder in FILES. They differ
+    /// only in where they start and whether they filter by time.</para>
+    ///
+    /// <para><paramref name="modifiedAfterUtc"/> is what makes the end-of-run
+    /// offload possible: a run touches lights, stacked, calibrated and snaps
+    /// across several folders, the session date rolls at local noon, and the
+    /// post-processing tools write into the tree without raising ImageSaved, so
+    /// a time window catches what a single folder would miss.</para></summary>
+    public async Task<int> EnqueueTree(string folder, DateTime? modifiedAfterUtc = null,
+                                       CancellationToken ct = default) {
+        if (!Enabled) return 0;
+        var root = _profile.Active?.ImageOutputDir ?? "";
+        if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root)) return 0;
+        if (string.IsNullOrWhiteSpace(folder)) folder = root;
+        if (!Directory.Exists(folder)) return 0;
+        if (!IsUnderRoot(root, folder)) {
+            _logger.LogWarning("Refusing to push {Folder}: it is outside the capture folder", folder);
+            return 0;
+        }
+
+        string relPrefix;
+        try { relPrefix = Path.GetRelativePath(root, folder).Replace('\\', '/'); }
+        catch { relPrefix = ""; }
+        if (relPrefix == "." || relPrefix == "..") relPrefix = "";
+
+        // One-shot pre-scan of the target (separate connection from the lanes),
+        // scoped to the sub-tree so sending one night does not enumerate an
+        // entire cloud account.
         IReadOnlyDictionary<string, long>? remote = null;
         try {
-            var cfg = StorageConfig.FromProfile(_profile.Active);
+            var cfg = StorageConfig.FromProfile(_profile.Active!);
             using var probe = _factory.Create(cfg.Kind);
             await probe.ConnectAsync(cfg, ct);
-            remote = await probe.ListAsync(ct);
+            remote = await probe.ListAsync(relPrefix, ct);
             probe.Disconnect();
         } catch (Exception ex) {
-            _logger.LogInformation(ex, "Backfill pre-scan unavailable; queueing all files");
+            _logger.LogInformation(ex, "Push pre-scan unavailable; queueing all files");
             remote = null;
         }
 
         IEnumerable<string> files;
-        try { files = Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories); }
+        try { files = Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories); }
         catch (Exception ex) {
-            _logger.LogWarning(ex, "Backfill: could not enumerate {Root}", root);
+            _logger.LogWarning(ex, "Push: could not enumerate {Folder}", folder);
             return 0;
         }
 
         int queued = 0, skipped = 0;
         foreach (var file in files) {
             ct.ThrowIfCancellationRequested();
+            if (IsExcludedFromPush(root, file)) { skipped++; continue; }
+            if (modifiedAfterUtc is DateTime since) {
+                DateTime written;
+                try { written = new FileInfo(file).LastWriteTimeUtc; } catch { written = DateTime.MinValue; }
+                if (written < since) { skipped++; continue; }
+            }
             if (remote != null) {
                 string rel;
                 try { rel = Path.GetRelativePath(root, file).Replace('\\', '/'); }
@@ -158,12 +200,78 @@ public sealed class StoragePushService : BackgroundService {
                 else _images.Enqueue(file);
                 queued++;
             } catch (Exception ex) {
-                _logger.LogWarning(ex, "Backfill: could not queue {File}", file);
+                _logger.LogWarning(ex, "Push: could not queue {File}", file);
             }
         }
-        _logger.LogInformation("Backfill: queued {Q}, already-present {S} (from {Root})",
-            queued, skipped, root);
+        _logger.LogInformation("Push: queued {Q}, skipped {S} (from {Folder})",
+            queued, skipped, folder);
         return queued;
+    }
+
+    /// <summary>Files a folder send should not carry: an interrupted transfer's
+    /// sidecar, and anything the operator already threw away.</summary>
+    internal static bool IsExcludedFromPush(string root, string fullPath) {
+        if (fullPath.EndsWith(StoragePath.PartialSuffix, StringComparison.OrdinalIgnoreCase)) return true;
+        string rel;
+        try { rel = Path.GetRelativePath(root, fullPath).Replace('\\', '/'); }
+        catch { return false; }
+        return rel.StartsWith("discarded/", StringComparison.OrdinalIgnoreCase)
+            || rel.Contains("/discarded/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Is this folder inside the capture root? The remote mirrors paths
+    /// relative to that root, so a folder outside it has no meaningful place on
+    /// the target and must be refused rather than flattened somewhere.</summary>
+    public static bool IsUnderRoot(string root, string candidate) {
+        if (string.IsNullOrWhiteSpace(root) || string.IsNullOrWhiteSpace(candidate)) return false;
+        string r, c;
+        try {
+            r = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+            c = Path.TrimEndingDirectorySeparator(Path.GetFullPath(candidate));
+        } catch { return false; }
+        var cmp = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        if (string.Equals(r, c, cmp)) return true;
+        // The separator matters: /files2 is not inside /files.
+        return c.StartsWith(r + Path.DirectorySeparatorChar, cmp)
+            || c.StartsWith(r + Path.AltDirectorySeparatorChar, cmp);
+    }
+
+    /// <summary>Offload everything a finished run wrote, when the operator asked
+    /// for that. Fire and forget, and deliberately unable to throw: this is
+    /// called from an engine's teardown, where an exception would take the rest
+    /// of the shutdown with it.</summary>
+    public void OffloadSessionAsync(DateTime runStartedUtc) {
+        if (!Enabled) return;
+        if (_profile.Active?.StoragePushOnSessionEnd != true) return;
+        // A PLAN run finishes twice: once for the main document and once for the
+        // end-actions document it compiles, both through the same engine. Rather
+        // than teach the engines about each other (which would need a reference
+        // cycle to ask "is a plan active?"), swallow a second call that lands in
+        // the same couple of minutes. The cost of being wrong is one skipped
+        // offload of files the next one would pick up anyway.
+        lock (_offloadGate) {
+            if (_lastOffloadUtc is DateTime last && DateTime.UtcNow - last < OffloadDebounce) {
+                _logger.LogDebug("Session offload already ran {S:F0}s ago, skipping this one",
+                    (DateTime.UtcNow - last).TotalSeconds);
+                return;
+            }
+            _lastOffloadUtc = DateTime.UtcNow;
+        }
+        // A couple of minutes of slack: clocks drift, and a frame written as the
+        // run began belongs to the run.
+        var since = runStartedUtc.AddMinutes(-2);
+        _ = Task.Run(async () => {
+            try {
+                var n = await EnqueueTree(_profile.Active?.ImageOutputDir ?? "", since);
+                if (n > 0) {
+                    _logger.LogInformation("Session offload: queued {N} file(s)", n);
+                    _notify?.Push("info", $"Uploading {n} file(s) from this session.", 8000);
+                }
+            } catch (Exception ex) {
+                _logger.LogWarning(ex, "Session offload failed");
+            }
+        });
     }
 
     /// <summary>Synchronous IProgress so per-chunk byte updates land on the field

@@ -226,6 +226,16 @@ public class AdvancedSequenceEngine {
             Document.Root.FinishedAt = DateTime.UtcNow;
             FinishedAt = DateTime.UtcNow;
             State = AdvancedSequenceState.Idle;
+            // Offload the night when the operator asked for it. Resolved rather
+            // than injected: this engine is built by the service provider it
+            // already holds, and a constructor dependency here would put a cycle
+            // between the plan runner and the push service.
+            try {
+                _services.GetService<StoragePushService>()
+                         ?.OffloadSessionAsync(StartedAt ?? DateTime.UtcNow);
+            } catch (Exception ex) {
+                _logger.LogWarning(ex, "Session offload could not start");
+            }
         }
     }
 

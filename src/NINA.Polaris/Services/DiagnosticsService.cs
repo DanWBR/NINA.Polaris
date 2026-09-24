@@ -189,6 +189,7 @@ public sealed class DiagnosticsService {
             ("solve-field", "plate solving (astrometry.net)",     false),
             ("siril",       "post-processing scripts",            false),
             ("gphoto2",     "DSLR capture",                       false),
+        ("rclone",      "cloud storage upload",               false),
             ("indiserver",  "INDI equipment drivers",             false),
         };
 
