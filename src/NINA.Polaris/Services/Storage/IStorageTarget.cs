@@ -20,7 +20,7 @@ namespace NINA.Polaris.Services.Storage;
 /// the settings that were live when it was enqueued.
 /// </summary>
 public sealed record StorageConfig(
-    string Kind,        // "smb" | "sftp" | "local"
+    string Kind,        // "smb" | "sftp" | "local" | "rclone"
     string Host,
     int Port,           // 0 => provider default
     string Share,       // SMB share name
@@ -30,8 +30,24 @@ public sealed record StorageConfig(
     string Password,
     /// <summary>Share of the uplink the push may take, as a percent; 100 means
     /// no pacing. Carried on the config so a target paces itself without
-    /// reaching back into the profile mid-transfer.</summary>
-    int LinkSharePercent = 100) {
+    /// reaching back into the profile mid-transfer. Ignored by the rclone kind,
+    /// which cannot duty-cycle an external process and uses
+    /// <see cref="BandwidthLimit"/> instead.</summary>
+    int LinkSharePercent = 100,
+    /// <summary>rclone remote name, the [section] in rclone.conf. Not a secret:
+    /// the credential lives in that file and never in the profile.</summary>
+    string RemoteName = "",
+    /// <summary>rclone --bwlimit value such as "2M". Empty = unlimited.</summary>
+    string BandwidthLimit = "",
+    /// <summary>Bumped whenever a remote is created, changed or deleted.
+    ///
+    /// <para>A cloud credential lives in rclone.conf, which this record cannot
+    /// see, so re-authorising a remote would otherwise be invisible to the
+    /// lanes' value-equality reconnect check and they would keep using a
+    /// connection built against the old credentials. A counter in the profile
+    /// makes that existing check do the right thing with no change to
+    /// StoragePushService.</para></summary>
+    int RemoteRevision = 0) {
 
     public static StorageConfig FromProfile(UserProfile p) => new(
         Kind:     (p.StorageKind ?? "smb").Trim().ToLowerInvariant(),
@@ -42,7 +58,10 @@ public sealed record StorageConfig(
         Domain:   (p.StorageDomain ?? "").Trim(),
         Username: (p.StorageUsername ?? "").Trim(),
         Password: p.StoragePassword ?? "",
-        LinkSharePercent: p.StoragePushLinkSharePercent);
+        LinkSharePercent: p.StoragePushLinkSharePercent,
+        RemoteName:     (p.StorageRemoteName ?? "").Trim(),
+        BandwidthLimit: (p.StorageBandwidthLimit ?? "").Trim(),
+        RemoteRevision: p.StorageRemoteRevision);
 }
 
 /// <summary>
@@ -79,6 +98,13 @@ public interface IStorageTarget : IDisposable {
     /// enqueue-all, and the per-file upload skip still prevents re-copies).</summary>
     Task<IReadOnlyDictionary<string, long>?> ListAsync(CancellationToken ct) =>
         Task.FromResult<IReadOnlyDictionary<string, long>?>(null);
+
+    /// <summary>The same map, restricted to one sub-tree of the capture root.
+    /// Sending a single night should not list an entire cloud account, and on a
+    /// metered or rate-limited backend the difference is minutes of API calls.
+    /// Backends that cannot scope a listing inherit the whole-tree answer.</summary>
+    Task<IReadOnlyDictionary<string, long>?> ListAsync(string relPrefix, CancellationToken ct) =>
+        ListAsync(ct);
 
     void Disconnect();
 }

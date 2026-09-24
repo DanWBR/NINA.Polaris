@@ -12,6 +12,7 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using Microsoft.Extensions.Logging.Abstractions;
 using NINA.Polaris.Services;
 using NINA.Polaris.Services.Storage;
 using NUnit.Framework;
@@ -92,11 +93,22 @@ public class StoragePushTests {
 
     [Test]
     public void Factory_MapsEachKind() {
-        var f = new StorageTargetFactory();
-        using (var t = f.Create("smb"))   Assert.That(t.Kind, Is.EqualTo("smb"));
-        using (var t = f.Create("sftp"))  Assert.That(t.Kind, Is.EqualTo("sftp"));
-        using (var t = f.Create("local")) Assert.That(t.Kind, Is.EqualTo("local"));
+        var f = NewFactory();
+        using (var t = f.Create("smb"))    Assert.That(t.Kind, Is.EqualTo("smb"));
+        using (var t = f.Create("sftp"))   Assert.That(t.Kind, Is.EqualTo("sftp"));
+        using (var t = f.Create("local"))  Assert.That(t.Kind, Is.EqualTo("local"));
+        // One kind for every cloud provider: the provider is a property of the
+        // rclone remote, not of Polaris. Constructing it needs no rclone binary.
+        using (var t = f.Create("rclone")) Assert.That(t.Kind, Is.EqualTo("rclone"));
         Assert.Throws<NotSupportedException>(() => f.Create("ftp"));
+    }
+
+    private static StorageTargetFactory NewFactory() {
+        var cfg = new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
+        var profiles = new ProfileService(cfg, NullLogger<ProfileService>.Instance);
+        var rclone = new NINA.Polaris.Services.External.RcloneService(
+            profiles, NullLogger<NINA.Polaris.Services.External.RcloneService>.Instance);
+        return new StorageTargetFactory(rclone, NullLoggerFactory.Instance);
     }
 
     // SHARESYNC-2: ListAsync backs the backfill pre-scan (enqueue only missing).
