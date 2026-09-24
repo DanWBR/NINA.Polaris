@@ -31542,6 +31542,15 @@ function ninaApp() {
                 s.rcloneVersion = d.version || '';
                 s.rcloneCandidates = d.candidates || [];
                 s.remotes = d.remotes || [];
+                // The <option> list is built from s.remotes, so a value set
+                // before the list existed leaves the select showing
+                // "(choose a remote)" while the profile says otherwise.
+                // Re-assign once the options are in the DOM.
+                const keep = s.remoteName;
+                if (keep) {
+                    s.remoteName = '';
+                    this.$nextTick(() => { s.remoteName = keep; });
+                }
             } catch (e) {
                 this.storagePush.rcloneAvailable = false;
             }
@@ -35205,7 +35214,7 @@ function ninaApp() {
                 ['Image processing', ['gpu acceleration (opencl)', 'external tools', 'image cache', 'image output', 'colour calibration data', 'scripts (beta)']],
                 ['Network & security',  ['authentication', 'https certificate',
                     'https endpoints (for webgpu + multi-thread wasm)', 'network (wifi)', 'remote terminal',
-                    'auto-push to network storage']],
+                    'auto-push to network or cloud storage', 'remote access relay']],
                 ['System & maintenance', ['debug logging', 'diagnostics', 'hardware benchmark',
                     'reset everything to factory defaults', 'software update', 'power',
                     'backup & restore', 'scheduled shutdown']],

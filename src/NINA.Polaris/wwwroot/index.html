@@ -14769,7 +14769,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      mounted path). Mirrors the capture folder tree onto the
                      target; the local copy is kept. -->
                 <div class="settings-section" id="storage-push-card" x-init="cardInit(() => loadStorageConfig())">
-                    <h3 data-tour="set-storage"><span class="settings-card-icon">📤</span>Auto-push to network storage</h3>
+                    <h3 data-tour="set-storage"><span class="settings-card-icon">📤</span>Auto-push to network or cloud storage</h3>
                     <p class="hint" style="margin-top:0">
                         Copy every saved image to a NAS, network share, SSH box or cloud
                         account as it's written, mirroring the capture folder tree. The local
@@ -14856,11 +14856,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         </label>
                     </div>
                     <div x-show="storagePush.kind === 'rclone' && !storagePush.rcloneAvailable" x-cloak
-                         style="margin-top:10px">
-                        <p class="text-warn" style="font-size:12px">rclone is not installed on this host.</p>
-                        <p class="hint">Cloud uploads are handled by rclone, which Polaris runs for you. Install it and this card picks it up.</p>
-                        <p class="hint"><code>sudo apt install rclone</code></p>
-                        <details style="margin-top:6px">
+                         style="margin:12px 0; padding:12px; border:1px solid var(--border); border-radius:8px">
+                        <p class="text-warn" style="font-size:12px; margin:0 0 6px">rclone is not installed on this host.</p>
+                        <p class="hint" style="margin:0 0 8px">Cloud uploads are handled by rclone, which Polaris runs for you. Install it and this card picks it up.</p>
+                        <pre style="margin:0; padding:8px 10px; border-radius:6px; background:var(--bg-tertiary); overflow-x:auto"><code>sudo apt install rclone</code></pre>
+                        <details style="margin-top:10px">
                             <summary class="text-muted" style="font-size:12px">Where Polaris looked for rclone</summary>
                             <table class="flatwiz-trained-table" style="margin-top:6px">
                                 <tbody>
@@ -14890,11 +14890,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                          in happens on the operator's own computer and the result
                          is carried across; see RcloneConfigPaste for the two
                          shapes people bring back. -->
-                    <div class="settings-subpanel" x-show="rcloneSetup.open" x-cloak x-transition
-                         style="margin-top:10px; padding:10px; border:1px solid var(--border); border-radius:8px">
+                    <div class="settings-subpanel rclone-setup" x-show="rcloneSetup.open" x-cloak x-transition>
                         <h5 style="margin:0 0 8px">Set up a cloud remote</h5>
-                        <label style="display:block; margin-bottom:8px"><span class="lbl">Provider</span>
-                            <select class="input input-sm" x-model="rcloneSetup.type" style="width:100%">
+                        <label><span class="lbl">Provider</span>
+                            <select class="input input-sm" x-model="rcloneSetup.type">
                                 <option value="drive">Google Drive</option>
                                 <option value="onedrive">Microsoft OneDrive</option>
                                 <option value="dropbox">Dropbox</option>
@@ -14903,9 +14902,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <option value="s3">S3 compatible</option>
                             </select>
                         </label>
-                        <label style="display:block; margin-bottom:8px"><span class="lbl">Remote name</span>
+                        <label><span class="lbl">Remote name</span>
                             <input class="input input-sm" type="text" x-model="rcloneSetup.name"
-                                   placeholder="gdrive" style="width:100%">
+                                   placeholder="gdrive">
                         </label>
                         <p class="hint">Use letters, numbers, dash, dot and underscore. No spaces or colons.</p>
 
@@ -14914,7 +14913,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <p class="hint">This host has no browser, so the provider sign in happens on your computer.</p>
                             <p class="hint">1. On a computer with a browser, install rclone and run:</p>
                             <div style="display:flex; gap:8px; align-items:center; margin:4px 0">
-                                <code x-text="rcloneSetup.command" style="flex:1"></code>
+                                <code x-text="rcloneSetup.command"></code>
                                 <button class="btn btn-sm" @click="copyAuthorizeCommand()">Copy command</button>
                             </div>
                             <p class="hint">2. Sign in when the browser opens, then copy everything rclone prints.</p>
@@ -14923,48 +14922,48 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 For OneDrive, run rclone config on your computer and paste the whole
                                 section it writes: the sign in alone does not carry the drive id.
                             </p>
-                            <textarea class="input input-sm" rows="4" style="width:100%"
+                            <textarea class="input input-sm" rows="4"
                                       x-model="rcloneSetup.paste"
                                       placeholder="Paste the rclone output, or the remote block from your rclone.conf"></textarea>
                         </div>
 
                         <!-- Providers that only need a form -->
                         <div x-show="!rcloneSetupNeedsBrowser()" x-cloak>
-                            <label x-show="rcloneSetup.type === 'webdav'" style="display:block; margin-bottom:8px">
+                            <label x-show="rcloneSetup.type === 'webdav'">
                                 <span class="lbl">WebDAV URL</span>
                                 <input class="input input-sm" type="text" x-model="rcloneSetup.url"
-                                       placeholder="https://cloud.example.com/remote.php/dav/files/you/" style="width:100%">
+                                       placeholder="https://cloud.example.com/remote.php/dav/files/you/">
                             </label>
-                            <label x-show="rcloneSetup.type === 'sftp'" style="display:block; margin-bottom:8px">
+                            <label x-show="rcloneSetup.type === 'sftp'">
                                 <span class="lbl">Server</span>
                                 <input class="input input-sm" type="text" x-model="rcloneSetup.host"
-                                       placeholder="192.168.0.50" style="width:100%">
+                                       placeholder="192.168.0.50">
                             </label>
-                            <label x-show="rcloneSetup.type !== 's3'" style="display:block; margin-bottom:8px">
+                            <label x-show="rcloneSetup.type !== 's3'">
                                 <span class="lbl">Username</span>
                                 <input class="input input-sm" type="text" x-model="rcloneSetup.user"
-                                       autocomplete="off" style="width:100%">
+                                       autocomplete="off">
                             </label>
-                            <label x-show="rcloneSetup.type !== 's3'" style="display:block; margin-bottom:8px">
+                            <label x-show="rcloneSetup.type !== 's3'">
                                 <span class="lbl">Password</span>
                                 <input class="input input-sm" type="password" x-model="rcloneSetup.pass"
-                                       autocomplete="new-password" style="width:100%">
+                                       autocomplete="new-password">
                             </label>
                             <template x-if="rcloneSetup.type === 's3'">
                                 <div>
-                                    <label style="display:block; margin-bottom:8px"><span class="lbl">Access key ID</span>
-                                        <input class="input input-sm" type="text" x-model="rcloneSetup.accessKey" style="width:100%">
+                                    <label><span class="lbl">Access key ID</span>
+                                        <input class="input input-sm" type="text" x-model="rcloneSetup.accessKey">
                                     </label>
-                                    <label style="display:block; margin-bottom:8px"><span class="lbl">Secret access key</span>
+                                    <label><span class="lbl">Secret access key</span>
                                         <input class="input input-sm" type="password" x-model="rcloneSetup.secretKey"
-                                               autocomplete="new-password" style="width:100%">
+                                               autocomplete="new-password">
                                     </label>
-                                    <label style="display:block; margin-bottom:8px"><span class="lbl">Endpoint</span>
+                                    <label><span class="lbl">Endpoint</span>
                                         <input class="input input-sm" type="text" x-model="rcloneSetup.endpoint"
-                                               placeholder="s3.eu-central-1.amazonaws.com" style="width:100%">
+                                               placeholder="s3.eu-central-1.amazonaws.com">
                                     </label>
-                                    <label style="display:block; margin-bottom:8px"><span class="lbl">Region</span>
-                                        <input class="input input-sm" type="text" x-model="rcloneSetup.region" style="width:100%">
+                                    <label><span class="lbl">Region</span>
+                                        <input class="input input-sm" type="text" x-model="rcloneSetup.region">
                                     </label>
                                 </div>
                             </template>
@@ -14978,11 +14977,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                   x-cloak x-text="rcloneSetup.error"></span>
                         </div>
                     </div>
-                    <label class="chk" style="display:flex; align-items:center; gap:8px; margin-top:10px">
+                    <label class="chk" style="display:flex; align-items:center; gap:8px; margin-top:14px">
                         <input type="checkbox" x-model="storagePush.pushOnSessionEnd" @change="saveStorageConfig()">
                         Upload the session folder when a run finishes
                     </label>
-                    <p class="hint">The local copy always stays on this host. Uploading never deletes anything.</p>
+                    <p class="hint" style="margin:6px 0 0">The local copy always stays on this host. Uploading never deletes anything.</p>
                     <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:12px">
                         <button class="btn btn-primary" @click="saveStorageConfig()">Save</button>
                         <button class="btn" @click="testStorageConnection()" :disabled="storagePush.testing">

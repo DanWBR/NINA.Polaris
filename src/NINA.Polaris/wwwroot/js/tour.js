@@ -285,7 +285,7 @@
         return [
             { center: true, title: 'Settings', body: "Let's walk through the Settings cards one by one: what each one is for. Cards that don't apply to your device are skipped.", before: open },
             { target: '[data-tour="set-https"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'HTTPS certificate', body: 'Generate/install a TLS certificate so the browser trusts the server over HTTPS, needed for WebGPU and secure remote access.' },
-            { target: '[data-tour="set-storage"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Auto-push to network storage', body: 'Automatically copy saved frames to a NAS / network share as they are written.' },
+            { target: '[data-tour="set-storage"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Auto-push to network or cloud storage', body: 'Automatically copy saved frames to a NAS, an SSH box or a cloud account as they are written.' },
             { target: '[data-tour="set-appearance"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Appearance', body: 'UI language, theme, font and density.' },
             { target: '[data-tour="set-skyimg"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Sky imagery (offline DSS)', body: 'Download deep-sky survey tiles for offline use, so the Sky map shows real imagery without internet.' },
             { target: '[data-tour="set-terminal"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Remote terminal', body: 'An in-browser SSH terminal to the Polaris host (or any Linux box on your LAN). Credentials are per-session and never saved.' },

@@ -464,7 +464,6 @@
   "Auto-GraXpert is fire-and-forget, the next exposure does not wait for it. Output lands next to each light with the": "Auto-GraXpert funktioniert nach dem Prinzip „Fire-and-Forget“, die nächste Belichtung wartet nicht darauf. Die Ausgabe erfolgt neben jeder Lichtquelle mit dem",
   "Auto-launch PHD2 and connect when the Headless server starts": "PHD2 automatisch starten und eine Verbindung herstellen, sobald der Headless-Server startet",
   "Auto-match": "Automatische Zuordnung",
-  "Auto-push to network storage": "Automatisches Hochladen auf Netzwerkspeicher",
   "Auto-refresh": "Automatische Aktualisierung",
   "Auto-refresh: continuously capture + solve while you adjust the knobs": "Automatische Aktualisierung: Kontinuierliche Erfassung und Berechnung, während Sie die Regler einstellen",
   "Auto-restart off": "Automatischer Neustart aus",
@@ -480,7 +479,6 @@
   "Auto: only on touch devices": "Automatisch: nur auf Touch-Geräten",
   "Automatic HTTPS certificate": "Automatisches HTTPS-Zertifikat",
   "Automatic HTTPS certificate (DuckDNS + Let's Encrypt).": "Automatisches HTTPS-Zertifikat (DuckDNS + Let's Encrypt).",
-  "Automatically copy saved frames to a NAS / network share as they are written.": "Kopiert gespeicherte Aufnahmen automatisch auf ein NAS oder eine Netzwerkfreigabe, sobald sie geschrieben werden.",
   "Automatically flip the mount during live stacking once the target passes the meridian by the minutes set below. The stack re-orients and continues on its own.": "Die Montierung wird während des Live-Stackings automatisch gedreht, sobald das Ziel den Meridian um die unten eingestellte Anzahl an Minuten überschritten hat. Der Stack wird neu ausgerichtet und läuft von selbst weiter.",
   "automatically: it opens GitHub in a new tab for you to": "automatisch: GitHub wird in einem neuen Tab geöffnet, damit Sie",
   "automatically: no browser cache needed.": "automatisch: kein Browser-Cache erforderlich.",
@@ -5086,5 +5084,7 @@
   "Send to cloud": "In die Cloud senden",
   "Upload the selected folder to the storage target. The local copy stays.": "Laedt den gewaehlten Ordner zum Speicherziel hoch. Die lokale Kopie bleibt.",
   "Select one folder to send.": "Waehlen Sie einen Ordner zum Senden.",
-  "Nothing new to upload.": "Nichts Neues zum Hochladen."
+  "Nothing new to upload.": "Nichts Neues zum Hochladen.",
+  "Auto-push to network or cloud storage": "Automatischer Upload in Netzwerk- oder Cloud-Speicher",
+  "Automatically copy saved frames to a NAS, an SSH box or a cloud account as they are written.": "Kopiert gespeicherte Frames automatisch beim Schreiben auf ein NAS, einen SSH-Server oder ein Cloud-Konto."
 }

@@ -380,7 +380,6 @@
   "Auto-GraXpert is fire-and-forget, the next exposure does not wait for it. Output lands next to each light with the": "",
   "Auto-launch PHD2 and connect when the Headless server starts": "",
   "Auto-match": "",
-  "Auto-push to network storage": "",
   "Auto-refresh": "",
   "Auto-refresh: continuously capture + solve while you adjust the knobs": "",
   "Auto-restart off": "",
@@ -395,7 +394,6 @@
   "Auto-stretched preview. The saved file keeps its linear data.": "",
   "Auto: only on touch devices": "",
   "Automatic HTTPS certificate (DuckDNS + Let's Encrypt).": "",
-  "Automatically copy saved frames to a NAS / network share as they are written.": "",
   "Automatically flip the mount during live stacking once the target passes the meridian by the minutes set below. The stack re-orients and continues on its own.": "",
   "automatically. Install solve-field + index files in the distro (e.g.": "",
   "Autorun": "",
@@ -4468,5 +4466,7 @@
   "Send to cloud": "",
   "Upload the selected folder to the storage target. The local copy stays.": "",
   "Select one folder to send.": "",
-  "Nothing new to upload.": ""
+  "Nothing new to upload.": "",
+  "Auto-push to network or cloud storage": "",
+  "Automatically copy saved frames to a NAS, an SSH box or a cloud account as they are written.": ""
 }
