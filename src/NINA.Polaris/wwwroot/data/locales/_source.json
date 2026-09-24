@@ -4466,5 +4466,7 @@
   "Select one folder to send.": "",
   "Nothing new to upload.": "",
   "Auto-push to network or cloud storage": "",
-  "Automatically copy saved frames to a NAS, an SSH box or a cloud account as they are written.": ""
+  "Automatically copy saved frames to a NAS, an SSH box or a cloud account as they are written.": "",
+  "Looking for rclone on this host...": "",
+  "This rclone is older than 1.63, so an aborted upload can leave a partial file under its final name at the destination. The next send replaces it, because the sizes differ.": ""
 }

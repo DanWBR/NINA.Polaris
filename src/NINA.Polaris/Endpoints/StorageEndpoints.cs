@@ -147,6 +147,10 @@ public static class StorageEndpoints {
                 available,
                 binaryPath = rclone.BinaryPath,
                 version = available ? await rclone.VersionAsync(ct) : null,
+                // Ubuntu packages 1.60, old enough that an aborted upload can
+                // leave a truncated file under the real name. The card says so
+                // rather than letting the operator discover it.
+                partialUploads = available && await rclone.SupportsPartialSuffixAsync(ct),
                 configPath = rclone.ConfigPath,
                 // Where we looked, so an operator with rclone somewhere unusual
                 // can see why we did not find it.

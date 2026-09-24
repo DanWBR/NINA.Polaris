@@ -121,6 +121,15 @@ preview and the guiding stay responsive while a night uploads.
 A folder send must stay inside the capture folder, because the whole
 point is mirroring that tree.
 
+### Old rclone
+
+Debian and Ubuntu package rclone 1.60, which is what most SBC images
+carry. Polaris works with it and checks the version: `--partial-suffix`
+only exists from 1.63, and an unknown flag makes rclone fail the whole
+command, so on an older binary Polaris leaves the flag out. The only
+thing lost is the partial-name guarantee. To get it, install a current
+rclone from rclone.org instead of the distribution package.
+
 ## Known limits
 
 - One rclone process per file. A very large backfill is therefore
@@ -140,6 +149,7 @@ point is mirroring that tree.
 | Test says the folder will be created | normal, the remote folder does not exist yet |
 | Uploads stop, queue frozen | the breaker tripped; fix the destination and press Retry failed |
 | A `.part` file left at the destination | an aborted upload; rclone writes to a partial name and renames on success, so the truncated copy never takes the real name. Delete it at the far end when it bothers you, Polaris never deletes anything on the remote |
+| A truncated file under the real name | rclone older than 1.63, which has no partial-name support. The card says so when it sees one. The next send replaces the file, because the sizes differ |
 | OneDrive remote authorises but uploads fail | created from `rclone authorize` alone, so it carries no drive id; recreate it from a full `rclone config` section |
 
 ## See also

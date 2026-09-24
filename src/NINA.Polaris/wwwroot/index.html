@@ -15028,7 +15028,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </label>
                     <div class="storage-form" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px">
                         <label><span class="lbl">Protocol</span>
-                            <select class="input input-sm" x-model="storagePush.kind">
+                            <select class="input input-sm" x-model="storagePush.kind" @change="onStorageKindChange()">
                                 <option value="smb">SMB / CIFS (NAS, Windows share)</option>
                                 <option value="sftp">SFTP (SSH)</option>
                                 <option value="local">Mounted / local folder</option>
@@ -15102,7 +15102,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             </select>
                         </label>
                     </div>
-                    <div x-show="storagePush.kind === 'rclone' && !storagePush.rcloneAvailable" x-cloak
+                    <p class="hint" x-show="storagePush.kind === 'rclone' && !storagePush.rcloneChecked" x-cloak
+                       style="margin-top:10px">Looking for rclone on this host...</p>
+                    <div x-show="storagePush.kind === 'rclone' && storagePush.rcloneChecked && !storagePush.rcloneAvailable" x-cloak
                          style="margin:12px 0; padding:12px; border:1px solid var(--border); border-radius:8px">
                         <p class="text-warn" style="font-size:12px; margin:0 0 6px">rclone is not installed on this host.</p>
                         <p class="hint" style="margin:0 0 8px">Cloud uploads are handled by rclone, which Polaris runs for you. Install it and this card picks it up.</p>
@@ -15131,6 +15133,8 @@ Windows  winget install Rclone.Rclone</code></pre>
                                 :disabled="!storagePush.remoteName">Delete remote</button>
                         <span class="text-muted" style="font-size:11px" x-text="storagePush.rcloneVersion"></span>
                     </div>
+                    <p class="hint" x-show="storagePush.kind === 'rclone' && storagePush.rcloneAvailable && !storagePush.rclonePartialUploads"
+                       x-cloak>This rclone is older than 1.63, so an aborted upload can leave a partial file under its final name at the destination. The next send replaces it, because the sizes differ.</p>
                     <p class="hint" x-show="storagePush.kind === 'rclone' && storagePush.rcloneAvailable && storagePush.remotes.length === 0"
                        x-cloak>No remotes configured yet.</p>
 

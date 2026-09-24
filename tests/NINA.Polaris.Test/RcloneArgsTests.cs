@@ -276,4 +276,13 @@ public class RcloneArgsTests {
         var i = args.ToList().IndexOf(flag);
         return i >= 0 && i + 1 < args.Count ? args[i + 1] : null;
     }
+
+    [Test]
+    public void Copy_DropsThePartialSuffixForAnOldRclone() {
+        // rclone 1.60, which Ubuntu still packages, does not know the flag and
+        // exits with a usage error, so every upload would fail.
+        var a = RcloneArgs.Copy(Cfg, Rclone(), "/a", "a", partialSuffix: false);
+        Assert.That(a, Does.Not.Contain("--partial-suffix"));
+        Assert.That(a, Does.Contain("copyto"), "the rest of the command is unchanged");
+    }
 }
