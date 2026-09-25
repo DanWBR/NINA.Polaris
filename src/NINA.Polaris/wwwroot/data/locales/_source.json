@@ -4468,5 +4468,13 @@
   "Auto-push to network or cloud storage": "",
   "Automatically copy saved frames to a NAS, an SSH box or a cloud account as they are written.": "",
   "Looking for rclone on this host...": "",
-  "This rclone is older than 1.63, so an aborted upload can leave a partial file under its final name at the destination. The next send replaces it, because the sizes differ.": ""
+  "This rclone is older than 1.63, so an aborted upload can leave a partial file under its final name at the destination. The next send replaces it, because the sizes differ.": "",
+  "Restart INDI": "",
+  "INDI restarted": "",
+  "Restart failed": "",
+  "Restarting INDI stops every running driver and starts them again. The mount, camera and focuser reconnect, which takes a few seconds. Do this when you are not in the middle of an exposure.": "",
+  "Stop and start indi-web. Every driver reconnects, and a driver installed since the last start shows up.": "",
+  "keeps running across a Polaris restart": "keeps running across a Polaris restart",
+  "stops when Polaris restarts": "stops when Polaris restarts",
+  "indi-web was started as a child of the Polaris process, so restarting Polaris stops it and the INDI drivers with it.": "indi-web was started as a child of the Polaris process, so restarting Polaris stops it and the INDI drivers with it."
 }

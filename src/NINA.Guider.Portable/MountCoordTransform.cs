@@ -128,10 +128,16 @@ public static class MountCoordTransform {
     /// <summary>Convert a correction distance (px) to a pulse duration (ms),
     /// clamped to [minMoveMs, maxDurationMs]. Returns 0 below minMoveMs.</summary>
     public static int ComputeMoveDurationMs(double distancePx, double ratePxPerMs,
-                                            int minMoveMs, int maxDurationMs) {
+                                            int maxDurationMs) {
         if (ratePxPerMs <= 0) return 0;
+        // PHD2: requestedAmount = ROUND(fabs(distance / rate)), then MoveAxis
+        // clamps to the axis Max Duration and guides whenever it is > 0. There
+        // is deliberately NO minimum duration here: min-move belongs to the
+        // algorithm, which applies it to the INPUT error. Applying it again to
+        // the output threw away every correction the algorithm had shrunk
+        // below min-move (aggression and hysteresis both shrink it), which is
+        // chronic under-correction that never shows up as an error.
         int ms = (int)Math.Round(Math.Abs(distancePx) / ratePxPerMs);
-        if (ms < minMoveMs) return 0;
         if (ms > maxDurationMs) ms = maxDurationMs;
         return ms;
     }

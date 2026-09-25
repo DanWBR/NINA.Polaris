@@ -5086,5 +5086,13 @@
   "Auto-push to network or cloud storage": "Envio automatico a almacenamiento de red o nube",
   "Automatically copy saved frames to a NAS, an SSH box or a cloud account as they are written.": "Copia automaticamente los frames guardados a un NAS, un servidor SSH o una cuenta en la nube segun se escriben.",
   "Looking for rclone on this host...": "Buscando rclone en este host...",
-  "This rclone is older than 1.63, so an aborted upload can leave a partial file under its final name at the destination. The next send replaces it, because the sizes differ.": "Este rclone es anterior a 1.63, asi que una subida abortada puede dejar un archivo parcial con su nombre final en el destino. El siguiente envio lo reemplaza, porque los tamanos difieren."
+  "This rclone is older than 1.63, so an aborted upload can leave a partial file under its final name at the destination. The next send replaces it, because the sizes differ.": "Este rclone es anterior a 1.63, asi que una subida abortada puede dejar un archivo parcial con su nombre final en el destino. El siguiente envio lo reemplaza, porque los tamanos difieren.",
+  "Restart INDI": "Reiniciar INDI",
+  "INDI restarted": "INDI reiniciado",
+  "Restart failed": "Fallo al reiniciar",
+  "Restarting INDI stops every running driver and starts them again. The mount, camera and focuser reconnect, which takes a few seconds. Do this when you are not in the middle of an exposure.": "Reiniciar INDI detiene todos los drivers en ejecucion y los vuelve a levantar. La montura, la camara y el enfocador se reconectan, lo que tarda unos segundos. Hazlo cuando no estes en medio de una exposicion.",
+  "Stop and start indi-web. Every driver reconnects, and a driver installed since the last start shows up.": "Detiene e inicia indi-web. Todos los drivers se reconectan, y un driver instalado despues del ultimo arranque aparece en la lista.",
+  "keeps running across a Polaris restart": "sigue funcionando cuando Polaris se reinicia",
+  "stops when Polaris restarts": "se detiene cuando Polaris se reinicia",
+  "indi-web was started as a child of the Polaris process, so restarting Polaris stops it and the INDI drivers with it.": "indi-web se inició como proceso hijo de Polaris, por lo que reiniciar Polaris lo detiene, y con él los controladores INDI."
 }

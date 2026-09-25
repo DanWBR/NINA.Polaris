@@ -594,16 +594,33 @@ the configured host and port. Check that they match what indi-web's
 "Server" page reports.
 
 **You want to manage indi-web with your own systemd unit instead.**
-Do not. `IndiWebManagerService` is designed to be the sole owner of
-the indi-web process. With a parallel unit, Polaris probes
-`127.0.0.1:8624` on boot, sees a listener, and flips the status to
-running, but its **Stop** button then fails silently because Polaris
-did not spawn that process; and if `IndiWeb:AutoStart` is true while
-the unit also starts on boot, both try to bind 8624 and one loses
-with an `EADDRINUSE` ("address already in use") error. For 24/7
-observatory rigs where the Polaris server is
-itself a systemd unit, set `IndiWeb:AutoStart = true` and let Polaris
-handle the lifecycle.
+On a host installed from the `.deb` there already is one, and Polaris
+uses it: `polaris-indiweb.service`. Polaris starts, stops and restarts
+that unit instead of forking indi-web itself, which is what keeps
+`indiserver` and every driver under it alive when `polaris.service`
+restarts. An update, a crash or a `sudo systemctl restart polaris`
+leaves the mount tracking and the camera on its setpoint; only the web
+UI blinks. The **INDI** card's status row names the owner, `systemd`
+or `child-process`, so you can tell which mode a host is in.
+
+Do not add a second unit of your own beside it. Both would try to bind
+8624 and one loses with an `EADDRINUSE` ("address already in use")
+error. To point the packaged unit at an indi-web you installed
+yourself, create `/etc/default/polaris-indiweb`:
+
+```bash
+INDIWEB_BIN=/usr/local/bin/indi-web
+INDIWEB_PORT=8624
+INDIWEB_HOST=127.0.0.1
+```
+
+Keep the port and host equal to `IndiWeb:Port` and
+`IndiWeb:BindAddress` in `appsettings.json`, or Polaris probes a port
+nobody is listening on and reports indi-web as down.
+
+Running Polaris from a source checkout, or on macOS, there is no such
+unit and Polaris falls back to spawning indi-web as a child process.
+That is fine when nothing is going to restart a unit underneath it.
 
 ## The INDI control panel
 

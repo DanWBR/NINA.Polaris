@@ -187,19 +187,19 @@ public class NativeGuiderCoreTests {
     }
 
     [Test]
-    public void ComputeMoveDurationMs_ClampsAndDeadbands() {
-        // rate = 0.01 px/ms.
-        // 5 px -> 500 ms, within [50, 2000] -> 500.
-        Assert.That(MountCoordTransform.ComputeMoveDurationMs(5.0, 0.01, 50, 2000),
+    public void ComputeMoveDurationMs_ClampsToTheAxisMaximumOnly() {
+        // rate = 0.01 px/ms. PHD2 rounds |dist| / rate and clamps to the axis
+        // Max Duration; see Phd2ParityTests for why there is no lower bound.
+        Assert.That(MountCoordTransform.ComputeMoveDurationMs(5.0, 0.01, 2000),
             Is.EqualTo(500));
-        // 0.2 px -> 20 ms, below minMove 50 -> 0.
-        Assert.That(MountCoordTransform.ComputeMoveDurationMs(0.2, 0.01, 50, 2000),
-            Is.EqualTo(0));
+        // 0.2 px -> 20 ms, and 20 ms is a pulse PHD2 would send.
+        Assert.That(MountCoordTransform.ComputeMoveDurationMs(0.2, 0.01, 2000),
+            Is.EqualTo(20));
         // 100 px -> 10000 ms, above max 2000 -> clamped to 2000.
-        Assert.That(MountCoordTransform.ComputeMoveDurationMs(100.0, 0.01, 50, 2000),
+        Assert.That(MountCoordTransform.ComputeMoveDurationMs(100.0, 0.01, 2000),
             Is.EqualTo(2000));
         // Guard: zero rate -> 0 (no divide-by-zero).
-        Assert.That(MountCoordTransform.ComputeMoveDurationMs(5.0, 0.0, 50, 2000),
+        Assert.That(MountCoordTransform.ComputeMoveDurationMs(5.0, 0.0, 2000),
             Is.EqualTo(0));
     }
 
@@ -486,130 +486,12 @@ public class NativeGuiderCoreTests {
     // ---- MultiStarTracker ----
 
     // Build a frame with several Gaussian stars at given centres.
-    private static ushort[] MultiStarFrame(int w, int h, (double x, double y)[] centres,
-                                           double sigma = 1.8, double peak = 9000, double bg = 300) {
-        var img = new ushort[w * h];
-        Array.Fill(img, (ushort)bg);
-        foreach (var (cx, cy) in centres) {
-            int x0 = Math.Max(0, (int)(cx - 6)), x1 = Math.Min(w - 1, (int)(cx + 6));
-            int y0 = Math.Max(0, (int)(cy - 6)), y1 = Math.Min(h - 1, (int)(cy + 6));
-            for (int y = y0; y <= y1; y++) {
-                for (int x = x0; x <= x1; x++) {
-                    double dx = x - cx, dy = y - cy;
-                    double v = bg + peak * Math.Exp(-(dx * dx + dy * dy) / (2 * sigma * sigma));
-                    int i = y * w + x;
-                    if (v > img[i]) img[i] = (ushort)Math.Clamp(v, 0, 65535);
-                }
-            }
-        }
-        return img;
-    }
 
-    [Test]
-    public void MultiStar_AveragesRigidFieldShift_FromAllStars() {
-        int w = 128, h = 128;
-        var refsArr = new (double x, double y)[] { (32, 40), (90, 35), (60, 95) };
-        var tracker = new MultiStarTracker(searchRegion: 12);
-        tracker.Reset(refsArr);
-
-        // Shift the whole field by a known vector; every star moves identically.
-        double sx = 2.3, sy = -1.4;
-        var shifted = refsArr.Select(r => (r.x + sx, r.y + sy)).ToArray();
-        var img = MultiStarFrame(w, h, shifted);
-
-        var res = tracker.Update(img, w, h);
-
-        Assert.That(res.Found, Is.True);
-        Assert.That(res.UsedCount, Is.EqualTo(3));
-        Assert.That(res.OffsetX, Is.EqualTo(sx).Within(0.15));
-        Assert.That(res.OffsetY, Is.EqualTo(sy).Within(0.15));
-    }
-
-    [Test]
-    public void MultiStar_RejectsOutlierStar() {
-        int w = 128, h = 128;
-        var refsArr = new (double x, double y)[] { (30, 30), (95, 40), (55, 100), (100, 100) };
-        var tracker = new MultiStarTracker(searchRegion: 10, maxMiss: 10, outlierPx: 3.0);
-        tracker.Reset(refsArr);
-
-        // Three stars shift by (1.5, 1.0); the fourth jumps far (a bad match /
-        // hot pixel) and must be rejected so it doesn't bias the average.
-        double sx = 1.5, sy = 1.0;
-        var pos = new (double x, double y)[] {
-            (refsArr[0].x + sx, refsArr[0].y + sy),
-            (refsArr[1].x + sx, refsArr[1].y + sy),
-            (refsArr[2].x + sx, refsArr[2].y + sy),
-            (refsArr[3].x + 9.0, refsArr[3].y - 8.0), // outlier
-        };
-        var img = MultiStarFrame(w, h, pos);
-
-        var res = tracker.Update(img, w, h);
-
-        Assert.That(res.Found, Is.True);
-        // The outlier is dropped, so the consensus shift survives.
-        Assert.That(res.OffsetX, Is.EqualTo(sx).Within(0.2));
-        Assert.That(res.OffsetY, Is.EqualTo(sy).Within(0.2));
-        Assert.That(res.UsedCount, Is.EqualTo(3), "outlier excluded from the average");
-    }
-
-    [Test]
-    public void MultiStar_SurvivesLossOfPrimaryStar() {
-        int w = 128, h = 128;
-        var refsArr = new (double x, double y)[] { (30, 30), (95, 40), (60, 100) };
-        var tracker = new MultiStarTracker(searchRegion: 10);
-        tracker.Reset(refsArr);
-
-        // Primary star absent this frame; the two secondaries still define the shift.
-        double sx = -2.0, sy = 1.7;
-        var pos = new (double x, double y)[] {
-            (refsArr[1].x + sx, refsArr[1].y + sy),
-            (refsArr[2].x + sx, refsArr[2].y + sy),
-        };
-        var img = MultiStarFrame(w, h, pos);
-
-        var res = tracker.Update(img, w, h);
-
-        Assert.That(res.Found, Is.True, "should still produce an offset without the primary");
-        Assert.That(res.UsedCount, Is.EqualTo(2));
-        Assert.That(res.OffsetX, Is.EqualTo(sx).Within(0.2));
-        Assert.That(res.OffsetY, Is.EqualTo(sy).Within(0.2));
-    }
-
-    [Test]
-    public void MultiStar_OffsetReferences_ShiftsAllRefsConsistently() {
-        int w = 128, h = 128;
-        var refsArr = new (double x, double y)[] { (40, 40), (90, 60) };
-        var tracker = new MultiStarTracker(searchRegion: 10);
-        tracker.Reset(refsArr);
-
-        // Simulate a dither: move the desired lock by (5, -3). After shifting
-        // the references, a frame with the stars still at their ORIGINAL spots
-        // should report an offset of (-5, +3) (the field must move back).
-        tracker.OffsetReferences(5, -3);
-        var img = MultiStarFrame(w, h, refsArr);
-
-        var res = tracker.Update(img, w, h);
-
-        Assert.That(res.Found, Is.True);
-        Assert.That(res.OffsetX, Is.EqualTo(-5.0).Within(0.2));
-        Assert.That(res.OffsetY, Is.EqualTo(3.0).Within(0.2));
-    }
-
-    [Test]
-    public void MultiStar_AllStarsLost_ReportsNotFound() {
-        int w = 96, h = 96;
-        var refsArr = new (double x, double y)[] { (30, 30), (60, 60) };
-        var tracker = new MultiStarTracker(searchRegion: 8);
-        tracker.Reset(refsArr);
-
-        var flat = new ushort[w * h];
-        Array.Fill(flat, (ushort)400);
-
-        var res = tracker.Update(flat, w, h);
-
-        Assert.That(res.Found, Is.False);
-        Assert.That(res.UsedCount, Is.EqualTo(0));
-    }
+    // The multi-star tests that used to live here pinned a combination of our
+    // own (median + outlier rejection + SNR-weighted mean, applied always, and
+    // able to guide with the primary star missing). PHD2 does none of that:
+    // the primary IS the measurement and the secondaries only refine it. The
+    // behaviour is pinned in Phd2ParityTests instead.
 
     // ---- CalibrationProcess backlash measurement ----
 

@@ -47,7 +47,7 @@ namespace NINA.Polaris.Services;
 /// want to own the indiserver process. When indi-web is the active
 /// owner (running) the SimulatorService MUST route its start/stop
 /// driver commands through indi-web's REST API instead of the
-/// indiserver FIFO it normally talks to — otherwise the two will
+/// indiserver FIFO it normally talks to, otherwise the two will
 /// race on the same FIFO and one of them loses. INDI-WEB-4 wires
 /// that delegation; until then the user picks one or the other.
 /// </summary>
@@ -56,9 +56,41 @@ namespace NINA.Polaris.Services;
 public sealed record IndiInstalledDriver(string Label, string? Binary, string? Family);
 
 public class IndiWebManagerService : BackgroundService {
+    /// <summary>The unit the .deb ships in /lib/systemd/system. Starting
+    /// indi-web through it is what keeps the drivers alive across a restart of
+    /// polaris.service; see <see cref="UseSystemdUnit"/>.</summary>
+    private const string SystemdUnit = "polaris-indiweb.service";
+
     private readonly IConfiguration _config;
     private readonly ILogger<IndiWebManagerService> _logger;
     private Process? _process;
+
+    /// <summary>True when systemd is the init system AND the packaged
+    /// <c>polaris-indiweb.service</c> unit is installed, so start/stop/restart
+    /// go through <c>systemctl</c> instead of <see cref="Process.Start()"/>.
+    ///
+    /// <para>This is the whole point of that unit. A forked child inherits
+    /// polaris.service's cgroup, and systemd's default KillMode=control-group
+    /// kills the entire cgroup on stop -- a restart being a stop plus a start.
+    /// So <c>systemctl restart polaris</c> killed indi-web, indiserver and
+    /// every driver under it, exactly what the class contract says must not
+    /// happen. setsid does not help: the cgroup is inherited across fork and a
+    /// new session is still the same cgroup. Only a separate unit is a separate
+    /// cgroup.</para>
+    ///
+    /// <para>False on macOS, on a source checkout, and on a host where someone
+    /// pip-installed indi-web without the .deb. Those fall back to the child
+    /// process, which is fine when nothing is going to restart a unit
+    /// underneath it.</para></summary>
+    public bool UseSystemdUnit { get; private set; }
+
+    /// <summary>"systemd" or "child-process", surfaced in /api/indi/web/status
+    /// so the INDI panel (and a bug report) can tell whether this host's
+    /// drivers actually survive a Polaris restart.</summary>
+    public string ManagedBy => UseSystemdUnit ? "systemd" : "child-process";
+
+    /// <summary>Unit name for the status payload, null when not unit-managed.</summary>
+    public string? SystemdUnitName => UseSystemdUnit ? SystemdUnit : null;
 
     /// <summary>True when <c>indi-web</c> is on PATH (or at the
     /// path explicitly configured via IndiWeb:ExecutablePath).</summary>
@@ -67,7 +99,7 @@ public class IndiWebManagerService : BackgroundService {
     public string? ExecutablePath { get; private set; }
 
     /// <summary>True when something is listening on the bound port
-    /// — refreshed by the 15 s health-probe loop.</summary>
+    ///, refreshed by the 15 s health-probe loop.</summary>
     public bool Running { get; private set; }
     public int BindPort { get; }
     public string BindAddress { get; }
@@ -98,7 +130,7 @@ public class IndiWebManagerService : BackgroundService {
         _config = config;
         _logger = logger;
         BindPort = _config.GetValue("IndiWeb:Port", 8624);
-        // Always loopback by default — indi-web has no auth, and the
+        // Always loopback by default, indi-web has no auth, and the
         // user reaches it via Polaris's reverse-proxy (which IS
         // gated by the Relay's token if enabled). Letting it bind on
         // 0.0.0.0 would re-expose driver control to the LAN.
@@ -114,6 +146,7 @@ public class IndiWebManagerService : BackgroundService {
         }
 
         await DetectAsync(stoppingToken);
+        await DetectSystemdUnitAsync(stoppingToken);
         if (!Installed) {
             _logger.LogInformation(
                 "IndiWebManagerService: indi-web not found, install via " +
@@ -123,7 +156,7 @@ public class IndiWebManagerService : BackgroundService {
 
         // 3 s stagger after Polaris boot so PHD2 / simulator services
         // get out of the way before indi-web prints to stdout in the
-        // log — keeps the startup banner readable.
+        // log, keeps the startup banner readable.
         try { await Task.Delay(TimeSpan.FromSeconds(3), stoppingToken); }
         catch (TaskCanceledException) { return; }
 
@@ -136,7 +169,7 @@ public class IndiWebManagerService : BackgroundService {
 
         // Periodic health check (15 s) keeps Running fresh for the
         // UI status pill. Also catches the case where the user (or
-        // an OOM killer) killed the indi-web process out of band —
+        // an OOM killer) killed the indi-web process out of band,
         // we'll notice within 15 s and surface it.
         while (!stoppingToken.IsCancellationRequested) {
             try {
@@ -157,6 +190,37 @@ public class IndiWebManagerService : BackgroundService {
         // setpoint, and nothing goes through a USB re-enumeration for what is a
         // few seconds of downtime in the layer above. The operator stops
         // indi-web explicitly from the INDI panel when they actually mean it.
+        //
+        // Not stopping it here was never enough on its own, though. Under
+        // systemd a forked child sits in polaris.service's cgroup and dies with
+        // it whatever this method does or does not do, which is why the packaged
+        // host runs indi-web as its own unit (see UseSystemdUnit). On a host
+        // without that unit this comment describes an intention, not a
+        // guarantee.
+    }
+
+    /// <summary>Decide between the systemd unit and a forked child, once, at
+    /// startup. Cheap: one <c>systemctl cat</c>, which needs no privileges and
+    /// exits non-zero when the unit is not installed.</summary>
+    private async Task DetectSystemdUnitAsync(CancellationToken ct) {
+        UseSystemdUnit = false;
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Linux)) return;
+        // systemd present as PID 1, rather than merely installed. A container
+        // or a chroot has the unit files on disk and no systemd to run them.
+        if (!Directory.Exists("/run/systemd/system")) return;
+
+        var cat = await RunCommandAsync("systemctl", $"cat {SystemdUnit}", ct);
+        UseSystemdUnit = cat.exitCode == 0;
+        if (UseSystemdUnit) {
+            _logger.LogInformation(
+                "IndiWebManagerService: managing indi-web through {Unit}; it survives " +
+                "a restart of polaris.service", SystemdUnit);
+        } else {
+            _logger.LogInformation(
+                "IndiWebManagerService: {Unit} not installed, falling back to a child " +
+                "process. Under systemd that child is killed with polaris.service.",
+                SystemdUnit);
+        }
     }
 
     private async Task DetectAsync(CancellationToken ct) {
@@ -210,6 +274,33 @@ public class IndiWebManagerService : BackgroundService {
             return true;
         }
 
+        // Preferred path on a packaged host: let systemd own indi-web, in a
+        // cgroup of its own, so the drivers under it are not collateral damage
+        // the next time polaris.service is restarted.
+        if (UseSystemdUnit) {
+            _logger.LogInformation("Starting indi-web via {Unit}", SystemdUnit);
+            var started = await RunCommandAsync("systemctl", $"start {SystemdUnit}", ct, 25_000);
+            if (started.exitCode == 0) {
+                if (await WaitForHealthyAsync(null, ct)) return true;
+                LastError =
+                    $"{SystemdUnit} started but nothing answered on {BindAddress}:{BindPort}. " +
+                    $"Check `systemctl status {SystemdUnit}`, and that INDIWEB_PORT / " +
+                    $"INDIWEB_HOST in the unit match IndiWeb:Port / IndiWeb:BindAddress.";
+                _logger.LogWarning("{Error}", LastError);
+                return false;
+            }
+            // Usually a missing PolicyKit grant ("Interactive authentication
+            // required"), which we cannot repair from in here. A child process
+            // still gives the operator a working INDI panel; it just dies with
+            // the next restart of polaris.service, so say that out loud instead
+            // of quietly reintroducing the bug.
+            _logger.LogWarning(
+                "systemctl start {Unit} failed (exit {Code}): {Err}. Falling back to a child " +
+                "process -- indi-web will NOT survive a restart of polaris.service. Check " +
+                "/etc/polkit-1/rules.d/50-polaris-indiweb.rules.",
+                SystemdUnit, started.exitCode, started.stderr.Trim());
+        }
+
         // Unlike xpra, indi-web runs in the foreground; we own the
         // process and have to keep the handle around. Redirect
         // stdout/stderr to /dev/null-ish (no UseShellExecute, no
@@ -240,14 +331,22 @@ public class IndiWebManagerService : BackgroundService {
             return false;
         }
 
-        // Wait up to 20 s for the HTTP server to come up. Bottle (the
-        // framework indi-web uses) prints its "running on..." banner
-        // after maybe a second of startup; allow generous slack for
-        // slow Pi hardware.
+        return await WaitForHealthyAsync(_process, ct);
+    }
+
+    /// <summary>Wait up to 20 s for the HTTP server to come up. Bottle (the
+    /// framework indi-web uses) prints its "running on..." banner after maybe a
+    /// second of startup; the slack is for slow Pi hardware.
+    ///
+    /// <para><paramref name="watch"/> is the child we forked, so its premature
+    /// exit ends the wait early with the exit code in the message. The systemd
+    /// path passes null: there is no handle to watch, and a unit that dies on
+    /// startup is systemd's own Restart=on-failure to deal with.</para></summary>
+    private async Task<bool> WaitForHealthyAsync(Process? watch, CancellationToken ct) {
         for (int i = 0; i < 40; i++) {
             try { await Task.Delay(500, ct); } catch (TaskCanceledException) { return false; }
-            if (_process?.HasExited == true) {
-                LastError = $"indi-web exited prematurely (code {_process.ExitCode})";
+            if (watch?.HasExited == true) {
+                LastError = $"indi-web exited prematurely (code {watch.ExitCode})";
                 _logger.LogWarning("{Error}", LastError);
                 return false;
             }
@@ -264,24 +363,40 @@ public class IndiWebManagerService : BackgroundService {
     }
 
     // Hides BackgroundService.StopAsync, same reasoning as StartAsync above.
-    public new Task<bool> StopAsync(CancellationToken ct = default) {
-        if (!IsSupportedOs) return Task.FromResult(false);
-        if (_process == null || _process.HasExited) {
-            Running = false;
-            return Task.FromResult(true);
+    public new async Task<bool> StopAsync(CancellationToken ct = default) {
+        if (!IsSupportedOs) return false;
+
+        // The unit comes first, and _process being null is not a reason to skip
+        // it: when indi-web runs as its own unit it outlives Polaris, so the
+        // instance we are stopping was very likely started by a Polaris process
+        // that no longer exists.
+        if (UseSystemdUnit) {
+            var stopped = await RunCommandAsync("systemctl", $"stop {SystemdUnit}", ct, 25_000);
+            if (stopped.exitCode != 0) {
+                LastError = $"systemctl stop {SystemdUnit} failed (exit {stopped.exitCode}): " +
+                            stopped.stderr.Trim();
+                _logger.LogWarning("{Error}", LastError);
+                return false;
+            }
         }
-        try {
-            _process.Kill(entireProcessTree: true);
-            _process.WaitForExit(5000);
-            Running = false;
-            _process = null;
-            LastError = null;
-            return Task.FromResult(true);
-        } catch (Exception ex) {
-            LastError = $"Failed to stop indi-web: {ex.Message}";
-            _logger.LogWarning(ex, "indi-web stop failed");
-            return Task.FromResult(false);
+
+        // Plus any child of ours: the fallback path above, and every host
+        // without the unit (macOS, a source checkout, a hand-rolled install).
+        if (_process is { HasExited: false }) {
+            try {
+                _process.Kill(entireProcessTree: true);
+                _process.WaitForExit(5000);
+            } catch (Exception ex) {
+                LastError = $"Failed to stop indi-web: {ex.Message}";
+                _logger.LogWarning(ex, "indi-web stop failed");
+                return false;
+            }
         }
+
+        _process = null;
+        Running = false;
+        LastError = null;
+        return true;
     }
 
     public async Task<bool> RestartAsync(CancellationToken ct = default) {
@@ -294,7 +409,7 @@ public class IndiWebManagerService : BackgroundService {
     // indi-web (knro/indiwebmanager) exposes /api/drivers/{start,stop,restart}
     // /<label> and /api/server/drivers. Restarting a single driver bounces
     // just that driver process on the indiserver without dropping the others,
-    // which is exactly what a wedged driver (dropped BLOB) needs — far less
+    // which is exactly what a wedged driver (dropped BLOB) needs, far less
     // disruptive than RestartAsync (which kills the whole indi-web) or
     // reconnecting the device (which does not fix a stuck driver process).
 
@@ -593,7 +708,7 @@ public class IndiWebManagerService : BackgroundService {
             LastError = "indi-web is not running";
             return false;
         }
-        // Path segment, not a query value — Uri.EscapeDataString keeps spaces
+        // Path segment, not a query value, Uri.EscapeDataString keeps spaces
         // (%20) and other label characters intact for Bottle's route match.
         var url = $"/api/drivers/{action}/{Uri.EscapeDataString(label)}";
         try {
@@ -634,7 +749,7 @@ public class IndiWebManagerService : BackgroundService {
         public string? ActiveProfile { get; set; }
     }
 
-    /// <summary>TCP probe — true if something is listening on
+    /// <summary>TCP probe, true if something is listening on
     /// BindAddress:BindPort. Cheap (single connect + 500 ms cap)
     /// so we can call it from the 15 s health loop without making
     /// the log noisy.</summary>

@@ -919,11 +919,11 @@ public class EquipmentProfile {
 
     /// <summary>Native guider RA minimum-move deadband (pixels). Errors
     /// below this are not corrected. Default 0.15 px.</summary>
-    public double NativeMinMoveRaPx { get; set; } = 0.15;
+    public double NativeMinMoveRaPx { get; set; } = 0.2;     // PHD2 DefaultMinMove
 
     /// <summary>Native guider Dec minimum-move deadband (pixels).
     /// Default 0.15 px.</summary>
-    public double NativeMinMoveDecPx { get; set; } = 0.15;
+    public double NativeMinMoveDecPx { get; set; } = 0.2;    // PHD2 DefaultMinMove
 
     /// <summary>Native guider RA hysteresis-algorithm aggression
     /// (0..2, fraction of the error corrected each frame). Default 0.70.</summary>
@@ -932,7 +932,7 @@ public class EquipmentProfile {
     /// <summary>Native guider Dec algorithm aggression (0..2, fraction of the
     /// error corrected each frame). Default 0.70. Separate from RA so each
     /// axis can be tuned independently (ASIAIR-style 10..150%).</summary>
-    public double NativeDecAggression { get; set; } = 0.70;
+    public double NativeDecAggression { get; set; } = 1.0;   // PHD2 resist-switch DefaultAggression
 
     /// <summary>Native guider RA hysteresis weight (0..0.99, fraction of
     /// the previous move blended into this one). Default 0.10.</summary>

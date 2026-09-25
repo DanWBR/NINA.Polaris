@@ -117,8 +117,9 @@ re-exposes driver control to anyone on the LAN.
    tabs (Mount, Camera, etc.) see the loaded drivers in their
    device dropdowns.
 6. When you're done, click **■ Stop** in the Polaris control row
-   to shut indi-web down. Polaris will kill the child process
-   tree cleanly.
+   to shut indi-web down. On a packaged host that is
+   `systemctl stop polaris-indiweb.service`; elsewhere Polaris
+   kills the child process tree it spawned.
 
 ## Coexistence with the built-in Simulator
 
@@ -237,23 +238,41 @@ Polaris's `IndiClient` connects via TCP to `indiserver` on the
 configured host:port (Settings → INDI). Check that the host:port
 match what indi-web's "Server" page reports.
 
-**I want to manage indi-web with my own systemd unit instead.**
-Don't, `IndiWebManagerService` is designed to be the sole owner
-of the indi-web process. If you run a parallel systemd unit:
+**How indi-web is owned, and why it survives a Polaris restart.**
 
-- On boot, Polaris probes `127.0.0.1:8624`, sees a listener, and
-  flips the status to running. The Stop button in the UI then
-  fails silently because it tries to kill a `_process` reference
-  that's null (Polaris didn't spawn this one).
-- If `IndiWeb:AutoStart=true` AND the systemd unit also starts on
-  boot, both try to bind 8624 and one loses with `EADDRINUSE`.
+On a host installed from the `.deb` the package ships
+`polaris-indiweb.service` and `IndiWebManagerService` drives it
+with `systemctl start|stop|restart`. That unit exists for one
+reason: a process forked from Polaris inherits
+`polaris.service`'s cgroup, systemd's default
+`KillMode=control-group` kills the whole cgroup on stop, and a
+restart is a stop plus a start. So `systemctl restart polaris`
+used to take indi-web down, and with it `indiserver` and every
+driver: the mount stopped tracking and the camera lost its
+setpoint over a few seconds of downtime in the layer above.
+`setsid` does not help, a cgroup is inherited across fork and a
+new session is still the same cgroup. Only a separate unit is a
+separate cgroup.
 
-For 24/7 observatory rigs where the Polaris server is itself a
-systemd unit, set `IndiWeb:AutoStart=true` and let Polaris handle
-the lifecycle. The standalone systemd unit only makes sense when
-Polaris runs interactively (dev mode), and even then the simpler
-fix is leaving Polaris's `AutoStart=true` and accepting the 3 s
-warmup at app boot.
+`GET /api/indi/web/status` reports `managedBy`, either
+`"systemd"` or `"child-process"`, plus `systemdUnit`. On macOS,
+in a container without systemd as PID 1, or from a source
+checkout, there is no unit and Polaris forks indi-web as before.
+
+The unit is NOT enabled at boot: whether indi-web starts is still
+`IndiWeb:AutoStart`'s decision, which Polaris acts on once it is
+up. Do not add a second unit of your own, both would try to bind
+8624 and one loses with `EADDRINUSE`. To use an indi-web outside
+the packaged venv, set `INDIWEB_BIN` (and `INDIWEB_PORT` /
+`INDIWEB_HOST`, which must match `IndiWeb:Port` and
+`IndiWeb:BindAddress`) in `/etc/default/polaris-indiweb`.
+
+If the journal shows Polaris logging "systemctl start
+polaris-indiweb.service failed", the PolicyKit grant in
+`/etc/polkit-1/rules.d/50-polaris-indiweb.rules` is missing or
+polkit has not reloaded. Polaris then falls back to a child
+process, so the panel still works, but the drivers go down again
+on the next restart.
 
 ## Restarting a wedged driver
 

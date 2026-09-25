@@ -1,0 +1,24 @@
+// TWIN: keep in sync with ../localauthority/50-local.d/50-polaris-update.pkla,
+// whose broad manage-units grant already covers this on polkit < 0.106.
+//
+// PolicyKit rule shipped by the polaris .deb. Grants the 'polaris' system user
+// the ability to drive the embedded INDI Web Manager unit, used by
+// IndiWebManagerService whenever the packaged unit is installed:
+//
+//   systemctl start|stop|restart polaris-indiweb.service
+//
+// indi-web lives in its own unit so that `systemctl restart polaris` does not
+// take indiserver and every driver down with it -- see the long comment in
+// /lib/systemd/system/polaris-indiweb.service. That only works if the polaris
+// user may actually talk to systemd about that unit; without this rule
+// systemctl answers "Interactive authentication required" and the service
+// silently falls back to spawning indi-web as a child, which is the bug.
+polkit.addRule(function(action, subject) {
+    if (subject.user != "polaris") return;
+
+    if ((action.id == "org.freedesktop.systemd1.manage-units"
+            || action.id == "org.freedesktop.systemd1.manage-unit-files")
+        && action.lookup("unit") == "polaris-indiweb.service") {
+        return polkit.Result.YES;
+    }
+});

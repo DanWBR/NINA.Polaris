@@ -11,6 +11,14 @@ case "$1" in
             if systemctl is-active --quiet polaris.service; then
                 systemctl stop polaris.service
             fi
+            # indi-web runs as its own unit precisely so it is NOT stopped with
+            # polaris.service -- which means an actual removal has to stop it
+            # here, or it keeps running with its ExecStart about to vanish.
+            # Only on remove: an upgrade is the case the separate unit exists
+            # for, and the drivers must ride it out.
+            if [ "$1" = "remove" ]                && systemctl is-active --quiet polaris-indiweb.service; then
+                systemctl stop polaris-indiweb.service || true
+            fi
         fi
         ;;
 

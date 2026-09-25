@@ -129,7 +129,7 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     // verdict plus its numbers. Lets the calibration retry say WHY it retries
     // instead of blaming every miss on a dropped frame.
     private GuideStarStatus? _lastFindStatus;
-    private double _lastFindSnr, _lastFindHfd;
+    private double _lastFindSnr, _lastFindHfd, _lastFindMass;
     private int _lastFrameOriginX, _lastFrameOriginY;
     private volatile ViewFrame? _view;
     private long _viewSeq;
@@ -155,6 +155,10 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     private IGuideAlgorithm _raAlgo = new HysteresisAlgorithm();
     private IGuideAlgorithm _decAlgo = new ResistSwitchAlgorithm();
     private BacklashComp _backlashComp = new(0);
+    // PHD2's two frame-rejection gates plus the running error they consult.
+    private readonly MassChecker _massChecker = new();
+    private readonly DistanceChecker _distanceChecker = new();
+    private readonly CurrentErrorTracker _errorTracker = new();
     // Timestamp of the previous guide frame, for the predictor's frame interval.
     private long _lastGuideMs;
 
@@ -533,9 +537,10 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
         double offY = raOnly ? 0.0 : mag * Math.Sin(angle);
         _lockX += offX;
         _lockY += offY;
-        // Shift every tracked star's reference by the same vector so multi-star
-        // stays consistent with the new lock point.
-        _multiStar.OffsetReferences(offX, offY);
+        // PHD2 does not shift the secondary references by the dither vector: it
+        // re-reads each secondary where it actually is once the primary has
+        // settled at the new lock.
+        _multiStar.NoteLockPositionMoved();
         _raAlgo.Reset();
         _decAlgo.Reset();
         // Installed as one unit against the guide loop's settle update: a settle
