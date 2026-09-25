@@ -133,6 +133,9 @@ public sealed partial class NativeGuider {
 
         if (!found) {
             _starLostCount++;
+            // PHD2 arms the distance checker on a lost frame: the offsets that
+            // come back right after a loss are not to be trusted yet.
+            _distanceChecker.Activate();
             // Surface a distinct state the GUIDE UI already understands (PHD2
             // parity: StarLost -> "LostLock"). Without this the badge stayed
             // green "Guiding" through a whole cloud-out and the user had no
@@ -178,7 +181,46 @@ public sealed partial class NativeGuider {
 
         double dx = curX - _lockX;
         double dy = curY - _lockY;
+
+        // PHD2 runs two gates before it will move the mount on a measurement.
+        //
+        // The mass check asks whether the thing just centroided is the same
+        // star: a cloud, a satellite or a neighbour drifting into the window
+        // changes the mass, and guiding on that is guiding on noise.
+        bool measuring = AppState == "Guiding" && !_paused && !IsSettling;
+        _massChecker.SetExposure(expMs, isAutoExposure: false);
+        if (measuring && _massChecker.CheckMass(_lastFindMass)) {
+            var lim = _massChecker.LastLimits;
+            _logger.LogDebug("Frame dropped: star mass {Mass:F0} outside ({Low:F0}, {High:F0}), median {Med:F0}",
+                             _lastFindMass, lim.Low, lim.High, lim.Median);
+            SetActivity(null);
+            PushStep(new PortableGuideStep(NowMs(), 0, 0, 0, 0, 0, 0, snr, hfd, false));
+            BuildView(curX, curY, snr, true);
+            _distanceChecker.Activate();
+            return;
+        }
+        _massChecker.AppendData(_lastFindMass);
+
+        // The distance check drops an implausible jump while recovering from a
+        // star loss. With PHD2's default (tolerate jumps off) the tolerance is
+        // effectively infinite and this only bites in the five seconds after a
+        // loss, where PHD2 forces a tolerance of 2.
+        double distPx = Math.Sqrt(dx * dx + dy * dy);
+        if (!_distanceChecker.CheckDistance(distPx, double.MaxValue,
+                                            _errorTracker.AvgDistanceLong,
+                                            _errorTracker.FrameCount, measuring)) {
+            _logger.LogDebug("Frame dropped: offset {Dist:F2}px against a smoothed average of {Avg:F2}px",
+                             distPx, _errorTracker.AvgDistanceLong);
+            SetActivity(null);
+            PushStep(new PortableGuideStep(NowMs(), 0, 0, 0, 0, 0, 0, snr, hfd, false));
+            BuildView(curX, curY, snr, true);
+            return;
+        }
+
         var (raPx, decPx) = MountCoordTransform.CameraToMount(_calibration, dx, dy);
+        // PHD2 Guider::UpdateCurrentDistance, the averages the gate above reads.
+        if (measuring) _errorTracker.Update(distPx, Math.Abs(raPx));
+        else _errorTracker.Seed(distPx, Math.Abs(raPx));
 
         // Frame interval for the (time-aware) predictive algorithm; reactive
         // algorithms ignore it. First frame falls back to the exposure period.
@@ -814,13 +856,14 @@ public sealed partial class NativeGuider {
         // INDI device's frame state, which leaked into the imaging camera.
         try { await cam.SetSubframeAsync(0, 0, 0, 0, ct); } catch { }
         var img = await CaptureFullAsync(cam, ct);
-        if (img == null) { _lastFindStatus = null; _lastFindSnr = 0; _lastFindHfd = 0; return (_lockX, _lockY, false, 0, 0); }
+        if (img == null) { _lastFindStatus = null; _lastFindSnr = 0; _lastFindHfd = 0; _lastFindMass = 0; return (_lockX, _lockY, false, 0, 0); }
         _lastFrame = img; _lastFrameOriginX = 0; _lastFrameOriginY = 0;
 
         int w = img.Properties.Width, h = img.Properties.Height;
         int sr = searchRegion ?? SearchRegion;
         var result = GuideStar.Find(img.Data, w, h, _lockX, _lockY, sr);
         _lastFindStatus = result.Status; _lastFindSnr = result.Snr; _lastFindHfd = result.Hfd;
+        _lastFindMass = result.Mass;
         if (!result.Found) {
             return (_lockX, _lockY, false, result.Snr, result.Hfd);
         }

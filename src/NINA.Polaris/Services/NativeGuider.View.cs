@@ -64,6 +64,9 @@ public sealed partial class NativeGuider {
             zfilterExpFactor: zExp);
         _raAlgo.Reset();
         _decAlgo.Reset();
+        _massChecker.Reset();
+        _distanceChecker.Reset();
+        _errorTracker.Reset();
         _lastGuideMs = 0;
         // Dec backlash compensation: only when enabled on the rig AND the
         // calibration actually measured a backlash. Disabled by default

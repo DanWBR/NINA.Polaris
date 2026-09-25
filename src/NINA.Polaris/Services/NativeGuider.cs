@@ -129,7 +129,7 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     // verdict plus its numbers. Lets the calibration retry say WHY it retries
     // instead of blaming every miss on a dropped frame.
     private GuideStarStatus? _lastFindStatus;
-    private double _lastFindSnr, _lastFindHfd;
+    private double _lastFindSnr, _lastFindHfd, _lastFindMass;
     private int _lastFrameOriginX, _lastFrameOriginY;
     private volatile ViewFrame? _view;
     private long _viewSeq;
@@ -155,6 +155,10 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     private IGuideAlgorithm _raAlgo = new HysteresisAlgorithm();
     private IGuideAlgorithm _decAlgo = new ResistSwitchAlgorithm();
     private BacklashComp _backlashComp = new(0);
+    // PHD2's two frame-rejection gates plus the running error they consult.
+    private readonly MassChecker _massChecker = new();
+    private readonly DistanceChecker _distanceChecker = new();
+    private readonly CurrentErrorTracker _errorTracker = new();
     // Timestamp of the previous guide frame, for the predictor's frame interval.
     private long _lastGuideMs;
 
