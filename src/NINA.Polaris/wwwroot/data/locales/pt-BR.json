@@ -5114,5 +5114,15 @@
   "This browser cannot share files. Downloading it instead.": "Este navegador nao compartilha arquivos. Vou baixar em vez disso.",
   "Share failed": "Falha ao compartilhar",
   "STREAM": "STREAM",
-  "The video stream is using the camera. No other frame can be taken until it is stopped.": "O stream de video esta usando a camera. Nenhum outro frame pode ser tirado ate ele parar."
+  "The video stream is using the camera. No other frame can be taken until it is stopped.": "O stream de video esta usando a camera. Nenhum outro frame pode ser tirado ate ele parar.",
+  "Reset USB": "Resetar o USB",
+  "Every USB device disconnects and comes back: cameras, mount, focuser, filter wheel. The INDI drivers restart with them. The disk the system boots from is never touched. Do not do this during a capture.": "Todos os dispositivos USB desconectam e voltam: cameras, montagem, focalizador, roda de filtros. Os drivers INDI reiniciam junto. O disco de onde o sistema inicia nunca e tocado. Nao faca isso durante uma captura.",
+  "Unplug and replug every USB device, without walking to the telescope. Cameras, mount, focuser and wheel all reconnect, and the INDI drivers restart. The disk the system boots from is never touched.": "Desconecta e reconecta todos os dispositivos USB, sem ir ate o telescopio. Cameras, montagem, focalizador e roda reconectam, e os drivers INDI reiniciam. O disco de boot nunca e tocado.",
+  "USB reset done": "Reset do USB concluido",
+  "USB reset failed": "Falha no reset do USB",
+  "port(s) re-enumerated": "porta(s) reenumerada(s)",
+  "driver(s) restarted": "driver(s) reiniciado(s)",
+  "Came back": "Voltaram",
+  "Did not come back": "Nao voltaram",
+  "Check the cable and the power on that device.": "Confira o cabo e a alimentacao desse dispositivo."
 }

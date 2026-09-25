@@ -643,6 +643,7 @@ builder.Services.AddSingleton<NINA.Image.Gpu.IGpuCompute>(sp => {
 });
 builder.Services.AddSingleton<FileBrowserService>();
 builder.Services.AddSingleton<DownloadTicketService>();
+builder.Services.AddSingleton<UsbResetService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Storage.RcloneOAuthService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.External.SirilService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.External.GraXpertService>();

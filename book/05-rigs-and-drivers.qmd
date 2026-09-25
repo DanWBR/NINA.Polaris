@@ -622,6 +622,32 @@ Running Polaris from a source checkout, or on macOS, there is no such
 unit and Polaris falls back to spawning indi-web as a child process.
 That is fine when nothing is going to restart a unit underneath it.
 
+## When a device vanishes: Reset USB {#sec-reset-usb}
+
+A camera that stops appearing, a focuser whose serial port is suddenly
+gone, a driver answering every command with an input/output error: on a
+small board this happens, and the usual cure is a walk to the telescope
+to unplug and replug a cable.
+
+**Reset USB**, in the INDI card, does that walk for you. It asks the
+kernel to enumerate the bus again, which recovers a device it had lost
+track of and a serial adapter that renumbered, and then restarts the
+INDI drivers so none of them is left holding a port that no longer
+exists. The chain carrying the root filesystem is deliberately left
+alone, so a board booting from a USB SSD cannot re-enumerate its own
+disk out from under itself.
+
+Read what it reports. If a device appears that was not there before,
+the reset recovered it. If nothing changes, the device is not
+electrically present, and no amount of re-enumeration will change that:
+a USB-C cable with no data pairs, for instance, comes back as a
+`USB Billboard Device` every single time. That is the moment to go and
+check the cable, the connector and the power, instead of restarting
+software.
+
+Every device disconnects and comes back when you press it, so do not
+press it in the middle of a capture.
+
 ## The INDI control panel
 
 The **INDI Control Panel** sub-tab is a built-in replacement for

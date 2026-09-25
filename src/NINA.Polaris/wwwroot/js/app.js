@@ -1857,6 +1857,8 @@ function ninaApp() {
         // the VIDEO tab, because while it runs NOTHING else can take a frame:
         // the header chip is the one thing that explains a refused capture
         // from any other tab.
+        // USB re-enumeration (the Reset USB button in the INDI card).
+        usb: { busy: false, lastResult: null },
         videoStack: null,         // { id, phase, framesAnalyzed, ..., done }
         _stackDonePromptedId: null, // job id we've already offered to open in Studio
 
@@ -46055,6 +46057,57 @@ function ninaApp() {
         // which is exactly what you want after installing a driver package:
         // indi-web reads the driver catalogue once, at startup, so a newly
         // installed driver is invisible until it runs again.
+        // ----- USB re-enumeration -----
+        //
+        // A device dropping off the bus mid session is routine on an SBC, and
+        // the cure has always been a walk to the telescope to replug a cable.
+        // This asks the kernel to enumerate the bus again instead, which
+        // recovers a camera that stopped appearing and a serial adapter that
+        // renumbered, and restarts the INDI drivers so none of them is left
+        // holding a port that no longer exists.
+        //
+        // What it cannot do is revive a device that is electrically absent: a
+        // USB-C cable with no data pairs comes back as a Billboard device
+        // however many times it is re-enumerated. The result says what came
+        // back and what did not, which is the difference between "fixed" and
+        // "go and check the cable".
+        async usbReset() {
+            if (this.usb.busy) return;
+            const ok = await this._confirmAsync(
+                this.$t('Every USB device disconnects and comes back: cameras, mount, focuser, filter wheel. '
+                      + 'The INDI drivers restart with them. The disk the system boots from is never touched. '
+                      + 'Do not do this during a capture.'),
+                { title: this.$t('Reset USB'), okLabel: this.$t('Reset USB'), cancelLabel: this.$t('Cancel') });
+            if (!ok) return;
+
+            this.usb.busy = true;
+            this.usb.lastResult = null;
+            try {
+                const r = await this.apiPostJson('/api/system/usb/reset');
+                this.usb.lastResult = r;
+                const back = (r.appeared || []).length;
+                const gone = (r.disappeared || []).length;
+                const drivers = (r.restartedDrivers || []).length;
+                this.toast(this.$t('USB reset done') + ': '
+                           + (r.reset || []).length + ' ' + this.$t('port(s) re-enumerated') + ', '
+                           + drivers + ' ' + this.$t('driver(s) restarted'), 'ok');
+                if (back > 0) {
+                    this.toast(this.$t('Came back') + ': ' + (r.appeared || []).join(', '), 'ok');
+                }
+                if (gone > 0) {
+                    // The useful half: naming what did NOT come back is what
+                    // stops the next hour being spent on the wrong theory.
+                    this.toast(this.$t('Did not come back') + ': ' + (r.disappeared || []).join(', ')
+                               + '. ' + this.$t('Check the cable and the power on that device.'), 'warn');
+                }
+                await this.indiWebStatusRefresh();
+            } catch (e) {
+                this.toastFail(this.$t('USB reset failed'), e);
+            } finally {
+                this.usb.busy = false;
+            }
+        },
+
         async indiWebRestart() {
             if (this.indiWeb.busy) return;
             const ok = await this._confirmAsync(

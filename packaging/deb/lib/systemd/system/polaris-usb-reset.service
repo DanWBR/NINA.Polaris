@@ -1,0 +1,20 @@
+[Unit]
+# On-demand unit that re-enumerates the USB bus, the software equivalent of
+# unplugging and replugging everything. Not enabled and not WantedBy anything:
+# UsbResetService starts it with `systemctl start polaris-usb-reset.service`,
+# which the polaris user may do without a password through
+# 50-polaris-usb.rules (and the broad .pkla twin on polkit < 0.106).
+#
+# Root is needed because /sys/bus/usb/drivers/usb/{bind,unbind} is root-only.
+# The script refuses to touch whatever chain carries the root filesystem, so a
+# board that boots from a USB SSD cannot re-enumerate its own disk.
+Description=N.I.N.A. Polaris USB re-enumeration
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/polaris/bin/polaris-usb-reset.sh
+RemainAfterExit=no
+# Unbind, settle, bind, then five seconds for the kernel to enumerate what
+# came back. Well inside the default, but be explicit.
+TimeoutStartSec=120
