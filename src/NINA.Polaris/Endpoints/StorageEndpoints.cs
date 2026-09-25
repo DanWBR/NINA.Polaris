@@ -174,6 +174,63 @@ public static class StorageEndpoints {
             return Results.Ok(new { command = RcloneArgs.AuthorizeCommand(type!) });
         });
 
+        // ---- Browser sign in, driven from whatever client is open ----
+        //
+        // See RcloneOAuthService: Polaris runs `rclone authorize` here, sends
+        // the operator to the provider, and takes back the address their
+        // browser landed on. No second computer, no second rclone.
+        group.MapPost("/rclone/oauth/start", async (OAuthStartRequest req, RcloneOAuthService oauth,
+                                                    CancellationToken ct) => {
+            var (ok, err) = await oauth.StartAsync(req?.Type ?? "", ct);
+            if (!ok) return Results.BadRequest(new { error = err });
+            return Results.Ok(new {
+                ok = true,
+                consentUrl = oauth.ConsentUrl,
+                // Only useful when the browser is ON the host; the UI offers it
+                // as the shortcut that needs no paste at all.
+                localUrl = oauth.LocalAuthUrl,
+                expiresInSeconds = (int)RcloneOAuthService.SignInWindow.TotalSeconds
+            });
+        });
+
+        group.MapGet("/rclone/oauth/status", (RcloneOAuthService oauth) => Results.Ok(new {
+            state = oauth.State.ToString().ToLowerInvariant(),
+            type = oauth.ProviderType,
+            consentUrl = oauth.ConsentUrl,
+            localUrl = oauth.LocalAuthUrl,
+            error = oauth.Error
+        }));
+
+        group.MapPost("/rclone/oauth/cancel", async (RcloneOAuthService oauth) => {
+            await oauth.CancelAsync();
+            return Results.Ok(new { ok = true });
+        });
+
+        // Finish: replay the pasted address, then create the remote from the
+        // token rclone hands back.
+        group.MapPost("/rclone/oauth/complete", async (OAuthCompleteRequest req, RcloneOAuthService oauth,
+                                                       RcloneService rclone, ProfileService profiles,
+                                                       CancellationToken ct) => {
+            if (req == null) return Results.BadRequest(new { error = "missing body" });
+            var name = (req.Name ?? "").Trim();
+            if (!RcloneArgs.IsValidRemoteName(name, out var why))
+                return Results.BadRequest(new { error = why });
+
+            var (ok, token, err) = await oauth.CompleteAsync(req.RedirectUrl ?? "", ct);
+            if (!ok || token == null) return Results.BadRequest(new { error = err });
+
+            var type = oauth.ProviderType ?? req.Type ?? "";
+            if (!RcloneArgs.IsProviderType(type)) return Results.BadRequest(new { error = "Unknown provider." });
+
+            var values = new Dictionary<string, string>(StringComparer.Ordinal) { ["token"] = token };
+            var (created, message) = await rclone.CreateRemoteAsync(name, type, values, obscure: false, ct);
+            if (!created) return Results.BadRequest(new { error = message });
+
+            var p = profiles.Active;
+            if (p != null) { p.StorageRemoteRevision++; profiles.Save(); }
+            return Results.Ok(new { ok = true, name, message });
+        });
+
         group.MapPost("/rclone/remotes", async (RcloneRemoteRequest req, RcloneService rclone,
                                                 ProfileService profiles, CancellationToken ct) => {
             if (req == null) return Results.BadRequest(new { error = "missing body" });
@@ -260,4 +317,6 @@ public static class StorageEndpoints {
     public record PushFolderRequest(string Path);
     public record RcloneRemoteRequest(string? Name, string? Type,
                                       Dictionary<string, string>? Values, string? Paste);
+    public record OAuthStartRequest(string? Type);
+    public record OAuthCompleteRequest(string? Name, string? Type, string? RedirectUrl);
 }

@@ -5094,5 +5094,21 @@
   "Stop and start indi-web. Every driver reconnects, and a driver installed since the last start shows up.": "Para e inicia o indi-web. Todos os drivers reconectam, e um driver instalado depois do ultimo arranque passa a aparecer.",
   "keeps running across a Polaris restart": "continua rodando quando o Polaris reinicia",
   "stops when Polaris restarts": "para quando o Polaris reinicia",
-  "indi-web was started as a child of the Polaris process, so restarting Polaris stops it and the INDI drivers with it.": "o indi-web foi iniciado como processo filho do Polaris, então reiniciar o Polaris o encerra, e os drivers INDI junto."
+  "indi-web was started as a child of the Polaris process, so restarting Polaris stops it and the INDI drivers with it.": "o indi-web foi iniciado como processo filho do Polaris, então reiniciar o Polaris o encerra, e os drivers INDI junto.",
+  "Sign in here, in this browser. The host does not need one of its own.": "Faca o login aqui, neste navegador. O host nao precisa ter um.",
+  "Sign in with the provider": "Entrar no provedor",
+  "This browser is on the host, so the sign in finishes by itself. Complete it in the tab that opened, then press Finish sign in.": "Este navegador esta no proprio host, entao o login termina sozinho. Conclua na aba que abriu e depois aperte Concluir login.",
+  "Sign in on the page that opened. Your browser then lands on an address that cannot load, which is expected: it points at the host. Copy that whole address from the address bar and paste it below.": "Faca o login na pagina que abriu. Depois o seu navegador cai num endereco que nao carrega, e isso e esperado: ele aponta para o host. Copie esse endereco inteiro da barra de enderecos e cole abaixo.",
+  "Open the sign in page": "Abrir a pagina de login",
+  "Address your browser landed on": "Endereco em que o seu navegador parou",
+  "Finish sign in": "Concluir login",
+  "Sign in on another computer instead": "Preferir fazer o login em outro computador",
+  "Give the remote a name first.": "De um nome ao remote primeiro.",
+  "No sign in page to open. Start again.": "Nao ha pagina de login para abrir. Comece de novo.",
+  "Could not open the sign in page. Copy this address by hand:": "Nao consegui abrir a pagina de login. Copie este endereco na mao:",
+  "Could not finish the sign in.": "Nao consegui concluir o login.",
+  "Share the selected file. A FITS is shared as the rendered image, so it opens anywhere.": "Compartilha o arquivo selecionado. Um FITS vai como a imagem renderizada, para abrir em qualquer lugar.",
+  "Sent to your device downloads": "Enviado para os downloads do aparelho",
+  "This browser cannot share files. Downloading it instead.": "Este navegador nao compartilha arquivos. Vou baixar em vez disso.",
+  "Share failed": "Falha ao compartilhar"
 }

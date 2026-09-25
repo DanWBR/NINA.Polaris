@@ -268,4 +268,12 @@ public static class RcloneArgs {
         var t = (type ?? "").Trim().ToLowerInvariant();
         return $"rclone authorize \"{t}\"";
     }
+
+    /// <summary>The same authorize, run HERE, for the sign in Polaris drives on
+    /// the operator's behalf. No --config: authorize writes nothing, it only
+    /// prints a token.</summary>
+    public static List<string> Authorize(string type) {
+        var t = (type ?? "").Trim().ToLowerInvariant();
+        return new List<string> { "authorize", t, "--auth-no-open-browser" };
+    }
 }

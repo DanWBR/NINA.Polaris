@@ -54,6 +54,16 @@ const Geolocation = Plugins.Geolocation
   || ((Cap && typeof Cap.registerPlugin === 'function')
         ? Cap.registerPlugin('Geolocation') : undefined);
 
+// @capacitor/share + @capacitor/filesystem, for the share bridge below.
+// Undefined in a plain browser, where the iframe uses the Web Share API
+// directly and never asks us.
+const SharePlugin = Plugins.Share
+  || ((Cap && typeof Cap.registerPlugin === 'function')
+        ? Cap.registerPlugin('Share') : undefined);
+const Filesystem = Plugins.Filesystem
+  || ((Cap && typeof Cap.registerPlugin === 'function')
+        ? Cap.registerPlugin('Filesystem') : undefined);
+
 // ---------- geolocation bridge (parent side) ----------
 // The Polaris UI runs in a cross-origin <iframe>, where navigator.geolocation
 // is unreliable inside the Android WebView. So the iframe asks US (the app
@@ -163,6 +173,95 @@ window.addEventListener('message', async (ev) => {
     reply({ ok: true, body });
   } catch (e) {
     reply({ ok: false, error: (e && e.message) || 'Native fetch failed' });
+  }
+});
+
+// ---------- download bridge ----------
+// The Polaris UI lives in a cross-origin iframe, and a WebView iframe cannot
+// start a download: navigating it just replaces the page, and the download
+// attribute on a blob is ignored outright. So the child posts the URL here and
+// the shell hands it to the OS, whose download manager can also cope with the
+// multi-gigabyte FITS selections this is mostly used for.
+//
+// The URL already carries the session token as a query parameter, because the
+// OS fetch has no way to send our Authorization header.
+window.addEventListener('message', (ev) => {
+  const d = ev.data;
+  if (!d || typeof d !== 'object' || d.__polarisDownloadReq !== true) return;
+  // Only from one of our own instance frames.
+  if (!instanceForSource(ev.source)) return;
+  let url;
+  try { url = new URL(String(d.url || '')); } catch { return; }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
+  try {
+    const w = window.open(url.href, '_blank');
+    if (!w) {
+      // Some WebView configurations return null for window.open; an anchor
+      // click is handled by the same navigation-delegate path.
+      const a = document.createElement('a');
+      a.href = url.href;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+  } catch { /* nothing else we can do from here */ }
+});
+
+// ---------- share bridge ----------
+// navigator.share does not exist in a WebView, and the iframe is cross-origin
+// anyway, so sharing an image has to happen out here where the Capacitor
+// plugins live: fetch the bytes, drop them in the cache directory, then hand
+// the file URI to the native share sheet.
+//
+// Size guard: the bytes travel through the bridge as base64, so this is for
+// images (the UI sends a rendered JPEG for a FITS), not for raw multi-GB data.
+// Anything larger falls back to the download bridge above.
+const SHARE_MAX_BYTES = 48 * 1024 * 1024;
+
+window.addEventListener('message', async (ev) => {
+  const d = ev.data;
+  if (!d || typeof d !== 'object' || d.__polarisShareReq !== true) return;
+  if (!instanceForSource(ev.source)) return;
+  const id = d.id;
+  const post = (msg) => { try { ev.source.postMessage(msg, '*'); } catch { /* ignore */ } };
+  // Ack so the child knows a native sharer is here and does not fall back.
+  post({ __polarisShareAck: true, id });
+  const reply = (m) => post(Object.assign({ __polarisShareRes: true, id }, m));
+
+  if (!SharePlugin || !Filesystem) { reply({ ok: false, error: 'No share plugin in this build' }); return; }
+
+  let url;
+  try { url = new URL(String(d.url || '')); } catch { reply({ ok: false, error: 'Bad URL' }); return; }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') { reply({ ok: false, error: 'Bad URL' }); return; }
+
+  const name = String(d.name || 'image.jpg').replace(/[\\/:*?"<>|]+/g, '_');
+  try {
+    const resp = await fetch(url.href, { credentials: 'omit' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const buf = await resp.arrayBuffer();
+    if (buf.byteLength > SHARE_MAX_BYTES) {
+      reply({ ok: false, error: 'Too large to share; download it instead' });
+      return;
+    }
+    // Chunked base64: one String.fromCharCode over a 40 MB array blows the
+    // argument limit on both platforms.
+    const bytes = new Uint8Array(buf);
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    }
+    const b64 = btoa(bin);
+
+    await Filesystem.writeFile({ path: name, data: b64, directory: 'CACHE' });
+    const uri = await Filesystem.getUri({ path: name, directory: 'CACHE' });
+    await SharePlugin.share({ title: d.title || name, files: [uri.uri] });
+    reply({ ok: true });
+  } catch (e) {
+    // A cancelled share sheet also lands here on some platforms; the child
+    // treats a failure as "nothing happened", which is the same outcome.
+    reply({ ok: false, error: (e && e.message) ? e.message : String(e) });
   }
 });
 

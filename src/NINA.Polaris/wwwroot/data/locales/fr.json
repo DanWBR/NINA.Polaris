@@ -5094,5 +5094,21 @@
   "Stop and start indi-web. Every driver reconnects, and a driver installed since the last start shows up.": "Arrete et relance indi-web. Tous les pilotes se reconnectent, et un pilote installe depuis le dernier demarrage apparait.",
   "keeps running across a Polaris restart": "continue de tourner après un redémarrage de Polaris",
   "stops when Polaris restarts": "s'arrête quand Polaris redémarre",
-  "indi-web was started as a child of the Polaris process, so restarting Polaris stops it and the INDI drivers with it.": "indi-web a été lancé comme processus enfant de Polaris, donc redémarrer Polaris l'arrête, et les pilotes INDI avec lui."
+  "indi-web was started as a child of the Polaris process, so restarting Polaris stops it and the INDI drivers with it.": "indi-web a été lancé comme processus enfant de Polaris, donc redémarrer Polaris l'arrête, et les pilotes INDI avec lui.",
+  "Sign in here, in this browser. The host does not need one of its own.": "Connectez-vous ici, dans ce navigateur. L'hote n'a pas besoin du sien.",
+  "Sign in with the provider": "Se connecter au fournisseur",
+  "This browser is on the host, so the sign in finishes by itself. Complete it in the tab that opened, then press Finish sign in.": "Ce navigateur est sur l'hote, la connexion se termine donc toute seule. Terminez-la dans l'onglet qui s'est ouvert, puis appuyez sur Terminer la connexion.",
+  "Sign in on the page that opened. Your browser then lands on an address that cannot load, which is expected: it points at the host. Copy that whole address from the address bar and paste it below.": "Connectez-vous sur la page qui s'est ouverte. Votre navigateur arrive ensuite sur une adresse qui ne charge pas, c'est normal: elle pointe vers l'hote. Copiez cette adresse entiere depuis la barre d'adresse et collez-la ci-dessous.",
+  "Open the sign in page": "Ouvrir la page de connexion",
+  "Address your browser landed on": "Adresse ou votre navigateur a atterri",
+  "Finish sign in": "Terminer la connexion",
+  "Sign in on another computer instead": "Se connecter depuis un autre ordinateur",
+  "Give the remote a name first.": "Donnez d'abord un nom au remote.",
+  "No sign in page to open. Start again.": "Aucune page de connexion a ouvrir. Recommencez.",
+  "Could not open the sign in page. Copy this address by hand:": "Impossible d'ouvrir la page de connexion. Copiez cette adresse a la main:",
+  "Could not finish the sign in.": "Impossible de terminer la connexion.",
+  "Share the selected file. A FITS is shared as the rendered image, so it opens anywhere.": "Partage le fichier selectionne. Un FITS part sous forme d'image rendue, pour s'ouvrir partout.",
+  "Sent to your device downloads": "Envoye vers les telechargements de l'appareil",
+  "This browser cannot share files. Downloading it instead.": "Ce navigateur ne partage pas de fichiers. Je le telecharge a la place.",
+  "Share failed": "Echec du partage"
 }

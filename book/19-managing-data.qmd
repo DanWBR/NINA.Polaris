@@ -219,19 +219,25 @@ in its own configuration file inside the Polaris data directory,
 readable only by the account Polaris runs as, and Polaris only ever
 writes it through rclone itself.
 
-Authorising a headless host takes one detour, because the Pi has no
-browser to sign in with:
+Signing in happens in the browser you already have Polaris open in.
+The Pi has none of its own, but it does not need one:
 
 1. **Set up a remote**, pick the provider, and give it a short name.
-2. On a computer that does have a browser, install rclone and run the
-   command the card shows, for example `rclone authorize "drive"`.
-3. Sign in when the browser opens. rclone prints a block of text.
-4. Paste it back into Polaris and press **Create remote**.
+2. Press **Sign in with the provider**. A tab opens on Google,
+   Microsoft or Dropbox.
+3. Sign in there. Your browser then lands on an address that cannot
+   load, which is expected: it points at the Pi, not at your phone or
+   laptop.
+4. Copy that whole address from the address bar, paste it into
+   **Address your browser landed on**, and press **Finish sign in**.
+
+That copy is the only manual step, and only because the provider
+insists on redirecting to rclone's own local address. With Polaris
+open on the host itself there is nothing to copy at all.
 
 OneDrive is the one exception: the sign in alone does not carry the
-drive id, so run `rclone config` on your computer instead and paste
-the whole section it writes into your desktop `rclone.conf`. The
-paste box accepts either shape.
+drive id, so use **Sign in on another computer instead**, run
+`rclone config` there, and paste the whole section it writes.
 
 Because rclone runs its own transfer loop, the Link share control
 cannot reach it. The cloud kind gets a hard **Upload speed limit**
@@ -249,6 +255,19 @@ goes up.
 - **On demand**, from this tab: select exactly one folder and press
   **Send to cloud**. Only what the destination is missing is queued,
   so sending the same night twice costs nothing.
+
+## Downloading and sharing one frame
+
+**Download** sends the selection to your device: a single file goes
+straight through, several are packed into a ZIP on the fly. In the
+mobile app the download is handed to the phone's own download manager,
+which is what copes with a multi-gigabyte selection.
+
+**Share** hands one file to whatever your device shares with:
+WhatsApp, Telegram, AirDrop, the photo library. A FITS is shared as
+the rendered image, with the same stretch the viewer shows, because
+nothing on a phone opens a FITS and the messaging apps refuse the
+size. Files that are already images go as they are.
 
 ## Switching the Studio root
 

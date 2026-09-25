@@ -295,6 +295,39 @@ public static class FilesEndpoints {
             }
         });
 
+        // A download has to be a NAVIGATION to reach the browser's (or the
+        // phone's) download manager, and a navigation cannot carry a POST
+        // body. So: post the selection, get a ticket, navigate to the ticket.
+        // Without this the app could not download a multi-file selection at
+        // all, because a WebView ignores the download attribute on the blob
+        // the old client-side path built.
+        g.MapPost("/download-zip/ticket", (ZipRequest req, DownloadTicketService tickets) => {
+            if (req.Paths == null || req.Paths.Count == 0)
+                return Results.BadRequest(new { error = "paths is required" });
+            return Results.Ok(new { ticket = tickets.Create(req) });
+        });
+
+        g.MapGet("/download-zip/{ticket}", async (string ticket, FileBrowserService svc,
+                                                  DownloadTicketService tickets, HttpContext ctx,
+                                                  CancellationToken ct) => {
+            if (!tickets.TryTake<ZipRequest>(ticket, out var req) || req == null)
+                return Results.NotFound(new { error = "That download link has expired. Try again." });
+            try {
+                var fileName = req.FileName ?? "polaris-files.zip";
+                ctx.Response.ContentType = "application/zip";
+                ctx.Response.Headers.ContentDisposition = $"attachment; filename=\"{fileName}\"";
+                var bodyControl = ctx.Features.Get<IHttpBodyControlFeature>();
+                if (bodyControl != null) bodyControl.AllowSynchronousIO = true;   // see the POST above
+                await svc.WriteZipAsync(req.Paths, ctx.Response.Body, req.RootForNames, ct);
+                return Results.Empty;
+            } catch (UnauthorizedAccessException ex) {
+                return Results.Json(new { error = ex.Message },
+                    statusCode: StatusCodes.Status403Forbidden);
+            } catch (FileNotFoundException ex) {
+                return Results.NotFound(new { error = ex.Message });
+            }
+        });
+
         // --- Preview -----------------------------------------------
 
         // Per type: FITS → stretched JPEG via FitsThumbnailer; raster
