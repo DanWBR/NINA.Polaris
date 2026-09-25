@@ -202,15 +202,15 @@ public sealed partial class NativeGuider {
         double raRate = MountCoordTransform.RaRateAtDec(_calibration, decRad);
         double decRate = _calibration.YRate;
 
-        int minMoveRaMs = RateToMs(Rig.NativeMinMoveRaPx, raRate);
-        int minMoveDecMs = RateToMs(Rig.NativeMinMoveDecPx, decRate);
-        // Clamp each pulse to the smaller of the exposure period (so corrections
-        // can't run past the next frame) and the per-axis Max Duration cap.
-        int maxRaMs  = Math.Min(expMs, Math.Max(50, Rig.NativeMaxRaDurationMs));
-        int maxDecMs = Math.Min(expMs, Math.Max(50, Rig.NativeMaxDecDurationMs));
+        // Only the per-axis Max Duration bounds the pulse, as in PHD2's
+        // Scope::MoveAxis. It used to be capped at the exposure as well, so a
+        // one-second exposure silently turned a 2500 ms limit into 1000 ms and
+        // a large excursion took several frames to come back.
+        int maxRaMs  = Math.Max(0, Rig.NativeMaxRaDurationMs);
+        int maxDecMs = Math.Max(0, Rig.NativeMaxDecDurationMs);
 
-        int raMs = MountCoordTransform.ComputeMoveDurationMs(raCorr, raRate, minMoveRaMs, maxRaMs);
-        int decMs = MountCoordTransform.ComputeMoveDurationMs(decCorr, decRate, minMoveDecMs, maxDecMs);
+        int raMs = MountCoordTransform.ComputeMoveDurationMs(raCorr, raRate, maxRaMs);
+        int decMs = MountCoordTransform.ComputeMoveDurationMs(decCorr, decRate, maxDecMs);
 
         // Direction: correction moves the star back toward lock. PHD2
         // calibration measured WEST as +X-rate and SOUTH as +Y-rate, so a
@@ -524,28 +524,28 @@ public sealed partial class NativeGuider {
         RaiseAlert($"Pier side changed to {nowSide}; calibration mirrored.");
     }
 
-    /// <summary>Measure the guide-star field offset this frame. When multi-star
-    /// is engaged (rig enabled + more than one star locked) it captures a full
-    /// frame, recentres every tracked star and returns the robust combined
-    /// offset expressed as an effective primary position (lock + offset), so the
-    /// caller's <c>cur - lock</c> math is unchanged. Otherwise it falls back to
-    /// the single-star ROI path.</summary>
+    /// <summary>Measure the guide-star field offset this frame. The primary is
+    /// always measured by the single-star path; when multi-star is engaged the
+    /// secondaries then refine that measurement on the same frame, the way PHD2
+    /// does it. The result is returned as an effective primary position
+    /// (lock + offset), so the caller's <c>cur - lock</c> math is unchanged.</summary>
     private async Task<(double x, double y, bool found, double snr, double hfd)>
             MeasureGuideStarAsync(ICamera cam, CancellationToken ct) {
-        bool useMulti = Rig.NativeMultiStar && _multiStar.Count > 1;
-        if (!useMulti) {
-            // Widen the window while the star is missing so a star that merely
-            // drifted during a cloud is found again instead of being lost forever.
-            return await FindStarDetailedAsync(cam, ct,
-                RecoverySearchRegionFor(_starLostCount, SearchRegion, MaxRecoverySearchRegion));
-        }
-        // Multi-star needs the whole field, so clear any ROI.
-        try { await cam.SetSubframeAsync(0, 0, 0, 0, ct); } catch { }
-        var img = await CaptureFullAsync(cam, ct);
-        if (img == null) return (_lockX, _lockY, false, 0, 0);
-        _lastFrame = img; _lastFrameOriginX = 0; _lastFrameOriginY = 0;
-        var res = _multiStar.Update(img.Data, img.Properties.Width, img.Properties.Height);
-        if (!res.Found) return (_lockX, _lockY, false, res.Snr, res.Hfd);
+        // Widen the window while the star is missing so a star that merely
+        // drifted during a cloud is found again instead of being lost forever.
+        var (x, y, found, snr, hfd) = await FindStarDetailedAsync(cam, ct,
+            RecoverySearchRegionFor(_starLostCount, SearchRegion, MaxRecoverySearchRegion));
+
+        if (!found || !Rig.NativeMultiStar || _multiStar.Count <= 1) return (x, y, found, snr, hfd);
+
+        var img = _lastFrame;
+        if (img == null) return (x, y, found, snr, hfd);
+
+        // PHD2 refines only while actually guiding and not settling: during a
+        // dither the secondaries are measuring the move, not the seeing.
+        bool allowRefine = AppState == "Guiding" && !IsSettling;
+        var res = _multiStar.Refine(img.Data, img.Properties.Width, img.Properties.Height,
+                                    x, y, snr, hfd, x - _lockX, y - _lockY, allowRefine);
         return (_lockX + res.OffsetX, _lockY + res.OffsetY, true, res.Snr, res.Hfd);
     }
 

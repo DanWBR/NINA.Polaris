@@ -1509,7 +1509,9 @@ function ninaApp() {
             { id: 'lowpass', name: 'Lowpass' },
             { id: 'lowpass2', name: 'Lowpass2' },
             { id: 'zfilter', name: 'ZFilter' },
-            { id: 'predictive', name: 'Predictive (PE + drift)' },
+            // No 'predictive' here: PHD2 has no such algorithm, and the native
+            // guider is meant to behave exactly like PHD2. The implementation
+            // stays in the tree (PredictiveAlgorithm.cs) but nothing offers it.
             { id: 'identity', name: 'Identity' },
         ],
 

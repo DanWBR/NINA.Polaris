@@ -532,9 +532,10 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
         double offY = raOnly ? 0.0 : mag * Math.Sin(angle);
         _lockX += offX;
         _lockY += offY;
-        // Shift every tracked star's reference by the same vector so multi-star
-        // stays consistent with the new lock point.
-        _multiStar.OffsetReferences(offX, offY);
+        // PHD2 does not shift the secondary references by the dither vector: it
+        // re-reads each secondary where it actually is once the primary has
+        // settled at the new lock.
+        _multiStar.NoteLockPositionMoved();
         _raAlgo.Reset();
         _decAlgo.Reset();
         // Installed as one unit against the guide loop's settle update: a settle

@@ -39,8 +39,12 @@ public sealed partial class NativeGuider {
         // ZFilter exposure factor: 0 = use the PHD2 default (2.0); else clamp [1,20].
         double zExp = Rig.NativeZFilterExpFactor >= 1.0 ? Math.Min(Rig.NativeZFilterExpFactor, 20.0) : 2.0;
         var prior = RestorePredictiveModel();
+        // PHD2 parity: 'predictive' is ours, not PHD2's, and is no longer
+        // offered. A rig saved while it was gets PHD2's default for the axis.
+        var raAlgoName = string.IsNullOrWhiteSpace(Rig.NativeRaAlgorithm) ? "hysteresis" : Rig.NativeRaAlgorithm;
+        if (raAlgoName.Equals("predictive", StringComparison.OrdinalIgnoreCase)) raAlgoName = "hysteresis";
         _raAlgo = GuideAlgorithmFactory.Create(
-            string.IsNullOrWhiteSpace(Rig.NativeRaAlgorithm) ? "hysteresis" : Rig.NativeRaAlgorithm,
+            raAlgoName,
             minMove: Math.Max(0.0, Rig.NativeMinMoveRaPx),
             aggression: Math.Clamp(Rig.NativeRaAggression, 0.0, 2.0),
             hysteresis: Math.Clamp(Rig.NativeRaHysteresis, 0.0, 0.99),
@@ -139,11 +143,6 @@ public sealed partial class NativeGuider {
         if (m.Equals("south", StringComparison.OrdinalIgnoreCase))
             return dir == GuideDirections.guideNorth;
         return false;
-    }
-
-    private static int RateToMs(double px, double ratePxPerMs) {
-        if (ratePxPerMs <= 0) return 0;
-        return (int)Math.Round(px / ratePxPerMs);
     }
 
     private void PushStep(PortableGuideStep p) {
