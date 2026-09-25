@@ -5093,5 +5093,8 @@
   "INDI restarted": "INDI reiniciado",
   "Restart failed": "Falha ao reiniciar",
   "Restarting INDI stops every running driver and starts them again. The mount, camera and focuser reconnect, which takes a few seconds. Do this when you are not in the middle of an exposure.": "Reiniciar o INDI para todos os drivers em execucao e sobe todos de novo. A montagem, a camera e o focalizador reconectam, o que leva alguns segundos. Faca isso quando nao estiver no meio de uma exposicao.",
-  "Stop and start indi-web. Every driver reconnects, and a driver installed since the last start shows up.": "Para e inicia o indi-web. Todos os drivers reconectam, e um driver instalado depois do ultimo arranque passa a aparecer."
+  "Stop and start indi-web. Every driver reconnects, and a driver installed since the last start shows up.": "Para e inicia o indi-web. Todos os drivers reconectam, e um driver instalado depois do ultimo arranque passa a aparecer.",
+  "keeps running across a Polaris restart": "continua rodando quando o Polaris reinicia",
+  "stops when Polaris restarts": "para quando o Polaris reinicia",
+  "indi-web was started as a child of the Polaris process, so restarting Polaris stops it and the INDI drivers with it.": "o indi-web foi iniciado como processo filho do Polaris, então reiniciar o Polaris o encerra, e os drivers INDI junto."
 }

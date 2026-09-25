@@ -11,6 +11,9 @@ Key paths
     /opt/polaris/                       Binary + assets
     /opt/polaris/appsettings.json       Editable config (conffile)
     /lib/systemd/system/polaris.service systemd unit
+    /lib/systemd/system/polaris-indiweb.service
+                                        indi-web unit (own cgroup)
+    /etc/default/polaris-indiweb        optional indi-web overrides
     /opt/polaris-indiweb-venv/          indi-web Python venv
     /home/polaris/files/                Captures (configurable in UI)
     /home/polaris/.config/NINA.Polaris/ Profiles, edits
@@ -22,6 +25,19 @@ Service control
     sudo systemctl restart polaris
     sudo systemctl stop polaris
     journalctl -u polaris -f
+
+indi-web runs as its own unit, polaris-indiweb.service, so restarting
+Polaris leaves indiserver and the INDI drivers alone: the mount keeps
+tracking and the camera keeps its setpoint. Polaris starts and stops
+that unit for you from the INDI panel; drive it by hand with
+
+    sudo systemctl status polaris-indiweb
+    journalctl -u polaris-indiweb -f
+
+To use an indi-web from outside /opt/polaris-indiweb-venv, put
+INDIWEB_BIN (and INDIWEB_PORT / INDIWEB_HOST, which must match
+IndiWeb:Port and IndiWeb:BindAddress in appsettings.json) in
+/etc/default/polaris-indiweb.
 
 Optional add-ons
 ----------------

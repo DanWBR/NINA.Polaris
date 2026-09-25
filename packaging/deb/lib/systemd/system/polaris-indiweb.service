@@ -1,0 +1,68 @@
+[Unit]
+# indi-web (knro/indiwebmanager) as a unit of its OWN, deliberately NOT a child
+# process of polaris.service.
+#
+# IndiWebManagerService used to spawn indi-web with Process.Start, which put it
+# in polaris.service's cgroup. systemd's default KillMode=control-group kills
+# every process in that cgroup on stop, and a restart is a stop followed by a
+# start, so `systemctl restart polaris` took indi-web down with it -- and with
+# indi-web went indiserver and every driver under it. Measured on an OPi5Pro on
+# 2026-09-24: indi_lx200am5 pid 1953 before the restart, a brand new pid after,
+# i.e. the mount stopped tracking and the camera lost its setpoint for a
+# restart that was only ever meant to swap the layer above.
+#
+# setsid does not help: a cgroup is inherited across fork/exec and a new session
+# is still the same cgroup. Only a separate unit gets a separate cgroup, which
+# is what this file is for. Polaris drives it with
+# `systemctl start|stop|restart polaris-indiweb.service` (see
+# IndiWebManagerService.UseSystemdUnit), permitted without a password by
+# /etc/polkit-1/rules.d/50-polaris-indiweb.rules.
+#
+# Not WantedBy anything and not enabled by postinst: whether indi-web comes up
+# at boot stays the IndiWeb:AutoStart setting's decision, taken by Polaris.
+Description=N.I.N.A. Polaris embedded INDI Web Manager
+Documentation=https://github.com/knro/indiwebmanager
+After=network.target
+
+[Service]
+Type=simple
+User=polaris
+Group=polaris
+WorkingDirectory=/home/polaris
+
+# Bottle (indi-web's web framework) and the appdirs-based libraries under it
+# read $HOME at import time; without it they fall back to / and fail quietly.
+Environment=HOME=/home/polaris
+
+# Which indi-web, on which socket. Override in /etc/default/polaris-indiweb
+# (optional, the leading dash means "ignore when absent") for a hand-rolled
+# pip install outside the packaged venv:
+#
+#   INDIWEB_BIN=/usr/local/bin/indi-web
+#   INDIWEB_PORT=8624
+#   INDIWEB_HOST=127.0.0.1
+#
+# Keep INDIWEB_PORT/INDIWEB_HOST equal to IndiWeb:Port / IndiWeb:BindAddress in
+# /opt/polaris/appsettings.json: Polaris probes the port it was configured with,
+# so a mismatch reads as "indi-web never came up".
+#
+# 127.0.0.1 on purpose: indi-web has no authentication of its own and users
+# reach it through Polaris's reverse proxy at /indi-web/, which is behind
+# Polaris's auth. Binding 0.0.0.0 would hand driver control to the whole LAN.
+Environment=INDIWEB_BIN=/opt/polaris-indiweb-venv/bin/indi-web
+Environment=INDIWEB_PORT=8624
+Environment=INDIWEB_HOST=127.0.0.1
+EnvironmentFile=-/etc/default/polaris-indiweb
+
+# A launcher rather than the binary directly: systemd does not expand variables
+# in the executable position of ExecStart, and the path has to stay overridable
+# for installs that did not use the packaged venv.
+ExecStart=/opt/polaris/bin/polaris-indiweb.sh
+
+# Restart only on failure. A stop asked for from the INDI panel is a clean exit
+# and must stay stopped.
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

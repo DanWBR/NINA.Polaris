@@ -19,8 +19,8 @@ namespace NINA.Polaris.Endpoints;
 /// <summary>
 /// REST surface for the embedded indi-web manager (a.k.a.
 /// indiwebmanager). The same shape as
-/// <c>/api/guider/gui-session/*</c> for the xpra-hosted PHD2 GUI —
-/// status, start, stop, restart — so the frontend can poll a
+/// <c>/api/guider/gui-session/*</c> for the xpra-hosted PHD2 GUI,
+/// status, start, stop, restart, so the frontend can poll a
 /// single "is the embedded driver-management UI ready" indicator
 /// and dispatch lifecycle commands without reimplementing
 /// transport for each service.
@@ -46,6 +46,13 @@ public static class IndiWebEndpoints {
             lastHealthCheckAt = svc.LastHealthCheckAt,
             lastError = svc.LastError,
             unsupportedReason = svc.UnsupportedReason,
+            // "systemd" or "child-process". The difference is whether the INDI
+            // drivers survive a restart of polaris.service: a child process
+            // shares polaris.service's cgroup and is killed with it. Reported
+            // here so the panel and a bug report can tell the two apart without
+            // ssh-ing in to read the process tree.
+            managedBy = svc.ManagedBy,
+            systemdUnit = svc.SystemdUnitName,
             // Hint URL the UI iframes, points to the Polaris reverse
             // proxy so the iframe stays same-origin (Bottle session
             // cookies + any XHR indi-web makes to itself work).

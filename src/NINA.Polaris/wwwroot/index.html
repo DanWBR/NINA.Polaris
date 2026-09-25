@@ -40,7 +40,7 @@
          on demand. -->
     <link rel="preload" href="/fonts/atkinson/AtkinsonHyperlegible-Regular.woff2" as="font" type="font/woff2" crossorigin>
     <!-- app.css was split into ordered parts for readability. Load order is
-         significant (CSS cascade) — keep these in sequence. All share the same
+         significant (CSS cascade), keep these in sequence. All share the same
          ?v= cache-bust token, bumped together on every deploy. -->
     <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20260728-topcollapse">
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260801-inputwidth">
@@ -250,7 +250,7 @@
                 </button>
             </form>
             <!-- Same certificate help on the returning-user screen, but only
-                 once we know the browser is actually blocking the upgrade —
+                 once we know the browser is actually blocking the upgrade,
                  a device that already trusts the cert should not be nagged. -->
             <div class="auth-cert" x-show="certGate.wsBlocked">
                 <div class="auth-cert-title">🔒 Live connection blocked by the certificate</div>
@@ -607,7 +607,7 @@
                  Equipment tab focused on that source. Each badge shows
                  ON / OFF / a count, and uses ok (green) / warn (amber) /
                  error (red) / off (grey) colour states.
-                 (INDI + ALPACA badges removed per request — connection state
+                 (INDI + ALPACA badges removed per request, connection state
                  lives in the Equipment tab; the PHD2 badge below stays.) -->
             <!-- PHD2 badge: tracks the JSON-RPC connection + live
                  AppState (same source the GUIDE-tab Control panel
@@ -639,7 +639,7 @@
                 <span class="chip-icon">T</span>
                 <span x-text="cameraTemp !== null ? cameraTemp.toFixed(1) + '&deg;C' : '--'"></span>
             </span>
-            <!-- Header status chip — same visibility rule as the
+            <!-- Header status chip, same visibility rule as the
                  activity-bar 'ls' chip: only surface when there are
                  actually stacked frames. Without the > 0 guard the
                  chip appeared at boot ('0 frames') because
@@ -1438,7 +1438,7 @@
                          loop), tap while active = stopLiveSession().
                          Visual states defined in app.css .polaris-shutter*.
                          Ring uses SVG stroke-dasharray; dashoffset is
-                         289 * (1 - progress) — see app.js
+                         289 * (1 - progress), see app.js
                          liveShutterDashoffset(). -->
                     <div class="shutter-wrap">
                         <div class="polaris-shutter"
@@ -1541,7 +1541,7 @@
                              frame fed to the live stacker is also saved
                              into {target}/lights/{date}/ as a
                              normal LIGHT (same layout a sequence capture
-                             would use). Off by default — EAA viewers
+                             would use). Off by default, EAA viewers
                              usually only care about the integrated
                              preview, not an archive. The counter shows
                              how many frames landed in this session. -->
@@ -1601,7 +1601,7 @@
                          current RA/Dec and re-slews to the same spot (the
                          mount firmware flips when crossing its limit, then
                          we recenter). The live stack auto-detects the new
-                         orientation and keeps stacking — no ghosting. The
+                         orientation and keeps stacking, no ghosting. The
                          button is disabled unless a mount is connected and
                          no flip is already running. -->
                     <div class="livestack-meridian">
@@ -2171,12 +2171,12 @@
                                   : ''">Res: <strong x-text="resolutionLabel()">--</strong></span>
                     <span x-show="filterWheel.connected" class="text-ok" x-text="filterWheel.currentFilter"></span>
                     <!-- Server-authoritative frame count. This read `sessionCaptures`,
-                         which is incremented ONLY by the client-driven capture() loop —
+                         which is incremented ONLY by the client-driven capture() loop,
                          dead since LIVE capture became server-owned (LiveCaptureService
                          drives every exposure; nothing external calls capture() any more).
                          So it sat at 0 all night while the panel two elements away said
                          "15 stacked" (field report). Prefer the stack's count while
-                         stacking, else the server's own capture count — liveCapture.frames
+                         stacking, else the server's own capture count, liveCapture.frames
                          was already in the WS payload, just never read here. Both come off
                          the same tick as the top chip and the LIVE panel, so the three
                          can't disagree any more. -->
@@ -2393,8 +2393,8 @@
 
                 <!-- POLARUI: ASIAIR-style alignment display. Bullseye with
                      the pole at the centre + the mount's RA axis plotted
-                     from (azErr, altErr) — mount-axis coordinates, immune
-                     to camera rotation/mirroring — plus per-axis readout
+                     from (azErr, altErr), mount-axis coordinates, immune
+                     to camera rotation/mirroring, plus per-axis readout
                      with the physical knob directions. -->
                 <!-- Two-column layout: readout + controls on the LEFT so
                      the text is easy to read, bullseye on the RIGHT where
@@ -2677,7 +2677,7 @@
                         </div>
                     </div>
 
-                    <!-- Sky map mini iframe — same engine as SKY tab.
+                    <!-- Sky map mini iframe, same engine as SKY tab.
                          RDPA-3 set-alignment-markers RPC draws target +
                          actual + line. Centred on the target via look-at
                          after each solve so the user sees both dots. -->
@@ -3871,7 +3871,7 @@
                     </div>
                     <div class="control-row">
                         <!-- Server-side continuous stream. Distinct from
-                             snap/loop — keeps its own toggle. Auto-picks
+                             snap/loop, keeps its own toggle. Auto-picks
                              native (CCD_VIDEO_STREAM, ~10-30 fps) when
                              supported, else falls back to a tight server
                              loop bounded by exposure. -->
@@ -3926,7 +3926,7 @@
                     <!-- Live solver console while solving (shared
                          filesSolveLog, streamed via /ws/status plateSolve).
                          FIELD5-1: Cancel aborts the run server-side (kills the
-                         solver process tree) — a doomed blind solve used to have
+                         solver process tree), a doomed blind solve used to have
                          to be waited out. -->
                     <div class="control-row" style="margin-top: 8px; align-items: flex-start;"
                          x-show="previewSolveBusy">
@@ -4115,7 +4115,7 @@
                                      videoExposureLadderMs(), trimmed to what the
                                      connected camera reports it accepts. Sub-
                                      millisecond rungs read as microseconds
-                                     ("500µ") — the Sun through a filter still
+                                     ("500µ"), the Sun through a filter still
                                      saturates at 1 ms. min/max/step remain as the
                                      fallback for a camera that reports no limits
                                      and as bounds for the inline numeric edit. -->
@@ -4359,7 +4359,7 @@
                                     S
                                 </button>
                             </div>
-                            <!-- Discrete slew-rate slider — driver-advertised
+                            <!-- Discrete slew-rate slider, driver-advertised
              TELESCOPE_SLEW_RATE elements. For planetary
              recentering operator typically drops to
              Guide/Centering so the planet doesn't fly
@@ -4597,7 +4597,7 @@
                                  role="group" aria-label="Field of view / ROI">
                                 <!-- FULL clears the ROI. Must call videoSetRoiRect
                                      (the old videoSetRoi(size) was renamed when the
-                                     rectangular pills landed — the stale reference
+                                     rectangular pills landed, the stale reference
                                      made this button a silent no-op, trapping the
                                      user in the last ROI). Active only when BOTH
                                      dims are 0: roiSize alone is 0 for rectangular
@@ -4967,7 +4967,7 @@
                      already says which guiding system is active, so the old
                      single "PHD2 Native" tab was pure redundancy and the
                      native dashboard now renders directly (field request).
-                     For the external backend the strip stays — its two tabs
+                     For the external backend the strip stays, its two tabs
                      switch between different PANES (embedded PHD2 GUI vs the
                      JSON-RPC Control panel), not between systems. -->
                 <div class="guide-tabstrip" x-show="guider.backend !== 'native'">
@@ -5486,7 +5486,7 @@
                          (no restart). Persisted on the active rig. -->
                     <!-- The sliders bind to a LOCAL model (guideAggr.*) that
                          mirrors the server value via x-effect, but ONLY when the
-                         user isn't dragging — otherwise the ~1 Hz status stream
+                         user isn't dragging, otherwise the ~1 Hz status stream
                          resets the thumb before the change is committed. -->
                     <div class="guide-aggr guide-group" x-show="guideSideTab === 'settings'"
                          x-effect="if (!_guideAggrEditing) {
@@ -5911,7 +5911,7 @@
                              bind) the select initialised before the bindings applied and
                              fell back to the first option (0.5 s); since guideExp already
                              equalled the persisted value, later WS ticks were no-ops and
-                             never re-synced the DOM — the "guide exp reverts to 0.5 s on
+                             never re-synced the DOM, the "guide exp reverts to 0.5 s on
                              reload" field bug. -->
                         <option value="500">0.5</option>
                         <option value="1000">1.0</option>
@@ -5968,7 +5968,7 @@
                             title="Floating always-on guiding graph: draggable &amp; resizable, visible from any tab">Overlay</button>
                     <!-- Dither/settle knobs moved to the side panel's Status
                          pane ("Dithering" section); Clear History moved onto
-                         the chart itself; the old Disconnect button dropped —
+                         the chart itself; the old Disconnect button dropped,
                          guider connection is managed from RIGS/equipment, so
                          a bare disconnect here only left the tab in a dead
                          state (field request). -->
@@ -6229,8 +6229,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
 
                 <!-- Driver-host connection lives ABOVE the sub-tabstrip so
                      the INDI / Alpaca connect controls (and the connected
-                     strip) stay visible on every sub-tab — Equipment, INDI
-                     Drivers, INDI Control Panel — since all of them need a
+                     strip) stay visible on every sub-tab, Equipment, INDI
+                     Drivers, INDI Control Panel, since all of them need a
                      live connection. Wrapped in a panel so it reads as a
                      distinct, framed control block. -->
                 <div class="equip-conn-panel">
@@ -7551,7 +7551,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
 
                             <!-- Group 2: Camera (guide camera; PHD2 owns its own,
                                  so the hardware controls show only for the native
-                                 guider — backend lives in the GUIDE tab). -->
+                                 guider, backend lives in the GUIDE tab). -->
                             <div class="equip-group">
                             <div class="equip-group-title">Camera</div>
                             <p class="hint" x-show="guiderDriver !== 'native'" style="margin:0;font-size:11px">
@@ -7753,7 +7753,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                  reports pixel size 0, so set it here and Polaris
                                  pushes it into the aux driver on connect. Only
                                  shown when a DSLR is actually on the aux port
-                                 (gphoto exposes ISO) — never for an astro cam
+                                 (gphoto exposes ISO), never for an astro cam
                                  like the SV605CC, which reports its own pixel. -->
                             <div class="equip-meta-row" x-show="auxIsDslr" x-cloak>
                                 <label>Pixel size (µm)
@@ -8609,6 +8609,23 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <span class="text-muted" style="font-size:11px;"
                                   x-show="indiWeb.status?.version"
                                   x-text="'v' + indiWeb.status?.version"></span>
+                            <!-- Who owns the indi-web process. On a packaged
+                                 host it is the polaris-indiweb.service unit, in
+                                 a cgroup of its own, so a Polaris restart leaves
+                                 indiserver and the drivers alone. A child
+                                 process shares polaris.service's cgroup and goes
+                                 down with it, which is worth saying before the
+                                 operator finds out mid-session. -->
+                            <span class="text-muted" style="font-size:11px;"
+                                  x-show="indiWeb.status?.running &amp;&amp; indiWeb.status?.managedBy === 'systemd'"
+                                  :title="'Runs as the ' + (indiWeb.status?.systemdUnit || 'polaris-indiweb.service') + ' systemd unit, separate from Polaris.'">
+                                keeps running across a Polaris restart
+                            </span>
+                            <span class="text-warn" style="font-size:11px;"
+                                  x-show="indiWeb.status?.running &amp;&amp; indiWeb.status?.managedBy === 'child-process'"
+                                  title="indi-web was started as a child of the Polaris process, so restarting Polaris stops it and the INDI drivers with it.">
+                                stops when Polaris restarts
+                            </span>
                             <span style="flex:1;"></span>
                             <!-- Auto-start toggle is server-side
                                  only (IndiWeb:AutoStart in appsettings)
@@ -8740,7 +8757,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                              unchanged). Now driven by indiWeb.iframeSrc, which
                              indiWebEnsureIframe() only sets to a cache-busted
                              "/indi-web/?_=ts" after a credentialed readiness
-                             probe returns OK — same fix as the PHD2 GUI iframe. -->
+                             probe returns OK, same fix as the PHD2 GUI iframe. -->
                         <iframe x-show="indiWeb.status?.running"
                                 :src="indiWeb.iframeSrc"
                                 style="width:100%;height:75vh;min-height:500px;
@@ -9010,7 +9027,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      style="padding:12px 16px;">
 
                     <!-- Top strip: camera picker (ONLY when both the main and
-                         the guide camera expose native controls — with a
+                         the guide camera expose native controls, with a
                          single native camera the panel is already exclusive
                          to it, the tab carries its name and a one-option
                          dropdown was just noise) + count + refresh. -->
@@ -9384,7 +9401,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             x-text="'#️⃣ ' + skyGridLabel()"
                             title="Toggle the sky coordinate grid: off → Alt-Az → Equatorial"></button>
                     <!-- Toggle pills: active = feature on (btn-active highlight),
-                         inactive = off. No ": on/off" text — the highlight is
+                         inactive = off. No ": on/off" text, the highlight is
                          the state, which saves toolbar width. -->
                     <!-- Ecliptic line: the plane of the solar system. -->
                     <button class="btn btn-sm" @click="toggleSkyEcliptic()"
@@ -9457,7 +9474,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <label x-show="atlasCatalogs.length > 0">Constellation
                         <!-- 3-letter IAU abbrev (And, Cyg, Ori, ...).
                              Free-text since the constellation set is
-                             fixed + tiny — quicker to type than scroll. -->
+                             fixed + tiny, quicker to type than scroll. -->
                         <input type="text" x-model="atlasFilter.constellation"
                                maxlength="3" placeholder="Cyg"
                                class="input-sm" @change="atlasSearch()" style="width: 70px;">
@@ -9528,7 +9545,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <!-- FIELD-4: lazy iframe src. Same race fix as the
                          PHD2 / INDI Web iframes. /sky/ is gated by
                          AuthMiddleware, so it needs the cookie too. -->
-                    <!-- skySuspended: mobile hard-suspend — after minutes
+                    <!-- skySuspended: mobile hard-suspend, after minutes
                          away from SKY the engine iframe unloads entirely
                          (Android froze on return otherwise) and reboots
                          fresh when the tab is reopened. -->
@@ -10752,7 +10769,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      style="display:flex; gap:18px; flex-wrap:wrap">
                     <div style="min-width:120px">
                         <div class="text-muted" style="font-size:11px" x-text="$t('Peak altitude')"></div>
-                        <div><strong x-text="milkyWay.data?.peak ? Math.round(milkyWay.data.peak.altDeg) + '°' : '—'"></strong>
+                        <div><strong x-text="milkyWay.data?.peak ? Math.round(milkyWay.data.peak.altDeg) + '°' : ', '"></strong>
                             <span class="text-muted" x-show="milkyWay.data?.peak"
                                   x-text="'@ ' + mwFmtTime(milkyWay.data?.peak?.utc)"></span></div>
                     </div>
@@ -10770,7 +10787,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <div class="text-muted" style="font-size:11px" x-text="$t('Dark window')"></div>
                         <div x-show="milkyWay.data?.darkWindow"><strong
                             x-text="mwFmtTime(milkyWay.data?.darkWindow?.startUtc) + ' – ' + mwFmtTime(milkyWay.data?.darkWindow?.endUtc)"></strong></div>
-                        <div class="text-muted" x-show="!milkyWay.data?.darkWindow" x-text="'—'"></div>
+                        <div class="text-muted" x-show="!milkyWay.data?.darkWindow" x-text="', '"></div>
                     </div>
                     <div style="min-width:120px">
                         <div class="text-muted" style="font-size:11px" x-text="$t('Moon')"></div>
@@ -11484,7 +11501,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      dither / meridian-flip / end-actions config. Right
                      = .autorun-sidebar with centered Polaris Shutter
                      + Pause/Resume + progress numbers (no horizontal
-                     seq-progress-section anymore — replaced by the
+                     seq-progress-section anymore, replaced by the
                      shutter ring). -->
                 <div class="autorun-pane" x-show="autorunTab === 'sequence'">
                 <div class="autorun-list-col">
@@ -11537,7 +11554,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
 
                 <!-- (Sequence cards relocated to .autorun-cards-col,
                      the dedicated vertical rail to the right of these
-                     controls — see after the list-col close below.) -->
+                     controls, see after the list-col close below.) -->
 
                 <!-- Meridian flip settings panel.
                      Header lives in the .autorun-options-bar chip
@@ -11884,7 +11901,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                            title="Enable or disable this item (disabled items are skipped)">
                                     <span class="seq-num" x-text="i + 1"></span>
                                     <!-- A LIGHT frame is named after the object in the FOV, once, for
-                                         the whole run (like live) — there is no per-item target name.
+                                         the whole run (like live), there is no per-item target name.
                                          The editable name stays only as a calibration set label. -->
                                     <div class="seq-input seq-input-name seq-name-auto"
                                          x-show="(item.imageType || 'LIGHT') === 'LIGHT'"
@@ -12617,7 +12634,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                      on the RIGHT of the list, giving the list their height. -->
                 <div class="files-body">
                 <div class="files-toolbars">
-                <!-- Action toolbar — icon-only. Every button has a
+                <!-- Action toolbar, icon-only. Every button has a
                      `title` for the tooltip; native browser behaviour
                      covers both desktop hover and mobile long-press
                      (iOS Safari and modern Android Chrome both pop
@@ -12765,14 +12782,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </button>
                 </div>
 
-                <!-- AI Tools — dedicated second toolbar grouping the editing
+                <!-- AI Tools, dedicated second toolbar grouping the editing
                      tools plus every in-browser ONNX model tool: StarNet
                      remove-stars, GraXpert BGE / deconvolution / denoise, and
                      Polaris's own halo removal + upscaling. AI-TOOLS-DISCOVERY:
                      the AI buttons are always offered (onnxToolOffered /
                      onnxStarnetAvailable now count downloadable models too) and
                      pull their model on demand, so nothing hides just because a
-                     model hasn't been downloaded yet. The bar is always shown —
+                     model hasn't been downloaded yet. The bar is always shown,
                      it also carries the non-AI editing tools (Blend/Edit/Crop/
                      Analyze/Solve/…) which must never depend on a model. -->
                 <div class="files-actions files-actions-icons files-ai-toolbar"
@@ -12895,7 +12912,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <span class="files-icon-label">SPCC</span>
                     </button>
                     <span class="files-actions-sep" aria-hidden="true"></span>
-                    <!-- Remove stars (StarNet++) — writes _starless + _stars,
+                    <!-- Remove stars (StarNet++), writes _starless + _stars,
                          then opens the before/after comparator. One file. -->
                     <button class="btn btn-sm btn-icon" data-tour="studio-starremoval"
                             x-show="onnxStarnetAvailable()"
@@ -12968,7 +12985,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </button>
                 </div>
 
-                <!-- SIRIL SCRIPTS — every ported Siril script, always, in one
+                <!-- SIRIL SCRIPTS, every ported Siril script, always, in one
                      stable order. What differs between them is how many files
                      they consume, and that is now shown by whether a button is
                      enabled rather than by taking it away: a frame script needs
@@ -13791,7 +13808,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             </div>
                         </div>
 
-                        <!-- Steps: advanced-sequencer-style tri-pane —
+                        <!-- Steps: advanced-sequencer-style tri-pane,
                              Palette (add), Sequence (ordered items), Properties
                              (edit selected). Each item is one action; every
                              editor slider is its own item (with an optional Auto). -->
@@ -14137,7 +14154,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                  is pinned to the bottom of the preview
                                  as a translucent strip, so toggling it
                                  off reclaims real estate without losing
-                                 the data — flip back on with the same
+                                 the data, flip back on with the same
                                  button. Active state painted via the
                                  .btn-toggle-on class hook. -->
                             <button class="btn btn-sm"
@@ -14263,7 +14280,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     title="Send these edits to the Auto Workflow to name, save, and batch-apply to other frames">
                                 → Workflow
                             </button>
-                            <!-- CROP — same modal as the FILES toolbar.
+                            <!-- CROP, same modal as the FILES toolbar.
                                  Pre-processing pass before BGE/decon/
                                  denoise; produces a sibling _crop.fits.
                                  User reopens that crop file in the
@@ -14320,7 +14337,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         </div>
 
                         <!-- LUZ / LIGHT -->
-                        <!-- STRETCH — non-linear stretch mode (Siril GHS/asinh port).
+                        <!-- STRETCH, non-linear stretch mode (Siril GHS/asinh port).
                              MTF = the histogram black/mid/white handles; GHS/asinh
                              drive the hyperbolic curve with D (amount) + B (intensity),
                              linked across channels so colour balance is preserved. -->
@@ -15068,7 +15085,7 @@ Windows  winget install Rclone.Rclone</code></pre>
                          language; the others are catalogs under /data/locales. -->
                     <label style="display:flex; align-items:center; gap:12px; max-width:560px">
                         <span style="min-width:90px">Language</span>
-                        <!-- Endonyms stay in their own language — never translate them. -->
+                        <!-- Endonyms stay in their own language, never translate them. -->
                         <select x-model="uiLang" @change="applyUiLang()" style="flex:1" data-no-i18n>
                             <option value="en">English</option>
                             <option value="pt-BR">Português (Brasil)</option>
@@ -15112,7 +15129,7 @@ Windows  winget install Rclone.Rclone</code></pre>
                          setups without internet still get the picked
                          family. The Atkinson option is recommended for
                          older / low-vision operators (unique letter
-                         shapes — B/8, l/1/I never confuse). -->
+                         shapes, B/8, l/1/I never confuse). -->
                     <label style="display:flex; align-items:center; gap:12px; max-width:560px; margin-top:16px">
                         <span style="min-width:90px">Font</span>
                         <select x-model="uiFont" @change="applyUiFont()" style="flex:1">
@@ -15682,7 +15699,7 @@ Windows  winget install Rclone.Rclone</code></pre>
                     <p class="text-muted" style="font-size:11px; margin:4px 0 0 132px"
                        x-show="psSelectedSolver">
                         <span x-show="psSelectedSolver?.available" class="text-ok">✓ ready</span>
-                        <!-- Online solver isn't "installed" — it just needs an API key. -->
+                        <!-- Online solver isn't "installed", it just needs an API key. -->
                         <span x-show="!psSelectedSolver?.available && psSelectedSolver?.id === 'astrometry-net-online'" class="text-warn">⚠ needs an API key (set below)</span>
                         <!-- Local solve-field on Windows usually means WSL: tell the user to enable it + Save. -->
                         <span x-show="!psSelectedSolver?.available && psSelectedSolver?.id === 'astrometry-net-local'" class="text-warn">⚠ not detected: enable "Run via WSL" (in advanced below) or set the solve-field path, then click <strong>Save</strong></span>
@@ -15898,7 +15915,7 @@ Windows  winget install Rclone.Rclone</code></pre>
 
                 <!-- Colour-calibration reference data (PCC + SPCC). Status of the
                      APASS catalog and the SPCC spectral sources + curve database.
-                     Everything ships with Polaris — this card just reports what's
+                     Everything ships with Polaris, this card just reports what's
                      present and where the editable curves live. -->
                 <div class="settings-section" id="colorcal-data-card" x-init="ccDataLoad()">
                     <h3><span class="settings-card-icon">🎨</span>Colour calibration data</h3>
@@ -16881,7 +16898,7 @@ Windows  winget install Rclone.Rclone</code></pre>
                      Bind=any, etc.), where it's still actionable. -->
                 <!-- Whole card collapses out of the layout when the user
                      IS already on a secure context (the common case after
-                     TLS-A2 wizard) — otherwise the parent <div> renders
+                     TLS-A2 wizard), otherwise the parent <div> renders
                      an empty settings-section card with nothing inside.
                      The HTTPS-cert install panel above already covers
                      fingerprint + alternate URLs + download. -->
@@ -18636,7 +18653,7 @@ Windows  winget install Rclone.Rclone</code></pre>
          Right side: host CPU + RAM. Both feed off the per-second
          status WS message, no extra polling. -->
     <!-- data-no-i18n: this footer is high-churn (host CPU/RAM updates ~1 Hz,
-         per-frame transfer chips) and mostly numeric/dynamic — keep the i18n
+         per-frame transfer chips) and mostly numeric/dynamic, keep the i18n
          observer out of it. Activity-chip labels that need translating use $t
          at their source instead. -->
     <!-- Collapsed, the bar shrinks to a few pixels with a small handle, and a
@@ -18845,7 +18862,7 @@ Windows  winget install Rclone.Rclone</code></pre>
             </span>
             <!-- Both chips read used / total. Narrow screens (see the
                  activity-bar media query) drop the total and keep the used
-                 figure, and the Client + Polaris chips hide entirely — the
+                 figure, and the Client + Polaris chips hide entirely, the
                  stats row was eating the whole bar on phones (field report). -->
             <span class="activity-host-stat" title="System memory used">
                 <span class="activity-host-label">RAM</span>
@@ -18960,7 +18977,7 @@ Windows  winget install Rclone.Rclone</code></pre>
         </span>
     </div>
 
-    <!-- Mosaic planner — floating panel (not a blocking modal) so the SKY map
+    <!-- Mosaic planner, floating panel (not a blocking modal) so the SKY map
          + live yellow grid overlay stay visible/interactive behind it. -->
     <div class="mosaic-modal" x-transition.opacity.duration.200ms x-show="mosaicOpen" x-cloak
          @keydown.escape.window="closeMosaicPlanner()">
@@ -19719,7 +19736,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             </p>
 
             <!-- BGE controls. Model selector on its own full-width row so the
-                 long product-name labels (e.g. "Polaris BGE v1.0.0 — 230 MB")
+                 long product-name labels (e.g. "Polaris BGE v1.0.0, 230 MB")
                  are not clipped; the numeric/enum controls share the next row. -->
             <div class="siril-modal-row" x-show="graxpert.modalOp === 'background-extraction'">
                 <label>AI model
@@ -20062,7 +20079,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
 
             <!-- Picker stage: preview <img> + overlay <canvas> stacked.
                  Canvas captures pointer events so we can draw a
-                 rectangle. The img is the actual image source —
+                 rectangle. The img is the actual image source,
                  letting it size naturally so aspect-ratio is right;
                  the canvas matches via position:absolute + same w/h. -->
             <div class="crop-picker"
@@ -20125,7 +20142,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <!-- SN-3: Star removal OPTIONS modal — shown before running so the user
+    <!-- SN-3: Star removal OPTIONS modal, shown before running so the user
          can tune the autostretch and choose a 2nd pass. Re-openable from the
          comparator's "Try again" button to retry with different settings. -->
     <div class="siril-modal" x-transition.opacity.duration.200ms x-show="starRemoval.options.open" x-cloak
@@ -20275,7 +20292,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
-    <!-- IMAGE BLEND modal — recombine two images (e.g. starless + stars)
+    <!-- IMAGE BLEND modal, recombine two images (e.g. starless + stars)
          with independent per-image MTF stretch + Screen blend + opacity.
          In-app equivalent of PixInsight's ImageBlend; finishing step of the
          starless workflow. -->
@@ -20314,12 +20331,12 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     <div class="blend-viewer-empty" x-show="!blend.previewUrl">
                         <span x-text="blend.busy ? 'Rendering…' : 'Loading…'"></span>
                     </div>
-                    <!-- RGB histogram of the blended preview — judge the
+                    <!-- RGB histogram of the blended preview, judge the
                          recombine proportion on linear frames (stars not
                          slammed to a 255 spike, nebula filling the low-mids). -->
                     <canvas class="blend-hist" x-ref="blendHist" width="260" height="72"
                             x-show="blend.histOpen && blend.previewUrl"></canvas>
-                    <!-- Zoom controls — same app btn style as the editor:
+                    <!-- Zoom controls, same app btn style as the editor:
                          − / NN% (click = fit to frame) / + , plus 1:1, plus a
                          histogram toggle. -->
                     <div class="blend-zoom-ctl" x-show="blend.previewUrl">
@@ -20950,7 +20967,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             </div>
             <!-- Annotate plate-solve in-progress banner: elapsed time, live
                  solver console (shared filesSolveLog, streamed via /ws/status),
-                 and a Cancel button — same UX as the FILES/SKY plate solve. -->
+                 and a Cancel button, same UX as the FILES/SKY plate solve. -->
             <div x-show="studioAnnotate.busy" x-cloak style="padding: 6px 8px;">
                 <div style="display:flex; align-items:center; gap:12px; padding: 8px 10px;
                             border: 1px solid var(--border); border-radius: 4px; background: var(--bg-elev); font-size: 12px;">
@@ -21266,7 +21283,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                                                 <td style="padding:2px 4px"><code x-text="filterName"></code></td>
                                                 <td style="padding:2px 4px" x-text="m.position"></td>
                                                 <td style="padding:2px 4px"
-                                                    x-text="(m.temperatureC != null && !isNaN(m.temperatureC)) ? m.temperatureC.toFixed(1) + '°C' : '—'"></td>
+                                                    x-text="(m.temperatureC != null && !isNaN(m.temperatureC)) ? m.temperatureC.toFixed(1) + '°C' : ', '"></td>
                                                 <td style="padding:2px 4px"
                                                     x-text="((Date.now() - Date.parse(m.utc)) / 3600000).toFixed(1) + 'h'"></td>
                                                 <td style="padding:2px 4px">
@@ -21603,7 +21620,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                         <div class="bs-crow">
                             <span class="bs-dot" :class="network.mode==='station' ? '' : 'off'"></span>
                             <span class="bs-clbl" x-text="networkModeLabel()"></span>
-                            <span class="bs-cval bs-name" x-text="network.ssid || '—'"></span>
+                            <span class="bs-cval bs-name" x-text="network.ssid || ', '"></span>
                         </div>
                         <div class="bs-cnote bs-num" x-show="network.ip"><span x-text="network.ip"></span><span x-show="network.mode==='station' && network.signal>0"> · <span x-text="network.signal"></span>% signal</span></div>
                         <div class="bs-cbtns"><button class="bs-cbtn primary" :disabled="networkSwitching" @click="networkOpenSwitchDialog()" x-text="network.mode==='station' ? 'Join a different WiFi' : 'Switch to WiFi'"></button></div>
@@ -21676,7 +21693,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
 
         <div class="bs-rail left" x-show="basicScreen!=='sky' && basicScreen!=='config'">
             <!-- On the guide screen the image is the relocated guide-cam view,
-                 which has its own zoom model — route Fit/Zoom to it there. The
+                 which has its own zoom model, route Fit/Zoom to it there. The
                  graph-overlay toggle is pointless on guide (the graph is
                  already pinned at the bottom), so it hides. -->
             <button class="bs-icn" @click="basicScreen==='guide' ? basicGuideFit() : _pzFit(basicActiveCanvas())" title="Fit"><span class="bs-big">&#9635;</span>Fit</button>
@@ -21974,8 +21991,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                  the dither setting. Rendering it as "Dither Off" therefore read as
                  "dithering is disabled" for the ~99% of the time no dither is in
                  progress (field report). Show it only while it IS dithering: the
-                 misleading state can't appear, and the useful one — knowing why the
-                 graph just jumped — still does. -->
+                 misleading state can't appear, and the useful one, knowing why the
+                 graph just jumped, still does. -->
             <span class="guide-overlay-dither" x-show="guider.dithering" x-cloak>Dithering…</span>
         </div>
         <div class="guide-overlay-resize" @pointerdown="guideOverlayResizeStart($event)"
@@ -22319,7 +22336,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          @click.self="phd2Viewer.open=false">
         <div style="width:min(960px,96vw);max-height:92vh;overflow:auto;background:var(--panel,#16213e);border:1px solid var(--border);border-radius:12px;padding:16px">
             <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
-                <h3 style="margin:0;font-size:15px">📈 <span>Guide log</span> —
+                <h3 style="margin:0;font-size:15px">📈 <span>Guide log</span>,
                     <span style="font-weight:400;font-size:13px;color:var(--text-secondary)" x-text="phd2Viewer.fileName"></span></h3>
                 <button class="btn btn-sm" @click="phd2Viewer.open=false">✕</button>
             </div>
@@ -22986,7 +23003,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     </div>
                 </template>
 
-                <!-- STEP: details — optics + cooling. Bound to the SAME
+                <!-- STEP: details, optics + cooling. Bound to the SAME
                      settings.* fields and handlers the RIGS optics cards use,
                      so the catalogue autofill and the debounced rig save all
                      come for free and stay in sync with the full UI. -->

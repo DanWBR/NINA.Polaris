@@ -4475,5 +4475,8 @@
   "INDI restarted": "",
   "Restart failed": "",
   "Restarting INDI stops every running driver and starts them again. The mount, camera and focuser reconnect, which takes a few seconds. Do this when you are not in the middle of an exposure.": "",
-  "Stop and start indi-web. Every driver reconnects, and a driver installed since the last start shows up.": ""
+  "Stop and start indi-web. Every driver reconnects, and a driver installed since the last start shows up.": "",
+  "keeps running across a Polaris restart": "keeps running across a Polaris restart",
+  "stops when Polaris restarts": "stops when Polaris restarts",
+  "indi-web was started as a child of the Polaris process, so restarting Polaris stops it and the INDI drivers with it.": "indi-web was started as a child of the Polaris process, so restarting Polaris stops it and the INDI drivers with it."
 }
