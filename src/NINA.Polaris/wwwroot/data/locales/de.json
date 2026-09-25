@@ -5112,5 +5112,7 @@
   "Share the selected file. A FITS is shared as the rendered image, so it opens anywhere.": "Teilt die ausgewaehlte Datei. Eine FITS geht als gerendertes Bild, damit sie sich ueberall oeffnen laesst.",
   "Sent to your device downloads": "An die Downloads des Geraets gesendet",
   "This browser cannot share files. Downloading it instead.": "Dieser Browser kann keine Dateien teilen. Stattdessen wird heruntergeladen.",
-  "Share failed": "Teilen fehlgeschlagen"
+  "Share failed": "Teilen fehlgeschlagen",
+  "STREAM": "STREAM",
+  "The video stream is using the camera. No other frame can be taken until it is stopped.": "Der Videostream benutzt die Kamera. Bis er gestoppt ist, kann kein anderes Bild aufgenommen werden."
 }

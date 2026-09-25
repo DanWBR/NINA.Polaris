@@ -817,6 +817,22 @@ body.asst-dock-dragging {
     color: var(--accent);
 }
 
+/* The camera stream chip. Amber and clickable, because it is not a
+   reading: it says the camera is taken, and what to do about it is one
+   tap away. */
+.status-chip-stream {
+    color: var(--warn, #e0a33e);
+    cursor: pointer;
+}
+.status-chip-stream .chip-icon {
+    color: var(--warn, #e0a33e);
+    animation: polaris-stream-pulse 2s ease-in-out infinite;
+}
+@keyframes polaris-stream-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.35; }
+}
+
 /* Top-bar clock. Tabular figures so the seconds tick without the
    text width jittering. Hidden on narrow viewports to keep the badge
    row from wrapping. */

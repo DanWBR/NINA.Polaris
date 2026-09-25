@@ -64,6 +64,14 @@ public class CameraStreamService : IDisposable {
     private FrameKind _broadcastKind = FrameKind.Video;
 
     public bool IsRunning { get; private set; }
+
+    /// <summary>The camera is ours while the stream runs. In native mode the
+    /// SDK pushes frames without ever entering the capture gate, so nothing
+    /// stopped an autofocus (or a sequence, or a snap) from exposing into a
+    /// camera that was mid-stream. On ZWO that stops the camera answering
+    /// until its power is cycled.</summary>
+    public const string OwnerName = "video stream";
+    private IDisposable? _cameraLease;
     public string Mode { get; private set; } = "idle";      // "native" | "loop" | "idle"
     public double ExposureSeconds { get; private set; }
     public int Gain { get; private set; }
@@ -140,6 +148,11 @@ public class CameraStreamService : IDisposable {
             if (IsRunning) throw new InvalidOperationException("Stream already running, stop first");
             var cam = _equip.Camera ?? throw new InvalidOperationException("No camera connected");
 
+            // Take the camera before the first frame: a capture already in
+            // flight refuses us here, which is the other half of the rule.
+            _cameraLease = CameraCaptureGate.TryAcquireExclusive(OwnerName, out var refusal);
+            if (_cameraLease == null) throw new CameraBusyException(refusal!);
+
             ExposureSeconds = cfg.ExposureSeconds <= 0 ? 0.1 : cfg.ExposureSeconds;
             Gain = cfg.Gain ?? cam.Gain;
             BinX = cfg.BinX ?? 1;
@@ -158,8 +171,15 @@ public class CameraStreamService : IDisposable {
             ResetSharpness();
 
             var useNative = !cfg.ForceLoop && cam.Capabilities.SupportsVideoStream;
-            if (useNative) StartNative(cam, _cts.Token);
-            else StartLoop(cam, _cts.Token);
+            try {
+                if (useNative) StartNative(cam, _cts.Token);
+                else StartLoop(cam, _cts.Token);
+            } catch {
+                // Never keep the camera hostage over a stream that failed to
+                // start: the next capture would be refused for no reason.
+                _cameraLease?.Dispose(); _cameraLease = null;
+                throw;
+            }
 
             IsRunning = true;
             _logger.LogInformation("Camera stream started in {Mode} mode (exp={Exp}s gain={Gain})",
@@ -190,6 +210,8 @@ public class CameraStreamService : IDisposable {
             try { await loop; } catch { /* expected cancellation */ }
         }
         Mode = "idle";
+        // Hand the camera back; from here a capture is allowed again.
+        lock (_lock) { _cameraLease?.Dispose(); _cameraLease = null; }
         _logger.LogInformation("Camera stream stopped after {N} frames ({Fps:F1} fps avg)",
             FrameCount, FrameCount > 0 ? FrameCount / Math.Max(0.001, (DateTime.UtcNow - _startedAt).TotalSeconds) : 0);
     }
@@ -359,10 +381,12 @@ public class CameraStreamService : IDisposable {
                 if (ExposureSeconds >= 1.0) {
                     using (_captureProgress.Begin("stream", ExposureSeconds))
                         image = await CameraCaptureGate.RunAsync(
-                            () => cam.CaptureAsync(ExposureSeconds, opts, ct), ct);
+                            () => cam.CaptureAsync(ExposureSeconds, opts, ct), ct,
+                            asOwner: OwnerName);
                 } else {
                     image = await CameraCaptureGate.RunAsync(
-                        () => cam.CaptureAsync(ExposureSeconds, opts, ct), ct);
+                        () => cam.CaptureAsync(ExposureSeconds, opts, ct), ct,
+                        asOwner: OwnerName);
                 }
                 sw.Stop();
                 LastCaptureMs = sw.Elapsed.TotalMilliseconds;

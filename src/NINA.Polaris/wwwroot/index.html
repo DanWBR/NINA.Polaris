@@ -635,6 +635,17 @@
                 <span x-text="captureProgressLabel()"
                       style="font-variant-numeric:tabular-nums; text-transform:none"></span>
             </span>
+            <!-- The camera stream owns the camera while it runs, and a frame
+                 requested anywhere else is refused. Leaving it on by accident
+                 is what wedged a ZWO hard enough to need its power cycled, so
+                 this chip is visible in every tab and clicking it goes to
+                 VIDEO, where it can be stopped. -->
+            <span class="status-chip status-chip-stream" x-show="cameraStream.running" x-cloak
+                  @click="tab='video'"
+                  title="The video stream is using the camera. No other frame can be taken until it is stopped.">
+                <span class="chip-icon">&#9679;</span>
+                <span>STREAM</span>
+            </span>
             <span class="status-chip" x-show="cameraTemp !== null">
                 <span class="chip-icon">T</span>
                 <span x-text="cameraTemp !== null ? cameraTemp.toFixed(1) + '&deg;C' : '--'"></span>

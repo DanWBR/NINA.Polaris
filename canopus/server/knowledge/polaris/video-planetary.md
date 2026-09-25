@@ -91,7 +91,28 @@ thresholded centroid + better alignment for extended objects.
 16-bit mono FITS. Open in PixInsight / Siril / Photoshop. Apply
 wavelet sharpening + saturation in your favorite tool.
 
+## The stream owns the camera
+
+While the video stream runs, **nothing else can take a frame**:
+autofocus, a snapshot, LIVE, a sequence, the flat wizard. Polaris
+refuses those with a message naming the stream, and refuses to start
+the stream on top of a capture that is already running.
+
+This is not tidiness. In native mode the camera's own SDK pushes
+frames without going through the capture path at all, so an exposure
+started elsewhere reached a camera that was already streaming. On ZWO
+that ends with a camera that stops answering until its power is
+cycled, and until this rule existed nothing reported the cause: the
+autofocus simply failed to get a frame.
+
+A **STREAM** chip sits in the top status bar whenever the stream is
+running, in every tab. Click it to go to VIDEO and stop the stream.
+
 ## Common pitfalls
+
+**Autofocus, a snapshot or a sequence refuses to take a frame**, the
+video stream is still running. Look for the STREAM chip in the top bar
+and stop it.
 
 **fps caps at ~5 even though camera supports native stream**, check
 that `CCD_VIDEO_STREAM` is actually exposed by your driver. Some INDI

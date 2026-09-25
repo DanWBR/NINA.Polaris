@@ -210,6 +210,23 @@ technique planetary imagers favor) and saturation in your
 favorite tool; the Polaris EDITOR (@sec-editor) targets deep-sky
 post-processing, so planetary finishing is best done externally.
 
+## The stream owns the camera
+
+While video is streaming, nothing else can expose: autofocus, a
+snapshot, LIVE, a sequence. Polaris now says so instead of letting the
+attempt fail in silence, and it will not start the stream on top of a
+capture that is already running either.
+
+The reason is worth knowing. In native mode the camera's SDK pushes
+frames on its own, outside the path everything else uses to take an
+exposure, so a frame requested elsewhere landed on a camera that was
+already busy. On ZWO cameras that ends with a camera that stops
+responding until you unplug its power.
+
+Whenever the stream is running, a **STREAM** chip appears in the top
+status bar in every tab. Clicking it takes you to VIDEO, where you can
+stop it.
+
 ## Common pitfalls
 
 **The frame rate caps at about 5 fps even though the camera supports

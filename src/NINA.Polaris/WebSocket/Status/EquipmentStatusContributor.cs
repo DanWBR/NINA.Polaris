@@ -66,6 +66,10 @@ public sealed class EquipmentStatusContributor : IStatusContributor {
             tick.Blocks["cameraStream"] = new {
                 running = cameraStream.IsRunning,
                 mode = cameraStream.Mode,
+                // Who holds the camera exclusively, if anyone. A running
+                // stream owns it and every other capture is refused, which is
+                // what the header chip and the refusal messages are about.
+                owner = NINA.Polaris.Services.CameraCaptureGate.ExclusiveOwner,
                 exposure = cameraStream.ExposureSeconds,
                 gain = cameraStream.Gain,
                 frames = cameraStream.FrameCount,

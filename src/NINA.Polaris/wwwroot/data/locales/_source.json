@@ -4494,5 +4494,7 @@
   "Share the selected file. A FITS is shared as the rendered image, so it opens anywhere.": "",
   "Sent to your device downloads": "",
   "This browser cannot share files. Downloading it instead.": "",
-  "Share failed": ""
+  "Share failed": "",
+  "STREAM": "",
+  "The video stream is using the camera. No other frame can be taken until it is stopped.": ""
 }

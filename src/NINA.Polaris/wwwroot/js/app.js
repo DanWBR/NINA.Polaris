@@ -1853,6 +1853,10 @@ function ninaApp() {
             recording: false, path: null, frames: 0, bytes: 0,
             durationSec: 0, droppedFrames: 0, lastError: null
         },
+        // Server-owned view of the camera stream. It is here, and not only in
+        // the VIDEO tab, because while it runs NOTHING else can take a frame:
+        // the header chip is the one thing that explains a refused capture
+        // from any other tab.
         videoStack: null,         // { id, phase, framesAnalyzed, ..., done }
         _stackDonePromptedId: null, // job id we've already offered to open in Studio
 
