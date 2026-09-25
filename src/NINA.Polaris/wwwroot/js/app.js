@@ -1898,7 +1898,10 @@ function ninaApp() {
             open: false, busy: false, error: '',
             type: 'drive', name: '', paste: '', command: '',
             url: '', host: '', user: '', pass: '',
-            accessKey: '', secretKey: '', endpoint: '', region: ''
+            accessKey: '', secretKey: '', endpoint: '', region: '',
+            // Browser sign in driven from here: see rcloneSignInStart.
+            signInStarted: false, signInLocal: false,
+            consentUrl: '', localUrl: '', redirectUrl: ''
         },
         storagePushStatus: {
             enabled: false, kind: 'smb', connected: false, queued: 0,
@@ -20191,15 +20194,52 @@ function ninaApp() {
             const entry = this.files.entries.find(x => x.fullPath === path);
             const bytes = Number(entry && entry.sizeBytes) || 0;
             if (bytes > 0) this._netRx(bytes);
+            // authUrl, because a navigation carries no Authorization header and
+            // falls through to the session cookie, which the app's iframe does
+            // not have (it is cross origin). That is why downloading from the
+            // app did nothing at all: every one of them was a 401.
+            const url = this.authUrl('/api/files/download?path=' + encodeURIComponent(path));
+            const name = String(path).split(/[\\/]+/).filter(Boolean).pop() || 'file';
+            if (this._shellDownload(url, name)) return;
             // window.location triggers the same dialog the user would
             // get from a direct link; honours Content-Disposition.
-            window.location = '/api/files/download?path=' + encodeURIComponent(path);
+            window.location = url;
+        },
+
+        // Inside the app, hand the download to the shell: the WebView iframe
+        // cannot start one itself, and the shell (app origin) can pass the URL
+        // to the OS, which has a real download manager for a file that may be
+        // gigabytes. Returns false in a plain browser, where navigating is the
+        // right answer.
+        _shellDownload(url, name) {
+            if (!this._authWrapperOrigin) return false;
+            try {
+                window.parent.postMessage(
+                    { __polarisDownloadReq: true, url: new URL(url, location.href).href, name },
+                    this._authWrapperOrigin);
+                this.toast(this.$t('Sent to your device downloads'), 'ok');
+                return true;
+            } catch (e) {
+                return false;
+            }
         },
 
         async _filesDownloadZip(paths) {
             try {
                 const fileName = (this.files.cwd.split(/[\\/]+/).filter(Boolean).pop()
                                   || 'polaris') + '-files.zip';
+                // In the app the blob + <a download> dance below is useless: a
+                // WebView ignores the download attribute, and buffering a
+                // multi-GB archive in memory would be wrong anyway. Take a
+                // ticket instead and let the OS fetch it as an ordinary URL.
+                if (this._authWrapperOrigin) {
+                    const t = await this.apiPostJson('/api/files/download-zip/ticket',
+                                                     { paths, rootForNames: this.files.cwd, fileName });
+                    if (t && t.ticket) {
+                        this._shellDownload(this.authUrl('/api/files/download-zip/' + t.ticket), fileName);
+                        return;
+                    }
+                }
                 // XFER: apiDownload streams the ZIP body through the
                 // ReadableStream reader so the activity-bar transfer
                 // chip can show progress. Zips of 50+ FITS easily run
@@ -20224,9 +20264,128 @@ function ninaApp() {
             }
         },
 
+        // --- Share -----------------------------------------------------
+        //
+        // Sharing a raw FITS is useless: nothing on a phone opens one, and the
+        // messaging apps refuse the size. So a FITS is shared as the image the
+        // preview pipeline renders from it, with the same stretch shown on
+        // screen, and anything that is already an image goes as it is.
+        //
+        // Two routes, because they are genuinely different platforms:
+        //   browser  navigator.share with the file attached (needs HTTPS)
+        //   app      the shell, where the Capacitor share sheet lives; the
+        //            iframe has no navigator.share at all
+        _filesShareEntry() {
+            const sel = this.files.selectedPaths;
+            if (sel.length !== 1) return null;
+            const e = this.files.entries.find(x => x.fullPath === sel[0]);
+            return (e && !e.isDirectory) ? e : null;
+        },
+
+        filesCanShare() {
+            return !!this._filesShareEntry();
+        },
+
+        // What to share for this file: the bytes themselves for a raster, the
+        // rendered preview for everything else.
+        _filesShareSource(entry) {
+            const name = String(entry.fullPath).split(/[\\/]+/).filter(Boolean).pop() || 'image';
+            const ext = (name.split('.').pop() || '').toLowerCase();
+            const raster = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
+            if (raster.includes(ext)) {
+                return {
+                    url: this.authUrl('/api/files/download?path=' + encodeURIComponent(entry.fullPath)),
+                    name,
+                    mime: ext === 'png' ? 'image/png' : (ext === 'webp' ? 'image/webp'
+                          : (ext === 'gif' ? 'image/gif' : 'image/jpeg'))
+                };
+            }
+            // maxDim caps the render: a full-size 26 MP stretch would take
+            // seconds on an SBC and no messaging app keeps it anyway.
+            return {
+                url: this.authUrl('/api/files/preview?path=' + encodeURIComponent(entry.fullPath)
+                                  + '&maxDim=4096'),
+                name: name.replace(/\.[^.]+$/, '') + '.jpg',
+                mime: 'image/jpeg'
+            };
+        },
+
+        async filesShareSelected() {
+            const entry = this._filesShareEntry();
+            if (!entry) return;
+            const src = this._filesShareSource(entry);
+
+            // In the app: ask the shell, which has the native sheet.
+            if (this._authWrapperOrigin) {
+                const ok = await this._shellShare(src);
+                if (ok) return;
+                // The shell could not do it (old build without the plugins, or
+                // a file too big for the bridge): fall back to a download,
+                // which always works there.
+                this._shellDownload(src.url, src.name);
+                return;
+            }
+
+            // In a browser: Web Share with the file attached. Chrome and
+            // Safari on a phone have it; a desktop browser usually does not,
+            // and neither does plain HTTP.
+            try {
+                if (!navigator.share) throw new Error('no-web-share');
+                const resp = await this.apiFetch(src.url);
+                const blob = await resp.blob();
+                const file = new File([blob], src.name, { type: src.mime });
+                if (navigator.canShare && !navigator.canShare({ files: [file] }))
+                    throw new Error('no-file-share');
+                await navigator.share({ files: [file], title: src.name });
+            } catch (e) {
+                if (e && e.name === 'AbortError') return;      // the user closed the sheet
+                if (e && (e.message === 'no-web-share' || e.message === 'no-file-share')) {
+                    this.toast(this.$t('This browser cannot share files. Downloading it instead.'), 'info');
+                    this.filesDownloadOne(entry.fullPath);
+                    return;
+                }
+                this.toastFail(this.$t('Share failed'), e);
+            }
+        },
+
+        // Ask the shell to share. Resolves false when there is no native
+        // sharer, so the caller can fall back instead of leaving the user
+        // with a button that does nothing.
+        _shellShare(src) {
+            return new Promise((resolve) => {
+                const id = 'sh' + (this._nextShareId = (this._nextShareId || 0) + 1);
+                let acked = false;
+                const done = (v) => {
+                    window.removeEventListener('message', onMsg);
+                    clearTimeout(ackTimer);
+                    resolve(v);
+                };
+                const onMsg = (ev) => {
+                    const d = ev.data;
+                    if (!d || typeof d !== 'object' || d.id !== id) return;
+                    if (d.__polarisShareAck === true) { acked = true; return; }
+                    if (d.__polarisShareRes !== true) return;
+                    if (!d.ok && d.error) this.toast(this.$t('Share failed') + ': ' + d.error, 'warn');
+                    done(!!d.ok);
+                };
+                window.addEventListener('message', onMsg);
+                try {
+                    window.parent.postMessage(
+                        { __polarisShareReq: true, id, url: new URL(src.url, location.href).href,
+                          name: src.name, mime: src.mime, title: src.name },
+                        this._authWrapperOrigin);
+                } catch (e) {
+                    done(false);
+                    return;
+                }
+                // No ack: an older shell build with no share bridge at all.
+                const ackTimer = setTimeout(() => { if (!acked) done(false); }, 1500);
+            });
+        },
+
         // --- Preview --------------------------------------------------
 
-        // Toolbar "View": open the single selected file in the viewer — the
+        // Toolbar "View": open the single selected file in the viewer, the
         // discoverable equivalent of double-clicking/double-tapping the row.
         filesViewSelected() {
             if (this.files.selectedPaths.length !== 1) return;
@@ -31603,6 +31762,85 @@ function ninaApp() {
                 this.toast('Could not copy. Select the command and copy it by hand.', 'warn');
             }
         },
+        // ----- Provider sign in, driven from this browser -----
+        //
+        // rclone's headless recipe asks for a second computer with rclone on
+        // it. It does not have to: the only thing that must reach rclone's
+        // little local server is the provider's redirect, and Polaris can
+        // replay that for us. So the operator signs in right here, and pastes
+        // back the address their browser could not load.
+        //
+        // When this browser is ON the host, even that is unnecessary: the
+        // redirect reaches rclone directly.
+        _rcloneClientIsOnHost() {
+            const h = location.hostname;
+            return h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '[::1]';
+        },
+
+        async rcloneSignInStart() {
+            const r = this.rcloneSetup;
+            if (!r.name) { r.error = this.$t('Give the remote a name first.'); return; }
+            r.busy = true; r.error = '';
+            try {
+                const d = await this.apiPostJson('/api/storage/rclone/oauth/start', { type: r.type });
+                r.consentUrl = d?.consentUrl || '';
+                r.localUrl = d?.localUrl || '';
+                r.signInLocal = this._rcloneClientIsOnHost();
+                r.signInStarted = true;
+                r.redirectUrl = '';
+                this.rcloneSignInOpen();
+            } catch (e) {
+                r.error = this._mountErrorText(e);
+            } finally {
+                r.busy = false;
+            }
+        },
+
+        rcloneSignInOpen() {
+            const r = this.rcloneSetup;
+            // On the host itself the local link completes the whole flow; from
+            // anywhere else only the provider's page is reachable.
+            const url = r.signInLocal ? (r.localUrl || r.consentUrl) : (r.consentUrl || r.localUrl);
+            if (!url) { r.error = this.$t('No sign in page to open. Start again.'); return; }
+            try {
+                window.open(url, '_blank', 'noopener');
+            } catch (e) {
+                r.error = this.$t('Could not open the sign in page. Copy this address by hand:') + ' ' + url;
+            }
+        },
+
+        async rcloneSignInFinish() {
+            const r = this.rcloneSetup;
+            r.busy = true; r.error = '';
+            try {
+                const res = await (await this.apiPost('/api/storage/rclone/oauth/complete', {
+                    name: r.name, type: r.type,
+                    // Empty on the host: there the provider already reached
+                    // rclone and the server only has to collect the token.
+                    redirectUrl: r.signInLocal ? '' : r.redirectUrl
+                })).json();
+                if (res && res.ok) {
+                    this.toast(this.$t('Remote created'), 'ok');
+                    r.open = false; r.signInStarted = false; r.redirectUrl = ''; r.paste = '';
+                    this.storagePush.remoteName = res.name || r.name;
+                    await this.loadRcloneInfo();
+                    await this.saveStorageConfig();
+                } else {
+                    r.error = (res && res.error) || this.$t('Could not finish the sign in.');
+                }
+            } catch (e) {
+                r.error = this._mountErrorText(e);
+            } finally {
+                r.busy = false;
+            }
+        },
+
+        async rcloneSignInCancel() {
+            const r = this.rcloneSetup;
+            try { await this.apiPost('/api/storage/rclone/oauth/cancel'); } catch (e) { }
+            r.signInStarted = false; r.redirectUrl = ''; r.consentUrl = ''; r.localUrl = ''; r.error = '';
+        },
+
         async createRcloneRemote() {
             const r = this.rcloneSetup;
             r.busy = true; r.error = '';

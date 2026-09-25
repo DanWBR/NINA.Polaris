@@ -18,9 +18,11 @@
     "@capacitor/android": "^6.1.2",
     "@capacitor/app": "^6.0.1",
     "@capacitor/core": "^6.1.2",
+    "@capacitor/filesystem": "^6.0.1",
     "@capacitor/geolocation": "^6.1.1",
     "@capacitor/ios": "^6.1.2",
     "@capacitor/preferences": "^6.0.2",
+    "@capacitor/share": "^6.0.2",
     "capacitor-zeroconf": "^3.0.0",
     "polaris-onnx": "file:plugins/polaris-onnx",
     "polaris-llama": "file:plugins/polaris-llama"

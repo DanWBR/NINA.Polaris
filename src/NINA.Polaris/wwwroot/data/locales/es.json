@@ -5096,5 +5096,21 @@
   "Stop and start indi-web. Every driver reconnects, and a driver installed since the last start shows up.": "Detiene e inicia indi-web. Todos los drivers se reconectan, y un driver instalado despues del ultimo arranque aparece en la lista.",
   "keeps running across a Polaris restart": "sigue funcionando cuando Polaris se reinicia",
   "stops when Polaris restarts": "se detiene cuando Polaris se reinicia",
-  "indi-web was started as a child of the Polaris process, so restarting Polaris stops it and the INDI drivers with it.": "indi-web se inició como proceso hijo de Polaris, por lo que reiniciar Polaris lo detiene, y con él los controladores INDI."
+  "indi-web was started as a child of the Polaris process, so restarting Polaris stops it and the INDI drivers with it.": "indi-web se inició como proceso hijo de Polaris, por lo que reiniciar Polaris lo detiene, y con él los controladores INDI.",
+  "Sign in here, in this browser. The host does not need one of its own.": "Inicia sesion aqui, en este navegador. El host no necesita uno propio.",
+  "Sign in with the provider": "Iniciar sesion en el proveedor",
+  "This browser is on the host, so the sign in finishes by itself. Complete it in the tab that opened, then press Finish sign in.": "Este navegador esta en el propio host, asi que el inicio de sesion termina solo. Completalo en la pestana que se abrio y pulsa Finalizar inicio de sesion.",
+  "Sign in on the page that opened. Your browser then lands on an address that cannot load, which is expected: it points at the host. Copy that whole address from the address bar and paste it below.": "Inicia sesion en la pagina que se abrio. Despues tu navegador llega a una direccion que no carga, y es lo esperado: apunta al host. Copia esa direccion completa de la barra de direcciones y pegala abajo.",
+  "Open the sign in page": "Abrir la pagina de inicio de sesion",
+  "Address your browser landed on": "Direccion en la que acabo tu navegador",
+  "Finish sign in": "Finalizar inicio de sesion",
+  "Sign in on another computer instead": "Prefiero iniciar sesion en otro ordenador",
+  "Give the remote a name first.": "Dale un nombre al remoto primero.",
+  "No sign in page to open. Start again.": "No hay pagina de inicio de sesion que abrir. Empieza de nuevo.",
+  "Could not open the sign in page. Copy this address by hand:": "No se pudo abrir la pagina de inicio de sesion. Copia esta direccion a mano:",
+  "Could not finish the sign in.": "No se pudo finalizar el inicio de sesion.",
+  "Share the selected file. A FITS is shared as the rendered image, so it opens anywhere.": "Comparte el archivo seleccionado. Un FITS va como la imagen renderizada, para que se abra en cualquier sitio.",
+  "Sent to your device downloads": "Enviado a las descargas del dispositivo",
+  "This browser cannot share files. Downloading it instead.": "Este navegador no comparte archivos. Lo descargo en su lugar.",
+  "Share failed": "Fallo al compartir"
 }

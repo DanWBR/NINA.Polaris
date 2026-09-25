@@ -5096,5 +5096,21 @@
   "Stop and start indi-web. Every driver reconnects, and a driver installed since the last start shows up.": "Stoppt und startet indi-web. Alle Treiber verbinden sich neu, und ein seit dem letzten Start installierter Treiber taucht auf.",
   "keeps running across a Polaris restart": "läuft über einen Polaris-Neustart hinweg weiter",
   "stops when Polaris restarts": "stoppt, wenn Polaris neu startet",
-  "indi-web was started as a child of the Polaris process, so restarting Polaris stops it and the INDI drivers with it.": "indi-web wurde als Kindprozess von Polaris gestartet; ein Neustart von Polaris beendet es und damit auch die INDI-Treiber."
+  "indi-web was started as a child of the Polaris process, so restarting Polaris stops it and the INDI drivers with it.": "indi-web wurde als Kindprozess von Polaris gestartet; ein Neustart von Polaris beendet es und damit auch die INDI-Treiber.",
+  "Sign in here, in this browser. The host does not need one of its own.": "Melden Sie sich hier in diesem Browser an. Der Host braucht keinen eigenen.",
+  "Sign in with the provider": "Beim Anbieter anmelden",
+  "This browser is on the host, so the sign in finishes by itself. Complete it in the tab that opened, then press Finish sign in.": "Dieser Browser laeuft auf dem Host, die Anmeldung schliesst sich also selbst ab. Beenden Sie sie im geoeffneten Tab und druecken Sie dann Anmeldung abschliessen.",
+  "Sign in on the page that opened. Your browser then lands on an address that cannot load, which is expected: it points at the host. Copy that whole address from the address bar and paste it below.": "Melden Sie sich auf der geoeffneten Seite an. Danach landet Ihr Browser auf einer Adresse, die nicht laedt, und das ist erwartet: sie zeigt auf den Host. Kopieren Sie diese ganze Adresse aus der Adressleiste und fuegen Sie sie unten ein.",
+  "Open the sign in page": "Anmeldeseite oeffnen",
+  "Address your browser landed on": "Adresse, auf der Ihr Browser gelandet ist",
+  "Finish sign in": "Anmeldung abschliessen",
+  "Sign in on another computer instead": "Stattdessen an einem anderen Computer anmelden",
+  "Give the remote a name first.": "Geben Sie dem Remote zuerst einen Namen.",
+  "No sign in page to open. Start again.": "Keine Anmeldeseite zum Oeffnen. Beginnen Sie neu.",
+  "Could not open the sign in page. Copy this address by hand:": "Die Anmeldeseite konnte nicht geoeffnet werden. Kopieren Sie diese Adresse von Hand:",
+  "Could not finish the sign in.": "Die Anmeldung konnte nicht abgeschlossen werden.",
+  "Share the selected file. A FITS is shared as the rendered image, so it opens anywhere.": "Teilt die ausgewaehlte Datei. Eine FITS geht als gerendertes Bild, damit sie sich ueberall oeffnen laesst.",
+  "Sent to your device downloads": "An die Downloads des Geraets gesendet",
+  "This browser cannot share files. Downloading it instead.": "Dieser Browser kann keine Dateien teilen. Stattdessen wird heruntergeladen.",
+  "Share failed": "Teilen fehlgeschlagen"
 }

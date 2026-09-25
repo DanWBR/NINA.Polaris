@@ -12678,6 +12678,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <span class="files-icon-label">Download</span>
                     </button>
                     <button class="btn btn-sm btn-icon"
+                            @click="filesShareSelected()"
+                            :disabled="!filesCanShare()"
+                            title="Share the selected file. A FITS is shared as the rendered image, so it opens anywhere."
+                            aria-label="Share">
+                        <span class="files-icon">&#x21AA;</span>
+                        <span class="files-icon-label">Share</span>
+                    </button>
+                    <button class="btn btn-sm btn-icon"
                             @click="filesSendToCloud()"
                             :disabled="files.selectedPaths.length !== 1"
                             title="Upload the selected folder to the storage target. The local copy stays."
@@ -14935,23 +14943,59 @@ Windows  winget install Rclone.Rclone</code></pre>
                         </label>
                         <p class="hint">Use letters, numbers, dash, dot and underscore. No spaces or colons.</p>
 
-                        <!-- Providers that need a browser -->
+                        <!-- Providers that need a browser. Polaris drives the
+                             sign in from THIS browser: it runs the authorize on
+                             the host and takes back the address the provider
+                             redirects to, so no second machine is involved. -->
                         <div x-show="rcloneSetupNeedsBrowser()" x-cloak>
-                            <p class="hint">This host has no browser, so the provider sign in happens on your computer.</p>
-                            <p class="hint">1. On a computer with a browser, install rclone and run:</p>
-                            <div style="display:flex; gap:8px; align-items:center; margin:4px 0">
-                                <code x-text="rcloneSetup.command"></code>
-                                <button class="btn btn-sm" @click="copyAuthorizeCommand()">Copy command</button>
+                            <div x-show="!rcloneSetup.signInStarted">
+                                <p class="hint">Sign in here, in this browser. The host does not need one of its own.</p>
+                                <button class="btn btn-primary btn-sm" @click="rcloneSignInStart()"
+                                        :disabled="rcloneSetup.busy || !rcloneSetup.name">Sign in with the provider</button>
                             </div>
-                            <p class="hint">2. Sign in when the browser opens, then copy everything rclone prints.</p>
-                            <p class="hint">3. Paste it below and press Create remote.</p>
-                            <p class="hint" x-show="rcloneSetup.type === 'onedrive'" x-cloak>
-                                For OneDrive, run rclone config on your computer and paste the whole
-                                section it writes: the sign in alone does not carry the drive id.
-                            </p>
-                            <textarea class="input input-sm" rows="4"
-                                      x-model="rcloneSetup.paste"
-                                      placeholder="Paste the rclone output, or the remote block from your rclone.conf"></textarea>
+
+                            <div x-show="rcloneSetup.signInStarted" x-cloak>
+                                <p class="hint" x-show="rcloneSetup.signInLocal">
+                                    This browser is on the host, so the sign in finishes by itself.
+                                    Complete it in the tab that opened, then press Finish sign in.
+                                </p>
+                                <p class="hint" x-show="!rcloneSetup.signInLocal">
+                                    Sign in on the page that opened. Your browser then lands on an address
+                                    that cannot load, which is expected: it points at the host. Copy that
+                                    whole address from the address bar and paste it below.
+                                </p>
+                                <div style="display:flex; gap:8px; align-items:center; margin:6px 0">
+                                    <button class="btn btn-sm" @click="rcloneSignInOpen()">Open the sign in page</button>
+                                    <button class="btn btn-sm" @click="rcloneSignInCancel()">Start over</button>
+                                </div>
+                                <label x-show="!rcloneSetup.signInLocal">
+                                    <span class="lbl">Address your browser landed on</span>
+                                    <input class="input input-sm" type="text" x-model="rcloneSetup.redirectUrl"
+                                           placeholder="http://127.0.0.1:53682/?state=...&amp;code=...">
+                                </label>
+                                <button class="btn btn-primary btn-sm" @click="rcloneSignInFinish()"
+                                        :disabled="rcloneSetup.busy">Finish sign in</button>
+                            </div>
+
+                            <details style="margin-top:12px">
+                                <summary class="text-muted" style="font-size:12px">Sign in on another computer instead</summary>
+                                <p class="hint">1. On a computer with a browser, install rclone and run:</p>
+                                <div style="display:flex; gap:8px; align-items:center; margin:4px 0">
+                                    <code x-text="rcloneSetup.command"></code>
+                                    <button class="btn btn-sm" @click="copyAuthorizeCommand()">Copy command</button>
+                                </div>
+                                <p class="hint">2. Sign in when the browser opens, then copy everything rclone prints.</p>
+                                <p class="hint">3. Paste it below and press Create remote.</p>
+                                <p class="hint" x-show="rcloneSetup.type === 'onedrive'" x-cloak>
+                                    For OneDrive, run rclone config on your computer and paste the whole
+                                    section it writes: the sign in alone does not carry the drive id.
+                                </p>
+                                <textarea class="input input-sm" rows="4"
+                                          x-model="rcloneSetup.paste"
+                                          placeholder="Paste the rclone output, or the remote block from your rclone.conf"></textarea>
+                                <button class="btn btn-sm" @click="createRcloneRemote()"
+                                        :disabled="rcloneSetup.busy">Create remote</button>
+                            </details>
                         </div>
 
                         <!-- Providers that only need a form -->
@@ -14997,7 +15041,10 @@ Windows  winget install Rclone.Rclone</code></pre>
                         </div>
 
                         <div style="display:flex; gap:8px; align-items:center; margin-top:8px">
+                            <!-- The browser providers finish through the sign in
+                                 above; this is the form providers' button. -->
                             <button class="btn btn-primary btn-sm" @click="createRcloneRemote()"
+                                    x-show="!rcloneSetupNeedsBrowser()"
                                     :disabled="rcloneSetup.busy">Create remote</button>
                             <button class="btn btn-sm" @click="rcloneSetup.open = false">Cancel</button>
                             <span class="text-danger" style="font-size:12px" x-show="rcloneSetup.error"

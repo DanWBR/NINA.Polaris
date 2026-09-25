@@ -65,29 +65,41 @@ every invocation. It is written only through `rclone config`, never
 by hand. **Cloud credentials never enter the Polaris profile** and are
 never returned by the API.
 
-### Setting up a remote on a headless host
+### Setting up a remote, from the browser you already have open
 
-The host has no browser, so the provider sign in happens on your own
-computer.
+The host has no browser of its own, but you do, and that is enough.
+Polaris runs the sign in on the host and lets your browser do the part
+that needs a human.
 
 1. Settings -> Storage push -> kind **Cloud** -> **Set up a remote**.
 2. Pick the provider and give the remote a name (letters, numbers,
    dash, dot, underscore; no spaces and no colons).
-3. On a computer that has a browser, install rclone and run the
-   command the card shows, for example:
+3. Press **Sign in with the provider**. A tab opens on Google,
+   Microsoft or Dropbox.
+4. Sign in there. Your browser then lands on an address that cannot
+   load, something like `http://127.0.0.1:53682/?state=...&code=...`.
+   That is expected: the address points at the host, not at your
+   device.
+5. Copy that whole address out of the address bar, paste it into
+   **Address your browser landed on**, and press **Finish sign in**.
 
-   ```
-   rclone authorize "drive"
-   ```
+That last copy is the only manual step, and it exists because the
+provider will only redirect to rclone's own local address. Polaris
+replays it against the host for you.
 
-4. Sign in when the browser opens. rclone prints a block of text.
-5. Paste that into the card and press **Create remote**.
+**When Polaris is open on the host itself** (a mini PC with a screen),
+there is nothing to copy: the redirect reaches rclone directly, so you
+sign in and press **Finish sign in**.
 
-**OneDrive is the exception.** `rclone authorize` alone does not
-produce the `drive_id` and `drive_type` that OneDrive needs, so run
-`rclone config` on your computer instead, complete it there, and paste
-the whole `[name]` section out of your desktop `rclone.conf`. The
-paste box accepts either shape.
+The old recipe still works and is kept under **Sign in on another
+computer instead**: run `rclone authorize "drive"` on a machine that
+has rclone, and paste what it prints.
+
+**OneDrive is the exception.** The sign in alone does not produce the
+`drive_id` and `drive_type` that OneDrive needs. Use **Sign in on
+another computer instead**: run `rclone config` on a machine with
+rclone, complete it there, and paste the whole `[name]` section out of
+its `rclone.conf`. The paste box accepts either that or a bare token.
 
 WebDAV/Nextcloud, SFTP and S3 need no browser at all: they are a
 plain form in the same panel.
