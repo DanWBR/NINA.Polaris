@@ -1507,3 +1507,31 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
   border: 1px solid var(--warn, #e0a030); border-radius: 8px; background: rgba(224, 160, 48, 0.10); font-size: 12.5px; }
 .plan-hold strong { color: var(--warn, #e0a030); text-transform: uppercase; letter-spacing: 0.04em; font-size: 11px; }
 .plan-skipped { display: flex; gap: 6px; padding: 4px 10px; font-size: 12px; color: var(--text-muted); }
+/* INDI driver packages, inside the indi-web card. Collapsed by default:
+   installing a driver is a once-in-a-while thing, and the list costs an
+   apt-cache query per package to build. */
+.indi-drivers {
+    margin-top: 10px;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid var(--border, #2a3142);
+    border-radius: 6px;
+}
+.indi-drivers > summary {
+    cursor: pointer;
+    font-size: 13px;
+    list-style: none;
+}
+.indi-drivers > summary::-webkit-details-marker { display: none; }
+.indi-drivers[open] { background: rgba(255, 255, 255, 0.04); }
+.indi-drivers[open] > summary { margin-bottom: 8px; }
+.indi-drivers-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.indi-drivers-table td {
+    padding: 5px 6px;
+    border-bottom: 1px solid var(--border, #2a3142);
+    vertical-align: top;
+}
+.indi-drivers-table tr:last-child td { border-bottom: none; }
+.indi-drivers-action { white-space: nowrap; text-align: right; }
+.indi-drivers-summary { color: var(--text-muted, #8b94a8); font-size: 11px; margin-top: 2px; }
+.indi-drivers-error { font-size: 12px; margin-top: 6px; }

@@ -1,0 +1,22 @@
+// PolicyKit rule shipped by the polaris .deb. Lets the 'polaris' system user
+// start the templated INDI driver install unit:
+//
+//   systemctl start polaris-indi-install@indi-asi.service
+//
+// TWIN: ../localauthority/50-local.d/50-polaris-update.pkla already grants
+// manage-units broadly on polkit < 0.106, which covers this there.
+//
+// Scoped to instances of that one unit. What may be installed is decided by
+// the script (an INDI package name, and only when apt's own plan removes
+// nothing), not by whoever can reach this rule.
+polkit.addRule(function(action, subject) {
+    if (subject.user != "polaris") return;
+
+    if ((action.id == "org.freedesktop.systemd1.manage-units"
+            || action.id == "org.freedesktop.systemd1.manage-unit-files")) {
+        var unit = action.lookup("unit");
+        if (unit && unit.indexOf("polaris-indi-install@") === 0) {
+            return polkit.Result.YES;
+        }
+    }
+});

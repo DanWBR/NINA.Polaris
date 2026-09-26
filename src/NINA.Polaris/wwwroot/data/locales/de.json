@@ -5125,5 +5125,17 @@
   "Check the cable and the power on that device.": "Pruefen Sie Kabel und Stromversorgung dieses Geraets.",
   "The Polaris server restarted. Anything that was running has stopped.": "Der Polaris-Server wurde neu gestartet. Was lief, ist gestoppt.",
   "The Polaris server keeps restarting by itself. This is not your network: check the log on the host.": "Der Polaris-Server startet immer wieder von selbst neu. Das ist nicht Ihr Netzwerk: sehen Sie ins Log auf dem Host.",
-  "The Polaris server keeps restarting. This is not your network.": "Der Polaris-Server startet immer wieder neu. Das ist nicht Ihr Netzwerk."
+  "The Polaris server keeps restarting. This is not your network.": "Der Polaris-Server startet immer wieder neu. Das ist nicht Ihr Netzwerk.",
+  "Install drivers": "Treiber installieren",
+  "Reading the package list": "Paketliste wird gelesen",
+  "This host has no apt, so drivers cannot be installed from here.": "Dieser Host hat kein apt, daher können hier keine Treiber installiert werden.",
+  "INDI from the astronomy PPA.": "INDI aus dem Astronomie-PPA.",
+  "INDI from the distribution archive.": "INDI aus dem Distributions-Archiv.",
+  "No INDI installed yet.": "Noch kein INDI installiert.",
+  "Only packages built against it are offered, because mixing the two makes apt remove the one in use and PHD2 with it.": "Es werden nur Pakete angeboten, die gegen dieses INDI gebaut wurden, denn beim Mischen entfernt apt das gerade benutzte und PHD2 mit ihm.",
+  "not in the repositories": "nicht in den Repositories",
+  "No driver packages found in the configured repositories.": "In den konfigurierten Repositories wurden keine Treiberpakete gefunden.",
+  "Install driver": "Treiber installieren",
+  "The install did not go through.": "Die Installation wurde nicht durchgeführt.",
+  "Download and install this driver package on the host, then restart indi-web so the new drivers appear. Nothing already installed is removed: an install that would remove something is refused instead. Drivers reconnect, so do not do this during a capture.": "Lädt dieses Treiberpaket herunter, installiert es auf dem Host und startet indi-web neu, damit die neuen Treiber erscheinen. Nichts, was bereits installiert ist, wird entfernt: eine Installation, die etwas entfernen würde, wird abgelehnt. Die Treiber verbinden sich neu, also nicht während einer Aufnahme ausführen."
 }

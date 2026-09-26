@@ -8961,6 +8961,65 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             </button>
                         </div>
 
+                        <!-- Driver packages. Installing a driver used to mean an
+                             SSH session and apt, and getting it wrong meant apt
+                             pulling the INDI stack out from under a running rig.
+                             The list only offers what matches the INDI build that
+                             is installed, and every install is simulated first and
+                             refused if the plan removes anything. -->
+                        <details class="indi-drivers" x-show="indiWeb.status?.supportedOs" x-cloak
+                                 @toggle="if ($event.target.open) indiPackagesLoad()">
+                            <summary>Install drivers</summary>
+
+                            <p class="hint" x-show="indiPackages.loading">Reading the package list</p>
+
+                            <p class="hint" x-show="!indiPackages.loading &amp;&amp; !indiPackages.supported" x-cloak>
+                                This host has no apt, so drivers cannot be installed from here.
+                            </p>
+
+                            <template x-if="!indiPackages.loading &amp;&amp; indiPackages.supported">
+                                <div>
+                                    <p class="hint">
+                                        <span x-show="indiPackages.stack === 'ppa'">INDI from the astronomy PPA.</span>
+                                        <span x-show="indiPackages.stack === 'archive'" x-cloak>INDI from the distribution archive.</span>
+                                        <span x-show="indiPackages.stack === 'unknown'" x-cloak>No INDI installed yet.</span>
+                                        Only packages built against it are offered, because mixing the two
+                                        makes apt remove the one in use and PHD2 with it.
+                                    </p>
+
+                                    <table class="indi-drivers-table">
+                                        <tbody>
+                                            <template x-for="p in indiPackages.items" :key="'pkg-' + p.name">
+                                                <tr>
+                                                    <td>
+                                                        <code x-text="p.name"></code>
+                                                        <div class="indi-drivers-summary" x-text="p.summary"></div>
+                                                    </td>
+                                                    <td class="indi-drivers-action">
+                                                        <span class="text-ok" x-show="p.installed" x-cloak>
+                                                            installed <span x-text="p.version"></span>
+                                                        </span>
+                                                        <span class="text-muted" x-show="!p.installed &amp;&amp; !p.available" x-cloak>
+                                                            not in the repositories
+                                                        </span>
+                                                        <button class="btn btn-sm" x-show="!p.installed &amp;&amp; p.available" x-cloak
+                                                                :disabled="indiPackages.busy"
+                                                                @click="indiPackageInstall(p)">Install</button>
+                                                    </td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+
+                                    <p class="hint" x-show="indiPackages.items.length === 0" x-cloak>
+                                        No driver packages found in the configured repositories.
+                                    </p>
+                                    <p class="text-err indi-drivers-error" x-show="indiPackages.error" x-cloak
+                                       x-text="indiPackages.error"></p>
+                                </div>
+                            </template>
+                        </details>
+
                         <!-- Unsupported OS banner (Windows) -->
                         <div class="text-warn"
                              style="padding:12px;background:rgba(245,158,11,0.08);

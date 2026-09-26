@@ -1858,6 +1858,9 @@ function ninaApp() {
         // from any other tab.
         // USB re-enumeration (the Reset USB button in the INDI card).
         usb: { busy: false, lastResult: null },
+        // INDI driver packages (the Install drivers list in the INDI card).
+        indiPackages: { loading: false, busy: false, supported: false,
+                        stack: 'unknown', items: [], error: '' },
         // Which server process we are talking to. A change of id across a
         // reconnect means it restarted; see _noteServerInstance.
         serverInstance: { id: null, startedAt: null, restarts: 0, lastRestartAt: 0, recent: [] },
@@ -46514,6 +46517,68 @@ function ninaApp() {
         // which is exactly what you want after installing a driver package:
         // indi-web reads the driver catalogue once, at startup, so a newly
         // installed driver is invisible until it runs again.
+        // ----- INDI driver packages -----
+        //
+        // Installing a driver meant an SSH session and apt, which is fine until
+        // apt decides a driver from one INDI build needs the other INDI build,
+        // and makes room by removing the stack the rig is using along with
+        // PHD2. So the list only offers packages that match the INDI already
+        // installed, and the server simulates every install and refuses one
+        // whose plan removes anything. The refusal names what would have gone.
+        async indiPackagesLoad() {
+            if (this.indiPackages.loading) return;
+            this.indiPackages.loading = true;
+            this.indiPackages.error = '';
+            try {
+                const d = await this.apiGet('/api/indi/web/packages');
+                this.indiPackages.supported = !!d.supported;
+                this.indiPackages.stack = d.stack || 'unknown';
+                this.indiPackages.items = d.packages || [];
+            } catch (e) {
+                this.indiPackages.error = e?.message || String(e);
+            } finally {
+                this.indiPackages.loading = false;
+            }
+        },
+
+        async indiPackageInstall(pkg) {
+            if (!pkg?.name || this.indiPackages.busy) return;
+            const ok = await this._confirmAsync(
+                this.$t('Download and install this driver package on the host, then restart indi-web '
+                      + 'so the new drivers appear. Nothing already installed is removed: an install '
+                      + 'that would remove something is refused instead. Drivers reconnect, so do not '
+                      + 'do this during a capture.'),
+                { title: this.$t('Install driver') + ': ' + pkg.name,
+                  okLabel: this.$t('Install'),
+                  cancelLabel: this.$t('Cancel') });
+            if (!ok) return;
+
+            this.indiPackages.busy = true;
+            this.indiPackages.error = '';
+            try {
+                const resp = await this.apiPost(
+                    '/api/indi/web/packages/' + encodeURIComponent(pkg.name) + '/install',
+                    null, { expectStatuses: [400] });
+                const r = await resp.json();
+                if (resp.ok && r?.ok) {
+                    this.toast(r.message || (pkg.name + ' installed'), 'ok');
+                    await this.indiPackagesLoad();
+                    await this.indiWebStatusRefresh();
+                    this.indiWebEnsureIframe(true);
+                } else {
+                    // The refusal is the whole value of the feature, so it stays
+                    // on the card instead of in a toast that fades away.
+                    this.indiPackages.error = r?.error || this.$t('The install did not go through.');
+                    this.toast(this.indiPackages.error, 'error');
+                }
+            } catch (e) {
+                this.indiPackages.error = e?.message || String(e);
+                this.toastFail(this.$t('Install driver'), e);
+            } finally {
+                this.indiPackages.busy = false;
+            }
+        },
+
         // ----- USB re-enumeration -----
         //
         // A device dropping off the bus mid session is routine on an SBC, and

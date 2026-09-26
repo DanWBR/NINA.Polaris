@@ -221,6 +221,10 @@ fi
 if [ -f "$BUILD_DIR/opt/polaris/bin/polaris-solverdb-install.sh" ]; then
     chmod 0755 "$BUILD_DIR/opt/polaris/bin/polaris-solverdb-install.sh"
 fi
+# INDI driver install (polaris-indi-install@.service runs it as root).
+if [ -f "$BUILD_DIR/opt/polaris/bin/polaris-indi-install.sh" ]; then
+    chmod 0755 "$BUILD_DIR/opt/polaris/bin/polaris-indi-install.sh"
+fi
 # USB re-enumeration (polaris-usb-reset.service runs it as root).
 if [ -f "$BUILD_DIR/opt/polaris/bin/polaris-usb-reset.sh" ]; then
     chmod 0755 "$BUILD_DIR/opt/polaris/bin/polaris-usb-reset.sh"

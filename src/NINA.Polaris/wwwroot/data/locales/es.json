@@ -5125,5 +5125,17 @@
   "Check the cable and the power on that device.": "Revisa el cable y la alimentacion de ese dispositivo.",
   "The Polaris server restarted. Anything that was running has stopped.": "El servidor de Polaris se reinicio. Lo que estaba en marcha se detuvo.",
   "The Polaris server keeps restarting by itself. This is not your network: check the log on the host.": "El servidor de Polaris se reinicia solo una y otra vez. No es tu red: revisa el log en el host.",
-  "The Polaris server keeps restarting. This is not your network.": "El servidor de Polaris se reinicia una y otra vez. No es tu red."
+  "The Polaris server keeps restarting. This is not your network.": "El servidor de Polaris se reinicia una y otra vez. No es tu red.",
+  "Install drivers": "Instalar drivers",
+  "Reading the package list": "Leyendo la lista de paquetes",
+  "This host has no apt, so drivers cannot be installed from here.": "Este host no tiene apt, así que no se pueden instalar drivers desde aquí.",
+  "INDI from the astronomy PPA.": "INDI del PPA de astronomía.",
+  "INDI from the distribution archive.": "INDI del archivo de la distribución.",
+  "No INDI installed yet.": "Todavía no hay INDI instalado.",
+  "Only packages built against it are offered, because mixing the two makes apt remove the one in use and PHD2 with it.": "Solo se ofrecen paquetes compilados contra él, porque mezclar los dos hace que apt elimine el que está en uso, y PHD2 con él.",
+  "not in the repositories": "no está en los repositorios",
+  "No driver packages found in the configured repositories.": "No se encontraron paquetes de drivers en los repositorios configurados.",
+  "Install driver": "Instalar driver",
+  "The install did not go through.": "La instalación no se completó.",
+  "Download and install this driver package on the host, then restart indi-web so the new drivers appear. Nothing already installed is removed: an install that would remove something is refused instead. Drivers reconnect, so do not do this during a capture.": "Descarga e instala este paquete de driver en el host y reinicia indi-web para que aparezcan los nuevos drivers. No se elimina nada que ya esté instalado: una instalación que quitaría algo se rechaza. Los drivers se reconectan, así que no hagas esto durante una captura."
 }
