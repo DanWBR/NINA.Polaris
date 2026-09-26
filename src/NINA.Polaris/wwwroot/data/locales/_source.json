@@ -4521,5 +4521,17 @@
   "No driver packages found in the configured repositories.": "",
   "Install driver": "",
   "The install did not go through.": "",
-  "Download and install this driver package on the host, then restart indi-web so the new drivers appear. Nothing already installed is removed: an install that would remove something is refused instead. Drivers reconnect, so do not do this during a capture.": ""
+  "Download and install this driver package on the host, then restart indi-web so the new drivers appear. Nothing already installed is removed: an install that would remove something is refused instead. Drivers reconnect, so do not do this during a capture.": "",
+  "Bahtinov mask": "",
+  "Analysis box (px)": "",
+  "Unpin star": "",
+  "Go back to using the brightest star in the frame": "",
+  "Click the star on the frame to pin it. Without a pin the brightest star in the frame is used, and on a rich field that changes between frames.": "",
+  "Star pinned. Raise the analysis box if the spikes run outside the dashed square.": "",
+  "In focus": "",
+  "Near focus, fine-tune": "",
+  "Rotate inward": "",
+  "Rotate outward": "",
+  "Colour sensor: measured on a 2x2 luminance grid.": "",
+  "Mono frame: measured at full resolution.": ""
 }

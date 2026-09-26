@@ -154,9 +154,10 @@ Polaris analyses Bahtinov masks automatically:
 
 After each capture, Polaris:
 
-1. Finds the brightest star in the frame (or accepts a manual
-   `starX` / `starY` if you POST one to `/api/focus/bahtinov`).
-2. Crops a 200 px ROI around it.
+1. Finds the brightest star in the frame (or uses the pinned
+   `starX` / `starY` the client sends).
+2. Crops an ROI around it, 200 px across by default and
+   adjustable through `roiHalf` (32 to 400 px half-width).
 3. Sweeps through every angle 0-180° in 0.5° steps, integrating
    intensity along each line through the ROI centre.
 4. Picks the 3 strongest peaks (with a 30° minimum separation
@@ -187,6 +188,55 @@ The sidebar shows the offset with a direction cue:
 
 Colour coding: green when in focus, amber when fine-tuning,
 red when far off.
+
+### Bahtinov on the live video stream (VIDEO tab)
+
+The same analysis runs on the live stream, at ~4 readings per
+second, which is the practical way to use a mask: you turn the
+knob and watch the number move instead of waiting for a capture.
+
+Where: VIDEO tab -> Capture, sidebar, **Bahtinov mask** panel
+right below the focus sharpness bar. Start the stream, tick
+**On**.
+
+Why it works without a capture: the stream caches every frame it
+relays at FULL resolution (`ImageRelayService.RelayVideoJpegAsync`
+sets `LatestImage`; only the JPEG on the wire is downscaled), and
+`POST /api/focus/bahtinov` reads that cache. Asking for a capture
+instead would be refused: a running stream holds
+`CameraCaptureGate` exclusively and every other main-camera
+capture gets a 409.
+
+Panel controls, and the failure each one exists for:
+
+- **Click the frame to pin the star** (`starX` / `starY`, in frame
+  pixels). At video SNR on a rich field the brightest star changes
+  between frames and the offset jitters. **Unpin star** returns to
+  automatic.
+- **Analysis box** (`roiHalf`, frame px). The sweep only sees
+  inside the box. Long focal length, small pixels or a large
+  defocus push the spikes outside the default 200 px and the
+  reading degrades silently. A dashed square on the overlay shows
+  the boundary.
+
+Colour sensors: the frame is a mosaic, so a line integrated across
+it alternates colour filters every pixel, a 2 px ripple that
+confuses peak finding. Each 2x2 quad is averaged into one sample
+first (`BahtinovInput.PseudoLuminance2x2`), then the result is
+scaled back to frame pixels (`ToFrameScale`), so offsets are
+always in frame pixels and the in-focus threshold scales with
+them. The panel states which grid was used, and the response
+carries `mosaic` and `scale`.
+
+Exposure guidance: 0.1 to 0.5 s on a star of magnitude 3 or
+brighter is comfortable. The analysis integrates along each spike,
+so it tolerates a frame that looks noisy on screen much better
+than the eye does. If the star is faint, raise the stream
+exposure; there is no cap.
+
+The overlay lives on `videoBahtinovCanvas` above
+`videoCaptureCanvas` and inherits the frame's pan/zoom transform
+(`_pzApply`), so it stays registered to the star when zoomed.
 
 ### Common Manual Assist pitfalls
 

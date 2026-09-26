@@ -5139,5 +5139,17 @@
   "No driver packages found in the configured repositories.": "No se encontraron paquetes de drivers en los repositorios configurados.",
   "Install driver": "Instalar driver",
   "The install did not go through.": "La instalación no se completó.",
-  "Download and install this driver package on the host, then restart indi-web so the new drivers appear. Nothing already installed is removed: an install that would remove something is refused instead. Drivers reconnect, so do not do this during a capture.": "Descarga e instala este paquete de driver en el host y reinicia indi-web para que aparezcan los nuevos drivers. No se elimina nada que ya esté instalado: una instalación que quitaría algo se rechaza. Los drivers se reconectan, así que no hagas esto durante una captura."
+  "Download and install this driver package on the host, then restart indi-web so the new drivers appear. Nothing already installed is removed: an install that would remove something is refused instead. Drivers reconnect, so do not do this during a capture.": "Descarga e instala este paquete de driver en el host y reinicia indi-web para que aparezcan los nuevos drivers. No se elimina nada que ya esté instalado: una instalación que quitaría algo se rechaza. Los drivers se reconectan, así que no hagas esto durante una captura.",
+  "Bahtinov mask": "Máscara Bahtinov",
+  "Analysis box (px)": "Caja de análisis (px)",
+  "Unpin star": "Soltar la estrella",
+  "Go back to using the brightest star in the frame": "Volver a usar la estrella más brillante del cuadro",
+  "Click the star on the frame to pin it. Without a pin the brightest star in the frame is used, and on a rich field that changes between frames.": "Haz clic en la estrella del cuadro para fijarla. Sin fijarla se usa la más brillante del cuadro, y en un campo poblado esa cambia de un cuadro a otro.",
+  "Star pinned. Raise the analysis box if the spikes run outside the dashed square.": "Estrella fijada. Aumenta la caja de análisis si los spikes salen del cuadrado discontinuo.",
+  "In focus": "Enfocado",
+  "Near focus, fine-tune": "Cerca del foco, ajuste fino",
+  "Rotate inward": "Gira hacia dentro",
+  "Rotate outward": "Gira hacia fuera",
+  "Colour sensor: measured on a 2x2 luminance grid.": "Sensor color: medido en una rejilla de luminancia 2x2.",
+  "Mono frame: measured at full resolution.": "Cuadro mono: medido a resolución completa."
 }

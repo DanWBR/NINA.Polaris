@@ -5139,5 +5139,17 @@
   "No driver packages found in the configured repositories.": "In den konfigurierten Repositories wurden keine Treiberpakete gefunden.",
   "Install driver": "Treiber installieren",
   "The install did not go through.": "Die Installation wurde nicht durchgeführt.",
-  "Download and install this driver package on the host, then restart indi-web so the new drivers appear. Nothing already installed is removed: an install that would remove something is refused instead. Drivers reconnect, so do not do this during a capture.": "Lädt dieses Treiberpaket herunter, installiert es auf dem Host und startet indi-web neu, damit die neuen Treiber erscheinen. Nichts, was bereits installiert ist, wird entfernt: eine Installation, die etwas entfernen würde, wird abgelehnt. Die Treiber verbinden sich neu, also nicht während einer Aufnahme ausführen."
+  "Download and install this driver package on the host, then restart indi-web so the new drivers appear. Nothing already installed is removed: an install that would remove something is refused instead. Drivers reconnect, so do not do this during a capture.": "Lädt dieses Treiberpaket herunter, installiert es auf dem Host und startet indi-web neu, damit die neuen Treiber erscheinen. Nichts, was bereits installiert ist, wird entfernt: eine Installation, die etwas entfernen würde, wird abgelehnt. Die Treiber verbinden sich neu, also nicht während einer Aufnahme ausführen.",
+  "Bahtinov mask": "Bahtinov-Maske",
+  "Analysis box (px)": "Analysefeld (px)",
+  "Unpin star": "Stern freigeben",
+  "Go back to using the brightest star in the frame": "Wieder den hellsten Stern im Bild verwenden",
+  "Click the star on the frame to pin it. Without a pin the brightest star in the frame is used, and on a rich field that changes between frames.": "Klicken Sie im Bild auf den Stern, um ihn festzulegen. Ohne Festlegung wird der hellste Stern im Bild genommen, und in einem sternreichen Feld wechselt dieser von Bild zu Bild.",
+  "Star pinned. Raise the analysis box if the spikes run outside the dashed square.": "Stern festgelegt. Vergrößern Sie das Analysefeld, wenn die Spikes über das gestrichelte Quadrat hinauslaufen.",
+  "In focus": "Im Fokus",
+  "Near focus, fine-tune": "Nahe am Fokus, Feinabstimmung",
+  "Rotate inward": "Nach innen drehen",
+  "Rotate outward": "Nach außen drehen",
+  "Colour sensor: measured on a 2x2 luminance grid.": "Farbsensor: auf einem 2x2-Luminanzraster gemessen.",
+  "Mono frame: measured at full resolution.": "Mono-Bild: bei voller Auflösung gemessen."
 }
