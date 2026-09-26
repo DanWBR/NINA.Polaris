@@ -33622,17 +33622,6 @@ function ninaApp() {
             c.update('none');
         },
 
-        // MFOC-4: draw the Bahtinov result on the manual-focus overlay
-        // canvas. Always clears first (so toggling the checkbox off
-        // wipes stale art). Draws:
-        //   - cross marker at the picked star (StarX, StarY in frame
-        //     coords, scaled to canvas dimensions);
-        //   - the 3 spike lines clipped to the canvas;
-        //   - the central spike highlighted in the offset colour
-        //     (green/amber/red on a 0.5 / 1.5 px threshold);
-        //   - a small circle at the V-bisector intersection point so
-        //     the user sees exactly where the central spike should
-        //     pass through when in focus.
         // Draw a Bahtinov result over a frame canvas. Shared by the FOCUS
         // Manual Assist tab and the VIDEO stream, which differ only in which
         // canvas pair they own and where the frame size comes from. The
