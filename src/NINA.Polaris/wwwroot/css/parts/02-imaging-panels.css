@@ -2072,6 +2072,23 @@ label select.input-sm.select-compact {
     border: 1px solid var(--border);
     border-radius: 8px;
 }
+/* Bahtinov panel in the VIDEO sidebar. Shares .sharp-panel's box; the
+   extra rules are the toggle in the header, the direction line (the part
+   the operator actually reads while turning the knob) and the hints. */
+.baht-panel .sharp-pct { margin-left: auto; font-variant-numeric: tabular-nums; }
+.baht-toggle { font-size: 11px; gap: 4px; margin: 0; white-space: nowrap; }
+.baht-dir { font-size: 13px; font-weight: 600; padding: 2px 0; }
+.baht-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 2px 0;
+}
+.baht-row label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; }
+.baht-row input { width: 84px; }
+.baht-hint { font-size: 10.5px; line-height: 1.35; }
+
 .sharp-head {
     display: flex;
     align-items: center;

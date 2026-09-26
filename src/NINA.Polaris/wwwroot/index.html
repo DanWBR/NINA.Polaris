@@ -4043,8 +4043,13 @@
                                'frame-controls-hidden': frameControlsHidden }">
                     <div class="preview-area">
                         <canvas id="videoCaptureCanvas" class="preview-canvas"
-                                @click="videoCenterRoiAt($event)"
-                                :style="(video.roiSize > 0 && cameraStream.running) ? 'cursor: crosshair' : ''"></canvas>
+                                @click="videoCanvasClick($event)"
+                                :style="((video.roiSize > 0 || video.bahtinov.on) &amp;&amp; cameraStream.running) ? 'cursor: crosshair' : ''"></canvas>
+                        <!-- Bahtinov overlay. Same canvas pair pattern as the
+                             LIVE and Manual Assist views: pointer-events none,
+                             and _pzApply copies the pan/zoom transform onto it
+                             so the spike lines stay on the star when zoomed. -->
+                        <canvas id="videoBahtinovCanvas" class="preview-overlay-canvas"></canvas>
                         <div class="pz-toolbar" @pointerdown.stop @dblclick.stop @wheel.stop>
                             <button @click="_pzFit('videoCaptureCanvas')" title="Zoom to fit (whole frame)">⊡</button>
                             <button @click="_pzFitWidth('videoCaptureCanvas')" title="Fit width">↔</button>
@@ -4541,6 +4546,55 @@
                                 Higher is sharper. The number only compares against itself, so turn
                                 the focuser and keep the direction that grows it.
                             </div>
+                        </div>
+
+                        <!-- Bahtinov mask. The sharpness bar above says how
+                             close focus is; it cannot say which way to turn.
+                             With a mask on the aperture this does, and it runs
+                             on the stream's own frames, so it costs no exposure
+                             and does not fight the stream for the camera. -->
+                        <div class="sharp-panel baht-panel" x-show="cameraStream.running" x-cloak>
+                            <div class="sharp-head">
+                                <span class="sharp-label">Bahtinov mask</span>
+                                <span class="sharp-pct" :class="videoBahtinovTone()"
+                                      x-text="videoBahtinovLabel()"></span>
+                                <label class="checkbox-label baht-toggle">
+                                    <input type="checkbox" x-model="video.bahtinov.on"
+                                           @change="videoBahtinovToggle()">
+                                    <span>On</span>
+                                </label>
+                            </div>
+
+                            <div class="baht-dir" :class="videoBahtinovTone()" x-show="video.bahtinov.on"
+                                 x-cloak x-text="videoBahtinovDirection()"></div>
+
+                            <div class="baht-row" x-show="video.bahtinov.on" x-cloak>
+                                <label>Analysis box (px)
+                                    <input type="number" class="bs-num" min="32" max="400" step="10"
+                                           x-model.number="video.bahtinov.roiHalf">
+                                </label>
+                                <button class="btn btn-sm" @click="videoBahtinovClearStar()"
+                                        :disabled="video.bahtinov.starX === null"
+                                        title="Go back to using the brightest star in the frame">Unpin star</button>
+                            </div>
+
+                            <div class="text-muted baht-hint" x-show="video.bahtinov.on" x-cloak>
+                                <span x-show="video.bahtinov.starX === null">
+                                    Click the star on the frame to pin it. Without a pin the brightest
+                                    star in the frame is used, and on a rich field that changes between
+                                    frames.
+                                </span>
+                                <span x-show="video.bahtinov.starX !== null" x-cloak>
+                                    <span x-text="$t('Star pinned. Raise the analysis box if the spikes run outside the dashed square.')"></span>
+                                    <span x-text="'(' + video.bahtinov.starX + ', ' + video.bahtinov.starY + ')'"></span>
+                                </span>
+                            </div>
+
+                            <div class="text-muted baht-hint" x-show="video.bahtinov.on &amp;&amp; videoBahtinovGridHint()"
+                                 x-cloak x-text="videoBahtinovGridHint()"></div>
+
+                            <div class="text-err baht-hint" x-show="video.bahtinov.error" x-cloak
+                                 x-text="video.bahtinov.error"></div>
                         </div>
 
                         <!-- Clipping meter. The preview auto-stretches every

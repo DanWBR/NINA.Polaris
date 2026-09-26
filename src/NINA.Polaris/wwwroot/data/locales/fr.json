@@ -5137,5 +5137,17 @@
   "No driver packages found in the configured repositories.": "Aucun paquet de pilote trouvé dans les dépôts configurés.",
   "Install driver": "Installer le pilote",
   "The install did not go through.": "L'installation n'a pas abouti.",
-  "Download and install this driver package on the host, then restart indi-web so the new drivers appear. Nothing already installed is removed: an install that would remove something is refused instead. Drivers reconnect, so do not do this during a capture.": "Télécharge et installe ce paquet de pilote sur l'hôte, puis redémarre indi-web pour que les nouveaux pilotes apparaissent. Rien de ce qui est déjà installé n'est supprimé: une installation qui supprimerait quelque chose est refusée. Les pilotes se reconnectent, donc ne faites pas cela pendant une capture."
+  "Download and install this driver package on the host, then restart indi-web so the new drivers appear. Nothing already installed is removed: an install that would remove something is refused instead. Drivers reconnect, so do not do this during a capture.": "Télécharge et installe ce paquet de pilote sur l'hôte, puis redémarre indi-web pour que les nouveaux pilotes apparaissent. Rien de ce qui est déjà installé n'est supprimé: une installation qui supprimerait quelque chose est refusée. Les pilotes se reconnectent, donc ne faites pas cela pendant une capture.",
+  "Bahtinov mask": "Masque de Bahtinov",
+  "Analysis box (px)": "Zone d'analyse (px)",
+  "Unpin star": "Libérer l'étoile",
+  "Go back to using the brightest star in the frame": "Revenir à l'étoile la plus brillante de l'image",
+  "Click the star on the frame to pin it. Without a pin the brightest star in the frame is used, and on a rich field that changes between frames.": "Cliquez sur l'étoile dans l'image pour la fixer. Sans cela, la plus brillante de l'image est utilisée, et dans un champ riche elle change d'une image à l'autre.",
+  "Star pinned. Raise the analysis box if the spikes run outside the dashed square.": "Étoile fixée. Agrandissez la zone d'analyse si les aigrettes sortent du carré en pointillés.",
+  "In focus": "Au point",
+  "Near focus, fine-tune": "Proche du point, ajustement fin",
+  "Rotate inward": "Tournez vers l'intérieur",
+  "Rotate outward": "Tournez vers l'extérieur",
+  "Colour sensor: measured on a 2x2 luminance grid.": "Capteur couleur: mesuré sur une grille de luminance 2x2.",
+  "Mono frame: measured at full resolution.": "Image mono: mesurée à pleine résolution."
 }

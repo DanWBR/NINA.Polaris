@@ -203,6 +203,50 @@ once for your rig by watching the sign change as you turn the knob,
 then map "inward" to whichever way that was. Colour coding is green
 in focus, amber while fine-tuning, red when far off.
 
+### Bahtinov on the live video stream
+
+The same analysis runs on the VIDEO tab's live stream, which is the
+faster way to work: you turn the knob and watch the number move at
+four readings a second instead of once per capture.
+
+Start the stream, then tick **On** in the **Bahtinov mask** panel in
+the sidebar, below the focus sharpness bar. The panel shows the signed
+offset, the same direction cue as Manual Assist, and draws the spike
+lines, the V's intersection and a dashed square for the analysis box
+over the live frame. The overlay follows the pan and zoom of the
+frame, so you can zoom into the star and still see the geometry.
+
+Nothing is captured for this. A running stream owns the camera and
+every other capture is refused, which is exactly why the two features
+could not be used together before: the analysis reads the frame the
+stream has already delivered, at full resolution, so it costs no
+exposure and does not interrupt anything.
+
+Two controls exist because they are the two things that go wrong:
+
+- **Click the star to pin it.** At video signal levels on a rich
+  field, "the brightest star in the frame" changes from frame to
+  frame, and the reported offset jumps with it. A pinned star is
+  measured every time. **Unpin star** goes back to automatic.
+- **Analysis box.** The sweep only sees what is inside the box. At
+  long focal length, with small pixels, or when the focuser starts
+  far from focus, the spikes run outside the default 200 pixels and
+  the measurement degrades without saying so. The dashed square shows
+  where the boundary is; raise the box until the spikes fit.
+
+On a colour camera the frame is a mosaic, so every second pixel along
+a line belongs to a different colour filter. Polaris averages each
+2 by 2 group into one sample before the sweep, which removes that
+ripple at the cost of half the resolution. Offsets are still reported
+in frame pixels, and the panel says which grid the reading came from.
+
+Exposure is the same trade as always: long enough for the spikes to
+stand out of the noise, short enough to keep the stream responsive.
+Between 0.1 and 0.5 s on a star of magnitude 3 or brighter is a
+comfortable starting point. The analysis integrates along each spike,
+so it tolerates a frame that looks noisy on screen far better than
+your eye does.
+
 ### Manual Assist pitfalls
 
 **HFR does not move when I turn the knob.** The loop interval is

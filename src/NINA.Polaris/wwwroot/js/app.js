@@ -1751,6 +1751,15 @@ function ninaApp() {
         ctrlIndiCache: {},                        // "device prop elem" -> {value,type}
         _ctrlTopZ: 1,
         video: {
+            // Bahtinov mask on the live stream. The analysis runs server side
+            // on the stream's own cached frame, so this costs no exposure and
+            // never touches the capture gate the stream already owns.
+            // starX/starY pin the star: at video SNR on a rich field the
+            // brightest star changes between frames and the offset jitters.
+            // roiHalf is in frame pixels, raised for long focal length or a
+            // large defocus, when the spikes run past the default box.
+            bahtinov: { on: false, roiHalf: 100, starX: null, starY: null,
+                        result: null, error: '', busy: false },
             exposure: 0.05,
             gain: 200,
             binning: 1,
@@ -12446,6 +12455,7 @@ function ninaApp() {
             const overlayId = canvasId === 'liveCanvas' ? 'overlayCanvas'
                 : canvasId === 'previewCanvas' ? 'previewOverlayCanvas'
                 : canvasId === 'manualFocusCanvas' ? 'manualFocusOverlayCanvas'
+                : canvasId === 'videoCaptureCanvas' ? 'videoBahtinovCanvas'
                 : null;
             if (overlayId) {
                 const ov = document.getElementById(overlayId);
@@ -29293,6 +29303,148 @@ function ninaApp() {
             }
         },
 
+        // ----- Bahtinov mask on the live video stream -----
+        //
+        // Focusing by eye on a tablet is guesswork, and the sharpness bar next
+        // to this says magnitude but not direction. A Bahtinov mask says both:
+        // the central spike sits on one side of the V when you are inside
+        // focus and on the other when you are outside.
+        //
+        // No exposure is taken here. The stream already caches every frame it
+        // relays, at full resolution, so the analysis runs on that; asking for
+        // a capture would be refused anyway, since the stream owns the camera
+        // while it runs. The poll is deliberately slow: focusing is a hand
+        // movement, four readings a second is more than enough, and the sweep
+        // costs real CPU on an SBC that is also encoding video.
+        videoBahtinovToggle() {
+            if (!this.video.bahtinov.on) {
+                this._videoBahtinovStop();
+                this._renderVideoBahtinovOverlay();
+                return;
+            }
+            this.video.bahtinov.error = '';
+            this._videoBahtinovTick();
+        },
+
+        _videoBahtinovStop() {
+            if (this._videoBahtinovTimer) {
+                clearTimeout(this._videoBahtinovTimer);
+                this._videoBahtinovTimer = null;
+            }
+            this.video.bahtinov.result = null;
+        },
+
+        async _videoBahtinovTick() {
+            if (!this.video.bahtinov.on) return;
+            // The panel is gated on a running stream, and without one the
+            // cached frame is whatever some other path left behind, which
+            // would be a stale reading presented as live. Stop instead.
+            if (!this.cameraStream.running) {
+                this.video.bahtinov.on = false;
+                this._videoBahtinovStop();
+                this._renderVideoBahtinovOverlay();
+                return;
+            }
+            if (!this.video.bahtinov.busy) {
+                this.video.bahtinov.busy = true;
+                try {
+                    const b = this.video.bahtinov;
+                    const r = await this.apiPostJson('/api/focus/bahtinov', {
+                        starX: Number.isFinite(b.starX) ? Math.round(b.starX) : null,
+                        starY: Number.isFinite(b.starY) ? Math.round(b.starY) : null,
+                        roiHalf: Math.round(b.roiHalf || 100)
+                    });
+                    b.result = r && r.ok ? r : null;
+                    b.error = (r && r.ok) ? '' : ((r && r.error) || '');
+                    this._renderVideoBahtinovOverlay();
+                } catch (e) {
+                    this.video.bahtinov.error = e?.message || String(e);
+                } finally {
+                    this.video.bahtinov.busy = false;
+                }
+            }
+            if (!this.video.bahtinov.on) return;
+            this._videoBahtinovTimer = setTimeout(() => this._videoBahtinovTick(), 250);
+        },
+
+        // Click on the frame while Bahtinov is on: pin the star. The stream's
+        // frame is what the analyser sees, so the pick is in frame pixels, not
+        // sensor pixels (the ROI re-center click below works in sensor coords,
+        // which is why these are two different handlers).
+        videoBahtinovPickStar(ev) {
+            const canvas = ev.currentTarget;
+            const rect = canvas.getBoundingClientRect();
+            if (rect.width <= 0 || rect.height <= 0) return;
+            const fx = (ev.clientX - rect.left) / rect.width;
+            const fy = (ev.clientY - rect.top) / rect.height;
+            if (fx < 0 || fx > 1 || fy < 0 || fy > 1) return;
+            // The WS status block names the streamed frame geometry
+            // width/height; this is frame space, not sensor space.
+            const fw = this.cameraStream.width || 0;
+            const fh = this.cameraStream.height || 0;
+            if (fw <= 0 || fh <= 0) return;
+            this.video.bahtinov.starX = Math.round(fx * fw);
+            this.video.bahtinov.starY = Math.round(fy * fh);
+            this.video.bahtinov.error = '';
+        },
+
+        videoBahtinovClearStar() {
+            this.video.bahtinov.starX = null;
+            this.video.bahtinov.starY = null;
+        },
+
+        // One handler for the frame canvas: Bahtinov star pick when the tool
+        // is on, ROI re-center otherwise. Without this the two features would
+        // fight over the same click.
+        videoCanvasClick(ev) {
+            if (this.video.bahtinov.on) return this.videoBahtinovPickStar(ev);
+            return this.videoCenterRoiAt(ev);
+        },
+
+        _renderVideoBahtinovOverlay() {
+            const r = this.video.bahtinov.on ? this.video.bahtinov.result : null;
+            // Prefer the frame size the analysis itself reports: it is the
+            // frame those coordinates came from, even if the stream has since
+            // changed ROI or binning.
+            this._drawBahtinovOverlay(
+                'videoCaptureCanvas', 'videoBahtinovCanvas', r,
+                r?.frameWidth || this.cameraStream.width,
+                r?.frameHeight || this.cameraStream.height);
+        },
+
+        videoBahtinovLabel() {
+            const r = this.video.bahtinov.result;
+            if (!r || !r.ok) return '--';
+            const off = r.offsetPx || 0;
+            return (off >= 0 ? '+' : '') + off.toFixed(2) + ' px';
+        },
+
+        videoBahtinovDirection() {
+            return this._bahtinovDirection(this.video.bahtinov.result);
+        },
+
+        videoBahtinovTone() {
+            const r = this.video.bahtinov.result;
+            if (!r || !r.ok) return 'text-muted';
+            const abs = Math.abs(r.offsetPx || 0);
+            const thr = r.inFocusThresholdPx || 0.5;
+            if (abs <= thr) return 'text-ok';
+            if (abs <= thr * 3) return 'text-warn';
+            return 'text-err';
+        },
+
+        // Says which grid the sweep ran on. On a colour camera the frame is a
+        // mosaic and gets averaged 2x2 first, so the numbers are still frame
+        // pixels but come from half-resolution samples: worth stating, because
+        // it explains why the same rig reads coarser in colour than in mono.
+        videoBahtinovGridHint() {
+            const r = this.video.bahtinov.result;
+            if (!r || !r.ok) return '';
+            return r.mosaic
+                ? this.$t('Colour sensor: measured on a 2x2 luminance grid.')
+                : this.$t('Mono frame: measured at full resolution.');
+        },
+
         // Persist the current ROI on the active rig so the next session
         // (or a tab reload) restores it without the user re-picking. The
         // backend stores LastVideoRoi{W,H,X,Y,Size,Aspect} on the rig;
@@ -33464,20 +33616,15 @@ function ninaApp() {
             c.update('none');
         },
 
-        // MFOC-4: draw the Bahtinov result on the manual-focus overlay
-        // canvas. Always clears first (so toggling the checkbox off
-        // wipes stale art). Draws:
-        //   - cross marker at the picked star (StarX, StarY in frame
-        //     coords, scaled to canvas dimensions);
-        //   - the 3 spike lines clipped to the canvas;
-        //   - the central spike highlighted in the offset colour
-        //     (green/amber/red on a 0.5 / 1.5 px threshold);
-        //   - a small circle at the V-bisector intersection point so
-        //     the user sees exactly where the central spike should
-        //     pass through when in focus.
-        _renderBahtinovOverlay() {
-            const live = document.getElementById('manualFocusCanvas');
-            const ovr = document.getElementById('manualFocusOverlayCanvas');
+        // Draw a Bahtinov result over a frame canvas. Shared by the FOCUS
+        // Manual Assist tab and the VIDEO stream, which differ only in which
+        // canvas pair they own and where the frame size comes from. The
+        // overlay canvas carries the same pan/zoom transform as the frame
+        // canvas (see _pzApply), so everything here is in canvas content
+        // coordinates. Pass a null result to clear.
+        _drawBahtinovOverlay(liveId, overlayId, r, frameW, frameH) {
+            const live = document.getElementById(liveId);
+            const ovr = document.getElementById(overlayId);
             if (!live || !ovr) return;
             if (ovr.width !== live.width || ovr.height !== live.height) {
                 ovr.width = live.width || 1;
@@ -33485,11 +33632,10 @@ function ninaApp() {
             }
             const ctx = ovr.getContext('2d');
             ctx.clearRect(0, 0, ovr.width, ovr.height);
-            const r = this.manualFocus.bahtinovResult;
-            if (!this.manualFocus.showBahtinov || !r || !r.ok) return;
+            if (!r || !r.ok) return;
 
-            const fw = this.manualFocus.lastFrameWidth || live.width;
-            const fh = this.manualFocus.lastFrameHeight || live.height;
+            const fw = frameW || live.width;
+            const fh = frameH || live.height;
             if (!fw || !fh) return;
             const sx = ovr.width / fw;
             const sy = ovr.height / fh;
@@ -33513,6 +33659,17 @@ function ninaApp() {
             ctx.moveTo(cx, cy - ch); ctx.lineTo(cx, cy + ch);
             ctx.stroke();
 
+            // The analysis box, so an operator who sees a bad measurement can
+            // tell at a glance whether the spikes even fit inside it.
+            if (r.roiHalf > 0) {
+                ctx.strokeStyle = 'rgba(180, 200, 255, 0.35)';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([4, 4]);
+                ctx.strokeRect(cx - r.roiHalf * sx, cy - r.roiHalf * sy,
+                               r.roiHalf * 2 * sx, r.roiHalf * 2 * sy);
+                ctx.setLineDash([]);
+            }
+
             // Spike lines. Each spike is a line through (cx + rho*nx,
             // cy + rho*ny) at angleDeg, extended across the canvas.
             const spikes = [
@@ -33521,20 +33678,20 @@ function ninaApp() {
                 { ang: r.spike3Angle, rho: r.spike3Rho, central: r.centreSpikeIndex === 2 }
             ];
             const maxLen = Math.hypot(ovr.width, ovr.height);
-            for (const s of spikes) {
-                if (!Number.isFinite(s.ang)) continue;
-                const theta = s.ang * Math.PI / 180.0;
+            for (const sp of spikes) {
+                if (!Number.isFinite(sp.ang)) continue;
+                const theta = sp.ang * Math.PI / 180.0;
                 const dx = Math.cos(theta);
                 const dy = Math.sin(theta);
                 // Perpendicular offset by rho (in frame px, scaled).
-                const rhoCanvasX = -dy * (s.rho || 0) * sx;
-                const rhoCanvasY = dx * (s.rho || 0) * sy;
+                const rhoCanvasX = -dy * (sp.rho || 0) * sx;
+                const rhoCanvasY = dx * (sp.rho || 0) * sy;
                 const x0 = cx + rhoCanvasX - dx * maxLen;
                 const y0 = cy + rhoCanvasY - dy * maxLen;
                 const x1 = cx + rhoCanvasX + dx * maxLen;
                 const y1 = cy + rhoCanvasY + dy * maxLen;
                 ctx.beginPath();
-                if (s.central) {
+                if (sp.central) {
                     ctx.strokeStyle = color;
                     ctx.lineWidth = 2.5;
                 } else {
@@ -33567,6 +33724,13 @@ function ninaApp() {
             ctx.restore();
         },
 
+        _renderBahtinovOverlay() {
+            this._drawBahtinovOverlay(
+                'manualFocusCanvas', 'manualFocusOverlayCanvas',
+                this.manualFocus.showBahtinov ? this.manualFocus.bahtinovResult : null,
+                this.manualFocus.lastFrameWidth, this.manualFocus.lastFrameHeight);
+        },
+
         // MFOC-4: directional helper for the sidebar readout. We don't
         // know which physical rotation direction the user's focuser
         // maps to (depends on tube + filter + scope orientation), so
@@ -33574,15 +33738,18 @@ function ninaApp() {
         // +N or -N px from the V's intersection. User watches the
         // sign change as they adjust the knob and learns which way
         // their rig wants.
-        manualFocusBahtinovDirection() {
-            const r = this.manualFocus.bahtinovResult;
+        _bahtinovDirection(r) {
             if (!r || !r.ok) return '';
             const off = r.offsetPx || 0;
             const abs = Math.abs(off);
             const thr = r.inFocusThresholdPx || 0.5;
-            if (abs <= thr) return '✓ In focus';
-            if (abs <= thr * 3) return 'Near focus, fine-tune';
-            return off > 0 ? 'Rotate inward' : 'Rotate outward';
+            if (abs <= thr) return this.$t('In focus');
+            if (abs <= thr * 3) return this.$t('Near focus, fine-tune');
+            return off > 0 ? this.$t('Rotate inward') : this.$t('Rotate outward');
+        },
+        manualFocusBahtinovDirection() {
+            const d = this._bahtinovDirection(this.manualFocus.bahtinovResult);
+            return d === this.$t('In focus') ? '✓ ' + d : d;
         },
         manualFocusBahtinovClass() {
             const r = this.manualFocus.bahtinovResult;
