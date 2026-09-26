@@ -5122,5 +5122,8 @@
   "driver(s) restarted": "Treiber neu gestartet",
   "Came back": "Zurueckgekommen",
   "Did not come back": "Nicht zurueckgekommen",
-  "Check the cable and the power on that device.": "Pruefen Sie Kabel und Stromversorgung dieses Geraets."
+  "Check the cable and the power on that device.": "Pruefen Sie Kabel und Stromversorgung dieses Geraets.",
+  "The Polaris server restarted. Anything that was running has stopped.": "Der Polaris-Server wurde neu gestartet. Was lief, ist gestoppt.",
+  "The Polaris server keeps restarting by itself. This is not your network: check the log on the host.": "Der Polaris-Server startet immer wieder von selbst neu. Das ist nicht Ihr Netzwerk: sehen Sie ins Log auf dem Host.",
+  "The Polaris server keeps restarting. This is not your network.": "Der Polaris-Server startet immer wieder neu. Das ist nicht Ihr Netzwerk."
 }
