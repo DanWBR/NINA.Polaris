@@ -5127,5 +5127,17 @@
   "Check the cable and the power on that device.": "Verifiez le cable et l'alimentation de cet appareil.",
   "The Polaris server restarted. Anything that was running has stopped.": "Le serveur Polaris a redemarre. Ce qui etait en cours s'est arrete.",
   "The Polaris server keeps restarting by itself. This is not your network: check the log on the host.": "Le serveur Polaris redemarre tout seul en boucle. Ce n'est pas votre reseau: regardez le journal sur l'hote.",
-  "The Polaris server keeps restarting. This is not your network.": "Le serveur Polaris redemarre en boucle. Ce n'est pas votre reseau."
+  "The Polaris server keeps restarting. This is not your network.": "Le serveur Polaris redemarre en boucle. Ce n'est pas votre reseau.",
+  "Install drivers": "Installer des pilotes",
+  "Reading the package list": "Lecture de la liste des paquets",
+  "This host has no apt, so drivers cannot be installed from here.": "Cet hôte n'a pas apt, les pilotes ne peuvent donc pas être installés ici.",
+  "INDI from the astronomy PPA.": "INDI du PPA astronomie.",
+  "INDI from the distribution archive.": "INDI depuis les dépôts de la distribution.",
+  "No INDI installed yet.": "Aucun INDI installé pour le moment.",
+  "Only packages built against it are offered, because mixing the two makes apt remove the one in use and PHD2 with it.": "Seuls les paquets compilés pour cette version sont proposés, car mélanger les deux pousse apt à supprimer celle qui est utilisée, et PHD2 avec elle.",
+  "not in the repositories": "absent des dépôts",
+  "No driver packages found in the configured repositories.": "Aucun paquet de pilote trouvé dans les dépôts configurés.",
+  "Install driver": "Installer le pilote",
+  "The install did not go through.": "L'installation n'a pas abouti.",
+  "Download and install this driver package on the host, then restart indi-web so the new drivers appear. Nothing already installed is removed: an install that would remove something is refused instead. Drivers reconnect, so do not do this during a capture.": "Télécharge et installe ce paquet de pilote sur l'hôte, puis redémarre indi-web pour que les nouveaux pilotes apparaissent. Rien de ce qui est déjà installé n'est supprimé: une installation qui supprimerait quelque chose est refusée. Les pilotes se reconnectent, donc ne faites pas cela pendant une capture."
 }

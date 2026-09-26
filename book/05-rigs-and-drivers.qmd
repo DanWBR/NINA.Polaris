@@ -467,6 +467,43 @@ and the INDI Drivers section shows the running iframe immediately on
 first open. Without it (the default), indi-web only runs when you
 click **Start**.
 
+### Installing a driver package
+
+The driver you need is not always installed. A new camera, a focuser
+from a different maker, a GPS dongle: each lives in its own Debian
+package, and until that package is on the host, indi-web has nothing
+to offer in its driver list.
+
+Open **Install drivers**, the collapsible block just under the
+indi-web control row. It lists the driver packages Polaris can install
+on this host, each with a short note on what it covers, whether it is
+already installed and at which version, and an **Install** button when
+it is available and missing. Clicking it downloads and installs the
+package, then restarts indi-web so the new drivers appear in the
+embedded UI. Nothing else is touched, and no device moves.
+
+Two rules shape what the list contains, and both exist because of the
+same trap. INDI on Debian and Ubuntu comes from one of two places:
+the astronomy PPA, which ships the whole third-party driver set as a
+single `indi-3rdparty-drivers` package, or the distribution archive,
+which ships one package per family (`indi-asi`, `indi-toupbase`,
+`indi-svbony` and so on). The two builds cannot be installed side by
+side. Ask `apt` for a driver from the wrong one and it happily makes
+room by removing the INDI you are actually using, and PHD2 along with
+it, in the middle of a session.
+
+So Polaris first works out which of the two builds is installed, and
+offers only packages built against it. Then, before installing
+anything, it asks `apt` what it would do and reads the answer. If the
+plan removes so much as one package, the install is refused and the
+card tells you exactly what would have gone. An install from here can
+add software; it can never take any away.
+
+If the list is empty, or the driver you want is missing from it, the
+package is not in the repositories this host has configured. That is
+the case to solve at the terminal, with `apt` and the PPA
+instructions on the INDI site, rather than from this card.
+
 ### Restarting a wedged driver
 
 Sometimes a single INDI driver stops responding mid-session, most

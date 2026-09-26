@@ -274,6 +274,49 @@ polkit has not reloaded. Polaris then falls back to a child
 process, so the panel still works, but the drivers go down again
 on the next restart.
 
+## Installing a driver package
+
+**Install drivers**, the collapsible block right under the indi-web
+control row in the RIGS tab, installs INDI driver packages on the host
+without an SSH session. Each row shows the package, what hardware it
+covers, whether it is installed and at which version, and an
+**Install** button when it is missing and available. Installing one
+runs apt on the host and then restarts indi-web, so the new drivers
+show up in the embedded UI.
+
+Two safety rules, both from the same trap:
+
+- **Only packages built against the INDI already installed are
+  offered.** INDI comes either from the astronomy PPA (owns
+  `libindi1`, ships every third-party driver as one
+  `indi-3rdparty-drivers` package) or from the distribution archive
+  (owns `libindidriver1`, one package per family: `indi-asi`,
+  `indi-toupbase`, `indi-svbony`, and so on). The two cannot coexist.
+  Polaris detects which is installed and offers the matching set.
+- **Every install is simulated first and refused if the plan removes
+  anything.** `apt-get install -s` runs first; if its plan contains a
+  single `Remv` line, nothing is installed and the card names what
+  would have been removed. This is not hypothetical: installing the
+  archive's `indi-asi` on a PPA host removes `indi-bin`, `libindi1`,
+  `libindi-dev` and `phd2` in one command, and a rig loses its mount
+  driver mid-session.
+
+apt needs root and Polaris does not have it, so the install runs
+through the packaged `polaris-indi-install@<package>.service` unit,
+started over the polkit grant in
+`/etc/polkit-1/rules.d/50-polaris-indi-install.rules`. The script
+validates the package name and re-runs the simulation as root before
+committing, so the guard holds even if the service is started by hand.
+
+Endpoints: `GET /api/indi/web/packages` (the list plus the detected
+stack), `GET /api/indi/web/packages/{name}/plan` (what apt would do),
+`POST /api/indi/web/packages/{name}/install`. A refusal comes back as
+400 with the reason in `error`.
+
+If the driver you want is not in the list, the package is not in the
+repositories this host has configured. Fix that at the terminal, with
+apt and the PPA instructions from the INDI site.
+
 ## Restarting a wedged driver
 
 Sometimes a single INDI driver stops responding mid-session - most

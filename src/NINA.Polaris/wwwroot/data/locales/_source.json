@@ -4509,5 +4509,17 @@
   "Check the cable and the power on that device.": "",
   "The Polaris server restarted. Anything that was running has stopped.": "",
   "The Polaris server keeps restarting by itself. This is not your network: check the log on the host.": "",
-  "The Polaris server keeps restarting. This is not your network.": ""
+  "The Polaris server keeps restarting. This is not your network.": "",
+  "Install drivers": "",
+  "Reading the package list": "",
+  "This host has no apt, so drivers cannot be installed from here.": "",
+  "INDI from the astronomy PPA.": "",
+  "INDI from the distribution archive.": "",
+  "No INDI installed yet.": "",
+  "Only packages built against it are offered, because mixing the two makes apt remove the one in use and PHD2 with it.": "",
+  "not in the repositories": "",
+  "No driver packages found in the configured repositories.": "",
+  "Install driver": "",
+  "The install did not go through.": "",
+  "Download and install this driver package on the host, then restart indi-web so the new drivers appear. Nothing already installed is removed: an install that would remove something is refused instead. Drivers reconnect, so do not do this during a capture.": ""
 }
