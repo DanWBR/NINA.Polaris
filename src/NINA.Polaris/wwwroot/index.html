@@ -635,6 +635,17 @@
                 <span x-text="captureProgressLabel()"
                       style="font-variant-numeric:tabular-nums; text-transform:none"></span>
             </span>
+            <!-- The camera stream owns the camera while it runs, and a frame
+                 requested anywhere else is refused. Leaving it on by accident
+                 is what wedged a ZWO hard enough to need its power cycled, so
+                 this chip is visible in every tab and clicking it goes to
+                 VIDEO, where it can be stopped. -->
+            <span class="status-chip status-chip-stream" x-show="cameraStream.running" x-cloak
+                  @click="tab='video'"
+                  title="The video stream is using the camera. No other frame can be taken until it is stopped.">
+                <span class="chip-icon">&#9679;</span>
+                <span>STREAM</span>
+            </span>
             <span class="status-chip" x-show="cameraTemp !== null">
                 <span class="chip-icon">T</span>
                 <span x-text="cameraTemp !== null ? cameraTemp.toFixed(1) + '&deg;C' : '--'"></span>
@@ -8932,6 +8943,16 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     :disabled="indiWeb.busy || !indiWeb.status?.running"
                                     title="Stop and start indi-web. Every driver reconnects, and a driver installed since the last start shows up.">
                                 <span aria-hidden="true">↻</span> Restart
+                            </button>
+                            <!-- Re-enumerate the USB bus: the software version of
+                                 walking to the telescope and replugging. A camera
+                                 that stopped appearing or a serial adapter that
+                                 renumbered comes back from here. -->
+                            <button class="btn btn-sm" @click="usbReset()"
+                                    :disabled="usb.busy"
+                                    x-show="indiWeb.status?.supportedOs"
+                                    title="Unplug and replug every USB device, without walking to the telescope. Cameras, mount, focuser and wheel all reconnect, and the INDI drivers restart. The disk the system boots from is never touched.">
+                                <span aria-hidden="true">⇄</span> Reset USB
                             </button>
                             <button class="btn btn-sm" @click="indiWebStatusRefresh(); indiWebEnsureIframe(true)"
                                     :disabled="indiWeb.busy"

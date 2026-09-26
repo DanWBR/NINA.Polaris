@@ -1,0 +1,19 @@
+// PolicyKit rule shipped by the polaris .deb. Grants the 'polaris' system
+// user the ability to start the USB re-enumeration unit:
+//
+//   systemctl start polaris-usb-reset.service
+//
+// TWIN: ../localauthority/50-local.d/50-polaris-update.pkla already grants
+// manage-units broadly on polkit < 0.106, which covers this unit there.
+//
+// The privilege is narrow on purpose: the unit runs one script, and that
+// script will not touch the USB chain carrying the root filesystem.
+polkit.addRule(function(action, subject) {
+    if (subject.user != "polaris") return;
+
+    if ((action.id == "org.freedesktop.systemd1.manage-units"
+            || action.id == "org.freedesktop.systemd1.manage-unit-files")
+        && action.lookup("unit") == "polaris-usb-reset.service") {
+        return polkit.Result.YES;
+    }
+});

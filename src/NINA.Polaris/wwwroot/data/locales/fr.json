@@ -5110,5 +5110,17 @@
   "Share the selected file. A FITS is shared as the rendered image, so it opens anywhere.": "Partage le fichier selectionne. Un FITS part sous forme d'image rendue, pour s'ouvrir partout.",
   "Sent to your device downloads": "Envoye vers les telechargements de l'appareil",
   "This browser cannot share files. Downloading it instead.": "Ce navigateur ne partage pas de fichiers. Je le telecharge a la place.",
-  "Share failed": "Echec du partage"
+  "Share failed": "Echec du partage",
+  "STREAM": "STREAM",
+  "The video stream is using the camera. No other frame can be taken until it is stopped.": "Le flux video utilise la camera. Aucune autre image ne peut etre prise tant qu'il tourne.",
+  "Reset USB": "Reinitialiser l'USB",
+  "Every USB device disconnects and comes back: cameras, mount, focuser, filter wheel. The INDI drivers restart with them. The disk the system boots from is never touched. Do not do this during a capture.": "Tous les peripheriques USB se deconnectent et reviennent: cameras, monture, focuser, roue a filtres. Les pilotes INDI redemarrent avec eux. Le disque de demarrage n'est jamais touche. Ne faites pas cela pendant une pose.",
+  "Unplug and replug every USB device, without walking to the telescope. Cameras, mount, focuser and wheel all reconnect, and the INDI drivers restart. The disk the system boots from is never touched.": "Debranche et rebranche tous les peripheriques USB, sans aller jusqu'au telescope. Cameras, monture, focuser et roue se reconnectent, et les pilotes INDI redemarrent. Le disque de demarrage n'est jamais touche.",
+  "USB reset done": "Reinitialisation USB terminee",
+  "USB reset failed": "Echec de la reinitialisation USB",
+  "port(s) re-enumerated": "port(s) reenumere(s)",
+  "driver(s) restarted": "pilote(s) redemarre(s)",
+  "Came back": "Revenus",
+  "Did not come back": "Non revenus",
+  "Check the cable and the power on that device.": "Verifiez le cable et l'alimentation de cet appareil."
 }

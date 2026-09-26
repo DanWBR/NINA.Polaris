@@ -141,6 +141,13 @@ public class AutoFocusService {
                 throw new ArgumentException("StepSize must be positive");
             if (options.ExposureSeconds <= 0)
                 throw new ArgumentException("ExposureSeconds must be positive");
+            // Say it before the first move, not after a run that quietly took
+            // no frames. A video stream left on is exactly the case that made
+            // an autofocus fail with nothing to read anywhere.
+            if (CameraCaptureGate.ExclusiveOwner is { } holder)
+                throw new CameraBusyException(
+                    $"The {holder} is using the camera, so autofocus cannot take a frame. "
+                    + "Stop it and start autofocus again.");
 
             _cts = new CancellationTokenSource();
             State = AutoFocusState.Running;
@@ -231,10 +238,11 @@ public class AutoFocusService {
                 var m0 = MeasureFrame(img0, o, tracker);
                 if (m0.Measure > 0) initialHfr = m0.Measure;
             } catch (OperationCanceledException) { throw; }
+              catch (CameraBusyException) { throw; }   // never "continue" past this one
               catch (Exception ex) { _logger.LogDebug(ex, "AF initial-HFR frame failed (continuing)"); }
 
             // Hardware ROI: set the centered subframe ONCE for the whole run
-            // (never per frame — INDI drivers wedge when CCD_FRAME is
+            // (never per frame, INDI drivers wedge when CCD_FRAME is
             // rewritten every capture). Reset in finally. Falls back to the
             // software crop inside MeasureFrame when unsupported.
             if (o.InnerCropRatio < 1 && camera.Capabilities.SupportsRoi

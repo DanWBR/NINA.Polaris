@@ -4492,5 +4492,17 @@
   "Share the selected file. A FITS is shared as the rendered image, so it opens anywhere.": "",
   "Sent to your device downloads": "",
   "This browser cannot share files. Downloading it instead.": "",
-  "Share failed": ""
+  "Share failed": "",
+  "STREAM": "",
+  "The video stream is using the camera. No other frame can be taken until it is stopped.": "",
+  "Reset USB": "",
+  "Every USB device disconnects and comes back: cameras, mount, focuser, filter wheel. The INDI drivers restart with them. The disk the system boots from is never touched. Do not do this during a capture.": "",
+  "Unplug and replug every USB device, without walking to the telescope. Cameras, mount, focuser and wheel all reconnect, and the INDI drivers restart. The disk the system boots from is never touched.": "",
+  "USB reset done": "",
+  "USB reset failed": "",
+  "port(s) re-enumerated": "",
+  "driver(s) restarted": "",
+  "Came back": "",
+  "Did not come back": "",
+  "Check the cable and the power on that device.": ""
 }

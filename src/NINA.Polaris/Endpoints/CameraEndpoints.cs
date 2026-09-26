@@ -345,6 +345,12 @@ public static class CameraEndpoints {
                 });
             } catch (OperationCanceledException) {
                 return Results.Ok(new { status = "cancelled" });
+            } catch (CameraBusyException ex) {
+                // Something else holds the camera (the video stream). 409 with
+                // the sentence, not a 500 problem document the UI shows as
+                // "An error occurred".
+                return Results.Json(new { error = ex.Message },
+                    statusCode: StatusCodes.Status409Conflict);
             } catch (Exception ex) {
                 return Results.Problem(ex.Message);
             }
@@ -749,6 +755,11 @@ public static class CameraEndpoints {
                     mode = stream.Mode,
                     supportsNative = equip.Camera.Capabilities.SupportsVideoStream
                 });
+            } catch (CameraBusyException ex) {
+                // A capture is in flight: starting the stream on top of it is
+                // the same collision the other way round.
+                return Results.Json(new { error = ex.Message },
+                    statusCode: StatusCodes.Status409Conflict);
             } catch (Exception ex) { return Results.BadRequest(new { error = ex.Message }); }
         });
 

@@ -23,15 +23,51 @@ public static class SystemEndpoints {
     public static void MapSystemEndpoints(this WebApplication app) {
         var group = app.MapGroup("/api/system");
 
+        // ----- USB re-enumeration -------------------------------------
+        //
+        // A device that drops off the bus mid session (a camera that stops
+        // appearing, a focuser whose serial adapter renumbered) normally means
+        // a trip to the telescope to replug a cable. This does it from here.
+        // The listing comes from UsbScanService, which already knows how to
+        // read the bus (and whether a driver bound to each device, which is
+        // what tells a dead cable from a missing module).
+        group.MapGet("/usb", (UsbResetService reset, UsbScanService scan) => {
+            var s = scan.Scan();
+            return Results.Ok(new {
+                supported = reset.IsSupported,
+                devices = s.Devices.Select(d => new {
+                    id = d.Path, vendorProduct = d.VendorId + ":" + d.ProductId,
+                    name = d.Product, manufacturer = d.Manufacturer,
+                    speedMbps = d.SpeedMbps, driverBound = d.DriverBound
+                }),
+                serialPorts = s.SerialPorts.Select(p => new { byId = p.ByIdName, device = p.Device })
+            });
+        });
+
+        group.MapPost("/usb/reset", async (UsbResetService usb, CancellationToken ct) => {
+            var r = await usb.ResetAsync(ct);
+            if (!r.Ok) return Results.BadRequest(new { error = r.Error });
+            return Results.Ok(new {
+                ok = true,
+                method = r.Method,
+                reset = r.Reset,
+                skipped = r.Skipped,
+                appeared = r.Appeared,
+                disappeared = r.Disappeared,
+                after = r.After,
+                restartedDrivers = r.RestartedDrivers
+            });
+        });
+
         // Anonymous instance-identify endpoint for the mobile app's discovery
         // FALLBACK. On hotspot networks (the SBC's own AP, or the phone
         // tethering the SBC) mDNS multicast frequently never reaches the
         // phone, so ZeroConf finds nothing even though the server is one hop
-        // away — the app then probes candidate addresses (known origins +
+        // away, the app then probes candidate addresses (known origins +
         // well-known hotspot gateways) with a plain fetch. CORS-open on
         // purpose: the Capacitor shell runs on https://localhost and must be
         // able to READ this reply cross-origin. Exposes only what the mDNS
-        // TXT record already broadcasts to the whole LAN — no secrets, and
+        // TXT record already broadcasts to the whole LAN, no secrets, and
         // auth still gates everything else (exempted in AuthMiddleware).
         app.MapGet("/api/identify", (ProfileService profiles, MdnsService mdns, HttpContext ctx) => {
             ctx.Response.Headers.AccessControlAllowOrigin = "*";

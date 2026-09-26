@@ -42,6 +42,7 @@ cameraStream.gain
 cameraStream.height
 cameraStream.lastError
 cameraStream.mode
+cameraStream.owner
 cameraStream.running
 cameraStream.sharpness
 cameraStream.sharpnessBest

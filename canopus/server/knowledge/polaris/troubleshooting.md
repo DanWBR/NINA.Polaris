@@ -60,6 +60,31 @@ sudo usermod -aG dialout,plugdev $USER
 
 For udev rules per device (ZWO especially), check the vendor's installer.
 
+## A device vanished from the bus: Reset USB
+
+**Symptoms:** a camera that no longer appears in the picker, a focuser
+whose serial port is gone, a driver that answers every command with an
+I/O error because the port it had open renumbered.
+
+**The button:** RIGS, the INDI card, **Reset USB**. It re-enumerates
+the bus, which is what physically unplugging and replugging every
+cable would do, and then restarts the INDI drivers so none of them is
+left holding a port that no longer exists. The chain carrying the root
+filesystem is never touched, so a board that boots from a USB SSD
+cannot re-enumerate its own disk.
+
+**Read the result.** It names what came back and what did not:
+
+- something appeared: the kernel had lost track of it and the reset
+  recovered it
+- nothing changed: the device is electrically absent. A USB-C cable
+  with no data pairs comes back as a `USB Billboard Device` however
+  many times it is re-enumerated, and no amount of software will fix
+  a cable
+
+**Do not press it during a capture.** Every device disconnects and
+comes back, cameras included.
+
 ## USB device crashes mid-operation (under-voltage)
 
 **Symptoms:** focuser disconnects ("DISCONNECTED within 500ms of

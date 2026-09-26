@@ -221,6 +221,10 @@ fi
 if [ -f "$BUILD_DIR/opt/polaris/bin/polaris-solverdb-install.sh" ]; then
     chmod 0755 "$BUILD_DIR/opt/polaris/bin/polaris-solverdb-install.sh"
 fi
+# USB re-enumeration (polaris-usb-reset.service runs it as root).
+if [ -f "$BUILD_DIR/opt/polaris/bin/polaris-usb-reset.sh" ]; then
+    chmod 0755 "$BUILD_DIR/opt/polaris/bin/polaris-usb-reset.sh"
+fi
 # Capture-storage setup (polaris-storage-prep.service runs it as root).
 if [ -f "$BUILD_DIR/opt/polaris/bin/polaris-storage-prep.sh" ]; then
     chmod 0755 "$BUILD_DIR/opt/polaris/bin/polaris-storage-prep.sh"
