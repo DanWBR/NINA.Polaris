@@ -668,13 +668,27 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Studio.FrameAnalysisService>
 // can sanity-check token+domain without burning a Let's Encrypt
 // rate-limit budget.
 builder.Services.AddSingleton<NINA.Polaris.Services.Tls.DuckDnsClient>();
-// Host CPU + memory sampler. AddResourceMonitoring wires the
-// platform-specific provider (Job Objects on Windows, cgroups on
-// Linux). HostMetricsService loops in the background, exposes the
-// latest snapshot via the Latest property which StatusStreamHandler
+// Host CPU + memory sampler. HostMetricsService loops in the background
+// and exposes the latest snapshot via Latest, which StatusStreamHandler
 // folds into the per-second WS broadcast.
+//
+// AddResourceMonitoring is used on Windows only, where its Job Objects
+// provider is fine. On Linux it is NOT: its cgroup v2 parser computes
+// memory as `memory.current - inactive_file` and throws when that is
+// negative, which an idle desktop does routinely. The throw happens in
+// ResourceMonitorService's constructor while the host starts, so the
+// process exits before it ever listens, systemd restarts it five seconds
+// later, and the browser reconnects and drops for ever. A user on a fresh
+// Lubuntu 26.04 reported it as a network problem, which is exactly what it
+// looks like from the outside. /proc gives us the same two numbers with no
+// cgroup arithmetic, for the whole host, which is what the activity bar is
+// showing anyway.
 #pragma warning disable EXTOBS0001
-if (!OperatingSystem.IsMacOS())
+if (OperatingSystem.IsLinux())
+{
+    builder.Services.AddSingleton<IResourceMonitor, ProcResourceMonitor>();
+}
+else if (!OperatingSystem.IsMacOS())
 {
     builder.Services.AddResourceMonitoring();
 }

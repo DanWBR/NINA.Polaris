@@ -42,6 +42,117 @@ internal sealed class MacResourceMonitor : IResourceMonitor {
 }
 
 /// <summary>
+/// Host CPU and memory on Linux, read straight from /proc.
+///
+/// This exists because AddResourceMonitoring() killed the server on ordinary
+/// desktop installs. Its cgroup v2 parser computes memory as
+/// <c>memory.current - inactive_file</c> and THROWS when that goes negative,
+/// which happens on an idle machine with a lot of page cache. The throw comes
+/// out of ResourceMonitorService's constructor while the host is starting, so
+/// it is not catchable from here: the process exits, systemd restarts it five
+/// seconds later, and the operator sees the browser reconnect and drop over
+/// and over. Reported from a fresh Lubuntu 26.04 on wired ethernet, where it
+/// looked exactly like a network fault and was not one.
+///
+/// /proc/stat and /proc/meminfo are what the activity bar wants anyway: the
+/// whole host, not this process's cgroup. A container-scoped number would be
+/// the wrong thing to show on a telescope controller.
+/// </summary>
+internal sealed class ProcResourceMonitor : IResourceMonitor {
+    private readonly object _lock = new();
+    private ulong _prevIdle;
+    private ulong _prevTotal;
+
+    public ResourceUtilization GetUtilization(TimeSpan window) {
+        double cpuPercent = ReadCpuPercent();
+        var (totalBytes, availableBytes) = ReadMemory();
+        long usedBytes = Math.Max(0, totalBytes - availableBytes);
+
+        ulong total = (ulong)(totalBytes > 0 ? totalBytes : 1);
+        return new ResourceUtilization(
+            cpuUsedPercentage: cpuPercent,
+            memoryUsedInBytes: (ulong)usedBytes,
+            systemResources: new SystemResources(
+                guaranteedCpuUnits: Environment.ProcessorCount,
+                maximumCpuUnits: Environment.ProcessorCount,
+                guaranteedMemoryInBytes: total,
+                maximumMemoryInBytes: total));
+    }
+
+    /// <summary>System-wide CPU since the previous call, from the aggregate
+    /// line of /proc/stat. The first call has nothing to compare against and
+    /// reports 0, which the sampler simply shows for one tick.</summary>
+    private double ReadCpuPercent() {
+        try {
+            string? line = null;
+            using (var reader = new StreamReader("/proc/stat")) line = reader.ReadLine();
+            if (line == null || !line.StartsWith("cpu ", StringComparison.Ordinal)) return 0;
+
+            var (total, idle) = ParseCpuLine(line);
+            if (total == 0) return 0;
+
+            lock (_lock) {
+                double busy = BusyPercent(_prevTotal, _prevIdle, total, idle);
+                _prevTotal = total; _prevIdle = idle;
+                return busy;
+            }
+        } catch {
+            // A metric is never worth taking the server down for, which is the
+            // whole lesson of this file.
+            return 0;
+        }
+    }
+
+    /// <summary>The aggregate cpu line of /proc/stat split into busy-plus-idle
+    /// and idle. Idle counts BOTH idle and iowait: a board waiting on an SD
+    /// card is not busy, and counting iowait as work made a Pi doing nothing
+    /// but writing a frame look pegged.</summary>
+    internal static (ulong Total, ulong Idle) ParseCpuLine(string? line) {
+        if (string.IsNullOrWhiteSpace(line)) return (0, 0);
+        var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length < 5 || !parts[0].StartsWith("cpu", StringComparison.Ordinal)) return (0, 0);
+        ulong total = 0, idle = 0;
+        // user nice system idle iowait irq softirq steal ...
+        for (int i = 1; i < parts.Length; i++) {
+            if (!ulong.TryParse(parts[i], out var v)) break;
+            total += v;
+            if (i == 4 || i == 5) idle += v;
+        }
+        return (total, idle);
+    }
+
+    /// <summary>Busy percentage between two /proc/stat readings. Zero when
+    /// there is nothing to compare, or when the counters went backwards.</summary>
+    internal static double BusyPercent(ulong prevTotal, ulong prevIdle, ulong total, ulong idle) {
+        if (prevTotal == 0 || total <= prevTotal) return 0;
+        double dTotal = total - prevTotal;
+        double dIdle = idle >= prevIdle ? idle - prevIdle : 0;
+        return Math.Clamp(100.0 * (dTotal - dIdle) / dTotal, 0, 100);
+    }
+
+    private static (long Total, long Available) ReadMemory() {
+        try {
+            long total = 0, available = 0;
+            foreach (var line in File.ReadLines("/proc/meminfo")) {
+                if (line.StartsWith("MemTotal:", StringComparison.Ordinal))
+                    total = ParseKb(line);
+                else if (line.StartsWith("MemAvailable:", StringComparison.Ordinal))
+                    available = ParseKb(line);
+                if (total > 0 && available > 0) break;
+            }
+            return (total, available);
+        } catch {
+            return (0, 0);
+        }
+    }
+
+    private static long ParseKb(string line) {
+        var parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length >= 2 && long.TryParse(parts[1], out var kb) ? kb * 1024 : 0;
+    }
+}
+
+/// <summary>
 /// Background sampler for host-level CPU + memory metrics. Powers the
 /// activity bar at the bottom of the UI. Samples every 2 seconds
 /// (the minimum window <see cref="IResourceMonitor.GetUtilization"/>
