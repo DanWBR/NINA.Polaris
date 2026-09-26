@@ -19015,8 +19015,14 @@ Windows  winget install Rclone.Rclone</code></pre>
         <span x-show="power.stopping">
             Polaris server stopped. Start it again on the host to reconnect.
         </span>
-        <span x-show="!power.stopping && (connectionLost || link.state === 'offline')">
+        <span x-show="!power.stopping && (connectionLost || link.state === 'offline') && !serverRestartLoop()">
             Connection to server lost. Reconnecting...
+        </span>
+        <!-- Two restarts inside ten minutes is not a flaky link, it is a
+             server that keeps dying. Saying "connection lost" there sends the
+             operator to their router for a day. -->
+        <span x-show="!power.stopping && (connectionLost || link.state === 'offline') && serverRestartLoop()">
+            The Polaris server keeps restarting. This is not your network.
         </span>
         <span x-show="!connectionLost && link.state === 'slow' && !linkBlamesHost()">
             The network to the host is slow right now.

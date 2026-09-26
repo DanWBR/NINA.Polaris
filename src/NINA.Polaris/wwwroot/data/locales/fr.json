@@ -5124,5 +5124,8 @@
   "driver(s) restarted": "pilote(s) redemarre(s)",
   "Came back": "Revenus",
   "Did not come back": "Non revenus",
-  "Check the cable and the power on that device.": "Verifiez le cable et l'alimentation de cet appareil."
+  "Check the cable and the power on that device.": "Verifiez le cable et l'alimentation de cet appareil.",
+  "The Polaris server restarted. Anything that was running has stopped.": "Le serveur Polaris a redemarre. Ce qui etait en cours s'est arrete.",
+  "The Polaris server keeps restarting by itself. This is not your network: check the log on the host.": "Le serveur Polaris redemarre tout seul en boucle. Ce n'est pas votre reseau: regardez le journal sur l'hote.",
+  "The Polaris server keeps restarting. This is not your network.": "Le serveur Polaris redemarre en boucle. Ce n'est pas votre reseau."
 }

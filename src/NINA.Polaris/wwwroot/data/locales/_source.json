@@ -4506,5 +4506,8 @@
   "driver(s) restarted": "",
   "Came back": "",
   "Did not come back": "",
-  "Check the cable and the power on that device.": ""
+  "Check the cable and the power on that device.": "",
+  "The Polaris server restarted. Anything that was running has stopped.": "",
+  "The Polaris server keeps restarting by itself. This is not your network: check the log on the host.": "",
+  "The Polaris server keeps restarting. This is not your network.": ""
 }

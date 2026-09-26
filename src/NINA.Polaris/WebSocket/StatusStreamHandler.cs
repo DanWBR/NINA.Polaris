@@ -102,7 +102,15 @@ public static class StatusStreamHandler {
         using var sendGate = new SemaphoreSlim(1, 1);
 
         try {
-            await SendJsonAsync(ws, new { type = "connected", stream = "status" }, sendGate, cts.Token);
+            // instanceId + startedAt let the client tell "the network blinked"
+            // from "the server went away and came back": the socket closes the
+            // same way for both, but a different id means a different process,
+            // so whatever was running stopped. See ServerInstance.
+            await SendJsonAsync(ws, new {
+                type = "connected", stream = "status",
+                instanceId = ServerInstance.Id,
+                startedAt = ServerInstance.StartedAtUtc
+            }, sendGate, cts.Token);
         } catch {
             return;
         }

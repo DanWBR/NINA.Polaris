@@ -1859,6 +1859,9 @@ function ninaApp() {
         // from any other tab.
         // USB re-enumeration (the Reset USB button in the INDI card).
         usb: { busy: false, lastResult: null },
+        // Which server process we are talking to. A change of id across a
+        // reconnect means it restarted; see _noteServerInstance.
+        serverInstance: { id: null, startedAt: null, restarts: 0, lastRestartAt: 0, recent: [] },
         videoStack: null,         // { id, phase, framesAnalyzed, ..., done }
         _stackDonePromptedId: null, // job id we've already offered to open in Studio
 
@@ -8868,7 +8871,9 @@ function ninaApp() {
                 // reasonable byte-count approximation for ASCII payload.
                 if (typeof evt.data === 'string') this._netRx(evt.data.length);
                 try {
-                    this.handleStatusMessage(JSON.parse(evt.data));
+                    const msg = JSON.parse(evt.data);
+                    if (msg && msg.type === 'connected') this._noteServerInstance(msg);
+                    this.handleStatusMessage(msg);
                 } catch (e) { }
             };
 
@@ -9025,6 +9030,59 @@ function ninaApp() {
             return '';
         },
 
+        // ---- Did the server restart, or did the link drop? ----------------
+        //
+        // From here the two are identical: the socket closes and later opens
+        // again. The server hands us an id minted at process start, so a
+        // different id on reconnect means a different process: the old one
+        // exited and anything it was running stopped.
+        //
+        // Worth the trouble because the wrong answer costs a night. A user on
+        // a fresh Lubuntu chased his ethernet for a day while the server was
+        // crashing at startup and systemd restarted it every five seconds; the
+        // browser saw every one of those restarts and called them a network
+        // problem.
+        _noteServerInstance(msg) {
+            const id = msg && msg.instanceId;
+            if (!id) return;                       // older server: nothing to compare
+            const si = this.serverInstance;
+            const previous = si.id;
+            si.id = id;
+            si.startedAt = msg.startedAt || null;
+            if (!previous || previous === id) return;   // first sight, or the same process
+
+            // Only restarts close together mean a loop; two deliberate
+            // restarts an hour apart are just two restarts.
+            const now = Date.now();
+            si.recent = (si.recent || []).filter(t => now - t < 10 * 60 * 1000);
+            si.recent.push(now);
+            si.restarts++;
+            si.lastRestartAt = now;
+
+            // The generic "reconnected" toast is waiting on a timer precisely
+            // so this one can take its place.
+            clearTimeout(this._reconnectToastTimer);
+            this._reconnectToastTimer = null;
+
+            if (si.recent.length >= 2) {
+                this.toast(this.$t('The Polaris server keeps restarting by itself. This is not your network: check the log on the host.'), 'error');
+                this._logFromClient('error', 'server restart loop detected',
+                                    { source: 'link', restarts: si.recent.length });
+            } else {
+                this.toast(this.$t('The Polaris server restarted. Anything that was running has stopped.'), 'warn');
+                this._logFromClient('warn', 'server restarted (new instance id)',
+                                    { source: 'link' });
+            }
+        },
+
+        /// True while the server has restarted more than once in the last ten
+        /// minutes, which the banner uses to stop blaming the network.
+        serverRestartLoop() {
+            const r = (this.serverInstance.recent || []);
+            const now = Date.now();
+            return r.filter(t => now - t < 10 * 60 * 1000).length >= 2;
+        },
+
         // Single entry point for "can we reach the server". Debounces the
         // alarm: see the comment on `connectionLost`. Recovery is instant,
         // because a banner that outlives the outage is its own kind of lie.
@@ -9035,7 +9093,15 @@ function ninaApp() {
                 this.serverReachable = true;
                 if (this.connectionLost) {
                     this.connectionLost = false;
-                    this.toast('Server reconnected', 'ok');
+                    // Deferred by a beat: the handshake that says WHICH server
+                    // we reached lands right after the socket opens, and if it
+                    // turns out to be a new process the operator should read
+                    // that instead of a cheerful "reconnected".
+                    clearTimeout(this._reconnectToastTimer);
+                    this._reconnectToastTimer = setTimeout(() => {
+                        this._reconnectToastTimer = null;
+                        this.toast(this.$t('Server reconnected'), 'ok');
+                    }, 1500);
                     // The driver catalogues are loaded ONCE per session, so a
                     // request that died mid-outage left its dropdown empty for
                     // good. Worse, loadMountDrivers falls back to a one-entry
