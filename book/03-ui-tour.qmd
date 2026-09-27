@@ -177,6 +177,13 @@ tap-to-expand steppers, a large shutter to start and stop, and, when a
 mount is connected, a movement pad with a slew-speed slider and
 **Home**, **Park**, and **Sync** buttons, each behind a confirmation.
 
+Sky is the same map as the full UI with a search box, a card for the
+selected object carrying **Slew & Center** and **GoTo only**, and the
+movement pad in the corner, so a GoTo that lands slightly off the mark
+is nudged onto the target without leaving the map. The pad starts
+collapsed to its side rail and expands with the arrows icon, which
+keeps the sky clear until you want it.
+
 **Setup** gets the rig online and covers the basics without leaving
 Field Mode. It lists your devices with a dropdown to choose each one
 and a single **Connect all**, a gear beside each device that opens

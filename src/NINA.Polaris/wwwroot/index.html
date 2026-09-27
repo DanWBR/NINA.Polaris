@@ -22324,7 +22324,12 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
         <button class="bs-focusreopen" x-show="(basicScreen==='focus' || basicScreen==='video') && !focusOpen" x-cloak @click="focusOpen=true">&#9737; focus</button>
 
-        <div class="bs-mount" x-show="basicScreen==='preview' || basicScreen==='video'" :class="{ 'mp-collapsed': !mountOpen }">
+        <!-- Mount pad. Also on SKY: after a GoTo the object is rarely dead
+             centre, and the pad is how you nudge it there without leaving the
+             map. It sits bottom left, clear of the search box (top left) and
+             the target card (top right), and starts collapsed to the side
+             rail so it never covers the sky. -->
+        <div class="bs-mount" x-show="basicScreen==='preview' || basicScreen==='video' || basicScreen==='sky'" :class="{ 'mp-collapsed': !mountOpen }">
             <div class="bs-side">
                 <button class="bs-icn" style="width:38px;height:38px" @click="mountOpen=!mountOpen" title="Mount pad"><span class="bs-big">&#10530;</span></button>
                 <button class="bs-pill" :class="mount.tracking ? 'on' : ''" @click="toggleTracking()">Track</button>
