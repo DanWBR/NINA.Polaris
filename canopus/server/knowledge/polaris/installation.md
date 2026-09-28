@@ -210,16 +210,39 @@ The folder structure is:
 ```
 {ImageOutputDir}/
   {RigName}/
-    lights/{Target}/{Filter}/{ISO-timestamp}/
-    calibration/dark/dark_{ExposureSec}s_{Gain}_{Temp}C.fits
-    calibration/flat/{Filter}/flat_{Timestamp}.fits
-    calibration/bias/bias_{Timestamp}.fits
-    stacked/                         (saved live stacks)
-    snaps/{Filter}_{Date}/           (from PREVIEW with Save on)
-    planetary/{Target}/{ts}.ser      (from the VIDEO tab)
-    siril/                           (Siril output)
-    bge/                             (GraXpert BGE output)
+    {Target}/lights/{Night}/         one object's subs, night by night
+    {Target}/aux/{Night}/            the second camera, same object
+    {Target}/stacked/{Night}/        integrations you asked for
+    {Target}/planetary/              SER clips and their stacks
+    calibration/dark/{Exposure}s_g{Gain}/
+    calibration/flat/{Filter}_g{Gain}/
+    calibration/bias/g{Gain}/
+    calibration/masters/             masters built in Studio
+    snaps/{Filter}_{Night}/          from PREVIEW with Save on
+    calibrated/ integrated/ processed/   Studio output
 ```
+
+**Folder layout** (Settings, Image Output) sets the order of the first two
+levels under the rig:
+
+| Value | A light lands at |
+| --- | --- |
+| `target-first` (default) | `{rig}/M42/lights/2026-09-28/` |
+| `night-first` | `{rig}/20260928/M42/lights/` |
+| `night-first-dashed` | `{rig}/2026-09-28/M42/lights/` |
+
+Aux frames and stacks follow it; calibration never does, it stays rig-level so
+masters are reusable across nights. The night is the astronomical night, with a
+local-midday rollover, so frames either side of midnight stay in one folder.
+Changing the setting does not move anything already written and Studio indexes
+both shapes, because it reads FITS headers rather than path segments.
+
+The default file name is
+`{target}_{camera}_{filter}_{exposure}s_g{gain}_{temp}C_{datetime}_{seq}`. The
+camera is in there so the sensor a light came off can be read from the name,
+which is what picking matching calibration masters starts from. A profile
+created before this keeps the name pattern it already had; Settings has a link
+that writes the current default in.
 
 ---
 

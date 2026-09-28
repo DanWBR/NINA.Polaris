@@ -1134,6 +1134,7 @@ function ninaApp() {
             imageFormat: 'fits',
             imageOutputDir: '',
             imageNamePattern: '',
+            imageFolderLayout: 'target-first',
             stellariumHost: 'localhost',
             stellariumPort: 8090,
             preferAdvancedSequencer: false,
@@ -1865,6 +1866,38 @@ function ninaApp() {
         // the VIDEO tab, because while it runs NOTHING else can take a frame:
         // the header chip is the one thing that explains a refused capture
         // from any other tab.
+        // The filename-pattern tokens, as clickable chips under the field in
+        // Settings. Kept here rather than in the markup so the list has one
+        // home, and it mirrors the switch in ImageWriterService.SubstitutePattern:
+        // a token that is not there comes out of the writer as literal braces
+        // in the file name. The sample is what the token looked like for a
+        // typical light frame, which is the fastest way to explain a token.
+        // How lights are foldered under the capture root. Mirrors
+        // ImageWriterService.FolderLayout; the profile overwrites it on load.
+        // 'target-first' | 'night-first' | 'night-first-iso'
+        imageFolderLayouts: [
+            { id: 'target-first',       label: 'Target, then night' },
+            { id: 'night-first',        label: 'Night, then target (20260928)' },
+            { id: 'night-first-dashed', label: 'Night, then target (2026-09-28)' }
+        ],
+
+        imageNameTokens: [
+            { tok: 'target',    sample: 'M42',                  hint: 'Target name' },
+            { tok: 'filter',    sample: 'Ha',                   hint: 'Filter in the wheel' },
+            { tok: 'exposure',  sample: '300',                  hint: 'Exposure in seconds' },
+            { tok: 'gain',      sample: '100',                  hint: 'Camera gain' },
+            { tok: 'binning',   sample: '1x1',                  hint: 'Binning' },
+            { tok: 'bitdepth',  sample: '16',                   hint: 'Bit depth of the frame' },
+            { tok: 'date',      sample: '2026-09-28',           hint: 'Local date' },
+            { tok: 'time',      sample: '23-41-07',             hint: 'Local time' },
+            { tok: 'datetime',  sample: '2026-09-28_23-41-07',  hint: 'Local date and time' },
+            { tok: 'framenr',   sample: '0042',                 hint: 'Frame number in the run' },
+            { tok: 'seq',       sample: '0042',                 hint: 'Sequence counter' },
+            { tok: 'camera',    sample: 'ASI2600MC',            hint: 'Camera name' },
+            { tok: 'temp',      sample: '-10',                  hint: 'Sensor temperature in C' },
+            { tok: 'imagetype', sample: 'LIGHT',                hint: 'Frame type: LIGHT, DARK, FLAT, BIAS' }
+        ],
+
         // USB re-enumeration (the Reset USB button in the INDI card).
         usb: { busy: false, lastResult: null },
         // INDI driver packages (the Install drivers list in the INDI card).
@@ -12977,6 +13010,7 @@ function ninaApp() {
                     this.settings.imageFormat = data.imageFormat || 'fits';
                     this.settings.imageOutputDir = data.imageOutputDir || '';
                     this.settings.imageNamePattern = data.imageNamePattern || '';
+                    this.settings.imageFolderLayout = data.imageFolderLayout || 'target-first';
                     this.settings.preferAdvancedSequencer = !!data.preferAdvancedSequencer;
                     this.settings.autoConnectOnStartup = !!data.autoConnectOnStartup;
                     this.settings.locationPromptDismissed = !!data.locationPromptDismissed;
@@ -26876,7 +26910,7 @@ function ninaApp() {
             return parts.join(' · ') + (ea.runOnStop ? ' · also on stop' : '');
         },
 
-        // Whether ANY end-action toggle is on — used by the compact
+        // Whether ANY end-action toggle is on, used by the compact
         // autorun-options-bar chip to paint the green status dot
         // without re-running endActionsSummary's string formatter.
         endActionsHasAny() {
@@ -26969,6 +27003,7 @@ function ninaApp() {
                         imageFormat: this.settings.imageFormat,
                         imageOutputDir: this.settings.imageOutputDir,
                         imageNamePattern: this.settings.imageNamePattern,
+                        imageFolderLayout: this.settings.imageFolderLayout,
                         preferAdvancedSequencer: this.settings.preferAdvancedSequencer,
                         autoConnectOnStartup: this.settings.autoConnectOnStartup,
                         locationPromptDismissed: this.settings.locationPromptDismissed,
@@ -29301,6 +29336,79 @@ function ninaApp() {
             } catch (e) {
                 this.toast('Re-center failed: ' + (e.message || 'driver rejected'), 'warn');
             }
+        },
+
+        // What tonight's lights will actually be called, for the card. Built
+        // from the same rules the writer uses, so the example is the answer
+        // rather than a drawing of it: the rig name comes from the active rig,
+        // the night rolls over at noon like a real session, and the leaf is
+        // the pattern with the sample values behind the token chips.
+        imageLayoutExample() {
+            const rig = (this.equipmentProfile?.name || 'Default').replace(/\s+/g, '_');
+            const now = new Date();
+            const night = new Date(now);
+            if (now.getHours() < 12) night.setDate(night.getDate() - 1);
+            const p = n => String(n).padStart(2, '0');
+            const dashed  = night.getFullYear() + '-' + p(night.getMonth() + 1) + '-' + p(night.getDate());
+            const compact = '' + night.getFullYear() + p(night.getMonth() + 1) + p(night.getDate());
+            const layout = this.settings.imageFolderLayout || 'target-first';
+            // Same sample target as the {target} chip, so the folder and the
+            // file name in the example are one frame rather than two.
+            const tgt = (this.imageNameTokens.find(t => t.tok === 'target') || {}).sample || 'M42';
+            const head = layout === 'night-first'        ? [rig, compact, tgt, 'lights']
+                       : layout === 'night-first-dashed'
+                         || layout === 'night-first-iso' ? [rig, dashed, tgt, 'lights']
+                       :                                   [rig, tgt, 'lights', dashed];
+            return head.join('/') + '/' + this.imageNameExample();
+        },
+
+        // The filename the current pattern produces, with the same sample
+        // values the token chips advertise.
+        imageNameExample() {
+            const pattern = this.settings.imageNamePattern || this.imageNameDefaultPattern;
+            const samples = {};
+            for (const t of this.imageNameTokens) samples[t.tok] = t.sample;
+            const ext = this.settings.imageFormat === 'xisf' ? '.xisf' : '.fits';
+            return pattern.replace(/\{(\w+)\}/g, (m, k) => samples[k] ?? m).replace(/\s+/g, '_') + ext;
+        },
+
+        // The pattern a fresh profile gets. Kept in step with
+        // UserProfile.ImageNamePattern; the button below is how an existing
+        // profile, which stores whatever default it was created with, adopts
+        // the current one.
+        imageNameDefaultPattern:
+            '{target}_{camera}_{filter}_{exposure}s_g{gain}_{temp}C_{datetime}_{seq}',
+
+        imageNameUseDefault() {
+            this.settings.imageNamePattern = this.imageNameDefaultPattern;
+            this.saveSettingsToServer();
+        },
+
+        // Insert a filename token at the cursor. Appends when the field was
+        // never focused, which is the common case: you click the chip, not the
+        // input. The caret lands after the token so several chips in a row
+        // build a pattern left to right, and the save goes through the same
+        // path the field's own @change uses.
+        insertImageNameToken(tok) {
+            const piece = '{' + tok + '}';
+            const el = document.getElementById('imageNamePatternInput');
+            const cur = this.settings.imageNamePattern || '';
+            let at = cur.length;
+            let end = cur.length;
+            if (el && typeof el.selectionStart === 'number' && document.activeElement === el) {
+                at = el.selectionStart;
+                end = el.selectionEnd;
+            }
+            const next = cur.slice(0, at) + piece + cur.slice(end);
+            this.settings.imageNamePattern = next;
+            this.saveSettingsToServer();
+            // Put the caret back where the text now continues, after Alpine
+            // has written the new value into the field.
+            this.$nextTick(() => {
+                if (!el) return;
+                const pos = at + piece.length;
+                try { el.focus(); el.setSelectionRange(pos, pos); } catch (_) { /* older WebView */ }
+            });
         },
 
         // ----- Bahtinov mask on the live video stream -----
@@ -43438,7 +43546,7 @@ function ninaApp() {
         },
 
         // True when the current guide history carries predictions (predictive
-        // algorithm active) — gates the dashed overlay + legend entry.
+        // algorithm active), gates the dashed overlay + legend entry.
         get guideHasPrediction() {
             const steps = this.guider.recentSteps || [];
             return steps.some(s => Math.abs(s.predRa || 0) > 1e-6 || Math.abs(s.predDec || 0) > 1e-6);

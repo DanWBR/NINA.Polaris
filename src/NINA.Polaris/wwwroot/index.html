@@ -17085,21 +17085,66 @@ Windows  winget install Rclone.Rclone</code></pre>
                         <a href="#" @click.prevent="tab='files'; filesInit()"
                            style="color:var(--accent);text-decoration:underline">Studio tab</a>:
                         navigate to the folder, then click <em>Set as Studio root</em>.
-                        Files are organised under
-                        <code>{rig}/{target}/lights · stacked · aux/... and {rig}/calibration/...</code>
-                        automatically.
+                    </p>
+
+                    <!-- Folder layout. The night belongs in the path either
+                         way: what changes is whether a target's whole history
+                         is one folder, or a night is. Calibration is not in
+                         this choice, it stays rig-level so masters outlive the
+                         night they were shot. -->
+                    <label style="margin-top:10px">Folder layout
+                        <select class="input-md" style="width:100%;max-width:520px"
+                                x-model="settings.imageFolderLayout"
+                                @change="saveSettingsToServer()">
+                            <template x-for="l in imageFolderLayouts" :key="l.id">
+                                <option :value="l.id" x-text="l.label"></option>
+                            </template>
+                        </select>
+                    </label>
+                    <p class="hint" style="margin-top:4px">
+                        Lights, aux frames and stacks follow this. Calibration always stays at
+                        <code>{rig}/calibration/...</code> so masters can be reused across nights.
+                        The night rolls over at midday, so frames either side of midnight stay
+                        together. Nothing already on disk is moved, and Studio indexes both shapes.
                     </p>
                     <label style="margin-top:10px">Filename pattern
                         <input type="text" class="input-md" style="width:100%;max-width:520px"
+                               id="imageNamePatternInput"
                                x-model="settings.imageNamePattern"
                                @change="saveSettingsToServer()"
                                placeholder="{target}_{filter}_{exposure}s_g{gain}_{temp}C_{datetime}_{seq}">
                     </label>
-                    <p class="hint" style="margin-top:4px">
-                        Tokens: <code>{target} {filter} {exposure} {gain} {binning} {bitdepth}
-                        {date} {time} {datetime} {framenr} {seq} {camera} {temp} {imagetype}</code>.
-                        Leave blank for the default
-                        (<code>{target}_{filter}_{exposure}s_g{gain}_{temp}C_{datetime}_{seq}</code>).
+                    <!-- The tokens used to be a paragraph to read and retype,
+                         braces and all, which is a typo waiting to happen in a
+                         field nobody validates. Clicking one drops it in at the
+                         cursor instead, and the example under each name says
+                         what it turns into. -->
+                    <p class="hint" style="margin-top:8px;margin-bottom:4px">
+                        Click a token to insert it at the cursor:
+                    </p>
+                    <div class="token-chips">
+                        <template x-for="t in imageNameTokens" :key="t.tok">
+                            <button type="button" class="token-chip"
+                                    :title="$t(t.hint) + '  ->  ' + t.sample"
+                                    @click="insertImageNameToken(t.tok)">
+                                <code x-text="'{' + t.tok + '}'"></code>
+                                <span class="token-sample" x-text="t.sample"></span>
+                            </button>
+                        </template>
+                    </div>
+                    <p class="hint" style="margin-top:6px">
+                        Leave it blank for the default, or
+                        <a href="#" @click.prevent="imageNameUseDefault()"
+                           style="color:var(--accent);text-decoration:underline">write the default in</a>:
+                        <code x-text="imageNameDefaultPattern"></code>.
+                    </p>
+                    <!-- One line that answers the only question this card is
+                         really asked: where does tonight's frame end up, and
+                         what is it called. Built by the same rules as the
+                         writer, from the live rig name and the current night. -->
+                    <p class="hint" style="margin-top:8px">
+                        Tonight a light lands at:<br>
+                        <code class="path-example" x-text="imageLayoutExample()"></code>
                     </p>
                     <label style="margin-top:10px">Format
                         <select class="input-sm" x-model="settings.imageFormat" @change="saveSettingsToServer()">

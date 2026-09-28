@@ -259,4 +259,114 @@ public class ImageWriterDirectoryLayoutTests {
             "a driver reporting 0 has no pedestal to report");
     }
 
+    // ----- The folder layout setting -----
+    //
+    // Two shapes, one setting. The original keeps a target's whole history in
+    // one place; the night-first ones keep a night in one place, the way an
+    // ASIAIR lays a card out, which is what you want when the next step is
+    // picking the matching calibration frames out of a library.
+
+    private static UserProfile ProfileWithLayout(string layout) =>
+        new() { ImageFolderLayout = layout };
+
+    [Test]
+    public void Light_NightFirst_PutsTheNightAboveTheTarget() {
+        var img = Frame("Ha", 300, 100, "M31", "LIGHT",
+            new DateTime(2026, 5, 21, 22, 30, 0, DateTimeKind.Local));
+        var sub = ImageWriterService.BuildSubDir("LIGHT", img, ProfileWithLayout("night-first"),
+            "Backyard 130mm APO", Session(2026, 5, 21));
+        Assert.That(sub, Is.EqualTo(Path.Combine("Backyard_130mm_APO",
+            "20260521", "M31", "lights")),
+            "the compact date sorts chronologically on its own, which is why it "
+            + "is the one the night-first shape uses");
+    }
+
+    [Test]
+    public void Light_NightFirstDashed_SameShapeWithDashes() {
+        var img = Frame("Ha", 300, 100, "M31", "LIGHT",
+            new DateTime(2026, 5, 21, 22, 30, 0, DateTimeKind.Local));
+        var sub = ImageWriterService.BuildSubDir("LIGHT", img, ProfileWithLayout("night-first-dashed"),
+            "rig", Session(2026, 5, 21));
+        Assert.That(sub, Is.EqualTo(Path.Combine("rig", "2026-05-21", "M31", "lights")));
+    }
+
+    [Test]
+    public void TheOldNameForTheDashedLayoutStillReads() {
+        // It was called -iso while this was being built. Nothing shipped with
+        // that spelling, but a profile saved in between must not silently fall
+        // back to a different shape.
+        Assert.That(ImageWriterService.ParseFolderLayout("night-first-iso"),
+            Is.EqualTo(ImageWriterService.FolderLayout.NightFirstDashed));
+    }
+
+    [Test]
+    public void Light_UnknownLayoutFallsBackToTheOriginal() {
+        // A profile from a newer build, a typo, an empty string: none of them
+        // may send tonight's frames somewhere unexpected.
+        var img = Frame("L", 60, 0, "M31", "LIGHT",
+            new DateTime(2026, 5, 21, 22, 0, 0, DateTimeKind.Local));
+        foreach (var layout in new[] { "", "  ", "nonsense", "NIGHT-FIRST-2" }) {
+            var sub = ImageWriterService.BuildSubDir("LIGHT", img, ProfileWithLayout(layout),
+                "rig", Session(2026, 5, 21));
+            Assert.That(sub, Is.EqualTo(Path.Combine("rig", "M31", "lights", "2026-05-21")), layout);
+        }
+    }
+
+    [Test]
+    public void LayoutNameIsCaseInsensitive() {
+        Assert.That(ImageWriterService.ParseFolderLayout("Night-First"),
+            Is.EqualTo(ImageWriterService.FolderLayout.NightFirst));
+    }
+
+    [Test]
+    public void Aux_FollowsTheSameLayoutAsLights() {
+        // The second camera's frames have to land in the same night folder as
+        // the main camera's, or a night is split across two trees again.
+        var img = Frame("L", 30, 0, "M31", "AUX",
+            new DateTime(2026, 5, 21, 23, 0, 0, DateTimeKind.Local));
+        var sub = ImageWriterService.BuildSubDir("AUX", img, ProfileWithLayout("night-first"),
+            "rig", Session(2026, 5, 21));
+        Assert.That(sub, Is.EqualTo(Path.Combine("rig", "20260521", "M31", "aux")));
+    }
+
+    [Test]
+    public void Stacked_FollowsTheSameLayoutAsLights() {
+        var img = Frame("L", 30, 0, "M31", "LIGHT",
+            new DateTime(2026, 5, 21, 23, 0, 0, DateTimeKind.Local));
+        var sub = ImageWriterService.BuildStackedSubDir(img, "rig", Session(2026, 5, 21),
+            "stacked", "night-first");
+        Assert.That(sub, Is.EqualTo(Path.Combine("rig", "20260521", "M31", "stacked")));
+    }
+
+    [Test]
+    public void Calibration_IgnoresTheLayout() {
+        // Masters outlive the night they were shot, so a dark never goes into
+        // a night folder however the lights are arranged.
+        var img = Frame("L", 300, 100, "M31", "DARK",
+            new DateTime(2026, 5, 21, 23, 0, 0, DateTimeKind.Local));
+        foreach (var layout in new[] { "target-first", "night-first", "night-first-dashed" }) {
+            var sub = ImageWriterService.BuildSubDir("DARK", img, ProfileWithLayout(layout),
+                "rig", Session(2026, 5, 21));
+            Assert.That(sub, Is.EqualTo(Path.Combine("rig", "calibration", "dark", "300s_g100")), layout);
+        }
+    }
+
+    [Test]
+    public void NightFolderIsTheAstronomicalNight_NotTheCalendarDay() {
+        // 02:30 belongs to the evening before, which is the reason the date is
+        // in the path at all: one night, one folder.
+        var late = ImageWriterService.SessionDateForLocal(new DateTime(2026, 5, 22, 2, 30, 0, DateTimeKind.Local));
+        var early = ImageWriterService.SessionDateForLocal(new DateTime(2026, 5, 21, 22, 30, 0, DateTimeKind.Local));
+        Assert.That(late, Is.EqualTo(early));
+        Assert.That(ImageWriterService.TargetKindPath(
+                ImageWriterService.FolderLayout.NightFirst, "M31", "lights", late),
+            Is.EqualTo(Path.Combine("20260521", "M31", "lights")));
+    }
+
+    [Test]
+    public void TheDefaultPatternNamesTheCamera() {
+        // Picking masters out of a library starts with knowing which sensor a
+        // light came off, so the default name says it.
+        Assert.That(new UserProfile().ImageNamePattern, Does.Contain("{camera}"));
+    }
 }

@@ -331,8 +331,20 @@ public class UserProfile {
 
     // Image output
     public string ImageOutputDir { get; set; } = "";
-    public string ImageNamePattern { get; set; } = "{target}_{filter}_{exposure}s_g{gain}_{temp}C_{datetime}_{seq}";
+    // The camera is in the default name on purpose: a light is only worth the
+    // darks and flats that match the sensor it came off, and reading that from
+    // the file name beats opening a header when you are picking masters out of
+    // a library. An existing profile keeps whatever it already has.
+    public string ImageNamePattern { get; set; } = "{target}_{camera}_{filter}_{exposure}s_g{gain}_{temp}C_{datetime}_{seq}";
     public string ImageFormat { get; set; } = "fits";
+
+    // How the light frames are foldered under the capture root:
+    //   target-first        {rig}/{target}/lights/{yyyy-MM-dd}  (the original)
+    //   night-first         {rig}/{yyyyMMdd}/{target}/lights     (a night at a time)
+    //   night-first-dashed  {rig}/{yyyy-MM-dd}/{target}/lights
+    // Calibration frames are unaffected: they stay rig-level so masters are
+    // reusable across nights. Nothing already written is moved.
+    public string ImageFolderLayout { get; set; } = "target-first";
 
     // PHD2 lifecycle preferences (app-global, not per-rig). When true the
     // PHD2AutoStartService launches PHD2 (and connects the JSON-RPC client)
