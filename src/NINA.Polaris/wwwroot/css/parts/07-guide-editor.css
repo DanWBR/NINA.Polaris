@@ -1141,6 +1141,20 @@
     .auth-overlay-boot.boot-veil-gone { transition-duration: 1ms, 0s; }
 }
 
+/* The stuck-boot hint inside the curtain. Hidden until a plain setTimeout
+   in index.html shows it, so it survives app.js not running at all. */
+.boot-stuck {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border, #2a3142);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    max-width: 44ch;
+}
+.boot-stuck .auth-hint { margin: 0; }
+
 /* Self-signed certificate help. Lives inside the auth modal (first run) and
    as a standalone banner + dialog once signed in. */
 .auth-cert {
