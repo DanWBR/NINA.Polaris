@@ -15,7 +15,11 @@ export async function getStaticPaths() {
 const { lang } = Astro.props as { lang: Lang };
 const {guide: g} = getContent(lang);
 // Resolve which step screenshots actually exist (placeholder otherwise).
-const publicDir = new URL('../../public/', import.meta.url);
+// Three levels up, not two: this page sits in pages/[...lang]/, one deeper
+// than a component. With two it resolved to src/public/, which does not
+// exist, so every step fell back to the placeholder and the published
+// page has been showing "screenshot coming soon" for all of them.
+const publicDir = new URL('../../../public/', import.meta.url);
 const steps = g.steps.map((s) => ({
   ...s,
   exists: !!s.image && existsSync(fileURLToPath(new URL('.' + s.image, publicDir))),
@@ -24,7 +28,7 @@ const steps = g.steps.map((s) => ({
 
 <Layout lang={lang}
   title={`${g.title}, Polaris Astro Controller`}
-  description="A basic first-night guide for Polaris Astro Controller: rig setup, connecting equipment, guiding, focus, live stacking or autorun, then stacking and editing in STUDIO."
+  description="A first-night guide for Polaris Astro Controller: get in from a phone or a browser, let the wizard find your equipment, focus, frame, guide, shoot with live stacking, an autorun or PLAN, then finish the image in STUDIO."
 >
   <main>
     <header class="page-head">
@@ -91,7 +95,7 @@ const steps = g.steps.map((s) => ({
           <div class="closing-btns">
             <a class="btn btn-primary" href={localePath("/install", lang)}>Installation guide</a>
             {g.closing.docUrl && (
-              <a class="btn btn-ghost" href={g.closing.docUrl} target="_blank" rel="noopener">Full end-to-end docs ↗</a>
+              <a class="btn btn-ghost" href={g.closing.docUrl}>Open the handbook</a>
             )}
           </div>
         </div>
@@ -143,7 +147,9 @@ const steps = g.steps.map((s) => ({
   /* Access section */
   .access-title { font-size: clamp(22px, 3vw, 30px); font-weight: 700; letter-spacing: -0.5px; margin-bottom: 10px; }
   .access-sub { font-size: 16px; color: var(--text-muted); margin-bottom: 26px; max-width: 70ch; }
-  .access-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  /* auto-fit rather than two fixed columns: with three ways in, a fixed
+     pair left the third card alone on a half-width row. */
+  .access-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 18px; }
   .access-card {
     background: var(--panel);
     border: 1px solid var(--border);

@@ -1,78 +1,98 @@
 {
   "title": "Getting started",
-  "lede": "Your first night, from scope on the tripod to a finished image you can share. This is the speed run: connect the gear, guide and focus, capture with live stacking or an unattended autorun, then stack and edit in STUDIO.",
+  "lede": "Your first night, from a board still in its box to a finished image you can share. Polaris runs on the rig and you drive it from a phone, a tablet or any browser. This is the short path: get in, let it find your equipment, focus, frame, guide, shoot, and finish the picture without moving the files anywhere.",
   "access": {
-    "title": "First, open the Polaris UI",
-    "sub": "Polaris runs on the rig and is driven from any device on the same network. There are two ways in.",
+    "title": "First, get in",
+    "sub": "Polaris runs on the rig and answers on the network. Three ways in, depending on where you are.",
     "options": [
+      {
+        "icon": "📱",
+        "title": "Phone or tablet app",
+        "body": "Install the app for Android or iOS from the Download page. It finds the boards on your network by itself and connects with one tap, so there is no address to type. On a phone the interface becomes Field Mode, a touch shell made for standing next to the scope in the dark.",
+        "code": ""
+      },
       {
         "icon": "🌐",
         "title": "Any browser",
-        "body": "Point any phone, tablet, or laptop at the rig's address on port 5000. Use its hostname or its IP, and accept the self-signed certificate once.",
+        "body": "Point any phone, tablet or laptop at the rig's address on port 5000, by hostname or by IP, and accept the self-signed certificate once.",
         "code": "https://<ip-or-hostname>:5000"
       },
       {
-        "icon": "📱",
-        "title": "Android app",
-        "body": "Install the Android app from the Download page and open it. It scans the network and lists every Polaris instance it finds, ready to connect with one tap, no IP typing needed.",
+        "icon": "📡",
+        "title": "First boot, before any network",
+        "body": "A freshly flashed card comes up as its own WiFi hotspot, named Polaris-Hotspot plus four characters from the adapter's MAC, password polaris1234. Join it, open the address above, choose your password, then tell Polaris where you are and which WiFi to use. Everything after that happens on your own network.",
         "code": ""
       }
     ]
   },
   "steps": [
     {
+      "icon": "🧭",
+      "title": "Let the wizard find your equipment",
+      "body": "The first time you open Polaris it offers to set the rig up for you. It probes what is plugged in, through INDI on Linux and through ASCOM or Alpaca on Windows, shows you what it found, connects it, and asks only for what no driver can tell it, such as focal length. Skip it and do everything by hand in RIGS if you prefer, and call it back from the Setup wizard button there whenever the gear changes.",
+      "tip": "No INDI driver for your camera or focuser? Install it from inside Polaris, in the INDI card under RIGS. It offers only packages built for the INDI already on the host, and refuses any install that would remove something you are using.",
+      "image": "/assets/screenshots/devices.jpg"
+    },
+    {
       "icon": "🛠️",
-      "title": "Set up your rig",
-      "body": "Open RIGS in the sidebar. Pick a saved rig from the dropdown, or build a new one by adding your Main Telescope (brand, model, reducer or flattener, so focal length and aperture auto-fill), Main Camera, Mount, Focuser, and Filter Wheel cards. Click Save selections so the rig remembers everything next time.",
-      "tip": "A rig stores focal length, gain defaults, and the PHD2 profile binding, which is the basis for framing and plate-solving.",
+      "title": "Check the rig",
+      "body": "A rig is one whole setup saved under one name: telescope, camera, mount, focuser, filter wheel, guide scope and accessories. Pick your telescope by brand and model and the focal length and aperture fill themselves in, add the reducer or flattener if you use one, then Save selections. Framing, plate solving and guiding scale all come from these numbers.",
+      "tip": "Keep one rig per physical setup. Switching rigs switches every default with it, so a second scope is one dropdown away rather than an evening of re-typing.",
       "image": "/assets/screenshots/gs-rigs.jpg"
     },
     {
       "icon": "🔌",
-      "title": "Connect your equipment",
-      "body": "On each card, pick the device under the connection strip: INDI on Linux, ASCOM or Alpaca on Windows, or a native camera SDK. Set the camera cooler target, then hit Connect on each device. Confirm the mount is tracking and that the filter list matches your wheel.",
-      "tip": "Auto-discovery lists devices it finds on the LAN, so most gear shows up without typing an address.",
+      "title": "Connect, and recover when something vanishes",
+      "body": "On each card, choose the driver under the connection strip: INDI on Linux, ASCOM or Alpaca on Windows, or a native SDK for ZWO, SVBony, Player One, ToupTek and Altair cameras. Set the cooler target, connect each device, and check that the mount is tracking and the filter names match what is in the wheel.",
+      "tip": "When a device drops off the bus mid session, Reset USB in the INDI card re-enumerates the bus and restarts the drivers, which is the software version of walking out and replugging every cable. It never touches the disk the board boots from.",
       "image": "/assets/screenshots/gs-connect.jpg"
-    },
-    {
-      "icon": "📡",
-      "title": "Set up guiding",
-      "body": "Switch to GUIDE. Click Launch PHD2 (or Connect if it is already running) and pick the profile that matches your guide camera and mount. Click Connect equipment, then Loop, Find Star, and Smart Calibrate. Watch the RA/Dec graph settle, and guiding then runs in the background all night.",
-      "tip": "Prefer the original PHD2 interface? Open the PHD2 GUI tab to drive the real app embedded over xpra or VNC.",
-      "image": "/assets/screenshots/gs-guiding.jpg"
     },
     {
       "icon": "🔬",
       "title": "Get sharp focus",
-      "body": "Open FOCUS and run V-curve auto-focus: set the step size and sample count for your focuser and hit Start AF. Polaris samples several positions, fits the HFR curve, and parks the focuser at the sharpest point. You can also focus manually with the stepper buttons while watching HFR drop.",
-      "tip": "Lower HFR means tighter stars. The sequencer can re-focus automatically when temperature or HFR drifts during the night.",
-      "image": "/assets/screenshots/gs-focus.jpg"
+      "body": "Open FOCUS and run the V-curve: choose a step size and a sample count, press Start AF, and Polaris samples both sides of focus, fits the curve and parks the focuser at the minimum. With a filter wheel it keeps the offset per filter, so the next filter change does not cost you another sweep.",
+      "tip": "Prefer a mask? Put a Bahtinov on the aperture, start the video stream and switch the Bahtinov panel on: it reads the offset about four times a second and tells you which way to turn, without taking an exposure of its own.",
+      "image": "/assets/screenshots/autofocus.jpg"
     },
     {
       "icon": "🌌",
-      "title": "Frame your target",
-      "body": "Open SKY and search for your target (M31, NGC 7000, and so on), or pick a suggestion from the TONIGHT tab ranked by altitude. Click the target, then Slew & Center: Polaris slews, plate-solves, and re-slews until the target sits centered inside the field-of-view overlay.",
-      "tip": "Slew & Center uses the Stellarium Web Engine sky explorer with full mount integration, no hand controller needed.",
+      "title": "Frame the target",
+      "body": "Open SKY and search for the object, or take a suggestion from TONIGHT, which ranks what is actually up from your site on this date. Slew and Center slews, plate solves and corrects until the target sits where you want it inside the field overlay. The rotation slider sets the angle, and with a motorised rotator Polaris turns it for you.",
+      "tip": "The sky map and the catalogs live on the host, so framing and plate solving work with no internet at all, which is the normal condition at a dark site.",
       "image": "/assets/screenshots/gs-sky.jpg"
     },
     {
+      "icon": "📡",
+      "title": "Start guiding",
+      "body": "GUIDE runs Polaris's own guider: connect the guide camera, Loop, calibrate once near the meridian and the equator, then Guide. Graph, star profile, multi-star, dithering and settling are all there, and the correction maths follows PHD2's algorithms, so nothing extra has to be installed.",
+      "tip": "Already have a PHD2 setup you trust? Connect Polaris to it instead, and open the embedded PHD2 window when you want the original interface.",
+      "image": "/assets/screenshots/guide-native.jpg"
+    },
+    {
       "icon": "📸",
-      "title": "Capture: live stacking or an autorun",
-      "body": "Two ways to shoot, and you can mix them. For instant EAA-style results, open LIVE and tap the shutter: it starts the loop and stacks each frame into the live image as it lands (tap again to stop, the stack is kept). For a full imaging run, open AUTORUN, add a target row (filter, exposure, count), enable dithering and meridian flip if needed, set your end-actions, and hit Start sequence. Subs are saved to disk for stacking later, and you can still watch them arrive in LIVE.",
-      "tip": "You can close the browser and walk away. The server keeps capturing, so come back in the morning to a folder full of subs.",
+      "title": "Shoot: live stacking or an autorun",
+      "body": "For results while you are still at the scope, LIVE stacks each frame as it lands, calibrated and aligned, and the object comes out of the noise in front of you. For a full night, AUTORUN takes a list of sets, each with filter, exposure and count, with dithering, meridian flip and end actions. Both write the subs to disk, and you can close the browser: the run belongs to the host, not to your tab.",
+      "tip": "End actions can park the mount, warm the camera, run background extraction on what you shot and upload the night, so the morning is a folder that is already sorted.",
       "image": "/assets/screenshots/gs-live.jpg"
     },
     {
+      "icon": "🗓️",
+      "title": "Or hand the night to PLAN",
+      "body": "PLAN is for a night with more than one target. Tell it what you want and how much of each; it works out when each object is high enough, orders the night around meridian flips and your horizon, and runs it. If guiding loses the star, it holds and picks the target back up when the star returns, instead of throwing the target away.",
+      "tip": "Custom horizons are supported, so a tree line or the neighbour's roof is part of the plan rather than a surprise at two in the morning.",
+      "image": "/assets/screenshots/plan.jpg"
+    },
+    {
       "icon": "🎨",
-      "title": "Stack and edit in STUDIO, then export",
-      "body": "Open STUDIO to turn your subs into a finished image: build master calibration frames, calibrate the lights, and Integrate them into a master. Clean it up with GraXpert AI in the browser (background extraction, then denoise, then deconvolution, accelerated on the client GPU or the SBC's NPU). Polish tone and color in the EDITOR, then Export as JPEG, PNG, or 16-bit TIFF.",
-      "tip": "Turn on Auto-GraXpert BGE in the autorun end-actions and the background-extracted frames are ready before you even open STUDIO.",
+      "title": "Finish the image, and get it off the board",
+      "body": "STUDIO turns the subs into a picture: masters from your calibration frames, then calibration and integration of the lights, background extraction, denoise and deconvolution with the AI tools, colour calibration against a star catalog, and star removal and blending when you want them. The EDITOR handles tone and colour, and exports to JPEG, PNG or 16-bit TIFF.",
+      "tip": "A night lives on one card until you copy it somewhere. Storage push sends a finished run to a NAS or to Drive, OneDrive, Dropbox, Nextcloud, SFTP or S3, and the copy on the host always stays where it is.",
       "image": "/assets/screenshots/gs-studio.jpg"
     }
   ],
   "closing": {
     "title": "That is the whole loop",
-    "sub": "This is the speed run. Each tab has a deeper reference, and the install guide covers every optional tool you can add.",
-    "docUrl": "https://github.com/DanWBR/NINA.Polaris/blob/master/docs/user-guide/end-to-end-workflow.md"
+    "sub": "This page is the speed run. The handbook walks through every tab in depth, and the install guide covers the optional pieces: plate solvers, star catalogs, the AI models and PHD2.",
+    "docUrl": "/handbook/"
   }
 }

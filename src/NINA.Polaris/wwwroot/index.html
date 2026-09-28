@@ -300,8 +300,43 @@
             </div>
             <h2>Polaris Astro Controller</h2>
             <p class="auth-hint">Getting the rig status…</p>
+
+            <!-- Escape hatch. Everything that lifts this curtain lives in
+                 app.js, so the one failure it cannot cover is app.js itself
+                 never running: a half-written file after an interrupted
+                 update, a script that 404s, a parse error. Alpine never
+                 initialises, the class binding above is never evaluated, and
+                 the operator gets this screen for ever with nothing to read.
+                 The timer below needs no framework and no network, so it
+                 still fires in that case, and it only ADDS a line rather than
+                 tearing the curtain down: when Alpine is alive and merely
+                 slow, it owns the curtain and would take the class back
+                 anyway. Field report: stuck here after a failed update. -->
+            <div class="boot-stuck" id="bootStuckHint" style="display:none">
+                <p class="auth-hint">
+                    Still waiting for the rig. Reload the page, and if this screen comes back,
+                    the server is up but the app did not finish loading: check the Polaris
+                    service on the host.
+                </p>
+                <button type="button" class="btn btn-sm btn-primary"
+                        onclick="location.reload(true)">Reload</button>
+            </div>
         </div>
     </div>
+
+    <script>
+        // See the comment in the boot curtain above. Plain DOM, no Alpine, no
+        // modules: this has to survive the failure of everything else on the
+        // page. Fifteen seconds is well past the six-second latch inside the
+        // app, so a healthy start never shows it.
+        setTimeout(function () {
+            var hint = document.getElementById('bootStuckHint');
+            var veil = document.querySelector('.auth-overlay-boot');
+            if (!hint || !veil) return;
+            if (veil.classList.contains('boot-veil-gone')) return;
+            hint.style.display = '';
+        }, 15000);
+    </script>
 
     <!-- Certificate banner for an already-signed-in session: same detection,
          shown outside the auth overlay so a running session that loses the

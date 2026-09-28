@@ -5149,5 +5149,6 @@
   "Rotate inward": "Gira hacia dentro",
   "Rotate outward": "Gira hacia fuera",
   "Colour sensor: measured on a 2x2 luminance grid.": "Sensor color: medido en una rejilla de luminancia 2x2.",
-  "Mono frame: measured at full resolution.": "Cuadro mono: medido a resolución completa."
+  "Mono frame: measured at full resolution.": "Cuadro mono: medido a resolución completa.",
+  "Still waiting for the rig. Reload the page, and if this screen comes back, the server is up but the app did not finish loading: check the Polaris service on the host.": "Todavía esperando al equipo. Recarga la página y, si esta pantalla vuelve, el servidor está en pie pero la app no terminó de cargar: revisa el servicio de Polaris en la máquina."
 }
