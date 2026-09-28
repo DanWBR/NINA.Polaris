@@ -5152,5 +5152,19 @@
   "Rotate outward": "Gire para fora",
   "Colour sensor: measured on a 2x2 luminance grid.": "Sensor colorido: medido numa grade de luminância 2x2.",
   "Mono frame: measured at full resolution.": "Quadro mono: medido na resolução cheia.",
-  "Still waiting for the rig. Reload the page, and if this screen comes back, the server is up but the app did not finish loading: check the Polaris service on the host.": "Ainda esperando o equipamento. Recarregue a página e, se esta tela voltar, o servidor está de pé mas o app não terminou de carregar: verifique o serviço do Polaris na máquina."
+  "Still waiting for the rig. Reload the page, and if this screen comes back, the server is up but the app did not finish loading: check the Polaris service on the host.": "Ainda esperando o equipamento. Recarregue a página e, se esta tela voltar, o servidor está de pé mas o app não terminou de carregar: verifique o serviço do Polaris na máquina.",
+  "Click a token to insert it at the cursor:": "Clique num token para inseri-lo no cursor:",
+  "Leave it blank for the default": "Deixe em branco para o padrão",
+  "Filter in the wheel": "Filtro na roda",
+  "Exposure in seconds": "Exposição em segundos",
+  "Camera gain": "Ganho da câmera",
+  "Bit depth of the frame": "Profundidade de bits do quadro",
+  "Local date": "Data local",
+  "Local time": "Hora local",
+  "Local date and time": "Data e hora locais",
+  "Frame number in the run": "Número do quadro na sessão",
+  "Sequence counter": "Contador da sequência",
+  "Camera name": "Nome da câmera",
+  "Sensor temperature in C": "Temperatura do sensor em C",
+  "Frame type: LIGHT, DARK, FLAT, BIAS": "Tipo de quadro: LIGHT, DARK, FLAT, BIAS"
 }

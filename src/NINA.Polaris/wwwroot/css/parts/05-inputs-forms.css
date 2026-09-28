@@ -2379,3 +2379,35 @@ body.link-offline .preview-pane::after {
     flex: 1 1 260px;
     min-width: 0;
 }
+
+/* Filename-pattern token chips (Settings -> Image Output). A chip carries the
+   token and, under it, what that token looked like on a real frame, so the
+   list explains itself without a second paragraph to read. */
+.token-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-width: 720px;
+}
+.token-chip {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    padding: 4px 8px;
+    background: var(--bg-input, rgba(255, 255, 255, 0.04));
+    border: 1px solid var(--border, #2a3142);
+    border-radius: 6px;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.12s, background 0.12s;
+}
+.token-chip:hover { border-color: var(--accent); background: rgba(255, 255, 255, 0.07); }
+.token-chip:active { transform: translateY(1px); }
+.token-chip code { font-size: 11.5px; color: var(--text); background: none; padding: 0; }
+.token-chip .token-sample {
+    font-size: 10px;
+    color: var(--text-muted, #8b94a8);
+    font-variant-numeric: tabular-nums;
+}
+

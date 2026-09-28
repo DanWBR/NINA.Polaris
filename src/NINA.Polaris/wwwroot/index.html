@@ -16844,14 +16844,31 @@ Windows  winget install Rclone.Rclone</code></pre>
                     </p>
                     <label style="margin-top:10px">Filename pattern
                         <input type="text" class="input-md" style="width:100%;max-width:520px"
+                               id="imageNamePatternInput"
                                x-model="settings.imageNamePattern"
                                @change="saveSettingsToServer()"
                                placeholder="{target}_{filter}_{exposure}s_g{gain}_{temp}C_{datetime}_{seq}">
                     </label>
-                    <p class="hint" style="margin-top:4px">
-                        Tokens: <code>{target} {filter} {exposure} {gain} {binning} {bitdepth}
-                        {date} {time} {datetime} {framenr} {seq} {camera} {temp} {imagetype}</code>.
-                        Leave blank for the default
+                    <!-- The tokens used to be a paragraph to read and retype,
+                         braces and all, which is a typo waiting to happen in a
+                         field nobody validates. Clicking one drops it in at the
+                         cursor instead, and the example under each name says
+                         what it turns into. -->
+                    <p class="hint" style="margin-top:8px;margin-bottom:4px">
+                        Click a token to insert it at the cursor:
+                    </p>
+                    <div class="token-chips">
+                        <template x-for="t in imageNameTokens" :key="t.tok">
+                            <button type="button" class="token-chip"
+                                    :title="$t(t.hint) + '  ->  ' + t.sample"
+                                    @click="insertImageNameToken(t.tok)">
+                                <code x-text="'{' + t.tok + '}'"></code>
+                                <span class="token-sample" x-text="t.sample"></span>
+                            </button>
+                        </template>
+                    </div>
+                    <p class="hint" style="margin-top:6px">
+                        Leave it blank for the default
                         (<code>{target}_{filter}_{exposure}s_g{gain}_{temp}C_{datetime}_{seq}</code>).
                     </p>
                     <label style="margin-top:10px">Format

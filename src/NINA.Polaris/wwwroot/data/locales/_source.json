@@ -4534,5 +4534,19 @@
   "Rotate outward": "",
   "Colour sensor: measured on a 2x2 luminance grid.": "",
   "Mono frame: measured at full resolution.": "",
-  "Still waiting for the rig. Reload the page, and if this screen comes back, the server is up but the app did not finish loading: check the Polaris service on the host.": ""
+  "Still waiting for the rig. Reload the page, and if this screen comes back, the server is up but the app did not finish loading: check the Polaris service on the host.": "",
+  "Click a token to insert it at the cursor:": "",
+  "Leave it blank for the default": "",
+  "Filter in the wheel": "",
+  "Exposure in seconds": "",
+  "Camera gain": "",
+  "Bit depth of the frame": "",
+  "Local date": "",
+  "Local time": "",
+  "Local date and time": "",
+  "Frame number in the run": "",
+  "Sequence counter": "",
+  "Camera name": "",
+  "Sensor temperature in C": "",
+  "Frame type: LIGHT, DARK, FLAT, BIAS": ""
 }
