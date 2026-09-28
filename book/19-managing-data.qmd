@@ -75,8 +75,8 @@ the first two levels:
 | Choice | A light lands at |
 | --- | --- |
 | Target, then night (the default) | `{rig}/M42/lights/2026-09-28/` |
-| Night, then target, day first | `{rig}/28-09-2026/M42/lights/` |
-| Night, then target, year first | `{rig}/2026-09-28/M42/lights/` |
+| Night, then target, `20260928` | `{rig}/20260928/M42/lights/` |
+| Night, then target, `2026-09-28` | `{rig}/2026-09-28/M42/lights/` |
 
 The night-first shapes are what an ASIAIR card looks like, and they
 suit an operator who thinks in sessions: everything shot on one night

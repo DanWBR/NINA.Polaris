@@ -75,9 +75,9 @@ namespace NINA.Polaris.Services;
 ///
 /// The order of the first levels is a setting, <c>ImageFolderLayout</c>:
 ///
-///   target-first     {rig}/{target}/lights/{yyyy-MM-dd}   (the shape above)
-///   night-first      {rig}/{dd-MM-yyyy}/{target}/lights   (a night at a time)
-///   night-first-iso  {rig}/{yyyy-MM-dd}/{target}/lights
+///   target-first        {rig}/{target}/lights/{yyyy-MM-dd}  (the shape above)
+///   night-first         {rig}/{yyyyMMdd}/{target}/lights     (a night at a time)
+///   night-first-dashed  {rig}/{yyyy-MM-dd}/{target}/lights
 ///
 /// It moves lights, aux and stacked together, so a night stays one folder
 /// whichever way round it is. Calibration is not affected: it stays rig-level
@@ -732,20 +732,25 @@ public class ImageWriterService {
     /// <summary>The three folder layouts the capture root can use.</summary>
     public enum FolderLayout {
         /// <summary>{target}/{kind}/{yyyy-MM-dd}: everything ever shot on one
-        /// object under one folder. The original, and still the default.</summary>
+        /// object under one folder. The original, and still the default. Its
+        /// date format does not change, or an existing install would start
+        /// writing beside its own folders instead of into them.</summary>
         TargetFirst,
-        /// <summary>{dd-MM-yyyy}/{target}/{kind}: a night at a time, the way
-        /// the ASIAIR lays it out. Day first, as asked for.</summary>
+        /// <summary>{yyyyMMdd}/{target}/{kind}: a night at a time, the way an
+        /// ASIAIR card reads, with the compact date that sorts by itself in
+        /// any file manager.</summary>
         NightFirst,
-        /// <summary>{yyyy-MM-dd}/{target}/{kind}: the same shape with a date
-        /// that sorts chronologically in any file manager.</summary>
-        NightFirstIso
+        /// <summary>{yyyy-MM-dd}/{target}/{kind}: the same, with the dashes.</summary>
+        NightFirstDashed
     }
 
     public static FolderLayout ParseFolderLayout(string? value) => (value ?? "").Trim().ToLowerInvariant() switch {
-        "night-first"     => FolderLayout.NightFirst,
-        "night-first-iso" => FolderLayout.NightFirstIso,
-        _                 => FolderLayout.TargetFirst
+        "night-first"        => FolderLayout.NightFirst,
+        "night-first-dashed" => FolderLayout.NightFirstDashed,
+        // The dashed shape was called -iso while this was being built. Nothing
+        // shipped with it, but a profile written in between still reads.
+        "night-first-iso"    => FolderLayout.NightFirstDashed,
+        _                    => FolderLayout.TargetFirst
     };
 
     /// <summary>
@@ -760,9 +765,9 @@ public class ImageWriterService {
     public static string TargetKindPath(FolderLayout layout, string target, string kind, DateTime sessionDate) {
         var inv = System.Globalization.CultureInfo.InvariantCulture;
         return layout switch {
-            FolderLayout.NightFirst    => Path.Combine(sessionDate.ToString("dd-MM-yyyy", inv), target, kind),
-            FolderLayout.NightFirstIso => Path.Combine(sessionDate.ToString("yyyy-MM-dd", inv), target, kind),
-            _                          => Path.Combine(target, kind, sessionDate.ToString("yyyy-MM-dd", inv))
+            FolderLayout.NightFirst       => Path.Combine(sessionDate.ToString("yyyyMMdd", inv), target, kind),
+            FolderLayout.NightFirstDashed => Path.Combine(sessionDate.ToString("yyyy-MM-dd", inv), target, kind),
+            _                             => Path.Combine(target, kind, sessionDate.ToString("yyyy-MM-dd", inv))
         };
     }
 

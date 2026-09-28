@@ -1877,9 +1877,9 @@ function ninaApp() {
         // ImageWriterService.FolderLayout; the profile overwrites it on load.
         // 'target-first' | 'night-first' | 'night-first-iso'
         imageFolderLayouts: [
-            { id: 'target-first',    label: 'Target, then night' },
-            { id: 'night-first',     label: 'Night, then target (day first)' },
-            { id: 'night-first-iso', label: 'Night, then target (year first)' }
+            { id: 'target-first',       label: 'Target, then night' },
+            { id: 'night-first',        label: 'Night, then target (20260928)' },
+            { id: 'night-first-dashed', label: 'Night, then target (2026-09-28)' }
         ],
 
         imageNameTokens: [
@@ -26953,7 +26953,7 @@ function ninaApp() {
             return parts.join(' · ') + (ea.runOnStop ? ' · also on stop' : '');
         },
 
-        // Whether ANY end-action toggle is on — used by the compact
+        // Whether ANY end-action toggle is on, used by the compact
         // autorun-options-bar chip to paint the green status dot
         // without re-running endActionsSummary's string formatter.
         endActionsHasAny() {
@@ -29355,15 +29355,16 @@ function ninaApp() {
             const night = new Date(now);
             if (now.getHours() < 12) night.setDate(night.getDate() - 1);
             const p = n => String(n).padStart(2, '0');
-            const iso = night.getFullYear() + '-' + p(night.getMonth() + 1) + '-' + p(night.getDate());
-            const dmy = p(night.getDate()) + '-' + p(night.getMonth() + 1) + '-' + night.getFullYear();
+            const dashed  = night.getFullYear() + '-' + p(night.getMonth() + 1) + '-' + p(night.getDate());
+            const compact = '' + night.getFullYear() + p(night.getMonth() + 1) + p(night.getDate());
             const layout = this.settings.imageFolderLayout || 'target-first';
             // Same sample target as the {target} chip, so the folder and the
             // file name in the example are one frame rather than two.
             const tgt = (this.imageNameTokens.find(t => t.tok === 'target') || {}).sample || 'M42';
-            const head = layout === 'night-first'     ? [rig, dmy, tgt, 'lights']
-                       : layout === 'night-first-iso' ? [rig, iso, tgt, 'lights']
-                       :                                [rig, tgt, 'lights', iso];
+            const head = layout === 'night-first'        ? [rig, compact, tgt, 'lights']
+                       : layout === 'night-first-dashed'
+                         || layout === 'night-first-iso' ? [rig, dashed, tgt, 'lights']
+                       :                                   [rig, tgt, 'lights', dashed];
             return head.join('/') + '/' + this.imageNameExample();
         },
 
@@ -43155,7 +43156,7 @@ function ninaApp() {
         },
 
         // True when the current guide history carries predictions (predictive
-        // algorithm active) — gates the dashed overlay + legend entry.
+        // algorithm active), gates the dashed overlay + legend entry.
         get guideHasPrediction() {
             const steps = this.guider.recentSteps || [];
             return steps.some(s => Math.abs(s.predRa || 0) > 1e-6 || Math.abs(s.predDec || 0) > 1e-6);

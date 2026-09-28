@@ -337,9 +337,9 @@ public class UserProfile {
     public string ImageFormat { get; set; } = "fits";
 
     // How the light frames are foldered under the capture root:
-    //   target-first     {rig}/{target}/lights/{yyyy-MM-dd}   (the original)
-    //   night-first      {rig}/{dd-MM-yyyy}/{target}/lights   (ASIAIR-like)
-    //   night-first-iso  {rig}/{yyyy-MM-dd}/{target}/lights   (same, sorts by date)
+    //   target-first        {rig}/{target}/lights/{yyyy-MM-dd}  (the original)
+    //   night-first         {rig}/{yyyyMMdd}/{target}/lights     (a night at a time)
+    //   night-first-dashed  {rig}/{yyyy-MM-dd}/{target}/lights
     // Calibration frames are unaffected: they stay rig-level so masters are
     // reusable across nights. Nothing already written is moved.
     public string ImageFolderLayout { get; set; } = "target-first";

@@ -5169,11 +5169,11 @@
   "Frame type: LIGHT, DARK, FLAT, BIAS": "Tipo de cuadro: LIGHT, DARK, FLAT, BIAS",
   "Folder layout": "Organización de carpetas",
   "Target, then night": "Objetivo, luego la noche",
-  "Night, then target (day first)": "Noche, luego el objetivo (día primero)",
-  "Night, then target (year first)": "Noche, luego el objetivo (año primero)",
   "Lights, aux frames and stacks follow this. Calibration always stays at": "Lights, cuadros de la cámara auxiliar y apilados siguen esta elección. La calibración siempre queda en",
   "so masters can be reused across nights. The night rolls over at midday, so frames either side of midnight stay together. Nothing already on disk is moved, and Studio indexes both shapes.": "para que los masters sirvan en varias noches. La noche cambia al mediodía, así que los cuadros de ambos lados de la medianoche quedan juntos. Nada de lo que ya está en el disco se mueve, y Studio indexa las dos formas.",
   "Leave it blank for the default, or": "Déjalo en blanco para el valor por defecto, o",
   "write the default in": "escribe aquí el valor por defecto",
-  "Tonight a light lands at:": "Esta noche un light acaba en:"
+  "Tonight a light lands at:": "Esta noche un light acaba en:",
+  "Night, then target (20260928)": "Noche, luego el objetivo (20260928)",
+  "Night, then target (2026-09-28)": "Noche, luego el objetivo (2026-09-28)"
 }

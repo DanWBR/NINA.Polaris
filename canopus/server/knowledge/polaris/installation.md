@@ -228,8 +228,8 @@ levels under the rig:
 | Value | A light lands at |
 | --- | --- |
 | `target-first` (default) | `{rig}/M42/lights/2026-09-28/` |
-| `night-first` | `{rig}/28-09-2026/M42/lights/` |
-| `night-first-iso` | `{rig}/2026-09-28/M42/lights/` |
+| `night-first` | `{rig}/20260928/M42/lights/` |
+| `night-first-dashed` | `{rig}/2026-09-28/M42/lights/` |
 
 Aux frames and stacks follow it; calibration never does, it stays rig-level so
 masters are reusable across nights. The night is the astronomical night, with a
