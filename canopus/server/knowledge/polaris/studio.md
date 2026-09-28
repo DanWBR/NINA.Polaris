@@ -57,8 +57,15 @@ library.
 
 Select calibrated frames + **Calibrate** button:
 
-- Picks the matching **master dark** + **master flat** + **master bias**
-  by (Exposure, Gain, Filter), auto-match with override dropdowns
+- Picks the matching **master dark** + **master flat** + **master bias**,
+  auto-match with override dropdowns. What it requires:
+  - same **camera** (INSTRUME). An empty camera on either side matches
+    anything, so libraries indexed before the camera was recorded keep
+    working; it only refuses when both sides name a camera and they differ
+  - same **gain**, exactly
+  - dark: exposure within **1%, minimum 0.5s** of the light. Darks are not
+    scaled, so a 10s dark on a 300s light is refused rather than applied
+  - flat: same **filter**, case-insensitive
 - Pixel math: `(light − dark − bias) / (flat − flatDark) × mean(flat
   − flatDark)`
 - Output: `calibrated/{Target}/{Filter}/cal_{originalName}.fits`
@@ -326,9 +333,16 @@ or override paths.
 **Rescan misses new files**, frame writer is still flushing. Wait a
 few seconds + retry.
 
-**Calibration leaves residual hot pixels**, master dark exposure /
-gain doesn't match the lights. Bump the auto-match tolerance or pick
-the master manually.
+**Calibration leaves residual hot pixels**, the master dark does not
+match the lights. Check exposure and gain first: the match needs the same
+gain and the exposure within 1% (minimum 0.5s), so a dark shot at another
+exposure is refused rather than applied. Shoot darks at the light's
+exposure, or pick the master manually in the slot.
+
+**"No matching masters found"** with a library that clearly has them: check
+the camera. The master has to come from the same camera as the light, and
+the message prints the camera, gain, exposure and filter it was looking
+for. Masters live under `{rig}/calibration/{camera}/masters/`.
 
 **Integration takes forever**, try smaller batches (50 frames) on
 RPi 4. SBC's memory ceiling caps the working set; very large stacks

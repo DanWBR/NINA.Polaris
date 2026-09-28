@@ -214,10 +214,10 @@ The folder structure is:
     {Target}/aux/{Night}/            the second camera, same object
     {Target}/stacked/{Night}/        integrations you asked for
     {Target}/planetary/              SER clips and their stacks
-    calibration/dark/{Exposure}s_g{Gain}/
-    calibration/flat/{Filter}_g{Gain}/
-    calibration/bias/g{Gain}/
-    calibration/masters/             masters built in Studio
+    calibration/{Camera}/dark/{Exposure}s_g{Gain}/
+    calibration/{Camera}/flat/{Filter}_g{Gain}/
+    calibration/{Camera}/bias/g{Gain}/
+    calibration/{Camera}/masters/    masters built in Studio
     snaps/{Filter}_{Night}/          from PREVIEW with Save on
     calibrated/ integrated/ processed/   Studio output
 ```

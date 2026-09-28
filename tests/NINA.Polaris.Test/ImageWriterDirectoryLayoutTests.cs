@@ -29,12 +29,12 @@ namespace NINA.Polaris.Test;
 public class ImageWriterDirectoryLayoutTests {
 
     private static IImageData Frame(string filter, double exp, int gain, string target,
-                                     string imageType, DateTime creation) {
+                                     string imageType, DateTime creation, string camera = "") {
         var props = new ImageProperties { Width = 100, Height = 100, BitDepth = 16 };
         var meta = new ImageMetaData {
             CreationTime = creation,
             Exposure  = new ImageMetaData.ExposureInfo  { ExposureTime = exp, Filter = filter, ImageType = imageType },
-            Camera    = new ImageMetaData.CameraInfo    { Gain = gain },
+            Camera    = new ImageMetaData.CameraInfo    { Gain = gain, Name = camera },
             Target    = new ImageMetaData.TargetInfo    { Name = target }
         };
         return new BaseImageData(new ushort[100 * 100], props, meta);
@@ -71,7 +71,7 @@ public class ImageWriterDirectoryLayoutTests {
         var img = Frame("", 300, 100, "", "DARK", DateTime.Now);
         var sub = ImageWriterService.BuildSubDir("DARK", img, EmptyProfile(),
             "MyRig", DateTime.Today);
-        Assert.That(sub, Is.EqualTo(Path.Combine("MyRig", "calibration", "dark", "300s_g100")));
+        Assert.That(sub, Is.EqualTo(Path.Combine("MyRig", "calibration", "Unknown", "dark", "300s_g100")));
     }
 
     [Test]
@@ -79,7 +79,7 @@ public class ImageWriterDirectoryLayoutTests {
         var img = Frame("", 0, 100, "", "BIAS", DateTime.Now);
         var sub = ImageWriterService.BuildSubDir("BIAS", img, EmptyProfile(),
             "MyRig", DateTime.Today);
-        Assert.That(sub, Is.EqualTo(Path.Combine("MyRig", "calibration", "bias", "g100")));
+        Assert.That(sub, Is.EqualTo(Path.Combine("MyRig", "calibration", "Unknown", "bias", "g100")));
     }
 
     [Test]
@@ -87,7 +87,7 @@ public class ImageWriterDirectoryLayoutTests {
         var img = Frame("Ha", 0.5, 100, "", "FLAT", DateTime.Now);
         var sub = ImageWriterService.BuildSubDir("FLAT", img, EmptyProfile(),
             "MyRig", DateTime.Today);
-        Assert.That(sub, Is.EqualTo(Path.Combine("MyRig", "calibration", "flat", "Ha_g100")));
+        Assert.That(sub, Is.EqualTo(Path.Combine("MyRig", "calibration", "Unknown", "flat", "Ha_g100")));
     }
 
     [Test]
@@ -95,7 +95,7 @@ public class ImageWriterDirectoryLayoutTests {
         var img = Frame("", 0.5, 100, "", "DARKFLAT", DateTime.Now);
         var sub = ImageWriterService.BuildSubDir("DARKFLAT", img, EmptyProfile(),
             "MyRig", DateTime.Today);
-        Assert.That(sub, Is.EqualTo(Path.Combine("MyRig", "calibration", "darkflat", "0.5s_g100")));
+        Assert.That(sub, Is.EqualTo(Path.Combine("MyRig", "calibration", "Unknown", "darkflat", "0.5s_g100")));
     }
 
     [Test]
@@ -143,7 +143,7 @@ public class ImageWriterDirectoryLayoutTests {
         var img = Frame("L", 0.25, 100, "", "DARK", DateTime.Now);
         var sub = ImageWriterService.BuildSubDir("DARK", img, EmptyProfile(),
             "MyRig", DateTime.Today);
-        Assert.That(sub, Is.EqualTo(Path.Combine("MyRig", "calibration", "dark", "0.25s_g100")));
+        Assert.That(sub, Is.EqualTo(Path.Combine("MyRig", "calibration", "Unknown", "dark", "0.25s_g100")));
     }
 
     [Test]
@@ -324,7 +324,7 @@ public class ImageWriterDirectoryLayoutTests {
         foreach (var layout in new[] { "target-first", "night-first", "night-first-dashed" }) {
             var sub = ImageWriterService.BuildSubDir("DARK", img, ProfileWithLayout(layout),
                 "rig", Session(2026, 5, 21));
-            Assert.That(sub, Is.EqualTo(Path.Combine("rig", "calibration", "dark", "300s_g100")), layout);
+            Assert.That(sub, Is.EqualTo(Path.Combine("rig", "calibration", "Unknown", "dark", "300s_g100")), layout);
         }
     }
 
@@ -345,5 +345,33 @@ public class ImageWriterDirectoryLayoutTests {
         // Picking masters out of a library starts with knowing which sensor a
         // light came off, so the default name says it.
         Assert.That(new UserProfile().ImageNamePattern, Does.Contain("{camera}"));
+    }
+
+    // ----- Calibration is per camera -----
+
+    [Test]
+    public void TwoCamerasOnOneRigKeepSeparateCalibration() {
+        // A dark belongs to the sensor, not to the rig. With both bodies
+        // dropping into {rig}/calibration/dark/300s_g100 there was nothing in
+        // the path to tell them apart, and picking masters by hand out of a
+        // library meant opening headers.
+        var mono = Frame("L", 300, 100, "M31", "DARK",
+            new DateTime(2026, 5, 21, 23, 0, 0, DateTimeKind.Local), "ZWO ASI2600MM Pro");
+        var osc  = Frame("L", 300, 100, "M31", "DARK",
+            new DateTime(2026, 5, 21, 23, 0, 0, DateTimeKind.Local), "SVBony SV605CC");
+        var a = ImageWriterService.BuildSubDir("DARK", mono, EmptyProfile(), "rig", Session(2026, 5, 21));
+        var b = ImageWriterService.BuildSubDir("DARK", osc,  EmptyProfile(), "rig", Session(2026, 5, 21));
+        Assert.That(a, Is.EqualTo(Path.Combine("rig", "calibration", "ZWO_ASI2600MM_Pro", "dark", "300s_g100")));
+        Assert.That(b, Is.EqualTo(Path.Combine("rig", "calibration", "SVBony_SV605CC", "dark", "300s_g100")));
+        Assert.That(a, Is.Not.EqualTo(b));
+    }
+
+    [Test]
+    public void ACameraWithNoNameStillGetsAFolder() {
+        // A driver that reports no name must not produce {rig}/calibration//dark.
+        var img = Frame("L", 300, 100, "M31", "DARK",
+            new DateTime(2026, 5, 21, 23, 0, 0, DateTimeKind.Local), "");
+        var sub = ImageWriterService.BuildSubDir("DARK", img, EmptyProfile(), "rig", Session(2026, 5, 21));
+        Assert.That(sub, Is.EqualTo(Path.Combine("rig", "calibration", "Unknown", "dark", "300s_g100")));
     }
 }

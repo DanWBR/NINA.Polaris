@@ -46,7 +46,7 @@ namespace NINA.Polaris.Services;
 ///         aux/{session}/...                      ← second camera, same object
 ///         stacked/{session}/...                  ← user-requested integrations
 ///         planetary/...                          ← SER clips + their stacks
-///       calibration/                             ← rig-level, reusable across sessions
+///       calibration/{camera}/                    ← per sensor, reusable across sessions
 ///         dark/{exposure}s_g{gain}/dark_*.fits
 ///         bias/g{gain}/bias_*.fits
 ///         darkflat/{exposure}s_g{gain}/darkflat_*.fits
@@ -68,8 +68,8 @@ namespace NINA.Polaris.Services;
 ///     with a noon-to-noon rollover so the date in the folder name is
 ///     the date the night *started*, matching how astronomers describe
 ///     observation runs.
-///   - **Calibration stays per-rig (not per-session)** so masters can be
-///     reused across nights, typical PixInsight workflow. Raw cal
+///   - **Calibration is per-rig and per-camera, never per-session**, so
+///     masters can be reused across nights but never across sensors. Raw cal
 ///     frames accumulate in the same bucket regardless of which night
 ///     they were shot, then STUDIO ST-3 integrates them into masters.
 ///
@@ -669,14 +669,24 @@ public class ImageWriterService {
         var layout = ParseFolderLayout(profile?.ImageFolderLayout);
         var target = SanitizeFolder(string.IsNullOrEmpty(m.Target.Name) ? "Unknown" : m.Target.Name);
 
+        // Calibration is grouped by CAMERA first: a dark is a property of the
+        // sensor that took it, and a rig can carry more than one (the imager,
+        // the aux camera, and several on a multi-imager rig). Without this
+        // level two cameras on one rig at the same exposure and gain drop
+        // their darks into the same folder, and the only thing telling them
+        // apart is a header. The camera is part of the MATCH now as well;
+        // this level is so a human can find the right masters in a library.
+        var camera = SanitizeFolder(string.IsNullOrWhiteSpace(m.Camera.Name) ? "Unknown" : m.Camera.Name);
+        var cal = Path.Combine("calibration", camera);
+
         var subPath = typeUpper switch {
-            "DARK"      => Path.Combine("calibration", "dark",
+            "DARK"      => Path.Combine(cal, "dark",
                             FormattableString.Invariant($"{exposure:0.##}s_g{gain}")),
-            "BIAS"      => Path.Combine("calibration", "bias",
+            "BIAS"      => Path.Combine(cal, "bias",
                             FormattableString.Invariant($"g{gain}")),
-            "DARKFLAT"  => Path.Combine("calibration", "darkflat",
+            "DARKFLAT"  => Path.Combine(cal, "darkflat",
                             FormattableString.Invariant($"{exposure:0.##}s_g{gain}")),
-            "FLAT"      => Path.Combine("calibration", "flat",
+            "FLAT"      => Path.Combine(cal, "flat",
                             FormattableString.Invariant($"{filter}_g{gain}")),
             // PREVIEW-tab snaps live in their own tree so they don't
             // mix with the science lights from a sequence. Folder is

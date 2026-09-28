@@ -425,7 +425,7 @@ public class FrameLibraryService {
             cmd.CommandText =
                 "SELECT id, path, file_name, image_type, filter, target, " +
                 "exposure_sec, gain, offset_val, width, height, bayer, " +
-                "date_obs, file_size FROM frames WHERE path IN (" +
+                "date_obs, file_size, camera FROM frames WHERE path IN (" +
                 string.Join(",", paramNames) + ")";
             using var rdr = cmd.ExecuteReader();
             while (rdr.Read()) {
@@ -443,7 +443,8 @@ public class FrameLibraryService {
                     Height:      rdr.IsDBNull(10) ? 0 : rdr.GetInt32(10),
                     Bayer:       rdr.IsDBNull(11) ? "" : rdr.GetString(11),
                     DateObs:     rdr.IsDBNull(12) ? "" : rdr.GetString(12),
-                    FileSize:    rdr.IsDBNull(13) ? 0 : rdr.GetInt64(13));
+                    FileSize:    rdr.IsDBNull(13) ? 0 : rdr.GetInt64(13),
+                    Camera:      rdr.IsDBNull(14) ? "" : rdr.GetString(14));
                 result[row.Path] = row;
             }
         }
@@ -473,7 +474,7 @@ public class FrameLibraryService {
             cmd.Parameters.AddWithValue("$dt2", q.DateTo);
         }
         var sql = "SELECT id, path, file_name, image_type, filter, target, exposure_sec, " +
-                  "gain, offset_val, width, height, bayer, date_obs, file_size " +
+                  "gain, offset_val, width, height, bayer, date_obs, file_size, camera " +
                   "FROM frames";
         if (where.Count > 0) sql += " WHERE " + string.Join(" AND ", where);
         // NULLS FIRST: a freshly-indexed file that the FITS reader
@@ -503,7 +504,8 @@ public class FrameLibraryService {
                 Height:      rdr.IsDBNull(10) ? 0 : rdr.GetInt32(10),
                 Bayer:       rdr.IsDBNull(11) ? "" : rdr.GetString(11),
                 DateObs:     rdr.IsDBNull(12) ? "" : rdr.GetString(12),
-                FileSize:    rdr.IsDBNull(13) ? 0 : rdr.GetInt64(13)
+                FileSize:    rdr.IsDBNull(13) ? 0 : rdr.GetInt64(13),
+                Camera:      rdr.IsDBNull(14) ? "" : rdr.GetString(14)
             ));
         }
         return list;
@@ -514,7 +516,8 @@ public class FrameLibraryService {
         c.Open();
         using var cmd = c.CreateCommand();
         cmd.CommandText = "SELECT id, path, file_name, image_type, filter, target, exposure_sec, " +
-                          "gain, offset_val, width, height, bayer, date_obs, file_size FROM frames WHERE id = $id";
+                          "gain, offset_val, width, height, bayer, date_obs, file_size, camera " +
+                          "FROM frames WHERE id = $id";
         cmd.Parameters.AddWithValue("$id", id);
         using var rdr = cmd.ExecuteReader();
         if (!rdr.Read()) return null;
@@ -532,7 +535,8 @@ public class FrameLibraryService {
             Height:      rdr.IsDBNull(10) ? 0 : rdr.GetInt32(10),
             Bayer:       rdr.IsDBNull(11) ? "" : rdr.GetString(11),
             DateObs:     rdr.IsDBNull(12) ? "" : rdr.GetString(12),
-            FileSize:    rdr.IsDBNull(13) ? 0 : rdr.GetInt64(13)
+            FileSize:    rdr.IsDBNull(13) ? 0 : rdr.GetInt64(13),
+            Camera:      rdr.IsDBNull(14) ? "" : rdr.GetString(14)
         );
     }
 
@@ -629,7 +633,7 @@ public record FrameRow(int Id, string Path, string FileName,
                        string ImageType, string Filter, string Target,
                        double ExposureSec, int Gain, int Offset,
                        int Width, int Height, string Bayer,
-                       string DateObs, long FileSize);
+                       string DateObs, long FileSize, string Camera = "");
 /// <summary>One indexed frame as the night log sees it.</summary>
 public record NightLogFrame(string Path, string ImageType, string Filter, string Target,
                             double ExposureSec, int Gain, int Offset, int Binning, string Bayer,

@@ -168,10 +168,27 @@ Calibration removes the sensor's signature from each light frame:
 the dark current, the vignetting and dust shadows mapped by the flat,
 and the readout offset recorded by the bias. Select the lights (or
 fill the Lights slot) and press **Calibrate**. Polaris picks the
-matching master dark, master flat, and master bias by exposure,
-gain, and filter; the auto-match can be overridden with per-master
-dropdowns, and you can also force specific masters by adding them to
-the master slots. The per-pixel arithmetic is:
+matching master dark, master flat, and master bias; the auto-match
+can be overridden with per-master dropdowns, and you can also force
+specific masters by adding them to the master slots.
+
+What the auto-match requires:
+
+- **The same camera.** A dark is a map of one sensor's dark current
+  and a flat is a map of one optical train's dust, so a master from
+  another body is not a substitute. A master with no camera recorded,
+  which older libraries are full of, still matches anything: the rule
+  only refuses when both sides name a camera and the names differ.
+- **The same gain**, exactly, for all three.
+- **The same exposure for a dark**, within one percent and never less
+  than half a second of slack. Nothing here scales a dark, so a 10 s
+  dark subtracted from a 300 s light removes almost none of the dark
+  current and reports success. Polaris would rather tell you it found
+  no dark.
+- **The same filter for a flat**, case-insensitively.
+
+If nothing qualifies, the error names what was being looked for, so
+the fix ("shoot darks at this exposure") is in the message. The per-pixel arithmetic is:
 
 ```
 (light - dark - bias) / (flat - flatDark) * mean(flat - flatDark)

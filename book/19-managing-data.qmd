@@ -50,10 +50,10 @@ predictable subtree:
     {Target}/aux/{Night}/            the second camera, same object
     {Target}/stacked/{Night}/        integrations you asked for
     {Target}/planetary/              SER clips and their stacks
-    calibration/dark/{Exposure}s_g{Gain}/
-    calibration/flat/{Filter}_g{Gain}/
-    calibration/bias/g{Gain}/
-    calibration/masters/             masters built in Studio
+    calibration/{Camera}/dark/{Exposure}s_g{Gain}/
+    calibration/{Camera}/flat/{Filter}_g{Gain}/
+    calibration/{Camera}/bias/g{Gain}/
+    calibration/{Camera}/masters/    masters built in Studio
     snaps/{Filter}_{Night}/          from PREVIEW with Save on
     calibrated/ integrated/ processed/   Studio output
 ```
@@ -85,8 +85,11 @@ who thinks in projects: a target's whole history in one place.
 
 Aux frames and stacks follow the choice, so a night never splits
 across two shapes. Calibration does not: darks, flats and biases stay
-at `{rig}/calibration/...`, because a master outlives the night it was
-shot on. Changing the setting moves nothing that is already on disk,
+at `{rig}/calibration/{camera}/...`, because a master outlives the
+night it was shot on, and because a master belongs to the sensor that
+took it rather than to the rig. A rig with an imager and an aux camera
+used to drop both their darks into one folder whenever the exposure
+and gain agreed. Changing the setting moves nothing that is already on disk,
 and Studio indexes both shapes, since it reads FITS headers rather
 than path segments.
 
