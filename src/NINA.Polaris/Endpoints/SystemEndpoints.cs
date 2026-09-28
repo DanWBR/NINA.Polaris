@@ -793,6 +793,7 @@ public static class SystemEndpoints {
             p.SolveToleranceArcsec = Num("solveToleranceArcsec", p.SolveToleranceArcsec);
             p.ImageNamePattern = Str("imageNamePattern", p.ImageNamePattern);
             p.ImageFormat = Str("imageFormat", p.ImageFormat);
+            p.ImageFolderLayout = Str("imageFolderLayout", p.ImageFolderLayout);
             p.PreferAdvancedSequencer = Bool("preferAdvancedSequencer", p.PreferAdvancedSequencer);
             p.LogToDisk = Bool("logToDisk", p.LogToDisk);
             p.SirilPath = Str("sirilPath", p.SirilPath);

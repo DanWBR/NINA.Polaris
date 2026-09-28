@@ -73,6 +73,18 @@ namespace NINA.Polaris.Services;
 ///     frames accumulate in the same bucket regardless of which night
 ///     they were shot, then STUDIO ST-3 integrates them into masters.
 ///
+/// The order of the first levels is a setting, <c>ImageFolderLayout</c>:
+///
+///   target-first     {rig}/{target}/lights/{yyyy-MM-dd}   (the shape above)
+///   night-first      {rig}/{dd-MM-yyyy}/{target}/lights   (a night at a time)
+///   night-first-iso  {rig}/{yyyy-MM-dd}/{target}/lights
+///
+/// It moves lights, aux and stacked together, so a night stays one folder
+/// whichever way round it is. Calibration is not affected: it stays rig-level
+/// so masters outlive the night. Changing it does not move anything already
+/// written; both shapes are indexed, since the library reads FITS headers
+/// rather than path segments.
+///
 /// The sub-path is derived from IMAGETYP. The filename pattern still
 /// controls just the leaf name. Pre-existing flat layouts keep being
 /// indexed by the FrameLibraryService scan since it walks recursively.
@@ -176,7 +188,7 @@ public class ImageWriterService {
                 : (format switch { "xisf" => ".xisf", _ => ".fits" });
 
             var pattern = string.IsNullOrWhiteSpace(profile.ImageNamePattern)
-                ? "{target}_{filter}_{exposure}s_g{gain}_{temp}C_{datetime}_{seq}"
+                ? "{target}_{camera}_{filter}_{exposure}s_g{gain}_{temp}C_{datetime}_{seq}"
                 : profile.ImageNamePattern;
             var fileName = SubstitutePattern(pattern, imageData, _sessionFrameNumber) + extension;
             // Sanitise illegal filename characters
@@ -197,7 +209,8 @@ public class ImageWriterService {
             // ({rig}/{target}/stacked/{session}) so the integrated master sits
             // beside that target's subs without being mixed in with them.
             var subDir = stacked
-                ? BuildStackedSubDir(imageData, rigName, sessionDate, stackedFolderName)
+                ? BuildStackedSubDir(imageData, rigName, sessionDate, stackedFolderName,
+                                     profile.ImageFolderLayout)
                 : BuildSubDir(imageType, imageData, profile, rigName, sessionDate);
             var targetDir = string.IsNullOrEmpty(subDir) ? dir : Path.Combine(dir, subDir);
             Directory.CreateDirectory(targetDir);
@@ -653,6 +666,9 @@ public class ImageWriterService {
         var gain     = m.Camera.Gain;
         var exposure = m.Exposure.ExposureTime;
 
+        var layout = ParseFolderLayout(profile?.ImageFolderLayout);
+        var target = SanitizeFolder(string.IsNullOrEmpty(m.Target.Name) ? "Unknown" : m.Target.Name);
+
         var subPath = typeUpper switch {
             "DARK"      => Path.Combine("calibration", "dark",
                             FormattableString.Invariant($"{exposure:0.##}s_g{gain}")),
@@ -673,16 +689,8 @@ public class ImageWriterService {
             // Auxiliary (second) camera frames sit beside the main camera's
             // lights under the same target, in their own aux/ folder so the
             // two never mix.
-            "AUX"       => Path.Combine(
-                            SanitizeFolder(string.IsNullOrEmpty(m.Target.Name) ? "Unknown" : m.Target.Name),
-                            "aux",
-                            sessionDate.ToString("yyyy-MM-dd",
-                                System.Globalization.CultureInfo.InvariantCulture)),
-            _           => Path.Combine(
-                            SanitizeFolder(string.IsNullOrEmpty(m.Target.Name) ? "Unknown" : m.Target.Name),
-                            "lights",
-                            sessionDate.ToString("yyyy-MM-dd",
-                                System.Globalization.CultureInfo.InvariantCulture))
+            "AUX"       => TargetKindPath(layout, target, "aux", sessionDate),
+            _           => TargetKindPath(layout, target, "lights", sessionDate)
         };
         return Path.Combine(rig, subPath);
     }
@@ -712,13 +720,50 @@ public class ImageWriterService {
     /// integrated result is where its subs are, without being mixed in with
     /// them. No filter level, for the same reason lights have none: the
     /// filename and the header both carry it.</summary>
-    public static string BuildStackedSubDir(IImageData img, string rigName, DateTime sessionDate, string folderName = "stacked") {
+    public static string BuildStackedSubDir(IImageData img, string rigName, DateTime sessionDate,
+                                            string folderName = "stacked", string? folderLayout = null) {
         var m = img.MetaData;
         var rig    = SanitizeFolder(string.IsNullOrEmpty(rigName) ? "Default" : rigName);
         var target = SanitizeFolder(string.IsNullOrEmpty(m.Target.Name) ? "Unknown" : m.Target.Name);
         var folder = SanitizeFolder(string.IsNullOrEmpty(folderName) ? "stacked" : folderName);
-        return Path.Combine(rig, target, folder,
-            sessionDate.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
+        return Path.Combine(rig, TargetKindPath(ParseFolderLayout(folderLayout), target, folder, sessionDate));
+    }
+
+    /// <summary>The three folder layouts the capture root can use.</summary>
+    public enum FolderLayout {
+        /// <summary>{target}/{kind}/{yyyy-MM-dd}: everything ever shot on one
+        /// object under one folder. The original, and still the default.</summary>
+        TargetFirst,
+        /// <summary>{dd-MM-yyyy}/{target}/{kind}: a night at a time, the way
+        /// the ASIAIR lays it out. Day first, as asked for.</summary>
+        NightFirst,
+        /// <summary>{yyyy-MM-dd}/{target}/{kind}: the same shape with a date
+        /// that sorts chronologically in any file manager.</summary>
+        NightFirstIso
+    }
+
+    public static FolderLayout ParseFolderLayout(string? value) => (value ?? "").Trim().ToLowerInvariant() switch {
+        "night-first"     => FolderLayout.NightFirst,
+        "night-first-iso" => FolderLayout.NightFirstIso,
+        _                 => FolderLayout.TargetFirst
+    };
+
+    /// <summary>
+    /// The part of the path below the rig for frames that belong to a target
+    /// on a night: lights, aux and stacked. Calibration does not come through
+    /// here, it is rig-level by design so masters outlive the night.
+    ///
+    /// <para>The night folder is the astronomical night (noon rollover), not
+    /// the calendar day, so frames taken either side of midnight stay in one
+    /// folder. That is the whole point of putting the date in the path.</para>
+    /// </summary>
+    public static string TargetKindPath(FolderLayout layout, string target, string kind, DateTime sessionDate) {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        return layout switch {
+            FolderLayout.NightFirst    => Path.Combine(sessionDate.ToString("dd-MM-yyyy", inv), target, kind),
+            FolderLayout.NightFirstIso => Path.Combine(sessionDate.ToString("yyyy-MM-dd", inv), target, kind),
+            _                          => Path.Combine(target, kind, sessionDate.ToString("yyyy-MM-dd", inv))
+        };
     }
 
     /// <summary>

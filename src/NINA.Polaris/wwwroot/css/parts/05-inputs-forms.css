@@ -2411,3 +2411,13 @@ body.link-offline .preview-pane::after {
     font-variant-numeric: tabular-nums;
 }
 
+/* The worked example under the filename pattern. Wraps on a narrow column and
+   breaks on the path separators rather than mid-token. */
+.path-example {
+    display: inline-block;
+    margin-top: 2px;
+    line-height: 1.5;
+    word-break: break-word;
+    color: var(--text);
+}
+

@@ -5166,5 +5166,14 @@
   "Sequence counter": "Zähler der Sequenz",
   "Camera name": "Name der Kamera",
   "Sensor temperature in C": "Sensortemperatur in C",
-  "Frame type: LIGHT, DARK, FLAT, BIAS": "Bildtyp: LIGHT, DARK, FLAT, BIAS"
+  "Frame type: LIGHT, DARK, FLAT, BIAS": "Bildtyp: LIGHT, DARK, FLAT, BIAS",
+  "Folder layout": "Ordnerstruktur",
+  "Target, then night": "Objekt, dann Nacht",
+  "Night, then target (day first)": "Nacht, dann Objekt (Tag zuerst)",
+  "Night, then target (year first)": "Nacht, dann Objekt (Jahr zuerst)",
+  "Lights, aux frames and stacks follow this. Calibration always stays at": "Lights, Bilder der Zweitkamera und Stacks folgen dieser Wahl. Die Kalibrierung bleibt immer unter",
+  "so masters can be reused across nights. The night rolls over at midday, so frames either side of midnight stay together. Nothing already on disk is moved, and Studio indexes both shapes.": "damit Master über mehrere Nächte hinweg nutzbar bleiben. Die Nacht wechselt mittags, sodass Bilder beiderseits von Mitternacht zusammenbleiben. Nichts, was schon auf der Platte liegt, wird verschoben, und Studio indiziert beide Formen.",
+  "Leave it blank for the default, or": "Leer lassen für den Standard, oder",
+  "write the default in": "den Standard eintragen",
+  "Tonight a light lands at:": "Heute Nacht landet ein Light unter:"
 }

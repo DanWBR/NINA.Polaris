@@ -4548,5 +4548,14 @@
   "Sequence counter": "",
   "Camera name": "",
   "Sensor temperature in C": "",
-  "Frame type: LIGHT, DARK, FLAT, BIAS": ""
+  "Frame type: LIGHT, DARK, FLAT, BIAS": "",
+  "Folder layout": "",
+  "Target, then night": "",
+  "Night, then target (day first)": "",
+  "Night, then target (year first)": "",
+  "Lights, aux frames and stacks follow this. Calibration always stays at": "",
+  "so masters can be reused across nights. The night rolls over at midday, so frames either side of midnight stay together. Nothing already on disk is moved, and Studio indexes both shapes.": "",
+  "Leave it blank for the default, or": "",
+  "write the default in": "",
+  "Tonight a light lands at:": ""
 }

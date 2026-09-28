@@ -1131,6 +1131,7 @@ function ninaApp() {
             imageFormat: 'fits',
             imageOutputDir: '',
             imageNamePattern: '',
+            imageFolderLayout: 'target-first',
             stellariumHost: 'localhost',
             stellariumPort: 8090,
             preferAdvancedSequencer: false,
@@ -1872,6 +1873,15 @@ function ninaApp() {
         // a token that is not there comes out of the writer as literal braces
         // in the file name. The sample is what the token looked like for a
         // typical light frame, which is the fastest way to explain a token.
+        // How lights are foldered under the capture root. Mirrors
+        // ImageWriterService.FolderLayout; the profile overwrites it on load.
+        // 'target-first' | 'night-first' | 'night-first-iso'
+        imageFolderLayouts: [
+            { id: 'target-first',    label: 'Target, then night' },
+            { id: 'night-first',     label: 'Night, then target (day first)' },
+            { id: 'night-first-iso', label: 'Night, then target (year first)' }
+        ],
+
         imageNameTokens: [
             { tok: 'target',    sample: 'M42',                  hint: 'Target name' },
             { tok: 'filter',    sample: 'Ha',                   hint: 'Filter in the wheel' },
@@ -12970,6 +12980,7 @@ function ninaApp() {
                     this.settings.imageFormat = data.imageFormat || 'fits';
                     this.settings.imageOutputDir = data.imageOutputDir || '';
                     this.settings.imageNamePattern = data.imageNamePattern || '';
+                    this.settings.imageFolderLayout = data.imageFolderLayout || 'target-first';
                     this.settings.preferAdvancedSequencer = !!data.preferAdvancedSequencer;
                     this.settings.autoConnectOnStartup = !!data.autoConnectOnStartup;
                     this.settings.locationPromptDismissed = !!data.locationPromptDismissed;
@@ -27003,6 +27014,7 @@ function ninaApp() {
                         imageFormat: this.settings.imageFormat,
                         imageOutputDir: this.settings.imageOutputDir,
                         imageNamePattern: this.settings.imageNamePattern,
+                        imageFolderLayout: this.settings.imageFolderLayout,
                         preferAdvancedSequencer: this.settings.preferAdvancedSequencer,
                         autoConnectOnStartup: this.settings.autoConnectOnStartup,
                         locationPromptDismissed: this.settings.locationPromptDismissed,
@@ -29330,6 +29342,51 @@ function ninaApp() {
             } catch (e) {
                 this.toast('Re-center failed: ' + (e.message || 'driver rejected'), 'warn');
             }
+        },
+
+        // What tonight's lights will actually be called, for the card. Built
+        // from the same rules the writer uses, so the example is the answer
+        // rather than a drawing of it: the rig name comes from the active rig,
+        // the night rolls over at noon like a real session, and the leaf is
+        // the pattern with the sample values behind the token chips.
+        imageLayoutExample() {
+            const rig = (this.equipmentProfile?.name || 'Default').replace(/\s+/g, '_');
+            const now = new Date();
+            const night = new Date(now);
+            if (now.getHours() < 12) night.setDate(night.getDate() - 1);
+            const p = n => String(n).padStart(2, '0');
+            const iso = night.getFullYear() + '-' + p(night.getMonth() + 1) + '-' + p(night.getDate());
+            const dmy = p(night.getDate()) + '-' + p(night.getMonth() + 1) + '-' + night.getFullYear();
+            const layout = this.settings.imageFolderLayout || 'target-first';
+            // Same sample target as the {target} chip, so the folder and the
+            // file name in the example are one frame rather than two.
+            const tgt = (this.imageNameTokens.find(t => t.tok === 'target') || {}).sample || 'M42';
+            const head = layout === 'night-first'     ? [rig, dmy, tgt, 'lights']
+                       : layout === 'night-first-iso' ? [rig, iso, tgt, 'lights']
+                       :                                [rig, tgt, 'lights', iso];
+            return head.join('/') + '/' + this.imageNameExample();
+        },
+
+        // The filename the current pattern produces, with the same sample
+        // values the token chips advertise.
+        imageNameExample() {
+            const pattern = this.settings.imageNamePattern || this.imageNameDefaultPattern;
+            const samples = {};
+            for (const t of this.imageNameTokens) samples[t.tok] = t.sample;
+            const ext = this.settings.imageFormat === 'xisf' ? '.xisf' : '.fits';
+            return pattern.replace(/\{(\w+)\}/g, (m, k) => samples[k] ?? m).replace(/\s+/g, '_') + ext;
+        },
+
+        // The pattern a fresh profile gets. Kept in step with
+        // UserProfile.ImageNamePattern; the button below is how an existing
+        // profile, which stores whatever default it was created with, adopts
+        // the current one.
+        imageNameDefaultPattern:
+            '{target}_{camera}_{filter}_{exposure}s_g{gain}_{temp}C_{datetime}_{seq}',
+
+        imageNameUseDefault() {
+            this.settings.imageNamePattern = this.imageNameDefaultPattern;
+            this.saveSettingsToServer();
         },
 
         // Insert a filename token at the cursor. Appends when the field was
