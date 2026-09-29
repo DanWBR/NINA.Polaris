@@ -264,6 +264,9 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Planetary.PlanetaryStackerSe
 // SER) into an animated GIF (self-contained) and/or an MP4 (ffmpeg when present).
 builder.Services.AddSingleton<NINA.Polaris.Services.External.FfmpegService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Timelapse.MediaEncodeService>();
+// Live broadcast: destination, quality and the stream key. Its own file under
+// the data dir, never the profile, which is served verbatim to every client.
+builder.Services.AddSingleton<NINA.Polaris.Services.Broadcast.BroadcastConfigService>();
 // Star trails: fixed-camera (tracking off) capture + per-pixel MAX composite,
 // previewed live and saved as a FITS master + JPEG; can feed the time-lapse builder.
 builder.Services.AddSingleton<NINA.Polaris.Services.StarTrail.StarTrailService>();
