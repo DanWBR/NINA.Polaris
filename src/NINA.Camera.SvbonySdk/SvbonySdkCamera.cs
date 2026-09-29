@@ -34,6 +34,7 @@ namespace NINA.Camera.SvbonySdk;
 public sealed class SvbonySdkCamera : ICamera {
     private readonly int _cameraId;
     private bool _connected;
+    private string? _disconnectReason;
 
     private int _maxX, _maxY, _maxBitDepth = 16;
     private double _pixelSize;
@@ -84,6 +85,7 @@ public sealed class SvbonySdkCamera : ICamera {
 
     public string DeviceName { get; private set; }
     public bool IsConnected => _connected;
+    public string? DisconnectReason => _disconnectReason;
     public CameraStates State { get; private set; } = CameraStates.NoState;
 
     // Cache the last valid reading so WrapFrame can stamp CCD-TEMP into the
@@ -213,6 +215,7 @@ public sealed class SvbonySdkCamera : ICamera {
         // control.
         _offset = ReadControl(SVB_CONTROL_TYPE.SVB_BLACK_LEVEL);
         _connected = true;
+        _disconnectReason = null;
         State = CameraStates.Idle;
     }, ct);
 
@@ -220,6 +223,8 @@ public sealed class SvbonySdkCamera : ICamera {
         try { StopStreamCore(); } catch { }
         if (_connected) { try { SVBCloseCamera(_cameraId); } catch { } }
         _connected = false;
+        // A disconnect the operator asked for is not news.
+        _disconnectReason = null;
         State = CameraStates.NoState;
     }, ct);
 
@@ -619,11 +624,31 @@ public sealed class SvbonySdkCamera : ICamera {
         try {
             // Serialise against the streaming pull thread (see _sdk note).
             lock (_sdk) {
-                if (SVBGetControlValue(_cameraId, t, out var v, out _) == SVB_ERROR_CODE.SVB_SUCCESS)
-                    return (int)v.Value;
+                var rc = SVBGetControlValue(_cameraId, t, out var v, out _);
+                if (rc == SVB_ERROR_CODE.SVB_SUCCESS) return (int)v.Value;
+                NoteSdkResult(rc);
             }
         } catch { }
         return 0;
+    }
+
+    /// <summary>
+    /// Drop the connection when the SDK says the camera is not there. The
+    /// status loop reads temperature and cooler power once a second, so the
+    /// answer is already being fetched; before this it was discarded and an
+    /// unplugged camera reported itself connected, at 0 degrees, for ever.
+    /// Only the two unambiguous codes count: a timeout is a bad moment, not a
+    /// missing camera.
+    /// </summary>
+    private void NoteSdkResult(SVB_ERROR_CODE rc) {
+        if (rc != SVB_ERROR_CODE.SVB_ERROR_CAMERA_REMOVED
+            && rc != SVB_ERROR_CODE.SVB_ERROR_INVALID_ID) return;
+        if (!_connected) return;
+        _connected = false;
+        _streaming = false;
+        _disconnectReason = rc == SVB_ERROR_CODE.SVB_ERROR_CAMERA_REMOVED
+            ? "the camera reported itself removed from the USB bus"
+            : "the SDK no longer knows this camera id, which is what a removed camera looks like";
     }
 
     // ----- Dynamic control panel (self-describing via SVBGetControlCaps) -----

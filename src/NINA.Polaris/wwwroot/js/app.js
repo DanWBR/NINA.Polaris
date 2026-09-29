@@ -1122,6 +1122,10 @@ function ninaApp() {
         seqStatus: null,
         _seqPollTimer: null,
 
+        // Set when a camera dropped off the bus on its own (the SDK reported
+        // it removed). Cleared when it comes back or is reconnected.
+        cameraDisconnectReason: '',
+
         // Settings
         settings: {
             indiHost: 'localhost',
@@ -48417,6 +48421,11 @@ function ninaApp() {
             }
             if (eq.camera) {
                 this.cameraTemp = eq.camera.temperature;
+                // Why the link went down, when it went down by itself. The
+                // server also pushes one notification, which is the thing
+                // that gets noticed; this keeps the explanation on the card
+                // after the toast has gone, next to the device that lost it.
+                this.cameraDisconnectReason = eq.camera.disconnectReason || '';
                 // ONLY mirror the camera name as "selectedCamera" when
                 // the backend reports it as actually CONNECTED. The
                 // EquipmentManager keeps Camera!=null after the user

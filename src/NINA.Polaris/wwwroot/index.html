@@ -6813,6 +6813,17 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <span class="equip-status-dot" :class="selectedCamera ? 'connected' : 'disconnected'"></span>
                         </div>
                         <div class="equip-card-body">
+                            <!-- The link went down on its own. The server
+                                 pushes a notification when it happens, which
+                                 is what gets noticed; this keeps the reason on
+                                 the card afterwards, where the device is. -->
+                            <div class="equip-install-banner cam-link-lost"
+                                 x-show="cameraDisconnectReason" x-cloak>
+                                <strong>Camera disconnected on its own.</strong>
+                                <span x-text="cameraDisconnectReason"></span>
+                                Check the cable and the power on the camera, then connect again.
+                            </div>
+
                             <!-- Driver picker. INDI is the default; vendor SDKs
                                  (Canon EDSDK, Nikon, Sony) only appear in the
                                  list on Windows and only with a green check

@@ -659,6 +659,37 @@ Running Polaris from a source checkout, or on macOS, there is no such
 unit and Polaris falls back to spawning indi-web as a child process.
 That is fine when nothing is going to restart a unit underneath it.
 
+## When the camera itself disappears
+
+A native camera, one driven through its vendor SDK rather than through
+INDI, used to keep reporting itself connected after the cable came out.
+The temperature read as zero, the cooler read as off, and the first
+sign of trouble was an exposure failing, or a sequence quietly burning
+through frames that never arrived. The SDK knew: it was returning "this
+camera has been removed" to every call. Nothing looked at the answer.
+
+Polaris now does. The status loop already asks the camera for its
+temperature once a second, so the removal code arrives without any
+extra polling, on Windows and on Linux alike. ZWO, SVBony and
+Player One report it as a return code; ToupTek and Altair raise a
+disconnect event, which Polaris was registered for and used to ignore.
+On any of them the reaction is the same:
+
+- the camera is marked disconnected, immediately, so everything that
+  waits for a healthy camera actually waits. An autorun, an advanced
+  sequence or a plan stops instead of failing frame after frame
+- a notification says which camera it was and what to check
+- the camera card keeps the reason on screen after the toast has gone
+
+A disconnect you asked for stays silent, because that is not news. The
+message only appears for a link nobody asked to drop.
+
+Two limits worth knowing. A camera driven through INDI is a different
+path: the driver stays loaded and usually keeps the device defined, so
+what you see depends on the driver rather than on Polaris, and the
+driver watchdog handles that case (@sec-rigs). And a DSLR over gphoto
+or the Canon SDK is not covered yet.
+
 ## When a device vanishes: Reset USB {#sec-reset-usb}
 
 A camera that stops appearing, a focuser whose serial port is suddenly
