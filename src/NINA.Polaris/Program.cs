@@ -267,6 +267,9 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Timelapse.MediaEncodeService
 // Live broadcast: destination, quality and the stream key. Its own file under
 // the data dir, never the profile, which is served verbatim to every client.
 builder.Services.AddSingleton<NINA.Polaris.Services.Broadcast.BroadcastConfigService>();
+// The object card on the broadcast: catalogue facts, a bundled cutout, and a
+// description that prefers our own text over a cached online one.
+builder.Services.AddSingleton<NINA.Polaris.Services.Broadcast.ObjectCardService>();
 // Star trails: fixed-camera (tracking off) capture + per-pixel MAX composite,
 // previewed live and saved as a FITS master + JPEG; can feed the time-lapse builder.
 builder.Services.AddSingleton<NINA.Polaris.Services.StarTrail.StarTrailService>();
