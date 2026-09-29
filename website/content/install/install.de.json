@@ -69,6 +69,10 @@
     "bootNote": "Board einschalten, fertig. Polaris startet von selbst: keine Installation, kein Konto, keine Einrichtung. Wenn das Board WLAN hat und kein Netzwerk in der Umgebung erkennt, macht es sein eigenes auf, es heißt Polaris-Hotspot-XXXX (das Passwort ist polaris1234). Verbinden Sie Handy oder Notebook mit diesem Netzwerk und öffnen Sie Polaris im Browser.",
     "tips": [
       {
+        "icon": "⚠️",
+        "body": "<strong>Die fertigen Images werden neu erstellt.</strong> Alle bisher veröffentlichten Images enthalten eine Polaris-Version, deren Oberfläche nicht lädt: ein Skriptfehler ließ den Browser auf dem Ladebildschirm stehen. Behoben in v0.98.143, die neuen Images entstehen gerade. Bis dahin lässt sich das Paket unten auf einer gewöhnlichen Karte mit Raspberry Pi OS, Armbian, Ubuntu oder Debian installieren und ist nicht betroffen."
+      },
+      {
         "icon": "🔎",
         "body": "<strong>Wie öffne ich Polaris?</strong> Am einfachsten mit der App für Handy oder Tablet, für Android und iOS. Sie sucht die Boards in Ihrem Netzwerk von allein und zeigt an, was sie findet: Sie brauchen keine Adresse zu kennen, App öffnen, Board antippen, fertig. Sie merkt sich außerdem mehrere Boards und hält sie in Tabs bereit.<br><strong>Keine App? Jeder Browser geht auch.</strong> Sie öffnen Polaris wie eine Webseite, indem Sie eine Adresse eintippen.<br><strong>Die Adresse ist die Nummer Ihres Boards.</strong> Öffnen Sie die Seite oder App Ihres Routers und sehen Sie sich die Liste der verbundenen Geräte an (oft DHCP oder Clients genannt). Ihr Board steht dort, mit einer Nummer wie 192.168.1.42. Tippen Sie <code>https://192.168.1.42:5000</code> in den Browser, mit Ihrer eigenen Nummer.<br><strong>Eine Abkürzung:</strong> auf dem Raspberry Pi können Sie den Namen eingeben, etwa <code>https://polaris-pi.local:5000</code>. Manche Orange-Pi-Images können das nicht, dort nehmen Sie die Nummer.<br><strong>Der Browser warnt Sie wegen des Zertifikats.</strong> Das ist so erwartet und kein Problem: Das Board signiert sein eigenes, weil es in Ihrem Heimnetz lebt und nicht im Internet. Einmal annehmen, dann fragt er nicht mehr.<br><strong>Board nicht zu finden?</strong> Wahrscheinlich ist es noch nicht in Ihrem WLAN, es bietet also weiterhin seinen eigenen Polaris-Hotspot-XXXX an. Verbinden Sie sich mit diesem Hotspot (oder stecken Sie ein Netzwerkkabel ein) und stellen Sie Ihr WLAN unter Einstellungen, Netzwerk ein."
       },
@@ -83,83 +87,83 @@
         "badge": "x86-64",
         "color": "#8b5cf6",
         "emoji": "🖥️",
-        "url": "https://drive.google.com/uc?export=download&id=1xHjeHH90uDB6vjMHiUE6IMpFiKBZtRL3",
         "os": "Ubuntu 24.04.4 LTS (x86-64)",
         "polaris": "0.98.137 (2026-09-27)",
         "size": "3.10 GB (.7z)",
         "access": "https://polaris-linux.local:5000/",
-        "note": "Der schnellste Weg zu Polaris, und kostenlos, wenn ohnehin ein Mini-PC oder ein altes Notebook herumliegt. Entpacken Sie das .7z, schreiben Sie das .img mit balenaEtcher oder Rufus auf einen USB-Stick und booten Sie davon. Läuft es, kopiert sudo polaris-install-to-disk alles auf die interne Platte und der Stick kann raus."
+        "note": "Der schnellste Weg zu Polaris, und kostenlos, wenn ohnehin ein Mini-PC oder ein altes Notebook herumliegt. Entpacken Sie das .7z, schreiben Sie das .img mit balenaEtcher oder Rufus auf einen USB-Stick und booten Sie davon. Läuft es, kopiert sudo polaris-install-to-disk alles auf die interne Platte und der Stick kann raus.",
+        "urlWithheld": "https://drive.google.com/uc?export=download&id=1xHjeHH90uDB6vjMHiUE6IMpFiKBZtRL3"
       },
       {
         "device": "Raspberry Pi 4",
         "badge": "arm64",
         "color": "#e11d6b",
-        "url": "https://drive.google.com/uc?export=download&id=1vX5fQ25B3friYTn0Bw_4Dma76A3pW8Oy",
         "os": "Raspberry Pi OS 64-Bit (Debian Trixie)",
         "polaris": "0.98.137 (2026-09-27)",
         "size": "5.22 GB (.7z)",
         "access": "https://polaris-pi4-1.local:5000/",
-        "note": "Das langsamste Board auf dieser Seite und trotzdem genug für eine normale Nacht: Aufnahme, Guiding, Plate Solving und Live Stacking laufen. Spürbar wird es bei großen Sensoren und den KI-Werkzeugen. Entpacken Sie das .7z und schreiben Sie das .img mit Raspberry Pi Imager, balenaEtcher oder Rufus."
+        "note": "Das langsamste Board auf dieser Seite und trotzdem genug für eine normale Nacht: Aufnahme, Guiding, Plate Solving und Live Stacking laufen. Spürbar wird es bei großen Sensoren und den KI-Werkzeugen. Entpacken Sie das .7z und schreiben Sie das .img mit Raspberry Pi Imager, balenaEtcher oder Rufus.",
+        "urlWithheld": "https://drive.google.com/uc?export=download&id=1vX5fQ25B3friYTn0Bw_4Dma76A3pW8Oy"
       },
       {
         "device": "Raspberry Pi 5",
         "badge": "arm64",
         "color": "#e11d6b",
-        "url": "https://drive.google.com/uc?export=download&id=1cSjaxzbMtkv1MUuBBRgN1uNb8Hjws-FL",
         "os": "Raspberry Pi OS 64-Bit (Debian Trixie)",
         "polaris": "0.98.137 (2026-09-27)",
         "size": "7.64 GB (.7z)",
         "access": "https://polaris-pi.local:5000/",
-        "note": "Etwa doppelt so schnell wie die Pi 4 und am leichtesten zu bekommen. Ein bequemer Allrounder, wenn Sie ohnehin in der Raspberry-Pi-Welt zu Hause sind. Entpacken Sie das .7z und schreiben Sie das .img mit Raspberry Pi Imager, balenaEtcher oder Rufus."
+        "note": "Etwa doppelt so schnell wie die Pi 4 und am leichtesten zu bekommen. Ein bequemer Allrounder, wenn Sie ohnehin in der Raspberry-Pi-Welt zu Hause sind. Entpacken Sie das .7z und schreiben Sie das .img mit Raspberry Pi Imager, balenaEtcher oder Rufus.",
+        "urlWithheld": "https://drive.google.com/uc?export=download&id=1cSjaxzbMtkv1MUuBBRgN1uNb8Hjws-FL"
       },
       {
         "device": "Orange Pi Zero 3",
         "badge": "arm64",
         "color": "#ff7a18",
-        "url": "https://drive.google.com/uc?export=download&id=1BK_FfEyVA11GeWPy_dD8meHs_oKAHz7v",
         "os": "Armbian 25.5.1 XFCE (Ubuntu 24.04, Kernel 6.12.23)",
         "polaris": "0.98.137 (2026-09-27)",
         "size": "2.52 GB (.7z)",
         "access": "https://orangepizero3.local:5000/",
-        "note": "Der günstigste Einstieg. Mit 1,5 GB RAM reicht es für Aufnahme, Guiding und Plate Solving; Live Stacking eines großen Sensors und die KI-Werkzeuge strapazieren die Geduld. Dieses Board hat keine GPU-Beschleunigung, die KI läuft also auf der CPU. Entpacken Sie das .7z und schreiben Sie das .img mit HDD Raw Copy Tool, balenaEtcher oder Rufus auf eine SD-Karte. Login-Passwort: polaris."
+        "note": "Der günstigste Einstieg. Mit 1,5 GB RAM reicht es für Aufnahme, Guiding und Plate Solving; Live Stacking eines großen Sensors und die KI-Werkzeuge strapazieren die Geduld. Dieses Board hat keine GPU-Beschleunigung, die KI läuft also auf der CPU. Entpacken Sie das .7z und schreiben Sie das .img mit HDD Raw Copy Tool, balenaEtcher oder Rufus auf eine SD-Karte. Login-Passwort: polaris.",
+        "urlWithheld": "https://drive.google.com/uc?export=download&id=1BK_FfEyVA11GeWPy_dD8meHs_oKAHz7v"
       },
       {
         "device": "Orange Pi 4 Pro",
         "badge": "arm64",
         "color": "#ff7a18",
-        "url": "https://drive.google.com/uc?export=download&id=14xR6ptitdHB53gE6TT6tACzb45Xv52fE",
         "os": "Ubuntu 22.04 (arm64)",
         "polaris": "0.98.137 (2026-09-27)",
         "size": "2.52 GB (.7z)",
         "access": "https://polaris-opi4pro-1.local:5000/",
-        "note": "Das Board für den Zweifelsfall. Rund 50 US$, deutlich flotter als eine Pi 4 und das beste Verhältnis aus Preis und Leistung hier. Entpacken Sie das .7z und schreiben Sie das .img mit HDD Raw Copy Tool, balenaEtcher oder Rufus auf den internen Speicher. Login-Passwort: polaris."
+        "note": "Das Board für den Zweifelsfall. Rund 50 US$, deutlich flotter als eine Pi 4 und das beste Verhältnis aus Preis und Leistung hier. Entpacken Sie das .7z und schreiben Sie das .img mit HDD Raw Copy Tool, balenaEtcher oder Rufus auf den internen Speicher. Login-Passwort: polaris.",
+        "urlWithheld": "https://drive.google.com/uc?export=download&id=14xR6ptitdHB53gE6TT6tACzb45Xv52fE"
       },
       {
         "device": "Orange Pi 5 Pro",
         "badge": "arm64",
         "color": "#ff7a18",
-        "url": "https://drive.google.com/uc?export=download&id=1Xb8MGqeLoctufMVvcfhcwf6hwLyv35WV",
         "os": "Armbian 26.8.0 KDE (Ubuntu 26.04, Kernel 6.1.115)",
         "polaris": "0.98.137 (2026-09-27)",
         "size": "8.27 GB (.7z)",
         "access": "https://polaris-opi5pro-1.local:5000/",
         "note": "Zweieinhalbmal eine Pi 4, mit GPU-Beschleunigung für die KI-Werkzeuge. Lohnt sich, wenn Hintergrundextraktion, Entrauschen und Dekonvolution zu Ihrer Bildbearbeitung gehören. Entpacken Sie das .7z und schreiben Sie das .img mit balenaEtcher oder Rufus.",
         "gpu": "ja",
-        "npu": "ja"
+        "npu": "ja",
+        "urlWithheld": "https://drive.google.com/uc?export=download&id=1Xb8MGqeLoctufMVvcfhcwf6hwLyv35WV"
       },
       {
         "device": "Radxa Dragon Q6A",
         "badge": "arm64",
         "color": "#10b981",
         "emoji": "🐉",
-        "url": "https://drive.google.com/uc?export=download&id=1nczaY7VILSmDrZU_sP3BumBn_ynAJogu",
         "os": "Ubuntu 24.04 LTS (arm64)",
         "polaris": "0.98.137 (2026-09-27)",
         "size": "6.46 GB (.7z)",
         "access": "https://radxa-dragon-q6a.local:5000/",
         "note": "Das schnellste Board hier, mit GPU- und NPU-Beschleunigung. Nehmen Sie es, wenn Sie viel mit den KI-Werkzeugen arbeiten oder große Bilder stapeln, während Sie noch aufnehmen. Entpacken Sie das .7z und schreiben Sie das .img mit balenaEtcher oder Rufus.",
         "gpu": "ja",
-        "npu": "ja"
+        "npu": "ja",
+        "urlWithheld": "https://drive.google.com/uc?export=download&id=1nczaY7VILSmDrZU_sP3BumBn_ynAJogu"
       }
     ],
     "update": {
@@ -168,7 +172,8 @@
       "selfBadge": "Empfohlen",
       "selfBody": "Jede .deb-Installation, auch die fertigen Images oben, aktualisiert sich selbst. Polaris fragt beim Start und danach stündlich bei GitHub nach. Gibt es einen neueren Build für Ihr Board, erscheint oben ein grünes Update-Abzeichen mit der Versionsnummer. Ein Klick zeigt, was sich geändert hat, dann herunterladen und installieren: Polaris holt die passende Datei, installiert sie und meldet sich in der neuen Version zurück. Kein SSH, kein apt, kein sudo-Passwort. Lassen Sie die Seite einfach offen, während sie neu lädt. Ihre Profile und Ihre Fotos bleiben genau da, wo sie sind.",
       "selfImage": "/assets/screenshots/self-update.jpg"
-    }
+    },
+    "soonLabel": "Wird neu erstellt"
   },
   "download": {
     "title": "Auf einem vorhandenen System installieren",
