@@ -82,7 +82,12 @@ public static class BroadcastArgs {
         var inFps = Math.Clamp(plan.InputFps, 1, 60);
         var outFps = Math.Clamp(plan.OutputFps, 5, 60);
 
-        var a = new List<string> { "-hide_banner", "-loglevel", "warning", "-stats" };
+        // Progress on stderr as key=value lines, not -stats. The one-line stats
+        // form is terminated by a carriage return, so a line reader holds the
+        // newest reading until the one after it arrives, and a watchdog reading
+        // that lag would call a healthy broadcast stalled.
+        var a = new List<string> { "-hide_banner", "-loglevel", "warning",
+                                   "-nostats", "-progress", "pipe:2" };
 
         // 0: the composed picture, raw over stdin.
         a.AddRange(new[] { "-f", "rawvideo", "-pix_fmt", "rgb24",
@@ -114,9 +119,23 @@ public static class BroadcastArgs {
         a.AddRange(new[] { "-c:a", "aac", "-b:a", "128k", "-ar", "44100" });
 
         var publishing = !string.IsNullOrWhiteSpace(plan.RtmpUrl) && !string.IsNullOrWhiteSpace(plan.StreamKey);
-        if (publishing) a.AddRange(new[] { "-f", "flv", JoinUrl(plan.RtmpUrl!, plan.StreamKey!) });
+        // -shortest on every output, because the picture is the only input that
+        // ever ends. The silent track and the card PNG are endless by
+        // construction, so without this ffmpeg keeps running after stdin
+        // closes, the stop times out and the process is killed instead of being
+        // allowed to finish. Every recording would arrive truncated.
+        if (publishing) a.AddRange(new[] { "-shortest", "-f", "flv", JoinUrl(plan.RtmpUrl!, plan.StreamKey!) });
         if (!string.IsNullOrWhiteSpace(plan.RecordPath))
-            a.AddRange(new[] { "-f", "mp4", "-movflags", "+faststart", plan.RecordPath! });
+            // Fragmented MP4 rather than +faststart. A broadcast recording runs
+            // for hours on a board that can lose power, and a plain MP4 keeps
+            // its index in memory until the writer exits: a power cut, an OOM
+            // kill or a crash and the whole night is an unopenable file.
+            // Fragments are written as they go, so what reached the disk plays.
+            // It also means stopping is instant, where faststart would rewrite
+            // several gigabytes before the process could exit.
+            a.AddRange(new[] { "-shortest", "-f", "mp4",
+                               "-movflags", "+frag_keyframe+empty_moov+default_base_moof",
+                               plan.RecordPath! });
         if (!publishing && string.IsNullOrWhiteSpace(plan.RecordPath))
             throw new InvalidOperationException("A broadcast needs somewhere to go: an RTMP destination, a recording, or both.");
         return a;
@@ -168,13 +187,27 @@ public static class BroadcastArgs {
         return string.Join(";", steps);
     }
 
-    /// <summary>filter_complex is its own little language: colons separate
-    /// options and backslashes escape, so a Windows path or a target with a
-    /// colon in it would otherwise end the option early.</summary>
+    /// <summary>
+    /// Escape a path for use inside a filter option value.
+    ///
+    /// <para>filter_complex is parsed twice, and both passes eat escapes. The
+    /// filtergraph pass splits the chain on colons and removes one level of
+    /// backslashes; what survives is then read as the filter's own options,
+    /// where a colon separates one option from the next. So a colon has to
+    /// arrive as <c>\\:</c> and a quote as <c>\\\'</c>: one backslash to get
+    /// through each pass. A single backslash, which looks right, reaches the
+    /// option parser as a bare colon and ffmpeg refuses the graph with "No
+    /// option name near", which is how this was found. No shell is involved,
+    /// since the arguments go through <c>ArgumentList</c>, so there is no third
+    /// level to escape for.</para>
+    ///
+    /// <para>Backslashes become forward slashes first: ffmpeg accepts those on
+    /// Windows and it takes the separator out of the escaping question.</para>
+    /// </summary>
     private static string Escape(string path) =>
         path.Replace("\\", "/", StringComparison.Ordinal)
-            .Replace(":", "\\:", StringComparison.Ordinal)
-            .Replace("'", "\\'", StringComparison.Ordinal);
+            .Replace("'", "\\\\\\'", StringComparison.Ordinal)
+            .Replace(":", "\\\\:", StringComparison.Ordinal);
 
     private static string JoinUrl(string baseUrl, string key) =>
         baseUrl.TrimEnd('/') + "/" + key.Trim();

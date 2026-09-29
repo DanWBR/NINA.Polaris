@@ -149,9 +149,48 @@ public class BroadcastArgsTests {
     [Test]
     public void APathWithAColonDoesNotEndTheFilterOption() {
         // A Windows path, or a target folder with a colon, would otherwise cut
-        // the drawtext option in half and ffmpeg would refuse to start.
+        // the drawtext option in half and ffmpeg would refuse to start. Two
+        // backslashes, not one: the filtergraph parser eats a level of escaping
+        // before the filter's own option parser ever sees the colon. Verified
+        // against a real ffmpeg in FfmpegLiveRunTests, which is where a single
+        // backslash was caught failing.
         var args = BroadcastArgs.Build(Plan(banner: @"C:\data\banner.txt"));
-        Assert.That(Flat(args), Does.Contain("C\\:/data/banner.txt"));
+        Assert.That(Flat(args), Does.Contain(@"C\\:/data/banner.txt"));
+    }
+
+    [Test]
+    public void EveryOutputEndsWithThePicture() {
+        // The silent audio and the card PNG are endless sources. Without
+        // -shortest, closing stdin does not end the run: ffmpeg carries on
+        // encoding silence, the stop times out and the process is killed, and
+        // a killed writer is a truncated recording. One per output, because it
+        // is an output option.
+        var both = BroadcastArgs.Build(Plan(record: "/data/night.mp4", card: "/tmp/card.png"));
+        Assert.That(both.Count(a => a == "-shortest"), Is.EqualTo(2));
+        Assert.That(both.IndexOf("-shortest"), Is.LessThan(both.IndexOf("flv")));
+    }
+
+    [Test]
+    public void TheRecordingIsWrittenSoAnInterruptionCostsOnlyTheLastSeconds() {
+        // Hours of recording on a board that can lose power. A plain MP4 holds
+        // its index until the writer exits, so a crash costs the whole night.
+        var args = BroadcastArgs.Build(Plan(record: "/data/night.mp4"));
+        var flags = args[args.IndexOf("-movflags") + 1];
+        Assert.That(flags, Does.Contain("frag_keyframe"));
+        Assert.That(flags, Does.Contain("empty_moov"));
+        Assert.That(flags, Does.Not.Contain("faststart"),
+            "faststart would also rewrite gigabytes before the process could stop");
+    }
+
+    [Test]
+    public void ProgressIsReportedInTheFormAReaderCanFollow() {
+        // -stats writes its one-liner terminated by a carriage return, so a
+        // line reader holds each reading until the next one pushes it out. Over
+        // a broadcast that lag is what a stall watchdog would fire on.
+        var args = BroadcastArgs.Build(Plan());
+        Assert.That(args, Does.Contain("-progress"));
+        Assert.That(args[args.IndexOf("-progress") + 1], Is.EqualTo("pipe:2"));
+        Assert.That(args, Does.Not.Contain("-stats"));
     }
 
     [Test]
