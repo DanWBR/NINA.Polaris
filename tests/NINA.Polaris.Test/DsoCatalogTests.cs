@@ -44,6 +44,80 @@ public class DsoCatalogTests {
         }
     }
 
+    /// <summary>
+    /// Every Messier number has to resolve, because a catalogue that is
+    /// missing one is missing it everywhere: the SKY search, the target the
+    /// file namer derives from where the mount points, Tonight's Best and
+    /// the broadcast object card all read this one table.
+    ///
+    /// <para>This exists because M45 was absent from the shipped database
+    /// for months and nothing noticed. OpenNGC keeps the objects with no NGC
+    /// or IC number in a separate addendum file, the build only read the
+    /// main one, and the Pleiades has no NGC number.</para>
+    ///
+    /// <para>M102 is the single allowed exception: it is disputed, OpenNGC
+    /// records it as a duplicate of M101, and the usual alternative
+    /// identification (NGC 5866) is contested enough that inventing a row
+    /// would be taking a side.</para>
+    /// </summary>
+    [Test]
+    public async Task EveryMessierNumberResolves() {
+        var missing = new List<string>();
+        for (var i = 1; i <= 110; i++) {
+            var name = "M" + i;
+            if (name == "M102") continue;
+            if (await _catalog.GetByNameAsync(name) == null) missing.Add(name);
+        }
+        Assert.That(missing, Is.Empty, "Messier numbers absent from the catalogue");
+    }
+
+    /// <summary>
+    /// The famous objects that carry no NGC or IC number, which is the class
+    /// the addendum exists for and the class that went missing with it.
+    /// </summary>
+    [TestCase("M45", "Pleiades")]
+    [TestCase("Mel 22", "Pleiades")]
+    [TestCase("C41", "Hyades")]
+    [TestCase("C99", "Coalsack")]
+    [TestCase("Cl 399", "Coathanger")]
+    [TestCase("B 33", "Horsehead")]
+    [TestCase("ESO 056-115", "Large Magellanic Cloud")]
+    public async Task ObjectsWithNoNgcNumberAreInTheCatalogue(string designation, string expectedName) {
+        var hit = await _catalog.GetByNameAsync(designation);
+        Assert.That(hit, Is.Not.Null, designation);
+        Assert.That(hit!.CommonName ?? "", Does.Contain(expectedName).IgnoreCase);
+    }
+
+    /// <summary>
+    /// Curated common names survive a rebuild.
+    ///
+    /// <para>Thirteen of these were once written straight into dso.db with no
+    /// change to the generator, and the next rebuild silently dropped every
+    /// one. They now live in EXTRA_COMMON_NAMES in the build script, and this
+    /// is what says so if anyone puts them back in the database by hand.</para>
+    /// </summary>
+    [TestCase("Deer Lick", "NGC 7331")]
+    [TestCase("Hamburger Galaxy", "NGC 3628")]
+    [TestCase("Stephan", "HCG 92")]
+    [TestCase("Seven Sisters", "M45")]
+    public async Task CuratedCommonNamesAreSearchable(string query, string expectedDesignation) {
+        var hits = await _catalog.SearchAsync(query, 8);
+        Assert.That(hits.Select(h => h.Name), Does.Contain(expectedDesignation), query);
+    }
+
+    /// <summary>
+    /// One row per designation. The addendum overlaps the Hickson catalogue
+    /// Vizier supplies, and taking both put two HCG 92 rows in the search.
+    /// </summary>
+    [TestCase("HCG 92")]
+    [TestCase("HCG 79")]
+    [TestCase("M45")]
+    [TestCase("C41")]
+    public async Task ADesignationNamesExactlyOneRow(string designation) {
+        var hits = await _catalog.SearchAsync(designation, 10);
+        Assert.That(hits.Count(h => h.Name == designation), Is.EqualTo(1), designation);
+    }
+
     [Test]
     public void IsAvailable_WhenDbPresent_IsTrue() {
         Assert.That(_catalog.IsAvailable, Is.True);
