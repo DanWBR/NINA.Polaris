@@ -129,6 +129,26 @@ public class FfmpegLiveRunTests {
     }
 
     [Test]
+    [CancelAfter(120_000)]
+    public async Task AnEncoderThatIsListedIsNotNecessarilyOneThatRuns() {
+        // The gap that cost a restart loop: this machine lists h264_qsv, has
+        // no usable Quick Sync, and answers "Could not open encoder before
+        // EOF" on the first frame. Nothing in the encoder table shows that,
+        // and on Windows there is no device node to check either, so the only
+        // honest test is to encode something.
+        var caps = await _ffmpeg.GetCapabilitiesAsync();
+        Assert.That(caps, Is.Not.Null);
+
+        Assert.That(await _ffmpeg.CanEncodeAsync("libx264"), Is.True,
+            "software encoding is the floor the broadcast falls back to");
+        Assert.That(await _ffmpeg.CanEncodeAsync("h264_thereisnosuchencoder"), Is.False);
+
+        // Cached: asking twice must not spawn twice.
+        var again = await _ffmpeg.CanEncodeAsync("libx264");
+        Assert.That(again, Is.True);
+    }
+
+    [Test]
     [CancelAfter(60_000)]
     public async Task TheBinaryIsAskedWhatItCanDo() {
         var caps = await _ffmpeg.GetCapabilitiesAsync();

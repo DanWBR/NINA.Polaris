@@ -283,6 +283,31 @@ public class FrameComposerTests {
     }
 
     [Test]
+    public void BeforeTheFirstImageTheFrameSaysSo() {
+        // A broadcast starts when the button is pressed, which is usually
+        // before the first sub has landed. A black rectangle with a card
+        // floating on it reads as a fault.
+        using var composer = new FrameComposer(_layout, _fonts);
+        // Copied: Compose hands back the same buffer every time, so holding
+        // the first result and then composing again would compare a frame
+        // with itself.
+        var bare = (byte[])composer.Compose(null, null, null).Clone();
+        var withMessage = composer.Compose(null, null, null, null, null, "Waiting for the first image");
+
+        // Something was drawn across the middle of the frame, which is where
+        // the line goes.
+        var row = H / 2;
+        var litBare = 0;
+        var litMessage = 0;
+        for (var x = 0; x < W; x++) {
+            if (At(bare, x, row).R > 40) litBare++;
+            if (At(withMessage, x, row).R > 40) litMessage++;
+        }
+        Assert.That(litBare, Is.Zero);
+        Assert.That(litMessage, Is.GreaterThan(0));
+    }
+
+    [Test]
     public void AMissingCutoutIsNotAMissingCard() {
         using var composer = new FrameComposer(_layout, _fonts);
         Assert.DoesNotThrow(() => composer.Compose(null, Card(thumb: "/no/such/file.jpg"), "x"));

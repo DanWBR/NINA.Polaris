@@ -64,6 +64,7 @@ public sealed partial class FfmpegService {
     private bool _probed;
     private FfmpegCapabilities? _caps;
     private Task<FfmpegCapabilities?>? _capsProbe;
+    private readonly Dictionary<string, bool> _encoderWorks = new(StringComparer.Ordinal);
 
     public FfmpegService(ILogger<FfmpegService> logger) => _logger = logger;
 
@@ -89,6 +90,7 @@ public sealed partial class FfmpegService {
             _cached = null;
             _caps = null;
             _capsProbe = null;
+            _encoderWorks.Clear();
         }
     }
 
@@ -180,6 +182,70 @@ public sealed partial class FfmpegService {
             throw new TimeoutException("ffmpeg did not answer a capability query.");
         }
         return await stdout.ConfigureAwait(false) + "\n" + await stderr.ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Does this encoder actually work on this host?
+    ///
+    /// <para>Being listed by <c>-encoders</c> is not the same as being usable.
+    /// A build carries every encoder it was compiled with, and whether the
+    /// hardware behind one is present, driven and free is a question only the
+    /// encoder can answer. On Linux a missing device node gives it away; on
+    /// Windows there is nothing to look at. This machine lists
+    /// <c>h264_qsv</c>, picks it, and gets "Could not open encoder before EOF"
+    /// on the first frame, which for a live broadcast is a restart loop that
+    /// never settles.</para>
+    ///
+    /// <para>So it is tried: two tenths of a second of black, encoded and
+    /// thrown away. Cached, because the answer cannot change while the process
+    /// lives, and <see cref="Invalidate"/> covers a driver install.</para>
+    /// </summary>
+    public async Task<bool> CanEncodeAsync(string encoder, CancellationToken ct = default) {
+        if (string.IsNullOrWhiteSpace(encoder)) return false;
+        lock (_gate) { if (_encoderWorks.TryGetValue(encoder, out var known)) return known; }
+
+        var bin = BinaryPath;
+        if (bin == null) return false;
+        var ok = false;
+        try {
+            var psi = new ProcessStartInfo {
+                FileName = bin, UseShellExecute = false,
+                RedirectStandardOutput = true, RedirectStandardError = true, CreateNoWindow = true
+            };
+            foreach (var a in new[] {
+                "-hide_banner", "-loglevel", "error", "-nostdin",
+                "-f", "lavfi", "-i", "color=c=black:s=320x240:d=0.2",
+                "-c:v", encoder, "-f", "null", "-" }) psi.ArgumentList.Add(a);
+
+            using var proc = Process.Start(psi) ?? throw new InvalidOperationException("ffmpeg did not start.");
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromSeconds(20));
+            var stdout = proc.StandardOutput.ReadToEndAsync(timeout.Token);
+            var stderr = proc.StandardError.ReadToEndAsync(timeout.Token);
+            try {
+                await proc.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
+                ok = proc.ExitCode == 0;
+            } catch (OperationCanceledException) {
+                // An encoder that hangs on a fifth of a second of black is no
+                // more usable than one that refuses outright.
+                try { proc.Kill(entireProcessTree: true); } catch { }
+            }
+            if (!ok) {
+                _logger.LogInformation("The {Encoder} encoder is listed but not usable here: {Why}",
+                    encoder, LastLine(await stderr.ConfigureAwait(false)));
+            }
+            _ = stdout;
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "Could not test the {Encoder} encoder", encoder);
+        }
+        lock (_gate) { _encoderWorks[encoder] = ok; }
+        return ok;
+    }
+
+    private static string LastLine(string? text) {
+        if (string.IsNullOrWhiteSpace(text)) return "(it said nothing)";
+        var lines = text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return lines.Length == 0 ? text.Trim() : lines[^1];
     }
 
     // --- Live run ---------------------------------------------------
@@ -298,12 +364,13 @@ public sealed partial class FfmpegService {
             string? line;
             try { line = await reader.ReadLineAsync().ConfigureAwait(false); } catch { break; }
             if (line == null) break;
-            var reading = parser.Feed(line);
-            if (reading != null) {
-                if (onProgress != null) { try { onProgress(reading); } catch { } }
+            if (parser.TryFeed(line, out var reading)) {
+                // Progress output, complete or not. Either way it is not a
+                // diagnostic and must not end up in the error message.
+                if (reading != null && onProgress != null) { try { onProgress(reading); } catch { } }
                 continue;
             }
-            // Not a progress line, so it is something ffmpeg wanted to say.
+            // Something ffmpeg wanted to say.
             lock (tail) {
                 tail.AppendLine(line);
                 if (tail.Length > 4000) tail.Remove(0, tail.Length - 4000);

@@ -34,6 +34,22 @@ public static class BroadcastStrings {
     /// <summary>The five interface languages, matching the browser catalogues.</summary>
     public static readonly string[] Languages = { "en", "pt", "es", "fr", "de" };
 
+    /// <summary>
+    /// What the frame says before there is a picture to show.
+    ///
+    /// <para>A broadcast starts the moment the button is pressed, which is
+    /// usually before the first sub has landed, and a black rectangle with a
+    /// card floating on it reads as a fault. This is the difference between a
+    /// viewer waiting and a viewer closing the tab.</para>
+    /// </summary>
+    public static string WaitingForFirstFrame(string? language) => Normalise(language) switch {
+        "pt" => "Aguardando a primeira imagem",
+        "es" => "Esperando la primera imagen",
+        "fr" => "En attente de la premiere image",
+        "de" => "Warten auf das erste Bild",
+        _ => "Waiting for the first image"
+    };
+
     /// <summary>The card fragments for a language, falling back to English for
     /// anything not on the list.</summary>
     public static ObjectCardTemplates TemplatesFor(string? language) => Normalise(language) switch {

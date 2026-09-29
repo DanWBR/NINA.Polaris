@@ -79,12 +79,16 @@ public sealed class FrameComposer : IDisposable {
     /// <param name="headerRig">The equipment, under the title. Static for the
     /// whole session, which is why it sits at the top and not in the banner
     /// with the numbers that change.</param>
+    /// <param name="waitingText">Shown in the middle when there is no picture
+    /// yet. Null leaves the frame bare.</param>
     public byte[] Compose(SKBitmap? picture, ObjectCard? card, string? bannerText,
-                          string? headerTitle = null, string? headerRig = null) {
+                          string? headerTitle = null, string? headerRig = null,
+                          string? waitingText = null) {
         using var surface = new SKCanvas(_canvasBitmap);
         surface.Clear(new SKColor(0x05, 0x07, 0x0C));
 
         if (picture != null) DrawPicture(surface, picture);
+        else if (!string.IsNullOrWhiteSpace(waitingText)) DrawWaiting(surface, waitingText!);
         if (!_l.Header.IsEmpty) DrawHeader(surface, headerTitle, headerRig);
         if (card != null) DrawCard(surface, card);
         if (!string.IsNullOrWhiteSpace(bannerText)) DrawBanner(surface, bannerText);
@@ -177,6 +181,17 @@ public sealed class FrameComposer : IDisposable {
             using var fs = File.OpenRead(path);
             return SKBitmap.Decode(fs);
         } catch { return null; }
+    }
+
+    /// <summary>The line shown while there is nothing to show. Centred on the
+    /// picture area, not the frame, so the header and banner do not push it
+    /// off centre.</summary>
+    private void DrawWaiting(SKCanvas c, string text) {
+        var line = Fit(text, _subtitle, _l.Width * 0.6f);
+        var width = _subtitle.MeasureText(line);
+        var m = _subtitle.Metrics;
+        using var paint = new SKPaint { Color = Dim, IsAntialias = true };
+        c.DrawText(line, (_l.Width - width) / 2f, _l.Height / 2f - m.Ascent / 2, _subtitle, paint);
     }
 
     // --- The header -------------------------------------------------

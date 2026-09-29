@@ -270,6 +270,9 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Broadcast.BroadcastConfigSer
 // The object card on the broadcast: catalogue facts, a bundled cutout, and a
 // description that prefers our own text over a cached online one.
 builder.Services.AddSingleton<NINA.Polaris.Services.Broadcast.ObjectCardService>();
+// The broadcast itself: composes frames and keeps an ffmpeg fed with them.
+// Nothing here starts on its own; it waits for the button.
+builder.Services.AddSingleton<NINA.Polaris.Services.Broadcast.BroadcastService>();
 // Star trails: fixed-camera (tracking off) capture + per-pixel MAX composite,
 // previewed live and saved as a FITS master + JPEG; can feed the time-lapse builder.
 builder.Services.AddSingleton<NINA.Polaris.Services.StarTrail.StarTrailService>();
@@ -543,6 +546,8 @@ builder.Services.AddSingleton<NINA.Polaris.WebSocket.Status.IStatusContributor,
     NINA.Polaris.WebSocket.Status.ProcessingStatusContributor>();
 builder.Services.AddSingleton<NINA.Polaris.WebSocket.Status.IStatusContributor,
     NINA.Polaris.WebSocket.Status.HostStatusContributor>();
+builder.Services.AddSingleton<NINA.Polaris.WebSocket.Status.IStatusContributor,
+    NINA.Polaris.WebSocket.Status.BroadcastStatusContributor>();
 builder.Services.AddSingleton<NINA.Polaris.WebSocket.StatusPayloadBuilder>();
 builder.Services.AddSingleton<MeridianFlipService>();
 // Auto meridian flip during LIVE stacking (polls HA, flips when due).
@@ -1462,6 +1467,7 @@ app.Map("/canopus/{**rest}", async (HttpContext ctx,
 app.MapEquipmentEndpoints();
 app.MapCameraEndpoints();
 app.MapVideoEndpoints();
+app.MapBroadcastEndpoints();
 app.MapStarTrailEndpoints();
 app.MapTelescopeEndpoints();
 app.MapFocuserEndpoints();

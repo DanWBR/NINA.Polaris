@@ -109,6 +109,42 @@ public class FfmpegProgressParserTests {
     }
 
     [Test]
+    public void EveryProgressLineIsClaimed_NotJustTheOneThatCompletesAReading() {
+        // The bug this exists for: the caller keeps whatever the parser did
+        // not claim as the error text. In the -progress form a reading is a
+        // dozen lines and only the last completes it, so eleven lines of
+        // frame= and bitrate= were being filed as diagnostics, and a
+        // broadcast whose encoder failed to open reported its last error as
+        // "speed=   2x" instead of the message that said so.
+        var p = new FfmpegProgressParser();
+        foreach (var line in ProgressGroup) {
+            Assert.That(p.TryFeed(line, out _), Is.True, line);
+        }
+
+        Assert.That(p.TryFeed("[vost#0:0/h264_qsv] Could not open encoder before EOF", out var none), Is.False);
+        Assert.That(none, Is.Null);
+        // A diagnostic that happens to carry an equals sign is still a
+        // diagnostic, and ffmpeg emits plenty of them.
+        Assert.That(p.TryFeed("  Stream #0:0: Video: rawvideo, rgb24, 1280x720, q=2-31, 25 tbr", out _), Is.False);
+        Assert.That(p.TryFeed("Task finished with error code: -22 (Invalid argument)", out _), Is.False);
+    }
+
+    [Test]
+    public void TheRealProgressOutputPadsItsValues() {
+        // Taken from ffmpeg 9.0 on Windows: the -progress form pads the same
+        // way -stats does, which a split on whitespace would not survive.
+        var p = new FfmpegProgressParser();
+        var r = FeedAll(p, new[] {
+            "frame=0", "fps=0.00", "bitrate=   0.0kbits/s", "total_size=0",
+            "out_time=00:00:00.998458", "dup_frames=11", "drop_frames=0",
+            "speed=   2x", "progress=end"
+        });
+        Assert.That(r.Speed, Is.EqualTo(2).Within(0.001));
+        Assert.That(r.BitrateKbps, Is.EqualTo(0));
+        Assert.That(r.DuplicatedFrames, Is.EqualTo(11));
+    }
+
+    [Test]
     public void DiagnosticsAreNotReadings() {
         // Everything that is not progress has to come back null so the caller
         // can keep it for the error message.
