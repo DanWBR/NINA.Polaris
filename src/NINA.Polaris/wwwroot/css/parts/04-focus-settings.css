@@ -1197,6 +1197,31 @@
 .storage-form label > .lbl { font-size: 12px; white-space: nowrap; }
 .storage-form label > .input { width: 100%; }
 
+/* Live broadcast card: same stacked shape as the storage form above, for the
+   same reason. A label beside its control puts every control at a different
+   x depending on how long the caption is, and "Broadcast title" next to
+   "Quality" made the inputs disagree by fifty pixels. Caption above, control
+   full width, and the spacing between rows comes from each cell's
+   padding-bottom rather than a flex gap, so a checkbox row and a select row
+   sit the same distance apart. */
+.broadcast-form {
+    display: grid;
+    grid-template-columns: 1fr;
+}
+.broadcast-form label {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    margin-bottom: 0;
+    padding-bottom: 10px;
+}
+.broadcast-form label > .lbl { font-size: 12px; }
+/* max-width has to go with it: .input carries a cap that otherwise leaves the
+   text fields at 220px while the selects run the full width of the card, so
+   the two halves of the same form disagree. */
+.broadcast-form label > .input { width: 100%; max-width: none; }
+
 /* The rclone remote setup panel, which sits below the storage form and
    is not part of its grid. Same shape: label above the control, control
    full width, so the two halves of the card do not disagree. */
