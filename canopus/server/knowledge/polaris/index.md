@@ -121,6 +121,10 @@ Each tab in the sidebar has its own page. Read the ones you need:
   from Settings → Network with a 30 s try-and-revert safety net.
 - **[Relay (remote access)](relay.md)**, TLS-tunneled access from
   outside your LAN.
+- **[Live broadcast](broadcast.md)**, stream the session to YouTube,
+  Twitch, Facebook or Instagram straight from the host, with no
+  computer at the scope. The host composes the frame (picture, object
+  card, session numbers) and can keep the same video as a file.
 - **[Remote terminal](remote-terminal.md)**, embedded SSH terminal
   (xterm.js + SSH.NET) in SETTINGS. Restart services on a headless Pi
   from the browser, without plugging in a screen.

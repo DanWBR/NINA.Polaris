@@ -47,6 +47,7 @@ book:
     - part: "Remote Access and Administration"
       chapters:
         - 27-networking.qmd
+        - 33-broadcasting.qmd
         - 28-administration.qmd
     - part: "The Optional Assistant"
       chapters:
