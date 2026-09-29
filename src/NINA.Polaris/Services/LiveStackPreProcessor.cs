@@ -133,7 +133,10 @@ public class LiveStackPreProcessor {
             Gain: meta.Camera.Gain,
             ExposureSec: meta.Exposure.ExposureTime,
             Filter: filter,
-            BinningX: meta.Camera.BinX <= 0 ? (short)1 : meta.Camera.BinX);
+            BinningX: meta.Camera.BinX <= 0 ? (short)1 : meta.Camera.BinX,
+            // In the key as well as in the match: two cameras streaming into
+            // the same stack must not share a cached master set.
+            Camera: meta.Camera.Name ?? "");
     }
 
     /// <summary>Resolve which masters to load for a given key. Honors
@@ -141,32 +144,32 @@ public class LiveStackPreProcessor {
     /// auto-match. Loads buffers from disk (potentially expensive --
     /// only happens once per key per session thanks to the cache).</summary>
     private CachedMasterSet ResolveMasters(MasterKey key, LiveStackPreProcSettings settings) {
-        // Snapshot the library so we can search by-specs in-process.
-        var all = _library.Query(new FrameQuery(
-            Type: null, Filter: null, Target: null,
-            DateFrom: null, DateTo: null, Limit: 5000, Offset: 0));
-        var darks = all.Where(f => string.Equals(f.ImageType, "MASTERDARK",
-            StringComparison.OrdinalIgnoreCase)).ToList();
-        var flats = all.Where(f => string.Equals(f.ImageType, "MASTERFLAT",
-            StringComparison.OrdinalIgnoreCase)).ToList();
-        var biases = all.Where(f => string.Equals(f.ImageType, "MASTERBIAS",
-            StringComparison.OrdinalIgnoreCase)).ToList();
-        var darkFlats = all.Where(f => string.Equals(f.ImageType, "MASTERDARKFLAT",
-            StringComparison.OrdinalIgnoreCase)).ToList();
+        // One query per type. The old single sweep asked for 5000 rows, which
+        // the library clamps to 500, newest first across every type: on a
+        // library with a few hundred lights in it the masters never made the
+        // cut and this silently found nothing to calibrate with.
+        List<FrameRow> OfType(string t) =>
+            _library.Query(new FrameQuery(t, null, null, null, null, 500, 0))
+                    .Where(f => string.Equals(f.ImageType, t, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+        var darks     = OfType("MASTERDARK");
+        var flats     = OfType("MASTERFLAT");
+        var biases    = OfType("MASTERBIAS");
+        var darkFlats = OfType("MASTERDARKFLAT");
 
         // Pick master rows (overrides win, otherwise auto-match).
         var darkRow = settings.MasterDarkOverrideId.HasValue
             ? _library.GetById(settings.MasterDarkOverrideId.Value)
-            : CalibrationMath.FindNearestDark(darks, key.ExposureSec, key.Gain);
+            : CalibrationMath.FindNearestDark(darks, key.ExposureSec, key.Gain, key.Camera);
         var flatRow = settings.MasterFlatOverrideId.HasValue
             ? _library.GetById(settings.MasterFlatOverrideId.Value)
-            : CalibrationMath.FindMatchingFlat(flats, key.Filter, key.Gain);
+            : CalibrationMath.FindMatchingFlat(flats, key.Filter, key.Gain, key.Camera);
         // Bias only useful when no dark; same precedence as the batch
         // CalibrationService -- dark already includes the bias signal.
         var biasRow = settings.MasterBiasOverrideId.HasValue
             ? _library.GetById(settings.MasterBiasOverrideId.Value)
             : (darkRow == null
-                ? CalibrationMath.FindMatchingBias(biases, key.Gain)
+                ? CalibrationMath.FindMatchingBias(biases, key.Gain, key.Camera)
                 : null);
 
         // Load buffers from disk. Any failure (file deleted, dimensions
@@ -182,7 +185,8 @@ public class LiveStackPreProcessor {
             // own exposure, then fall back to bias, then nothing.
             BaseImageData? calImg = null;
             var calRow = CalibrationMath.FindNearestDark(darkFlats,
-                flatImg.MetaData.Exposure.ExposureTime, flatImg.MetaData.Camera.Gain);
+                flatImg.MetaData.Exposure.ExposureTime, flatImg.MetaData.Camera.Gain,
+                flatImg.MetaData.Camera.Name ?? key.Camera);
             if (calRow != null) calImg = LoadFitsImage(calRow.Path);
             else if (biasRow != null) calImg = LoadFitsImage(biasRow.Path);
             flat = CalibrationMath.NormalizeFlat(flatImg, calImg);
@@ -216,9 +220,9 @@ public class LiveStackPreProcessor {
         return FITSReader.Read(fs);
     }
 
-    private record MasterKey(int Gain, double ExposureSec, string Filter, short BinningX);
+    private record MasterKey(int Gain, double ExposureSec, string Filter, short BinningX, string Camera);
 
-    // MEMOPT: the normalised flat is stored as float[] — on a 9 MP
+    // MEMOPT: the normalised flat is stored as float[], on a 9 MP
     // sensor that's 34.5 MB resident instead of 69 MB as double[],
     // and float's 24-bit mantissa is ~1e-7 relative error on a flat
     // that lives in [~0.5, ~2.0], far below photon noise.

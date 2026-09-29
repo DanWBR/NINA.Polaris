@@ -17103,7 +17103,8 @@ Windows  winget install Rclone.Rclone</code></pre>
                     </label>
                     <p class="hint" style="margin-top:4px">
                         Lights, aux frames and stacks follow this. Calibration always stays at
-                        <code>{rig}/calibration/...</code> so masters can be reused across nights.
+                        <code>{rig}/calibration/{camera}/...</code>, per sensor, so masters can be
+                        reused across nights but never across cameras.
                         The night rolls over at midday, so frames either side of midnight stay
                         together. Nothing already on disk is moved, and Studio indexes both shapes.
                     </p>
