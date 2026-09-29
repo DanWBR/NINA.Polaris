@@ -5173,5 +5173,7 @@
   "write the default in": "escribe aquí el valor por defecto",
   "Tonight a light lands at:": "Esta noche un light acaba en:",
   "Night, then target (20260928)": "Noche, luego el objetivo (20260928)",
-  "Night, then target (2026-09-28)": "Noche, luego el objetivo (2026-09-28)"
+  "Night, then target (2026-09-28)": "Noche, luego el objetivo (2026-09-28)",
+  "Camera disconnected on its own.": "La cámara se desconectó sola.",
+  "Check the cable and the power on the camera, then connect again.": "Revisa el cable y la alimentación de la cámara, y vuelve a conectar."
 }

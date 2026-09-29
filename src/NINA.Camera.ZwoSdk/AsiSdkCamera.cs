@@ -44,6 +44,7 @@ public sealed class AsiSdkCamera : ICamera {
     public int StreamReopens { get; private set; }
     private readonly int _cameraId;
     private bool _connected;
+    private string? _disconnectReason;
 
     private int _maxX, _maxY, _bitDepth = 16;
     private double _pixelSize;
@@ -87,6 +88,7 @@ public sealed class AsiSdkCamera : ICamera {
 
     public string DeviceName { get; private set; }
     public bool IsConnected => _connected;
+    public string? DisconnectReason => _disconnectReason;
     public CameraStates State { get; private set; } = CameraStates.NoState;
 
     // Cache the last valid reading so WrapFrame can stamp CCD-TEMP into the
@@ -233,6 +235,7 @@ public sealed class AsiSdkCamera : ICamera {
         _gain = ReadControl(ASI_CONTROL_TYPE.ASI_GAIN);
         _offset = ReadControl(ASI_CONTROL_TYPE.ASI_OFFSET);
         _connected = true;
+        _disconnectReason = null;
         State = CameraStates.Idle;
     }, ct);
 
@@ -331,6 +334,9 @@ public sealed class AsiSdkCamera : ICamera {
         try { StopStreamCore(); } catch { }
         if (_connected) { try { ASICloseCamera(_cameraId); } catch { } }
         _connected = false;
+        // A disconnect the operator asked for is not news, so it clears the
+        // reason rather than leaving the last unplug on the record.
+        _disconnectReason = null;
         State = CameraStates.NoState;
     }, ct);
 
@@ -773,11 +779,40 @@ public sealed class AsiSdkCamera : ICamera {
         try {
             // Serialise against the streaming pull thread (see _sdk note).
             lock (_sdk) {
-                if (ASIGetControlValue(_cameraId, t, out var v, out _) == ASI_ERROR_CODE.ASI_SUCCESS)
-                    return (int)v.Value;
+                var rc = ASIGetControlValue(_cameraId, t, out var v, out _);
+                if (rc == ASI_ERROR_CODE.ASI_SUCCESS) return (int)v.Value;
+                NoteSdkResult(rc);
             }
         } catch { }
         return 0;
+    }
+
+    /// <summary>
+    /// Watch an SDK return code for "this camera is not there any more" and,
+    /// when it says so, drop the connection here rather than waiting for
+    /// someone to try a capture.
+    ///
+    /// <para>This is the whole disconnect detector, and it costs nothing:
+    /// the status loop already reads temperature and cooler power once a
+    /// second, so the SDK is already being asked a question whose answer
+    /// carries the removal code. It used to be thrown away, which is why an
+    /// unplugged camera went on reporting itself connected at 0 degrees
+    /// forever, and why every capture path that waits for a healthy camera
+    /// never waited.</para>
+    ///
+    /// <para>Only the two unambiguous codes count. A timeout or a buffer
+    /// error is a bad moment, not a missing camera, and marking those as
+    /// gone would turn a hiccup into a disconnection.</para>
+    /// </summary>
+    private void NoteSdkResult(ASI_ERROR_CODE rc) {
+        if (rc != ASI_ERROR_CODE.ASI_ERROR_CAMERA_REMOVED
+            && rc != ASI_ERROR_CODE.ASI_ERROR_INVALID_ID) return;
+        if (!_connected) return;
+        _connected = false;
+        _streaming = false;
+        _disconnectReason = rc == ASI_ERROR_CODE.ASI_ERROR_CAMERA_REMOVED
+            ? "the camera reported itself removed from the USB bus"
+            : "the SDK no longer knows this camera id, which is what a removed camera looks like";
     }
 
     // ----- Dynamic control panel (self-describing via ASIGetControlCaps) -----

@@ -1116,6 +1116,11 @@ public class EquipmentManager : IDisposable {
             status["camera"] = new {
                 name = Camera.DeviceName,
                 connected = Camera.IsConnected,
+                // Set when the adapter dropped the link on its own (the SDK
+                // reported the device removed, or raised a disconnect event).
+                // Null on a healthy camera and after a deliberate disconnect,
+                // so the client can tell "you unplugged it" from "it fell off".
+                disconnectReason = Camera.DisconnectReason,
                 state = Camera.State.ToString(),
                 temperature = Safe(Camera.Temperature),
                 coolerOn = Camera.CoolerOn,

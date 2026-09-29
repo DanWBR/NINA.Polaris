@@ -1413,13 +1413,20 @@ body.link-offline .preview-pane::after {
     color: #ffd0a0;
     text-decoration: underline;
 }
+/* A camera that fell off the bus is not the same class of news as a missing
+   SDK: one is something to install, the other is a cable to go and check. */
+.equip-install-banner.cam-link-lost {
+    background: rgba(239, 68, 68, 0.12);
+    border-color: rgba(239, 68, 68, 0.45);
+    color: #ff9a9a;
+}
 
 .equip-select {
     flex: 1;
     min-width: 0;
     /* Match the .input-sm geometry used by the Main Telescope card
        (Brand / Model / Accessory dropdowns). Previously this was
-       5px / 12px-font / no min-height — produced visibly shorter
+       5px / 12px-font / no min-height, produced visibly shorter
        selects in Camera / Mount / Focuser / FilterWheel / Rotator /
        Flat Panel / Dome / Weather cards than in Telescope, which
        broke the uniform row rhythm. Now everything in RIGS uses

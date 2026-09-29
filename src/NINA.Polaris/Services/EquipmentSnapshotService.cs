@@ -66,10 +66,18 @@ public sealed class EquipmentSnapshotService : BackgroundService {
     private Thread? _thread;
 
     public EquipmentSnapshotService(EquipmentManager equip,
+                                    NotificationService notifications,
                                     ILogger<EquipmentSnapshotService> logger) {
         _equip = equip;
+        _notifications = notifications;
         _logger = logger;
     }
+
+    // Camera links that went down without anyone asking. This loop is the
+    // only thing in the process that touches the camera every second, so it
+    // is where the drop is noticed; the watch decides whether it is news.
+    private readonly NotificationService _notifications;
+    private readonly CameraLinkWatch _linkWatch = new();
 
     /// <summary>The newest equipment block, or null before the first refresh
     /// completes.</summary>
@@ -119,6 +127,22 @@ public sealed class EquipmentSnapshotService : BackgroundService {
         return Task.CompletedTask;
     }
 
+    /// <summary>Tell the operator when a camera dropped off by itself. The
+    /// adapters set the reason when the SDK reports the device removed, so
+    /// there is nothing to poll here beyond what was just read.</summary>
+    private void NoteCameraLinks() {
+        foreach (var (role, cam) in new[] {
+                     ("camera", _equip.Camera),
+                     ("guide camera", _equip.GuideCamera),
+                     ("aux camera", _equip.AuxCamera) }) {
+            if (cam == null) { _linkWatch.Forget(role); continue; }
+            var msg = _linkWatch.Observe(role, cam.DeviceName, cam.IsConnected, cam.DisconnectReason);
+            if (msg == null) continue;
+            _logger.LogWarning("{Message}", msg);
+            _notifications.Push("error", msg, 0);
+        }
+    }
+
     private void Loop(CancellationToken ct) {
         while (!ct.IsCancellationRequested) {
             var started = DateTime.UtcNow;
@@ -126,6 +150,7 @@ public sealed class EquipmentSnapshotService : BackgroundService {
             try {
                 var snapshot = _equip.GetEquipmentStatus();
                 var done = DateTime.UtcNow;
+                NoteCameraLinks();
                 lock (_gate) {
                     _latest = snapshot;
                     _latestAtUtc = done;

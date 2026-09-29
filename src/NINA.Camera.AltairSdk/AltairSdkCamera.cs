@@ -32,6 +32,7 @@ public sealed class AltairSdkCamera : ICamera {
     private readonly string _camId;
     private Altaircam? _cam;
     private bool _connected;
+    private string? _disconnectReason;
 
     private int _maxX, _maxY, _bitDepth = 16;
     private double _pixelSize;
@@ -66,6 +67,7 @@ public sealed class AltairSdkCamera : ICamera {
 
     public string DeviceName { get; private set; }
     public bool IsConnected => _connected;
+    public string? DisconnectReason => _disconnectReason;
     public CameraStates State { get; private set; } = CameraStates.NoState;
 
     // Cache the last valid reading so WrapFrame can stamp CCD-TEMP into the
@@ -172,6 +174,7 @@ public sealed class AltairSdkCamera : ICamera {
         _gain = _gainMin;
         if (cam.get_Option(Altaircam.eOPTION.OPTION_BLACKLEVEL, out int bl0)) _offset = bl0;
         _connected = true;
+        _disconnectReason = null;
         State = CameraStates.Idle;
     }, ct);
 
@@ -181,6 +184,8 @@ public sealed class AltairSdkCamera : ICamera {
         try { _cam?.Close(); } catch { }
         _cam = null;
         _connected = false;
+        // A disconnect the operator asked for is not news.
+        _disconnectReason = null;
         State = CameraStates.NoState;
     }, ct);
 
@@ -415,6 +420,21 @@ public sealed class AltairSdkCamera : ICamera {
     }
 
     private void OnEvent(Altaircam.eEVENT e) {
+        // The SDK says it plainly on both operating systems, on its own
+        // thread, the moment the device goes: this callback was already
+        // registered and every event other than a frame was dropped, so an
+        // unplugged camera kept reporting itself connected until something
+        // tried to expose. EVENT_ERROR covers the link failing without a
+        // clean removal, which from here is the same news.
+        if (e == Altaircam.eEVENT.EVENT_DISCONNECTED || e == Altaircam.eEVENT.EVENT_ERROR) {
+            if (_connected) {
+                _connected = false;
+                _disconnectReason = e == Altaircam.eEVENT.EVENT_DISCONNECTED
+                    ? "the camera reported itself disconnected from the USB bus"
+                    : "the camera SDK reported a fatal link error, which is what a removed camera looks like";
+            }
+            return;
+        }
         if (e != Altaircam.eEVENT.EVENT_IMAGE) return;
         if (_cam == null) return;
         if (!_cam.get_Size(out int w, out int h) || w <= 0 || h <= 0) return;

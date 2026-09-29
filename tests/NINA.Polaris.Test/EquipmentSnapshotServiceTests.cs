@@ -38,7 +38,8 @@ public class EquipmentSnapshotServiceTests {
         var equip = new EquipmentManager(indi, NullLogger<EquipmentManager>.Instance,
             new NINA.Polaris.Services.Alpaca.AlpacaDiscoveryCache(),
             new NINA.Polaris.Services.Simulator.Gear.SimGearService());
-        return new EquipmentSnapshotService(equip, NullLogger<EquipmentSnapshotService>.Instance);
+        return new EquipmentSnapshotService(equip, new NotificationService(),
+            NullLogger<EquipmentSnapshotService>.Instance);
     }
 
     [Test]
