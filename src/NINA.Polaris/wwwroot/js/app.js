@@ -1,10 +1,10 @@
 // =====================================================================
-// Polaris Astro Controller — frontend application script (Alpine.js)
+// Polaris Astro Controller, frontend application script (Alpine.js)
 // ---------------------------------------------------------------------
 // This is a single large file by design: ninaApp() (below) returns ONE
 // Alpine x-data object (~740 methods) bound to <body> in index.html, so
-// every tab shares one reactive state bag. There is no bundler — the file
-// is served as-is — so it is organised by convention, not by modules.
+// every tab shares one reactive state bag. There is no bundler, the file
+// is served as-is, so it is organised by convention, not by modules.
 //
 // HOW TO NAVIGATE (line numbers drift; search for these anchors instead):
 //   • Module scope (pre-ninaApp): _polarisCharts, EXPOSURE_PRESETS_ALL
@@ -58,7 +58,7 @@ const CUSTOM_ACCESSORY = '__custom__';
 
 // Per-device appearance preferences mirrored to the mobile shell. They live
 // in localStorage, which is exactly the storage iOS empties for a
-// cross-origin iframe between app launches — so without this the operator
+// cross-origin iframe between app launches, so without this the operator
 // would set the nav-rail inset (added for that phone) or the UI scale and
 // find them back at the default on the next launch. The shell keeps the bag
 // natively and hands it back at boot. Nothing here is a secret; it is a
@@ -110,7 +110,7 @@ function ninaApp() {
         asst: {
             // Which backend serves the assistant: 'cloud' (hosted Azure, paid),
             // 'sbc' (local llama-server on this Polaris host, free), or 'device'
-            // (on-device model — deferred). Persisted in localStorage.
+            // (on-device model, deferred). Persisted in localStorage.
             backend: 'cloud',
             sbc: null,            // last /api/canopus/status snapshot (SBC controls)
             sbcBusy: false,       // a start/stop/download action is in flight
@@ -251,7 +251,7 @@ function ninaApp() {
             // Offline "relay" update: SBC has no internet but the client
             // (phone on 4G/5G) does. The browser reads the release metadata
             // from GitHub (CORS-allowed JSON), the user downloads the .deb on
-            // their device (a normal download — the asset bytes are NOT CORS-
+            // their device (a normal download, the asset bytes are NOT CORS-
             // readable, so we can't fetch() them), then picks the file and we
             // upload it to the SBC, which verifies the SHA-256 (read from the
             // GitHub API) before installing.
@@ -261,7 +261,7 @@ function ninaApp() {
             relayUploading: false,  // uploading the picked .deb to the SBC
             relayError: '',
             relayInfo: null,        // { latestVersion, assetName, assetSize, assetUrl, sha256 }
-            // Rollback / version-history (its own modal — the update modal only
+            // Rollback / version-history (its own modal, the update modal only
             // appears when a newer version exists). releases: [{ tag, name,
             // publishedAt, htmlUrl, prerelease, assetName, assetSize, relation,
             // isCurrent, installable }].
@@ -273,13 +273,13 @@ function ninaApp() {
         guideView: { brightness: 1, contrast: 1, zoom: 1, panX: 0, panY: 0 },
         // Local model for the RA/Dec aggressiveness sliders (percent). Kept in
         // sync with the server value via x-effect ONLY while the user isn't
-        // dragging — otherwise the ~1 Hz WS status snapped the slider back
+        // dragging, otherwise the ~1 Hz WS status snapped the slider back
         // before the change could be sent (field report).
         guideAggr: { ra: 70, dec: 70 },
         _guideAggrEditing: false,
         // Self-signed-certificate gate. wsBlocked flips when the page is on
         // HTTPS, the server answers plain requests, but no WebSocket ever
-        // opened — the browser is refusing the upgrade because the cert is
+        // opened, the browser is refusing the upgrade because the cert is
         // not trusted. See _startWsCertWatch.
         certGate: { wsBlocked: false, open: false, loading: false, guides: [] },
         _wsEverOpened: false,
@@ -294,7 +294,7 @@ function ninaApp() {
         // (LiveCaptureService), so capture() never runs for it and the bar read 0
         // all night. It now reads liveStackFrames / serverLiveCapture.frames off the
         // WS tick. Kept because capture() still maintains it and would be the counter
-        // again if a client-driven path returns — but it is NOT a session-wide total,
+        // again if a client-driven path returns, but it is NOT a session-wide total,
         // so don't wire it back to a UI that means "frames this session".
         sessionCaptures: 0,
         imageHistory: [],
@@ -358,7 +358,7 @@ function ninaApp() {
         })(),
         // A simple click/tap on a LIVE/PREVIEW/VIDEO frame hides the overlay
         // controls (toolbar, sidebar, histogram, crosshair cluster) for a
-        // clean view; tap again to bring them back. Not persisted — a fresh
+        // clean view; tap again to bring them back. Not persisted, a fresh
         // load should always show the controls.
         frameControlsHidden: false,
         liveStackFrames: 0,
@@ -375,7 +375,7 @@ function ninaApp() {
         // checkbox. PUT /api/livestack/save-frames updates both the
         // running service flag and the active rig's
         // LiveStackSaveFramesToDisk profile field, so the choice
-        // survives a Polaris restart + rig switch. Default ON —
+        // survives a Polaris restart + rig switch. Default ON,
         // most users want both the integrated preview AND an
         // archive they can re-stack offline.
         liveStackSaveFrames: true,
@@ -689,7 +689,7 @@ function ninaApp() {
             // opens so "Sync to current" is one click.
             syncPosition: 0,
             // FOCUS_REVERSE_MOTION: pending toggle state. Not
-            // round-tripped from WS — the driver doesn't broadcast
+            // round-tripped from WS, the driver doesn't broadcast
             // current reverse state, so the toggle reflects what
             // the user has set in THIS session.
             reversed: false,
@@ -770,7 +770,7 @@ function ninaApp() {
             // Spec-compliance v2: hidrated from filterWheel.capabilities
             // in the WS payload. UI hides the "Edit names" affordance
             // for wheels that don't advertise edit support (ASCOM/Alpaca,
-            // by design — names are managed externally there).
+            // by design, names are managed externally there).
             capabilities: { editNames: false }
         },
         selectedFilterWheel: null,
@@ -822,7 +822,7 @@ function ninaApp() {
 
         // HiPS background-survey picker. The bridge points the engine's
         // imagery slot (its `dss` module) at whichever survey is chosen.
-        // All are full-sky, well-known HiPS from CDS/alasky — the "most
+        // All are full-sky, well-known HiPS from CDS/alasky, the "most
         // used, highest coverage" set. Only DSS Colour has a bundled
         // offline pyramid (localSlug); the others stream from CDS and need
         // a connection (like DSS with imagery on, offline). Selecting one
@@ -929,7 +929,7 @@ function ninaApp() {
         // FONT-1: app-wide font picker. Values match the
         // [data-font="..."] selectors in app.css that override
         // --font-body / --font-mono. 'atkinson' is the default
-        // (Braille Institute's Atkinson Hyperlegible — unique
+        // (Braille Institute's Atkinson Hyperlegible, unique
         // letter shapes so B/8, l/1/I, 0/O never confuse, best
         // for the older / low-vision operators Polaris targets);
         // 'inter' is the previous default kept as a clean modern
@@ -1004,11 +1004,11 @@ function ninaApp() {
         skyShowResults: false,
         // Mobile WebView hard-suspend for the SKY engine iframe: after a
         // grace period away from the SKY tab the iframe src flips to
-        // about:blank (engine fully unloaded — no WASM loop, no GL
+        // about:blank (engine fully unloaded, no WASM loop, no GL
         // context left for Android to evict), and boots fresh on return.
         // Field report: coming back to SKY after a long stretch on LIVE
         // froze the whole Android app; all iframes share the WebView
-        // main thread, so a wedged engine can't be detected from here —
+        // main thread, so a wedged engine can't be detected from here,
         // it has to be prevented. Desktop never suspends.
         skySuspended: false,
         _skySuspendTimer: null,
@@ -1017,7 +1017,7 @@ function ninaApp() {
         // and re-applied whenever the engine (re)loads. Default = equatorial
         // (the RA/Dec grid astrophotographers expect).
         skyGridMode: 'eq',
-        // SKY ecliptic line toggle. On by default — the plane of the solar
+        // SKY ecliptic line toggle. On by default, the plane of the solar
         // system (where the Sun/Moon/planets ride) is handy for planning.
         // Pushed via the set-ecliptic bridge msg and re-applied whenever the
         // engine (re)loads. Persisted to localStorage, so a saved choice wins.
@@ -1026,7 +1026,7 @@ function ninaApp() {
         // Pushed via set-satellites and re-applied on engine (re)load.
         skySatellitesVisible: true,
         // SKY constellations: stick-figure lines (on by default, matching the
-        // engine) and the bundled IAU western illustration art (off — it's
+        // engine) and the bundled IAU western illustration art (off, it's
         // pretty but busy). Both pushed via the set-constellations bridge msg
         // and re-applied whenever the engine (re)loads.
         skyConstLines: true,
@@ -1379,7 +1379,7 @@ function ninaApp() {
         equipCoolerTarget: -10,
         // COOLRAMP: max °C/min the cooler setpoint may move, in both directions.
         // 0 = no ramp (jump straight to target). Seeded from the active rig on
-        // load; null there means "unset" and resolves to 2°C/min — the rate the
+        // load; null there means "unset" and resolves to 2°C/min, the rate the
         // sequencer's warm-up has always used.
         equipCoolerRamp: 2,
         // Per-slot ramp state from the WS `cooling` block: {main:{...},aux:{...}}.
@@ -1464,8 +1464,8 @@ function ninaApp() {
             parseFloat(localStorage.getItem('polaris-disp-saturation') || '')),
         // Result of the parallel aux plate solve (fired alongside the main
         // SKY solve). When present, the pink aux FOV rect anchors to this
-        // solved RA/Dec + rotation — the real angle the aux frame comes out
-        // with — instead of assuming the mount rotation.
+        // solved RA/Dec + rotation, the real angle the aux frame comes out
+        // with, instead of assuming the mount rotation.
         auxSolvedFrame: null,
         auxCapture: { running: false, frameCount: 0, noOutputDir: false },
         _auxSaveTimer: null,
@@ -1491,7 +1491,7 @@ function ninaApp() {
         // option (see _expPresetsMs / _snapExpMs).
         guideExp: 1000,
         // Preset exposures offered by the Exp (s) dropdown, in ms (seconds:
-        // 0.5, 1.0, 1.5, 2.0, 3.0, 5.0 — 0.5 s is the product minimum; sub-
+        // 0.5, 1.0, 1.5, 2.0, 3.0, 5.0, 0.5 s is the product minimum; sub-
         // second guide exposures chase seeing and starve the pulse dwell).
         // Keep in sync with the <option> list in index.html.
         _expPresetsMs: [500, 1000, 1500, 2000, 3000, 5000],
@@ -1620,7 +1620,7 @@ function ninaApp() {
         // _reconcileCaptureTimers() lit the flag on behalf of a SERVER run this
         // browser didn't start (reconnect / reload mid-exposure). Such a flag has
         // no local finally to clear it, so the reconciler must release it itself
-        // once the server run is gone — otherwise the shutter reads "activated"
+        // once the server run is gone, otherwise the shutter reads "activated"
         // forever off a run that ended. False means a local capture owns the flag
         // and its own finally will clear it; the release phase must not touch it.
         _previewBusyAdopted: false,
@@ -1820,7 +1820,7 @@ function ninaApp() {
             processSerPath: '',
             serList: [],          // [{ path, label }]
             // PLANNVME: optional folder to scan for .ser instead of the default
-            // capture root — for clips on an external SSD / NVMe mount outside
+            // capture root, for clips on an external SSD / NVMe mount outside
             // ~/files. Remembered across sessions in localStorage.
             scanDir: (() => { try { return localStorage.getItem('polaris.video.scanDir') || ''; } catch (e) { return ''; } })(),
             // SERSCALE: rescale (right-aligned RAW16 salvage) controls.
@@ -2088,7 +2088,7 @@ function ninaApp() {
         // upload.onprogress) and apiDownload (fetch + ReadableStream
         // reader, counts bytes as chunks arrive). Each transfer has:
         //   { id, label, direction: 'up'|'down', loaded, total, done }
-        // total=0 means "size unknown" — the chip shows an indeterminate
+        // total=0 means "size unknown", the chip shows an indeterminate
         // bar. done=true triggers a short "✓ Done" hold before removal.
         transfers: [],
         _nextTransferId: 1,
@@ -2197,7 +2197,7 @@ function ninaApp() {
             // Devices the operator UNCHECKED on the found list. Several INDI
             // drivers publish stub devices with no hardware behind them
             // (PlayerOne Camera 1..3, QHYCFW1..3, the four ZWO AM variants,
-            // V4L2 CCD), so "published" does not mean "present" — the person
+            // V4L2 CCD), so "published" does not mean "present", the person
             // in front of the rig curates the list.
             exclude: {},            // device name -> true (excluded)
             serialChoice: {},       // '/dev/ttyUSB0' -> driver label ('' = skip)
@@ -2370,7 +2370,7 @@ function ninaApp() {
         phd2GuiStarting: false,
         phd2GuiIframeSrc: '/phd2-gui/',
         _phd2GuiEnsuring: false,
-        // Set when xpra is up but its HTTP root 404s — the HTML5 client
+        // Set when xpra is up but its HTTP root 404s, the HTML5 client
         // (xpra-html5) isn't installed. Drives a dedicated install banner.
         phd2GuiHtml5Missing: false,
         // PH2VNC: Windows TightVNC + noVNC bridge state, sibling of
@@ -2447,7 +2447,7 @@ function ninaApp() {
         atlasTypes: [],
         // CAT-4: list of catalog sources available in the DSO DB
         // ('NGC','IC','M','C','Arp','Sh2','HCG','AGC'). Empty array
-        // when the bundled DB is missing — the catalog dropdown
+        // when the bundled DB is missing, the catalog dropdown
         // hides itself via x-show in that case.
         atlasCatalogs: [],
         altitudeData: null,
@@ -4253,14 +4253,14 @@ function ninaApp() {
             modalDeconStrength: 0.5,
             modalDeconPsfSize: 4.0,
             fwhmBusy: false,   // "Auto" FWHM measurement in flight
-            // NM-2: classical RL only — restrict sharpening by measured local
+            // NM-2: classical RL only, restrict sharpening by measured local
             // SNR (photon-transfer σ map) instead of a flat background noise
             // threshold, so shot noise on bright nebulosity is respected.
             modalDeconNoiseAdaptive: false,
             modalDeconProtectStars: true,
             // Run the RL iteration loop in the browser (server only measures
             // the PSF + noise model, then the browser does the heavy work).
-            // Stays true by default — frees the SBC server CPU for capture.
+            // Stays true by default, frees the SBC server CPU for capture.
             // Forced to false for field RL (multiple kernels per tile).
             modalRlRunInBrowser: true,
             // GX-12h: parity with GraXpert UI, pick the dedicated
@@ -4378,7 +4378,7 @@ function ninaApp() {
             busy: false, phase: '', progress: 0, error: '',
             // Set by starRemovalAbort() to signal the in-browser pipeline to
             // bail at its next tile/pass checkpoint (mirrors GraXpert's
-            // browserAbortRequested — a WebGPU shader can't be hard-killed
+            // browserAbortRequested, a WebGPU shader can't be hard-killed
             // mid-tile, so we stop launching new tiles).
             aborting: false,
             lastSource: '',   // last image run, for "retry" from the comparator
@@ -4423,7 +4423,7 @@ function ninaApp() {
             // .crop-picker bounding rect. Both null when no selection.
             roi: { startX: null, startY: null, endX: null, endY: null },
             dragging: false,
-            // Captured on <img> load — image's intrinsic dimensions
+            // Captured on <img> load, image's intrinsic dimensions
             // (the FITS source resolution) and how the browser laid
             // them out after max-height/max-width clamping. Used to
             // convert ROI back to image coords before POST.
@@ -4433,7 +4433,7 @@ function ninaApp() {
             imgDisplayHeight: 0,
             // TRUE source resolution (FITS NAXIS1/NAXIS2). The preview is
             // a downscaled JPEG, so imgNaturalWidth is NOT the master's
-            // real size — using it to scale the ROI shrank the crop. We
+            // real size, using it to scale the ROI shrank the crop. We
             // fetch the real dimensions from the FITS header and send a
             // normalised (fraction) ROI so the server crops the master at
             // full resolution. 0 until loaded (raster files fall back to
@@ -4456,7 +4456,7 @@ function ninaApp() {
             result: null,         // FrameAnalysis DTO from the server
             imgDisplayWidth: 0,
             imgDisplayHeight: 0,
-            inspectorZoom: 2,     // 1..6 — higher = tighter (more magnified) crops
+            inspectorZoom: 2,     // 1..6, higher = tighter (more magnified) crops
             previewReady: false,  // the tilt/aberration preview <img> finished loading
             inspectorReady: false,// the hi-res inspector image finished loading
         },
@@ -4573,7 +4573,7 @@ function ninaApp() {
             // toggleable in the toolbar.
             linkStretch: true,
         },
-        // Star colour/fringe repair (SVBony debayer artifact) — run first.
+        // Star colour/fringe repair (SVBony debayer artifact), run first.
         starColor: {
             modalOpen: false, busy: false, framePath: '', aggressiveness: 1.0,
             exclusionRadius: 9, stage: '', error: '',
@@ -4746,7 +4746,7 @@ function ninaApp() {
         studioAnnotate: { active: false, busy: false, width: 0, height: 0, items: [], elapsed: 0 },
         // AbortController + elapsed timer for the in-flight annotate solve, so
         // the viewer can show progress (shared filesSolveLog console) and let
-        // the user cancel — same UX as the FILES plate solve.
+        // the user cancel, same UX as the FILES plate solve.
         _annotateAbort: null,
         _annotateTimer: null,
         imageViewerPath: '',   // absolute path of the file open in the viewer (FILES); '' for the live frame
@@ -4895,7 +4895,7 @@ function ninaApp() {
         // arrives and whenever a mono sensor leaves auto a no-op.
         // NOT the same as the hardware-side video.wbR / video.wbB which
         // write WB_R/WB_B to the camera driver (different OSCs expose
-        // those very differently — display tint always works).
+        // those very differently, display tint always works).
         wb: { r: 1.7, b: 1.5, auto: true },
         _wbLastAutoAt: 0,
         showWbPanel: false,
@@ -5240,7 +5240,7 @@ function ninaApp() {
             this.$watch('auxCameraDriver', () => { this.auxIsDslr = false; this.auxSupportsCooler = false; });
 
             // Self-update: the check runs post-auth in _initCore (the endpoint
-            // is gated — running it here, before the login overlay clears, 401s
+            // is gated, running it here, before the login overlay clears, 401s
             // and the badge stays hidden until a manual refresh). See _initCore.
 
             // FIELD-6: rehydrate persisted chip dismissals. Only
@@ -5315,7 +5315,7 @@ function ninaApp() {
                         this._lastImageFrameAt = 0;
                     }
                     // Mobile SKY hard-suspend also covers the whole app
-                    // going to background while the SKY tab is open —
+                    // going to background while the SKY tab is open,
                     // same Android GL-eviction / freeze-on-return risk
                     // as sitting on another Polaris tab. On return to a
                     // visible SKY tab, reboot a suspended engine.
@@ -5340,14 +5340,14 @@ function ninaApp() {
             }
 
             // iOS WKWebView stuck-scroll watchdog. The app shell is a
-            // fixed flex column — the ROOT document never legitimately
+            // fixed flex column, the ROOT document never legitimately
             // scrolls. But WKWebView scrolls it anyway when the OS
             // keyboard opens / focus jumps (even with the native
             // keyboard suppressed) and sometimes never restores it:
             // the whole UI ends up shifted with a blank band on the
             // right/bottom that survives until a reload (field report:
             // "o SKY se desloca no iPhone e não volta"). Pin the root
-            // back to 0,0 whenever the viewport settles — skipped
+            // back to 0,0 whenever the viewport settles, skipped
             // while an editable element is focused so we never fight
             // the OS revealing an input on Android.
             {
@@ -5418,7 +5418,7 @@ function ninaApp() {
                     // tab is display:none, which is what froze the Android
                     // app ("Polaris isn't responding"). Drop it to a
                     // keep-alive rate whenever SKY isn't the active tab.
-                    // No-op on desktop — the /sky/ perf guard only installs
+                    // No-op on desktop, the /sky/ perf guard only installs
                     // itself on phones/tablets.
                     this._skySendMessage({ type: 'set-render-paused', paused: v !== 'sky' });
                     // Mobile hard-suspend (see skySuspended). The paused
@@ -5427,7 +5427,7 @@ function ninaApp() {
                     // Android can evict the hidden iframe's GL context and
                     // the engine froze the whole app on return. Unload the
                     // iframe after a grace period and reboot it fresh when
-                    // the user comes back — the bridge 'ready' handler
+                    // the user comes back, the bridge 'ready' handler
                     // re-hydrates observer/time/overlays automatically.
                     if (this._isMobileClient()) {
                         clearTimeout(this._skySuspendTimer);
@@ -5534,7 +5534,7 @@ function ninaApp() {
             this._bootRevealTimer = setTimeout(() => this._bootReveal(), 6000);
 
             // Tab-discard restore: if Chrome's Memory Saver discarded and
-            // reloaded this tab, document.wasDiscarded is true — return to the
+            // reloaded this tab, document.wasDiscarded is true, return to the
             // tab the user was on (persisted in sessionStorage) and replay its
             // entry side effects, instead of dumping them on 'home'. Gated on
             // wasDiscarded so a deliberate manual reload still opens the
@@ -5572,7 +5572,7 @@ function ninaApp() {
             // this belongs after login rather than in the pre-auth boot.
             this.loadDeviceName();
 
-            // Self-update: check now (post-auth — the endpoint is gated) then
+            // Self-update: check now (post-auth, the endpoint is gated) then
             // hourly. Runs here rather than in the pre-auth boot init so the
             // badge appears right after login instead of only after a manual
             // refresh. No-ops off SBC .deb installs (supported:false → hidden).
@@ -5811,7 +5811,7 @@ function ninaApp() {
             // UI language: mirror whatever js/i18n.js resolved (localStorage is
             // the source of truth). The actual translation already happened at
             // load; this only syncs the picker. The profile UiLanguage acts as
-            // the seed for a fresh browser — handled in loadSettings().
+            // the seed for a fresh browser, handled in loadSettings().
             try {
                 const langSaved = localStorage.getItem('nina-ui-lang');
                 const supported = (window.I18N && window.I18N.supported) || ['en','pt-BR','es','fr','de'];
@@ -5821,7 +5821,7 @@ function ninaApp() {
 
             // Reduce motion: mirror the value the head IIFE already stamped
             // (localStorage is the source of truth) so the Settings toggle
-            // reflects reality. No re-apply needed — the attribute is set.
+            // reflects reality. No re-apply needed, the attribute is set.
             try { this.uiReduceMotion = localStorage.getItem('nina-reduce-motion') === '1'; }
             catch (_) { /* private mode */ }
 
@@ -5991,7 +5991,7 @@ function ninaApp() {
             const dedup = options.dedup !== false;
 
             // Deduplicate: if the same request is already in flight, share it.
-            // Each caller gets its OWN clone of the Response — the body stream
+            // Each caller gets its OWN clone of the Response, the body stream
             // can only be read once, so handing the same Response to two callers
             // (e.g. the imaging + guide camera pickers both discovering the same
             // driver) made the second resp.json() throw "body stream already
@@ -6063,12 +6063,12 @@ function ninaApp() {
                 this._setServerReachable(true);
 
                 // DBGLOG-6: log the response. error level for 5xx, warn for
-                // 4xx (including 401 — useful for diagnosing auth churn),
+                // 4xx (including 401, useful for diagnosing auth churn),
                 // info otherwise. Skip /api/logs/client to break the feedback
                 // loop (POSTing a log entry would log the POST, recursion).
                 // FIELD6-10: `expectStatuses` lets a caller declare which non-2xx
                 // codes are a NORMAL answer for that endpoint rather than a
-                // fault. Those log at debug and do NOT throw — the caller reads
+                // fault. Those log at debug and do NOT throw, the caller reads
                 // resp.ok itself. Without it a polled endpoint that legitimately
                 // answers 404 ("no stack yet") emitted a warn AND an error every
                 // single tick and buried the LOG panel (field report).
@@ -6143,7 +6143,7 @@ function ninaApp() {
 
                 if (err.name === 'AbortError') {
                     // A per-request timeout (slow capture, slow plate solve,
-                    // big upload) is NOT a server outage — don't flip
+                    // big upload) is NOT a server outage, don't flip
                     // serverReachable, or the next successful request fires a
                     // spurious "Server reconnected" toast on every slow op.
                     // Genuine outages still surface via the TypeError branch
@@ -6256,7 +6256,7 @@ function ninaApp() {
         //   /api/foo                  → /api/foo?token=xxx
         //   /api/foo?bar=baz          → /api/foo?bar=baz&token=xxx
         // Skipped when auth.token is empty (e.g. auth disabled OR not
-        // yet logged in — the request will 401 either way, and the
+        // yet logged in, the request will 401 either way, and the
         // ?token= would just be empty).
         authUrl(url) {
             if (!url || !this.auth?.token) return url;
@@ -6362,7 +6362,7 @@ function ninaApp() {
                 let lastLoaded = 0;
                 xhr.upload.onprogress = (e) => {
                     if (!e.lengthComputable && total <= 0) {
-                        // Indeterminate — best we can do is advance the
+                        // Indeterminate, best we can do is advance the
                         // "loaded" counter so the chip shows activity.
                         this._transferProgress(tid, e.loaded);
                     } else {
@@ -6421,7 +6421,7 @@ function ninaApp() {
                 // Leave responseType at the default ('') so the onload
                 // handler can read xhr.responseText on both success and
                 // error paths. The previous responseType='blob' tripped
-                // an InvalidStateError on every non-2xx response —
+                // an InvalidStateError on every non-2xx response,
                 // reject(new ApiError(xhr.status, xhr.responseText))
                 // throws because responseText is forbidden in blob
                 // mode, masking the real server error. The success
@@ -6543,7 +6543,7 @@ function ninaApp() {
                 }
                 if (!this.auth.authenticated) {
                     // Saved token was invalid or expired. Drop it, including
-                    // the shell's copy — otherwise it keeps handing back a
+                    // the shell's copy, otherwise it keeps handing back a
                     // dead token on every launch.
                     this.auth.token = '';
                     sessionStorage.removeItem('polaris_token');
@@ -6821,7 +6821,7 @@ function ninaApp() {
             // AUTH-DEVICE-CONTRACT (#651, app-first): if the shell did not answer
             // the boot-time ask (a slow cold launch can miss the 1.5 s window),
             // _authWrapperOrigin was never set and every later push silently
-            // no-op'd — so a "remember me" login was never handed to the native
+            // no-op'd, so a "remember me" login was never handed to the native
             // store and the app re-prompted on the next launch. Re-establish the
             // relay on demand before pushing so a login after a slow boot still
             // persists. Genuinely-no-shell (a plain browser) still resolves to
@@ -7560,7 +7560,7 @@ function ninaApp() {
 
         // Conservative UA sniff. Enough to land the user on the right
         // tab; if we guess wrong they can pick another one. iPad on
-        // iOS 13+ reports as "Macintosh" — the touch heuristic salvages
+        // iOS 13+ reports as "Macintosh", the touch heuristic salvages
         // it. Order matters: check iOS before macOS.
         _detectOs() {
             const ua = (navigator.userAgent || '').toLowerCase();
@@ -7658,9 +7658,9 @@ function ninaApp() {
                 }
             } catch (e) {
                 // Three distinct failure modes to surface clearly:
-                //   1) ApiError(status, body) — server responded with a
+                //   1) ApiError(status, body), server responded with a
                 //      4xx/5xx and a JSON body containing { error: "..." }
-                //   2) "Request timed out" — apiFetch aborted (backend
+                //   2) "Request timed out", apiFetch aborted (backend
                 //      hung longer than 20s, likely polkit waiting on an
                 //      auth agent we can't provide)
                 //   3) Other (offline / TLS / CORS) -> fallback message
@@ -7861,7 +7861,7 @@ function ninaApp() {
         // camera's remembered exposure/gain/binning into the live fields.
         // The mirror-watch (installed in _previewInitPerCamera) keeps
         // bySource[active] up to date as the user edits, so we don't need to
-        // stash here — just point _activeSource at the new slot and load it.
+        // stash here, just point _activeSource at the new slot and load it.
         previewApplyCameraSource() {
             const src = this.preview.cameraSource || 'main';
             this.preview._activeSource = src;
@@ -7881,7 +7881,7 @@ function ninaApp() {
         // Guard the PREVIEW/FOCUS camera pickers: if the previously-selected
         // source is no longer connected (e.g. the aux camera was disconnected
         // after it was picked), its <option> is hidden but the x-model value
-        // lingers — the picker shows a stale, un-listed camera and a capture
+        // lingers, the picker shows a stale, un-listed camera and a capture
         // would target a gone device. Snap back to 'main'. Driven reactively
         // by x-effect, so it fires the moment the connection flag flips.
         previewGuardCameraSource() {
@@ -8042,7 +8042,7 @@ function ninaApp() {
         // Turn the remote terminal back off (clears profile.TerminalEnabled).
         // Disconnects any live session first. Note: if the host also sets
         // Terminal:Enabled=true in appsettings.json, that static gate keeps
-        // the endpoint live regardless — the toast flags that case is only
+        // the endpoint live regardless, the toast flags that case is only
         // changeable in the file.
         async disableTerminal() {
             if (this.term.enabling) return;
@@ -8069,7 +8069,7 @@ function ninaApp() {
 
         // Optimize-SBC launcher: open the Remote Terminal connected to
         // localhost and run `sudo <tool>` (raspi-config / armbian-config).
-        // Root is the user's OWN sudo — Polaris gains no passwordless root.
+        // Root is the user's OWN sudo, Polaris gains no passwordless root.
         async sbcOptimize(tool) {
             if (tool !== 'raspi-config' && tool !== 'armbian-config') return;
             if (!this.term.serverEnabled) { await this.enableTerminal(); }
@@ -8104,7 +8104,7 @@ function ninaApp() {
             this.term.lastError = '';
 
             // Pop the terminal-window modal and let Alpine paint it before
-            // we mount xterm — the FitAddon needs the mount to have real
+            // we mount xterm, the FitAddon needs the mount to have real
             // dimensions, which it only does once the modal is displayed
             // (x-show flips off display:none).
             this.term.modalOpen = true;
@@ -8324,7 +8324,7 @@ function ninaApp() {
 
         // FONT-1: write [data-font] on <html> + persist. The CSS
         // selectors in app.css pick up the attribute and swap
-        // --font-body / --font-mono; the change is instant — no
+        // --font-body / --font-mono; the change is instant, no
         // reflow more expensive than a font swap, and no need to
         // re-render any canvas since canvases don't use document
         // CSS. 'atkinson' clears the attribute (default state) so
@@ -8599,7 +8599,7 @@ function ninaApp() {
                     body: JSON.stringify({ entries: batch })
                 });
             } catch (_) {
-                // drop on failure — re-queueing risks an infinite loop
+                // drop on failure, re-queueing risks an infinite loop
                 // when the server is down. Local entries already render
                 // in the panel via _ingestLocalEntry below.
             }
@@ -8750,7 +8750,7 @@ function ninaApp() {
         },
 
         // DBGLOG-8: confirm + wipe the server ring buffer. Local cursor
-        // intentionally NOT reset — subsequent WS ticks will see a
+        // intentionally NOT reset, subsequent WS ticks will see a
         // truncated:true flag and the panel UI can show "buffer cleared".
         async logClear() {
             if (!await this._confirmAsync(
@@ -9025,7 +9025,7 @@ function ninaApp() {
         //
         // Polaris serves HTTPS with its own certificate. A browser that has
         // not been told to trust it shows an interstitial for the PAGE, and
-        // the user clicks through — but Firefox does NOT extend that
+        // the user clicks through, but Firefox does NOT extend that
         // exception to the WebSocket handshakes the same page load then
         // makes. Every retry fails, the UI sits there with no live data, and
         // only a second page load fixes it. That is exactly the field report:
@@ -9638,7 +9638,7 @@ function ninaApp() {
             // XFER-4: ephemeral chip for each image-stream frame that
             // arrived. WebSocket API doesn't expose mid-frame progress
             // (browsers buffer until the full message is delivered),
-            // so we can't show "downloading 40%" — but we CAN flash a
+            // so we can't show "downloading 40%", but we CAN flash a
             // chip showing the frame size + format the moment it lands.
             // Skip tiny frames (< 64 KB) which are usually thumbnails
             // or stats-only payloads and would just spam the chip row.
@@ -9653,7 +9653,7 @@ function ninaApp() {
             // bar. One-off snaps and stacked frames still flash a chip;
             // a live stream doesn't need one to tell you it is running.
             // Both wire shapes carry FrameKind at arrayBuffer offset 24
-            // (header offset 20 + the 4-byte length prefix — see the long
+            // (header offset 20 + the 4-byte length prefix, see the long
             // note in _renderRawFrame before touching this).
             let chipFrameKind = headeredJpegKind;
             if (chipFrameKind == null && !isBareJpeg && view.length >= 30) {
@@ -9679,11 +9679,11 @@ function ninaApp() {
                 // Dedicated-stack-path gate: while the SERVER is integrating
                 // the stack (full mode), the LIVE canvas shows ONLY LiveStack
                 // (kind 6) frames. Any kind-0 JPEG arriving in that window is
-                // a stray (stale relay, other producer) — drop it so it can't
+                // a stray (stale relay, other producer), drop it so it can't
                 // flash over the colour stack.
                 const jk = headeredJpegBytes !== null ? (headeredJpegKind | 0) : 0;
                 // LIVE-TRACE (FIELD6-8): the JPEG arm. A LiveStack JPEG is the
-                // server's COLOUR branch (already debayered to RGB server-side —
+                // server's COLOUR branch (already debayered to RGB server-side,
                 // the client paints it as-is, no debayer). So if the LOG shows
                 // this line for kind=3, the server IS producing colour and any
                 // grey render is downstream of here. If instead the RAW arm's
@@ -9765,8 +9765,8 @@ function ninaApp() {
                     // the tick, say) left
                     // _lastStackFrameShown behind forever: the guard above stayed
                     // true and we re-fetched EVERY tick, ~1/s all night, each
-                    // costing a warn + an error line. That retry loop — not the
-                    // 404 itself — is what buried the LOG panel. A transient
+                    // costing a warn + an error line. That retry loop, not the
+                    // 404 itself, is what buried the LOG panel. A transient
                     // network 'error' still retries, which is the case retrying
                     // was actually for.
                     if (res === 'ok' || res === 'unavailable') this._lastStackFrameShown = frameCount;
@@ -9774,7 +9774,7 @@ function ninaApp() {
                 .finally(() => { this._stackRestoreInFlight = false; });
         },
 
-        /// Returns 'ok' | 'unavailable' (server has no stacked image — a normal
+        /// Returns 'ok' | 'unavailable' (server has no stacked image, a normal
         /// answer, do not retry for this frame count) | 'error' (transient, retry).
         async restoreLiveStackPreview(epoch = null) {
             try {
@@ -9785,7 +9785,7 @@ function ninaApp() {
                 if (!resp || !resp.ok) return 'error';
                 const buf = await resp.arrayBuffer();
                 // 200 with an empty/short body: the server answered, there is
-                // just nothing to paint. Same class as 404 — don't re-ask for
+                // just nothing to paint. Same class as 404, don't re-ask for
                 // this frame count.
                 if (!buf || buf.byteLength < 2) return 'unavailable';
                 // Re-check after the await: the stack may have been reset while
@@ -9833,12 +9833,12 @@ function ninaApp() {
                         imageData: null,      // filled in on demand
                         width: img.width, height: img.height, frameKind
                     };
-                    // Server colour live stack renders LIVE as an RGB JPEG — arm
+                    // Server colour live stack renders LIVE as an RGB JPEG, arm
                     // the dropout guard so a later mono raw sub (transient
                     // CCD_CFA dropout) is held rather than flashed grey.
                     // Kind 6 = the dedicated LiveStack path.
                     if (frameKind === 0 || frameKind === 6) {
-                        // Arm the latch only — do NOT record the JPEG's size as
+                        // Arm the latch only, do NOT record the JPEG's size as
                         // the raw-geometry reference. The colour stack JPEG is
                         // downscaled (maxDim 4096), so its dimensions differ from
                         // the native raw sub; storing them here made the raw
@@ -10070,11 +10070,11 @@ function ninaApp() {
         // Compute shadow / scale / midtone for the WebGL stretch.
         //
         // Returns three values consumed by the fragment shader:
-        //   shadow      — black point, in raw ADU. Pixels below
+        //   shadow     , black point, in raw ADU. Pixels below
         //                 this get clipped to 0.
-        //   scaleFactor — 1 / (white - shadow). Maps the [shadow,
+        //   scaleFactor, 1 / (white - shadow). Maps the [shadow,
         //                 white] window onto [0, 1] for the MTF.
-        //   midtone     — MTF parameter, 0..1. m=0.5 is identity;
+        //   midtone    , MTF parameter, 0..1. m=0.5 is identity;
         //                 smaller stretches shadows (typical DSO).
         //
         // The previous version computed only shadow + scaleFactor
@@ -10101,7 +10101,7 @@ function ninaApp() {
             // below 99% means the brightest pixel is legitimate
             // signal that hasn't hit full-well, and excluding it
             // would narrow the sample, raise shadow, and crush
-            // mid-tones to black — the user perceived this as
+            // mid-tones to black, the user perceived this as
             // "the image got smaller" after the 0.9 version of
             // this heuristic mis-fired on a bright daytime preview.
             const step = Math.max(1, Math.floor(pixels.length / 200000));
@@ -10123,7 +10123,7 @@ function ninaApp() {
             if (sampleArr.length === 0) {
                 // Uniformly saturated / overexposed frame. Set the
                 // scale factor so the observed max maps to 1.0,
-                // midtone identity (0.5) — result is a near-white
+                // midtone identity (0.5), result is a near-white
                 // canvas, intuitive for "blown out exposure" instead
                 // of the old "everything's black" behaviour.
                 const whiteVal = observedMax > 0 ? observedMax : maxVal;
@@ -10142,7 +10142,7 @@ function ninaApp() {
             // GraXpert: midtone = MTF(x_med, target_bg) where
             // x_med = (median - shadow) / (maxVal - shadow).
             // Setting target_bg = 0.15 lands the median at 15%
-            // gray in the output — matches the AutoStretch.cs +
+            // gray in the output, matches the AutoStretch.cs +
             // GraXpert default that the editor / thumbnails use.
             const targetBg = 0.15;
             const denom = Math.max(1, maxVal - shadow);
@@ -10153,7 +10153,7 @@ function ninaApp() {
             // singularity at x = m / (2m-1).
             midtone = Math.min(0.999, Math.max(0.001, midtone));
 
-            // Throttled diagnostic — last-resort debugging when the
+            // Throttled diagnostic, last-resort debugging when the
             // canvas comes out black or the displayed image looks off.
             // Logs once every ~2s so live-stacking doesn't spam.
             const nowMs = performance.now();
@@ -10324,7 +10324,7 @@ function ninaApp() {
         // them. On a flat they are nowhere near each other. Measured on the
         // operator's SV605CC flat: medians R 10204, G 28228, B 65534. Under the
         // offset model those map to 0.020, 0.034 and 0.900 of the output range
-        // — the blue is nine tenths of the way to white while the red is at
+        //, the blue is nine tenths of the way to white while the red is at
         // two hundredths, which is exactly the solid blue flat that was
         // reported. Under a gain all three land on 0.034.
         //
@@ -10428,7 +10428,7 @@ function ninaApp() {
         applyManualStretch() {
             const f = this._lastRawFrame;
             if (!f) {
-                // No raw buffer — this is a server-rendered JPEG (the colour
+                // No raw buffer, this is a server-rendered JPEG (the colour
                 // OSC live stack). Re-stretch the cached decoded JPEG so the
                 // histogram handles take effect immediately instead of waiting
                 // for the next stacked frame (which they'd never change).
@@ -11028,7 +11028,7 @@ function ninaApp() {
         // the channel means equalise. Sub-sampled (every 16 px) so
         // it runs in ~5ms even on a 24 MP master. Returns true on
         // success, false when the algorithm couldn't compute (mono
-        // sensor, all-zero frame, etc — leaves wb untouched).
+        // sensor, all-zero frame, etc, leaves wb untouched).
         _computeAutoWB(pixels, width, height, bayerPattern) {
             // Mono sensors (BayerPattern = None / 0) don't have R/G/B
             // separation to balance. Same for malformed inputs.
@@ -11038,7 +11038,7 @@ function ninaApp() {
             let sumR = 0, sumG = 0, sumB = 0;
             let nR = 0, nG = 0, nB = 0;
             // Walk 2x2 super-pixels with stride. stride=8 gives one
-            // sample per 16×16 pixel patch — enough to converge on
+            // sample per 16×16 pixel patch, enough to converge on
             // gray-world without iterating every pixel.
             const stride = 8;
             for (let y = 0; y + 1 < height; y += 2 * stride) {
@@ -11117,7 +11117,7 @@ function ninaApp() {
         },
 
         // Reset display WB to the neutral defaults that work for most
-        // daylight OSC captures (1.7 / 1.5 — calibrated against
+        // daylight OSC captures (1.7 / 1.5, calibrated against
         // ZWO / QHY OSC sensors with no IR cut on a typical scope).
         resetWb() {
             this.wb.r = 1.7;
@@ -11496,7 +11496,7 @@ function ninaApp() {
             // _initWebGL() creates it once and attaches the WebGL2
             // context to it. Rendering used to target liveCanvas
             // directly, which meant a PREVIEW snap (kind=1) painted
-            // over the live-stack accumulator's display canvas — the
+            // over the live-stack accumulator's display canvas, the
             // user would see preview content on the LIVE tab after
             // a single tap on PREVIEW. With the offscreen separation
             // we render once, then drawImage out to whichever canvas
@@ -11528,7 +11528,7 @@ function ninaApp() {
             // The SOURCE texture must fit the GPU limit too. WebGL does NOT
             // throw for an oversize texImage2D: it raises INVALID_VALUE and
             // leaves the texture incomplete, so the draw silently produced a
-            // BLACK canvas while this function still returned true — meaning
+            // BLACK canvas while this function still returned true, meaning
             // the 2D fallback never ran and the canvas kept whatever it had.
             // A 4144px-wide sensor on a 4096 MAX_TEXTURE_SIZE (tablet) GPU is
             // exactly that case. Decimate whole 2x2 Bayer cells so the mosaic
@@ -12067,7 +12067,7 @@ function ninaApp() {
             // Dedicated-stack-path gate: while the server integrates the stack
             // (full mode), the LIVE canvas accepts ONLY LiveStack (kind 6)
             // frames. Kind-0 raw frames in that window (stray sub relays,
-            // driver CFA dropouts rendering mono) are dropped outright — this
+            // driver CFA dropouts rendering mono) are dropped outright, this
             // is the hard guarantee behind the "B&W frames alternating with
             // the colour stack" field report.
             if (frameKind === 0 && this._serverStackOwnsLive()) {
@@ -12077,7 +12077,7 @@ function ninaApp() {
             // Transient CCD_CFA dropout guard (LIVE only). Some INDI OSC drivers
             // occasionally publish one sub with BayerPattern=None mid-session
             // (not just the first frame). Rendering it flips the colour LIVE view
-            // to grey for a single frame — the "frame preto e branco no live"
+            // to grey for a single frame, the "frame preto e branco no live"
             // field report. Once we've shown a colour LIVE frame, hold the last
             // good stacked frame instead of painting the mono dropout; the next
             // real (Bayered) frame from the server or the client stack takes over.
@@ -12087,7 +12087,7 @@ function ninaApp() {
                 // Re-arm the colour latch only on a genuine change in the RAW
                 // frame geometry (an OSC→mono camera swap restarts capture at a
                 // new sensor size). Do NOT reset on the FIRST raw frame after
-                // colour was shown via the downscaled JPEG path — its native
+                // colour was shown via the downscaled JPEG path, its native
                 // size legitimately differs from the JPEG's, and treating that
                 // as a camera swap dropped the latch and let a mono dropout sub
                 // paint the LIVE canvas B&W permanently (field report).
@@ -12101,7 +12101,7 @@ function ninaApp() {
                 if (isColor) {
                     this._liveSawColor = true;
                 } else if (this._liveSawColor) {
-                    return; // dropout — keep the last good stacked frame on screen
+                    return; // dropout, keep the last good stacked frame on screen
                 }
             }
 
@@ -12139,11 +12139,11 @@ function ninaApp() {
             // Sample DENSELY (~1M px). A sparse 4096-sample probe over a 12 MP
             // astro sub misses the sparse bright pixels (stars, nebula core),
             // so it underestimates the true max and wrongly clamps a genuine
-            // 16-bit frame down to ~16383 — the preview came out black/washed
+            // 16-bit frame down to ~16383, the preview came out black/washed
             // while the (dense-histogram) LIVE stack rendered fine (field
             // report, SV405CC + dual-band). Only clamp when the observed max is
             // genuinely sub-normal (<= ~12-bit packed), which is the byte-in-16
-            // case this guard exists for — never a real 16-bit sub, whose
+            // case this guard exists for, never a real 16-bit sub, whose
             // background alone sits in the thousands.
             const probeStride = Math.max(1, (pixels.length / 1_000_000) | 0);
             // (the probe walks every plane on an RGB frame, which is what we
@@ -12251,7 +12251,7 @@ function ninaApp() {
             };
             if (chCount === 3 && pixels.length >= width * height * 3) {
                 // Without this branch a colour stack renders as a GREYSCALE
-                // picture of its red plane on any client without WebGL2 —
+                // picture of its red plane on any client without WebGL2,
                 // the loop below reads pixels[i] straight through.
                 const plane = width * height;
                 const sh3 = perChan ? [perChan.r.shadow, perChan.g.shadow, perChan.b.shadow]
@@ -12288,7 +12288,7 @@ function ninaApp() {
         // none on a hidden tab), the next tab switch will pick up the
         // bitmap via the existing mirror call.
         // Map a server-tagged FrameKind to the canvas IDs that panel
-        // owns. Keeps streams isolated — a PREVIEW snap no longer
+        // owns. Keeps streams isolated, a PREVIEW snap no longer
         // overwrites the LIVE canvas, an autofocus exposure doesn't
         // bleed into VIDEO, etc. Live (default / unknown) keeps the
         // legacy single liveCanvas target; everything else is panel-
@@ -12300,7 +12300,7 @@ function ninaApp() {
                 case 3:  return ['videoCaptureCanvas'];                     // Video
                 case 4:  return ['slewPreviewCanvas'];                      // SlewPreview
                 // AUTORUN / ADV / PLAN sequence captures land on the sequence
-                // previews only — kept separate from Live so a running
+                // previews only, kept separate from Live so a running
                 // sequence doesn't bleed onto the LIVE tab (and vice-versa).
                 // PLAN runs through the same engine and relays the same kind,
                 // so both canvases get the frame and whichever tab is open
@@ -12323,7 +12323,7 @@ function ninaApp() {
 
         // True while the SERVER owns the LIVE display: a live stack is running
         // The stack arrives as dedicated LiveStack (kind 6) frames and the
-        // client must IGNORE kind-0 frames on the LIVE canvas — that's what
+        // client must IGNORE kind-0 frames on the LIVE canvas, that's what
         // used to flash B&W between colour stack updates. Always true while
         // the stack runs: integration is server-side, the only kind there is.
         _serverStackOwnsLive() {
@@ -12394,7 +12394,7 @@ function ninaApp() {
                 // Size the backing store to the SOURCE resolution, not the
                 // fit-to-container size. The canvas is laid out by CSS
                 // (width/height:100% + object-fit:contain), so a denser
-                // backing store doesn't change the on-screen size — it gives
+                // backing store doesn't change the on-screen size, it gives
                 // the CSS pan/zoom transform real pixels to sample when the
                 // user zooms in, instead of magnifying a bitmap we'd already
                 // shrunk to the container (that pre-shrink was the source of
@@ -12644,7 +12644,7 @@ function ninaApp() {
             try { localStorage.setItem('nina-preview-maxdim', String(this.previewMaxDim)); } catch { }
             try { this.applyManualStretch(); } catch (e) { /* no frame yet */ }
             // The COLOUR live-stack preview is a server-rendered JPEG (no raw
-            // render path), so it can't read previewMaxDim locally — push it so
+            // render path), so it can't read previewMaxDim locally, push it so
             // the colour LIVE preview matches "Preview quality" too.
             this.pushPreviewDim();
         },
@@ -12712,7 +12712,7 @@ function ninaApp() {
                 s._tapCandidate = !onOverlay;
                 // A press that lands on an interactive overlay (e.g. dragging a
                 // histogram stretch handle) must NOT also start a frame pan or
-                // double-tap reset — otherwise moving the slider drags the
+                // double-tap reset, otherwise moving the slider drags the
                 // zoomed image underneath it. Bail before any pan/tap setup.
                 if (onOverlay) { s._dragging = false; return; }
                 s._tapX0 = e.clientX;
@@ -13363,7 +13363,7 @@ function ninaApp() {
         // hard-suspend existed (not-ready only lasted through page
         // load); a suspended iframe can now stay down for hours while
         // status-driven overlay pushes keep arriving, so cap it and
-        // drop the OLDEST — the newest messages carry the state worth
+        // drop the OLDEST, the newest messages carry the state worth
         // replaying at the next 'ready'.
         _skyQueuePending(msg) {
             this._skyPending = this._skyPending || [];
@@ -13453,7 +13453,7 @@ function ninaApp() {
         // mount is connected, re-issues the initial look-at. Used by
         // the bridge 'ready' handler at +800ms and +2200ms because the
         // first push can land before the engine's HiPS / skydata
-        // pipeline is ready to honour it — symptom is "sky doesn't
+        // pipeline is ready to honour it, symptom is "sky doesn't
         // show the right place on first refresh". Idempotent: if
         // everything already converged, all three calls are no-ops
         // from the engine's perspective.
@@ -13477,7 +13477,7 @@ function ninaApp() {
                 }
                 // Re-apply constellation lines + figures. Always pushed (not
                 // just when on) so the bridge also forces show_only_pointed
-                // off — otherwise the engine shows lines for just the centred
+                // off, otherwise the engine shows lines for just the centred
                 // constellation, not the whole sky.
                 this._skySendMessage({
                     type: 'set-constellations',
@@ -13488,7 +13488,7 @@ function ninaApp() {
                     && Number.isFinite(this.mount.dec)) {
                     this._skyLookAt(this.mount.ra, this.mount.dec, 15);
                 } else if (!this._skyDefaultLookAtDone) {
-                    // No mount connected — aim at the celestial pole of
+                    // No mount connected, aim at the celestial pole of
                     // the observer's hemisphere. Engine's default points
                     // at RA=0/Dec=0 which on a southern site puts the
                     // camera looking north at high altitude, with the
@@ -13539,7 +13539,7 @@ function ninaApp() {
             if (!s) return;
             this.skySurvey = id;
             try { localStorage.setItem('nina-sky-survey', id); } catch { /* quota */ }
-            // Picking a survey means the operator wants imagery — turn the
+            // Picking a survey means the operator wants imagery, turn the
             // DSS/imagery toggle on if it was off.
             if (!this.skyDssVisible) {
                 this.skyDssVisible = true;
@@ -13561,7 +13561,7 @@ function ninaApp() {
         // scripts/build-dso-thumbs.py (DSS2 cutouts) under
         // /sky/data/skydata/dso-thumbs/.
         /// Does this URL actually decode as an image? The SKY card paints its thumb
-        /// with a CSS background-image on a <div>, which — unlike an <img> — fires
+        /// with a CSS background-image on a <div>, which, unlike an <img>, fires
         /// no error event, so a 404 just silently shows nothing and we'd have no
         /// way to fall through to the next candidate. Preloading answers that, and
         /// warms the browser cache for the paint that follows.
@@ -13580,8 +13580,8 @@ function ninaApp() {
         ///
         /// dsoThumbUrl() slugs by parsing letters+digits out of the name, so it
         /// only ever matches catalogue names ("M 8", "NGC 6523"). The SKY engine
-        /// reports COMMON names for the bright showpieces — "Lagoon Nebula",
-        /// "Trifid Nebula" — which have no digits, so the regex fails, the slug
+        /// reports COMMON names for the bright showpieces, "Lagoon Nebula",
+        /// "Trifid Nebula", which have no digits, so the regex fails, the slug
         /// comes back empty, and the object with a perfectly good bundled JPEG
         /// gets no thumb. Those are exactly the objects a user clicks.
         /// /api/sky/catalog/search maps common name -> catalogue name (its `name`
@@ -13604,17 +13604,17 @@ function ninaApp() {
                         if (url && await this._imageLoads(url)) return url;
                     }
                 }
-            } catch (e) { /* no catalogue match — fall through to the online lookup */ }
+            } catch (e) { /* no catalogue match, fall through to the online lookup */ }
             return '';
         },
 
         /// Thumbnail for the SKY info card, offline-first. Order matters:
-        ///   1. bundled DSO cutout   — 17k JPEGs shipped in the .deb, no network,
+        ///   1. bundled DSO cutout  , 17k JPEGs shipped in the .deb, no network,
         ///                             instant. Resolves common names via catalogue.
-        ///   2. localUrl             — server already cached the image on disk;
+        ///   2. localUrl            , server already cached the image on disk;
         ///                             same-origin, needs ?token= (path is /api/*).
-        ///   3. thumbnailUrl         — Wikipedia/NASA CDN. Needs internet.
-        ///   4. fullUrl              — last resort, can be several MB.
+        ///   3. thumbnailUrl        , Wikipedia/NASA CDN. Needs internet.
+        ///   4. fullUrl             , last resort, can be several MB.
         /// Mirrors _loadCelestialThumb's priority; (1) is added because the card
         /// sits in front of the bundle and had no reason to ignore it.
         async _loadSkyCardThumb(obj) {
@@ -13707,7 +13707,7 @@ function ninaApp() {
                     // pins it to whichever source answered then (the bundled
                     // baseline or, if nothing was local yet, remote CDS). The
                     // tiles we just wrote won't be used until it re-probes, so
-                    // reload the iframe — re-registration now finds the LOCAL
+                    // reload the iframe, re-registration now finds the LOCAL
                     // bundle (incl. the freshly downloaded high-order tiles).
                     this._reloadSkyFrame();
                 } else if (this.dssDownload.error !== 'cancelled') {
@@ -13919,7 +13919,7 @@ function ninaApp() {
         // long after page-load (e.g. clicking "Center" on a Tonight
         // card after the user has been parked on another tab for an
         // hour) compute against a stale LST and pan to the wrong patch
-        // of sky — sometimes below the horizon, which looks like
+        // of sky, sometimes below the horizon, which looks like
         // "Center didn't do anything". Cheap: three postMessage calls,
         // delivered in order to the iframe.
         _skyLookAt(raHours, decDeg, fovDeg, objectName) {
@@ -13934,7 +13934,7 @@ function ninaApp() {
             this._skyProgrammaticPanUntil = Date.now() + 3000;
             // Remember a genuinely fixed sky target (a catalog object, or a
             // definite RA/Dec) so GoTo / Slew & Center / Sync use its fixed
-            // coordinates rather than the live map centre — which the engine
+            // coordinates rather than the live map centre, which the engine
             // stores in Alt/Az and silently drifts in RA (~15°/h) as the sky
             // rotates while you wait before pressing the button (#13). A manual
             // drag clears it (see the 'center' fromDrag handler below).
@@ -13954,7 +13954,7 @@ function ninaApp() {
 
         // Resolve the sky target for GoTo / Slew & Center / Sync. A fixed
         // catalog object or clicked point wins over the live map centre (which
-        // drifts in RA — see _skyLookAt). The live centre is only the fallback
+        // drifts in RA, see _skyLookAt). The live centre is only the fallback
         // for a fresh map with nothing selected.
         async _resolveSkyTarget() {
             const fixed = this._skyFixedTarget;
@@ -14362,7 +14362,7 @@ function ninaApp() {
             return this._canopusDeviceUrl().replace(/\/+$/, '').replace(/\/v1$/, '');
         },
         // Resolve the VRAM figure the recommendation uses. Manual pick wins; 'auto'
-        // means "unknown" (0) — the browser cannot read VRAM, so we fall back to a
+        // means "unknown" (0), the browser cannot read VRAM, so we fall back to a
         // safe mid-tier recommendation. See _canopusDetectGpu for the label only.
         _canopusVramGb() {
             const c = this.asst.deviceVramChoice;
@@ -14728,8 +14728,8 @@ function ninaApp() {
         // (LIVE / PREVIEW / FOCUS / VIDEO / AUTORUN / FILES viewer) and hand it
         // to the assistant's vision model as a size-capped JPEG data URL. This
         // grabs the on-screen canvas directly (client-side), so it reflects
-        // exactly what the operator sees — the applied stretch, white balance,
-        // stack, etc. — not a re-fetched server frame. Non-destructive; safe to
+        // exactly what the operator sees, the applied stretch, white balance,
+        // stack, etc., not a re-fetched server frame. Non-destructive; safe to
         // expose without the API allowlist. Message: { type:'assistant:capture-view',
         // id, maxDim?, quality? } -> host:tool-result { dataUrl, tab, width, height }.
         _assistantCaptureView(msg) {
@@ -14790,7 +14790,7 @@ function ninaApp() {
         },
 
         // Re-encode a canvas as a size-capped JPEG data URL. Returns null if the
-        // canvas is tainted (cross-origin) — our imaging canvases are same-origin.
+        // canvas is tainted (cross-origin), our imaging canvases are same-origin.
         _assistantCanvasToDataUrl(canvas, maxDim, quality) {
             try {
                 const scale = Math.min(1, maxDim / Math.max(canvas.width, canvas.height));
@@ -14837,7 +14837,7 @@ function ninaApp() {
                         equip: () => this.loadOpticsCatalogue && this.loadOpticsCatalogue(),
                         polar: () => {
                             this.loadPolarTargets && this.loadPolarTargets();
-                            // Canvas was display:none while on other tabs —
+                            // Canvas was display:none while on other tabs,
                             // repaint the bullseye once it has real size.
                             this.$nextTick(() => this.drawPolarBullseye());
                         },
@@ -14925,7 +14925,7 @@ function ninaApp() {
         // breakpoints both set it). `position: fixed` offsets are resolved in
         // this zoomed frame, so at 80% a right/bottom-anchored launcher lands
         // ~80% of the way to the corner instead of at it. Divide offsets by z to
-        // land on the true physical corner — same convention the resize grips use.
+        // land on the true physical corner, same convention the resize grips use.
         _assistantEffZoom() {
             let z = parseFloat(getComputedStyle(document.body).zoom);
             return (!z || isNaN(z)) ? 1 : z;
@@ -15069,7 +15069,7 @@ function ninaApp() {
             const mobile = vw <= 480;
             const wasDocked = this.asst.dock !== 'float';
             const { rect } = this._assistantPanelRect(ev);
-            // When pulling out of a dock — or lifting the phone bottom sheet —
+            // When pulling out of a dock, or lifting the phone bottom sheet,
             // drop the full-size rect and adopt a sensible floating size (last
             // floating geometry if we have one, else defaults) so the panel
             // visibly detaches and lands under the cursor.
@@ -15236,7 +15236,7 @@ function ninaApp() {
         // anchor, but the round FAB (56px) and the much wider "Meet …" badge
         // share it. A left computed while the FAB was showing lets the wide
         // badge overflow the right edge. Once the launcher has rendered, measure
-        // its ACTUAL box and keep it fully on-screen — which, for the wide badge
+        // its ACTUAL box and keep it fully on-screen, which, for the wide badge
         // dragged toward the right, naturally right-aligns it with a gap. No-op
         // when there's no saved position (CSS anchors it to the bottom-right).
         _assistantFitLauncher() {
@@ -15373,7 +15373,7 @@ function ninaApp() {
                         // queued messages. If a queued message is a
                         // look-at, its RA/Dec → Alt/Az conversion
                         // depends on observer.latitude / utc /
-                        // longitude being set — otherwise the bridge
+                        // longitude being set, otherwise the bridge
                         // silently returns false and the pan never
                         // happens (this was the "Center from Tonight
                         // doesn't centre" bug). Pushing first means
@@ -15444,7 +15444,7 @@ function ninaApp() {
                         // rects get silently dropped. Re-push a couple of times
                         // as the engine settles (guarded, so a tab switch or
                         // re-suspend in the meantime is a no-op). force=true or
-                        // the dedup swallows the retry — the first push already
+                        // the dedup swallows the retry, the first push already
                         // set the key, so an unforced retry after a dropped push
                         // never actually re-sends.
                         [700, 2000].forEach(ms => setTimeout(() => {
@@ -15456,7 +15456,7 @@ function ninaApp() {
                         // HiPS tile + skydata loading, so on first
                         // refresh the engine sometimes renders with a
                         // stale observer (Geneva 2009) or skips the
-                        // initial pan entirely — the symptom the user
+                        // initial pan entirely, the symptom the user
                         // sees is "sky doesn't load the right place on
                         // first refresh". Two extra pushes at +800ms
                         // and +2200ms cover both fast and slow loads
@@ -15512,7 +15512,7 @@ function ninaApp() {
                             // in progress" window. While that window is
                             // open, the centre events arriving are pan
                             // echoes from the engine animating toward
-                            // the user-picked target — NOT a genuine
+                            // the user-picked target, NOT a genuine
                             // drag. Treat them as such: keep skyTarget
                             // verbatim (especially .name, which was set
                             // to the object name by _populateSkyInfo
@@ -15533,7 +15533,7 @@ function ninaApp() {
                                 };
                                 // A genuine drag means "go where I dragged", so
                                 // any previously-selected fixed target no longer
-                                // applies — fall back to the live centre.
+                                // applies, fall back to the live centre.
                                 this._skyFixedTarget = null;
                             }
                             // Re-push so the red target rectangle
@@ -15560,7 +15560,7 @@ function ninaApp() {
                                 name: 'Click ' + msg.raDeg.toFixed(2) + ',' + msg.decDeg.toFixed(2),
                                 ra: msg.raDeg / 15, dec: msg.decDeg
                             };
-                            // A click is a definite RA/Dec — treat it as a fixed
+                            // A click is a definite RA/Dec, treat it as a fixed
                             // target so a later GoTo doesn't drift.
                             this._skyFixedTarget = { ra: msg.raDeg / 15, dec: msg.decDeg, name: this.skyTarget.name };
                         }
@@ -17823,7 +17823,7 @@ function ninaApp() {
             }
             try {
                 // XFER: apiDownload so the user sees a real progress
-                // bar — the raw working buffer is typically 50-200 MB
+                // bar, the raw working buffer is typically 50-200 MB
                 // (full-res 8-bit per channel) and used to feel like
                 // a freeze on first open.
                 const r = await this.apiDownload(
@@ -18000,7 +18000,7 @@ function ninaApp() {
             const base = parts[parts.length - 1];
             const parent = parts[parts.length - 2];
             const head = parts[0];                  // C: / "" (POSIX root)
-            // Reassemble with a consistent separator — pick the
+            // Reassemble with a consistent separator, pick the
             // one the input used so the displayed path still
             // looks native to the user's OS.
             const sep = p.includes('\\') ? '\\' : '/';
@@ -18175,14 +18175,14 @@ function ninaApp() {
         // POST /api/onnx/npu-run when a Qualcomm NPU is present + a matching
         // context binary exists. Returns the sibling FITS path on success, or
         // null to fall back to the browser pipeline (non-Qualcomm host, missing
-        // .bin, 'detail' decon model, or any server error — all handled quietly).
+        // .bin, 'detail' decon model, or any server error, all handled quietly).
         async _npuRunServer(op, path, runOpts, onPhase) {
             const serverOp = op === 'halo-removal' ? 'halo'
                 : op === 'upscaling' ? 'upscale'
                 : op === 'deconvolution' ? 'decon' : null;
             if (!serverOp) return null;
             if (!this.graxpert?.status?.npuAvailable) return null;
-            // Decon on the NPU only serves the GraXpert stars/objects models —
+            // Decon on the NPU only serves the GraXpert stars/objects models,
             // NOT Polaris "Detail" (different I/O, no context binary). Let those
             // stay on the browser path.
             if (serverOp === 'decon') {
@@ -18754,7 +18754,7 @@ function ninaApp() {
             };
             const onUp = () => {
                 if (!this._editorDragging) return;
-                // Short settle window — covers the case where the
+                // Short settle window, covers the case where the
                 // user releases briefly then re-grabs the same
                 // slider (mouse wheel, keyboard arrows on a focused
                 // range emit input events between pointerup +
@@ -18872,7 +18872,7 @@ function ninaApp() {
             }
         },
 
-        // Tiny requestIdleCallback shim — Safari doesn't ship rIC
+        // Tiny requestIdleCallback shim, Safari doesn't ship rIC
         // even today, so fall back to a short setTimeout. The
         // histogram update is non-critical so a 100 ms delay is
         // fine when rIC isn't available.
@@ -19010,7 +19010,7 @@ function ninaApp() {
                 combined[i] = isRgb ? (hist[i] + hist[256 + i] + hist[512 + i]) : hist[i];
             }
             this._editorHistoComputeStats(combined);
-            // Handle fractions follow edits.stretch — but NOT while dragging,
+            // Handle fractions follow edits.stretch, but NOT while dragging,
             // so a redraw mid-drag can't fight the drag's own positions.
             if (!this._editorHistoDrag) this._editorHistoSyncFracs();
             // Keep the Zoom view framed to the data on open + after each
@@ -19074,7 +19074,7 @@ function ninaApp() {
         },
 
         // Stats only (Max/Avg/Min/Std on the ~0..65535 scale). Does NOT touch
-        // handle fractions or the display range — those are owned separately so
+        // handle fractions or the display range, those are owned separately so
         // a redraw can't shift the reference under an in-progress drag.
         _editorHistoComputeStats(bins) {
             let total = 0, sum = 0, sumSq = 0, mn = -1, mx = 0;
@@ -19112,7 +19112,7 @@ function ninaApp() {
                 midBal = +(st.mid ?? 0.5);
             }
             // Midtone handle sits at the input value (within [black,white]) that
-            // maps to mid-grey — i.e. black + midBalance*(white-black).
+            // maps to mid-grey, i.e. black + midBalance*(white-black).
             const b = this.editorHisto.blackFrac, w = this.editorHisto.whiteFrac;
             this.editorHisto.midFrac = b + Math.max(0.001, Math.min(0.999, midBal)) * (w - b);
         },
@@ -19185,7 +19185,7 @@ function ninaApp() {
                 this.editorHisto.midFrac = cf;
             }
             this.editorState.edits.stretch = st;
-            // Move ONLY the marker during the drag — do NOT re-stretch yet.
+            // Move ONLY the marker during the drag, do NOT re-stretch yet.
             // Re-stretching mid-drag changes the histogram (and thus the X
             // reference) under the pointer, which made the handle overshoot.
             // The actual re-stretch + render happens once, on release.
@@ -19677,7 +19677,7 @@ function ninaApp() {
                 if (sr && sr.effective) effectiveRoot = sr.effective;
             } catch { /* fall back to settings below */ }
             // Try, in order, the remembered cwd, the effective root, then the
-            // first platform root — using the first that actually lists. The
+            // first platform root, using the first that actually lists. The
             // remembered cwd can itself be a now-missing path.
             const remembered = localStorage.getItem('filesCwd');
             const candidates = [remembered, effectiveRoot, this.files.roots[0]?.name]
@@ -20537,7 +20537,7 @@ function ninaApp() {
             if (entry && !entry.isDirectory) this.filesOpenPreview(entry);
         },
 
-        // Image files in the current directory, in listing order — the set the
+        // Image files in the current directory, in listing order, the set the
         // viewer's prev/next and discard-then-advance step through.
         _filesViewerSiblings() {
             const imgExts = ['fits','fit','fts','xisf','png','jpg','jpeg','gif','bmp','webp','tif','tiff'];
@@ -20905,7 +20905,7 @@ function ninaApp() {
         // tracked object don't always trigger re-render in v3).
         tonightThumbFailed(item) {
             const current = this.tonight.thumbs[item.name];
-            // The bundled DSO cutout 404'd (object outside the DSO set —
+            // The bundled DSO cutout 404'd (object outside the DSO set,
             // a planet, comet, or oddly-named entry): fall back to the
             // online NASA/Wikipedia lookup.
             if (current?.source === 'dso') {
@@ -20950,7 +20950,7 @@ function ninaApp() {
                 // instantly with no network round-trip. Use it as the
                 // primary thumbnail; the NASA/Wikipedia lookup only runs
                 // (via tonightThumbFailed → _tonightLookupThumb) when a
-                // bundled thumb 404s — planets, comets, or objects outside
+                // bundled thumb 404s, planets, comets, or objects outside
                 // the DSO set.
                 const dso = this.dsoThumbUrl({ name: item.name });
                 if (dso) {
@@ -21268,7 +21268,7 @@ function ninaApp() {
             // CD matrix from the solve: the frame's true sky orientation
             // INCLUDING parity (mirror), which the scalar rotation can't
             // express. The SKY bridge draws the exact sensor footprint from
-            // it — this is what fixes the "FOV rectangles mirrored / 180°
+            // it, this is what fixes the "FOV rectangles mirrored / 180°
             // off" field report. Cleared when a solve doesn't carry one so
             // a stale matrix never describes a newer pointing.
             this.solveCd = (Number.isFinite(r.cd11) && Number.isFinite(r.cd12)
@@ -21280,7 +21280,7 @@ function ninaApp() {
             catch (e) { /* SKY engine may not be live */ }
             // Name the field from the solve. Every successful solve lands here
             // (manual, Slew & Center), and the solved centre is the
-            // honest input for "what am I looking at" — better than mount.ra/dec,
+            // honest input for "what am I looking at", better than mount.ra/dec,
             // which is exactly the value the solve just corrected. Fire and
             // forget: a catalog lookup must never hold up the frame.
             this._identifyFromSolve(raDeg / 15, decDeg);
@@ -21315,7 +21315,7 @@ function ninaApp() {
         // suspend/resume, engine recompose) the parent app.js keeps running, so
         // _lastFovOverlayKey still holds the pre-reload key. The engine came back
         // EMPTY, but mount/target haven't moved, so an un-forced re-push computes
-        // the same key and returns early — the rects stay gone until a slew moves
+        // the same key and returns early, the rects stay gone until a slew moves
         // the key or a page reload clears it. That is exactly the "FOV rectangles
         // vanish and only come back on refresh or slew" field report. Every
         // recovery path (bridge ready, tab open, the settle retries) passes force.
@@ -21371,7 +21371,7 @@ function ninaApp() {
             // CD matrix from the last solve (null when none): lets the
             // bridge draw the exact footprint with parity instead of
             // guessing from the scalar rotation. Applies to BOTH the mount
-            // (blue) and target (red) rectangles — they describe the same
+            // (blue) and target (red) rectangles, they describe the same
             // physical camera. FLATTENED to a fresh plain object: Alpine
             // wraps this.solveCd in a reactive Proxy, and a Proxy inside
             // postMessage throws DataCloneError and silently kills the
@@ -21427,7 +21427,7 @@ function ninaApp() {
             // Anchoring, in priority order:
             //   1. The aux's OWN plate solve (parallel aux solve): the
             //      real sky position + rotation its frames come out with.
-            //   2. Otherwise CONCENTRIC WITH THE RED TARGET — main and
+            //   2. Otherwise CONCENTRIC WITH THE RED TARGET, main and
             //      aux ride the same mount and are assumed co-pointed
             //      until an aux solve says how far off they really are.
             //      That means celestial at the target's solved anchor
@@ -21439,7 +21439,7 @@ function ninaApp() {
             let asw = this.auxSensorWidthMm, ash = this.auxSensorHeightMm;
             if (!(asw > 0 && ash > 0) && (this.aux?.enabled || this.auxCamera)) {
                 // Live dims missing: DSLRs on the aux port (indi_gphoto)
-                // don't publish CCD_INFO — their geometry lives in the rig's
+                // don't publish CCD_INFO, their geometry lives in the rig's
                 // per-aux overrides (DSLR picker, or learned from the last
                 // connected aux camera in the status ingest). Derive the
                 // footprint from those so the pink rect shows for a
@@ -21488,7 +21488,7 @@ function ninaApp() {
             // OAG guide FOV (green). Only in OAG mode: the guide camera images
             // through the main OTA (main focal length) and the prism pick-off
             // puts its field OFFSET from the main field by oagOffsetMm at
-            // position angle oagPositionAngleDeg — so, unlike the aux rect, it
+            // position angle oagPositionAngleDeg, so, unlike the aux rect, it
             // is NOT concentric. Anchored to the main-field centre (mount, else
             // the solved target). Celestial-only (needs an anchor).
             let guide = null;
@@ -21519,7 +21519,7 @@ function ninaApp() {
                         // Position angle of the offset on sky = field rotation +
                         // prism PA (measured from +Y/up). North = +Dec.
                         // NOTE: offset DIRECTION/parity is the field-verification
-                        // point (like polar-align Refresh) — the sign convention
+                        // point (like polar-align Refresh), the sign convention
                         // here is the first cut and may be flipped after a look.
                         const paRad = (fieldRot + (Number(this.settings.oagPositionAngleDeg) || 0))
                             * Math.PI / 180;
@@ -21566,7 +21566,7 @@ function ninaApp() {
                     ? this.solveRotationDeg.toFixed(2) : null,
                 // CD matrix signature: a fresh solve can change parity /
                 // orientation without moving ra/dec or the scalar rotation
-                // (e.g. after a meridian flip) — re-push then too.
+                // (e.g. after a meridian flip), re-push then too.
                 cd: solveCd
                     ? [solveCd.cd11, solveCd.cd12, solveCd.cd21, solveCd.cd22]
                         .map(v => v.toExponential(3)).join(',')
@@ -21605,7 +21605,7 @@ function ninaApp() {
 
             // mosaicTiles is an Alpine reactive array (a Proxy); postMessage
             // can't structured-clone a Proxy and throws DataCloneError, which
-            // killed the WHOLE message (mount+target+mosaic) — that's why the
+            // killed the WHOLE message (mount+target+mosaic), that's why the
             // grid never reached the SKY iframe. Send plain object copies.
             const mosaicMsg = (this.mosaicTiles && this.mosaicTiles.length)
                 ? { tiles: this.mosaicTiles.map(t => ({
@@ -21777,7 +21777,7 @@ function ninaApp() {
             // cameras with the verticalFlipImage quirk (e.g. SV605CC/SV405CC),
             // but the plate-solve annotations are in raw (un-flipped) frame
             // coordinates. Without matching the flip the markers land mirrored
-            // top-for-bottom (STUDIO is fine — it shows the raw frame as-is).
+            // top-for-bottom (STUDIO is fine, it shows the raw frame as-is).
             let flipV = false;
             try {
                 const q = (this.cameraQuirks || []).find(
@@ -21935,7 +21935,7 @@ function ninaApp() {
 
         // Cancel the in-flight annotate solve. Aborts the HTTP request; the
         // server's CancellationToken then kills the ASTAP process. (No-op when
-        // the file had an embedded WCS — that path returns instantly.)
+        // the file had an embedded WCS, that path returns instantly.)
         cancelStudioAnnotate() {
             if (this._annotateAbort) {
                 this._annotateAbort.abort();
@@ -22081,7 +22081,7 @@ function ninaApp() {
         },
 
         // (POLARUI: the PA-5 error-vector arrow that used to be drawn
-        // here on the LIVE/PREVIEW overlay was removed — its on-image
+        // here on the LIVE/PREVIEW overlay was removed, its on-image
         // direction was ambiguous under optical mirroring, and it lived
         // on the wrong tab. The POLAR tab now has drawPolarBullseye(),
         // which plots (azErr, altErr) in mount-axis coordinates.)
@@ -23250,7 +23250,7 @@ function ninaApp() {
         },
         // MUST return an OBJECT, not a style string. Alpine's x-bind:style with
         // a string calls setAttribute('style', ...), which wipes the inline
-        // display:none that x-show had just set — and since this is re-evaluated
+        // display:none that x-show had just set, and since this is re-evaluated
         // on every WS tick, the overlay resurrected itself right after being
         // hidden (field report: "empty overlay after refresh that won't close").
         // The object form sets each property individually and leaves display alone.
@@ -23353,7 +23353,7 @@ function ninaApp() {
         },
 
         // ==================================================================
-        // Property Control Panels — SCADA-style floating per-rig cards.
+        // Property Control Panels, SCADA-style floating per-rig cards.
         // Read live values (WS equipment + switch, polled camera-controls +
         // INDI props), write via the existing endpoints. Geometry + widget
         // bindings persist on the active rig.
@@ -23527,7 +23527,7 @@ function ninaApp() {
         },
         ctrlWidgetDisplay(w) {
             const v = this.ctrlWidgetValue(w);
-            if (v.missing || v.value == null) return '—';
+            if (v.missing || v.value == null) return ', ';
             if (typeof v.value === 'boolean') return v.value ? this.$t('On') : this.$t('Off');
             if (typeof v.value === 'number') {
                 const d = (w.decimals != null) ? w.decimals : (Number.isInteger(v.value) ? 0 : 2);
@@ -23995,7 +23995,7 @@ function ninaApp() {
             try {
                 localStorage.setItem('polaris.guideView',
                     JSON.stringify({ brightness: this.guideView.brightness, contrast: this.guideView.contrast }));
-            } catch (e) { /* private mode / quota — non-fatal */ }
+            } catch (e) { /* private mode / quota, non-fatal */ }
         },
 
         // Reset the guide-frame brightness/contrast back to the auto-stretched
@@ -24013,7 +24013,7 @@ function ninaApp() {
         // image AND its overlay together and they stay aligned. Click-to-select
         // maps via getBoundingClientRect, which already reflects the transform,
         // so star picking stays correct at any zoom. Session-only (not
-        // persisted) — a fresh look-down starts at 1x.
+        // persisted), a fresh look-down starts at 1x.
         _GUIDE_ZOOM_MIN: 1,
         _GUIDE_ZOOM_MAX: 8,
         guideZoomStyle() {
@@ -24501,9 +24501,9 @@ function ninaApp() {
             c.data.datasets[6].data = finitePts
                 .filter(p => p.refinement)
                 .map(p => ({ x: p.position, y: p.hfr }));
-            // AFPORT: draw the SERVED fits — the hyperbola (or the weighted
+            // AFPORT: draw the SERVED fits, the hyperbola (or the weighted
             // parabola when the method is parabolic) plus both trendline arm
-            // segments — instead of re-deriving a heuristic parabola.
+            // segments, instead of re-deriving a heuristic parabola.
             const fits = this.autoFocus.fits;
             // Span the fit line over the COARSE samples only. The fine cluster
             // sits inside that span anyway, but taking the extremes from all
@@ -24562,7 +24562,7 @@ function ninaApp() {
 
         // Live-stack overlay chart: SNR cumulative (primary) +
         // per-frame HFR (secondary), indexed by image #. SNR is the
-        // headline number — "is my stack getting better?" — HFR
+        // headline number, "is my stack getting better?", HFR
         // stays as the secondary line for focus drift diagnostics.
         // Star count moved into the chart tooltip to keep the
         // overlay visually quiet (3-line charts get noisy fast).
@@ -24624,7 +24624,7 @@ function ninaApp() {
         },
 
         // SNR-7: format ETA seconds → human-friendly "~12 min" /
-        // "~45 s" / "—". Pass the liveStackStatus payload so we can
+        // "~45 s" / ", ". Pass the liveStackStatus payload so we can
         // decorate "✓ done" when the target's already reached.
         formatSnrEta(ls) {
             if (!ls) return '-';
@@ -24688,7 +24688,7 @@ function ninaApp() {
         // LIVE metrics bar: for a target still EAST of the meridian, show the
         // time until it transits (a flip may be needed past it). Once the target
         // is WEST of the meridian (already crossed), "time until meridian" is
-        // meaningless — switch to the time until it SETS below the horizon, which
+        // meaningless, switch to the time until it SETS below the horizon, which
         // is the countdown that actually matters (how long the target is still
         // usable). hourAngleHours < 0 = east/rising, >= 0 = west/descending.
         meridianOrSetLabel() {
@@ -24813,7 +24813,7 @@ function ninaApp() {
                     setTimeout(() => this.loadRigs(attempt + 1), 800 * (attempt + 1));
                 }
             } catch (e) {
-                // Same rationale — a transient first-load failure must self-heal.
+                // Same rationale, a transient first-load failure must self-heal.
                 if (attempt < 5) setTimeout(() => this.loadRigs(attempt + 1), 800 * (attempt + 1));
             }
         },
@@ -24832,7 +24832,7 @@ function ninaApp() {
             this.liveStackSigmaRejection = rig.liveStackSigmaRejection === true;
             this.liveStackSigmaKappa = (rig.liveStackSigmaKappa > 0)
                 ? rig.liveStackSigmaKappa : 3.0;
-            // Per-sub cosmetic (hot/cold pixel) correction. Default ON for EAA —
+            // Per-sub cosmetic (hot/cold pixel) correction. Default ON for EAA,
             // absent on an old rig means the C# initializer (true) applied.
             this.liveStackCosmetic = rig.liveStackCosmetic !== false;
             // Auto-pause cap in MINUTES (UI unit). Backend stores
@@ -25126,7 +25126,7 @@ function ninaApp() {
 
         // PERSIST-RESET (#638): persist ONLY the changed fields, never the whole
         // rig. A whole-rig PUT ships every field's current client value, and
-        // during the init race some of those still read JS defaults — which is
+        // during the init race some of those still read JS defaults, which is
         // how touching one control could reset unrelated per-rig settings. The
         // server's RigPatch.Merge fills every absent field from the STORED rig,
         // so a minimal patch can only ever change what the user actually touched.
@@ -25242,7 +25242,7 @@ function ninaApp() {
             // The accessory <select> options are filtered by the OTA model,
             // so it has the same drop-the-value-when-option-absent race as
             // the brand/model selects. Re-adopt it LAST, after telescopeModel
-            // is set and its option list has rebuilt — otherwise the saved
+            // is set and its option list has rebuilt, otherwise the saved
             // accessory shows blank and the next save PUTs the blank back,
             // losing the reducer/flattener on the rig.
             const ma = this._accessoryPickFor(active);
@@ -25445,7 +25445,7 @@ function ninaApp() {
         // rig.preConnectDelayMsByDevice[deviceName] = ms before
         // sending CONNECTION. Useful for ESP32-based mounts (Onstep,
         // ZWO AM3 WiFi bridge), USB-serial focusers with slow firmware
-        // init. Mirror of the Filter offsets helpers above — both edit
+        // init. Mirror of the Filter offsets helpers above, both edit
         // a string-keyed map on the rig and ride saveRig's debounce.
         setPreConnectDelay(rig, deviceName, valueStr) {
             const v = parseInt(valueStr, 10);
@@ -25823,7 +25823,7 @@ function ninaApp() {
             // owns, never the whole rig. Spreading ...rig used to ship every
             // field's current value, so a save that fired while the local rig
             // copy was stale (or before a field hydrated) could wipe unrelated
-            // per-rig settings — filter offsets, per-connect delays, the autorun
+            // per-rig settings, filter offsets, per-connect delays, the autorun
             // sequence, cooler ramp, per-camera quirks. The server's
             // RigPatch.Merge fills every ABSENT field from the STORED rig, so an
             // omitted field is preserved rather than reset. Every value below is
@@ -25949,8 +25949,8 @@ function ninaApp() {
                 const r = await this.apiFetch('/api/plan/plans');
                 this.plans = await r.json() || [];
                 // Keep the current selection if it still exists, else pick the
-                // newest plan (last in insertion order) so a just-created plan —
-                // e.g. one the assistant just built — is auto-selected instead of
+                // newest plan (last in insertion order) so a just-created plan,
+                // e.g. one the assistant just built, is auto-selected instead of
                 // leaving the picker on an older entry.
                 if (this.planSelectedId && this.plans.some(p => p.id === this.planSelectedId)) {
                     this.selectPlan(this.planSelectedId);
@@ -26486,7 +26486,7 @@ function ninaApp() {
         },
         // Plan times are stored as UTC "HH:mm" (the sequencer interprets them
         // as UTC). These convert to/from the operator's local time for display
-        // and the <input type="time"> fields only — storage stays UTC.
+        // and the <input type="time"> fields only, storage stays UTC.
         _todUtcToLocal(hhmm) {
             const m = /^(\d{1,2}):(\d{2})/.exec(hhmm || '');
             if (!m) return '';
@@ -26547,7 +26547,7 @@ function ninaApp() {
             const a = this.planAlt[t.id];
             if (!svg || !a || !a.span) return;
             // Capture the offset between the pointer and the handle's current
-            // position so the drag is relative — without this the handle snaps
+            // position so the drag is relative, without this the handle snaps
             // to the raw pointer X on the first move (a visible jump).
             const rect0 = svg.getBoundingClientRect();
             const curMs = this._planTodToMs(t, which === 'start' ? t.startAtUtc : t.endAtUtc);
@@ -26738,7 +26738,7 @@ function ninaApp() {
                 // at their explicit window and still advance the cursor.
                 // The preview has to agree with what the runner will actually
                 // do. PlanStartMode has exactly two values, Now and AtTime, and
-                // PlanCompilerService only emits a WaitUntilTime for AtTime — a
+                // PlanCompilerService only emits a WaitUntilTime for AtTime, a
                 // Now plan begins the instant you press start.
                 //
                 // This used to anchor everything that was not AtTime at dusk,
@@ -26804,7 +26804,7 @@ function ninaApp() {
                     const a = this.planAlt[t.id];
                     const pts = (a && a.pts && !a.empty && !a.error) ? a.pts : null;
                     // Delay (firstDelaySec): the wait at the start of the slot
-                    // before frames begin — drawn as a hatch over the band start.
+                    // before frames begin, drawn as a hatch over the band start.
                     const delaySec = Math.max(0, t.firstDelaySec || 0);
                     const x0 = xOf(s0);
                     const delayX1 = delaySec > 0 ? xOf(s0 + delaySec * 1000) : x0;
@@ -27140,7 +27140,7 @@ function ninaApp() {
         _syncEquipChoicesFromConnected() {
             if (!Array.isArray(this.devices) || this.devices.length === 0) return;
             const names = new Set(this.devices.filter(d => d && d.name).map(d => d.name));
-            // Camera — only reconcile against the INDI device list when the
+            // Camera, only reconcile against the INDI device list when the
             // INDI driver is active. For vendor-SDK drivers the choice holds a
             // device id from cameraVendorDevices (e.g. "1") that never appears
             // in the INDI `devices` list, so this clamp would wipe it every
@@ -27154,7 +27154,7 @@ function ninaApp() {
                     this.equipCameraChoice = this.selectedCamera;
                 }
             }
-            // Mount — same INDI-only guard: ASCOM/Alpaca choices are ids that
+            // Mount, same INDI-only guard: ASCOM/Alpaca choices are ids that
             // aren't in the INDI device list, so don't clamp them here.
             if (this.mountDriver === 'indi' || !this.mountDriver) {
                 if (this.equipMountChoice && !names.has(this.equipMountChoice)) {
@@ -27264,7 +27264,7 @@ function ninaApp() {
             } catch (e) {
                 aborted = e && (e.name === 'AbortError' || /abort/i.test(e.message || ''));
                 if (aborted) {
-                    // Deliberate stopCapture() / watchdog — not an error.
+                    // Deliberate stopCapture() / watchdog, not an error.
                 } else if (this.looping) {
                     this.toast('Capture error, retrying...', 'warn');
                 } else {
@@ -27310,13 +27310,13 @@ function ninaApp() {
             // by default, so warm frames matter here too).
             if (!await this.confirmCoolerForSession('the LIVE loop')) return;
             // ASIAIR-style: the shutter owns the stack lifecycle. Arm stacking
-            // before starting the loop — fresh/empty stack starts silently, a
+            // before starting the loop, fresh/empty stack starts silently, a
             // stopped stack with frames asks Continue/Restart first. Cooler was
             // just confirmed above, so no re-prompt inside.
             await this._armLiveStackForShutter();
             // LIVE capture is ALWAYS server-owned: the server (LiveCaptureService)
             // drives every exposure and keeps going even if the browser drops or
-            // the tab is backgrounded — which is why two Polaris tabs can be
+            // the tab is backgrounded, which is why two Polaris tabs can be
             // switched freely without the old client-driven loop wedging. The
             // client only renders the relayed frames and, when the compute mode
             // routes stacking client-side, offloads the WASM math. We just ask
@@ -27360,7 +27360,7 @@ function ninaApp() {
         },
 
         /// Start the 50ms tick that drives the shutter ring's
-        /// smooth countdown. Idempotent — if already running, no-op.
+        /// smooth countdown. Idempotent, if already running, no-op.
         /// Auto-stops itself when _anyShutterActive() drops to false.
         _startShutterTick() {
             if (this._shutterRafTimer) return;
@@ -27425,7 +27425,7 @@ function ninaApp() {
             // Active state: STOP on press (not on release). Firing on
             // pointerdown makes the stop reliable on touchscreens, where a
             // pointercancel / pointerleave can swallow the pointerup and leave
-            // the loop running — the "I pressed stop but it kept going" bug.
+            // the loop running, the "I pressed stop but it kept going" bug.
             // Flag it so the matching pointerup is a no-op (never re-starts).
             if (ctx.isActive && ctx.isActive()) {
                 this._shutterStoppedOnDown = true;
@@ -27463,7 +27463,7 @@ function ninaApp() {
             }
             this.armingLoop = false;
             this._shutterArmStartedAt = 0;
-            // Active-state stop already fired on pointerdown — this release is a
+            // Active-state stop already fired on pointerdown, this release is a
             // no-op so it can't re-trigger onTap (which would re-start the loop).
             if (this._shutterStoppedOnDown) {
                 this._shutterStoppedOnDown = false;
@@ -27536,7 +27536,7 @@ function ninaApp() {
             let startedAtLocal;
             if (Number.isFinite(startedMs) && Number.isFinite(serverNowMs)) {
                 // Elapsed measured purely in server time, then re-based to the
-                // local clock — robust to client clock skew / a fresh reload.
+                // local clock, robust to client clock skew / a fresh reload.
                 const elapsedMs = Math.max(0, serverNowMs - startedMs);
                 startedAtLocal = Date.now() - elapsedMs;
             } else {
@@ -27566,11 +27566,11 @@ function ninaApp() {
             // exists to clear the flag when the run ends. Adoption used to be
             // one-way, which stranded the flag forever: the shutter read
             // "activated" off the local flag while the countdown read the (now
-            // gone) server run and showed 0s — field report "preview 2s but
+            // gone) server run and showed 0s, field report "preview 2s but
             // shutter 0s, activated". The camera was free the whole time (live
             // stacking kept running through CameraCaptureGate's single slot),
             // proving no capture existed. Only release what WE adopted, so a
-            // genuine local snap — whose own finally owns the flag — is untouched
+            // genuine local snap, whose own finally owns the flag, is untouched
             // during the window before the server reports its run.
             const snapActive = !!(sc && sc.active && sc.source === 'snap');
             const liveActive = !!(sc && sc.active && sc.source === 'live');
@@ -27679,7 +27679,7 @@ function ninaApp() {
                 // its running flag even if the local looping/capturing flags lag
                 // (fresh reload, tab switch, or a between-frame WS tick). Without
                 // this the button can think LIVE is idle and a stop-press arms a
-                // NEW loop (turns blue) instead of stopping — the reported bug.
+                // NEW loop (turns blue) instead of stopping, the reported bug.
                 isActive: () => this.capturing || this.looping
                     || !!(this.serverLiveCapture && this.serverLiveCapture.running),
                 disabled: () => !this.selectedCamera,
@@ -27903,7 +27903,7 @@ function ninaApp() {
                         : Date.now();
             } else if (this.autorunFrameStart) {
                 // Same frame, but a reconnect may have just delivered the
-                // server's real start — adopt it if we'd drifted (e.g. our
+                // server's real start, adopt it if we'd drifted (e.g. our
                 // initial stamp assumed the frame just began).
                 const sc = this.serverCapture;
                 if (sc && sc.active
@@ -28157,7 +28157,7 @@ function ninaApp() {
             }
             // If a flat panel is connected and the user picked a non-zero
             // brightness, set it before kicking the wizard. 0 means
-            // "don't touch the panel" — sky / T-shirt flats.
+            // "don't touch the panel", sky / T-shirt flats.
             if (this.flatDevice?.connected && this.flatWizard.panelBrightness > 0) {
                 try {
                     await this.apiPost('/api/flatdevice/brightness', null, {
@@ -28167,7 +28167,7 @@ function ninaApp() {
                     });
                 } catch (e) {
                     this.toastFail('Set panel brightness failed', e, 'warn');
-                    // keep going — user may want to proceed without panel
+                    // keep going, user may want to proceed without panel
                 }
             }
             try {
@@ -28199,7 +28199,7 @@ function ninaApp() {
         },
 
         /// Per-tab shutter context. Tap and long-press both fire start
-        /// (no separate loop concept — the wizard runs to completion
+        /// (no separate loop concept, the wizard runs to completion
         /// once kicked). Tap-during-active aborts.
         flatWizardShutterCtx() {
             return {
@@ -28280,7 +28280,7 @@ function ninaApp() {
                 return;
             }
             this.preview.busy = true;
-            // We own the flag now — our finally clears it. Drop any adopted
+            // We own the flag now, our finally clears it. Drop any adopted
             // marker so the reconciler's release phase leaves this snap alone
             // in the window before the server reports its run.
             this._previewBusyAdopted = false;
@@ -28304,7 +28304,7 @@ function ninaApp() {
                     // per-preview name, then 'snap'.
                     targetName: (this.targetName || '').trim()
                                 || this.preview.targetName || 'snap',
-                    // PREVIEW is "test shot to check framing/focus" —
+                    // PREVIEW is "test shot to check framing/focus",
                     // never feed the live stack, otherwise the
                     // always-on stacker counts these frames + fires
                     // the LSTR auto-recenter plate solve on the
@@ -28329,7 +28329,7 @@ function ninaApp() {
                 // serving stale JS -- hard-refresh (Ctrl+Shift+R).
                 console.log('[Polaris] previewTakeSnap body:', previewBody);
                 // Abortable so previewAbort() can cancel the in-flight request
-                // immediately (otherwise the await — and thus preview.busy —
+                // immediately (otherwise the await, and thus preview.busy,
                 // stays pending until the long exposure+30s timeout, leaving the
                 // shutter spinning "forever" after an abort).
                 this._previewSnapAbort = new AbortController();
@@ -28356,7 +28356,7 @@ function ninaApp() {
                         + ' · ' + (r.stats?.starCount ?? '--') + ' stars', 'ok', 2000);
                 }
             } catch (e) {
-                // Deliberate abort (previewAbort) cancels the request — that's
+                // Deliberate abort (previewAbort) cancels the request, that's
                 // not an error, just stop quietly.
                 const aborted = e && (e.name === 'AbortError' || /abort/i.test(e.message || ''));
                 if (!aborted) this.toastFail('Snap failed', e);
@@ -28578,7 +28578,7 @@ function ninaApp() {
         // Cancel the in-flight STUDIO/FILES plate solve. Aborts the HTTP
         // request; the server's CancellationToken then kills the ASTAP process.
         // FIELD5-1: aborting only the fetch relied on the client disconnect
-        // propagating to Kestrel's RequestAborted — which doesn't survive the
+        // propagating to Kestrel's RequestAborted, which doesn't survive the
         // relay tunnel / a reverse proxy, so the solver kept grinding and had to
         // be killed by hand. Tell the server explicitly, then drop our own wait.
         async cancelFilesSolve() {
@@ -28657,13 +28657,13 @@ function ninaApp() {
         // Start a slew-and-center job with the mount-slew safety gate.
         // The server returns 409 when the move is flagged (large / near the
         // meridian / target below the altitude floor) or when a safety stop is
-        // standing — this confirms with the operator and retries with force.
+        // standing, this confirms with the operator and retries with force.
         // Returns the started-job data ({ jobId, ... }) or null if declined.
         // Born from a near tripod-strike on an AM3 after a flip + guard trip.
         async _postSlewAndCenter(body) {
             if (body && body.rotation === undefined) body = { ...body, ...this._skyRotForSlew() };
             // apiPost (→ apiFetch) THROWS ApiError on any non-2xx, so a 409
-            // arrives as a thrown error, not a returned Response — we must
+            // arrives as a thrown error, not a returned Response, we must
             // catch it (the old `resp.status === 409` check was dead code, which
             // is why a flagged slew just errored out with no confirm prompt).
             const post = async (b) => (await this.apiPost('/api/sky/slew-and-center', b)).json();
@@ -28805,7 +28805,7 @@ function ninaApp() {
             // take a while to actually return (the server may keep waiting on a
             // BLOB that never arrives after the driver abort); don't make the
             // button spin until then. Cancel the request and clear the busy/ring
-            // state now — previewTakeSnap's finally is then a harmless no-op.
+            // state now, previewTakeSnap's finally is then a harmless no-op.
             try { this._previewSnapAbort?.abort(); } catch (e) { }
             this.preview.busy = false;
             this.preview._snapStartedAt = null;
@@ -28873,7 +28873,7 @@ function ninaApp() {
         // VIDEO tab "📡 Auto" button next to Target name. Asks the
         // server which Moon / planet is closest to where the mount
         // is currently pointing and fills the field if it's within
-        // 5° (a fairly generous cone — the operator just slewed to
+        // 5° (a fairly generous cone, the operator just slewed to
         // it, so it should be near centre). Beyond that, toast and
         // leave the field alone so we don't silently lie.
         async videoAutoDetectTarget() {
@@ -28987,7 +28987,7 @@ function ninaApp() {
         // /api/ui-state so any browser that opens Polaris restores the last
         // values typed. Curated list of model paths to persist; dotted paths
         // navigate the Alpine model. Per-rig settings (slewCenter/polar/video
-        // ROI) stay out of this list — they already persist on the rig.
+        // ROI) stay out of this list, they already persist on the rig.
         _uiStatePaths() {
             return [
                 // LIVE capture
@@ -29001,7 +29001,7 @@ function ninaApp() {
                 // VIDEO capture
                 'video.exposure', 'video.gain', 'video.binning',
                 'video.maxDurationSec', 'video.wbR', 'video.wbB',
-                // Auto-focus: only the optical-train choice persists locally —
+                // Auto-focus: only the optical-train choice persists locally,
                 // the sweep parameters are profile-backed (rig.autoFocus) since
                 // AFPORT and reload from the rig on FOCUS tab entry.
                 'afParams.focuserSource',
@@ -29084,7 +29084,7 @@ function ninaApp() {
         // Identify what sits at a given pointing and put it in the target
         // fields. Split out of identifyTarget so a plate solve can pass its
         // OWN coordinates: the solve is where the camera actually looked,
-        // while mount.ra/dec is only where the mount believes it is — the
+        // while mount.ra/dec is only where the mount believes it is, the
         // whole reason one plate-solves in the first place.
         async _identifyAt(ra, dec, silent = false) {
             this.identifyBusy = true;
@@ -29100,7 +29100,7 @@ function ninaApp() {
                         + (within ? ' (' + within + ')' : ''), 'success');
                     return r;
                 }
-                // No DSO in the field — try a Solar System body before giving up.
+                // No DSO in the field, try a Solar System body before giving up.
                 const p = await this.apiGet('/api/sky/nearest-planet?ra='
                     + encodeURIComponent(ra) + '&dec=' + encodeURIComponent(dec));
                 if (p?.found && p.angularSepDeg <= Math.max(this._fovRadiusDeg() * 1.5, 2)) {
@@ -29215,7 +29215,7 @@ function ninaApp() {
                     serDepth: this.video.serDepth === 'off' ? 16
                         : (/^\d+$/.test(String(this.video.serDepth)) ? parseInt(this.video.serDepth, 10) : null)
                 });
-                // apiPost returns the Response — parse it. Previously `r.path`
+                // apiPost returns the Response, parse it. Previously `r.path`
                 // was read off the Response object, always toasting
                 // "Recording → undefined". Show just the filename.
                 const r = await resp.json();
@@ -29269,13 +29269,13 @@ function ninaApp() {
                 // If the rig had a saved ROI, push it to the camera
                 // now (subframe sticks across server restarts but not
                 // across camera reconnects, which is the more common
-                // case). Skip when a stream is already running — the
+                // case). Skip when a stream is already running, the
                 // driver would reject the change mid-exposure.
                 // ONLY inside the VIDEO tab: this function also runs from
                 // the PREVIEW nav button and after camera connect (any
                 // tab), and re-applying the planetary ROI there silently
                 // shrank PREVIEW / LIVE / sequence captures to e.g.
-                // 640x480 — the ROI is a VIDEO-only concept (the tab
+                // 640x480, the ROI is a VIDEO-only concept (the tab
                 // watcher resets to full frame on leave, and /connect
                 // asserts full frame server-side for the same reason).
                 if (this.tab === 'video'
@@ -30017,13 +30017,13 @@ function ninaApp() {
             } catch { /* leave canvas blank */ }
         },
         mwFmtTime(utc) {
-            return utc ? new Date(utc).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
+            return utc ? new Date(utc).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ', ';
         },
         // Moon-interference chip for the summary: quiet when the moon is down or
         // faint+far, a warning when it's up, bright and close to the core.
         mwMoonBadge() {
             const m = this.milkyWay.data?.moon;
-            if (!m || m.sepDeg == null || isNaN(m.sepDeg)) return { label: '—', cls: 'idle' };
+            if (!m || m.sepDeg == null || isNaN(m.sepDeg)) return { label: ', ', cls: 'idle' };
             const illum = Math.round((m.illumination || 0) * 100);
             if (!m.up) return { label: this.$t('Moon down') + ' · ' + illum + '%', cls: 'ok' };
             const sep = Math.round(m.sepDeg);
@@ -30166,7 +30166,7 @@ function ninaApp() {
         /// Sends ONLY coolerRampDegPerMinute. That's safe for this field because
         /// it's nullable server-side (omitted => null => untouched), which is the
         /// SlewConfirmDeg pattern. Don't copy this shape for the other numeric rig
-        /// fields — gain/offset/binning/cooler-target are non-nullable and a
+        /// fields, gain/offset/binning/cooler-target are non-nullable and a
         /// partial PUT resets them to the model defaults (see RIGPUT-1).
         async saveCoolerRamp() {
             try {
@@ -30195,7 +30195,7 @@ function ninaApp() {
             try {
                 // Explicit null check: `temp || null` collapses 0 to
                 // null because 0 is falsy, which silently swallowed
-                // "Set target to 0 C" — the server got no target and
+                // "Set target to 0 C", the server got no target and
                 // skipped the call. Numeric coerce + check covers
                 // both string and number input (the number input
                 // field still binds via x-model.number).
@@ -30210,14 +30210,14 @@ function ninaApp() {
                 // apiFetch hands back a Response, not a parsed body.
                 const r = await resp.json().catch(() => null);
                 // Turning the cooler OFF now RAMPS to ambient first and cuts the TEC
-                // only on arrival — ~10 min at 2°C/min. Say so: the toggle flips to
+                // only on arrival, ~10 min at 2°C/min. Say so: the toggle flips to
                 // OFF immediately (it reflects intent) while the cooler is
                 // deliberately still running, and unexplained that reads as a bug.
                 if (r && r.ramping && !enabled) {
                     this.toast(`Warming to ${r.target}°C at ${r.rate}°C/min before the cooler switches off, protects against dew. Set Ramp to 0 to switch off instantly.`, 'info', 7000);
                 }
             } catch (e) {
-                // Command failed — drop the optimistic hold so the toggle
+                // Command failed, drop the optimistic hold so the toggle
                 // reflects the camera's real state on the next tick.
                 this._coolerPendingValue = null;
                 this._coolerPendingUntil = 0;
@@ -30229,14 +30229,14 @@ function ninaApp() {
 
         // Toggle the floating right-side control panel on LIVE /
         // PREVIEW / VIDEO. Persisted in localStorage so the operator's
-        // choice survives reloads — useful when reviewing a long stack
+        // choice survives reloads, useful when reviewing a long stack
         // and they want the canvas full-screen the whole session.
         toggleQuickControls() {
             this.quickControlsCollapsed = !this.quickControlsCollapsed;
             try {
                 localStorage.setItem('polaris.quickControlsCollapsed',
                     this.quickControlsCollapsed ? '1' : '0');
-            } catch { /* private-browsing / quota — silent */ }
+            } catch { /* private-browsing / quota, silent */ }
         },
 
         // Focuser group in the capture panels. Driven by <details>, so the
@@ -30245,7 +30245,7 @@ function ninaApp() {
             this.focusGroupOpen = !!open;
             try {
                 localStorage.setItem('polaris.focusGroupOpen', this.focusGroupOpen ? '1' : '0');
-            } catch { /* private-browsing / quota — silent */ }
+            } catch { /* private-browsing / quota, silent */ }
         },
 
         // Generic side-panel / column width resizer. Every resizable panel in
@@ -30263,7 +30263,7 @@ function ninaApp() {
             this.basicMode = this.deviceIsPhone && this.basicModePref !== 'off';
             // Mark the body so the Full-UI modals reused inside basic mode
             // (host file picker, detect wizard, update, wifi) can be pinned to
-            // the phone viewport — those elements live outside .basic-shell.
+            // the phone viewport, those elements live outside .basic-shell.
             try { document.body.classList.toggle('basic-active', !!this.basicMode); } catch (e) { }
         },
         basicSetPref(pref) {
@@ -30849,7 +30849,7 @@ function ninaApp() {
             this.uiLocked = !this.uiLocked;
             try {
                 localStorage.setItem('polaris.uiLocked', this.uiLocked ? '1' : '0');
-            } catch { /* private-browsing / quota — silent */ }
+            } catch { /* private-browsing / quota, silent */ }
         },
 
         // Retract the GUIDE tab's parameters panel (same UX as the LIVE/PREVIEW
@@ -30859,7 +30859,7 @@ function ninaApp() {
             try {
                 localStorage.setItem('polaris.guideSideCollapsed',
                     this.guideSideCollapsed ? '1' : '0');
-            } catch { /* private-browsing / quota — silent */ }
+            } catch { /* private-browsing / quota, silent */ }
         },
 
         // ASIAIR-style: the LIVE shutter owns the whole stack lifecycle,
@@ -30940,7 +30940,7 @@ function ninaApp() {
         },
 
         // Shutter press while LIVE is running: stop the capture loop AND
-        // pause stacking. The accumulator is kept — the next shutter press
+        // pause stacking. The accumulator is kept, the next shutter press
         // offers Continue/Restart; ↻ Reset clears it explicitly.
         async stopLiveSession() {
             if (this._liveSessionBusy) return;   // stop already in flight
@@ -30965,13 +30965,13 @@ function ninaApp() {
             }
             this._liveSessionBusy = true;
             try {
-                // Pause the STACK FIRST (fast — Stop() keeps the accumulator +
+                // Pause the STACK FIRST (fast, Stop() keeps the accumulator +
                 // its frame count) and reflect state immediately, BEFORE the
                 // capture-abort. On drivers that can't abort mid-exposure
                 // (SVBony native) stopCapture() blocks until the in-flight
                 // frame finishes; doing the stack-stop up front means that even
                 // if the operator taps the shutter again during that wait, the
-                // stack is already cleanly paused with its N frames retained —
+                // stack is already cleanly paused with its N frames retained,
                 // so the re-arm offers Continue/Restart instead of silently
                 // restarting from zero.
                 if (wasStacking) {
@@ -31189,7 +31189,7 @@ function ninaApp() {
             const dir = dirMap[direction] || direction;
             try {
                 await this.apiPost(`/api/telescope/move/${dir}`);
-                // Quiet success — the mount panel's status row updates
+                // Quiet success, the mount panel's status row updates
                 // via the next WS tick (Track / RA / Dec / Slewing) and
                 // the user sees the motion immediately.
             } catch (e) {
@@ -32150,7 +32150,7 @@ function ninaApp() {
                 console.warn('[storage] load config failed', e);
                 // A dropped first-load (init burst / iOS WKWebView cert race) left
                 // the form blank; a later enable-toggle then PUT the blanks and
-                // wiped the stored host/share/username — the "re-enter the network
+                // wiped the stored host/share/username, the "re-enter the network
                 // share every time" report. Retry like loadRigs so the form always
                 // ends up reflecting the stored config.
                 if (attempt < 5) setTimeout(() => this.loadStorageConfig(attempt + 1), 800 * (attempt + 1));
@@ -32553,7 +32553,7 @@ function ninaApp() {
 
         // Pre-flight warning before starting a long session (AUTORUN / LIVE /
         // PLAN): if the imaging camera is a cooled model but its cooler is OFF,
-        // ask the operator to confirm — running a cooled sensor warm adds a lot
+        // ask the operator to confirm, running a cooled sensor warm adds a lot
         // of thermal noise and makes the darks library useless. Returns true to
         // proceed, false to cancel. No-op (returns true) for uncooled cameras.
         async confirmCoolerForSession(sessionLabel) {
@@ -32829,14 +32829,14 @@ function ninaApp() {
 
         // Inline style: apply left/top only once the panel has been dragged;
         // until then return '' so the CSS top/right anchor is used.
-        // MUST return an OBJECT, not a style string — same Alpine footgun as
+        // MUST return an OBJECT, not a style string, same Alpine footgun as
         // guideOverlayStyle(). x-bind:style with a string calls
         // setAttribute('style', ...), which wipes the display:none that this
         // element's x-show had set, and the panel un-hides itself. It bites here
         // WORSE than on the guide overlay: that one's x-show deps (guider.*) are
         // replaced every WS tick so x-show re-runs ~1Hz and re-asserts the hide,
         // whereas these deps (slewCenterStatus/JobId/FailedLog/solveSyncBusy) are
-        // only written by the slew-center flows — so nothing ever re-hides it and
+        // only written by the slew-center flows, so nothing ever re-hides it and
         // the ghost console sits over the sky map until you dismiss it by hand.
         // Trigger: _restoreSkySolverPanel() runs post-auth, long after x-show
         // already hid the element, and mutating x/y re-fires this binding.
@@ -32857,10 +32857,10 @@ function ninaApp() {
                     // desktop restores fully off-screen on a phone (position:fixed),
                     // taking its own hide button with it. The drag handler and every
                     // sibling restore (_guideOverlayClamp, _assistantClampPos) clamp
-                    // with these same 60/40 margins — this load path was the holdout.
+                    // with these same 60/40 margins, this load path was the holdout.
                     this._clampSkySolverPanel();
                 }
-            } catch { /* private mode / bad JSON — keep default anchor */ }
+            } catch { /* private mode / bad JSON, keep default anchor */ }
         },
         _clampSkySolverPanel() {
             const p = this.skySolverPanel;
@@ -33093,8 +33093,8 @@ function ninaApp() {
                 // A redundant commit (slider release racing the goto, or a
                 // repeat tick) can hit the backend's "already moving" guard
                 // while the REAL move is already in flight, or the target
-                // equals the current position. Those are benign — the focuser
-                // still goes where asked — so don't show a scary error toast.
+                // equals the current position. Those are benign, the focuser
+                // still goes where asked, so don't show a scary error toast.
                 const msg = ((e && (e.body || e.message)) || '').toString();
                 if (/already moving|already at|already at target/i.test(msg)) return;
                 this.toast('Focus move failed', 'error');
@@ -33456,7 +33456,7 @@ function ninaApp() {
             });
         },
 
-        // PUT /api/filterwheel/names — pushes the edited names back
+        // PUT /api/filterwheel/names, pushes the edited names back
         // into the driver via INDI FILTER_NAME. Validates count
         // client-side first (server validates too, but this gives
         // friendlier feedback than 400 Bad Request).
@@ -33499,7 +33499,7 @@ function ninaApp() {
                 // The PUT /names endpoint already persisted the names on the
                 // active rig (EffectiveFilterWheel) AND remapped the per-filter
                 // focus offsets by slot. Mirror both locally so the RIGS card
-                // reflects it without a reload — and do NOT saveRig() here: a
+                // reflects it without a reload, and do NOT saveRig() here: a
                 // whole-rig PUT would ship the stale, old-key offsets and undo
                 // the server's remap.
                 const arig = this.rigs.find(r => r.id === this.activeRigId);
@@ -33908,11 +33908,10 @@ function ninaApp() {
             }
             const ctx = ovr.getContext('2d');
             ctx.clearRect(0, 0, ovr.width, ovr.height);
-            const r = this.manualFocus.bahtinovResult;
-            if (!this.manualFocus.showBahtinov || !r || !r.ok) return;
+            if (!r || !r.ok) return;
 
-            const fw = this.manualFocus.lastFrameWidth || live.width;
-            const fh = this.manualFocus.lastFrameHeight || live.height;
+            const fw = frameW || live.width;
+            const fh = frameH || live.height;
             if (!fw || !fh) return;
             const sx = ovr.width / fw;
             const sy = ovr.height / fh;
@@ -33955,20 +33954,20 @@ function ninaApp() {
                 { ang: r.spike3Angle, rho: r.spike3Rho, central: r.centreSpikeIndex === 2 }
             ];
             const maxLen = Math.hypot(ovr.width, ovr.height);
-            for (const s of spikes) {
-                if (!Number.isFinite(s.ang)) continue;
-                const theta = s.ang * Math.PI / 180.0;
+            for (const sp of spikes) {
+                if (!Number.isFinite(sp.ang)) continue;
+                const theta = sp.ang * Math.PI / 180.0;
                 const dx = Math.cos(theta);
                 const dy = Math.sin(theta);
                 // Perpendicular offset by rho (in frame px, scaled).
-                const rhoCanvasX = -dy * (s.rho || 0) * sx;
-                const rhoCanvasY = dx * (s.rho || 0) * sy;
+                const rhoCanvasX = -dy * (sp.rho || 0) * sx;
+                const rhoCanvasY = dx * (sp.rho || 0) * sy;
                 const x0 = cx + rhoCanvasX - dx * maxLen;
                 const y0 = cy + rhoCanvasY - dy * maxLen;
                 const x1 = cx + rhoCanvasX + dx * maxLen;
                 const y1 = cy + rhoCanvasY + dy * maxLen;
                 ctx.beginPath();
-                if (s.central) {
+                if (sp.central) {
                     ctx.strokeStyle = color;
                     ctx.lineWidth = 2.5;
                 } else {
@@ -34094,7 +34093,7 @@ function ninaApp() {
             };
         },
 
-        // Persist the panel values as the rig's AutoFocus defaults — the same
+        // Persist the panel values as the rig's AutoFocus defaults, the same
         // values the sequencer AF instruction and every AF trigger use.
         async saveAfParamsToRig() {
             const rig = this.rigs?.find(r => r.id === this.activeRigId);
@@ -34223,7 +34222,7 @@ function ninaApp() {
             } catch (e) { this.toast('Refine stop failed', 'error'); }
         },
 
-        // POLARUI: ASIAIR-style manual refresh — ONE capture + solve,
+        // POLARUI: ASIAIR-style manual refresh, ONE capture + solve,
         // error updates, phase returns to Ok. The operator turns a
         // knob, taps Refresh, reads the new error. refreshBusy guards
         // double-taps locally; the server 409s overlaps anyway.
@@ -34257,7 +34256,7 @@ function ninaApp() {
         // fires before the engine inside is ready, so we re-check on
         // first paint).
         rudimentaryInit() {
-            // Nothing async needed — state defaults are enough; this
+            // Nothing async needed, state defaults are enough; this
             // hook is kept so future setup (e.g. preflight diagnostic)
             // has a place to land without re-touching the markup.
         },
@@ -34449,7 +34448,7 @@ function ninaApp() {
         },
 
         /// Persist Slew & Center capture settings to the active rig.
-        /// Mirrors savePolarRigSettings — separate handler so the
+        /// Mirrors savePolarRigSettings, separate handler so the
         /// debounced @change on the SKY tab inputs doesn't churn the
         /// polar fields and vice-versa.
         async saveSlewCenterRigSettings() {
@@ -34518,9 +34517,9 @@ function ninaApp() {
         // Hemisphere-aware knob guidance derived from the TPPA sign
         // convention (ComputeError: ideal axis az = 0 north / 180 south;
         // +azErr = mount axis rotated toward INCREASING azimuth from the
-        // ideal, +altErr = axis above the pole). Unlike the canvas arrow —
+        // ideal, +altErr = axis above the pole). Unlike the canvas arrow,
         // whose on-image direction depends on camera rotation AND any
-        // optical mirroring the solver's rotation angle can't capture —
+        // optical mirroring the solver's rotation angle can't capture,
         // this names the unambiguous PHYSICAL direction for the adjusters:
         //   North: +azErr = axis EAST of pole  → move azimuth west.
         //   South: +azErr = axis WEST of pole  → move azimuth east
@@ -34561,7 +34560,7 @@ function ninaApp() {
         },
 
         // POLARUI: ASIAIR-style bullseye on the POLAR tab. Pole at the
-        // centre, mount RA axis plotted from (azErr, altErr) — these
+        // centre, mount RA axis plotted from (azErr, altErr), these
         // are MOUNT-AXIS coordinates from ComputeError, so unlike the
         // old on-image arrow the plot is immune to camera rotation and
         // optical mirroring.
@@ -34573,7 +34572,7 @@ function ninaApp() {
         //   horizontal = azimuth. North (facing NCP): east is the
         //     viewer's RIGHT and +azErr = axis east ⇒ plot right.
         //     South (facing SCP): east is the viewer's LEFT and
-        //     +azErr = axis WEST ⇒ still plot right — only the E/W
+        //     +azErr = axis WEST ⇒ still plot right, only the E/W
         //     compass labels swap between hemispheres.
         drawPolarBullseye() {
             const canvas = this.$refs.polarBullseye;
@@ -34680,7 +34679,7 @@ function ninaApp() {
             return sign + arcmin.toFixed(2) + "'";
         },
 
-        // (AFPORT: the legacy SVG V-curve helpers were removed — the chart is
+        // (AFPORT: the legacy SVG V-curve helpers were removed, the chart is
         // Chart.js in updateAfChart and draws the SERVED fit parameters.)
 
         // --- Filter Wheel ---
@@ -34704,7 +34703,7 @@ function ninaApp() {
             this.toast('Moving to filter: ' + filterName, 'info');
             try {
                 // The endpoint blocks (up to 30 s) until INDI reports
-                // the wheel settled — that's where we get the real
+                // the wheel settled, that's where we get the real
                 // "done" signal to surface to the user.
                 const r = await this.apiPostJson(
                     `/api/filterwheel/filter/${encodeURIComponent(filterName)}`);
@@ -35268,7 +35267,7 @@ function ninaApp() {
                 this.toast('Setup dialog closed for ' + progId, 'ok');
             } catch (e) {
                 // ApiError.message is "HTTP 400: {full json envelope}"
-                // — useless in a toast. The server-side handler stuffs
+                //, useless in a toast. The server-side handler stuffs
                 // the human-readable text into the .error field of the
                 // JSON body, so parse the body out and surface that
                 // instead. Hint (if present) follows as a second line.
@@ -35967,7 +35966,7 @@ function ninaApp() {
         },
         // Group the settings cards by category (with a header row per group)
         // and sort alphabetically within each group. Pure DOM reorder of the
-        // existing card nodes — preserves all Alpine bindings/x-init. Runs once.
+        // existing card nodes, preserves all Alpine bindings/x-init. Runs once.
         reorderSettings(gridEl) {
             if (!gridEl || gridEl._settingsReordered) return;
             // category name -> exact normalized titles it contains (emoji
@@ -36040,7 +36039,7 @@ function ninaApp() {
             this._expEditing = false;   // commit done; let WS sync resume
             // Keep the LOCAL rig copy in step. The guider endpoint persists
             // the exposure server-side, but every _persistRigSelection call
-            // PUTs the whole local rig object — with a stale copy, the next
+            // PUTs the whole local rig object, with a stale copy, the next
             // unrelated rig save (gain, algorithm, camera connect) silently
             // reverted the exposure to the old value ("always back to 0.1 s").
             const rig = this.rigs?.find(x => x.id === this.activeRigId);
@@ -36841,7 +36840,7 @@ function ninaApp() {
 
         async graxpertRedetect() {
             try {
-                // apiPost resolves to the raw Response, not parsed JSON —
+                // apiPost resolves to the raw Response, not parsed JSON,
                 // parse it, otherwise r.available is undefined and redetect
                 // always reports "not found" (boot detects fine via apiGet).
                 const resp = await this.apiPost('/api/graxpert/redetect');
@@ -37499,8 +37498,8 @@ function ninaApp() {
         graxpertOpenModal(operation, pathOverride) {
             // GX-7: open the modal if either path is viable, CLI
             // installed OR the matching ONNX model is in the registry.
-            // AI-TOOLS-DISCOVERY: a downloadable model also counts as viable —
-            // the tool pulls it on demand at Start — so the tools are always
+            // AI-TOOLS-DISCOVERY: a downloadable model also counts as viable,
+            // the tool pulls it on demand at Start, so the tools are always
             // offered instead of hidden until a model happens to be present.
             const cliOk     = !!this.graxpert.status?.available;
             const browserOk = this.onnxAvailableForOp(operation)
@@ -37789,7 +37788,7 @@ function ninaApp() {
                 const blob = await r.blob();
                 if (this.blend.previewUrl) URL.revokeObjectURL(this.blend.previewUrl);
                 this.blend.previewUrl = URL.createObjectURL(blob);
-            } catch (e) { /* transient — keep last preview */ }
+            } catch (e) { /* transient, keep last preview */ }
         },
         // Data-driven autostretch from the layer's histogram stats (black ≈
         // avg − 2.8σ, midtone via MTF onto a target background). Falls back to
@@ -37887,7 +37886,7 @@ function ninaApp() {
             try {
                 octx.drawImage(img, 0, 0, sw, sh);
                 data = octx.getImageData(0, 0, sw, sh).data;
-            } catch (e) { return; }   // tainted/decoding — skip silently
+            } catch (e) { return; }   // tainted/decoding, skip silently
             const R = new Float32Array(256), G = new Float32Array(256), B = new Float32Array(256);
             for (let i = 0; i < data.length; i += 4) { R[data[i]]++; G[data[i + 1]]++; B[data[i + 2]]++; }
             // Scale to the tallest bin, ignoring the pure-black/white spikes
@@ -37919,7 +37918,7 @@ function ninaApp() {
         // Each stretch panel (base/stars) gets a LINEAR histogram of its
         // source with draggable blackpoint / midtone / whitepoint handles
         // that drive that layer's black/mid/white. Lets you set the stretch
-        // visually on the data distribution — essential for linear frames.
+        // visually on the data distribution, essential for linear frames.
         blendHistData(key) { return key === 'base' ? this.blend.baseHist : this.blend.blendHist; },
         blendHistDraw(key) {
             const h = this.blendHistData(key);
@@ -38069,8 +38068,8 @@ function ninaApp() {
         // ----- SN-3: StarNet++ star removal --------------------------
         // True when ANY star-removal model is registered, so the FILES
         // "Remove stars" button only shows once a model is installed.
-        // Two families ship: 'starrem2k13' (U2NETP, MIT — the bundled
-        // default) and 'starnet' (StarNet++, NonCommercial — opt-in).
+        // Two families ship: 'starrem2k13' (U2NETP, MIT, the bundled
+        // default) and 'starnet' (StarNet++, NonCommercial, opt-in).
         onnxStarnetAvailable() {
             // AI-TOOLS-DISCOVERY: offered when any star model is installed or
             // downloadable. Before the catalogue loads, stay visible so a slow
@@ -38091,7 +38090,7 @@ function ninaApp() {
             // is always listed (installed or downloadable).
             if (offered('starrem2k13'))
                 out.push({ value: 'starrem2k13', label: 'starrem2k13 (U-Net · MIT)' });
-            // nox (StarNet-like, MIT) — needs the colour and/or gray model.
+            // nox (StarNet-like, MIT), needs the colour and/or gray model.
             if (offered('nox-color') || offered('nox-gray'))
                 out.push({ value: 'nox', label: 'nox (StarNet-like · MIT)' });
             if (offered('starnet'))
@@ -38290,7 +38289,7 @@ function ninaApp() {
                 this.toast('AI runtime not loaded', 'error'); return;
             }
             this.starRemoval.lastSource = path;   // for "Try again" from compare
-            // CC BY-NC-SA 4.0 (NonCommercial) gate — same consent the
+            // CC BY-NC-SA 4.0 (NonCommercial) gate, same consent the
             // GraXpert ONNX ops use; StarNet weights are NC too.
             const ok = await this._ensureOnnxLicenseAccepted();
             if (!ok) { this.toast('Star removal cancelled (licence not accepted)', 'warn'); return; }
@@ -38391,7 +38390,7 @@ function ninaApp() {
             const stem = base.replace(/\.[^.]+$/, '');
             this.crop.outputName = stem + '_crop.fits';
             // Reuse the same FILES preview endpoint that ships the
-            // auto-stretched JPEG of the master — keeps the preview
+            // auto-stretched JPEG of the master, keeps the preview
             // visually consistent with what the user sees in FILES.
             this.crop.previewUrl = this.authUrl(
                 '/api/files/preview?path=' + encodeURIComponent(path)
@@ -38581,7 +38580,7 @@ function ninaApp() {
             this._analyzeDrawOverlay();
         },
 
-        // True while something is still loading in the active tab — drives
+        // True while something is still loading in the active tab, drives
         // the centred spinner. busy = server analysis; otherwise the
         // relevant image (preview, or the inspector hi-res) isn't ready.
         analyzeLoading() {
@@ -38751,7 +38750,7 @@ function ninaApp() {
             let cx = (t ? t.clientX : ev.clientX) || 0;
             let cy = (t ? t.clientY : ev.clientY) || 0;
             // Old Blink / Android WebView: getBoundingClientRect() is still
-            // layout-space while clientX is visual — map the pointer back.
+            // layout-space while clientX is visual, map the pointer back.
             if (!this._rectAppliesZoom()) {
                 const z = this._cumulativeZoom(pickerEl);
                 if (z && Math.abs(z - 1) > 0.001) { cx /= z; cy /= z; }
@@ -38783,7 +38782,7 @@ function ninaApp() {
             if (!this.crop.dragging) return;
             // Throttle to one update per frame: a drag fires many pointermove
             // events per frame, and each one triggers a reactive overlay
-            // re-render — without coalescing they back up and the rectangle
+            // re-render, without coalescing they back up and the rectangle
             // visibly trails the cursor.
             this._cropPendingXY = this._cropPointerXY(ev, ev.currentTarget);
             if (this._cropRaf) return;
@@ -38831,7 +38830,7 @@ function ninaApp() {
 
         // Human-readable summary shown beneath the picker. Reports
         // dimensions in IMAGE pixels (what the server will actually
-        // crop), not display pixels — that's the number the user
+        // crop), not display pixels, that's the number the user
         // cares about because it determines final master resolution.
         cropRoiSummary() {
             const img = this._cropRoiInImagePixels();
@@ -38866,7 +38865,7 @@ function ninaApp() {
         // Returns ROI in IMAGE pixel coordinates (server-space) for the
         // summary, or null if not ready. Uses the TRUE source dimensions
         // (FITS NAXIS / raster natural size), NOT the downscaled preview's
-        // size — the previous code scaled by the preview resolution, which
+        // size, the previous code scaled by the preview resolution, which
         // shrank the crop to a fraction of what the user drew.
         _cropRoiInImagePixels() {
             const frac = this._cropRoiFractions();
@@ -38886,7 +38885,7 @@ function ninaApp() {
 
         // Auto crop SUGGEST: ask the server for the largest fully-stacked
         // inner rectangle (trims the ragged/black dither borders) and pre-fill
-        // the picker with it. Nothing is written — the user reviews, adjusts,
+        // the picker with it. Nothing is written, the user reviews, adjusts,
         // or accepts with "Crop and save". Inverse of _cropRoiFractions:
         // fractions relative to the image → picker display coords.
         async cropAutoSuggest() {
@@ -39009,7 +39008,7 @@ function ninaApp() {
             // bare _decon, the new _decon_<variant>, or with a numeric
             // collision-avoidance suffix tacked on by the saver.
             const masterRx = /(^|[\\/])(?:result|integration|integrated|stack|stacked|master|autosave|livestack)[_-]|_drizzle_|_stack_|_integrated_|_\d+s\.(?:fits?|xisf|fts)$|_bge(?:_\d+)?\.|_denoise(?:_\d+)?\.|_decon(?:_(?:stars|objects))?(?:_\d+)?\./i;
-            // NOTE: "stack(?:s|ed)?" must cover "stacked" — Polaris saves
+            // NOTE: "stack(?:s|ed)?" must cover "stacked", Polaris saves
             // user/live stacks under {rig}/stacked/ (ImageWriterService
             // BuildStackedSubDir). A bare "stacks?" missed that folder, so a
             // genuine stack triggered the "looks like a single exposure"
@@ -39034,7 +39033,7 @@ function ninaApp() {
             return false;
         },
 
-        // Phone/tablet detection (Android or iOS) — same surfaces the
+        // Phone/tablet detection (Android or iOS), same surfaces the
         // /sky/ perf guard installs itself on. Gates the SKY iframe
         // hard-suspend, which desktop never needs.
         _isMobileClient() {
@@ -39071,7 +39070,7 @@ function ninaApp() {
                     }));
                 }
             }
-            // Classical, measured-PSF Richardson-Lucy — always available
+            // Classical, measured-PSF Richardson-Lucy, always available
             // (server-side math, no model file). Listed last so an installed
             // AI model stays the default pick.
             out.push({
@@ -39082,7 +39081,7 @@ function ninaApp() {
                 installed: true, downloadable: false,
             });
             // Field-varying PSF: a PSF per region (corner ≠ centre). The
-            // headline differentiator — corrects coma / field curvature / tilt.
+            // headline differentiator, corrects coma / field curvature / tilt.
             out.push({
                 family: 'rl', version: 'field', target: 'rl',
                 key: 'rl::field',
@@ -39158,7 +39157,7 @@ function ninaApp() {
         // and compare each component as an integer. The provider prefix
         // ("polaris-") and the quant suffix (-fp16 / -int8 / -int16) are
         // stripped first so Polaris's own versions (polaris-1.0, polaris-2.0,
-        // ...) order numerically as they improve over time — NOT all collapse
+        // ...) order numerically as they improve over time, NOT all collapse
         // to 0 (which an over-greedy "drop everything after the first dash"
         // did, leaving every Polaris model tied + sorted behind GraXpert).
         // Returns <0, 0, >0 like compareTo.
@@ -39219,7 +39218,7 @@ function ninaApp() {
                 : v.endsWith('-w8a16') ? ' (W8A16, NPU)'
                 : v.endsWith('-int8')  ? ' (INT8)'
                 : '';
-            // Build label: "<Provider Product vX> — <sizeMB> MB [(FP16)]"
+            // Build label: "<Provider Product vX>, <sizeMB> MB [(FP16)]"
             const choices = models.map(m => {
                 const mb = m.sizeBytes
                     ? (m.sizeBytes / (1024 * 1024)).toFixed(0)
@@ -39392,7 +39391,7 @@ function ninaApp() {
                     field,
                     grid: 3
                 }, { timeout: 1800000 });   // RL on a full master is slow on CPU
-                                            // (no GPU path yet) — allow up to 30 min
+                                            // (no GPU path yet), allow up to 30 min
                 const r = await resp.json();
                 const results = r.results || [];
                 const failures = r.failures || [];
@@ -39568,7 +39567,7 @@ function ninaApp() {
             // AI-TOOLS-DISCOVERY: if the selected model isn't on the host yet,
             // pull it on demand (host download, else client proxy) before the
             // in-browser / NPU run fetches its bytes. Only for paths that
-            // actually load the ONNX model in the browser — when the user has
+            // actually load the ONNX model in the browser, when the user has
             // chosen the host GraXpert CLI it stages its own model, so we don't
             // download a redundant copy. RL / server paths report installed:true.
             const need = this.graxpertModelNeedsDownload();
@@ -39651,7 +39650,7 @@ function ninaApp() {
                         accelerator: this.graxpert.modalAccelerator || 'auto',
                         useNpu: (this.graxpert.modalAccelerator || 'auto') !== 'cpu'
                 });
-                // apiPost returns the raw Response — parse the body to get
+                // apiPost returns the raw Response, parse the body to get
                 // the jobId (reading resp.jobId directly gave "undefined").
                 const r = await resp.json();
                 this.graxpert.currentJobId = r.jobId;
@@ -39705,7 +39704,7 @@ function ninaApp() {
         },
 
         // AI-TOOLS-DISCOVERY: true when the op has at least one model in the
-        // downloadable catalogue that isn't installed yet — i.e. the tool can
+        // downloadable catalogue that isn't installed yet, i.e. the tool can
         // be made to work on demand even though nothing is on the host now.
         _opHasDownloadable(op) {
             if (op === 'deconvolution')
@@ -39718,7 +39717,7 @@ function ninaApp() {
         // AI-TOOLS-DISCOVERY: whether to OFFER a tool button in the STUDIO AI
         // toolbar. Every AI tool is offered whenever it is installed, has a
         // downloadable model, or (decon) has the always-available server RL
-        // path — so the buttons no longer vanish just because a model hasn't
+        // path, so the buttons no longer vanish just because a model hasn't
         // been downloaded yet. Falls back to true before the catalogue loads
         // so a slow /catalog fetch never hides the whole toolbar.
         onnxToolOffered(op) {
@@ -42206,7 +42205,7 @@ function ninaApp() {
             if (!this.equipFocuserChoice) return;
             try {
                 // Same ?driver= dispatch the camera / mount selects use.
-                // INDI is the default — older clients that never picked a
+                // INDI is the default, older clients that never picked a
                 // driver still work, and the ASCOM picker on Windows is
                 // honoured.
                 const qs = this.focuserDriver && this.focuserDriver !== 'indi'
@@ -42597,7 +42596,7 @@ function ninaApp() {
         // Group the writable channels by physical port (INDI vector index, e.g.
         // ASI Power's DEV{n}/ONOFF{n}/DUTYCYCLE{n} → one "Port n+1" group), so a
         // port's role/outlet/dew heater render together. Channels with no port
-        // index (group < 0 — a Pegasus-style single-vector hub) fall into one
+        // index (group < 0, a Pegasus-style single-vector hub) fall into one
         // trailing, heading-less group, preserving the old flat layout.
         powerBoxGroups() {
             const chans = this.powerBoxControls();
@@ -42793,7 +42792,7 @@ function ninaApp() {
         },
 
         async fetchPhd2Exposure() {
-            // PHD2-only probe — skip for the native guider so we don't poke a
+            // PHD2-only probe, skip for the native guider so we don't poke a
             // PHD2 endpoint that will never have a connection on this rig.
             if (this.guiderDriver !== 'phd2') return;
             try {
@@ -42812,7 +42811,7 @@ function ninaApp() {
         },
 
         async fetchPhd2DecMode() {
-            // PHD2-only probe — skip for the native guider (see fetchPhd2Exposure).
+            // PHD2-only probe, skip for the native guider (see fetchPhd2Exposure).
             if (this.guiderDriver !== 'phd2') return;
             try {
                 const r = await this.apiGet('/api/guider/dec-mode');
@@ -42851,7 +42850,7 @@ function ninaApp() {
             } catch (e) { this.toastFail('Disconnect failed', e); }
         },
         // (guiderDisconnect removed: the GUIDE tab's Disconnect button was
-        // dropped — guider connection is managed via RIGS/equipment, and a
+        // dropped, guider connection is managed via RIGS/equipment, and a
         // bare disconnect only left the tab dead until a reconnect there.)
 
         // ----- PH2X-4: Smart Calibrate -----
@@ -43063,8 +43062,8 @@ function ninaApp() {
         // Build the xpra proxy base URL. In the Capacitor (Android/iOS)
         // wrapper the Polaris UI runs in a CROSS-ORIGIN iframe, so the
         // WebView blocks the third-party session cookie and the embedded
-        // xpra client — whose own asset + WebSocket requests we can't add an
-        // Authorization header to — has no way to authenticate. Carry the
+        // xpra client, whose own asset + WebSocket requests we can't add an
+        // Authorization header to, has no way to authenticate. Carry the
         // token as a PATH segment (/phd2-gui/t/<token>/...) so every relative
         // sub-request AND the xpra WebSocket inherit it; the server proxy
         // strips /t/<token> before forwarding to xpra. Falls back to the
@@ -43330,7 +43329,7 @@ function ninaApp() {
                 if (data.connected) {
                     // Merge (don't replace): the WS status handler fills the
                     // richer fields (pixelSizeUm/maxX/sensor/supportsCooler).
-                    // Dropping pixelSizeUm here made the DSLR picker flicker —
+                    // Dropping pixelSizeUm here made the DSLR picker flicker,
                     // this poll wiped it to 0 (picker shows) and the next WS
                     // tick restored 3.72 (picker hides), alternating. Keep them.
                     this.equipCameraInfo = {
@@ -43344,7 +43343,7 @@ function ninaApp() {
                         maxY: data.maxY || 0,
                         supportsCooler: !!(data.capabilities && data.capabilities.cooler),
                         // gphoto-over-INDI counts as a DSLR even if the ISO cap
-                        // hasn't loaded yet — match on the device name too.
+                        // hasn't loaded yet, match on the device name too.
                         supportsIso: !!(data.capabilities && data.capabilities.iso)
                                      || /gphoto/i.test(data.deviceName || data.name || '')
                     };
@@ -43522,12 +43521,12 @@ function ninaApp() {
                 // Always query BOTH sources in parallel and merge. The
                 // DSO catalog only knows deep-sky objects (Messier /
                 // NGC / IC / Arp / Sh2 / HCG / Abell). The engine
-                // knows everything else the user is likely to type —
+                // knows everything else the user is likely to type,
                 // Sun, Moon, planets, satellites, bright stars (Vega,
                 // Sirius), bundled comets. Querying both matters when
                 // a query hits BOTH (e.g. "Sun" matches Sunflower
                 // Galaxy NGC 5055 / M63 in the catalog AND the actual
-                // Sun in the engine — user wants the engine hit
+                // Sun in the engine, user wants the engine hit
                 // surfaced, not just the galaxies).
                 const [catalogData, engineHit] = await Promise.all([
                     this.apiGet(
@@ -43557,9 +43556,9 @@ function ninaApp() {
                 }
 
                 // Merge: engine first (it's typically what the user
-                // typed verbatim — "Sun" / "Moon" / "Jupiter"), then
+                // typed verbatim, "Sun" / "Moon" / "Jupiter"), then
                 // catalog. Dedupe by name (engine "Sun" vs catalog
-                // entry literally named "Sun" — unlikely but cheap to
+                // entry literally named "Sun", unlikely but cheap to
                 // guard).
                 const merged = [];
                 if (engineRow) merged.push(engineRow);
@@ -43653,8 +43652,8 @@ function ninaApp() {
 
             // Card thumbnail. Opens with the icon fallback; the photo slides in.
             //
-            // This used to take ONLY r.thumbnailUrl from /api/sky/image — a remote
-            // Wikipedia/NASA CDN URL — which made it the one thumbnail path in the
+            // This used to take ONLY r.thumbnailUrl from /api/sky/image, a remote
+            // Wikipedia/NASA CDN URL, which made it the one thumbnail path in the
             // app that required internet. The rig is an SBC at a dark site with no
             // internet, so the SKY card never showed a photo while Tonight's Best
             // (bundled DSO cutouts) and the AUTORUN cards (localUrl-first) both
@@ -43994,7 +43993,7 @@ function ninaApp() {
             document.body.removeChild(a);
             setTimeout(() => URL.revokeObjectURL(url), 1000);
         },
-        // Add a horizon point at the mount's CURRENT alt/az — point the scope
+        // Add a horizon point at the mount's CURRENT alt/az, point the scope
         // at the top of an obstacle (tree/building), then capture it. Uses the
         // driver's reported alt/az (ground truth on AltAz mounts). Replaces an
         // existing point within 1 degree of the same azimuth instead of stacking.
@@ -44107,7 +44106,7 @@ function ninaApp() {
         // be read for any reason.
         async slewAndCenter() {
             // Target resolution (fixed catalog object / click over the drifting
-            // live centre) is shared with Slew Only and Sync — see
+            // live centre) is shared with Slew Only and Sync, see
             // _resolveSkyTarget / _skyLookAt (#13).
             let target = await this._resolveSkyTarget();
             if (!target) {
@@ -44169,7 +44168,7 @@ function ninaApp() {
                 const data = await resp.json();
                 this.centerBodyJobId = data.jobId;
                 this.centerBodyStatus = { state: 'pending', body };
-                // Show the solver console — phase 1 (offset-field solve) streams there.
+                // Show the solver console, phase 1 (offset-field solve) streams there.
                 this.skySolverHidden = false;
                 this.toast('Center on ' + body + ' started', 'ok');
                 this.startCenterBodyPolling();
@@ -44238,7 +44237,7 @@ function ninaApp() {
                 return Array.isArray(r) ? r[1] : null;
             } catch { return null; }
         },
-        // True (and toasts) when the target is below the horizon — used to
+        // True (and toasts) when the target is below the horizon, used to
         // fail a GoTo early instead of leaning on the mount's "(no message)"
         // rejection (the AM3/LX200 below-horizon case).
         _blockIfBelowHorizon(raHours, decDeg) {
@@ -44255,7 +44254,7 @@ function ninaApp() {
         // map-centre (red FOV) coordinates, WITHOUT moving it. Recovers the
         // driver's pointing model when it lost the real position (e.g. an INDI
         // driver reload reset the AM3 to home) and you can't plate-solve
-        // (clouds) — you aim the map at the patch the scope is really on and
+        // (clouds), you aim the map at the patch the scope is really on and
         // confirm. A wrong sync throws off later GoTos, hence the modal.
         async syncMountHere() {
             if (!this.mount.connected) { this.toast('Connect a mount first', 'error'); return; }
@@ -44279,7 +44278,7 @@ function ninaApp() {
         },
 
         // One-tap recovery: capture a frame, plate-solve it, and sync the
-        // mount to the solved coords WITHOUT slewing — re-establishes the
+        // mount to the solved coords WITHOUT slewing, re-establishes the
         // driver's pointing model on the real sky position (the proper fix
         // after the AM3 driver lost its position). Needs a camera + clear sky;
         // use "Sync here" (manual) when clouded out.
@@ -44348,7 +44347,7 @@ function ninaApp() {
 
         // Golden touch: capture + solve an aux-camera frame in parallel with
         // the main SKY solve. The aux rides the same mount, so this reveals
-        // the REAL rotation + field the aux photo will come out with — the
+        // the REAL rotation + field the aux photo will come out with, the
         // pink SKY rectangle snaps onto the solved aux pose. Fire-and-forget:
         // never blocks or fails the main solve. No-op without an aux camera.
         async solveAuxFovInParallel() {
@@ -44640,21 +44639,21 @@ function ninaApp() {
         // already powers the Tonight tab. Result cached on the item
         // itself (item.thumbUrl) so Alpine re-renders pick it up
         // and we never re-hit the API for the same item. Silent
-        // no-op when the catalog has no match — the card just
+        // no-op when the catalog has no match, the card just
         // renders without a thumb.
         //
         // URL priority:
-        //   1) localUrl  — server already downloaded the JPEG and
+        //   1) localUrl , server already downloaded the JPEG and
         //                  proxies it from /api/sky/image/file/{slug}.
         //                  Same-origin, no CORS / mixed-content
         //                  pitfalls; needs ?token= via authUrl()
         //                  because the path is under /api/* (gated).
-        //   2) thumbnailUrl — direct CDN URL from Wikipedia / NASA.
+        //   2) thumbnailUrl, direct CDN URL from Wikipedia / NASA.
         //                     Fallback when the disk cache miss left
         //                     localFileExt empty (offline server,
         //                     etc). Cross-origin but img tags don't
         //                     need auth headers for upstream loads.
-        //   3) fullUrl    — full-size variant; last resort, can be
+        //   3) fullUrl   , full-size variant; last resort, can be
         //                   several MB so we try the thumbs first.
         async _loadCelestialThumb(item) {
             if (!item || !item.name) return;
@@ -44670,7 +44669,7 @@ function ninaApp() {
                     item.thumbUrl = r.fullUrl;
                 }
             } catch (e) {
-                // No match / offline — render without a thumb. Logged
+                // No match / offline, render without a thumb. Logged
                 // at debug level so devtools can show why a name the
                 // user expected didn't get a picture.
                 console.debug('[Polaris] celestial thumb lookup failed for',
@@ -44810,7 +44809,7 @@ function ninaApp() {
                 if (data.items) {
                     this.sequence = data.items;
                     // Rehydrate celestial thumbnails for catalog targets
-                    // — the server doesn't persist thumbUrl (it's a
+                    //, the server doesn't persist thumbUrl (it's a
                     // pure UI cache), so on reload we re-resolve any
                     // item that was originally added from Sky. Server
                     // caches the API response on disk for 30 days so
@@ -45135,7 +45134,7 @@ function ninaApp() {
             // PLAN night planner (host-owned: keeps running with every
             // client closed; this chip reappears on reconnect from the WS
             // plan payload). Suppresses the generic Adv-sequence chip below
-            // since the plan drives the advanced engine — one chip is enough.
+            // since the plan drives the advanced engine, one chip is enough.
             const planActive = !!(this.planStatus && this.planStatus.active);
             if (planActive) {
                 const ps = this.planStatus;
@@ -45165,7 +45164,7 @@ function ninaApp() {
 
             // Auto Workflow batch (STUDIO). AMBER on purpose: unlike Plan/
             // Adv/Autorun this runner is CLIENT-side (browser ONNX), so
-            // closing this tab kills the run — the chip both tracks progress
+            // closing this tab kills the run, the chip both tracks progress
             // and reminds the operator to keep the tab open.
             if (this.workflow.running) {
                 const total = Math.max(1, (this.workflow.sources || []).length || 1);
@@ -45190,7 +45189,7 @@ function ninaApp() {
                 // overshoot it (the planner extends an arm when the trendline says
                 // the V isn't bracketed yet), so a raw denominator produced the
                 // nonsense "15/11" and a >100% bar. Widen the total to whatever
-                // we've actually reached — same guard the FOCUS panel already has
+                // we've actually reached, same guard the FOCUS panel already has
                 // (index.html ~2830/2837); this badge was just missed.
                 const n = Math.max(this.autoFocus.steps ?? 0, cur);
                 out.push({
@@ -45250,7 +45249,7 @@ function ninaApp() {
                     onClick: () => { this.tab = 'guide'; } });
             }
 
-            // Live stacking — only show the activity chip when frames
+            // Live stacking, only show the activity chip when frames
             // have actually been accumulated. liveStackEnabled defaults
             // true at boot (matches the always-on stacker behaviour),
             // which would otherwise render a "Live stack 0f" chip
@@ -45833,7 +45832,7 @@ function ninaApp() {
         // Credentialed readiness probe + cache-busting iframe (re)load for the
         // embedded indi-web panel. Mirrors phd2GuiProbeReady / _reloadPhd2GuiIframe.
         //   force=false: only (re)load when the iframe is currently blank
-        //               (initial open / after a 401-race) — never disrupts a
+        //               (initial open / after a 401-race), never disrupts a
         //               working panel the user is interacting with.
         //   force=true:  always reload (used by Start / the Refresh button).
         async indiWebEnsureIframe(force) {
@@ -46150,7 +46149,7 @@ function ninaApp() {
         // Close without finishing. Deliberately NOT remembered anywhere: the
         // only durable gates are the server-side flag (Skip setup / a
         // finished run) and "this host has equipment configured". A person
-        // who closes to go plug something in gets offered again next boot —
+        // who closes to go plug something in gets offered again next boot,
         // a field test showed a browser-side dismissal made one Cancel
         // permanent and the wizard "never appeared again".
         // A Linux probe in flight is torn down.
@@ -46251,7 +46250,7 @@ function ninaApp() {
         },
 
         // Human-ish identity for a serial port, from its /dev/serial/by-id
-        // name — the only identification a generic USB-serial bridge offers
+        // name, the only identification a generic USB-serial bridge offers
         // (e.g. "usb-1a86_USB_Serial-if00-port0" -> "1a86 USB Serial").
         // Better than nothing: the operator at least sees WHICH adapter chip
         // or product sits on each port when there is more than one.
@@ -46350,7 +46349,7 @@ function ninaApp() {
         // The probe and the finalize both swap indiservers under the
         // backend's INDI client. Its socket still LOOKS connected (TCP half-
         // open) so ConnectAsync no-ops, and the auto-reconnect backoff can
-        // outlast the wait window — which is how a serial focuser's device
+        // outlast the wait window, which is how a serial focuser's device
         // never showed up in time (field report: Gemini focuser). Force a
         // clean drop + connect against the NEW server, quietly (no toasts).
         async _wizardReconnectIndi() {
@@ -46368,8 +46367,8 @@ function ninaApp() {
         //
         // Coverage per DRIVER, not a device count: one driver can publish
         // several devices (ZWO CCD lists every camera, the AM driver lists
-        // four variants), so a count is satisfied while a slower driver —
-        // a serial focuser, in the field report — has not published yet, and
+        // four variants), so a count is satisfied while a slower driver,
+        // a serial focuser, in the field report, has not published yet, and
         // its rig assignment silently never happens.
         async _wizardWaitDevices(tries) {
             const w = this.wizard;
@@ -46911,7 +46910,7 @@ function ninaApp() {
                         // Blanking `supported` here made the whole "<camera>
                         // settings" sub-tab vanish permanently after one
                         // failed poll (field report with the native SVBony
-                        // driver) — only a definitive supported:false from
+                        // driver), only a definitive supported:false from
                         // the server may hide it.
                     }
                 }
@@ -47063,7 +47062,7 @@ function ninaApp() {
         //   - autoRefresh is on, AND
         //   - the RIGS tab is open AND the indi-cp sub-tab is the
         //     one currently selected (no point polling while the
-        //     panel isn't visible — saves the Pi a tiny bit of CPU
+        //     panel isn't visible, saves the Pi a tiny bit of CPU
         //     + saves the user from running into the WS payload
         //     races caused by overlapping fetches).
         // 2 s cadence matches the typical INDI device update rate
@@ -47282,7 +47281,7 @@ function ninaApp() {
         },
         phd2BadgeText() {
             const g = this.guider || {};
-            // Backend name only — never the generic word "GUIDE"/"GUIDER",
+            // Backend name only, never the generic word "GUIDE"/"GUIDER",
             // which doubled up with the state verb ("GUIDE GUIDING").
             // Native guider -> "PHD2N", external PHD2 -> "PHD2E".
             const tag = (g.backend === 'native') ? 'PHD2N' : 'PHD2E';
@@ -47365,7 +47364,7 @@ function ninaApp() {
         // Open a pre-filled GitHub issue (kind='issue') or discussion
         // (kind='discussion') on the project repo, with client + server
         // diagnostics baked into the body so reports are actionable. Opens a
-        // new tab to GitHub's "new" form — nothing is submitted automatically;
+        // new tab to GitHub's "new" form, nothing is submitted automatically;
         // the user reviews + posts there.
         reportToGithub(kind) {
             const repo = 'https://github.com/DanWBR/NINA.Polaris';
@@ -47453,7 +47452,7 @@ function ninaApp() {
                 this.update.assetName = u.assetName || '';
                 this.update.assetSize = u.assetSize || 0;
                 return u;
-            } catch (e) { /* offline / not supported — leave badge hidden */ return null; }
+            } catch (e) { /* offline / not supported, leave badge hidden */ return null; }
         },
         // Manual "Check for updates" (POWER card button). Forces a fresh check
         // (bypasses the 30-min cache) and surfaces the outcome as a toast; opens
@@ -47510,7 +47509,7 @@ function ninaApp() {
         /// headings, bold/italic, inline + fenced code, ordered/unordered
         /// lists, links and paragraphs. SECURITY: the raw text is HTML-
         /// escaped FIRST, then only the known tags below are introduced, and
-        /// links are restricted to http(s) — so untrusted release notes
+        /// links are restricted to http(s), so untrusted release notes
         /// cannot inject markup. Output is bound via x-html.
         renderMarkdown(src) {
             if (!src) return '';
@@ -47575,7 +47574,7 @@ function ninaApp() {
         // ─── Install progress bar ────────────────────────────────────────
         // The server gives no real percentage: it blocks on the apt download,
         // installs, then the service restarts and we poll for the version to
-        // change. So we drive an *eased* bar with two ceilings — it creeps
+        // change. So we drive an *eased* bar with two ceilings, it creeps
         // toward 50% during download/install, toward 95% once the restart/poll
         // phase begins, then snaps to 100% on success. It always moves (so it
         // doesn't look hung) without ever claiming progress we can't verify.
@@ -47626,7 +47625,7 @@ function ninaApp() {
             try {
                 // The server blocks on downloading the (tens-of-MB) .deb before
                 // it returns, which easily outlasts the default 15s apiFetch
-                // timeout — that abort was cancelling the install mid-download
+                // timeout, that abort was cancelling the install mid-download
                 // ("signal is aborted without reason" / server TaskCanceled).
                 // Allow up to 10 min, matching the server's download timeout.
                 // force: the confirm above already asked. Without it the server
@@ -47644,7 +47643,7 @@ function ninaApp() {
                 // The install runs in a transient systemd scope; polaris.service
                 // restarts under it. Poll /api/system/status until the reported
                 // version CHANGES from what we're running now, then reload.
-                // (Comparing against the old version is scheme-agnostic — the
+                // (Comparing against the old version is scheme-agnostic, the
                 // status 'version' string need not equal the GitHub tag.)
                 this.update.progress = 'Restarting service and applying update…';
                 this._updProgRestart();
@@ -47686,7 +47685,7 @@ function ninaApp() {
                         return;
                     }
                 }
-            } catch (e) { /* server down mid-restart — keep polling */ }
+            } catch (e) { /* server down mid-restart, keep polling */ }
             setTimeout(() => this._pollUpdateComplete(oldVersion, startedAt), 4000);
         },
 
@@ -47836,7 +47835,7 @@ function ninaApp() {
         // GitHub releases API straight from the browser (api.github.com sends
         // CORS '*', so the JSON is readable) and find the architecture-matched
         // .deb. The asset *bytes* are NOT CORS-readable (the final
-        // release-assets host omits the header), so we don't fetch them — we
+        // release-assets host omits the header), so we don't fetch them, we
         // hand the user a normal download link and a file picker instead.
         async relayCheckGithub() {
             if (this.update.relayBusy) return;
@@ -47884,7 +47883,7 @@ function ninaApp() {
                     assetName: asset.name,
                     assetSize: asset.size || 0,
                     // browser_download_url is a plain navigation download (no CORS
-                    // — it's not read by JS, the browser saves it to the device).
+                    //, it's not read by JS, the browser saves it to the device).
                     assetUrl: asset.browser_download_url,
                     sha256: (asset.digest || '').replace(/^sha256:/i, '')
                 };
@@ -47999,7 +47998,7 @@ function ninaApp() {
         // This browser tab's JS heap in MB, or null when the engine doesn't
         // expose it (only Chromium implements performance.memory; Safari and
         // Firefox don't, and there is no portable browser CPU metric). Read
-        // live each render — the host stats refresh ~1 Hz so this updates too.
+        // live each render, the host stats refresh ~1 Hz so this updates too.
         clientMemMB() {
             try {
                 const m = performance && performance.memory;
@@ -48465,7 +48464,7 @@ function ninaApp() {
 
         // ---- WiFi signal indicator (status bar, next to net rx/tx) ----
         // Data comes from the host's NetworkManagerService `network`
-        // block (signal 0-100, nmcli SIGNAL). Purely reflective — the
+        // block (signal 0-100, nmcli SIGNAL). Purely reflective, the
         // browser never touches the radio.
         _wifiBarsFilled() {
             const s = this.network && this.network.signal != null ? this.network.signal : 0;
@@ -48629,7 +48628,7 @@ function ninaApp() {
                         coolerOn = this._coolerPendingValue;
                     }
                 } else if (this._coolerPendingValue !== null) {
-                    // Window expired — release the hold, trust the camera.
+                    // Window expired, release the hold, trust the camera.
                     this._coolerPendingValue = null; this._coolerPendingUntil = 0;
                 }
                 // DSLR / cooler classification is STICKY: only (re)learned from a
@@ -48642,7 +48641,7 @@ function ninaApp() {
                 // Auto-load the native-camera control panel when a camera
                 // connects, so its RIGS "<camera> settings" sub-tab can appear
                 // on its own. The tab is x-show="camCtrlAny()", which only
-                // turns true after camCtrlLoad() runs — without this trigger it
+                // turns true after camCtrlLoad() runs, without this trigger it
                 // was a chicken-and-egg (nothing loaded the controls until you
                 // clicked the still-hidden tab). Safe for any camera: non-native
                 // drivers report no controls, so the tab stays hidden. Keyed off
@@ -48657,7 +48656,7 @@ function ninaApp() {
                     if (camCtrlKey !== '|') this.camCtrlLoad();
                 } else if (camConn && !this.camCtrlAny() && !this.camCtrl.busy
                     && Date.now() - (this._camCtrlLastTry || 0) > 15000) {
-                    // Self-heal: the connect-time load is a one-shot — if it
+                    // Self-heal: the connect-time load is a one-shot, if it
                     // failed (native SDK still settling, transient relay
                     // error) the controls tab never appeared for the whole
                     // session. Re-try every 15 s while a camera is connected
@@ -48739,7 +48738,7 @@ function ninaApp() {
             this.auxCameraConnected = !!(eq.auxCamera && eq.auxCamera.connected);
             // DSLR-ness follows the actual aux camera (gphoto exposes ISO), so
             // the DSLR pickers live wherever the DSLR is plugged in.
-            // Aux DSLR/cooler classification — same sticky rule as the main
+            // Aux DSLR/cooler classification, same sticky rule as the main
             // camera: only (re)learned from a CONNECTED aux camera, kept across
             // reconnects; gphoto-over-INDI (ISO cap or "gphoto" name) = DSLR.
             if (eq.auxCamera && eq.auxCamera.connected) {
@@ -48779,7 +48778,7 @@ function ninaApp() {
                         this.aux.maxX = lmx;
                         this.aux.maxY = lmy;
                         if (eq.auxCamera.bitDepth > 0) this.aux.bitDepth = eq.auxCamera.bitDepth;
-                        // Persist ONLY the geometry fields — not the whole
+                        // Persist ONLY the geometry fields, not the whole
                         // saveAux() blob (focal length / exposure / gain /
                         // enabled), which could clobber the rig with client
                         // defaults if this tick lands before rig hydration.
@@ -48912,7 +48911,7 @@ function ninaApp() {
             // which motor the jog slider / GoTo / nudges drive (focusMoveTo +
             // focusAbort route the same way). Drive the jog readout, RANGE and
             // connection from THAT focuser so an absolute move never sends a
-            // main-range value to the aux/guide motor — and so a guide/aux
+            // main-range value to the aux/guide motor, and so a guide/aux
             // focuser can be jogged even when the main imaging focuser isn't
             // connected. This block runs independently of `eq.focuser` for
             // exactly that reason. Device identity / RIGS card stay on main above.
@@ -49329,7 +49328,7 @@ function ninaApp() {
                 // Host-owned advanced-sequencer summary on the 1 Hz stream so
                 // the activity chip works from ANY tab and reappears after a
                 // client reconnect (the ADV tab's own 2 s poll only runs
-                // while that tab is open). Only the summary fields — the full
+                // while that tab is open). Only the summary fields, the full
                 // sequence document still comes from loadAdvSeq.
                 this.advSeq.state = msg.advSeq.state || 'Idle';
                 this.advSeq.lastError = msg.advSeq.lastError;
@@ -49436,7 +49435,7 @@ function ninaApp() {
                     if (!this.looping) this.looping = true;
                 } else if (this.looping
                            && !(this.serverCapture && this.serverCapture.active)) {
-                    // Server loop ended (stopped or hit the duration cap) —
+                    // Server loop ended (stopped or hit the duration cap),
                     // reset the LIVE shutter so it doesn't look stuck active.
                     this.looping = false;
                 }
@@ -49960,7 +49959,7 @@ function ninaApp() {
 
         async advSeqStart() {
             // Continue-or-restart prompt when the server retains partial
-            // progress AND the local tree wasn't edited since — an edited
+            // progress AND the local tree wasn't edited since, an edited
             // tree must be re-pushed, and pushing the document resets the
             // server-side progress by design.
             if (!this.advSeqDirty && this.advSeq.hasResumableProgress) {
@@ -50047,7 +50046,7 @@ function ninaApp() {
             // per-device error toasts. Used by the boot-time auto-
             // discovery (_initCore → autoDiscoverAlpaca) where an
             // empty result is the normal case on machines without
-            // an ASCOM Remote Server running — toasting a warning
+            // an ASCOM Remote Server running, toasting a warning
             // there would be noise. Manual button click stays loud
             // so the user gets feedback for what they explicitly
             // asked for.
@@ -50086,7 +50085,7 @@ function ninaApp() {
                     const ok = this.alpaca.autoConnected.filter(d => d.ok).length;
                     const fail = this.alpaca.autoConnected.length - ok;
                     if (fail === 0) {
-                        // Always toast on success — even auto-discovery,
+                        // Always toast on success, even auto-discovery,
                         // since "your equipment just came online" is
                         // info worth surfacing.
                         this.toast(`${ok} Alpaca device(s) connected. Pick them in the cards under "Alpaca" driver.`, 'ok');
@@ -50131,7 +50130,7 @@ function ninaApp() {
             if (this._alpacaAutoTried) return;
             this._alpacaAutoTried = true;
             setTimeout(() => {
-                // autoConnect:false — boot discovery only LISTS what's on
+                // autoConnect:false, boot discovery only LISTS what's on
                 // the LAN so the RIGS pickers populate; it must NOT connect
                 // (connection is host-owned, see discoverAlpaca). This is
                 // what stops every browser refresh / extra client from
@@ -50193,7 +50192,7 @@ function ninaApp() {
                 }
                 return true;
             }
-            // IPv6 (very loose — just hex groups + colons + optional ::)
+            // IPv6 (very loose, just hex groups + colons + optional ::)
             if (/^\[?[0-9a-fA-F:]+\]?$/.test(s) && s.includes(':')) return true;
             // Hostname (RFC-1123ish)
             return /^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/.test(s);
@@ -50269,7 +50268,7 @@ function ninaApp() {
             // Centre the SKY view on the mosaic centre so the yellow grid is
             // always in frame. Without this the grid is drawn at the target's
             // RA/Dec, which may be off-screen if the view was panned elsewhere
-            // (the operator reported "nada dos yellow rectangles" — the tiles
+            // (the operator reported "nada dos yellow rectangles", the tiles
             // were rendering correctly but outside the viewport). Pick a FOV
             // that frames the whole grid with margin.
             const totalW = (this.mosaic.req.cols || 1) * (this.mosaic.req.panelFovWidthDeg || 1);
@@ -50291,7 +50290,7 @@ function ninaApp() {
 
         async updateMosaicPreview() {
             try {
-                // apiPost returns the Response (not parsed JSON) — must .json()
+                // apiPost returns the Response (not parsed JSON), must .json()
                 // it. The earlier code assigned the Response straight to
                 // mosaic.plan, so plan.panels was undefined → "0 panels / 0m".
                 const resp = await this.apiPost('/api/mosaic/plan', this.mosaic.req);
@@ -50376,7 +50375,7 @@ function ninaApp() {
             } catch (e) { this.toastFail('Mosaic export failed', e); }
         },
 
-        // Export the mosaic panels as a NEW imaging Plan (PLAN tab) — one target
+        // Export the mosaic panels as a NEW imaging Plan (PLAN tab), one target
         // per panel, each with the modal's exposure/count/filter. Lets the user
         // run the mosaic through the multi-target night planner instead of the
         // Advanced Sequencer.
@@ -50492,7 +50491,7 @@ class WheelPicker {
         this.label = opts.label || '';
         // Optional LADDER mode: an explicit, ascending list of values the
         // wheel may take, instead of a uniform min..max..step ramp. Exposure
-        // needs it — the useful range spans 50 µs (solar, with a filter) to
+        // needs it, the useful range spans 50 µs (solar, with a filter) to
         // several seconds, which no single linear step can cover. In ladder
         // mode "one step" is one position in the list. `format` renders a
         // value; without it the step's decimal count is used, as before.

@@ -173,9 +173,9 @@ automatically:
 4. Tick **Bahtinov mask analysis** in the sidebar.
 
 After each capture, Polaris finds the brightest star in the frame (or
-accepts manual `starX` / `starY` coordinates POSTed to
-`/api/focus/bahtinov`), crops a 200-pixel region of interest (ROI)
-around it, and sweeps every angle from 0 to 180 degrees in
+uses the one you pinned with a click), crops a region of interest
+(ROI) around it, 200 pixels across by default and adjustable, and
+sweeps every angle from 0 to 180 degrees in
 0.5-degree steps,
 integrating intensity along each line through the ROI centre. It
 picks the three strongest peaks, enforcing a 30-degree minimum
