@@ -15222,6 +15222,126 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                        x-text="relayCfg.lastError"></p>
                 </div>
 
+                <!-- Live broadcast: composes the picture, an object card and a
+                     line of session numbers on the host and publishes the
+                     result over RTMP, so a session can be streamed with no
+                     computer at the scope. Nothing here starts on its own and
+                     nothing resumes across a restart: the stream begins when
+                     somebody presses Start. -->
+                <div class="settings-section" id="broadcast-card" x-init="cardInit(() => loadBroadcastConfig())">
+                    <h3 data-tour="set-broadcast"><span class="settings-card-icon">📡</span>Live broadcast</h3>
+                    <p class="hint" style="margin-top:0">
+                        Stream the session to YouTube, Twitch, Facebook or Instagram
+                        from the host itself, with no computer at the scope. The host
+                        draws the picture, an object card and a line of session
+                        numbers, and can keep the same video as a file.
+                    </p>
+
+                    <!-- ffmpeg is a soft Recommends of the .deb, so it can be
+                         absent. Say where it was looked for: an operator with
+                         it installed somewhere unusual can then see why. -->
+                    <div x-show="broadcastFf.loaded && !broadcastFf.available" x-cloak
+                         style="border:1px solid var(--warn); border-radius:8px; padding:10px; margin-bottom:12px">
+                        <p class="text-warn" style="margin:0 0 6px">
+                            ffmpeg is not installed on the host, and the broadcast is encoded with it.
+                        </p>
+                        <p class="hint" style="margin:0 0 6px">
+                            On Debian and Ubuntu: <code>sudo apt install ffmpeg</code>. Polaris looked in:
+                        </p>
+                        <ul class="hint" style="margin:0 0 8px; padding-left:18px">
+                            <template x-for="c in broadcastFf.searched" :key="c.path">
+                                <li><code x-text="c.path"></code></li>
+                            </template>
+                        </ul>
+                        <button class="btn btn-sm" @click="rescanFfmpeg()">Check again</button>
+                    </div>
+
+                    <div x-show="!broadcastFf.loaded || broadcastFf.available">
+                        <div class="broadcast-form">
+                            <label><span class="lbl">Platform</span>
+                                <select class="input input-sm" x-model="broadcastCfg.destination"
+                                        @change="broadcastPickDestination()">
+                                    <template x-for="d in broadcastCfg.destinations" :key="d.id">
+                                        <option :value="d.id" x-text="d.label"></option>
+                                    </template>
+                                </select>
+                            </label>
+                            <label><span class="lbl">Ingest URL</span>
+                                <input class="input input-sm" type="text" x-model="broadcastCfg.rtmpUrl"
+                                       placeholder="rtmp://a.rtmp.youtube.com/live2" autocomplete="off">
+                            </label>
+                            <label><span class="lbl">Stream key</span>
+                                <input class="input input-sm" type="password" x-model="broadcastCfg.streamKey"
+                                       autocomplete="new-password"
+                                       :placeholder="broadcastCfg.hasStreamKey ? '•••••• (unchanged)' : ''">
+                            </label>
+                            <label><span class="lbl">Quality</span>
+                                <select class="input input-sm" x-model="broadcastCfg.quality"
+                                        title="Higher quality needs both a faster host and more upload bandwidth. Broadcasting from a phone hotspot shares that link with this browser session.">
+                                    <template x-for="q in broadcastCfg.qualities" :key="q.id">
+                                        <option :value="q.id" x-text="q.label"></option>
+                                    </template>
+                                </select>
+                            </label>
+                            <label><span class="lbl">Broadcast title</span>
+                                <input class="input input-sm" type="text" x-model="broadcastCfg.title"
+                                       placeholder="Polaris Live Stream" autocomplete="off">
+                            </label>
+                        </div>
+
+                        <div style="display:flex; flex-wrap:wrap; gap:14px; margin-top:12px">
+                            <label class="chk" style="display:flex; align-items:center; gap:8px">
+                                <input type="checkbox" x-model="broadcastCfg.showHeader">
+                                Title and equipment at the top
+                            </label>
+                            <label class="chk" style="display:flex; align-items:center; gap:8px">
+                                <input type="checkbox" x-model="broadcastCfg.showObjectCard">
+                                Object card
+                            </label>
+                            <label class="chk" style="display:flex; align-items:center; gap:8px">
+                                <input type="checkbox" x-model="broadcastCfg.showBanner">
+                                Session numbers along the bottom
+                            </label>
+                            <label class="chk" style="display:flex; align-items:center; gap:8px"
+                                   title="Only for objects Polaris ships no text for. The lookup never delays a frame, and with no connection the card falls back to a sentence built from the catalogue.">
+                                <input type="checkbox" x-model="broadcastCfg.fetchDescriptions">
+                                Look up descriptions online
+                            </label>
+                            <label class="chk" style="display:flex; align-items:center; gap:8px"
+                                   title="Keeps the same composed video as an MP4 under the capture folder. Works with or without a broadcast.">
+                                <input type="checkbox" x-model="broadcastCfg.recordToDisk">
+                                Also record to a file
+                            </label>
+                        </div>
+
+                        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:12px">
+                            <button class="btn" :disabled="broadcastCfg.saving" @click="saveBroadcastConfig()">
+                                <span x-show="!broadcastCfg.saving">Save</span>
+                                <span x-show="broadcastCfg.saving" x-cloak>Saving…</span>
+                            </button>
+                            <button class="btn btn-primary" x-show="!broadcastStatus.running"
+                                    :disabled="broadcastCfg.busy" @click="startBroadcast()">
+                                Start broadcasting
+                            </button>
+                            <button class="btn btn-danger" x-show="broadcastStatus.running" x-cloak
+                                    :disabled="broadcastCfg.busy" @click="stopBroadcast()">
+                                Stop
+                            </button>
+                            <span :class="broadcastStatus.running ? 'status-pill status-pill-ok' : 'status-pill'"
+                                  x-text="broadcastStatus.running ? 'On air' : 'Off'"></span>
+                        </div>
+
+                        <p class="hint" style="margin-top:8px" x-show="broadcastStatus.running" x-cloak
+                           x-text="broadcastSummary()"></p>
+                        <p class="hint" style="margin-top:4px"
+                           x-show="broadcastStatus.running && broadcastStatus.recordPath" x-cloak>
+                            Recording to <code x-text="broadcastStatus.recordPath"></code>
+                        </p>
+                        <p class="text-warn" style="font-size:12px; margin-top:8px"
+                           x-show="broadcastStatus.lastError" x-cloak x-text="broadcastStatus.lastError"></p>
+                    </div>
+                </div>
+
                 <!-- Auto-push captured images to network storage (SMB / SFTP /
                      mounted path). Mirrors the capture folder tree onto the
                      target; the local copy is kept. -->

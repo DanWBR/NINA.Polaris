@@ -599,6 +599,26 @@ function ninaApp() {
             state: 'disabled', hostname: null, lastError: null, saving: false
         },
 
+        // Live broadcast. The config is what the card edits and saves; the
+        // status is pushed by /ws/status once a second while a broadcast is
+        // on air, so the card does not poll. streamKey is write-only: it is
+        // never returned by the host and is cleared after every save.
+        broadcastCfg: {
+            destination: 'youtube', rtmpUrl: '', streamKey: '', hasStreamKey: false,
+            quality: 'medium', title: '', showHeader: true, showObjectCard: true,
+            showBanner: true, fetchDescriptions: true, recordToDisk: false,
+            destinations: [], qualities: [], loaded: false, saving: false, busy: false
+        },
+        broadcastStatus: {
+            running: false, quality: 'medium', encoder: null, hardwareEncoder: false,
+            uptimeSec: 0, fps: 0, bitrateKbps: 0, droppedFrames: 0, reconnects: 0,
+            recording: false, recordPath: null, lastError: null, frameSource: 'none'
+        },
+        broadcastFf: {
+            loaded: false, available: false, path: '', version: '',
+            chosen: '', hardware: false, searched: []
+        },
+
         // HELP-1: in-app tutorial state. tutorial null = landing
         // (4-card picker); otherwise one of 'firstNight', 'capture',
         // 'workflowsPicker', 'lrgb', 'planetary', 'pcc', 'troubleshoot'.
@@ -31959,6 +31979,144 @@ function ninaApp() {
             })[this.relayCfg.state] || this.relayCfg.state;
         },
 
+        // ---- Live broadcast (Settings card) ----
+        // The config load is gated behind cardInit like every other card, and
+        // guarded by a loaded flag: saving before the load has landed would
+        // write the empty defaults over what the host has.
+        async loadBroadcastConfig(attempt = 0) {
+            try {
+                const d = await this.apiGet('/api/broadcast/config');
+                const c = this.broadcastCfg;
+                c.destination = d.destination || 'youtube';
+                c.rtmpUrl = d.rtmpUrl || '';
+                c.hasStreamKey = !!d.hasStreamKey;
+                c.streamKey = '';
+                c.quality = d.quality || 'medium';
+                c.title = d.title || '';
+                c.showHeader = !!d.showHeader;
+                c.showObjectCard = !!d.showObjectCard;
+                c.showBanner = !!d.showBanner;
+                c.fetchDescriptions = !!d.fetchDescriptions;
+                c.recordToDisk = !!d.recordToDisk;
+                c.destinations = d.destinations || [];
+                c.qualities = d.qualities || [];
+                c.loaded = true;
+                this.loadBroadcastEncoders();
+            } catch (e) {
+                // The host may still be starting. Back off and try again
+                // rather than leaving the card showing defaults that would be
+                // saved over the real configuration.
+                if (attempt < 5) setTimeout(() => this.loadBroadcastConfig(attempt + 1), 1000 * (attempt + 1));
+            }
+        },
+
+        async loadBroadcastEncoders() {
+            try {
+                const d = await this.apiGet('/api/broadcast/encoders');
+                this.broadcastFf = {
+                    loaded: true, available: !!d.available, path: d.path || '',
+                    version: d.version || '', chosen: d.chosen || '', hardware: !!d.hardware,
+                    searched: d.searched || []
+                };
+            } catch (e) { this.broadcastFf.loaded = true; }
+        },
+
+        async rescanFfmpeg() {
+            try {
+                await this.apiPostJson('/api/broadcast/rescan');
+                await this.loadBroadcastEncoders();
+                this.toast(this.broadcastFf.available ? 'ffmpeg found' : 'Still no ffmpeg',
+                           this.broadcastFf.available ? 'ok' : 'warn');
+            } catch (e) { this.toastFail('Could not look for ffmpeg', e); }
+        },
+
+        // Selecting a platform only fills the URL in. Twitch has regional
+        // ingest servers and Instagram issues a fresh URL per session, so the
+        // field stays editable and is what actually gets used.
+        broadcastPickDestination() {
+            const d = (this.broadcastCfg.destinations || [])
+                .find(x => x.id === this.broadcastCfg.destination);
+            if (d && d.rtmpUrl) this.broadcastCfg.rtmpUrl = d.rtmpUrl;
+        },
+
+        async saveBroadcastConfig() {
+            if (!this.broadcastCfg.loaded) return;
+            this.broadcastCfg.saving = true;
+            try {
+                const c = this.broadcastCfg;
+                const d = await this.apiPut('/api/broadcast/config', {
+                    destination: c.destination,
+                    rtmpUrl: c.rtmpUrl || '',
+                    // null keeps the stored key. The field is write-only and
+                    // is cleared after a save, so an untouched form must not
+                    // send the empty string, which would clear it.
+                    streamKey: c.streamKey ? c.streamKey : null,
+                    quality: c.quality,
+                    title: c.title || '',
+                    showHeader: !!c.showHeader,
+                    showObjectCard: !!c.showObjectCard,
+                    showBanner: !!c.showBanner,
+                    fetchDescriptions: !!c.fetchDescriptions,
+                    recordToDisk: !!c.recordToDisk
+                });
+                c.streamKey = '';
+                c.hasStreamKey = !!d.hasStreamKey;
+                this.toast('Broadcast settings saved', 'ok');
+            } catch (e) {
+                this.toastFail('Could not save the broadcast settings', e);
+            } finally {
+                this.broadcastCfg.saving = false;
+            }
+        },
+
+        async startBroadcast() {
+            this.broadcastCfg.busy = true;
+            try {
+                this.broadcastStatus = await this.apiPostJson('/api/broadcast/start');
+                this.toast('Broadcast started', 'ok');
+            } catch (e) {
+                this.toastFail('Could not start the broadcast', e);
+            } finally {
+                this.broadcastCfg.busy = false;
+            }
+        },
+
+        async stopBroadcast() {
+            this.broadcastCfg.busy = true;
+            try {
+                this.broadcastStatus = await this.apiPostJson('/api/broadcast/stop');
+                this.toast('Broadcast stopped', 'ok');
+            } catch (e) {
+                this.toastFail('Could not stop the broadcast', e);
+            } finally {
+                this.broadcastCfg.busy = false;
+            }
+        },
+
+        // One line of what is actually happening, for under the buttons.
+        broadcastSummary() {
+            const s = this.broadcastStatus;
+            const bits = [];
+            if (s.uptimeSec) bits.push(this.$t('On air {t}', { t: this.broadcastUptime(s.uptimeSec) }));
+            if (s.bitrateKbps) bits.push(Math.round(s.bitrateKbps) + ' kbps');
+            if (s.encoder) {
+                bits.push(s.hardwareEncoder
+                    ? this.$t('{e}, in hardware', { e: s.encoder })
+                    : this.$t('{e}, in software', { e: s.encoder }));
+            }
+            if (s.droppedFrames) bits.push(this.$t('{n} frames dropped', { n: s.droppedFrames }));
+            if (s.reconnects) bits.push(this.$t('reconnected {n} times', { n: s.reconnects }));
+            return bits.join(' · ');
+        },
+
+        broadcastUptime(seconds) {
+            const s = Math.max(0, Math.round(seconds));
+            const h = Math.floor(s / 3600);
+            const m = Math.floor((s % 3600) / 60);
+            if (h > 0) return h + 'h ' + String(m).padStart(2, '0') + 'm';
+            return m + 'm ' + String(s % 60).padStart(2, '0') + 's';
+        },
+
         // ---- Auto-push to network storage (Settings card) ----
         async loadStorageConfig(attempt = 0) {
             try {
@@ -35832,7 +35990,7 @@ function ninaApp() {
                 ['Image processing', ['gpu acceleration (opencl)', 'external tools', 'image cache', 'image output', 'colour calibration data', 'scripts (beta)']],
                 ['Network & security',  ['authentication', 'https certificate',
                     'https endpoints (for webgpu + multi-thread wasm)', 'network (wifi)', 'remote terminal',
-                    'auto-push to network or cloud storage', 'remote access relay']],
+                    'auto-push to network or cloud storage', 'remote access relay', 'live broadcast']],
                 ['System & maintenance', ['debug logging', 'diagnostics', 'hardware benchmark',
                     'reset everything to factory defaults', 'software update', 'power',
                     'backup & restore', 'scheduled shutdown']],
@@ -45601,6 +45759,22 @@ function ninaApp() {
                 });
             }
 
+            // On air. The operator is publishing their sky and their
+            // session under their own name, so this stays visible on every
+            // tab for as long as it is running. Turns amber when ffmpeg has
+            // had to be restarted, which on a hotspot is the uplink talking.
+            if (this.broadcastStatus.running) {
+                const b = this.broadcastStatus;
+                const trouble = b.reconnects > 0 || !!b.lastError;
+                out.push({
+                    id: 'broadcast', icon: '\ud83d\udce1', kind: trouble ? 'warn' : 'ok',
+                    label: trouble
+                        ? this.$t('On air, reconnected {n} times', { n: b.reconnects })
+                        : this.$t('On air {t}', { t: this.broadcastUptime(b.uptimeSec) }),
+                    onClick: () => this.openSettingsCard('broadcast-card')
+                });
+            }
+
             return out;
         },
 
@@ -49469,6 +49643,11 @@ function ninaApp() {
                 // on these two snapshots inside the GUIDE tab.
                 if (g.vncSession)   this.phd2VncSession = g.vncSession;
             }
+            // Pushed every second while a broadcast is on air, so the
+            // Settings card and the activity chip both stay live without
+            // either of them polling.
+            if (msg.broadcast) this.broadcastStatus = msg.broadcast;
+
             if (msg.liveStack) {
                 this.liveStackEnabled = msg.liveStack.isRunning;
                 this.liveStackFrames = msg.liveStack.frameCount;

@@ -1,0 +1,214 @@
+# Broadcasting the Night {#sec-broadcasting}
+
+Astrophotography live streams are their own small genre: the stacked
+image climbing out of the noise while the numbers tick over beside it,
+and a chat asking what scope that is. Polaris has everything needed to
+be the source of one, and this chapter is about joining it up.
+
+What makes it worth doing from Polaris rather than from OBS on a
+laptop is what is missing from the picture. The usual way to stream a
+session is to point capture software at a laptop screen, which means a
+laptop at the scope, awake, plugged in, all night. Polaris broadcasts
+from the host itself: the same small box already sitting on the
+tripod, already doing the capture. Nothing else has to be there.
+
+<!-- screenshot: the Live broadcast card in Settings, on air, with the
+status pill and the uptime and bitrate line under the buttons -->
+
+## What goes out
+
+The host does not capture a screen. A headless box has no screen to
+capture, and even where there is one, a browser window scaled to
+1280x720 puts the image in the middle of a lot of sidebar. Instead
+Polaris draws a frame of its own, laid out for someone watching on a
+phone:
+
+- Along the top, a **header**: the title you give the broadcast, the
+  rig's name, and the equipment. Focal length and f-ratio, camera,
+  mount, filter wheel, focuser, guide camera and guider, as far as
+  they are configured. This is the answer to the question every astro
+  chat asks, on screen from the first frame so nobody has to type it.
+- On the right, an **object card**: a cutout of the target, its common
+  name, its catalogue numbers, the facts (type, constellation,
+  magnitude, apparent size) and a short description.
+- Along the bottom, a **banner**: target, filter, exposure, gain,
+  frames, total integration, SNR, guide RMS and sensor temperature.
+- Everything else is the picture.
+
+The split between the top strip and the bottom one is deliberate. The
+header is fixed for the session; the banner is what changes. Someone
+arriving in the middle reads the top once and the bottom continuously,
+and mixing the two would make the part that is actually updating
+harder to find.
+
+Each of the three can be switched off, and the picture then has that
+much more room.
+
+## Where the picture comes from
+
+Twice a second, Polaris asks for the best image available right now.
+If a video stream is running, that is the picture, which is what you
+want for planetary work. Otherwise it takes the last image the relay
+handled, which covers LIVE, the stack, PREVIEW and AUTORUN, and which
+the host keeps whether or not a browser is attached: you can close the
+tab and the broadcast carries on. Failing both, it redraws the last
+frame, so the picture holds steady between subs rather than going
+black.
+
+Two things it deliberately never does. It never starts a camera stream
+of its own, because a stream holds the camera exclusively and would
+block every exposure for as long as the broadcast ran. And it never
+waits for an image. A two minute sub and a plate solve in the middle
+of it are ordinary, and a broadcast that stopped sending during those
+would stop every few minutes.
+
+## Setting up a destination
+
+Go to **Settings -> Network & security -> Live broadcast**, pick your
+platform, and paste the ingest URL and the stream key that the
+platform gives you.
+
+| Platform | Where to find them |
+|---|---|
+| YouTube | Studio, Go live, Stream settings |
+| Twitch | Creator Dashboard, Settings, Stream |
+| Facebook | Live producer, Streaming software |
+| Instagram | Live producer, on a professional account |
+| Custom | any RTMP or RTMPS server, including your own |
+
+Choosing a platform only fills the URL field in; what you save is what
+is used. That matters for Twitch, which has regional ingest servers
+worth choosing between, and for Instagram, which issues a fresh URL
+and key for every session.
+
+The commonest mistake is to paste the address of the studio page from
+the browser's address bar instead of the ingest address. Polaris
+recognises that and refuses it with an explanation, rather than
+failing later with a connection error.
+
+The stream key is treated as a credential, because it is one: anybody
+holding it can broadcast to your channel as you. It is stored in its
+own file on the host, readable only by the account Polaris runs as,
+and it is never sent back to a browser. The field shows only whether a
+key is set. Leave it untouched when you change something else and the
+stored key is kept; clear it to remove the key.
+
+## Quality, and what it costs
+
+| Setting | Resolution | Bitrate | Per hour |
+|---|---|---|---|
+| Low | 854x480 | 1000 kbps | about 0.5 GB |
+| Medium | 1280x720 | 2500 kbps | about 1.1 GB |
+| High | 1920x1080 | 4500 kbps | about 2.0 GB |
+
+The per-hour figure is both the upload and, if you are recording, the
+size on disk. Two things limit the sensible choice. The first is the
+link: broadcasting from a phone hotspot in the field shares that link
+with the browser session you are using to control the rig, and
+starving your own control session to feed the stream is a bad trade.
+Start at Low there. The second is the host, which the next section is
+about.
+
+## Recording, with or without an audience
+
+**Also record to a file** keeps the same composed video as an MP4
+under the capture folder. It works with a broadcast and it works
+without one, and recording alone is a perfectly good use of the
+feature: you get the timelapse of the night, with the card and the
+numbers already burned in, and nothing goes anywhere near the
+internet.
+
+The file is written in fragments as it goes rather than being
+finalised at the end. A night-long recording on a box that can lose
+power is exactly the case where the usual arrangement fails badly: a
+plain MP4 holds its index in memory until the writer exits, so a power
+cut costs the whole file rather than the last few seconds.
+
+## The object descriptions
+
+The description on the card comes from one of three places, tried in
+order. First the text Polaris ships, written for the Messier catalogue
+and the better known NGC, IC and Sharpless objects. Then, if you have
+left **Look up descriptions online** on and the host has a connection,
+a description fetched once from Wikipedia in your interface language
+and kept. Last, a sentence built from the catalogue facts, which is
+mechanical but always correct and never absent.
+
+That last one is why the card is never blank, and why the online
+lookup can be treated as a bonus rather than a dependency. The
+broadcast goes on air with whatever is already on disk; if a lookup
+lands later, the card improves itself on the next frame. With no
+network at all, nothing waits and nothing fails. A fetched text
+carries a small credit line, which is not optional: it is published
+under a licence that requires attribution, and a broadcast is
+publishing.
+
+## What the host has to be able to do
+
+Encoding H.264 is real work, and it happens next to the capture loop
+all night.
+
+Polaris needs `ffmpeg`, which the `.deb` recommends rather than
+requires, so it may not be there. The card says so plainly, lists
+every path it looked in, and offers to look again once you have run
+`sudo apt install ffmpeg`.
+
+Given ffmpeg, Polaris chooses an encoder by trying them. This is worth
+a sentence because the obvious approach does not work: every ffmpeg
+build advertises every encoder it was compiled with, and that says
+nothing about whether the silicon behind one is present and usable.
+A machine can list Intel Quick Sync, be chosen for it, and then answer
+"could not open encoder" on the very first frame, which as a live
+broadcast means a restart loop that never settles. So each candidate
+is asked to encode a fifth of a second of black before it is trusted.
+It costs about a second when you press Start.
+
+On ARM boards the order is the Rockchip encoder (Orange Pi 5, Radxa),
+then the kernel encoder most other boards expose, then software. On
+x86 it is Quick Sync, NVENC, VAAPI, then software. The status line
+tells you which was chosen and whether it is hardware.
+
+If it is not hardware, be modest with the quality setting. A Pi 4
+encoding 1080p in software while capturing and guiding will not keep
+up, and the dropped-frame counter is where you will see it.
+
+## While it is running
+
+An **ON AIR** chip sits on the activity bar on every tab, so you can
+work in FOCUS or LIVE and still know the broadcast is alive. It turns
+amber the moment the encoder has had to be restarted.
+
+Restarts are expected. RTMP connections drop, and from a hotspot at a
+dark site that is an ordinary night rather than a fault. When the
+encoder exits while you still want a broadcast, Polaris starts it
+again with a backoff that tops out at thirty seconds, and counts the
+reconnect. A slowly climbing count is the uplink; a fast one with an
+error message beside it is worth reading.
+
+**Stop** is a graceful stop. Polaris closes the encoder's input and
+lets it finish, which is what puts the last fragment in the recording
+and gives the platform a clean disconnect, and only kills the process
+if it has not finished after ten seconds.
+
+Nothing starts by itself. There is no scheduled broadcast and nothing
+resumes after the host restarts. A broadcast puts your sky, your
+equipment list and your session out under your own name, and it begins
+when you press the button and at no other moment.
+
+## What it does not do
+
+- **No sound.** A silent audio track is sent because YouTube refuses a
+  video-only stream, but there is no commentary: that would mean a
+  microphone on the host, which is a different feature.
+- **Instagram limits a session to about an hour.** That is Instagram.
+- **Two frames a second reach the encoder.** For deep sky that is
+  generous, since the picture changes once per sub. For planetary,
+  where the video stream is running far faster, the broadcast is a
+  slideshow of it rather than the stream itself.
+- **Object types and constellation names stay in English**, because
+  they come from the catalogue. The rest of the card follows your
+  interface language.
+
+<!-- verified against src/NINA.Polaris/Services/Broadcast/ (the
+composer, the service and the argument builder) and
+src/NINA.Polaris/Endpoints/BroadcastEndpoints.cs -->

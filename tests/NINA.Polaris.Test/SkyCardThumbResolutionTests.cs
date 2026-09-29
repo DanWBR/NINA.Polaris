@@ -66,26 +66,20 @@ public class SkyCardThumbResolutionTests {
             Assert.Ignore($"dso-thumbs bundle not present at {ThumbDir}; skipping.");
     }
 
-    /// <summary>Mirror of app.js dsoThumbUrl()'s slug rule. Duplicated on purpose:
-    /// the JS has no test runner here, and pinning the RULE against the real
-    /// bundle is what catches "the bundle no longer has what the card asks for".
-    /// Keep in sync with dsoThumbUrl if that regex changes.</summary>
-    private static string SlugFor(string name) {
-        if (string.IsNullOrWhiteSpace(name)) return "";
-        var raw = name.Trim();
-        var sh = Regex.Match(raw, @"^sh\s*2\s*[-\s]?\s*0*(\d+)", RegexOptions.IgnoreCase);
-        if (!sh.Success) sh = Regex.Match(raw, @"^sharpless\s*[-\s]?\s*0*(\d+)", RegexOptions.IgnoreCase);
-        if (sh.Success) return "SH2" + sh.Groups[1].Value;
-        var m = Regex.Match(raw, @"^([A-Za-z]+)\s*0*(\d+[A-Za-z]?)");
-        return m.Success ? (m.Groups[1].Value + m.Groups[2].Value).ToUpperInvariant() : "";
-    }
+    /// <summary>The slug rule, which used to be copied out into this file. It
+    /// now lives in <see cref="DsoThumbSlug"/>, because the broadcast's object
+    /// card resolves the same cutouts on the host and a third copy of a regex
+    /// is a third thing to forget. Still mirrored by app.js dsoThumbUrl(), so
+    /// the SKY card can resolve its own thumbnail in the browser; keep the two
+    /// in step, and this file is what checks the rule against the real bundle.</summary>
+    private static string SlugFor(string name) => DsoThumbSlug.For(name);
 
     private static bool ThumbExists(string slug) =>
         !string.IsNullOrEmpty(slug) && File.Exists(Path.Combine(ThumbDir, slug + ".jpg"));
 
     /// <summary>THE bug, as the user hit it: click "Lagoon Nebula" / "Trifid
     /// Nebula" on the SKY map and get no photo. Both are common names with no
-    /// digits, so the slug regex alone yields nothing — the card must go through
+    /// digits, so the slug regex alone yields nothing, the card must go through
     /// the catalogue to reach a code whose JPEG is bundled.</summary>
     [Test]
     public async Task CommonNames_ResolveToABundledThumb() {
