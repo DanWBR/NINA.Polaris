@@ -55,6 +55,49 @@ public class BroadcastLayoutTests {
             Is.EqualTo((double)small.Card.Width / small.Width).Within(0.03));
     }
 
+    [TestCase(854, 480)]
+    [TestCase(1280, 720)]
+    [TestCase(1920, 1080)]
+    public void TheHeaderPushesTheCardDownInsteadOfSittingOnIt(int w, int h) {
+        var without = BroadcastLayout.For(w, h, hasHeader: false);
+        Assert.That(without.Header.IsEmpty, Is.True);
+        Assert.That(without.Card.Y, Is.EqualTo(without.Pad));
+
+        var with = BroadcastLayout.For(w, h, hasHeader: true);
+        Assert.That(with.Header.IsEmpty, Is.False);
+        Assert.That(with.Header.Width, Is.EqualTo(with.Banner.Width), "top and bottom strips line up");
+        Assert.That(with.Card.Y, Is.GreaterThanOrEqualTo(with.Header.Bottom),
+            "the card must start below the header, not under it");
+        Assert.That(with.Card.Bottom, Is.LessThanOrEqualTo(with.Banner.Y));
+        Assert.That(with.Card.Height, Is.LessThan(without.Card.Height), "and it gives up the room");
+        Assert.That(with.Card.Height, Is.GreaterThan(h / 3), "but not so much that it cannot hold a card");
+        Assert.That(with.HeaderTitleSize, Is.GreaterThan(with.HeaderRigSize),
+            "the title leads and the equipment is secondary");
+    }
+
+    [Test]
+    public void TheCutoutSlotIsWiderThanItIsTall() {
+        // A square cutout at card width takes half the panel, and with a
+        // header above there is no longer half a panel to spare.
+        var l = BroadcastLayout.For(1280, 720, hasHeader: true);
+        Assert.That(l.CardThumb.Width, Is.GreaterThan(l.CardThumb.Height));
+        Assert.That(l.CardThumb.Height, Is.LessThan(l.Card.Height / 2));
+    }
+
+    [Test]
+    public void ACutoutFillsItsSlotRatherThanLeavingBarsInsideThePanel() {
+        var slot = new BroadcastRect(10, 10, 200, 124);
+        var square = BroadcastLayout.Cover(1000, 1000, slot);
+        Assert.That(square.Width, Is.GreaterThanOrEqualTo(slot.Width));
+        Assert.That(square.Height, Is.GreaterThanOrEqualTo(slot.Height));
+        // Centred, so what the crop loses is the top and bottom in equal
+        // measure, and the cutouts are centred on the object.
+        Assert.That(square.X + square.Width / 2, Is.EqualTo(slot.X + slot.Width / 2).Within(1));
+        Assert.That(square.Y + square.Height / 2, Is.EqualTo(slot.Y + slot.Height / 2).Within(1));
+
+        Assert.That(BroadcastLayout.Cover(0, 0, slot).IsEmpty, Is.True);
+    }
+
     [Test]
     public void ARidiculousCanvasStillProducesAUsableLayout() {
         var tiny = BroadcastLayout.For(1, 1);
@@ -210,6 +253,33 @@ public class FrameComposerTests {
         var rgb = composer.Compose(null, Card(description: wall), null);
         var belowBanner = At(rgb, _layout.Card.X + 5, H - 2);
         Assert.That(belowBanner.R, Is.LessThan(30));
+    }
+
+    [Test]
+    public void TheHeaderIsDrawnAndTheCardMovesUnderIt() {
+        var layout = BroadcastLayout.For(W, H, hasHeader: true);
+        using var composer = new FrameComposer(layout, _fonts);
+        using var picture = Picture(1600, 900, 200);
+        var rgb = composer.Compose(picture, Card(), "M42 | 14 frames",
+            "Polaris Live Stream", "550 mm f/5.5 · ASI2600MC Pro · AM5");
+
+        var i = ((layout.Header.Y + layout.Header.Height / 2) * W + layout.Header.X + 5) * 3;
+        Assert.That(rgb[i], Is.LessThan(90), "the header panel is dark over the picture");
+
+        // Above the header there is still picture, so the strip is inset
+        // rather than glued to the edge where a player would overscan it.
+        var above = ((layout.Header.Y / 2) * W + W / 2) * 3;
+        Assert.That(rgb[above], Is.GreaterThan(150));
+    }
+
+    [Test]
+    public void AHeaderWithNothingToSayIsNotDrawn() {
+        var layout = BroadcastLayout.For(W, H, hasHeader: true);
+        using var composer = new FrameComposer(layout, _fonts);
+        using var picture = Picture(1600, 900, 200);
+        var rgb = composer.Compose(picture, null, null, null, null);
+        var i = ((layout.Header.Y + layout.Header.Height / 2) * W + layout.Header.X + 5) * 3;
+        Assert.That(rgb[i], Is.GreaterThan(150), "no panel over the picture");
     }
 
     [Test]

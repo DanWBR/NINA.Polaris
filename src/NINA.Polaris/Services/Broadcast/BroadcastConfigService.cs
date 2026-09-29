@@ -48,6 +48,12 @@ public sealed record BroadcastConfig {
     public string RtmpUrl { get; init; } = "";
     public string StreamKey { get; init; } = "";
     public string Quality { get; init; } = "medium";
+    /// <summary>The first line of the header strip. Empty means the default,
+    /// which the renderer supplies: the operator should not have to type
+    /// anything to get a broadcast with a name on it.</summary>
+    public string Title { get; init; } = "";
+    /// <summary>The header strip: the title, and the equipment under it.</summary>
+    public bool ShowHeader { get; init; } = true;
     public bool ShowObjectCard { get; init; } = true;
     public bool ShowBanner { get; init; } = true;
     /// <summary>Look descriptions up online for objects Polaris ships no text
@@ -69,7 +75,8 @@ public sealed record BroadcastConfig {
 public sealed record BroadcastConfigUpdate(
     string? Destination = null, string? RtmpUrl = null, string? StreamKey = null,
     string? Quality = null, bool? ShowObjectCard = null, bool? ShowBanner = null,
-    bool? FetchDescriptions = null, bool? RecordToDisk = null);
+    bool? FetchDescriptions = null, bool? RecordToDisk = null,
+    string? Title = null, bool? ShowHeader = null);
 
 /// <summary>
 /// The broadcast configuration, in its own file under the data dir rather than
@@ -152,6 +159,10 @@ public sealed class BroadcastConfigService {
                 // trailing newline with it often enough to be worth handling.
                 StreamKey = req.StreamKey == null ? cur.StreamKey : req.StreamKey.Trim(),
                 Quality = quality,
+                // Trimmed and capped: it is drawn into a video frame, and a
+                // title longer than the strip is ellipsised anyway.
+                Title = req.Title == null ? cur.Title : Cap(req.Title.Trim(), 80),
+                ShowHeader = req.ShowHeader ?? cur.ShowHeader,
                 ShowObjectCard = req.ShowObjectCard ?? cur.ShowObjectCard,
                 ShowBanner = req.ShowBanner ?? cur.ShowBanner,
                 FetchDescriptions = req.FetchDescriptions ?? cur.FetchDescriptions,
@@ -172,6 +183,8 @@ public sealed class BroadcastConfigService {
             rtmpUrl = c.RtmpUrl,
             hasStreamKey = c.HasStreamKey,
             quality = c.Quality,
+            title = c.Title,
+            showHeader = c.ShowHeader,
             showObjectCard = c.ShowObjectCard,
             showBanner = c.ShowBanner,
             fetchDescriptions = c.FetchDescriptions,
@@ -201,6 +214,8 @@ public sealed class BroadcastConfigService {
         return null;
     }
 
+    private static string Cap(string s, int max) => s.Length <= max ? s : s[..max].TrimEnd();
+
     private static bool IsRtmpUrl(string url) =>
         url.StartsWith("rtmp://", StringComparison.OrdinalIgnoreCase)
         || url.StartsWith("rtmps://", StringComparison.OrdinalIgnoreCase);
@@ -210,6 +225,8 @@ public sealed class BroadcastConfigService {
         RtmpUrl = s.RtmpUrl?.Trim() ?? "",
         StreamKey = s.StreamKey ?? "",
         Quality = BroadcastQuality.Parse(s.Quality).Id,
+        Title = s.Title?.Trim() ?? "",
+        ShowHeader = s.ShowHeader ?? true,
         ShowObjectCard = s.ShowObjectCard ?? true,
         ShowBanner = s.ShowBanner ?? true,
         FetchDescriptions = s.FetchDescriptions ?? true,
@@ -230,6 +247,7 @@ public sealed class BroadcastConfigService {
         var tmp = _path + ".tmp";
         File.WriteAllText(tmp, JsonSerializer.Serialize(new StoredConfig {
             Destination = c.Destination, RtmpUrl = c.RtmpUrl, StreamKey = c.StreamKey, Quality = c.Quality,
+            Title = c.Title, ShowHeader = c.ShowHeader,
             ShowObjectCard = c.ShowObjectCard, ShowBanner = c.ShowBanner,
             FetchDescriptions = c.FetchDescriptions, RecordToDisk = c.RecordToDisk
         }, _json));
@@ -247,6 +265,8 @@ public sealed class BroadcastConfigService {
         public string? RtmpUrl { get; set; }
         [JsonPropertyName("streamKey")] public string? StreamKey { get; set; }
         public string? Quality { get; set; }
+        public string? Title { get; set; }
+        public bool? ShowHeader { get; set; }
         public bool? ShowObjectCard { get; set; }
         public bool? ShowBanner { get; set; }
         public bool? FetchDescriptions { get; set; }

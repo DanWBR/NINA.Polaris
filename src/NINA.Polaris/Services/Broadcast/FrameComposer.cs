@@ -45,6 +45,7 @@ public sealed class FrameComposer : IDisposable {
     private readonly BroadcastLayout _l;
     private readonly BroadcastFonts _fonts;
     private readonly SKFont _title, _subtitle, _chip, _body, _banner, _credit;
+    private readonly SKFont _headerTitle, _headerRig;
     private readonly SKBitmap _canvasBitmap;
     private readonly byte[] _rgb;
 
@@ -57,7 +58,10 @@ public sealed class FrameComposer : IDisposable {
         _body = new SKFont(fonts.Regular, layout.BodySize);
         _banner = new SKFont(fonts.Bold, layout.BannerSize);
         _credit = new SKFont(fonts.Regular, layout.CreditSize);
-        foreach (var f in new[] { _title, _subtitle, _chip, _body, _banner, _credit }) {
+        _headerTitle = new SKFont(fonts.Bold, layout.HeaderTitleSize);
+        _headerRig = new SKFont(fonts.Regular, layout.HeaderRigSize);
+        foreach (var f in new[] { _title, _subtitle, _chip, _body, _banner, _credit,
+                                  _headerTitle, _headerRig }) {
             f.Edging = SKFontEdging.SubpixelAntialias;
             f.Subpixel = true;
         }
@@ -71,11 +75,17 @@ public sealed class FrameComposer : IDisposable {
     /// reading on stdin. The buffer is reused between frames: copy it if you
     /// intend to keep it.
     /// </summary>
-    public byte[] Compose(SKBitmap? picture, ObjectCard? card, string? bannerText) {
+    /// <param name="headerTitle">What this broadcast is, on the top strip.</param>
+    /// <param name="headerRig">The equipment, under the title. Static for the
+    /// whole session, which is why it sits at the top and not in the banner
+    /// with the numbers that change.</param>
+    public byte[] Compose(SKBitmap? picture, ObjectCard? card, string? bannerText,
+                          string? headerTitle = null, string? headerRig = null) {
         using var surface = new SKCanvas(_canvasBitmap);
         surface.Clear(new SKColor(0x05, 0x07, 0x0C));
 
         if (picture != null) DrawPicture(surface, picture);
+        if (!_l.Header.IsEmpty) DrawHeader(surface, headerTitle, headerRig);
         if (card != null) DrawCard(surface, card);
         if (!string.IsNullOrWhiteSpace(bannerText)) DrawBanner(surface, bannerText);
         surface.Flush();
@@ -140,9 +150,10 @@ public sealed class FrameComposer : IDisposable {
             using (var clip = new SKPaint { IsAntialias = true }) {
                 c.Save();
                 c.ClipRoundRect(new SKRoundRect(dst, radius / 2), antialias: true);
-                // Cutouts are square and so is the slot, but a pack entry that
-                // is not gets fitted rather than stretched out of shape.
-                var fitted = BroadcastLayout.Letterbox(thumb.Width, thumb.Height,
+                // Filled, not fitted: a letterbox here would put bars inside
+                // the panel. The cutouts are centred on the object, so what
+                // the crop loses is empty sky.
+                var fitted = BroadcastLayout.Cover(thumb.Width, thumb.Height,
                     new BroadcastRect((int)dst.Left, (int)dst.Top, (int)dst.Width, (int)dst.Height));
                 using var thumbImage = SKImage.FromBitmap(thumb);
                 c.DrawImage(thumbImage, new SKRect(fitted.X, fitted.Y, fitted.Right, fitted.Bottom),
@@ -168,14 +179,54 @@ public sealed class FrameComposer : IDisposable {
         } catch { return null; }
     }
 
+    // --- The header -------------------------------------------------
+
+    /// <summary>
+    /// The top strip: the name of the broadcast, and the equipment under it.
+    ///
+    /// <para>The equipment belongs here and not in the bottom banner because
+    /// it does not change. The banner is where the numbers that move live, and
+    /// mixing a fixed string of gear names into it makes the part that is
+    /// actually updating harder to find. Someone arriving mid stream reads the
+    /// top once and the bottom continuously.</para>
+    /// </summary>
+    private void DrawHeader(SKCanvas c, string? title, string? rig) {
+        var r = _l.Header;
+        if (string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(rig)) return;
+        Panel(c, r, Math.Max(3, r.Height * 0.16f));
+
+        var padX = r.Height * 0.30f;
+        var padY = r.Height * 0.20f;
+        var y = r.Y + padY;
+        var maxW = r.Width - padX * 2;
+
+        if (!string.IsNullOrWhiteSpace(title)) {
+            var m = _headerTitle.Metrics;
+            using var paint = new SKPaint { Color = Ink, IsAntialias = true };
+            c.DrawText(Fit(title!, _headerTitle, maxW), r.X + padX, y - m.Ascent, _headerTitle, paint);
+            y += m.Descent - m.Ascent + m.Leading;
+        }
+        if (!string.IsNullOrWhiteSpace(rig)) {
+            var m = _headerRig.Metrics;
+            using var paint = new SKPaint { Color = Dim, IsAntialias = true };
+            c.DrawText(Fit(rig!, _headerRig, maxW), r.X + padX, y - m.Ascent, _headerRig, paint);
+        }
+    }
+
+    private static void Panel(SKCanvas c, BroadcastRect r, float radius) {
+        var rect = new SKRect(r.X, r.Y, r.Right, r.Bottom);
+        using (var fill = new SKPaint { Color = PanelFill, IsAntialias = true })
+            c.DrawRoundRect(rect, radius, radius, fill);
+        using (var edge = new SKPaint {
+            Color = PanelEdge, IsAntialias = true, Style = SKPaintStyle.Stroke, StrokeWidth = 1
+        }) c.DrawRoundRect(rect, radius, radius, edge);
+    }
+
     // --- The banner -------------------------------------------------
 
     private void DrawBanner(SKCanvas c, string text) {
         var r = _l.Banner;
-        var rect = new SKRect(r.X, r.Y, r.Right, r.Bottom);
-        var radius = Math.Max(3, r.Height * 0.22f);
-        using (var fill = new SKPaint { Color = PanelFill, IsAntialias = true })
-            c.DrawRoundRect(rect, radius, radius, fill);
+        Panel(c, r, Math.Max(3, r.Height * 0.22f));
 
         var padX = r.Height * 0.45f;
         var line = Fit(text, _banner, r.Width - padX * 2);

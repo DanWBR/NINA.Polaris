@@ -62,10 +62,21 @@ public sealed record BroadcastLayout {
     /// <summary>The strip along the bottom holding the session numbers.</summary>
     public required BroadcastRect Banner { get; init; }
 
+    /// <summary>The strip along the top: the name of the broadcast on one
+    /// line, the equipment on the next. Empty when the broadcast has no
+    /// header, and the card then starts at the top margin instead.</summary>
+    public required BroadcastRect Header { get; init; }
+    public required float HeaderTitleSize { get; init; }
+    public required float HeaderRigSize { get; init; }
+
     /// <summary>The widest the card text may run before it has to wrap.</summary>
     public int CardTextWidth => Card.Width - CardInset * 2;
 
-    public static BroadcastLayout For(int width, int height) {
+    /// <param name="hasHeader">Whether to reserve the top strip. Decided once
+    /// when the broadcast starts rather than per frame: a card that jumped
+    /// down the screen the moment a rig name appeared would be worse than
+    /// either arrangement on its own.</param>
+    public static BroadcastLayout For(int width, int height, bool hasHeader = false) {
         var w = Math.Max(160, width);
         var h = Math.Max(120, height);
         var pad = Math.Max(6, w / 64);
@@ -75,17 +86,32 @@ public sealed record BroadcastLayout {
         // picture. Clamped so it stays sane at both ends of the range.
         var cardW = Math.Clamp((int)(w * 0.26), 200, 460);
         var inset = Math.Max(6, cardW / 14);
-        var thumb = new BroadcastRect(w - pad - cardW + inset, pad + inset,
-                                      cardW - inset * 2, cardW - inset * 2);
 
         var bannerH = Math.Max(24, h / 11);
         var banner = new BroadcastRect(pad, h - pad - bannerH, w - pad * 2, bannerH);
 
+        // Two lines: what the broadcast is, then what it is being made with.
+        // Full width, mirroring the banner, so the frame reads as a picture
+        // with a strip top and bottom rather than as furniture scattered over
+        // it.
+        var headerH = hasHeader ? Math.Max(30, (int)(h / 7.6)) : 0;
+        var header = hasHeader
+            ? new BroadcastRect(pad, pad, w - pad * 2, headerH)
+            : new BroadcastRect(pad, pad, 0, 0);
+
         // The card's height is set by its content, which only the renderer
-        // knows once the text is wrapped. This is the room it may use: from the
-        // top margin down to the banner.
-        var cardMaxH = banner.Y - pad * 2;
-        var card = new BroadcastRect(w - pad - cardW, pad, cardW, cardMaxH);
+        // knows once the text is wrapped. This is the room it may use: below
+        // the header, down to the banner.
+        var cardTop = hasHeader ? header.Bottom + pad : pad;
+        var cardMaxH = banner.Y - pad - cardTop;
+        var card = new BroadcastRect(w - pad - cardW, cardTop, cardW, cardMaxH);
+
+        // The cutout is a wide crop, not the full square the pack ships. A
+        // square at card width takes half the panel, and with a header above
+        // there is no longer half a panel to spare. The middle of a DSS cutout
+        // is the part worth showing anyway.
+        var thumbW = cardW - inset * 2;
+        var thumb = new BroadcastRect(card.X + inset, card.Y + inset, thumbW, (int)(thumbW * 0.62));
 
         return new BroadcastLayout {
             Width = w,
@@ -93,6 +119,9 @@ public sealed record BroadcastLayout {
             Pad = pad,
             Card = card,
             Banner = banner,
+            Header = header,
+            HeaderTitleSize = Math.Max(12f, headerH * 0.34f),
+            HeaderRigSize = Math.Max(9f, headerH * 0.23f),
             CardInset = inset,
             CardThumb = thumb,
             TitleSize = Math.Max(11f, cardW / 11f),
@@ -112,6 +141,24 @@ public sealed record BroadcastLayout {
     /// sensor almost never is; cropping to fill would cut the top and bottom
     /// off every image, which on a tall galaxy is the galaxy.</para>
     /// </summary>
+    /// <summary>
+    /// The opposite of <see cref="Letterbox"/>: scale a picture until it
+    /// covers <paramref name="into"/> entirely and centre it, letting the
+    /// overflow fall outside. The caller has to clip.
+    ///
+    /// <para>For the cutout on the card, where a letterbox would leave bars
+    /// inside the panel. Cropping is safe there and not on the main picture:
+    /// the cutouts are centred on the object by construction, so the part that
+    /// goes over the edge is empty sky.</para>
+    /// </summary>
+    public static BroadcastRect Cover(int srcW, int srcH, BroadcastRect into) {
+        if (srcW <= 0 || srcH <= 0 || into.IsEmpty) return new BroadcastRect(into.X, into.Y, 0, 0);
+        var scale = Math.Max((double)into.Width / srcW, (double)into.Height / srcH);
+        var w = Math.Max(1, (int)Math.Ceiling(srcW * scale));
+        var h = Math.Max(1, (int)Math.Ceiling(srcH * scale));
+        return new BroadcastRect(into.X + (into.Width - w) / 2, into.Y + (into.Height - h) / 2, w, h);
+    }
+
     public static BroadcastRect Letterbox(int srcW, int srcH, BroadcastRect into) {
         if (srcW <= 0 || srcH <= 0 || into.IsEmpty) return new BroadcastRect(into.X, into.Y, 0, 0);
         var scale = Math.Min((double)into.Width / srcW, (double)into.Height / srcH);
