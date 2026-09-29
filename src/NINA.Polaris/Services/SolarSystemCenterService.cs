@@ -19,7 +19,7 @@ using NINA.Image.Interfaces;
 namespace NINA.Polaris.Services;
 
 /// <summary>
-/// "Center on Sun / Moon / planet" orchestrator — the <b>solve-near-and-offset</b>
+/// "Center on Sun / Moon / planet" orchestrator, the <b>solve-near-and-offset</b>
 /// strategy (Mode A) for solar-system objects that plate solving can't handle
 /// directly.
 ///
@@ -35,7 +35,7 @@ namespace NINA.Polaris.Services;
 ///     <c>CosineKitty</c> ephemeris (J2000 frame, to match the catalog/solver
 ///     epoch the rest of the slew-and-center pipeline already uses);</item>
 ///   <item>slews a few degrees off to a <b>nearby star field</b> and runs the
-///     normal <see cref="SlewCenterService"/> there — that solve + sync corrects
+///     normal <see cref="SlewCenterService"/> there, that solve + sync corrects
 ///     the mount's pointing model right next to the target;</item>
 ///   <item>recomputes the ephemeris (the Moon moves ~0.5°/h, so re-snap right
 ///     before the final hop) and does a precise relative GoTo onto the object.</item>
@@ -257,7 +257,7 @@ public class SolarSystemCenterJob {
     public double OffsetDeg { get; set; }
     public double ToleranceArcsec { get; set; }
     public SolarSystemCenterState State { get; set; }
-    /// <summary>Object's apparent position (J2000) — updated to the fresh snapshot
+    /// <summary>Object's apparent position (J2000), updated to the fresh snapshot
     /// right before the final slew.</summary>
     public double TargetRa { get; set; }
     public double TargetDec { get; set; }

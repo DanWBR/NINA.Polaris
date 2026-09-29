@@ -19,16 +19,16 @@ using NINA.Image.ImageData;
 namespace NINA.Polaris.Services.Studio;
 
 /// <summary>
-/// Star colour/fringe repair for OSC frames — fixes the blue/magenta + dark
+/// Star colour/fringe repair for OSC frames, fixes the blue/magenta + dark
 /// one-sided fringe on bright stars that SVBony (and similar) cameras leave from
 /// their debayer/CFA, which channel alignment alone can't remove. Meant to run
 /// FIRST on an SVBony stack, before background extraction.
 ///
 /// Two stages (both gated by the aggressiveness 0..1):
-///   1. CHANNEL ALIGN — measure the per-channel sub-pixel centroid offset over
+///   1. CHANNEL ALIGN, measure the per-channel sub-pixel centroid offset over
 ///      many bright stars (median R-vs-G and B-vs-G) and shift R/B onto G. Fixes
 ///      the field-wide lateral colour offset (atmospheric dispersion + CFA).
-///   2. RADIAL STAR SYMMETRY — a star is radially symmetric, the fringe is on ONE
+///   2. RADIAL STAR SYMMETRY, a star is radially symmetric, the fringe is on ONE
 ///      side. Per bright star, per radius ring, take the MEDIAN colour (the clean
 ///      sides dominate) and rebuild each pixel's colour from it; FILL the dark
 ///      side up to the per-ring median luminance (never lower the core, never

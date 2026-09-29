@@ -38,7 +38,7 @@ namespace NINA.Polaris.Services;
 ///
 /// Secondary signal: a >30% drop in detected star count, but ONLY
 /// when the HFR is also elevated above baseline. A star-count drop on
-/// its own does not fire — passing clouds / poor transparency dim out
+/// its own does not fire, passing clouds / poor transparency dim out
 /// the faint stars without affecting focus, so the HFR of the bright
 /// stars that survive stays flat. Real focus drift bloats every star,
 /// so the count drop comes paired with rising HFR; that pairing is
@@ -98,8 +98,8 @@ public class RefocusSuggestionService : IDisposable {
     /// treated as a focus problem when the rolling-mean HFR is also at
     /// least this fraction above baseline. Below it the drop is treated
     /// as poor transparency (passing clouds) and the suggestion is
-    /// suppressed: clouds dim out the faint stars — collapsing the
-    /// count — without touching focus, so the HFR of the bright stars
+    /// suppressed: clouds dim out the faint stars, collapsing the
+    /// count, without touching focus, so the HFR of the bright stars
     /// that survive stays flat, whereas real focus drift bloats every
     /// star and pushes HFR up alongside the count drop. 1.10 = HFR must
     /// be ≥10% degraded (comfortably above stable seeing jitter, which
@@ -386,8 +386,8 @@ public class RefocusSuggestionService : IDisposable {
         //      A star-count drop on its own is ambiguous and was a
         //      source of false alarms: passing clouds / poor
         //      transparency dim out the faint stars (the count
-        //      collapses) while focus — and so the HFR of the bright
-        //      stars that survive — is untouched. Real focus drift
+        //      collapses) while focus, and so the HFR of the bright
+        //      stars that survive, is untouched. Real focus drift
         //      bloats every star, pushing HFR up *together with* the
         //      count drop. So we only fire here when HFR is also
         //      meaningfully above baseline; a star crash with flat HFR
@@ -423,7 +423,7 @@ public class RefocusSuggestionService : IDisposable {
             fireToast = false;
             toastReason = null;
         }
-        _logger.LogInformation("RefocusSuggestion: firing — {Reason}", reason);
+        _logger.LogInformation("RefocusSuggestion: firing, {Reason}", reason);
         return true;
     }
 

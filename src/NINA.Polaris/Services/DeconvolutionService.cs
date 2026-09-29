@@ -21,8 +21,8 @@ namespace NINA.Polaris.Services;
 /// <summary>
 /// Classical, measured-PSF deconvolution on a FITS file (server-side).
 ///
-/// Unlike the AI / GraXpert deconvolution — which runs in the browser with a
-/// single guessed FWHM — this measures the frame's actual PSF from its own
+/// Unlike the AI / GraXpert deconvolution, which runs in the browser with a
+/// single guessed FWHM, this measures the frame's actual PSF from its own
 /// stars (<see cref="PsfExtractor"/>) and runs Richardson-Lucy with that exact
 /// kernel (<see cref="RichardsonLucyDeconvolution"/>), TV-regularized, with a
 /// background support mask and a flux-conservation guard. The PSF is measured
@@ -57,7 +57,7 @@ public class DeconvolutionService {
     /// <summary>
     /// Measure the PSF, noise model, and star positions for a frame so the
     /// browser can run the RL iteration loop locally (avoiding long server-side
-    /// blocking). Only global-PSF mode is supported here — field mode stays
+    /// blocking). Only global-PSF mode is supported here, field mode stays
     /// server-side (multiple kernels per tile are not worth the JS complexity).
     /// </summary>
     /// <summary>
@@ -205,7 +205,7 @@ public class DeconvolutionService {
             "Not enough clean stars to measure the PSF (need ≥ 8 unsaturated, " +
             "isolated, round stars). Use AI deconvolution for star-poor frames.";
 
-        // Measure the PSF — a single global one, or a per-region field.
+        // Measure the PSF, a single global one, or a per-region field.
         PsfModel? psf;
         // Non-null exactly when `field` is set. Every read below tests
         // psfField rather than `field`, so the two cannot drift apart.
@@ -225,8 +225,8 @@ public class DeconvolutionService {
 
         // Measured photon-transfer noise map (σ per pixel) from luminance. It
         // drives damped Richardson-Lucy (White 1994) so the iteration doesn't
-        // amplify noise or ring around stars — the main cause of the dark halos
-        // vanilla RL produces — and optionally the noise-adaptive support mask.
+        // amplify noise or ring around stars, the main cause of the dark halos
+        // vanilla RL produces, and optionally the noise-adaptive support mask.
         var (bg, noise) = PsfExtractor.EstimateBackgroundNoise(lum);
         var sigmaMap = NoiseMap.Estimate(lum, w, h, out _);
         const double dampingThreshold = 2.5;  // σ units
@@ -250,11 +250,11 @@ public class DeconvolutionService {
         // the diffuse signal (nebula/galaxy) is deconvolved. Eliminates dark
         // rings on stars caused by PSF residuals, at the cost of not sharpening
         // the stars themselves. When off, RL runs on the full frame (stars +
-        // diffuse) — correct if colour fringing / debayer artefacts are fixed
+        // diffuse), correct if colour fringing / debayer artefacts are fixed
         // upstream, as those are what RL amplifies into the visible dark crescent.
         if (protectStars) try {
             // MaxStarSize bounded so genuinely extended structure (nebula /
-            // galaxy) is NOT classified as a star and protected — big saturated
+            // galaxy) is NOT classified as a star and protected, big saturated
             // star cores are still caught here, and the saturation guard below
             // is the fallback for anything larger.
             var det = new StarDetector {
@@ -282,7 +282,7 @@ public class DeconvolutionService {
 
         // Saturation guard: belt-and-braces over any clipped cores the star
         // detector might miss. Only engage when the frame actually reaches near
-        // the 16-bit ceiling — i.e. there IS clipping.
+        // the 16-bit ceiling, i.e. there IS clipping.
         const double ceiling = 65535.0;
         ushort maxLum = 0;
         for (long i = 0; i < plane; i++) if (lum[i] > maxLum) maxLum = lum[i];
@@ -294,7 +294,7 @@ public class DeconvolutionService {
             RichardsonLucyDeconvolution.ApplySaturationGuard(mask, lumF, w, h, satLevel, satDilate, feather);
         }
 
-        // Everything runs through the tiled field engine — even the "global"
+        // Everything runs through the tiled field engine, even the "global"
         // (single measured PSF) path uses a uniform PSF over a tile grid so the
         // FFT works on bounded ~512 px tiles (low, predictable memory on an SBC)
         // and reports per-tile progress. FFT keeps the per-iteration cost

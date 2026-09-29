@@ -26,7 +26,7 @@ namespace NINA.Polaris.Test;
 ///  * <see cref="QnnInferenceService.QnnBinaryFor"/> resolves the arch-tagged
 ///    context binary in the parallel <c>qnn/</c> subtree, preferring fp16.
 ///  * The record/replay runners (<see cref="RecordingTileRunner"/> /
-///    <see cref="ReplayingTileRunner"/>) behave correctly, and — the key one —
+///    <see cref="ReplayingTileRunner"/>) behave correctly, and, the key one,
 ///    a record→replay round-trip reproduces EXACTLY what running the shared
 ///    <see cref="RknnPipelines"/> directly produces. That faithfulness is what
 ///    lets the QNN lane batch one <c>qnn-net-run</c> per image while reusing the
@@ -233,7 +233,7 @@ public class QnnLaneTests {
         Assert.That(rec.Inputs[0][0], Is.EqualTo(1f), "must capture a defensive copy");
         rec.RunTile(new float[] { 5, 6 }, new float[] { 0.9f, 0.9f });
         Assert.That(rec.Params, Is.EqualTo(new float[] { 0.3f, 0.4f }),
-            "params are constant across tiles — captured once from the first call");
+            "params are constant across tiles, captured once from the first call");
     }
 
     [Test]

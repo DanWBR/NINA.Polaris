@@ -69,7 +69,7 @@ public static class FITSReader {
             Width = width,
             Height = height,
             // 8-bit sources are promoted into the 16-bit range in
-            // ReadPixelData (see case 8), so report 16 here too — otherwise
+            // ReadPixelData (see case 8), so report 16 here too, otherwise
             // a RAW8 frame saved as a 16-bit FITS reloads as BitDepth=8 and
             // the 16-bit stretch renders it near-black.
             BitDepth = Math.Abs(bitpix) <= 8 ? 16 : (Math.Abs(bitpix) > 16 ? 16 : Math.Abs(bitpix)),
@@ -128,7 +128,7 @@ public static class FITSReader {
     private static ushort[] ReadPixelData(Stream stream, int width, int height, int bitpix, int bzero, double bscale) {
         long pixelCount = (long)width * height;
         // A 0x0 (or negative-dimension) image means the source FITS had no
-        // NAXIS1/NAXIS2 — e.g. an empty or malformed BLOB handed back by an
+        // NAXIS1/NAXIS2, e.g. an empty or malformed BLOB handed back by an
         // INDI driver during a video->still transition. Bail out with a
         // clear, catchable error instead of letting Partitioner.Create(0, 0)
         // throw the cryptic "toExclusive ('0') must be greater than '0'".
@@ -181,7 +181,7 @@ public static class FITSReader {
                                              int bitpix, int bzero, double bscale) {
         switch (bitpix) {
             case 8:
-                // 8-bit source (e.g. an INDI driver left in RAW8 — the
+                // 8-bit source (e.g. an INDI driver left in RAW8, the
                 // SVBONY SV405CC defaults to it). Promote into the TOP 8
                 // bits of the 16-bit range (value << 8) so the rest of the
                 // 16-bit pipeline (auto-stretch, stacking, FITS save) sees a
@@ -203,7 +203,7 @@ public static class FITSReader {
                 //   (b) some drivers write raw *unsigned* samples with BZERO=0
                 //       (or omit it). Interpreting those as signed pushes every
                 //       value > 32767 negative, and a (ushort) cast of a
-                //       negative double is 0 — so saturated star cores render
+                //       negative double is 0, so saturated star cores render
                 //       BLACK. Treat BZERO=0,BSCALE=1 as unsigned instead.
                 // Clamp on every path (case 8 and case 32 already do); the old
                 // 16-bit branch was the only one relying on integer wraparound,

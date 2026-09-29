@@ -144,7 +144,7 @@ public class BahtinovAnalyzerTests {
         var px = new ushort[w * h];
         for (int i = 0; i < px.Length; i++) px[i] = BackgroundLevel;
         // Add a 1px bright core so StarDetector locks on. Bigger
-        // cores break the rho refinement — at the centre of the
+        // cores break the rho refinement, at the centre of the
         // ROI the line integration always wins regardless of the
         // spike's perpendicular offset because it crosses the
         // bright core. Real Bahtinov masks don't show a separate

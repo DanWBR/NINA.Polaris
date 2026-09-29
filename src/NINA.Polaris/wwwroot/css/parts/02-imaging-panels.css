@@ -94,7 +94,7 @@
 }
 .live-pane > .quick-controls,
 .preview-pane > .quick-controls {
-    /* Floating translucent sidebar — overlays the canvas on the right
+    /* Floating translucent sidebar, overlays the canvas on the right
        so the bitmap underneath spans the full pane width whether the
        panel is open OR collapsed. Backdrop blur + 88% opacity keep the
        text legible against bright nebulae / wide-field star fields
@@ -114,7 +114,7 @@
        handle that lives at the inside-left edge of the panel
        (28px wide handle + 8px gap before content starts). */
     padding: 12px 12px 12px 44px;
-    /* The panel itself no longer scrolls — an inner .quick-controls-scroll
+    /* The panel itself no longer scrolls, an inner .quick-controls-scroll
        wrapper does. This keeps the absolutely-positioned toggle handle sized
        to the panel's full visible height; it used to scroll away with the
        content, so the grab bar didn't reach the bottom when the panel
@@ -157,7 +157,7 @@
 .preview-pane.frame-controls-hidden > .preview-area {
     margin-right: 0;
 }
-/* AUTORUN + Flat Wizard keep the old in-flow sidebar — they're
+/* AUTORUN + Flat Wizard keep the old in-flow sidebar, they're
    list-driven, not bitmap-driven, so a translucent overlay would
    just hide content with no upside. */
 .autorun-pane > .quick-controls,
@@ -186,7 +186,7 @@
        vertical position. The .quick-controls panel has padding-left:
        44px to reserve room so this handle never overlaps content.
        When the panel is collapsed (transform translateX(100% - 28px)),
-       only its leftmost 28 px stays visible — exactly where this
+       only its leftmost 28 px stays visible, exactly where this
        handle sits. */
     position: absolute;
     top: 0;
@@ -450,7 +450,7 @@
 }
 /* The filled-disc + brighter-track treatment that rescued this compact
    ring now lives on the base .polaris-shutter rules (see the shutter
-   section below) — all shutters share it. */
+   section below), all shutters share it. */
 /* No counter under the compact AUTORUN ring: the absolute-positioned
    countdown (bottom:-28px) bled over the "+ Add" button right below the
    run bar, in red while running (field report). The run-meta text next
@@ -477,7 +477,7 @@
 }
 /* Keep all three columns down to tablet-landscape widths; only stack on
    genuinely narrow screens. When it DOES stack, the run-control sidebar
-   must go full-width too — otherwise it keeps its fixed 260px width and
+   must go full-width too, otherwise it keeps its fixed 260px width and
    wraps to a lonely box below the preview (the "run button ended up under
    the preview" bug). */
 @media (max-width: 820px) {
@@ -490,7 +490,7 @@
            unreachable. */
         overflow-y: auto;
     }
-    /* Don't trap the rows in their own nested scrollers when stacked —
+    /* Don't trap the rows in their own nested scrollers when stacked,
        let them grow to content height and the pane scroll as one column. */
     .autorun-pane > .autorun-list-col,
     .autorun-pane > .autorun-cards-col {
@@ -508,7 +508,7 @@
 .live-pane > .quick-controls .control-row,
 .preview-pane > .quick-controls .control-row {
     /* Stack control items vertically inside the narrow 320px sidebar
-       so each row spans the full panel width — looks tidy and gives
+       so each row spans the full panel width, looks tidy and gives
        the inputs / preset bars proper breathing room instead of the
        jagged wrap the row-direction layout produces here. */
     display: flex;
@@ -543,7 +543,7 @@
     margin-left: auto;
     min-width: 0;
 }
-/* Preset button bars (ZWO L/M/H gain, BIN1..4) — make every button
+/* Preset button bars (ZWO L/M/H gain, BIN1..4), make every button
    share the row equally so they justify across the full sidebar. */
 .live-pane > .quick-controls .control-row > .zwo-gain-presets,
 .live-pane > .quick-controls .control-row > .bin-presets,
@@ -558,7 +558,7 @@
 .preview-pane > .quick-controls .control-row > .zwo-gain-presets > button,
 .preview-pane > .quick-controls .control-row > .bin-presets > button {
     /* Override the compact 2-3px padding / 10px font-size of the global
-       .zwo-gain-preset and .bin-preset rules — these buttons sit alone
+       .zwo-gain-preset and .bin-preset rules, these buttons sit alone
        on their own row in the sidebar with empty vertical space below,
        so a taller, more touch-friendly target reads better. */
     flex: 1;
@@ -573,12 +573,12 @@
 /* Exposure + Gain/ISO on a single flex row. The Exposure field (the
    first label) grows to take the leftover width so its input stretches
    toward the Gain field; Gain stays compact on the right with its "?"
-   help. Flexbox (not grid) so the growth is deterministic — a grid item
+   help. Flexbox (not grid) so the growth is deterministic, a grid item
    would not reliably stretch its inner input here. */
 /* Capture bar exposure/gain/offset controls, laid out as a real HTML
    <table>: 3 columns (label 50% · input 50% · help auto), one <tr> per
    field (Exp / Gain / Offset). A plain table gives deterministic column
-   widths across rows in every WebView — no grid/subgrid/display:contents
+   widths across rows in every WebView, no grid/subgrid/display:contents
    quirks. Column widths come from the inline <colgroup>. */
 .exp-gain-grid {
     width: 100%;
@@ -723,7 +723,7 @@
     }
 }
 
-/* SHUT-1: Polaris Shutter — ASIAIR/StellaVita-style circular capture
+/* SHUT-1: Polaris Shutter, ASIAIR/StellaVita-style circular capture
    button. Reused across LIVE, PREVIEW, FOCUS Manual, VIDEO Capture,
    AUTORUN. SVG ring shows exposure progress, inner button morphs
    between a solid circle (idle) and a square STOP icon (active).
@@ -830,7 +830,7 @@ button,
     transition: stroke-dashoffset 0.1s linear, stroke 0.2s ease;
 }
 .polaris-shutter.shutter-active .shutter-progress {
-    /* Red while capturing — matches the STOP semantic of the inner
+    /* Red while capturing, matches the STOP semantic of the inner
        icon, and matches the red REC chip convention. */
     stroke: #ef4444;
 }
@@ -864,7 +864,7 @@ button,
     transition: stroke-dashoffset 0.2s linear;
 }
 /* Filled disc behind every shutter icon (::before, no markup needed):
-   blue gradient idle, red while running, amber while arming — the
+   blue gradient idle, red while running, amber while arming, the
    look debuted on the compact AUTORUN ring and was promoted to all
    shutters (user request). inset 15% keeps the disc clear of both
    the outer (r=46) and the AUTORUN inner exposure (r=38) SVG rings;
@@ -914,7 +914,7 @@ button,
     left: 50%;
     transform: translateX(-50%);
     /* Bumped from 12px → 17px. User reported the previous size was
-       hard to read at a glance during long exposures — the counter
+       hard to read at a glance during long exposures, the counter
        is the primary 'how much time left' signal so it should pop. */
     font-size: 17px;
     font-weight: 600;
@@ -943,7 +943,7 @@ button,
     animation: shutter-spin 1.4s linear infinite;
 }
 .polaris-shutter.shutter-indeterminate .shutter-progress {
-    stroke-dashoffset: 217;   /* 75% of 289 — leaves a 25% arc lit */
+    stroke-dashoffset: 217;   /* 75% of 289, leaves a 25% arc lit */
     transition: stroke 0.2s ease;
 }
 
@@ -1347,7 +1347,7 @@ button,
     align-items: stretch;
     gap: 10px;
     /* 84px fitted Auto+Zoom; the Sat slider added a third action row and
-       overflowed the LIVE overlay (field report) — grown to fit. */
+       overflowed the LIVE overlay (field report), grown to fit. */
     height: 106px;
     flex: 0 0 auto;
     padding: 6px 12px;
@@ -1472,7 +1472,7 @@ button,
        targets rendered as "-1(" because the trailing digit fell behind
        the spinner.
        Tap-friendly height: ~38 px (9 px vertical padding + 14 px font
-       + 2 px border) — comfortable on phones / tablets without feeling
+       + 2 px border), comfortable on phones / tablets without feeling
        oversized on desktop. */
     width: 80%;
     max-width: 220px;
@@ -1555,7 +1555,7 @@ input[data-exposure-presets] {
     border-color: var(--accent);
 }
 
-/* Generic `.input` (used by the prompt-style modals — STUDIO integration /
+/* Generic `.input` (used by the prompt-style modals, STUDIO integration /
    calibration method picker, folder/rename/password text fields). Without
    this the bare class fell back to the OS combobox/field chrome (white bg,
    no border-radius) that clashes with the dark theme. Match the same look
@@ -1599,7 +1599,7 @@ select.input-sm {
        width 50% so the chevron + the longest option text both fit. */
     width: 90px;
     /* The 220px cap on .input-sm exists to stop NUMERIC inputs from
-       blowing out a row; dropdowns are different — their option text
+       blowing out a row; dropdowns are different, their option text
        varies and a hard cap truncates it. Let selects grow to fill
        whatever width their (flex) container gives them instead. */
     max-width: none;
@@ -1667,7 +1667,7 @@ label select.input-sm.select-compact {
     transition: background var(--transition), border-color var(--transition);
     white-space: nowrap;
     /* <a class="btn"> would otherwise inherit the browser default
-       underline + link colour — kills the button look (see the
+       underline + link colour, kills the button look (see the
        TLS-A2 download links). Force-strip both at the .btn level so
        any future link-as-button stays consistent. */
     text-decoration: none;
@@ -1985,7 +1985,7 @@ label select.input-sm.select-compact {
 .indi-props-subtab .indi-prop-rows {
     /* One element per visual row. Flex column wrapper, each element
        is a flex row (label | input | optional Set). Was a 3-column
-       grid before — when a property had many ro elements (no Set
+       grid before, when a property had many ro elements (no Set
        button rendered), they packed multiple elements per row
        because the grid kept flowing children into available cells.
        Now layout is element-count-independent. */

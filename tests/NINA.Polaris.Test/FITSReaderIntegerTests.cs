@@ -26,7 +26,7 @@ namespace NINA.Polaris.Test;
 /// The regression these guard against: field report of an SV405CC where
 /// saturated star cores rendered BLACK. The 16-bit branch of
 /// <see cref="FITSReader.DecodeIntegerPixels"/> used to interpret every sample
-/// as signed and cast <c>(ushort)(val*bscale+bzero)</c> — with BZERO=0 that
+/// as signed and cast <c>(ushort)(val*bscale+bzero)</c>, with BZERO=0 that
 /// sends any value &gt; 32767 negative, and the double→ushort cast of a negative
 /// number is 0, i.e. the brightest pixels flip to black. The branch also lacked
 /// the <c>Math.Clamp</c> the 8- and 32-bit branches already had.
@@ -74,7 +74,7 @@ public class FITSReaderIntegerTests {
     [Test]
     public void Read_Int16_RawUnsigned_MissingBzeroCard_TreatedAsUnsigned() {
         // BZERO absent entirely (GetIntHeader defaults to 0) behaves like the
-        // BZERO=0 case — the brightest pixels must still be white.
+        // BZERO=0 case, the brightest pixels must still be white.
         var samples = new ushort[] { 0, 65535, 50000, 100 };
         var fits = BuildInt16Fits(2, 2, samples, bzero: null);
         var img = FITSReader.Read(new MemoryStream(fits));

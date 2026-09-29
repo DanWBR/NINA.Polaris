@@ -22,7 +22,7 @@ namespace NINA.Polaris.Test;
 /// memory, but the output buffer + a frame's debayer/resample transient
 /// still scale with sensor size; on a small SBC a big sensor can still
 /// exhaust RAM. The guard must refuse those up front instead of letting the
-/// OOM killer take the whole process — while never blocking a job when
+/// OOM killer take the whole process, while never blocking a job when
 /// memory is plentiful or unknown.
 /// </summary>
 [TestFixture]

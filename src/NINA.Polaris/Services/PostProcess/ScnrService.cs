@@ -24,7 +24,7 @@ namespace NINA.Polaris.Services.PostProcess;
 /// a sibling FITS named `{stem}_scnr.fits`. Mono input is a no-op passthrough
 /// (SCNR needs three colour planes).
 ///
-/// Pure I/O + math — no SkiaSharp, ONNX, or external binary. Mirrors the
+/// Pure I/O + math, no SkiaSharp, ONNX, or external binary. Mirrors the
 /// <see cref="CropService"/> path-in/path-out pattern so the Auto Workflow
 /// runner and the Files toolbar can drive it as a plain FITS→FITS step.
 /// </summary>

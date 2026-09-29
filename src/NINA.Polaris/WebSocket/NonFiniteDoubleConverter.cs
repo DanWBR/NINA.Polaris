@@ -26,7 +26,7 @@ namespace NINA.Polaris.WebSocket;
 /// System.Text.Json refuses to write a non-finite double and throws
 /// ArgumentException. Inside the status loop that exception killed the whole
 /// send, so a SINGLE bad number took down the status WebSocket for every
-/// connected client — the app opened its tab, got no status, and reported
+/// connected client, the app opened its tab, got no status, and reported
 /// "connection to server lost". Worse, the bad value lived in retained state,
 /// so every subsequent tick threw the same way and the app could never
 /// reconnect: only restarting the process cleared it (field, Radxa Q6A,

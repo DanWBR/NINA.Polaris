@@ -92,7 +92,7 @@ public static class PolarAlignmentEndpoints {
 
         // ASIAIR-style manual refresh: ONE capture+solve+error update,
         // then back to Ok. The operator turns a knob, taps Refresh,
-        // reads the new error — no continuous loop in between.
+        // reads the new error, no continuous loop in between.
         group.MapPost("/refine/once", async (PolarAlignmentService svc, CancellationToken ct) => {
             try {
                 var ok = await svc.RefineOnceAsync(ct);
@@ -189,7 +189,7 @@ public static class PolarAlignmentEndpoints {
                 var result = await svc.RudimentaryReSolveAsync(ctx.RequestAborted);
                 return Results.Ok(result);
             } catch (InvalidOperationException ex) {
-                // No active session — UI should disable the button.
+                // No active session, UI should disable the button.
                 return Results.Conflict(new { error = ex.Message });
             }
         });

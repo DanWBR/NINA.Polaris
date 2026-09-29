@@ -43,7 +43,7 @@ public class RichardsonLucyTests {
         return Math.Sqrt(-2.0 * Math.Log(u1)) * Math.Cos(2.0 * Math.PI * u2);
     }
 
-    // Blur with a (symmetric) PSF kernel — reflect borders.
+    // Blur with a (symmetric) PSF kernel, reflect borders.
     private static float[] Convolve(double[] src, int w, int h, PsfModel psf) {
         int ks = psf.Size, kr = ks / 2; var k = psf.Kernel;
         var dst = new float[src.Length];
@@ -76,7 +76,7 @@ public class RichardsonLucyTests {
         return u;
     }
 
-    // FWHM at a KNOWN star centre via background-subtracted second moments —
+    // FWHM at a KNOWN star centre via background-subtracted second moments,
     // deterministic, independent of star detection (which we don't need here
     // since we planted the stars ourselves).
     private static double MeasureFwhm(float[] img, int w, int x0, int y0, int r, double bg) {
@@ -201,7 +201,7 @@ public class RichardsonLucyTests {
             Assert.That(outp[i], Is.EqualTo(f[i]).Within(1e-3));
     }
 
-    // ── optional: real frame — measured PSF then RL, FWHM before/after ──────
+    // ── optional: real frame, measured PSF then RL, FWHM before/after ──────
     [Test, Explicit("Requires local polaris-ai/data/own/raw/originals FITS")]
     public void RealFrame_Sharpens() {
         string? dir = FindOriginalsDir();

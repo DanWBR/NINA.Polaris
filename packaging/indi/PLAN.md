@@ -1,14 +1,14 @@
-# PLAN — Distributing patched INDI drivers as `.deb` + auto-update from Polaris
+# PLAN, Distributing patched INDI drivers as `.deb` + auto-update from Polaris
 
 ## Why this exists
 
 The Pi 4 / Pi 5 / Orange Pi 5 Pro images ship the **whole INDI stack built from
 source** (`indiserver` + every `indi-3rdparty` driver), because indilib has **no
-apt repository for Debian / Raspberry Pi OS arm64** — only an Ubuntu PPA. Field
+apt repository for Debian / Raspberry Pi OS arm64**, only an Ubuntu PPA. Field
 diagnosis on a Pi 4 image confirmed:
 
 - `indiserver` and all `/usr/bin/indi_*` are **orphan files** (`dpkg -S` → "no
-  path found") — i.e. `make install`, not tracked by dpkg.
+  path found"), i.e. `make install`, not tracked by dpkg.
 - Prefix is `/usr` (the `/bin/...` hit is just the usrmerge symlink, not a real
   duplicate). **No `/usr/local` copies.**
 - The INDI runtime *libraries* came from Debian apt: `libindi* 1.9.9+dfsg`.
@@ -16,7 +16,7 @@ diagnosis on a Pi 4 image confirmed:
   `/usr/lib/aarch64-linux-gnu/libASICamera2.so.1.41`.
 
 So when DanWBR patches a driver (e.g. a BAYERPAT / readout fix in `indi-asi`),
-there is currently no way to push it to users — they would have to recompile.
+there is currently no way to push it to users, they would have to recompile.
 This plan makes a patched driver shippable as a `.deb` that:
 
 1. is built **from the existing `make` build** (no rewrite of how drivers are
@@ -40,7 +40,7 @@ all ~280 drivers. The unit of distribution is **one upstream package group**
 | Prefix `/usr` already | Build the `.deb` with `-DCMAKE_INSTALL_PREFIX=/usr` → zero duplicates, no `/usr/local` shadowing. A defensive `preinst` `rm` of `/usr/local/bin/<bins>` is kept as belt-and-suspenders. |
 | libindi `1.9.9` from apt | The `.deb` declares `Depends: libindidriver1, libindiclient1, libindialignmentdriver1`. The soname (`…driver1`) **pins the ABI**: if libindi ever bumps to soname 2, apt blocks the mismatched driver instead of letting it crash. |
 | SDK `libASICamera2` is orphan too | The driver `.deb` must carry the SDK `.so` (the upstream `indi-asi` bundles it via the `libasi` sub-build). Verify with `dpkg -S /usr/lib/aarch64-linux-gnu/libASICamera2.so.1.41`. |
-| cmake writes `install_manifest.txt` | **This is the file list for the `.deb`** — no hand-maintained allowlist. The packager reads it. |
+| cmake writes `install_manifest.txt` | **This is the file list for the `.deb`**, no hand-maintained allowlist. The packager reads it. |
 
 ## The build → `.deb` workflow (the part to get right)
 
@@ -52,14 +52,14 @@ a staging dir instead of `/`**, then run the packager. Concrete, for `indi-asi`:
 SRC=~/src/indi-3rdparty
 
 # 1. Build the ASI SDK shim (provides libASICamera2 + headers) and the driver,
-#    exactly like the upstream developer build — nothing new here.
+#    exactly like the upstream developer build, nothing new here.
 cmake -B build/libasi   -DCMAKE_INSTALL_PREFIX=/usr "$SRC/libasi"
 cmake --build build/libasi -j"$(nproc)"
 
 cmake -B build/indi-asi -DCMAKE_INSTALL_PREFIX=/usr "$SRC/indi-asi"
 cmake --build build/indi-asi -j"$(nproc)"
 
-# 2. Install into a STAGING root (DESTDIR) — NOT the live system.
+# 2. Install into a STAGING root (DESTDIR), NOT the live system.
 #    cmake records every installed path in <build>/install_manifest.txt.
 STAGE="$PWD/stage-indi-asi"; rm -rf "$STAGE"
 DESTDIR="$STAGE" cmake --install build/libasi
@@ -113,7 +113,7 @@ DEB_DESC_LONG="ZWO ASI camera/focuser/filter-wheel/ST4 INDI drivers, rebuilt by
 
 ## Distribution: SourceForge + a manifest
 
-`.deb` files are loose downloads on SourceForge (its mirror redirects are fine —
+`.deb` files are loose downloads on SourceForge (its mirror redirects are fine,
 `HttpClient` follows them; this is **not** an apt repo, so the redirect that
 breaks apt does not apply here). A single `manifest.json` is the index Polaris
 reads:
@@ -153,7 +153,7 @@ Clone of `Services/External/UpdateService.cs`, source = the manifest URL
 - **Apply**: download each `.deb` (bounded timeout, **SHA-256 verified**, then
   `dpkg-deb -f … Package` sanity = expected name), stage under
   `/home/polaris/.cache/`, then `systemctl start polaris-indi-update.service`.
-- **Offline relay**: same as Polaris — the browser fetches the `.deb` over its
+- **Offline relay**: same as Polaris, the browser fetches the `.deb` over its
   own link and POSTs the bytes; verified by SHA-256 from the manifest.
 
 ### `polaris-indi-update.service` + `polaris-indi-update.sh`
@@ -163,7 +163,7 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get install -y /home/polaris/.cache/indi-*.deb   # apt resolves libindi deps
 ```
 Driver-only update **does not restart `polaris.service`**, so it does not need its
-own cgroup the way the Polaris self-update does — but keeping it a unit gives us
+own cgroup the way the Polaris self-update does, but keeping it a unit gives us
 the passwordless polkit grant and a clean log.
 
 ### `50-polaris-indi-update.rules`
@@ -173,7 +173,7 @@ Twin of `50-polaris-update.rules`: authorize the `polaris` user to
 ### Safety gates (load-bearing)
 - **Refuse while a session is active** (capturing / guiding / slewing / autorun /
   live stack). Swapping a driver binary is safe on Linux (open inode survives),
-  but to *use* the new driver `indiserver` must restart — never mid-night.
+  but to *use* the new driver `indiserver` must restart, never mid-night.
 - After a successful install, prompt the user to **reconnect equipment** (Polaris
   bounces the INDI connection / indiserver), instead of doing it silently.
 - **Scope** strictly to packages named in the manifest. Never a blanket
@@ -184,23 +184,23 @@ Twin of `50-polaris-update.rules`: authorize the `polaris` user to
 A "Drivers (DanWBR)" row in the System Updates hub (next to the Polaris updater):
 current vs available per package, a changelog from `summary`, a one-tap
 "Update drivers", progress streamed via the existing terminal socket / transfer
-chips. Auto-check is opt-in (boot + daily) and only ever *notifies* — never
+chips. Auto-check is opt-in (boot + daily) and only ever *notifies*, never
 applies unattended.
 
 ## Phases
 
-- **P0 — Packaging skeleton (this commit).** `build-driver-deb.sh` + templates +
+- **P0, Packaging skeleton (this commit).** `build-driver-deb.sh` + templates +
   `indi-asi.conf` + `manifest.example.json` + this plan. No server changes.
-- **P1 — Prove one driver end-to-end.** Build `indi-asi` on a Pi, produce the
+- **P1, Prove one driver end-to-end.** Build `indi-asi` on a Pi, produce the
   `.deb`, `sudo apt install ./indi-asi_*.deb`, confirm: orphan files now
   `dpkg -S`-owned, `indiserver` runs the new binary, capture works, a second
   install upgrades cleanly.
-- **P2 — Manifest + SourceForge.** Publish the `.deb` + `manifest.json`; verify
+- **P2, Manifest + SourceForge.** Publish the `.deb` + `manifest.json`; verify
   the URL + SHA-256 by hand (`curl` + `sha256sum`).
-- **P3 — `ThirdPartyDriverUpdateService` + endpoints + unit + polkit rule** (no
+- **P3, `ThirdPartyDriverUpdateService` + endpoints + unit + polkit rule** (no
   UI yet); idle-gate; tests mirroring `UpdateService` tests.
-- **P4 — System Updates hub UI** row + opt-in auto-check + offline-relay path.
-- **P5 — Generalize** to `indi-svbony`, `indi-playerone`, `indi-gphoto`, … (just
+- **P4, System Updates hub UI** row + opt-in auto-check + offline-relay path.
+- **P5, Generalize** to `indi-svbony`, `indi-playerone`, `indi-gphoto`, … (just
   more `.conf` files) + docs in `docs/user-guide/`.
 
 ## Files

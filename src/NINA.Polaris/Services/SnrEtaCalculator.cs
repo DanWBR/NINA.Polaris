@@ -28,14 +28,14 @@ namespace NINA.Polaris.Services;
 /// </para>
 ///
 /// <para>We fit log(snr) against log(N) by ordinary least squares.
-/// We don't pin the slope at 0.5 — letting it float compensates for
+/// We don't pin the slope at 0.5, letting it float compensates for
 /// (a) frames the stacker rejects mid-session (alignment fail,
 /// guiding hiccup), (b) seeing degrading the per-frame SNR, and
 /// (c) the user changing exposure / gain mid-stack. The R² of the
 /// fit doubles as a confidence gate: weak fits return a null ETA
-/// so the UI shows "—" instead of a fantasy number.</para>
+/// so the UI shows ", " instead of a fantasy number.</para>
 ///
-/// <para>Pure functional helper — no state, fully testable.</para>
+/// <para>Pure functional helper, no state, fully testable.</para>
 /// </summary>
 public static class SnrEtaCalculator {
     /// <summary>Minimum samples before we even attempt a fit. With
@@ -48,7 +48,7 @@ public static class SnrEtaCalculator {
     /// every frame keeps failing.</summary>
     public const double MinConfidence = 0.6;
 
-    /// <summary>Hard cap on how far we'll project — past ~1000 frames
+    /// <summary>Hard cap on how far we'll project, past ~1000 frames
     /// the √N model breaks down anyway (atmosphere, drift, etc.) and
     /// returning "23,847 frames" is worse than returning null.</summary>
     public const int MaxProjection = 1000;
@@ -66,7 +66,7 @@ public static class SnrEtaCalculator {
     /// <summary>
     /// Return null when the input is too short, the fit is too weak,
     /// the projection exceeds the cap, or the target is already
-    /// achieved. Callers render "—" on null.
+    /// achieved. Callers render ", " on null.
     /// </summary>
     public static EtaResult? Estimate(
             IReadOnlyList<(int frame, double snr)> samples,
@@ -108,14 +108,14 @@ public static class SnrEtaCalculator {
         double intercept = meanY - slope * meanX;
         // R² = 1 − SS_res/SS_tot. Equivalent closed form via
         // correlation coefficient squared. Guard against zero
-        // y-variance (all snr identical — flat stack, no growth).
+        // y-variance (all snr identical, flat stack, no growth).
         double varY = sumYY / n - meanY * meanY;
         if (varY < 1e-9) return null;
         double r = (sumXY / n - meanX * meanY) / Math.Sqrt(varX * varY);
         double r2 = r * r;
-        // Weak fit: the log-log regression is too noisy to trust — the
+        // Weak fit: the log-log regression is too noisy to trust, the
         // common real-world case in the first frames of a session (seeing
-        // + alignment jitter). Instead of showing "—" until it eventually
+        // + alignment jitter). Instead of showing ", " until it eventually
         // converges, fall back to a coarse √N projection so the operator
         // still gets a ballpark ETA. Genuinely flat data was already
         // rejected above (varY ≈ 0), so this only fires on noisy-but-
@@ -123,7 +123,7 @@ public static class SnrEtaCalculator {
         if (r2 < MinConfidence) return SqrtNFallback(samples, targetSnr, averageExposureSeconds);
 
         // Slope sanity check. Negative or zero slope means SNR is
-        // flat or decreasing — fit doesn't extrapolate to anything
+        // flat or decreasing, fit doesn't extrapolate to anything
         // useful, and the user probably has a different problem
         // (clouds, focus drift) the LIVE chart is more honest about.
         if (slope <= 0.05) return SqrtNFallback(samples, targetSnr, averageExposureSeconds);
@@ -148,7 +148,7 @@ public static class SnrEtaCalculator {
     /// anchors it on the most recent sample: SNR ∝ √N ⇒
     /// N_target = N_last · (target / snr_last)². Only returns a value when
     /// the stack is genuinely rising (last clearly above first) and the
-    /// projection is within the cap — otherwise null (caller shows "—").
+    /// projection is within the cap, otherwise null (caller shows ", ").
     /// Reported with a low confidence so the UI/telemetry can flag it as
     /// an estimate.
     /// </summary>

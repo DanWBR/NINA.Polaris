@@ -58,8 +58,8 @@ public sealed class AsiSdkCamera : ICamera {
     private double _exposureSec = 0.03;
     private int _roiX, _roiY, _roiW, _roiH, _bin = 1;
     // Last geometry actually written to the SDK, for ApplyRoi's idempotency
-    // guard. Includes _imgType because ASISetROIFormat takes it too — unlike
-    // SVBony, where the output format is a separate call — so a RAW8<->RAW16
+    // guard. Includes _imgType because ASISetROIFormat takes it too, unlike
+    // SVBony, where the output format is a separate call, so a RAW8<->RAW16
     // switch must NOT be skipped. Reset on connect.
     private bool _roiApplied;
     private int _lastRoiX, _lastRoiY, _lastRoiW, _lastRoiH, _lastRoiBin;
@@ -378,16 +378,16 @@ public sealed class AsiSdkCamera : ICamera {
         // Must stop the EXPOSURE, not the video capture: CaptureAsync uses the
         // snap API (ASIStartExposure / ASIGetDataAfterExp), and those are
         // distinct SDK entry points from ASIStartVideoCapture / ASIGetVideoData.
-        // This called ASIStopVideoCapture — a leftover from the snap-mode
+        // This called ASIStopVideoCapture, a leftover from the snap-mode
         // migration documented in CaptureAsync itself ("The old path used video
         // capture..."): the capture path was migrated, this one wasn't. Aborting
         // a still therefore stopped an idle video engine and left the exposure
         // integrating, so POST /api/camera/abort silently did nothing (it does
-        // not cancel the capture token either — the poll loop just ran to its
+        // not cancel the capture token either, the poll loop just ran to its
         // deadline). The guider path masked this: it cancels the token first, so
         // CaptureAsync's finally cleaned up regardless of what Abort did.
         // Stills and streams are mutually exclusive (CaptureAsync throws while
-        // _streaming), so there is no case where a stream needs stopping here —
+        // _streaming), so there is no case where a stream needs stopping here,
         // the stream has StopVideoStreamAsync. Mirrors PlayerOne's POAStopExposure.
         lock (_sdk) { try { ASIStopExposure(_cameraId); } catch { } }
         State = CameraStates.Idle;
@@ -403,7 +403,7 @@ public sealed class AsiSdkCamera : ICamera {
 
     private void ApplyRoi() {
         if (!_connected) return;
-        // ASI forbids changing ROI/format DURING capture — doing so wedges the
+        // ASI forbids changing ROI/format DURING capture, doing so wedges the
         // driver. While a stream is running just stash the fields; they take
         // effect on the next StartVideoStreamAsync, which re-applies ROI while
         // stopped.
@@ -415,7 +415,7 @@ public sealed class AsiSdkCamera : ICamera {
         // matches. This matters MORE here than on the other natives: CaptureAsync
         // re-calls ApplyRoi() on EVERY still, and slew-and-centre / plate solve /
         // autofocus each call SetSubframeAsync(0,0,0,0) around every capture with
-        // the SAME full-frame geometry — so a burst of solve/AF captures fired two
+        // the SAME full-frame geometry, so a burst of solve/AF captures fired two
         // unconditional SDK writes per frame at a driver whose own comment (above)
         // says ROI must not change during capture. Also closes most of the
         // mid-still race: `_streaming` only covers the video stream, so a
@@ -485,7 +485,7 @@ public sealed class AsiSdkCamera : ICamera {
                     // previous capture didn't stop cleanly the SDK still thinks it's
                     // exposing, and the next start can wedge the driver. Stills churn a
                     // full start/stop per frame, so bursts of slew+solve / autofocus
-                    // captures hit it hardest — that's how the SVBony twin failed in
+                    // captures hit it hardest, that's how the SVBony twin failed in
                     // the field. A stop on an idle camera is a harmless no-op. Rated
                     // lower risk here (the ASI SDK is more tolerant than SVBony's), but
                     // it costs nothing and keeps the natives consistent.
@@ -618,7 +618,7 @@ public sealed class AsiSdkCamera : ICamera {
             t = _streamThread; _streamThread = null;
         }
         // Join the pull thread BEFORE touching the SDK so its in-flight
-        // ASIGetVideoData (holding _sdk) has finished — then ASIStopVideoCapture
+        // ASIGetVideoData (holding _sdk) has finished, then ASIStopVideoCapture
         // under _sdk can't run concurrently with it. Generous timeout so a
         // long-exposure GetVideoData can return first.
         try { t?.Join(5000); } catch { }

@@ -15,7 +15,7 @@
 namespace NINA.Polaris.Services.Studio;
 
 /// <summary>
-/// SpectroPhotometric Color Calibration (SPCC) math — the spectral engine
+/// SpectroPhotometric Color Calibration (SPCC) math, the spectral engine
 /// that separates SPCC from the broadband PCC in
 /// <see cref="ColorCalibrationMath"/>. Where PCC maps a star's catalog B-V
 /// to expected channel flux ratios through a fixed empirical slope, SPCC
@@ -57,7 +57,7 @@ public static class SpccMath {
     public record Spectrum(double[] WavelengthNm, double[] Flux);
 
     /// <summary>A sampled response (throughput, 0..1) on an increasing
-    /// wavelength grid in nanometres — a filter transmission or a sensor
+    /// wavelength grid in nanometres, a filter transmission or a sensor
     /// QE curve, or their product (a channel's total response).</summary>
     public record ResponseCurve(double[] WavelengthNm, double[] Response);
 

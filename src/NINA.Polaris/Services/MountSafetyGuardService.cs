@@ -21,16 +21,16 @@ namespace NINA.Polaris.Services;
 /// Fail-safe watchdog that protects the mount + cabling during unattended
 /// sessions. Born from a real ASIAIR incident: a mount tracked hours past the
 /// meridian WITHOUT a flip (plate-solve angle stayed constant all night) while
-/// a clouded-out run looped on guide-star recovery forever — the RA axis wound
+/// a clouded-out run looped on guide-star recovery forever, the RA axis wound
 /// the cabling into a corkscrew until a USB cable physically ripped.
 ///
 /// Two guards, both opt-out, both purely *halting* (never command a risky move):
 ///
-///  1. <b>Past-meridian cable-wrap limit</b> — if the target tracks more than
+///  1. <b>Past-meridian cable-wrap limit</b>, if the target tracks more than
 ///     <see cref="MeridianFlipSettings.MaxMinutesPastMeridian"/> past the
 ///     meridian and no flip happened (GEM pier side unchanged, or a flip-less
 ///     strain-wave mount), stop tracking + abort.
-///  2. <b>Guiding circuit breaker</b> — if the guider loses the star
+///  2. <b>Guiding circuit breaker</b>, if the guider loses the star
 ///     <see cref="MeridianFlipSettings.MaxConsecutiveGuideFailures"/> times in
 ///     a row with no recovery, stop tracking + abort instead of looping.
 ///
@@ -77,9 +77,9 @@ public class MountSafetyGuardService : BackgroundService {
     }
 
     /// <summary>Altitude to test against the safety floor. Prefers the driver's
-    /// own encoder-reported altitude — ground truth on AltAz-native mounts (e.g.
+    /// own encoder-reported altitude, ground truth on AltAz-native mounts (e.g.
     /// a Seestar S50 over Alpaca), where RA/Dec are derived rather than measured
-    /// and can carry drift the recompute would inherit — and only falls back to
+    /// and can carry drift the recompute would inherit, and only falls back to
     /// the RA/Dec→AltAz recompute when the driver reports NaN (equatorial
     /// drivers that don't expose horizontal coordinates).</summary>
     private double CurrentAltitude(double driverAlt, double ra, double dec) {
@@ -135,7 +135,7 @@ public class MountSafetyGuardService : BackgroundService {
     // Logs a full mount snapshot whenever tracking stops UNEXPECTEDLY (not a
     // slew, flip, park or our own safety trip). Built to chase an intermittent
     // ZWO AM3 that stops tracking near the zenith on the west side: comparing
-    // several events shows which invariant is constant — a fixed hour angle
+    // several events shows which invariant is constant, a fixed hour angle
     // (meridian/tracking limit), a fixed altitude (altitude limit), or a fixed
     // RA-axis angle (travel limit / hardware).
     private bool? _prevTracking;
@@ -191,9 +191,9 @@ public class MountSafetyGuardService : BackgroundService {
     /// <summary>Did the mount just cross the meridian WHILE TRACKING? A crossing
     /// is HA going − → ≥0 between two consecutive samples. A commanded slew that
     /// carries HA across 0 (e.g. slewing out of the home position to a target
-    /// just west of the meridian) is NOT a cable-wrap crossing — the mount is
+    /// just west of the meridian) is NOT a cable-wrap crossing, the mount is
     /// being driven to a legitimate pointing, not drifting past the meridian on
-    /// the sky — so this returns false while slewing.</summary>
+    /// the sky, so this returns false while slewing.</summary>
     public static bool DetectMeridianCrossing(double? prevHa, double ha, bool slewing) {
         if (slewing) return false;
         return prevHa.HasValue && prevHa.Value < 0 && ha >= 0;
@@ -293,9 +293,9 @@ public class MountSafetyGuardService : BackgroundService {
                         await TripAsync(
                             flipping
                                 ? $"Flip aborted: the OTA reached {altDeg:F0}° altitude, below the " +
-                                  $"{floorDeg:F0}° flip floor — below the horizon during a meridian flip."
+                                  $"{floorDeg:F0}° flip floor, below the horizon during a meridian flip."
                                 : $"Slew aborted: the OTA dropped to {altDeg:F0}° altitude, below the " +
-                                  $"{floorDeg:F0}° floor — a wrong-way slew heading for the mount/tripod.",
+                                  $"{floorDeg:F0}° floor, a wrong-way slew heading for the mount/tripod.",
                             s, ct);
                         return;
                     }
@@ -328,7 +328,7 @@ public class MountSafetyGuardService : BackgroundService {
             var mins = haHours.Value * 60.0;
             await TripAsync(
                 $"Mount tracked {mins:F0} min past the meridian without a flip " +
-                $"(limit {s.MaxMinutesPastMeridian:F0} min) — stopping to prevent a cable wrap.",
+                $"(limit {s.MaxMinutesPastMeridian:F0} min), stopping to prevent a cable wrap.",
                 s, ct);
             return;
         }
@@ -355,7 +355,7 @@ public class MountSafetyGuardService : BackgroundService {
             }
             await TripAsync(
                 $"Guider lost the star {_consecutiveGuideFailures} times in a row with no " +
-                $"recovery (limit {s.MaxConsecutiveGuideFailures}) — stopping the session.",
+                $"recovery (limit {s.MaxConsecutiveGuideFailures}), stopping the session.",
                 s, ct);
         }
     }
@@ -385,7 +385,7 @@ public class MountSafetyGuardService : BackgroundService {
     /// report). Skips the legitimate reasons tracking goes off: an in-progress
     /// slew (or one that just finished), a meridian flip, or our own safety trip.
     /// Records RA/Dec, hour angle, altitude, azimuth and pier side so several
-    /// events can be compared — whichever value is constant across dropouts
+    /// events can be compared, whichever value is constant across dropouts
     /// points at the cause (fixed HA = meridian limit, fixed altitude = altitude
     /// limit, fixed RA-axis angle = travel limit / hardware).
     /// </summary>
@@ -405,7 +405,7 @@ public class MountSafetyGuardService : BackgroundService {
 
         // Only care about a genuine on -> off transition.
         if (!(wasTracking && !tracking)) return;
-        // Expected reasons tracking is off — not a fault:
+        // Expected reasons tracking is off, not a fault:
         //  • slewing now, or slewing on the previous tick (tracking re-engages a
         //    beat after a GoTo completes);
         //  • a meridian flip in progress;
@@ -427,7 +427,7 @@ public class MountSafetyGuardService : BackgroundService {
             $"Alt={alt:F1}° Az={az:F1}° pier={pier}";
         LastTrackingDrop = $"{DateTime.UtcNow:HH:mm:ss}Z  {snap}";
         _logger.LogWarning(
-            "MOUNT TRACKING STOPPED unexpectedly (diagnostic — not a slew/flip/safety-stop): {Snap}. " +
+            "MOUNT TRACKING STOPPED unexpectedly (diagnostic, not a slew/flip/safety-stop): {Snap}. " +
             "Compare several of these: constant HA ⇒ meridian/tracking limit; constant Alt ⇒ altitude limit; " +
             "constant RA/pier ⇒ RA-axis travel limit or hardware.", snap);
     }
@@ -464,7 +464,7 @@ public class MountSafetyGuardService : BackgroundService {
         }
 
         // Detect the meridian crossing (HA goes − → ≥0): record the pier side
-        // then. Gated on !slewing (see DetectMeridianCrossing) — a commanded slew
+        // then. Gated on !slewing (see DetectMeridianCrossing), a commanded slew
         // that carries HA across 0 (e.g. slewing out of home to a target just
         // west of the meridian) is not a cable-wrap crossing. Counting it tripped
         // the guard on a fresh GoTo to a west target (field report: "guard
@@ -506,13 +506,13 @@ public class MountSafetyGuardService : BackgroundService {
             if (g.IsConnected) await g.StopAsync(ct);
         } catch (Exception ex) { _logger.LogWarning(ex, "Safety: guider stop failed"); }
 
-        // 3. THE important one — turn tracking off so the RA axis stops winding.
+        // 3. THE important one, turn tracking off so the RA axis stops winding.
         var scope = _equip.Telescope;
         if (scope != null && scope.IsConnected) {
             try { await scope.SetTrackingAsync(false, ct); }
             catch (Exception ex) { _logger.LogWarning(ex, "Safety: stop-tracking failed"); }
 
-            // 4. Optional park (unwinds fully) — opt-in to avoid a surprise re-home.
+            // 4. Optional park (unwinds fully), opt-in to avoid a surprise re-home.
             if (s.ParkOnSafetyStop) {
                 try { await scope.ParkAsync(ct); }
                 catch (Exception ex) { _logger.LogWarning(ex, "Safety: park failed"); }

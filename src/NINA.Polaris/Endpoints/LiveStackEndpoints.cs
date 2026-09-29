@@ -21,7 +21,7 @@ public static class LiveStackEndpoints {
     public static void MapLiveStackEndpoints(this WebApplication app) {
         var group = app.MapGroup("/api/livestack");
 
-        // Server-owned LIVE capture loop — the only LIVE loop. The LIVE shutter
+        // Server-owned LIVE capture loop, the only LIVE loop. The LIVE shutter
         // starts/stops this instead of the browser driving repeated
         // /api/camera/capture calls, so the session keeps capturing even if the
         // client drops or the tab is backgrounded, and client-side WASM stacking
@@ -90,7 +90,7 @@ public static class LiveStackEndpoints {
                     didRecenter = true;
                 }
             } catch (Exception ex) {
-                // Don't block the stack on prep failures — the operator
+                // Don't block the stack on prep failures, the operator
                 // wanted to stack regardless. Report what tripped so
                 // the toast can warn but the stack still starts.
                 prepError = ex.Message;
@@ -171,7 +171,7 @@ public static class LiveStackEndpoints {
         });
 
         // Partial-stack checkpoints saved this session (frame, elapsed,
-        // cumulative SNR, HFR, path) — the persisted quality-timeline dataset.
+        // cumulative SNR, HFR, path), the persisted quality-timeline dataset.
         // Cadence knobs live on LiveStackTriggers and round-trip through
         // /triggers/settings.
         group.MapGet("/checkpoints", (LiveStackCheckpointService checkpoints) =>
@@ -387,7 +387,7 @@ public static class LiveStackEndpoints {
 
         // Auto-pause duration cap, seconds. 0 = unlimited (default).
         // Negative values are clamped to 0. Same persistence pattern
-        // as /save-frames — runtime + profile in one call.
+        // as /save-frames, runtime + profile in one call.
         group.MapPut("/max-duration", (MaxDurationRequest req,
                                         LiveStackingService stack,
                                         ProfileService profiles) => {
@@ -404,7 +404,7 @@ public static class LiveStackEndpoints {
         // Client pushes its Appearance "Preview quality" (previewMaxDim) so the
         // COLOUR live-stack JPEG is rendered at that resolution (the colour
         // preview has no client-side raw render path). Not persisted server-side
-        // — it's a client localStorage setting the client re-sends on load.
+        //, it's a client localStorage setting the client re-sends on load.
         group.MapPost("/preview-dim", (PreviewDimRequest? req, LiveStackingService stack) => {
             var dim = req?.Dim ?? 0;          // tolerate an empty body (best-effort call)
             stack.PreviewMaxDim = dim;        // 0 = native; clamped when applied
@@ -423,7 +423,7 @@ public static class LiveStackEndpoints {
             var image = stack.GetCurrentStackImage();
             if (image == null) {
                 return Results.BadRequest(new {
-                    error = "No live stack to save — start stacking and integrate at least one frame first."
+                    error = "No live stack to save, start stacking and integrate at least one frame first."
                 });
             }
             var name = string.IsNullOrWhiteSpace(target)

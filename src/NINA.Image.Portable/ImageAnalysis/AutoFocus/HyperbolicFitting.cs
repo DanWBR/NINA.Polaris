@@ -43,7 +43,7 @@ public sealed class HyperbolicFitting {
     public (double X, double Y) Minimum { get; private set; }
     public double RSquared { get; private set; }
     /// <summary>False when no fit could be computed (all-zero or degenerate
-    /// input — the desktop "BadData" guards).</summary>
+    /// input, the desktop "BadData" guards).</summary>
     public bool HasFit { get; private set; }
 
     public double Evaluate(double x) => A * Math.Cosh(Math.Asinh((P - x) / B));
@@ -122,7 +122,7 @@ public sealed class HyperbolicFitting {
         HasFit = true;
         Minimum = ((int)Math.Round(p), a);
 
-        // R² over the non-zero points. Deliberately UNWEIGHTED — the desktop
+        // R² over the non-zero points. Deliberately UNWEIGHTED, the desktop
         // implementation has the weights commented out, and the ported
         // reference tests pin the unweighted values.
         double meanY = nonZeroPoints.Average(dp => dp.Y);

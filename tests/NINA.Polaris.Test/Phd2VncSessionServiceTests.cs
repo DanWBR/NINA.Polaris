@@ -23,7 +23,7 @@ namespace NINA.Polaris.Test;
 /// <summary>
 /// Pins the OS-gating contract of Phd2VncSessionService. The actual
 /// TightVNC integration is Windows-only and depends on a third-party
-/// install + a Windows Service — those paths are smoke-tested in
+/// install + a Windows Service, those paths are smoke-tested in
 /// PH2VNC-6 end-to-end verification, not here. These tests cover
 /// the cross-platform surface: that the service compiles + runs on
 /// any OS, that non-Windows hosts cleanly short-circuit with an
@@ -130,7 +130,7 @@ public class Phd2VncSessionServiceTests {
     [Test]
     public void ServiceName_IsCanonicalTightVncName() {
         // tvnserver is the public service name TightVNC's installer
-        // registers — the bridge endpoint + UI banners rely on this
+        // registers, the bridge endpoint + UI banners rely on this
         // being stable, pin it.
         Assert.That(Phd2VncSessionService.ServiceName, Is.EqualTo("tvnserver"));
     }

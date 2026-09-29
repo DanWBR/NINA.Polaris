@@ -104,7 +104,7 @@ public class CometElementsUpdaterTests {
     /// THE ONE THAT MATTERS. a = q / (1 - e) is infinite at e = 1 and negative
     /// past it, so an elliptic-only solver returned NaN for every long-period
     /// comet. NaN then propagates into RA/Dec and, from there, into the status
-    /// payload — which is exactly how a non-finite number took the app's
+    /// payload, which is exactly how a non-finite number took the app's
     /// WebSocket down earlier in this cycle.
     /// </summary>
     [Test]

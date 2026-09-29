@@ -45,9 +45,9 @@ public static class AscomEndpoints {
         });
 
         // Open the driver's modal SetupDialog in a CHILD PROCESS so a
-        // buggy driver — looking at you, ZWO's VB6-era ASCOM wrapper
+        // buggy driver, looking at you, ZWO's VB6-era ASCOM wrapper
         // that throws AccessViolationException from inside the setup
-        // form — can only take down the helper exe, NOT the main API
+        // form, can only take down the helper exe, NOT the main API
         // server. The previous in-process implementation relied on
         // LegacyCorruptedStateExceptionsPolicy via AppContext.SetSwitch
         // to catch CSEs, but .NET 10 fast-fails on AVE regardless in
@@ -75,7 +75,7 @@ public static class AscomEndpoints {
                     progId,
                     remote = true,
                     error = "This ASCOM driver's Setup window opens on the screen of the machine "
-                          + "running Polaris — not on this device. Configure it there with the "
+                          + "running Polaris, not on this device. Configure it there with the "
                           + "ASCOM Platform's Profile Explorer, or connect the device over Alpaca "
                           + "(ASCOM Remote), which has a browser-based setup you can reach from here."
                 });
@@ -87,7 +87,7 @@ public static class AscomEndpoints {
                 // Non-zero exit = driver-side failure OR child crash.
                 // stderr carries the human-readable message we wrote
                 // from AscomSetupRunner; if the child died via CSE
-                // there's no stderr — fall back to a generic hint
+                // there's no stderr, fall back to a generic hint
                 // that at least tells the user the server is fine.
                 var msg = string.IsNullOrWhiteSpace(stderr)
                     ? $"SetupDialog subprocess exited with code {exitCode}. "
@@ -101,10 +101,10 @@ public static class AscomEndpoints {
                          + "interactive Windows session (not as a service). "
                          + "If this keeps happening, use the ASCOM Platform's "
                          + "Profile Explorer to configure the driver directly "
-                         + "— Polaris will pick up whatever it saves."
+                         + ", Polaris will pick up whatever it saves."
                 });
             } catch (Exception ex) {
-                // Failed to even spawn the helper (rare — missing
+                // Failed to even spawn the helper (rare, missing
                 // ProcessPath, security policy, etc).
                 return Results.BadRequest(new {
                     progId,
@@ -131,7 +131,7 @@ public static class AscomEndpoints {
     private static async Task<(int ExitCode, string Stderr)> RunSetupHelperAsync(string progId) {
         var procPath = Environment.ProcessPath
             ?? throw new InvalidOperationException(
-                "Environment.ProcessPath is unavailable — cannot relaunch self.");
+                "Environment.ProcessPath is unavailable, cannot relaunch self.");
         var entryDll = System.Reflection.Assembly.GetEntryAssembly()?.Location;
         var procName = Path.GetFileNameWithoutExtension(procPath);
         var psi = new ProcessStartInfo {
@@ -180,7 +180,7 @@ public static class AscomEndpoints {
     /// <summary>
     /// Defensive whitelist for the ProgID we hand to the child
     /// process. ASCOM ProgIDs look like
-    /// <c>ASCOM.ZWO_ASI_715MC.Camera</c> — alphanumerics, dots,
+    /// <c>ASCOM.ZWO_ASI_715MC.Camera</c>, alphanumerics, dots,
     /// underscores, hyphens. Stops anyone from sneaking shell-style
     /// args into the command line via the URL path segment.
     /// </summary>

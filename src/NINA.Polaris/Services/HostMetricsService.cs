@@ -324,7 +324,7 @@ public class HostMetricsService : BackgroundService {
             // Fallback (Windows, edge cases). GCMemoryInfo carries BOTH the
             // physical-memory ceiling (TotalAvailableMemoryBytes) AND the
             // system-wide memory load (MemoryLoadBytes, sourced from the OS
-            // — GlobalMemoryStatusEx on Windows). We must NOT use the
+            //, GlobalMemoryStatusEx on Windows). We must NOT use the
             // IResourceMonitor's MemoryUsedPercentage here: on Windows it is
             // process-scoped (it reported ~Polaris's working set, e.g.
             // "1.2 / 63.8 GB"), which is wrong for a system-memory display.
@@ -357,8 +357,8 @@ public class HostMetricsService : BackgroundService {
         // Disk usage on the volume that hosts the STUDIO root (where FILES /
         // STUDIO browse + captures are written). Mirror the exact same
         // resolution the FILES tab uses (ResolveStudioRoot) so the gauge
-        // always measures the disk the user actually sees in STUDIO — e.g.
-        // an NVMe SSD when ImageOutputDir points there — never the app's
+        // always measures the disk the user actually sees in STUDIO, e.g.
+        // an NVMe SSD when ImageOutputDir points there, never the app's
         // install partition. Surfaces free / total in the activity bar so
         // the user notices a full disk before a sequence fails mid-frame.
         string studioRoot;

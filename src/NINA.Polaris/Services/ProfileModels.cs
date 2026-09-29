@@ -58,7 +58,7 @@ public class UserProfile {
 
     /// <summary>One-shot scheduled rig teardown (UTC). When reached, Polaris
     /// stops capture + guiding, parks the mount, warms the camera and turns
-    /// cooling off, and — when <see cref="ScheduledShutdownHost"/> — powers the
+    /// cooling off, and, when <see cref="ScheduledShutdownHost"/>, powers the
     /// host down. Persisted so it survives a restart; cleared after it fires or
     /// is cancelled. Null = nothing scheduled.</summary>
     public DateTime? ScheduledShutdownUtc { get; set; }
@@ -107,7 +107,7 @@ public class UserProfile {
     public DateTime? SetupWizardCompletedUtc { get; set; }
 
     /// <summary>Self-update channel: "stable" (default; GitHub's latest
-    /// non-prerelease) or "preview" (opts into pre-releases — the Insider-style
+    /// non-prerelease) or "preview" (opts into pre-releases, the Insider-style
     /// early-access channel for risky new features). Global, not per-rig.</summary>
     public string UpdateChannel { get; set; } = "stable";
 
@@ -216,7 +216,7 @@ public class UserProfile {
 
     // Auto-push of saved images to network storage (NAS / share / SSH box).
     // Global (one target for the host), persisted in plain JSON like the
-    // DuckDns/PHD2 creds above — the profile file is already gated by OS
+    // DuckDns/PHD2 creds above, the profile file is already gated by OS
     // file permissions. Password is never returned by GET /api/storage/config
     // nor exposed over the WebSocket status. Pushed files mirror the local
     // capture tree onto the target; the local copy is kept.
@@ -397,7 +397,7 @@ public class UserProfile {
     /// <summary>
     /// DBGLOG-9: opt-in disk persistence for the debug log. When
     /// false (default), the LogService ring buffer is the only home
-    /// for entries — a server restart discards everything. When
+    /// for entries, a server restart discards everything. When
     /// true, LogRotatorService subscribes to the Appended event and
     /// flushes batched entries to disk.
     ///
@@ -431,7 +431,7 @@ public class UserProfile {
     /// persisted flag lets the operator turn the feature on from the
     /// Settings UI (behind a risk-acknowledgement modal) without editing a
     /// JSON file on a headless host. Either source being true enables the
-    /// endpoint. Default OFF — full shell access to the host is a serious
+    /// endpoint. Default OFF, full shell access to the host is a serious
     /// capability, so it stays opt-in.
     /// </summary>
     public bool TerminalEnabled { get; set; } = false;
@@ -562,7 +562,7 @@ public class EquipmentProfile {
     /// name, ASCOM ProgID, or Alpaca <c>host:port[:devnum]</c>).</summary>
     public string? Switch { get; set; }
     /// <summary>Power box backend kind. Same enum as
-    /// <see cref="FilterWheelDriver"/> — <c>indi</c> (default),
+    /// <see cref="FilterWheelDriver"/>, <c>indi</c> (default),
     /// <c>ascom-com</c>, or <c>alpaca</c>.</summary>
     public string SwitchDriver { get; set; } = "indi";
 
@@ -571,7 +571,7 @@ public class EquipmentProfile {
     // RIGPUT-1: the value-type per-rig fields below are NULLABLE with NO
     // initializer, on purpose. The rig PUT binds a whole EquipmentProfile, and
     // two callers send a PARTIAL body ({liveStackComputeMode} and
-    // {slewConfirmDeg,slewFloorDeg}) — System.Text.Json leaves an omitted nullable
+    // {slewConfirmDeg,slewFloorDeg}), System.Text.Json leaves an omitted nullable
     // property as null, so the handler can tell "absent" (null → don't touch) from
     // an explicit value (0/false included) and stop resetting the rig to model
     // defaults on every partial save. That reset was a live bug (a compute-mode
@@ -712,7 +712,7 @@ public class EquipmentProfile {
     public double? RequiredBackspacingMm { get; set; }
 
     /// <summary>Main-camera pixel size in micrometres. Fallback for backends
-    /// that don't report it via CCD_INFO — notably <c>indi_gphoto</c> (DSLRs),
+    /// that don't report it via CCD_INFO, notably <c>indi_gphoto</c> (DSLRs),
     /// which leaves CCD_PIXEL_SIZE at 0 until/unless told. 0 = "let the camera
     /// report it" (the normal case for dedicated astro cameras). When set and
     /// the connected camera reports 0, Polaris pushes it into the driver's
@@ -721,7 +721,7 @@ public class EquipmentProfile {
     public double CameraPixelSizeUm { get; set; }
 
     /// <summary>Main-camera sensor resolution + bit depth, for backends that
-    /// don't report it until/unless told — indi_gphoto rejects every exposure
+    /// don't report it until/unless told, indi_gphoto rejects every exposure
     /// ("Please update the CCD Information ...") until CCD_INFO has a non-zero
     /// Max X/Y. Filled by the DSLR picker (derived from the catalogue) and
     /// pushed to the driver on connect. 0 = let the camera report it.</summary>
@@ -751,14 +751,14 @@ public class EquipmentProfile {
     [System.Text.Json.Serialization.JsonIgnore]
     public double EffectiveGuiderFocalLengthMm => GuiderIsOag ? FocalLengthMm : GuiderFocalLengthMm;
 
-    /// <summary>OAG prism pick-off geometry — radial distance (mm, in the focal
+    /// <summary>OAG prism pick-off geometry, radial distance (mm, in the focal
     /// plane) from the optical axis to the centre of the guide chip's field.
     /// Drives where the guide FOV "square" is drawn on the SKY map relative to
     /// the main-scope solve. 0 = concentric with the main field. Only meaningful
     /// when <see cref="GuiderIsOag"/> is true.</summary>
     public double OagOffsetMm { get; set; }
 
-    /// <summary>OAG prism position angle — rotation (degrees) of the pick-off
+    /// <summary>OAG prism position angle, rotation (degrees) of the pick-off
     /// offset direction around the optical axis, measured from the camera's
     /// +Y (up) axis. Combined with the field rotation to place the guide FOV
     /// square. Only meaningful when <see cref="GuiderIsOag"/> is true.</summary>
@@ -808,13 +808,13 @@ public class EquipmentProfile {
     public double AuxFocalLengthMm { get; set; } = 200;
 
     /// <summary>Aux-camera pixel size in micrometres. Same role + fallback
-    /// behaviour as <see cref="CameraPixelSizeUm"/> but for the aux camera —
+    /// behaviour as <see cref="CameraPixelSizeUm"/> but for the aux camera,
     /// a DSLR on the aux port (indi_gphoto) reports 0, so Polaris pushes this
     /// into the aux driver's CCD_INFO on connect. 0 = let the camera report it.</summary>
     public double AuxCameraPixelSizeUm { get; set; }
 
     /// <summary>Aux-camera sensor resolution + bit depth. Same role as the main
-    /// camera's CameraMaxX/Y/BitDepth — needed to bootstrap indi_gphoto's
+    /// camera's CameraMaxX/Y/BitDepth, needed to bootstrap indi_gphoto's
     /// CCD_INFO so the aux DSLR's exposures aren't rejected. 0 = camera reports.</summary>
     public int AuxCameraMaxX { get; set; }
     public int AuxCameraMaxY { get; set; }
@@ -980,7 +980,7 @@ public class EquipmentProfile {
     public double NativeZFilterExpFactor { get; set; } = 0.0;
 
     /// <summary>Apply Dec backlash compensation (the amount is auto-measured
-    /// during calibration). Off by default — an over-large value oscillates
+    /// during calibration). Off by default, an over-large value oscillates
     /// worse than no compensation.</summary>
     public bool NativeBacklashComp { get; set; } = false;
 
@@ -1234,7 +1234,7 @@ public class EquipmentProfile {
     /// <c>LiveStackingService.AddFrameAsync</c> is also persisted to
     /// disk as a regular LIGHT (lands in the same per-target /
     /// per-filter / per-session layout as a sequence capture).
-    /// Default ON — most users want both the integrated preview
+    /// Default ON, most users want both the integrated preview
     /// AND an archive they can re-stack offline in Siril /
     /// PixInsight later. Per-rig so visual-only EAA rigs can opt
     /// out (just untick the checkbox in the LIVE tab).</summary>
@@ -1256,7 +1256,7 @@ public class EquipmentProfile {
     /// buffer, the R/G/B accumulators and the eight scratch planes come to
     /// ~38 bytes per pixel, so a 11.7 MP OSC frame needs ~440 MB at 1:1 and
     /// ~110 MB at 1:2. This is the setting that decides whether live stacking
-    /// fits on a 1-1.5 GB SBC at all. Only the EAA PREVIEW is reduced — the
+    /// fits on a 1-1.5 GB SBC at all. Only the EAA PREVIEW is reduced, the
     /// subs written to disk are always full resolution.</para></summary>
     public int LiveStackBinning { get; set; } = 0;
 

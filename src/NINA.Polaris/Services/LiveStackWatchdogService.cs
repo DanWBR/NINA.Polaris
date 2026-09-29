@@ -77,7 +77,7 @@ public sealed class LiveStackWatchdogService : System.IDisposable {
                 _autoStopped = true;
                 _capture.Stop();
                 _notify.Push("ok",
-                    $"Live stack reached target SNR {_stack.TargetSnr.Value:0.#} — capture stopped.", 8000);
+                    $"Live stack reached target SNR {_stack.TargetSnr.Value:0.#}, capture stopped.", 8000);
                 _logger.LogInformation("Live-stack watchdog: target SNR {Target:0.#} reached at frame {Frame}, capture stopped.",
                     _stack.TargetSnr.Value, info.FrameCount);
             }

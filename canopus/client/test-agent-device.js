@@ -1,4 +1,4 @@
-// N.I.N.A. Polaris — Canopus Assistant
+// N.I.N.A. Polaris, Canopus Assistant
 // Copyright (C) 2024-2026 Daniel Wagner (DanWBR) and the N.I.N.A. Polaris contributors
 //
 // This program is free software: you can redistribute it and/or modify it under
@@ -49,7 +49,7 @@ function makeHarness(script) {
 
 (async () => {
   // Read tool: user -> tool-call(get_status) -> assistant -> done.
-  const h1 = makeHarness([{ text: null, toolCalls: [{ id: '1', name: 'get_status', arguments: {} }] }, { text: 'All good — guiding is running.', toolCalls: [] }]);
+  const h1 = makeHarness([{ text: null, toolCalls: [{ id: '1', name: 'get_status', arguments: {} }] }, { text: 'All good, guiding is running.', toolCalls: [] }]);
   await h1.agent.onMessage({ type: 'user', text: 'how is it going?' });
   const t1 = h1.out.map(m => m.type);
   assert(t1.includes('tool-call'), 'read: emits a tool-call');

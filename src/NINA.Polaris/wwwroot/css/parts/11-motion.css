@@ -1,8 +1,8 @@
-/* 11-motion.css — lightweight UI motion + a global "reduce motion" kill switch.
+/* 11-motion.css, lightweight UI motion + a global "reduce motion" kill switch.
  *
  * Loaded LAST so the reduce-motion overrides win the cascade. Everything here
  * animates ONLY `opacity` / `transform`, which the browser composits on the GPU
- * off the main thread — effectively free even on a weak client tablet. We never
+ * off the main thread, effectively free even on a weak client tablet. We never
  * animate layout/paint properties (width/height/top/left/box-shadow/filter/
  * background) here, and never the hot regions (image canvas, charts, xterm, the
  * 1 Hz status chips).
@@ -18,7 +18,7 @@
  * The tab panels toggle via Alpine x-show (display:none <-> block). A CSS
  * animation re-runs every time the element returns to a rendered display value,
  * so simply attaching it to .tab-panel gives a fade-in each time that tab is
- * shown — no per-panel markup, no JS. Opacity only (NOT transform): a
+ * shown, no per-panel markup, no JS. Opacity only (NOT transform): a
  * transformed ancestor becomes the containing block for any position:fixed
  * descendant, which would briefly mis-place fixed children during the animation.
  */
@@ -47,7 +47,7 @@
  *   1. Backdrops that carry x-show get an Alpine `x-transition.opacity` in the
  *      markup, so they fade BOTH in and out (the close reverse the user asked
  *      for). We must NOT also CSS-animate those on enter or the two opacity
- *      mechanisms fight — so they are absent from the list below.
+ *      mechanisms fight, so they are absent from the list below.
  *   2. The FRAME inside each backdrop has no x-show of its own, so it can't use
  *      x-transition; it keeps a CSS pop on open (re-runs each time the backdrop
  *      returns to a rendered display) and simply fades out with its parent

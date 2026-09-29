@@ -1,12 +1,12 @@
 /* ───────────────────────────────────────────────────────────────────────
-   09-mobile.css — defensive phone reflow.
+   09-mobile.css, defensive phone reflow.
 
    Loaded LAST so it wins specificity ties. The app's base mobile strategy is
    `body { zoom }` (see 01-base-statusbar.css): the whole desktop layout is
    scaled to 0.85 (≤960px) / 0.75 (≤640px). That keeps everything visible but
    several rows still overflow horizontally on a phone (iPhone 12 Pro). These
-   rules add real reflow — wrap toolbars/param rows, stop fixed-width inputs
-   from forcing horizontal scroll, and compact the header — at the ≤640px tier
+   rules add real reflow, wrap toolbars/param rows, stop fixed-width inputs
+   from forcing horizontal scroll, and compact the header, at the ≤640px tier
    (the same breakpoint where the 0.75 zoom is already active on the phone).
 
    Everything here only loosens layout on narrow viewports, so it can't affect
@@ -24,7 +24,7 @@
         column-gap: 6px;
     }
     .brand-version { display: none; }
-    /* Compact the wordmark to just "Polaris" on phones — the full
+    /* Compact the wordmark to just "Polaris" on phones, the full
        "ASTRO CONTROLLER" tag is too wide for the status bar. */
     .brand-tag { display: none; }
 
@@ -67,7 +67,7 @@
    (~950 px, so the width-keyed zoom above stays at 0.85 on the full desktop
    layout) but only ~400-450 px TALL. The result: the 15-item nav rail and the
    panels overflow the short height, and everything feels oversized. The width
-   tiers can't catch this — a landscape phone isn't "narrow". Key off
+   tiers can't catch this, a landscape phone isn't "narrow". Key off
    orientation + a short height instead. Tablets in landscape are ≥700 px tall,
    so they never match; portrait phones are tall, so they keep the 0.75 tier. */
 @media (orientation: landscape) and (max-height: 520px) {

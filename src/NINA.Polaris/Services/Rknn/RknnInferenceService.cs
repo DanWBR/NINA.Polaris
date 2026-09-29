@@ -96,7 +96,7 @@ public sealed class RknnInferenceService : IDisposable {
         } else {
             // Denoise. v3 models clip at 1.0, v2 at 10.0. Real-RGB single pass
             // (GraXpert-style): the 3 colour channels go through the model
-            // together, one inference per tile — not three mono passes.
+            // together, one inference per tile, not three mono passes.
             double clip = version.StartsWith("3.", StringComparison.Ordinal) ? 1.0 : 10.0;
             outPixels = RknnPipelines.RunDenoise(session, img.Data, w, h, channels,
                 opts.DenoiseStrength, clip);

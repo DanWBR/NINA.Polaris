@@ -66,7 +66,7 @@ public static class ImageStreamHandler {
                     // NO artificial receive deadline. This stream is a pure
                     // CONSUMER: after the handshake the browser never sends
                     // anything again, and WebSocket ping/pong are control
-                    // frames handled below ReceiveAsync — so a receive timeout
+                    // frames handled below ReceiveAsync, so a receive timeout
                     // guillotined EVERY connection on schedule (PingInterval*3
                     // = 90 s, matching the observed "CONNECT /ws/image-stream
                     // 200 90013.1ms"). That killed whatever frame was in flight

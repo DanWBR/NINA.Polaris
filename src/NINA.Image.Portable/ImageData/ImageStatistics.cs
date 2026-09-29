@@ -124,7 +124,7 @@ public class ImageStatistics : IImageStatistics {
 
     /// <summary>
     /// Background SNR plus the median (a robust sky-background proxy, ADU) and
-    /// the peak pixel — computed together so the live path can derive the
+    /// the peak pixel, computed together so the live path can derive the
     /// sky-background rate (for the sub-exposure advisor) and a saturation
     /// ceiling without a redundant median pass. The median histogram is already
     /// built for the SNR; only the max adds a light memory-bound scan.
@@ -170,7 +170,7 @@ public class ImageStatistics : IImageStatistics {
     public static double ComputeBackgroundSnr(ushort[] data, double median, double mad) {
         if (data == null || data.Length == 0) return 0;
         // MAD floor protects against frames with a histogram spike
-        // (all pixels in a single bucket — DSLR flat black, dropped
+        // (all pixels in a single bucket, DSLR flat black, dropped
         // frame, simulator returning constant). Without it, a few
         // outliers blow up SNR to ridiculous values.
         var madFloored = Math.Max(1.0, mad);
@@ -240,7 +240,7 @@ public class ImageStatistics : IImageStatistics {
         int med = (int)median;
         var histogram = new int[65536];
         var hl = new object();
-        // MEMOPT: partition-local bins are rented, not allocated — a fresh
+        // MEMOPT: partition-local bins are rented, not allocated, a fresh
         // int[65536] is 256 KB (LOH) PER PARTITION per pass, and this runs
         // several times per live-stack frame; on a many-core host that was
         // tens of MB of per-frame churn.

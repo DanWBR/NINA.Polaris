@@ -121,7 +121,7 @@ public static class WcsHeaders {
     /// CD matrix + reference pixel. Prefer this over <see cref="FromSolveResult"/>
     /// whenever the solver hands back a real CD matrix (ASTAP and astrometry.net
     /// both do): the CD matrix carries the true parity (mirror/flip) of the
-    /// optical train, which a (scale, rotation) reconstruction cannot — it
+    /// optical train, which a (scale, rotation) reconstruction cannot, it
     /// assumes a fixed handedness and silently mirrors the RA axis for setups
     /// with the opposite parity, misprojecting every catalog star (the root
     /// cause of PCC/SPCC "only N catalog matches").

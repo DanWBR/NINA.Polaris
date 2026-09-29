@@ -114,7 +114,7 @@ public class PhaseCorrelationAlignerTests {
 
     [Test]
     public void FillFraction_BoundedDiscOnSky_IsLow() {
-        // A disc with dark sky around it (radius 40 in 200²) — centroid territory.
+        // A disc with dark sky around it (radius 40 in 200²), centroid territory.
         const int w = 200, h = 200, r = 40;
         var f = new ushort[w * h];
         for (int y = 0; y < h; y++)

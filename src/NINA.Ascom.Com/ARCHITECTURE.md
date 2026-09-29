@@ -73,7 +73,7 @@ filter wheel) to work; each was learned the hard way against a real driver:
 2. **A minimal process, not the loaded server.** Even through DriverAccess, the
    driver's `Connected = true` (opening a serial port via
    `ASCOM.Utilities.Serial`) fast-fails inside the loaded Kestrel process, yet
-   throws a clean error — or connects — in a minimal child. Proven by running
+   throws a clean error, or connects, in a minimal child. Proven by running
    the exact same connect both ways.
 
 So the wheel runs in a minimal child: the Polaris exe re-launched with
@@ -82,7 +82,7 @@ an STA pump and serving it over stdin/stdout JSON. `AscomHostChannel` (parent)
 marshals member access and turns a child crash into a clean
 `AscomHostException`; `AscomComFilterWheelHosted` is the `IFilterWheel` over it.
 Self-relaunch means zero extra packaging, and a crashing driver takes down only
-its child — the API server surfaces a clean error with an Alpaca hint.
+its child, the API server surfaces a clean error with an Alpaca hint.
 
 The remaining raw-COM adapters (camera / focuser / telescope / switch) still
 activate in-process; native drivers (ZWO etc.) are fine there, but a WinForms

@@ -66,7 +66,7 @@ public class ImageRelayService : IDisposable {
     // Stabilize a transient CCD_CFA dropout: some drivers momentarily report
     // BayerPattern=None mid-session, which (without an operator override) would
     // relay that single frame as mono and flash a grey / raw-mosaic frame on
-    // the client-side debayer — the intermittent "frame não debayerado" report.
+    // the client-side debayer, the intermittent "frame não debayerado" report.
     // Mirrors LiveStackingService._lastGoodBayer, but capped so a genuinely
     // mono camera (continuous None, e.g. after switching to a mono rig) is not
     // forced into colour: after a short run of None frames we stop substituting
@@ -91,11 +91,11 @@ public class ImageRelayService : IDisposable {
     public IImageData? LatestImageData => _latestImageData;
 
     // A full-frame raw relay is BIG (a 4144x2822 16-bit sub is ~22 MB raw,
-    // ~19 MB after LZ4 — astro data barely compresses). On an SBC uplink that
+    // ~19 MB after LZ4, astro data barely compresses). On an SBC uplink that
     // is also carrying the storage push (another ~23 MB per capture), 10 s was
     // not enough to drain one frame: the send timed out, the client was
     // dropped, and the browser kept showing the last frame that made it
-    // through — the preview looked frozen on a stale image while LIVE/STUDIO
+    // through, the preview looked frozen on a stale image while LIVE/STUDIO
     // (small server-side JPEGs) stayed fine. Give a frame a realistic window;
     // the per-client "skip if still sending" backpressure already stops a slow
     // consumer from building a backlog, so a long timeout costs nothing.
@@ -241,7 +241,7 @@ public class ImageRelayService : IDisposable {
 
     /// <summary>
     /// Broadcast a frame to every connected /ws/image-stream client.
-    /// The default kind is <see cref="FrameKind.Live"/> — backwards
+    /// The default kind is <see cref="FrameKind.Live"/>, backwards
     /// compatible with every caller that doesn't say otherwise.
     /// </summary>
     public Task RelayImageAsync(IImageData imageData, CancellationToken ct = default)
@@ -302,7 +302,7 @@ public class ImageRelayService : IDisposable {
         } else if (_lastRelayBayer != BayerPatternEnum.None) {
             // Source reported Bayer=None but we've already locked a real pattern
             // this session, so this is a CCD_CFA dropout (some INDI OSC drivers
-            // only publish the pattern intermittently, not every frame) — keep
+            // only publish the pattern intermittently, not every frame), keep
             // colouring. Reuse is UNBOUNDED on purpose: the previous 5-frame cap
             // meant a driver that dropped the pattern for >5 subs flashed the
             // LIVE view mono a few seconds after each stack (field report). A
@@ -336,7 +336,7 @@ public class ImageRelayService : IDisposable {
         // RAW + LZ4 + client-side WebGL stretch every time.
         int calibration = IsNoiseFrame(sourceData.MetaData?.Exposure?.ImageType) ? 1 : 0;
         var header = buffer.GetStreamHeader(frameKind, calibration);
-        // MEMOPT: the payload stays in a POOLED (oversized) buffer — only the
+        // MEMOPT: the payload stays in a POOLED (oversized) buffer, only the
         // first compressedLen bytes are real. Returned to the pool below, so the
         // per-frame ~20 MB Large Object Heap allocation is gone entirely.
         var compressed = buffer.RentLz4Compressed(out int compressedLen);
@@ -352,7 +352,7 @@ public class ImageRelayService : IDisposable {
         // MEMOPT: send the envelope as TWO WebSocket fragments instead of
         // building one combined array. Concatenating used to allocate a second
         // ~20 MB Large Object Heap block per frame purely to memcpy the payload
-        // into it, so 40 MB was live to deliver 20 MB — the exact kind of LOH
+        // into it, so 40 MB was live to deliver 20 MB, the exact kind of LOH
         // churn that fragments the heap on a 1 GB SBC. The browser reassembles
         // fragments into a single message event, so the client is unchanged.
         var prefix = new byte[4 + header.Length];
@@ -364,7 +364,7 @@ public class ImageRelayService : IDisposable {
         // to push over an SBC WiFi uplink (measured lastSendMs on a snap loop),
         // and in a SEQUENTIAL capture loop the previous send has always
         // finished before the next frame, so the per-client skip-if-busy
-        // backpressure (SendLock.Wait(0)) never fired — the exposure cadence was
+        // backpressure (SendLock.Wait(0)) never fired, the exposure cadence was
         // gated by the browser's download speed, not the camera. This is why the
         // SV405CC "took 30-42 s/frame and degraded on the OPi5Pro" while the
         // smaller SV605CC and every NINA-desktop rig (no raw-over-WiFi relay in
@@ -394,12 +394,12 @@ public class ImageRelayService : IDisposable {
     /// histogram had to come from a second, server-side computation, its handles
     /// had to be converted between the stretch the server applied and the stretch
     /// they set, and the two framings drifted apart. Sending the real pixels
-    /// removes all of that — the client stretches and builds its histogram from
+    /// removes all of that, the client stretches and builds its histogram from
     /// the same numbers, which is what the mono path has always done and what
     /// ASIAIR does.</para>
     ///
     /// <para>The cost is bandwidth: 16-bit RGB is about ten times the JPEG. Hence
-    /// <paramref name="maxDim"/>, which is not optional — a full-frame 4144x2822
+    /// <paramref name="maxDim"/>, which is not optional, a full-frame 4144x2822
     /// colour stack is 70 MB. <see cref="FitsThumbnailer.DownsampleForPreview"/>
     /// box-averages whole pixels per plane, so the downsample costs signal-to-noise
     /// nothing and the histogram it feeds still describes the real stack.</para>
@@ -492,7 +492,7 @@ public class ImageRelayService : IDisposable {
     /// still handed to recording subscribers untouched (SER stays raw).
     ///
     /// <para>Bounded by a single in-flight render guard: if the previous
-    /// frame is still encoding, this frame is dropped rather than queued —
+    /// frame is still encoding, this frame is dropped rather than queued,
     /// the stream stays smooth at the rate the Pi can actually encode +
     /// the link can carry, instead of building an unbounded backlog.</para>
     /// </summary>
@@ -550,7 +550,7 @@ public class ImageRelayService : IDisposable {
     /// Broadcast a 3-plane (planar R,G,B) RGB image as a downscaled,
     /// per-channel auto-stretched JPEG tagged <paramref name="kind"/>.
     /// Used by the colour live-stacker so the LIVE canvas shows the
-    /// debayered RGB stack without a client-side RGB-raw render path —
+    /// debayered RGB stack without a client-side RGB-raw render path,
     /// the browser decodes the colour JPEG and the existing headered-JPEG
     /// route draws it on the frame's canvas. Same drop-if-busy guard as
     /// <see cref="RelayVideoJpegAsync"/>.
@@ -583,7 +583,7 @@ public class ImageRelayService : IDisposable {
             //
             // This used to set _latestJpeg = null, reasoning that invalidating the
             // cache would make /api/livestack/preview "re-encode from THIS colour
-            // stack". It does re-encode — as GREYSCALE. GetLatestJpeg falls back to
+            // stack". It does re-encode, as GREYSCALE. GetLatestJpeg falls back to
             // ImageBuffer.ToJpeg(), whose only encoder is JpegHelper.EncodeGrayscale;
             // there is no colour path through it, because ImageBuffer carries a
             // single plane. So the sequence the user kept seeing was:
@@ -593,7 +593,7 @@ public class ImageRelayService : IDisposable {
             //   4. the greyscale preview paints over the colour frame  → B&W
             // Confirmed by LIVE-TRACE: every frame logged
             // `out{branch=COLOUR(debayer-per-plane -> RGB JPEG)} ch=3`, i.e. the
-            // server ALWAYS sent colour — the flip was never on the stacking side,
+            // server ALWAYS sent colour, the flip was never on the stacking side,
             // which is why chasing _colorActive / CCD_CFA dropouts never found it.
             // The histograms of the colour and B&W screenshots were identical
             // (MAX 59206, MIN 223) precisely because the DATA never changed: same
@@ -670,7 +670,7 @@ public class ImageRelayService : IDisposable {
             // (backpressure). Guard the whole semaphore interaction: a
             // client can be unregistered concurrently, and even though we
             // no longer dispose its SendLock, any per-client fault here
-            // must only kill THAT client — never propagate out and fail
+            // must only kill THAT client, never propagate out and fail
             // the capture that triggered this relay.
             bool acquired;
             try {
@@ -789,7 +789,7 @@ public class ImageRelayService : IDisposable {
             // colour instead of one.
             // A 3-plane buffer (the colour stack, since it moved to the raw
             // relay) has nothing to debayer and everything to lose in a grey
-            // encoder — same trap as the Bayer case below, one step later.
+            // encoder, same trap as the Bayer case below, one step later.
             if (img.Channels >= 3 && img.PixelData.Length >= img.Width * img.Height * 3) {
                 var planes = System.Runtime.InteropServices.MemoryMarshal
                                  .TryGetArray(img.PixelData, out var pseg) && pseg.Array != null
@@ -839,7 +839,7 @@ public class ImageRelayService : IDisposable {
     public void Dispose() {
         foreach (var (_, entry) in _clients) {
             try { entry.Ws.Dispose(); } catch { }
-            // SendLock intentionally not disposed — see UnregisterClient.
+            // SendLock intentionally not disposed, see UnregisterClient.
         }
         _clients.Clear();
     }

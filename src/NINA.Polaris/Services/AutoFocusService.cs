@@ -27,12 +27,12 @@ using NINA.Image.Interfaces;
 namespace NINA.Polaris.Services;
 
 /// <summary>
-/// Auto-focus service — port of the N.I.N.A. desktop algorithm (AFPORT).
+/// Auto-focus service, port of the N.I.N.A. desktop algorithm (AFPORT).
 ///
 /// The sweep first moves OUT by OffsetSteps*StepSize and samples OffsetSteps+1
 /// points sweeping back IN; it then keeps adding ONE point at a time on
 /// whichever side of the curve minimum has fewer than OffsetSteps trendline
-/// points (<see cref="AutoFocusSweepPlanner"/>) — so a start far from focus
+/// points (<see cref="AutoFocusSweepPlanner"/>), so a start far from focus
 /// grows the missing arm instead of building a one-sided curve. Every point
 /// carries a 1-sigma error (HFR spread across stars, pooled over frames) and
 /// every fit weights by 1/σ²; a no-stars point is soft-rejected (measure 0,
@@ -324,7 +324,7 @@ public class AutoFocusService {
                         ? clamped >= minX : clamped <= maxX;
                     if (railed || focuser.Position == 0) {
                         // Travel rail / zero position: can't grow that arm any
-                        // further — fit what we have and let the gates decide.
+                        // further, fit what we have and let the gates decide.
                         _logger.LogWarning("AF hit focuser travel limit while extending; fitting what we have");
                         break;
                     }
@@ -432,7 +432,7 @@ public class AutoFocusService {
 
                 // Per-filter focus memory: record this run's optimum for the
                 // active filter (MAIN train only) + refresh the learned relative
-                // offsets, so a later filter change can reuse it. Best-effort —
+                // offsets, so a later filter change can reuse it. Best-effort,
                 // a memory write must never fail an otherwise-good autofocus.
                 if (source == "main" && o.RecordFilterMemory) {
                     try {
@@ -545,7 +545,7 @@ public class AutoFocusService {
         int n = Math.Clamp(o.RefinePoints, 3, 8);
 
         // Positions centred on the vertex: for n=4 and step=12 that is
-        // vertex-18, vertex-6, vertex+6, vertex+18 — the whole window sits
+        // vertex-18, vertex-6, vertex+6, vertex+18, the whole window sits
         // inside one coarse interval either side.
         var targets = new List<int>(n);
         double half = (n - 1) / 2.0;
@@ -657,7 +657,7 @@ public class AutoFocusService {
     /// yielding (mean star HFR, stdev across stars); frames are combined as
     /// mean-of-means with pooled stdev sqrt(Σσ²/N). Frames below MinStars
     /// contribute nothing; a point with NO starry frame is soft-rejected as
-    /// (0, 1000) — near-zero weight in the fits, still counted by the
+    /// (0, 1000), near-zero weight in the fits, still counted by the
     /// planner. HFR is 0 rather than NaN because the points go straight onto
     /// the WS JSON payload (System.Text.Json rejects NaN).</summary>
     private async Task<(double measure, double stdev, int starCount)> MeasurePointFramesAsync(
@@ -777,7 +777,7 @@ public class AutoFocusService {
         // detector was being run straight on it.
         //
         // On a mosaic a star's flux is split across its R/G/G/B sites, so each
-        // pixel holds a fraction of it, and same-colour pixels sit TWO apart —
+        // pixel holds a fraction of it, and same-colour pixels sit TWO apart,
         // far enough that even the eight-connectivity above cannot join them.
         // A small star therefore arrives as a scatter of single pixels, each
         // below MinStarSize and each dimmer than the whole star would be
@@ -786,7 +786,7 @@ public class AutoFocusService {
         // Board log (OPi5Pro + ASI585MC, 2026-08-13) confirms the SYMPTOM: a
         // failed auto-focus plotted nothing on short focus subs, while the live
         // stack read 200 stars per frame. That number is not a clean measure of
-        // the binning on its own — the live stack also runs 180 s subs against
+        // the binning on its own, the live stack also runs 180 s subs against
         // auto-focus's ~15 s, so it has far more star signal to begin with. What
         // it does establish is that this rig genuinely produced empty sweeps.
         // The binning's own contribution is isolated in the unit test, which
@@ -800,7 +800,7 @@ public class AutoFocusService {
         // (LiveStackingService.BinFrame keeps its result a valid half-size
         // MOSAIC because that output is debayered downstream; here we only need
         // luminance, so collapsing the quad to a single pixel is both simpler
-        // and cleaner for detection.) A luminance proxy, not a debayer — nothing
+        // and cleaner for detection.) A luminance proxy, not a debayer, nothing
         // here needs colour, only where the light is and how spread out it is.
         int detScale = 1;
         if (image.Properties.IsBayered && width >= 4 && height >= 4) {
@@ -867,11 +867,11 @@ public class AutoFocusService {
 
         // Robust central HFR across stars. At a fixed focuser position every
         // real star is defocused by the SAME amount, so their HFRs cluster
-        // tightly; spurious detections — merged donuts, nebula structure, hot
-        // regions — read far larger and, under a plain mean, spike the whole
+        // tightly; spurious detections, merged donuts, nebula structure, hot
+        // regions, read far larger and, under a plain mean, spike the whole
         // point (the HFR 28-30 outliers that shatter an otherwise smooth
         // V-curve). Sigma-clip around the median (MAD-scaled) and average only
-        // the survivors so the point tracks the true defocus size — what keeps
+        // the survivors so the point tracks the true defocus size, what keeps
         // ASIAIR's curve uniform. The survivor stdev still feeds the 1/σ² fit
         // weights.
         var (mean, stdev, _) = RobustMeanHfr(stars.Select(s => (double)s.HFR).ToList());
@@ -960,7 +960,7 @@ public class AutoFocusService {
     }
 
     /// <summary>Fit-space projection of the sampled points: X = position,
-    /// Y = HFR, ErrorY = stdev floored at 0.001 — except soft/low-wing
+    /// Y = HFR, ErrorY = stdev floored at 0.001, except soft/low-wing
     /// rejected points which carry σ=1000 so their fit weight is ~1e-6.</summary>
     private static List<FocusPoint> BuildFitPoints(IReadOnlyList<AutoFocusPoint> points) {
         return points
@@ -978,8 +978,8 @@ public class AutoFocusService {
 
     /// <summary>
     /// Flag "low wing" samples: HFR readings that DROP as the star defocuses
-    /// further from focus. A real V-curve is convex — moving away from the
-    /// vertex, HFR only increases — so a wing sample lower than the highest
+    /// further from focus. A real V-curve is convex, moving away from the
+    /// vertex, HFR only increases, so a wing sample lower than the highest
     /// HFR already seen on its way out is unphysical (detector missed the
     /// faint donut and latched onto noise). Flagged points keep their
     /// measured values for the chart but are soft-rejected in the fit
@@ -993,7 +993,7 @@ public class AutoFocusService {
         // Where is focus? NOT at the global minimum HFR: that is precisely what
         // the bug being guarded against corrupts. A far-out sample whose donut
         // the detector lost reads a bogus SMALL HFR, becomes the "vertex", and
-        // the series then looks monotonic outward from there — so nothing is
+        // the series then looks monotonic outward from there, so nothing is
         // flagged and, worse, the real focus point ends up on the wrong side of
         // scan and gets rejected instead (reproduced in
         // AutoFocusDefocusMeasurementTests: with focus at 3.0 and a bogus 1.1
@@ -1105,7 +1105,7 @@ public class AutoFocusService {
     /// Backlash-aware absolute move (port of the desktop compensation
     /// decorators). OVERSHOOT: when a direction's backlash is configured,
     /// overshoot PAST the target by that amount, settle, then approach the
-    /// target — so the final approach always loads the gears the same way.
+    /// target, so the final approach always loads the gears the same way.
     /// ABSOLUTE: keep a persistent offset that grows/shrinks on every
     /// direction reversal; the commanded physical position includes it while
     /// the LOGICAL position (returned, recorded as the curve X) does not.
@@ -1151,7 +1151,7 @@ public class AutoFocusService {
     /// command reads the stale Idle state and returns while the motor is still
     /// travelling. The measurement then ran mid-move and the position read came
     /// back stale, so two consecutive samples landed at nearly the same motor
-    /// position — wrecking the V-curve. Gating on "reached the requested
+    /// position, wrecking the V-curve. Gating on "reached the requested
     /// position AND not moving" is deterministic regardless of how the driver
     /// sequences its Busy/Idle transitions or how fast the move completes.
     /// </remarks>
@@ -1521,7 +1521,7 @@ public class AutoFocusResult {
     /// <summary>Curve fitting method the run used.</summary>
     public string Method { get; set; } = "";
     /// <summary>HFR measured at the start position before the sweep (0 if it
-    /// couldn't be measured — too far out of focus).</summary>
+    /// couldn't be measured, too far out of focus).</summary>
     public double InitialHfr { get; set; }
     /// <summary>How many sweep attempts it took to land an accepted curve.</summary>
     public int Attempts { get; set; } = 1;

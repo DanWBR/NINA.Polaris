@@ -18,7 +18,7 @@ namespace NINA.Polaris.Services;
 
 /// <summary>
 /// FILTERNAME: makes the operator's saved filter names (on the rig) the source
-/// of truth for LABELS, regardless of what the driver can do — the way NINA
+/// of truth for LABELS, regardless of what the driver can do, the way NINA
 /// desktop treats them.
 ///
 /// The ASCOM/Alpaca spec makes a wheel's <c>Names</c> read-only: the driver
@@ -29,8 +29,8 @@ namespace NINA.Polaris.Services;
 ///
 /// This decorator wraps the real backend and overlays the rig's
 /// <c>EquipmentProfile.FilterNames</c> per slot, so every consumer that reads
-/// through <c>EquipmentManager.FilterWheel</c> — the status feed, the FITS
-/// FILTER keyword, selection-by-name, the sequencer — sees the effective
+/// through <c>EquipmentManager.FilterWheel</c>, the status feed, the FITS
+/// FILTER keyword, selection-by-name, the sequencer, sees the effective
 /// (renamed) names without knowing anything changed. Editing persists to the
 /// profile for ALL drivers and additionally pushes into the driver when it
 /// accepts names (INDI), so nothing regresses for writable wheels.
@@ -166,7 +166,7 @@ public sealed class EffectiveFilterWheel : IFilterWheel {
         }
 
         // Writable driver (INDI): push so the driver's own labels match too.
-        // Best-effort — a driver that rejects the push must not fail the save
+        // Best-effort, a driver that rejects the push must not fail the save
         // that already landed on the rig.
         if (_inner.Capabilities.SupportsEditNames) {
             try { await _inner.SetFilterNamesAsync(final, ct); }

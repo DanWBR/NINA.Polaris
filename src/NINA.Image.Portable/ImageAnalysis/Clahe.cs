@@ -18,7 +18,7 @@ using System.Threading.Tasks;
 namespace NINA.Image.ImageAnalysis;
 
 /// <summary>
-/// CLAHE — Contrast-Limited Adaptive Histogram Equalization. Boosts LOCAL
+/// CLAHE, Contrast-Limited Adaptive Histogram Equalization. Boosts LOCAL
 /// contrast (per-tile histogram equalization) while the clip limit caps noise
 /// amplification, and bilinear interpolation between tile mappings removes the
 /// tile-boundary seams. Runs on luminance and re-applies the change as a gain

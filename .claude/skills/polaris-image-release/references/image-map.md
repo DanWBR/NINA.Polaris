@@ -17,8 +17,8 @@ sgdisk -p <image>.img        # GPT
 | x86-64 mini PC | `polaris-linux-x64-*.7z` | GPT | `1953792` | `2048` (953M ESP) | not needed |
 | Raspberry Pi 4 | `rpi4-polaris-*.7z` | DOS | `1064960` | `16384` (512M FAT32) | `/boot/firmware` |
 | Raspberry Pi 5 | `rpi5-polaris-*.7z` | DOS | `1064960` | `16384` (512M FAT32) | `/boot/firmware` |
-| Orange Pi 4 Pro | `opi4pro-polaris-*.7z` | DOS | `65536` | none (boot inside root) | — |
-| Orange Pi 5 Pro | `opi5pro-polaris-*.7z` | GPT | `32768` | none (boot inside root) | — |
+| Orange Pi 4 Pro | `opi4pro-polaris-*.7z` | DOS | `65536` | none (boot inside root) |, |
+| Orange Pi 5 Pro | `opi5pro-polaris-*.7z` | GPT | `32768` | none (boot inside root) |, |
 | Radxa Dragon Q6A | `radxa-dragon-q6a-polaris-*.7z` | GPT | `2162688` | `65536` (1G EFI) | `/boot/efi` |
 
 The Q6A also has a 16 MB partition at `32768` that carries firmware; leave it

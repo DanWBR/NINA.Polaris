@@ -1,9 +1,9 @@
-// Copyright (c) 2018 Ken Self — PHD2 / OpenPHDGuiding (BSD-3-Clause).
+// Copyright (c) 2018 Ken Self, PHD2 / OpenPHDGuiding (BSD-3-Clause).
 // Copyright (C) 2024-2026 Daniel Wagner (DanWBR) and the N.I.N.A. Polaris contributors
 //
 // The ZFilter guide algorithm + IIR filter factory are ported to C# from PHD2
 // (guide_algorithm_zfilter.cpp / zfilterfactory.cpp), which is distributed under
-// the BSD-3-Clause license — see licenses/PHD2-LICENSE.txt. The factory is itself
+// the BSD-3-Clause license, see licenses/PHD2-LICENSE.txt. The factory is itself
 // based on A. J. Fisher's mkfilter (University of York, 1992),
 // https://www-users.cs.york.ac.uk/~fisher/mkfilter/.
 //
@@ -21,7 +21,7 @@ namespace NINA.Guider.Portable;
 /// chasing real drift. The cutoff is set by <c>expFactor</c> ("exposure factor"):
 /// the equivalent post-filter exposure time ≈ expFactor × exposure. Below a corner
 /// of 6 it falls back to a Butterworth design, otherwise Bessel (order 4), exactly
-/// like PHD2. Faithful port — see file header for provenance + license.
+/// like PHD2. Faithful port, see file header for provenance + license.
 /// </summary>
 public sealed class ZFilterAlgorithm : IGuideAlgorithm {
     private readonly double _minMove;

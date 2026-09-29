@@ -26,7 +26,7 @@ namespace NINA.Polaris.Test;
 ///
 /// Field, 2026-08-13 (SV550 + ASI585MC): a stack was stopped over a run of
 /// black frames, the camera reconnected, and on resume every frame was dropped
-/// as "alignment failed (200 stars detected)" — a perfect frame, rejected —
+/// as "alignment failed (200 stars detected)", a perfect frame, rejected,
 /// until a reset re-anchored the reference. The frames had drifted past the
 /// 50 px default translation window while the stack was paused, and nothing
 /// escalated the search. These pin the radius behaviour the fix relies on.
@@ -61,7 +61,7 @@ public class StarMatcherDriftRadiusTests {
         Assert.That(Math.Abs(t.Ty), Is.EqualTo(9).Within(3));
     }
 
-    /// <summary>THE FIELD CASE. A 120 px offset — a paused, resumed stack —
+    /// <summary>THE FIELD CASE. A 120 px offset, a paused, resumed stack,
     /// is invisible to the 50 px window: the correct pairs never vote, so no
     /// transform comes back at the default.</summary>
     [Test]

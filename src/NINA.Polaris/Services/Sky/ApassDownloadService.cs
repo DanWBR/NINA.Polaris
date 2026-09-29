@@ -210,7 +210,7 @@ public class ApassDownloadService {
             var cols = line.Split('\t');
             if (cols.Length < 5) continue;
             // Header and any units/dashes line fail the numeric parse below and
-            // are skipped — no need to special-case them.
+            // are skipped, no need to special-case them.
             if (!double.TryParse(cols[0], NumberStyles.Float, CultureInfo.InvariantCulture, out double ra)) continue;
             if (!double.TryParse(cols[1], NumberStyles.Float, CultureInfo.InvariantCulture, out double dec)) continue;
             double? magV = ParseNullable(cols[2]);

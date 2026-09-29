@@ -22,7 +22,7 @@ namespace NINA.Polaris.Test;
 /// Guards the client-side (WASM) live-stack colour path. The browser stacker
 /// (<c>NINA.Polaris.Wasm.Interop.AddFrame</c>) used to align OSC frames by
 /// bilinear-warping the <b>raw Bayer mosaic</b>, which blends adjacent
-/// R/G/G/B pixels together and desaturates the stack — the field bug where the
+/// R/G/G/B pixels together and desaturates the stack, the field bug where the
 /// live stack went black-and-white while the individual frames were fine.
 ///
 /// The fix mirrors <c>LiveStackingService</c>'s colour path: debayer to RGB,
@@ -38,10 +38,10 @@ public class LiveStackClientColourTests {
     private const int W = 16, H = 16;
     private const ushort RVAL = 40000, GVAL = 20000, BVAL = 8000;
 
-    // Re-mosaic phase table — MUST match NINA.Polaris.Wasm.Interop.ColorBlock
+    // Re-mosaic phase table, MUST match NINA.Polaris.Wasm.Interop.ColorBlock
     // (itself mirroring BayerDebayer.ColorBlockFor). index = (y&1)*2 + (x&1),
     // value 0=R / 1=G / 2=B. If this drifts from BayerDebayer, the round-trip
-    // assertion below swaps colours and fails — which is the whole point.
+    // assertion below swaps colours and fails, which is the whole point.
     private static int[] ColorBlock(BayerPatternEnum p) => p switch {
         BayerPatternEnum.RGGB => new[] { 0, 1, 1, 2 },
         BayerPatternEnum.GRBG => new[] { 1, 0, 2, 1 },
@@ -113,7 +113,7 @@ public class LiveStackClientColourTests {
         // The raw-mosaic warp corrupts the colour: shifting the CFA by 1 px
         // slides each colour site onto a neighbour of a DIFFERENT colour, so
         // the debayer reads the wrong channel. At least one channel must land
-        // far from its true value — that desaturation IS the bug.
+        // far from its true value, that desaturation IS the bug.
         int dr = System.Math.Abs(badCh.R[i] - RVAL);
         int dg = System.Math.Abs(badCh.G[i] - GVAL);
         int db = System.Math.Abs(badCh.B[i] - BVAL);

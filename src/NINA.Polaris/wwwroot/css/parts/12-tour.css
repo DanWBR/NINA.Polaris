@@ -82,7 +82,7 @@
 }
 .tour-btn-primary:hover { background: var(--accent-hover, #6cb2ff); }
 
-/* Directional arrow — a small rotated square pinned to the tip edge that
+/* Directional arrow, a small rotated square pinned to the tip edge that
    points toward the highlighted element. */
 .tour-arrow {
     position: fixed;

@@ -29,7 +29,7 @@ namespace NINA.Polaris.Services;
 /// side of the V-curve minimum still has fewer than <c>offsetSteps</c>
 /// trendline-arm points. Arm membership comes from
 /// <see cref="TrendlineFitting"/> (points meaningfully ABOVE the minimum on
-/// that side), NOT from counting points beyond a fitted vertex — that is what
+/// that side), NOT from counting points beyond a fitted vertex, that is what
 /// fixes the "curve built only to one side" field report: a start far from
 /// focus keeps yielding SampleLeft/SampleRight for the empty arm until the
 /// curve actually has two usable slopes.
@@ -46,7 +46,7 @@ public static class AutoFocusSweepPlanner {
         SampleRight,
         /// <summary>Both arms have enough points; proceed to the final fit.</summary>
         Done,
-        /// <summary>No trend points on either side — the sweep has no usable
+        /// <summary>No trend points on either side, the sweep has no usable
         /// slope at all (all-cloud / hopeless). Desktop parity: restore and
         /// give up WITHOUT reattempting.</summary>
         FailNoTrend,
@@ -94,7 +94,7 @@ public static class AutoFocusSweepPlanner {
         }
 
         // Fill the left arm first (moving further in), then the right
-        // (moving back out) — mirrors the desktop's one-at-a-time order.
+        // (moving back out), mirrors the desktop's one-at-a-time order.
         if (leftCount < offsetSteps && leftZero < offsetSteps) {
             return (SweepAction.SampleLeft, (int)Math.Round(minX) - stepSize);
         }
@@ -102,7 +102,7 @@ public static class AutoFocusSweepPlanner {
             return (SweepAction.SampleRight, (int)Math.Round(maxX) + stepSize);
         }
         // Neither guard fires but a side's sum quota is unmet (all-zero side):
-        // nothing productive left to sample. Treat as done — the fit +
+        // nothing productive left to sample. Treat as done, the fit +
         // R² gate downstream decides whether the curve is usable.
         return (SweepAction.Done, 0);
     }

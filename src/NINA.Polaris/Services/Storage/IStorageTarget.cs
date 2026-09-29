@@ -86,7 +86,7 @@ public interface IStorageTarget : IDisposable {
                      IProgress<long>? progress = null);
 
     /// <summary>Best-effort connectivity probe used by the "Test connection"
-    /// button — never throws, returns a human-readable message.</summary>
+    /// button, never throws, returns a human-readable message.</summary>
     Task<(bool ok, string message)> TestAsync(StorageConfig cfg, CancellationToken ct);
 
     /// <summary>SHARESYNC: one-shot map of every file already on the target,

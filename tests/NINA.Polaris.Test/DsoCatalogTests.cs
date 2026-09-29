@@ -162,7 +162,7 @@ public class DsoCatalogTests {
         var results = await _catalog.SearchAsync("NGC 733", limit: 20);
         Assert.That(results, Is.Not.Empty,
             "NGC 7331 / 7339 / etc all start with NGC 733");
-        // NGC 7331 is the brightest hit (mag 9.4) — should rank first.
+        // NGC 7331 is the brightest hit (mag 9.4), should rank first.
         Assert.That(results[0].Name, Does.StartWith("NGC 733"));
     }
 

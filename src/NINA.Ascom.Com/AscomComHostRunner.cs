@@ -28,7 +28,7 @@ namespace NINA.Ascom.Com;
 /// <para>Why a child at all: an old WinForms/.NET-Framework driver (e.g. a DIY
 /// MilkyWheel opening a serial port through <c>ASCOM.Utilities.Serial</c>)
 /// fast-fails (0xC0000409) on <c>Connected = true</c> inside the loaded Kestrel
-/// server process, yet connects (or throws a clean error) in a minimal child —
+/// server process, yet connects (or throws a clean error) in a minimal child,
 /// proven by probing the same driver both ways. So the driver lives here in the
 /// clean child; the app marshals every call and a driver crash kills only this
 /// process. Uses DriverAccess (the ASCOM Platform wrapper NINA uses), which is

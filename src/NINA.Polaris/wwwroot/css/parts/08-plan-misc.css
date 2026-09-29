@@ -206,7 +206,7 @@ input[type="checkbox"]:not(.checkbox-native):checked::after {
     transform: rotate(45deg);
 }
 
-/* Radio bullet — solid filled circle centred in the ring. */
+/* Radio bullet, solid filled circle centred in the ring. */
 input[type="radio"]:not(.checkbox-native):checked::after {
     content: '';
     position: absolute;
@@ -225,7 +225,7 @@ input[type="radio"]:not(.checkbox-native):disabled {
 }
 
 /* Labels wrapping a checkbox were laid out with display:block by the
-   browser default — switching the input to inline-block above leaves
+   browser default, switching the input to inline-block above leaves
    stray flex/grid items wrapping awkwardly. Force inline-flex on the
    nearby <label class="checkbox-label"> (and any vanilla label that
    contains a checkbox) so the label + text stay on one line and
@@ -251,7 +251,7 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
     font-size: 18px;
     padding: 4px 8px;
     outline: none;
-    /* Hide the spinner arrows — at 85% width they crowd the value;
+    /* Hide the spinner arrows, at 85% width they crowd the value;
        the wheel itself is still available for click-to-step UX. */
     -moz-appearance: textfield;
 }
@@ -300,7 +300,7 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
     touch-action:none; will-change:transform; }
 /* Smooth (bilinear) upscale of the guide preview JPEG: it is rendered small
    server-side, so nearest-neighbour made the stars look blocky/posterized.
-   ASIAIR does the same — interpolate for a clean guide image. */
+   ASIAIR does the same, interpolate for a clean guide image. */
 .phd2-cam-img { max-width:100%; max-height:min(420px, 44vh); display:block; image-rendering:auto; cursor:crosshair; }
 .phd2-zoom-ctl { position:absolute; top:6px; left:6px; z-index:3; display:flex;
     align-items:center; gap:4px; background:rgba(0,0,0,0.45); border-radius:6px;
@@ -603,7 +603,7 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 /* Collapsed: slide off to the right leaving only the 28px handle visible. */
 .guide-side.guide-side--collapsed { transform:translateX(calc(100% - 28px)); }
 /* Section header. Generous top margin gives each functional group clear
-   breathing room within its tab (no divider lines — the tabs already group
+   breathing room within its tab (no divider lines, the tabs already group
    things; lines just made it look boxed/cramped). */
 .guide-side-title { font-size:12px; color:#888; margin:16px 0 10px;
     text-transform:uppercase; letter-spacing:.04em; }
@@ -628,7 +628,7 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 .guide-side .guide-status-card .info-row strong { color:var(--text-primary, #e6e9ef);
     font-variant-numeric:tabular-nums; }
 
-/* Functional groups inside the Settings / Calibration tabs — same carded
+/* Functional groups inside the Settings / Calibration tabs, same carded
    look as the Status readout, so each function (aggressiveness, guiding
    parameters, meridian flip, mount calibration, dark library, calibration &
    correction) reads as its own tidy block. */
@@ -853,7 +853,7 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
     overflow: hidden;
     animation: modal-pop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
-/* Accent strip across the top — neutral (accent) by default, red for
+/* Accent strip across the top, neutral (accent) by default, red for
    destructive confirmations (.modal-card.danger). */
 .modal-card::before {
     content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
@@ -1025,7 +1025,7 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
 }
 .guide-bc input[type="range"] { width: 84px; }
 
-/* SN-6: Image Blend — hosted in the FILES editor's modal chrome
+/* SN-6: Image Blend, hosted in the FILES editor's modal chrome
    (.files-editor-modal/-panel). The blend-body is the editor-workspace
    equivalent: zoomable viewer + resizable side panel with large sliders. */
 .blend-body { flex:1 1 auto; display:flex; min-height:0; margin-top:8px; }

@@ -102,7 +102,7 @@ public class PolarAlignmentRefineOnceTests {
     [Test]
     public async Task RefineOnce_NoCamera_ReturnsFalse_AndRestoresOk() {
         // Valid baseline but nothing connected: the step must FAIL
-        // SOFT — report false + LastError and put the job back into
+        // SOFT, report false + LastError and put the job back into
         // Ok/tppa so the UI's Refresh button doesn't wedge in
         // "Refining" forever.
         var svc = MakeService();

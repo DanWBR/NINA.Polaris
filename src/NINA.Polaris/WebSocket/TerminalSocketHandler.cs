@@ -183,7 +183,7 @@ public static class TerminalSocketHandler {
         public int Rows { get; init; }
         /// <summary>Optional command typed into the shell once after connect
         /// (e.g. "sudo raspi-config" from the Optimize-SBC launcher). No more
-        /// privileged than the user typing it — this is their own SSH session.</summary>
+        /// privileged than the user typing it, this is their own SSH session.</summary>
         public string? InitialCommand { get; init; }
     }
 

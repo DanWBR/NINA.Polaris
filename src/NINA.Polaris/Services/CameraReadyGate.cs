@@ -20,14 +20,14 @@ namespace NINA.Polaris.Services;
 /// Shared "wait until the main camera is ready before capturing" gate.
 ///
 /// The INDI driver watchdog is global: on a wedged driver it restarts the driver,
-/// reconnects the device and restores the cooler — a recovery that takes on the
+/// reconnects the device and restores the cooler, a recovery that takes on the
 /// order of tens of seconds. For that recovery to actually SAVE a capture run, the
 /// run has to stay out of the way and pick back up when the camera returns. Only
 /// the LIVE loop did (its private WaitForCameraReadyAsync). AUTORUN, the ADV tree
 /// sequencer and PLAN each had a weaker null-check that let a disconnected camera
 /// through, so during a restart they either burned their frame budget on fast
 /// failures (AUTORUN skipped ~one frame every 2 s, fast-forwarding through the
-/// night) or aborted the whole run (ADV/PLAN) — the latter able to trip a plan's
+/// night) or aborted the whole run (ADV/PLAN), the latter able to trip a plan's
 /// host-shutdown end action. This centralises the wait so every capture path
 /// shares the one behaviour instead of reinventing a lesser one.
 ///
@@ -55,7 +55,7 @@ public class CameraReadyGate {
     /// run abort). Re-resolves the camera on every poll, so a reconnect that swaps
     /// the ICamera instance hands back the live one, never a stale reference.
     ///
-    /// Polls at 1 s and logs ONCE per outage (not per poll) — the per-second log
+    /// Polls at 1 s and logs ONCE per outage (not per poll), the per-second log
     /// flood was the exact symptom this replaces. <paramref name="context"/> tags
     /// the log line with the caller (AUTORUN / ADV / LIVE).</summary>
     public async Task<ICamera?> WaitAsync(string context, CancellationToken ct,

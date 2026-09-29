@@ -19,7 +19,7 @@ using PortableGuideStep = NINA.Guider.Portable.GuideStep;
 
 namespace NINA.Polaris.Services;
 
-// Part of the NativeGuider class — split from NativeGuider.cs for
+// Part of the NativeGuider class, split from NativeGuider.cs for
 // readability. See NativeGuider.cs for the type overview + fields.
 public sealed partial class NativeGuider {
     // ----- Guide loop -----
@@ -104,7 +104,7 @@ public sealed partial class NativeGuider {
                 // blocking for the exposure; a cam that returns faster than the
                 // nominal exposure (short exposures, cached/streamed frames, or a
                 // capture that fails fast) spun the loop and churned a full guide
-                // frame + preview per iteration — the +500 MB GC plateau. Sleep
+                // frame + preview per iteration, the +500 MB GC plateau. Sleep
                 // the remainder of the exposure period so the loop runs at ~1
                 // frame / exposure. The star-lost + error paths already dwell,
                 // so their elapsed >= period and this adds nothing there.
@@ -158,7 +158,7 @@ public sealed partial class NativeGuider {
             // left even the widened window. Then the ONLY thing that recovered
             // guiding was the user doing stop → loop → start by hand, which
             // re-detects on the full frame. Field report: "a guiagem nativa não
-            // sobrevive a alguns instantes de nuvens — não consegue pegar a estrela
+            // sobrevive a alguns instantes de nuvens, não consegue pegar a estrela
             // de volta e realinhar. Tenho que dar stop, loop e depois start guiding
             // manualmente. Isso é crítico para processos de captura longa."
             // Do that automatically instead, once, after the widened search has had
@@ -395,7 +395,7 @@ public sealed partial class NativeGuider {
     /// effectively 8-bit despite the RAW16 enforcement in the camera adapter.
     /// An 8-bit FITS frame is decoded into the HIGH byte of each 16-bit sample
     /// (value &lt;&lt; 8), so every pixel's low byte is zero and only 256 grey
-    /// levels exist — the preview posterizes ("totally pixelated", few B&amp;W
+    /// levels exist, the preview posterizes ("totally pixelated", few B&amp;W
     /// nuances) even though guiding still works on the raw star peaks. The fix
     /// is to set the camera capture format to RAW16 (RIGS / INDI panel); this
     /// just tells the user that's what's happening.</summary>
@@ -419,7 +419,7 @@ public sealed partial class NativeGuider {
         _warned8Bit = true;
         if (!anyLowByte) {
             RaiseAlert(
-                "Guide camera is sending 8-bit (RAW8) frames — the preview will look " +
+                "Guide camera is sending 8-bit (RAW8) frames, the preview will look " +
                 "posterized/pixelated. Set the camera capture format to RAW16 " +
                 "(RIGS or the INDI control panel) for smooth guide images.", "warn");
         }
@@ -514,7 +514,7 @@ public sealed partial class NativeGuider {
         // Compare against the running baseline seeded at guiding start, NOT the
         // side stamped into the calibration. A freshly measured (or reconciled)
         // calibration is ground truth for the current side, so we must never
-        // mirror it on the strength of a stale stamped side — we react only to a
+        // mirror it on the strength of a stale stamped side, we react only to a
         // pier side that CHANGES while guiding. (Lazily adopt the baseline here
         // if it was unknown at start, e.g. the driver only reported it later.)
         if (_loopPierBaseline == PierSide.pierUnknown) {
@@ -557,7 +557,7 @@ public sealed partial class NativeGuider {
         if (_haveLock) {
             await BuildMultiStarAsync(ct);
             // AutoSelectStarAsync set the state to "Selected"; we're still
-            // actively guiding on the new side, so restore "Guiding" —
+            // actively guiding on the new side, so restore "Guiding",
             // otherwise the badge stays stuck on "Selected" after the flip
             // even though the loop keeps correcting (as the recalibrate branch
             // above already does on success).
@@ -690,7 +690,7 @@ public sealed partial class NativeGuider {
     /// frames have already lost it.
     ///
     /// While the star is missing the mount keeps tracking with NO corrections, so
-    /// the star drifts — periodic error plus polar-alignment drift. On a typical
+    /// the star drifts, periodic error plus polar-alignment drift. On a typical
     /// guide scale (2-5"/px) a few minutes of cloud is easily 20-40 px. The fixed
     /// 15 px window meant that once the star drifted out of it, it was never found
     /// again even after the sky cleared and it sat there blazing 30 px away: the
@@ -700,7 +700,7 @@ public sealed partial class NativeGuider {
     /// Widen one base-width every 2 lost frames, capped. The cap is deliberate and
     /// NOT generous: GuideStar.Find returns the BRIGHTEST peak in the window, so an
     /// over-wide search will happily lock a neighbouring star, and the resulting
-    /// jump in dx/dy would be applied as a correction — walking the target out of
+    /// jump in dx/dy would be applied as a correction, walking the target out of
     /// frame. Beyond the cap, re-acquisition (TryReacquireAsync) takes over, which
     /// picks by PROXIMITY instead and can afford to look further.</summary>
     internal static int RecoverySearchRegionFor(int starLostCount, int baseRegion, int maxRegion) {
@@ -713,7 +713,7 @@ public sealed partial class NativeGuider {
     /// NEAREST the old lock, within <paramref name="maxRadius"/>, ignoring
     /// saturated stars and those too close to the frame edge.
     ///
-    /// Nearest, deliberately — not brightest, which is what AutoSelectStarAsync
+    /// Nearest, deliberately, not brightest, which is what AutoSelectStarAsync
     /// uses when starting fresh. After a cloud-out the original star is the one
     /// that drifted a little; the brightest star in a 150 px radius may be a
     /// different star entirely, and re-locking onto it would silently re-frame the
@@ -742,7 +742,7 @@ public sealed partial class NativeGuider {
     /// → start dance the user had to do by hand after every cloud.
     ///
     /// Re-locking MOVES the lock point, so the correction that follows won't drag
-    /// the star back to where it was — the small residual drift is kept instead of
+    /// the star back to where it was, the small residual drift is kept instead of
     /// fought. That's the right trade: a few px of pointing shift costs one frame's
     /// worth of alignment (the stacker handles it), whereas the alternative on the
     /// table was guiding staying dead for the rest of the night.</summary>
@@ -750,7 +750,7 @@ public sealed partial class NativeGuider {
         try {
             _logger.LogInformation(
                 "Native guide: star lost for {N} frames; re-acquiring on the full frame", _starLostCount);
-            RaiseAlert("Guide star lost — re-acquiring…");
+            RaiseAlert("Guide star lost, re-acquiring…");
             try { await cam.SetSubframeAsync(0, 0, 0, 0, ct); } catch { }
             var img = await CaptureFullAsync(cam, ct);
             if (img == null) return;

@@ -368,7 +368,7 @@ public class SequenceEngine {
 
             // Resume point captured ONCE up front. CurrentItemIndex is rewritten
             // on every iteration below, so the per-item start-frame check must
-            // compare against this snapshot — otherwise every item looked like
+            // compare against this snapshot, otherwise every item looked like
             // "the resumed item" and inherited the previous item's finished
             // frame counter, skipping all its frames (the 2nd-card-skipped bug).
             int resumeItem = Math.Max(0, CurrentItemIndex);
@@ -453,7 +453,7 @@ public class SequenceEngine {
                     // while a stale one (panel brightness changed, different
                     // gain, another session) is corrected instead of poisoning
                     // the whole flat set. The probes run with THIS item's gain
-                    // + the rig offset — the exact conditions the capture loop
+                    // + the rig offset, the exact conditions the capture loop
                     // uses below; probing at whatever gain the previous item
                     // left on the camera was how "auto" produced flats at a
                     // completely wrong ADU.
@@ -492,7 +492,7 @@ public class SequenceEngine {
                 // rewritten to `i` at the top of every iteration, so
                 // comparing against it is always true and every item after
                 // the first inherited the previous item's finished frame
-                // counter — its for-loop started past Count and the whole
+                // counter, its for-loop started past Count and the whole
                 // item was skipped (field report: the run "ended" right
                 // after the first card).
                 int startFrame = (i == resumeItem) ? resumeFrame : 0;
@@ -519,7 +519,7 @@ public class SequenceEngine {
                     // was a bare `if (_equip.Camera == null) abort`, which let a
                     // present-but-DISCONNECTED camera (mid driver-restart) sail
                     // straight into CaptureAsync. The capture failed in ~2 s, the
-                    // catch skipped the frame, and the `for (f...)` loop advanced —
+                    // catch skipped the frame, and the `for (f...)` loop advanced,
                     // so a 30 s driver recovery burned ~15 frames of a 60 s item,
                     // the item "completed" with nothing on disk, and the night
                     // fast-forwarded while reporting success. Waiting holds f in
@@ -532,7 +532,7 @@ public class SequenceEngine {
                     // AUTORUN-BLOB-STUCK (#635): null means either a user stop OR the
                     // camera did not come back within the recovery budget. On a stop,
                     // throw OCE so the one cancellation handler runs. Otherwise the
-                    // driver is wedged past a normal restart+reconnect — SKIP this
+                    // driver is wedged past a normal restart+reconnect, SKIP this
                     // frame and keep the run alive (the field report was the whole
                     // night frozen on one BLOB-timed-out frame), so a later recovery
                     // resumes it instead of the run hanging forever.
@@ -562,7 +562,7 @@ public class SequenceEngine {
                     var autorunOffset = RigCaptureDefaults.AutorunOffset(_profile);
                     // AUTORUN-TARGET-NAME: a LIGHT frame never takes a per-item
                     // name. The target does not change across a run, so every
-                    // light is named after the most relevant object in the FOV —
+                    // light is named after the most relevant object in the FOV,
                     // resolved once by ImageWriterService.ResolveTargetName from
                     // the mount/solve pointing, exactly as LIVE names its output.
                     // A blank name here is what lets that resolver run. item.Name

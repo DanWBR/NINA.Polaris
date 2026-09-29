@@ -1,4 +1,4 @@
-// N.I.N.A. Polaris — Canopus Assistant
+// N.I.N.A. Polaris, Canopus Assistant
 // Copyright (C) 2024-2026 Daniel Wagner (DanWBR) and the N.I.N.A. Polaris contributors
 //
 // This program is free software: you can redistribute it and/or modify it under
@@ -7,7 +7,7 @@
 // later version. Distributed WITHOUT ANY WARRANTY; see the GNU AGPL for details.
 // <https://www.gnu.org/licenses/>.
 //
-// LocalOpenAIProvider — the "On this device" LLM backend. It runs IN THE BROWSER
+// LocalOpenAIProvider, the "On this device" LLM backend. It runs IN THE BROWSER
 // and talks to an OpenAI-compatible server the user runs on their own machine
 // (Ollama / LM Studio / llama.cpp), using the machine's native GPU. This is the
 // JS twin of the server-side providers_local.py LlamaServerProvider: it posts

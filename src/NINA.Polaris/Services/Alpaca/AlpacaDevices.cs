@@ -380,7 +380,7 @@ public class AlpacaCoverCalibrator {
     private static async Task<List<int>?> Safe(Task<List<int>?> t) { try { return await t; } catch { return null; } }
 }
 
-// ---- Switch (ISwitchV2 — power boxes / relay hubs / dew controllers) --------
+// ---- Switch (ISwitchV2, power boxes / relay hubs / dew controllers) --------
 /// <summary>
 /// Alpaca ISwitchV2 client exposed through <see cref="ISwitchDevice"/>. The
 /// ISwitchV2 GET verbs take an <c>Id</c> query parameter, so we use the

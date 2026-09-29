@@ -47,7 +47,7 @@ public class AdvancedSequenceEngine {
     /// <summary>True when the last run ended in a FAILURE (an instruction threw
     /// past its retry/error policy), as opposed to completing normally or being
     /// stopped by the user. Read by <see cref="Plan.PlanRunnerService"/> the moment
-    /// a run goes Idle, to tell a genuine finish from a crash — the engine drops to
+    /// a run goes Idle, to tell a genuine finish from a crash, the engine drops to
     /// <see cref="AdvancedSequenceState.Idle"/> for ALL THREE outcomes, so State
     /// alone can't. Reflects <c>Document.Root.Status</c>, so read it before loading
     /// the next document (e.g. an end-actions doc) or it describes that one.</summary>
@@ -109,7 +109,7 @@ public class AdvancedSequenceEngine {
     /// <summary>
     /// True when the loaded document carries partial progress a resumed start
     /// can continue from: the tree ran but didn't complete, and at least one
-    /// entity finished (or captured part of its frame set). Purely in-memory —
+    /// entity finished (or captured part of its frame set). Purely in-memory,
     /// a server restart clears it.
     /// </summary>
     public bool HasResumableProgress =>
@@ -139,7 +139,7 @@ public class AdvancedSequenceEngine {
     /// Start the loaded document. With <paramref name="resume"/> true and
     /// retained partial progress, the tree is NOT reset: top-level entities
     /// already Completed are skipped, the interrupted one re-runs (its setup
-    /// instructions repeat — the mount may have moved/parked meanwhile) and
+    /// instructions repeat, the mount may have moved/parked meanwhile) and
     /// TakeExposure instructions fast-forward past frames already captured.
     /// </summary>
     public void Start(bool resume) {

@@ -10,7 +10,7 @@
     //
     //   2. LONG-PRESS on a titled control inside a status bar (top + bottom),
     //      an icon toolbar, or any .tip-longpress container. Those chips/icons
-    //      are CLICKABLE (navigate on tap), so we can't steal the tap —
+    //      are CLICKABLE (navigate on tap), so we can't steal the tap,
     //      long-press reveals the tip and cancels the click that would
     //      otherwise follow. The scope list is deliberate rather than global:
     //      elements that own their own long-press gesture (the shutter = loop,

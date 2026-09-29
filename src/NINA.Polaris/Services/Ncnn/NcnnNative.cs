@@ -18,7 +18,7 @@ namespace NINA.Polaris.Services.Ncnn;
 
 /// <summary>
 /// P/Invoke bindings to ncnn's stable C API (<c>c_api.h</c>, built when
-/// <c>NCNN_C_API=ON</c> — the default). All handles are opaque pointers; the C
+/// <c>NCNN_C_API=ON</c>, the default). All handles are opaque pointers; the C
 /// API is plain <c>extern "C"</c> so the calling convention is Cdecl.
 ///
 /// We only bind the slice needed to load a converted ncnn model

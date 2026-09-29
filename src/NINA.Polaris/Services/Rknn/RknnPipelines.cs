@@ -273,14 +273,14 @@ internal static class RknnPipelines {
 
     /// <summary>
     /// StarNet v1 star removal on the NPU. Single inference per tile over a
-    /// <c>[1,256,256,3]</c> NHWC tensor — the SAME single-input/single-output
+    /// <c>[1,256,256,3]</c> NHWC tensor, the SAME single-input/single-output
     /// contract as <see cref="RunDenoise"/>/<see cref="RunBge"/>, so it runs on
     /// both the RKNN and QNN lanes (record/replay) unchanged. Faithful port of the
     /// browser <c>StarRemovalPipeline</c> (starnet profile):
     /// <list type="bullet">
     /// <item>MTF-autostretch each channel into the network's trained (non-linear)
     /// domain ("15% bg, 3σ"), run, then INVERSE-stretch the output back to the
-    /// source's linear range — without this, linear stacks come out with black
+    /// source's linear range, without this, linear stacks come out with black
     /// holes where bright stars were.</item>
     /// <item>The model output IS the starless image (the graph emits
     /// <c>input − ReLU(decoder)</c>); hard inner-tile extraction at stride 96
@@ -291,7 +291,7 @@ internal static class RknnPipelines {
     /// Optional multi-pass (≤3) feeds the starless back through the net to clean
     /// residual halos; each pass recomputes its own autostretch. Returns
     /// <c>(starless, stars)</c> where <c>stars = clamp(original − starless, 0)</c>,
-    /// both in the same channel layout as the input — ready for the Image Blend
+    /// both in the same channel layout as the input, ready for the Image Blend
     /// tool (starless = base, stars = blend).
     /// </summary>
     public static (ushort[] starless, ushort[] stars) RunStarRemoval(

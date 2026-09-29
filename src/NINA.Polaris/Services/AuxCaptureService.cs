@@ -17,7 +17,7 @@ using NINA.Image.Interfaces;
 namespace NINA.Polaris.Services;
 
 /// <summary>
-/// Independent capture+save loop for the AUXILIARY camera — a second camera on
+/// Independent capture+save loop for the AUXILIARY camera, a second camera on
 /// the same mount with different optics. It runs on its own cadence (its own
 /// exposure/gain/binning) while a main imaging session (LIVE or AUTORUN) is
 /// active, and only saves each frame to a separate <c>aux/</c> subtree. It does
@@ -126,7 +126,7 @@ public sealed class AuxCaptureService {
             try { await cam.SetBinningAsync(bin, bin, ct); } catch { /* best effort */ }
 
             while (!ct.IsCancellationRequested) {
-                // Pause while the mount is moving — same OTA on the same mount,
+                // Pause while the mount is moving, same OTA on the same mount,
                 // so a dither/settle/AF/flip/slew trails the aux frame too.
                 while (!ct.IsCancellationRequested && MountBusy()) {
                     try { await Task.Delay(250, ct); } catch { return; }

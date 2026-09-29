@@ -38,7 +38,7 @@ namespace NINA.INDI.Devices;
 /// </list>
 ///
 /// <para>Channel ids are assigned once (on connect / refresh) from a stable
-/// ordering — properties sorted by name, elements in their published order —
+/// ordering, properties sorted by name, elements in their published order,
 /// so the UI's toggle for "channel 3" keeps addressing the same outlet across
 /// status ticks.</para>
 /// </summary>
@@ -95,7 +95,7 @@ public class IndiSwitch : ISwitchDevice {
     }
 
     /// <summary>Rebuild the stable channel map from the current device
-    /// snapshot. Called on connect and on explicit refresh — not on every
+    /// snapshot. Called on connect and on explicit refresh, not on every
     /// read, so channel ids stay put.</summary>
     private void BuildMap() {
         _map.Clear();
@@ -119,7 +119,7 @@ public class IndiSwitch : ISwitchDevice {
                 var elems = sw.Values.Keys.ToList();
 
                 // A genuine Off/On pair under the OneOfMany rule is ONE physical
-                // outlet, not two channels — publish a single toggle bound to
+                // outlet, not two channels, publish a single toggle bound to
                 // the "on" member (indi_asi_power's ONOFF<n>, and the same shape
                 // in several relay/dust-cap drivers). Require BOTH an on-labelled
                 // and an off-labelled member, so a two-value *selector* (e.g. a

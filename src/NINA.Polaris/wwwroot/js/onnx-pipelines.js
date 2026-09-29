@@ -31,7 +31,7 @@
     const IDB_STORE = 'blobs';
 
     // One-shot worker (memory reclaim): GraXpert BGE/Denoise/Decon on the WASM
-    // backend grow the WASM heap, which never shrinks for the realm's life — so
+    // backend grow the WASM heap, which never shrinks for the realm's life, so
     // a tab that ran one op stays pinned at ~1 GB. We run those in a Worker the
     // parent terminates after a short idle, which frees the whole heap. Kept
     // alive across a batch (fast), torn down once idle (reclaims). See
@@ -489,7 +489,7 @@
             // for the multi-hundred-MB downloads.
             const total = parseInt(resp.headers.get('content-length') || '0', 10);
             // XFER: also register a transfer chip so the activity bar
-            // shows the same progress the modal does — useful when the
+            // shows the same progress the modal does, useful when the
             // user clicks away from the editor while the download runs.
             const xferLabel = 'AI model ' + family + ' v' + version;
             const transferId =
@@ -986,7 +986,7 @@
     // blend math to get wrong. Same hard-crop approach as GraXpert.
     //
     // AIIMP: stride was 128 (margin 64), which computed every output
-    // pixel 4x — (256/128)^2 redundancy. Stride 192 cuts that to
+    // pixel 4x, (256/128)^2 redundancy. Stride 192 cuts that to
     // 1.78x, ~2.25x fewer inferences per image. Denoise normalization
     // is GLOBAL (one median/MAD per plane), so adjacent tiles live in
     // the same domain and 32px of context matches the geometry the
@@ -997,7 +997,7 @@
     // denoised result back against the original to taste.
     // ───────────────────────────────────────────────────────────────
     // Context margin per tile edge; stride = TILE - 2*margin (192 for the
-    // 256 models, 448 for a -512 sibling — the same margin geometry
+    // 256 models, 448 for a -512 sibling, the same margin geometry
     // GraXpert's decon uses at 512/448).
     const DENOISE_TILE_MARGIN = 32;
 
@@ -1490,7 +1490,7 @@
             const usePacked2ch = inputNames.length === 1 && !useThreeInputs;
             // Detail normalization: the GraXpert-style log-mean-std per-tile
             // domain is now the DEFAULT (validated to eliminate the dark-ring
-            // overshoot on saturated stars — every current/future Detail model
+            // overshoot on saturated stars, every current/future Detail model
             // is trained with train_task.py --log-norm). The old 1st/99.9th
             // percentile path is kept only as a legacy fallback for the earlier
             // percentile-trained model: opt out by tagging that version "-pct"
@@ -1762,12 +1762,12 @@
     // SN-2: Star removal (StarNet v1, github.com/DanWBR/starnet fork).
     // Tiled, window 256, stride configurable (default 128 → 64-px
     // context margin per edge), keep the inner stride×stride of each
-    // tile — the same tiling shape as DenoisePipeline. Faithful to the
+    // tile, the same tiling shape as DenoisePipeline. Faithful to the
     // fork's transform.py contract:
     //   • input  [1,256,256,3] NHWC, values in [0,1] (NO ×2−1). StarNet
     //     was trained on STRETCHED images, so we MTF-autostretch the
     //     (usually linear) source into its trained domain first, then
-    //     inverse-stretch the output — without this, linear stacks come
+    //     inverse-stretch the output, without this, linear stacks come
     //     out with black holes where bright stars were. The in-graph
     //     batch-norm runs training=True (per-tile batch stats).
     //   • output [1,256,256,3], residual = input − ReLU(decoder),
@@ -1781,7 +1781,7 @@
     // only at the outermost border, same simplification DenoisePipeline
     // already ships with.
     //
-    // The weights are CC BY-NC-SA 4.0 (NonCommercial) — Copyright (c)
+    // The weights are CC BY-NC-SA 4.0 (NonCommercial), Copyright (c)
     // Nikita Misiura (nekitmm). Attribution lives in 3rd-party-licenses.
     // ───────────────────────────────────────────────────────────────
 
@@ -1900,7 +1900,7 @@
             const alphaFull = this._upsample(alphaS, sw, sh, width, height);
             for (let c = 0; c < chans; c++) {
                 if (opts.shouldAbort && opts.shouldAbort()) throw new Error('aborted by user');
-                // Smooth hole-fill via pull-push (image pyramid) — fills the
+                // Smooth hole-fill via pull-push (image pyramid), fills the
                 // masked star/halo regions with a gradient from the
                 // surrounding background, with NO blocky plateaus (which a
                 // single box-average window leaves behind).
@@ -2056,12 +2056,12 @@
         async _pass(pixels, width, height, opts = {}) {
             const channels = opts && opts.channels === 3 ? 3 : 1;
             // Model profile (opts.model):
-            //  'starnet'     — 256² tiles, RGB fed together as a 3ch NHWC
+            //  'starnet'    , 256² tiles, RGB fed together as a 3ch NHWC
             //                  tensor, [0,1] normalization.
-            //  'starrem2k13' — pix2pix U-Net (~31M); 512² tiles, ONE channel
+            //  'starrem2k13', pix2pix U-Net (~31M); 512² tiles, ONE channel
             //                  per inference, input [1,512,512] (3D) → [1,512,512,1]
             //                  (relu); 8-bit /512 norm (feed ·255/512, read ·512/255).
-            //  'nox'         — StarNet-like (~54M, LayerNorm + GAN); 512² tiles,
+            //  'nox'        , StarNet-like (~54M, LayerNorm + GAN); 512² tiles,
             //                  NATIVE color (3ch model) or gray (1ch model)
             //                  chosen by channel count; subtractive output in the
             //                  [-1,1] domain (feed 2x−1, read (y+1)/2).
@@ -2428,7 +2428,7 @@
             }
         };
         w.onerror = (e) => {
-            // The worker crashed — fail every in-flight job and drop it so the
+            // The worker crashed, fail every in-flight job and drop it so the
             // next call rebuilds. The caller's .catch falls back in-page.
             const err = new Error((e && e.message) || 'onnx worker crashed');
             for (const [, job] of _osJobs) job.reject(err);
@@ -2476,7 +2476,7 @@
      * heavy memory is GPU-side + reclaimable, and WebGPU-in-worker is finicky,
      * so that stays in-page. StarNet (shouldAbort callback + dual output) and
      * any unknown kind also run in-page. On ANY worker failure it transparently
-     * falls back in-page, so the feature can't break — worst case is no reclaim.
+     * falls back in-page, so the feature can't break, worst case is no reclaim.
      */
     function runOneShot(kind, pixels, width, height, opts = {}) {
         const hasGpu = (typeof navigator !== 'undefined' && !!navigator.gpu);

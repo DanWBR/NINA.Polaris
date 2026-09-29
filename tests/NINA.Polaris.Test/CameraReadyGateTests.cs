@@ -124,7 +124,7 @@ public class CameraReadyGateTests {
         var gate = new CameraReadyGate(() => current, NullLogger<CameraReadyGate>.Instance);
 
         var wait = gate.WaitAsync("test", CancellationToken.None);
-        // Swap in a fresh, connected instance — as a driver reconnect would.
+        // Swap in a fresh, connected instance, as a driver reconnect would.
         var fresh = new FlipCamera { Connected = true };
         current = fresh;
 
@@ -135,7 +135,7 @@ public class CameraReadyGateTests {
 
     /// <summary>AUTORUN-BLOB-STUCK (#635): with a finite timeout, a camera that
     /// never comes back returns null once the budget elapses (not a hang), and the
-    /// token is NOT cancelled — so the caller can tell "timed out, skip the frame"
+    /// token is NOT cancelled, so the caller can tell "timed out, skip the frame"
     /// apart from a user stop. LIVE keeps the no-timeout overload (waits forever).</summary>
     [Test]
     public async Task WaitAsync_Timeout_ReturnsNullWithoutCancelling() {

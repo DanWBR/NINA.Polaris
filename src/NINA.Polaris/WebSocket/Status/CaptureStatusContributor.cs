@@ -71,7 +71,7 @@ public sealed class CaptureStatusContributor : IStatusContributor {
             // COOLRAMP: in-flight cooler ramps, keyed by slot
             // ("main"/"aux"). A ramp takes ~14 min at the default
             // 2°C/min, so the UI needs to show that the setpoint is
-            // still walking — otherwise the sensor sitting at 12°C
+            // still walking, otherwise the sensor sitting at 12°C
             // with a -10°C target looks like a broken cooler.
             tick.Blocks["auxCapture"] = new {
                 running = auxCapture.IsRunning,

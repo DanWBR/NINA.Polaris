@@ -48,7 +48,7 @@ public class VideoRecordingService : IDisposable {
     // The drain runs on its own Thread (not the thread pool): a slow eMMC/SD
     // write-back blocks in a write() syscall, and on the pool that would tie
     // up a worker the runtime only replaces ~1/sec, starving the HTTP/WS
-    // handlers — exactly the field symptom where recording stalled at a few
+    // handlers, exactly the field symptom where recording stalled at a few
     // hundred MB and the whole UI froze. A dedicated thread absorbs the stall
     // in isolation; the bounded queue just drops frames while it catches up.
     private BlockingCollection<QueueItem>? _queue;
@@ -74,7 +74,7 @@ public class VideoRecordingService : IDisposable {
 
     public bool IsRecording { get; private set; }
     // The SER writer opens lazily on the first streamed frame, so right after
-    // Start() the writer is still null — report the path Start() settled on
+    // Start() the writer is still null, report the path Start() settled on
     // (where the file WILL be) so /record/start + /record/status can show it
     // immediately instead of null until the first frame lands.
     private string? _pendingPath;
@@ -320,7 +320,7 @@ public class VideoRecordingService : IDisposable {
                     // Open the SER lazily on the first frame, sized from the
                     // ACTUAL streamed geometry: always 16-bit, single plane (the
                     // stream delivers a ushort[] mosaic). This is what makes
-                    // recording robust to ROI/binning and 8/16-bit cameras —
+                    // recording robust to ROI/binning and 8/16-bit cameras,
                     // sizing from cam.MaxX/MaxY/BitDepth dropped every frame.
                     if (writer == null) {
                         if (item.Width <= 0 || item.Height <= 0

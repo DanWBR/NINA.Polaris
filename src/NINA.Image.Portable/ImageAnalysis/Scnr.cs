@@ -18,11 +18,11 @@ using System.Threading.Tasks;
 namespace NINA.Image.ImageAnalysis;
 
 /// <summary>
-/// SCNR — Subtractive Chromatic Noise Reduction. Removes the residual green
+/// SCNR, Subtractive Chromatic Noise Reduction. Removes the residual green
 /// colour cast that light pollution + OSC debayering leave on broadband RGB
 /// stacks (real astro scenes have almost no pure green, so a green-dominant
 /// pixel is noise). Ported from Siril's <c>src/filters/scnr.c</c> (GPLv3;
-/// re-implemented here in C#, no code copied) — the four classic modes:
+/// re-implemented here in C#, no code copied), the four classic modes:
 ///
 ///   AverageNeutral : g = min(g, (r+b)/2)
 ///   MaximumNeutral : g = min(g, max(r,b))
@@ -31,7 +31,7 @@ namespace NINA.Image.ImageAnalysis;
 ///
 /// Values are worked in normalised [0,1]. Optional <c>preserveLightness</c>
 /// keeps the pixel's Rec.709 luminance (rescales r/g/b after the green
-/// subtraction) so the operation only shifts hue, not overall brightness — a
+/// subtraction) so the operation only shifts hue, not overall brightness, a
 /// self-contained approximation of Siril's CIE-L preserve.
 /// Mono images are a no-op (SCNR needs three colour planes).
 /// </summary>

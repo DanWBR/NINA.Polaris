@@ -300,7 +300,7 @@ body.link-offline .preview-pane::after {
        the empty state collapses to its natural height instead of
        stretching to fill the autorun list column. The chip bar
        sits above it; cramping vertical space here gives the user
-       a tight "no sequence yet — click + Add" line instead of a
+       a tight "no sequence yet, click + Add" line instead of a
        450 px void. */
     flex: 0 0 auto;
     display: block;
@@ -369,7 +369,7 @@ body.link-offline .preview-pane::after {
 }
 .autorun-option-chip .chip-dot-on { background: var(--success); }
 
-/* Header strip inside an expanded option-panel body — same row
+/* Header strip inside an expanded option-panel body, same row
    that used to live in the chip's pre-refactor accordion header
    (enable toggle + status counters). */
 .autorun-option-body-head {
@@ -1248,7 +1248,7 @@ body.link-offline .preview-pane::after {
 }
 
 /* Mount safety-stop banner (anti cable-wrap / guide circuit breaker trip).
-   Red, prominent, with a Dismiss button — shown in the Meridian Flip panel. */
+   Red, prominent, with a Dismiss button, shown in the Meridian Flip panel. */
 .safety-banner {
     display: flex;
     align-items: center;
@@ -1378,8 +1378,8 @@ body.link-offline .preview-pane::after {
 }
 /* GUIDE side-panel groups (e.g. the Dithering section) pair a short
    uppercase caption with a value field on one line. Keep the caption
-   on a single line — "SETTLE PX" / "TIMEOUT S" were wrapping to two
-   rows (field report) — and let the input take the remaining width. */
+   on a single line, "SETTLE PX" / "TIMEOUT S" were wrapping to two
+   rows (field report), and let the input take the remaining width. */
 .guide-group .equip-driver-label {
     white-space: nowrap;
     flex: 0 0 auto;
@@ -2031,7 +2031,7 @@ body.link-offline .preview-pane::after {
 }
 .editor-controls-header .btn {
     /* Content-sized; the row wraps when it runs out of room. The old
-       `flex: 1` made each button equal-width — fine for 2 buttons,
+       `flex: 1` made each button equal-width, fine for 2 buttons,
        broke entirely past 4. */
     flex: 0 0 auto;
 }

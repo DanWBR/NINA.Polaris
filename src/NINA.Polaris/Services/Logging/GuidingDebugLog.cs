@@ -26,7 +26,7 @@ namespace NINA.Polaris.Services.Logging;
 ///
 /// Static + lock-guarded: loggers are created per category by the
 /// logging infrastructure and must never take DI dependencies.
-/// All failures are swallowed — a full disk can't break guiding.
+/// All failures are swallowed, a full disk can't break guiding.
 /// </summary>
 public static class GuidingDebugLog {
     private static readonly object _lock = new();

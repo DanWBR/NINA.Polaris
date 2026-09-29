@@ -268,7 +268,7 @@ public sealed class SvbonySdkCamera : ICamera {
 
     private void ApplyRoi() {
         if (!_connected) return;
-        // SVBony forbids changing ROI/format DURING capture — doing so wedges
+        // SVBony forbids changing ROI/format DURING capture, doing so wedges
         // the driver. While a stream is running just stash the fields; they take
         // effect on the next StartVideoStreamAsync, which re-applies ROI while
         // stopped.
@@ -279,7 +279,7 @@ public sealed class SvbonySdkCamera : ICamera {
         // Idempotency guard, mirroring the INDI side's CCD_FRAME guard: skip the
         // SDK write when the geometry is already what we asked for. Slew-and-
         // centre, plate solve and autofocus all call SetSubframeAsync(0,0,0,0)
-        // around every capture — always the SAME full-frame geometry — so without
+        // around every capture, always the SAME full-frame geometry, so without
         // this each one was a redundant SVBSetROIFormat on a driver documented
         // (see above) to wedge on ROI churn. Those bursts are exactly when the
         // camera stopped responding in the field. This also closes most of the
@@ -324,7 +324,7 @@ public sealed class SvbonySdkCamera : ICamera {
                 // The mode switch + start MUST sit inside the try: if
                 // SVBStartVideoCapture throws with them outside it, the finally
                 // below never runs and the camera is left latched in TRIG_SOFT
-                // forever — every later capture then waits on a soft trigger the
+                // forever, every later capture then waits on a soft trigger the
                 // stream path never fires, so the camera looks dead until it is
                 // physically re-enumerated. The finally is idempotent (both calls
                 // already swallow), so running it after a failed start is safe.
@@ -336,8 +336,8 @@ public sealed class SvbonySdkCamera : ICamera {
                         // StartVideoStreamAsync): if the PREVIOUS capture didn't
                         // stop cleanly the SDK still thinks it's capturing, and the
                         // next SVBStartVideoCapture wedges the driver. Stills churn
-                        // a full start/stop per frame, so slew+solve / autofocus —
-                        // which fire captures back-to-back — hit this far harder
+                        // a full start/stop per frame, so slew+solve / autofocus,
+                        // which fire captures back-to-back, hit this far harder
                         // than video does (field: camera stops responding after a
                         // burst of solve/AF captures). A stop on an idle camera is
                         // a harmless no-op.
@@ -375,7 +375,7 @@ public sealed class SvbonySdkCamera : ICamera {
                 // loop forever). Skipped for ~zero exposures (bias) where the
                 // first frame is already correct.
                 lock (_sdk) {
-                    // Defensive stop before start — see the soft-trigger branch
+                    // Defensive stop before start, see the soft-trigger branch
                     // above and StartVideoStreamAsync: an unclean previous stop
                     // leaves the SDK "capturing" and the next start wedges it.
                     try { SVBStopVideoCapture(_cameraId); } catch { }
@@ -468,7 +468,7 @@ public sealed class SvbonySdkCamera : ICamera {
             _streamThread = null;
         }
         // Join the pull thread BEFORE touching the SDK so its in-flight
-        // SVBGetVideoData (holding _sdk) has finished — then SVBStopVideoCapture
+        // SVBGetVideoData (holding _sdk) has finished, then SVBStopVideoCapture
         // under _sdk can't run concurrently with it. Generous timeout so a
         // long-exposure GetVideoData can return first.
         try { t?.Join(5000); } catch { }
@@ -605,7 +605,7 @@ public sealed class SvbonySdkCamera : ICamera {
         // EXPOSURE (and DATE-AVG). Without this, SVBony SDK frames saved with
         // no exposure value.
         meta.Exposure.ExposureTime = exposureSec;
-        // Binning (XBINNING/YBINNING) + sensor temperature (CCD-TEMP) — both
+        // Binning (XBINNING/YBINNING) + sensor temperature (CCD-TEMP), both
         // essential for matching calibration frames (darks/flats) and were
         // otherwise absent from native-SDK FITS.
         meta.Camera.BinX = (short)_bin;

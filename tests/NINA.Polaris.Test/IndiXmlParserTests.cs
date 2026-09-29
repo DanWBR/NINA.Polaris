@@ -316,7 +316,7 @@ public class IndiXmlParserTests {
     // --- setBLOBVector payload decoding (MEMOPT) ---
     //
     // The BLOB path decodes base64 incrementally now instead of materialising
-    // the whole payload as a string first (a 22 MB FITS was a 62 MB char[] —
+    // the whole payload as a string first (a 22 MB FITS was a 62 MB char[],
     // the biggest object in a heap dump on the Orange Pi). These pin the decode
     // itself: bytes must come out identical to Convert.FromBase64String,
     // including the whitespace INDI wraps the payload in and a wrong/absent

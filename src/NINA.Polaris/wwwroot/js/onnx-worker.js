@@ -1,12 +1,12 @@
-// onnx-worker.js — runs the GraXpert ONNX pipelines (BGE / Denoise / Decon)
+// onnx-worker.js, runs the GraXpert ONNX pipelines (BGE / Denoise / Decon)
 // off the main thread, in a Worker the parent TERMINATES after a short idle.
 //
-// Why: ONNX inference (esp. the WASM backend used when there's no WebGPU —
+// Why: ONNX inference (esp. the WASM backend used when there's no WebGPU,
 // e.g. the Android WebView in the APK) grows the WASM linear heap to fit the
 // work, and that heap NEVER shrinks for the life of the realm. So a tab that
 // ran one BGE stays pinned at ~1 GB forever. Running it in a Worker means the
 // parent can `worker.terminate()` once idle, which frees the whole heap back
-// to the OS — the tab drops back to its ~50 MB baseline.
+// to the OS, the tab drops back to its ~50 MB baseline.
 //
 // Design choice: this worker runs the EXISTING, UNMODIFIED onnx-pipelines.js.
 // A Worker has no `window`/`document`/`sessionStorage`, and that file loads

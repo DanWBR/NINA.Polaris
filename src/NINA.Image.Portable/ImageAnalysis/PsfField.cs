@@ -51,7 +51,7 @@ public class PsfField {
     public PsfModel Cell(int gx, int gy) =>
         Cells[Math.Clamp(gy, 0, GridY - 1) * GridX + Math.Clamp(gx, 0, GridX - 1)] ?? Global;
 
-    /// <summary>How many cells got their own (non-fallback) PSF — a quick
+    /// <summary>How many cells got their own (non-fallback) PSF, a quick
     /// quality indicator for the UI.</summary>
     public int MeasuredCellCount {
         get {

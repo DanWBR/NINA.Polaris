@@ -64,7 +64,7 @@ public class GraXpertService {
     }
 
     /// <summary>
-    /// True when an NPU is available to accelerate BGE/Denoise on the host —
+    /// True when an NPU is available to accelerate BGE/Denoise on the host,
     /// either a Rockchip NPU (RK3588, <see cref="Rknn.RknnInferenceService"/>) or
     /// a Qualcomm Hexagon (QCS6490, <see cref="Qnn.QnnInferenceService"/>). The
     /// two are mutually exclusive by hardware. Surfaced in the GraXpert status so
@@ -395,7 +395,7 @@ public class GraXpertService {
     }
 
     /// <summary>
-    /// Run BGE/Denoise-v2 on a Vulkan GPU via ncnn — the open counterpart of
+    /// Run BGE/Denoise-v2 on a Vulkan GPU via ncnn, the open counterpart of
     /// <see cref="TryRunRknn"/> for boards without a supported NPU (e.g. the Q6A's
     /// Adreno 643). Reads the FITS input, runs the converted ncnn model on the
     /// GPU, writes a FITS output, and falls back to the CLI on any failure.
@@ -445,7 +445,7 @@ public class GraXpertService {
 
     /// <summary>
     /// Run BGE/Denoise on the Qualcomm Hexagon NPU (QCS6490) instead of the
-    /// GraXpert CLI — the Hexagon counterpart of <see cref="TryRunRknn"/>. Reads
+    /// GraXpert CLI, the Hexagon counterpart of <see cref="TryRunRknn"/>. Reads
     /// the FITS input, runs the pre-built HTP context binary, and writes a FITS
     /// output with the same naming the CLI path uses. Returns null (with a logged
     /// warning) on any failure so the caller transparently falls back to the CLI.

@@ -88,7 +88,7 @@ public sealed class LiveStackStatusContributor : IStatusContributor {
                 // etaSeconds drive the LIVE-tab "stack
                 // quality" widget. etaConfidence (R² of the
                 // log-log fit) is null when the ETA is
-                // null — UI shows "—" instead.
+                // null, UI shows ", " instead.
                 lastFrameSnr = liveStack.LastFrameSnr,
                 cumulativeSnr = liveStack.CumulativeSnr,
                 targetSnr = liveStack.TargetSnr,
@@ -99,7 +99,7 @@ public sealed class LiveStackStatusContributor : IStatusContributor {
                 // Quality timeline for the LIVE SNR/HFR chart. The full
                 // per-frame series lives server-side; broadcast a
                 // downsampled view (<=80 points) so the chart works in the
-                // server-owned path — the old client-capture loop that used
+                // server-owned path, the old client-capture loop that used
                 // to feed it is retired.
                 qualitySeries = BuildQualitySeries(liveStack.QualityHistory),
                 // Stacking activity + dropped-frame visibility: true
@@ -114,7 +114,7 @@ public sealed class LiveStackStatusContributor : IStatusContributor {
                 // 8-bit JPEG and the browser had no linear data of its own.
                 // It now receives the real 16-bit planes (RelayRgbRawAsync), so
                 // it computes min/max/mean/std and the three curves from the
-                // same numbers it renders — one source, no second framing to
+                // same numbers it renders, one source, no second framing to
                 // reconcile.
                 triggers = liveStackTriggers.CurrentStatus,
                 // REFSUG-1: trend-based advisory. Always

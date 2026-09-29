@@ -121,7 +121,7 @@ public static class FilterWheelEndpoints {
         });
 
         // Apply the stored/derived focus point for a filter on demand (the UI
-        // "Apply" button — used when auto-apply is off, or to re-apply).
+        // "Apply" button, used when auto-apply is off, or to re-apply).
         group.MapPost("/focus-memory/apply/{filterName}",
                       async (string filterName, FilterFocusMemoryService mem) => {
             var outcome = await mem.ApplyStoredAsync(filterName);

@@ -74,7 +74,7 @@ public static class StarMatcher {
                 refStars, curStars, tx, ty, tightRadius: 8.0);
         } else {
             // Pre-alignment is unreliable when the histogram lacks a
-            // clear winner — too few stars, or no shared star field
+            // clear winner, too few stars, or no shared star field
             // (e.g. one channel was clouded out). Fall back to the
             // original behavior so synthetic 3-4 star inputs and the
             // existing pinned tests keep working.

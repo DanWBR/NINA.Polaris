@@ -203,7 +203,7 @@ public sealed class ToupTekSdkCamera : ICamera {
         return Task.CompletedTask;
     }
 
-    // ----- Dynamic control panel (curated — the ToupTek SDK is option-based,
+    // ----- Dynamic control panel (curated, the ToupTek SDK is option-based,
     // not self-describing, so we surface a fixed set of well-known controls). -----
 
     public IReadOnlyList<CameraControl> GetControls() {
@@ -256,7 +256,7 @@ public sealed class ToupTekSdkCamera : ICamera {
         if (_cam.get_Option(Toupcam.eOPTION.OPTION_DENOISE, out int dn))
             list.Add(new CameraControl("Denoise", "Denoise", "In-camera denoise strength (0 = off)",
                 dn, 0, 100, 0, Writable: true, Auto: false, AutoSupported: false, "int"));
-        // Cooling fan — only if this model actually has one.
+        // Cooling fan, only if this model actually has one.
         uint fanMax = 0;
         try { fanMax = _cam.FanMaxSpeed; } catch { }
         if (fanMax > 0 && _cam.get_Option(Toupcam.eOPTION.OPTION_FAN, out int fan))
@@ -498,7 +498,7 @@ public sealed class ToupTekSdkCamera : ICamera {
         // Stamp the integration time so the FITS/XISF writers emit EXPTIME /
         // EXPOSURE (otherwise native-SDK frames saved with no exposure value).
         meta.Exposure.ExposureTime = _exposureSec;
-        // Binning + sensor temperature — essential for matching calibration
+        // Binning + sensor temperature, essential for matching calibration
         // frames (darks/flats); otherwise absent from native-SDK FITS.
         meta.Camera.BinX = (short)_bin;
         meta.Camera.BinY = (short)_bin;
@@ -506,7 +506,7 @@ public sealed class ToupTekSdkCamera : ICamera {
         meta.Camera.PixelSizeX = _pixelSize;
         meta.Camera.PixelSizeY = _pixelSize;
         // FITS/XISF writers stamp BAYERPAT from meta.Camera.BayerPattern, not
-        // props — propagate the detected pattern so OSC frames save with it.
+        // props, propagate the detected pattern so OSC frames save with it.
         meta.Camera.BayerPattern = _bayer;
         return new BaseImageData(pixels, props, meta);
     }

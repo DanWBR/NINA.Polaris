@@ -49,7 +49,7 @@ public class SnrEtaCalculatorTests {
     public void Estimate_TargetAlreadyReached_ReturnsZero() {
         var samples = new List<(int, double)>();
         for (int n = 1; n <= 10; n++) samples.Add((n, 10.0 * Math.Sqrt(n)));
-        // Target 20 — at N=10 snr ≈ 31.6, already past 20.
+        // Target 20, at N=10 snr ≈ 31.6, already past 20.
         var eta = SnrEtaCalculator.Estimate(samples, 20.0, 30.0);
         Assert.That(eta, Is.Not.Null);
         Assert.That(eta!.RemainingFrames, Is.EqualTo(0));
@@ -58,9 +58,9 @@ public class SnrEtaCalculatorTests {
 
     [Test]
     public void Estimate_FlatStack_ReturnsNull() {
-        // SNR didn't grow at all between frames — slope ≈ 0, fail
+        // SNR didn't grow at all between frames, slope ≈ 0, fail
         // the slope sanity check. Could be clouds rolled in, focus
-        // drifted, target framing changed — UI shows "—" instead
+        // drifted, target framing changed, UI shows ", " instead
         // of an infinite ETA.
         var samples = new List<(int, double)>();
         for (int n = 1; n <= 8; n++) samples.Add((n, 12.0));

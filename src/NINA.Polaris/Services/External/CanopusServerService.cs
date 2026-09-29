@@ -19,23 +19,23 @@ using System.Net.Sockets;
 namespace NINA.Polaris.Services.External;
 
 /// <summary>
-/// CANOPUS: manages the local "On this server (SBC)" assistant backend — the
+/// CANOPUS: manages the local "On this server (SBC)" assistant backend, the
 /// self-hosted, keyless tier that runs entirely on the Polaris host so any phone
 /// or tablet is a thin client. It owns TWO loopback child processes:
 ///
-///   1. llama.cpp <c>llama-server</c> (Qwen3-4B Q4_0) — the LLM. Launched with
+///   1. llama.cpp <c>llama-server</c> (Qwen3-4B Q4_0), the LLM. Launched with
 ///      <c>--mmap 0</c> (load-bearing: Android/embedded page-cache reclaim makes
-///      the mmap'd path ~340x slower — see canopus-eval/MOBILE.md) and half the
+///      the mmap'd path ~340x slower, see canopus-eval/MOBILE.md) and half the
 ///      cores, leaving the rest for the rig.
 ///   2. the OPEN Canopus agent (<c>canopus/server/local_server.py</c> via uvicorn)
-///      — serves the chat client + a local-tier manifest + the agent WebSocket,
+///     , serves the chat client + a local-tier manifest + the agent WebSocket,
 ///      pointed at llama-server through <c>CANOPUS_LOCAL_LLM_URL</c>.
 ///
 /// Polaris reverse-proxies both under <c>/canopus/*</c> (loopback only, gated by
 /// the same auth layer as /indi-web). Same lifecycle shape as
 /// <see cref="IndiWebManagerService"/>: dual DI registration (singleton for the
 /// endpoints + hosted for the auto-start / health loop), TCP health probes, an
-/// AutoStart toggle (default OFF — the model is heavy), and a clear reason string
+/// AutoStart toggle (default OFF, the model is heavy), and a clear reason string
 /// when the host can't run it.
 /// </summary>
 /// <summary>Which brain the agent process talks to. Local = llama-server on
@@ -222,14 +222,14 @@ public sealed class CanopusServerService : BackgroundService {
         // Thread count for generation. Fewer threads leave headroom for the rig
         // (guiding runs continuously); more threads speed up each turn. On the
         // Radxa Q6A the morning bench measured ~5 t/s generation at 8 threads with
-        // Polaris alive, vs roughly half that at 4 — so `Canopus:Threads` is
+        // Polaris alive, vs roughly half that at 4, so `Canopus:Threads` is
         // exposed to tune the trade-off. Default: leave two cores for the rig.
         var threads = _config.GetValue("Canopus:Threads", Math.Max(1, Environment.ProcessorCount - 2));
         var ctx = _config.GetValue("Canopus:ContextSize", 8192);
         var exe = _models.LlamaServerPath;
         var model = _models.ModelPath;
         // --no-mmap: keep weights resident (Android/embedded page-cache reclaim
-        // makes the mmap'd path ~340x slower — canopus-eval/MOBILE.md). --jinja:
+        // makes the mmap'd path ~340x slower, canopus-eval/MOBILE.md). --jinja:
         // use the model's tool template so llama-server returns native OpenAI
         // tool_calls. (Validated against llama-server b10058 on the Q6A: the flag
         // is --no-mmap, NOT the `--mmap 0` that llama-bench takes.)

@@ -21,7 +21,7 @@ namespace NINA.Polaris.Test;
 /// <summary>
 /// INDIROB-1: covers the ack-based property-write helpers added to
 /// <see cref="IndiClient"/>. The internal SendAndAwaitAckAsync (used
-/// by the public Set*AsyncAck wrappers) is what we exercise here —
+/// by the public Set*AsyncAck wrappers) is what we exercise here,
 /// tests pass a no-op send func so we don't need a real socket, then
 /// simulate the driver's echo by firing PropertyChanged manually.
 /// </summary>
@@ -72,7 +72,7 @@ public class IndiClientAckTests {
         Assert.That(result.Rejected, Is.False);
     }
 
-    /// <summary>Driver rejected with state=Alert + a message — most
+    /// <summary>Driver rejected with state=Alert + a message, most
     /// common failure mode in practice. Verify the AlertMessage is
     /// captured so IndiTelescope can re-throw with a user-actionable
     /// string ("Below horizon", "Mount is parked", etc).</summary>
@@ -96,7 +96,7 @@ public class IndiClientAckTests {
         Assert.That(result.AlertMessage, Is.EqualTo("Below horizon"));
     }
 
-    /// <summary>Driver was silent — no echo within timeout. This
+    /// <summary>Driver was silent, no echo within timeout. This
     /// usually means the property name was wrong (server-side drop)
     /// or the driver wedged. Different from Alert so the caller can
     /// surface a different user-facing message.</summary>
@@ -116,7 +116,7 @@ public class IndiClientAckTests {
     }
 
     /// <summary>Echo from a DIFFERENT device or DIFFERENT property
-    /// should not satisfy the ack — the helper filters strictly by
+    /// should not satisfy the ack, the helper filters strictly by
     /// (device, property). Without this we'd see false-positive acks
     /// when an unrelated property updates concurrently (very common
     /// during connect/disconnect cycles where many properties echo
@@ -131,10 +131,10 @@ public class IndiClientAckTests {
             ct: default);
 
         await Task.Delay(50);
-        // Different device — should not satisfy the ack.
+        // Different device, should not satisfy the ack.
         FirePropertyChanged(client, "Focuser", "EQUATORIAL_EOD_COORD",
             IndiPropertyState.Busy, message: null);
-        // Different property on the right device — also no match.
+        // Different property on the right device, also no match.
         FirePropertyChanged(client, "Mount", "TELESCOPE_PARK",
             IndiPropertyState.Busy, message: null);
 

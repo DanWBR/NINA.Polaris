@@ -105,7 +105,7 @@ public class BenchmarkServiceTests {
         // The measured RTX 5070 numbers: two ops slower (<1x), one big win.
         var perOp = new[] { 0.47, 0.40, 16.17 };
         var geo = BenchmarkService.GpuOverallSpeedup(perOp);
-        // Geometric mean = (0.47*0.40*16.17)^(1/3) ≈ 1.45 — honest, vs the old
+        // Geometric mean = (0.47*0.40*16.17)^(1/3) ≈ 1.45, honest, vs the old
         // arithmetic mean ≈ 5.68 which the single blur win inflated.
         Assert.That(geo, Is.EqualTo(1.45).Within(0.01));
         Assert.That(geo, Is.LessThan(perOp.Average()),

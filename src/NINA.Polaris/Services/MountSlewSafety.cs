@@ -21,7 +21,7 @@ namespace NINA.Polaris.Services;
 /// the long way down toward the tripod. These helpers let the slew path
 /// (a) skip a redundant GoTo when the mount is already sitting on the target
 /// (removing the trigger that made the AM3 un-flip), (b) flag a large or
-/// near-meridian slew — or a target below the altitude floor — for a
+/// near-meridian slew, or a target below the altitude floor, for a
 /// confirmation before the mount moves, and (c) decide when a slew that is
 /// driving the OTA below the altitude floor must be aborted mid-flight.
 /// </summary>
@@ -80,7 +80,7 @@ public static class MountSlewSafety {
 
     /// <summary>Should the altitude-floor guard abort a slew? True only when the
     /// floor is enabled (>0), the mount is actively slewing, and the current
-    /// pointing has dropped below the floor — i.e. an OTA being driven down
+    /// pointing has dropped below the floor, i.e. an OTA being driven down
     /// toward the pier/tripod. A parked or idle mount is never slewing, so it
     /// can sit low without tripping.</summary>
     public static bool ShouldAbortForAltitude(double currentAltDeg, double minAltFloorDeg,
@@ -129,7 +129,7 @@ public static class MountSlewSafety {
         bool belowFloor = minAltFloorDeg > 0 && targetAlt < minAltFloorDeg;
         bool largeMove = haveMount && largeMoveDeg > 0 && moveDeg >= largeMoveDeg;
         // Near-meridian only matters if we'd actually issue a fresh GoTo (not
-        // already parked on the target) — that's the AM3 un-flip case.
+        // already parked on the target), that's the AM3 un-flip case.
         bool nearMeridian = Math.Abs(haMin) <= NearMeridianMinutes && !alreadyOnTarget;
 
         var reasons = new List<string>();
@@ -138,7 +138,7 @@ public static class MountSlewSafety {
         if (largeMove)
             reasons.Add($"a large slew of ~{moveDeg:F0}°");
         if (nearMeridian)
-            reasons.Add($"the target is near the meridian ({Math.Abs(haMin):F0} min) — the mount may swing the long way / un-flip");
+            reasons.Add($"the target is near the meridian ({Math.Abs(haMin):F0} min), the mount may swing the long way / un-flip");
 
         bool warn = belowFloor || largeMove || nearMeridian;
         return new SlewSafetyVerdict(

@@ -22,7 +22,7 @@ using NINA.Polaris.Services.Rknn;   // reuse RknnPipelines (backend-agnostic til
 namespace NINA.Polaris.Services.Ncnn;
 
 /// <summary>
-/// Host-side GraXpert AI inference on a Vulkan GPU via ncnn — the open,
+/// Host-side GraXpert AI inference on a Vulkan GPU via ncnn, the open,
 /// vendor-neutral counterpart of <see cref="RknnInferenceService"/> (which is
 /// Rockchip-NPU-only). Runs on the Adreno 643 of the Radxa Dragon Q6A (Turnip),
 /// Mali, etc. When a converted <c>model.ncnn.param</c>/<c>.bin</c> exists for the
@@ -32,7 +32,7 @@ namespace NINA.Polaris.Services.Ncnn;
 ///
 /// Scope (validated in the polaris-ai/ncnn spike): <b>BGE and Denoise v2 only.</b>
 /// Denoise v3 converts but produces NaN on ncnn's Vulkan path (its LayerNorm/
-/// Div/Sqrt chain), and deconvolution isn't numerically faithful — both stay on
+/// Div/Sqrt chain), and deconvolution isn't numerically faithful, both stay on
 /// the CLI/NPU. The tile math is shared with the RKNN lane via
 /// <see cref="IRknnTileRunner"/>; only the backend (NcnnSession) differs.
 /// Sessions are cached for the app lifetime, keyed by the <c>.param</c> path.
@@ -97,7 +97,7 @@ public sealed class NcnnInferenceService : IDisposable {
                 opts.Correction, opts.SaveBackground, out bgPixels);
             tiles = 1;
         } else {
-            // Denoise v2 clips at 10.0 (v3 is excluded — NaN on Vulkan).
+            // Denoise v2 clips at 10.0 (v3 is excluded, NaN on Vulkan).
             outPixels = RknnPipelines.RunDenoise(session, img.Data, w, h, channels,
                 opts.DenoiseStrength, 10.0);
             int itw = (int)Math.Ceiling((double)w / (session.TileSize / 2));
@@ -127,7 +127,7 @@ public sealed class NcnnInferenceService : IDisposable {
 
     /// <summary>
     /// Only versions known to run correctly on ncnn's Vulkan path. BGE: all.
-    /// Denoise: v2 only — v3 (major &gt;= 3) outputs NaN on Vulkan (LayerNorm).
+    /// Denoise: v2 only, v3 (major &gt;= 3) outputs NaN on Vulkan (LayerNorm).
     /// </summary>
     private static bool IsVulkanSafe(string family, string version) {
         if (string.Equals(family, "denoise", StringComparison.OrdinalIgnoreCase)) {

@@ -76,7 +76,7 @@ public class SpccService {
     /// Read only the FITS header of a frame and suggest the SPCC sensor +
     /// filter set + OSC/mono type from it (camera model in INSTRUME, Bayer in
     /// BAYERPAT). Used by the modal to pre-select the dropdowns; the user can
-    /// always override. Never throws for a missing/odd header — returns a
+    /// always override. Never throws for a missing/odd header, returns a
     /// mono/no-match suggestion instead.
     /// </summary>
     public SpccDatabase.SpccSuggestion Suggest(string framePath) {
@@ -235,7 +235,7 @@ public class SpccService {
         }
         if (flipDesc != "none")
             _logger.LogInformation("SPCC: matched with a {Flip} pixel flip " +
-                "({N} stars) — external plate-solve / ROWORDER convention.",
+                "({N} stars), external plate-solve / ROWORDER convention.",
                 flipDesc, matched.Count);
         if (spccStars.Count < 5) {
             int withBv = catalogStars.Count(c => c.Bv != null);

@@ -481,7 +481,7 @@
     flex-direction: column;
 }
 
-/* Native <details>/<summary> drive expand/collapse — no JS,
+/* Native <details>/<summary> drive expand/collapse, no JS,
    no state to persist, and keyboard nav (Space/Enter on the
    summary) comes free. The chevron is the default disclosure
    triangle; we just style spacing + colours around it. */
@@ -563,7 +563,7 @@
 
 /* Leaf row (a single frame). active = currently in the right
    preview pane (single). selected = part of the multi-select
-   batch (an item can be both — that's the typical case when
+   batch (an item can be both, that's the typical case when
    the user clicks ONE thing). */
 .studio-tree-frame {
     display: flex;
@@ -796,7 +796,7 @@
 
 /* Pixel-exact rendering for every astro-image inspection surface: editor
    preview, crop picker, the before/after comparer, and the Auto Workflow
-   detail preview. Astro pixels matter — the browser must NOT bilinear-
+   detail preview. Astro pixels matter, the browser must NOT bilinear-
    smooth when the image is scaled up. `crisp-edges` first as the older
    Firefox spelling, then `pixelated` (Chrome/Edge/Safari + modern FF).
    The main PREVIEW/LIVE viewers use OpenSeadragon, disabled separately
@@ -1109,7 +1109,7 @@
 }
 .onnx-model-dl-offer .hint { flex: 1 1 220px; }
 
-/* Live Siril console — the stdout/stderr stream rendered as a
+/* Live Siril console, the stdout/stderr stream rendered as a
    terminal-style block inside the run modal so the user can watch
    the job progress instead of staring at an opaque progress bar.
    Fixed height + internal scroll so a 500-line log doesn't push
@@ -1155,15 +1155,15 @@
    "drag a rectangle" affordance is obvious.
 
    max-height is capped so even a 4K master doesn't push the modal
-   off-screen on a laptop — the img scales down via the natural
+   off-screen on a laptop, the img scales down via the natural
    width / height ratio. */
 .crop-picker {
     position: relative;
     /* inline-block so the picker shrink-wraps the image exactly (it is
        never smaller than the image, so the pointer-capture area always
        covers the whole photo). An earlier width:fit-content attempt made
-       the picker NARROWER than the image, so the drag area — and thus the
-       drawn rectangle — was smaller than the photo. */
+       the picker NARROWER than the image, so the drag area, and thus the
+       drawn rectangle, was smaller than the photo. */
     display: inline-block;
     margin: 12px auto;
     max-width: 100%;
@@ -1247,7 +1247,7 @@
     top: 0;
     pointer-events: none;
 }
-/* Aberration Inspector mosaic — a plain centred canvas (sized in JS). */
+/* Aberration Inspector mosaic, a plain centred canvas (sized in JS). */
 .analyze-inspector-canvas {
     display: block;
     max-width: 100%;
@@ -1336,7 +1336,7 @@
 .analyze-modal-frame .analyze-body {
     flex: 1 1 auto;
     min-height: 0;          /* let the flex children shrink, not the frame */
-    overflow: hidden;       /* no scrollbar — content is sized to fit */
+    overflow: hidden;       /* no scrollbar, content is sized to fit */
     align-items: stretch;
 }
 .analyze-modal-frame .analyze-side {
@@ -1583,7 +1583,7 @@
     flex-wrap: nowrap;
     overflow-x: auto;
     overflow-y: hidden;
-    /* Own the leftover middle space and scroll internally — basis 0 so the
+    /* Own the leftover middle space and scroll internally, basis 0 so the
        chips' total width never dictates the bar layout and pushes the fixed
        net / CPU / RAM blocks off the right edge. */
     flex: 1 1 0;
@@ -1610,7 +1610,7 @@
     font-size: 11px;
     line-height: 1.2;
     cursor: default;
-    /* Keep the natural content width — the parent .activity-bar-ops row
+    /* Keep the natural content width, the parent .activity-bar-ops row
        scrolls when crowded. Without this the chips are flex-shrunk below
        their nowrap text, which then spills past the rounded pill edge. */
     flex: 0 0 auto;
@@ -1729,7 +1729,7 @@
     border-color: rgba(var(--accent-rgb), 0.4);
 }
 .activity-transfer-done {
-    /* Brief "✓ done" fade — same colour family but dimmer +
+    /* Brief "✓ done" fade, same colour family but dimmer +
        slightly muted so the eye recognises completion without
        being startled by a colour flip. */
     opacity: 0.65;
@@ -1969,7 +1969,7 @@
 
    That rule alone was wrong for the case it mattered most in. A live stack
    keeps a chip on the bar for the whole session, so the readouts folded when
-   stacking began and stayed folded all night — the operator lost CPU, RAM and
+   stacking began and stayed folded all night, the operator lost CPU, RAM and
    disk during the one activity that runs for hours and fills the disk. The
    fold now keys off .stats-folded, which is the automatic rule OR whatever the
    arrow at the end of the bar was last told (see activityStatsMode in app.js).
@@ -2152,7 +2152,7 @@
     display: grid;
     /* Column count follows the grid's ACTUAL width, not the viewport: pack as
        many columns as fit at a ~440px floor (so 2 cols appear as soon as there
-       is room, even with the sidebar + density/zoom eating viewport width — the
+       is room, even with the sidebar + density/zoom eating viewport width, the
        old viewport breakpoints stayed 1-col in that case). The 440px floor
        keeps the Camera card's cooler chart + sensor metadata legible; on a
        genuinely huge screen it tops out around 3–4 readable cols. */
@@ -2191,7 +2191,7 @@
    (otherwise inherit input-sm's 60-90px fixed width and clip
    ", Manual entry," / ", Pick a model," labels). Numeric inputs
    inside the same row keep their explicit inline width attr.
-   max-width: none clears the 220px cap from .input-sm — that cap
+   max-width: none clears the 220px cap from .input-sm, that cap
    is right for free-floating compact inputs but inside metadata
    rows it was the actual reason the Accessory dropdown stopped
    way before the Model dropdown's right edge ('[reducer] SVBony
@@ -2214,9 +2214,9 @@
 /* Accessory row has a single, often very long option label like
    '[reducer] SVBony SV209 0.8x Reducer/Flattener (0.8×)' that gets
    cropped at the card's narrow 280px width inherited from the role
-   grid. Bumping just THIS row's select min-width — without touching
+   grid. Bumping just THIS row's select min-width, without touching
    the Brand+Model row above (which has two side-by-side selects
-   that must share the same row width) — gives the accessory text
+   that must share the same row width), gives the accessory text
    room to breathe. Card is in an auto-fit grid so on viewports
    wider than the minimum it'll happily expand and the wider
    accessory select absorbs the extra space. */
@@ -2542,8 +2542,8 @@
 }
 
 /* Dust-mote modal: a bigger canvas than the wavelet one. A mote is judged by
-   whether a faint disc is still there, so the preview wants room — up to ~80%
-   of the screen — while still collapsing sanely on a tablet or phone. Its own
+   whether a faint disc is still there, so the preview wants room, up to ~80%
+   of the screen, while still collapsing sanely on a tablet or phone. Its own
    class so widening it never touches the Wavelets dialog. Beats the 440px
    `.modal-card` cap the same 0-2-0 way `.wave-card` does. */
 .modal-card.dust-card {

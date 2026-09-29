@@ -27,17 +27,17 @@ namespace NINA.Image.Editor;
 /// identical output in both compute modes.
 ///
 /// Two-stage, color-preserving:
-///   • Stage A (always) — the GraXpert auto-stretch (15% bg, 3σ) PER CHANNEL.
+///   • Stage A (always), the GraXpert auto-stretch (15% bg, 3σ) PER CHANNEL.
 ///     This is the neutral, white-balanced display base (each channel's
 ///     background lands at ~15% with its own midtone, so OSC data renders
 ///     neutral). Auto mode returns this base directly.
-///   • Stage B (manual only) — the user's black/mid/white applied as ONE
+///   • Stage B (manual only), the user's black/mid/white applied as ONE
 ///     linked MTF over the already-neutral base (same LUT for R/G/B). Because
 ///     the base is balanced, a linked adjustment can't introduce a colour
 ///     cast: it just brightens/clips uniformly. Identity at (0, 0.5, 1).
 ///
 /// So the manual handles operate in DISPLAY space on the neutral base (like a
-/// Lightroom tone curve), not on the raw linear channels — that's what keeps
+/// Lightroom tone curve), not on the raw linear channels, that's what keeps
 /// the colour stable while you adjust. Shared by the server + WASM editor.
 /// </summary>
 public static class EditorStretch {

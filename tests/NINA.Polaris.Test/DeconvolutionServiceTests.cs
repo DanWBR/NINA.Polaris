@@ -100,7 +100,7 @@ public class DeconvolutionServiceTests {
         }
     }
 
-    // Plants a saturated (clipped) bright star on a noisy background — the case
+    // Plants a saturated (clipped) bright star on a noisy background, the case
     // that makes vanilla RL ring a dark halo. With damping + the saturation
     // guard the deconvolved frame must not dig a deep black ring (pixels driven
     // well below the background) around that star.
@@ -111,7 +111,7 @@ public class DeconvolutionServiceTests {
             img[i] = (ushort)Math.Clamp((int)Math.Round(bg + Gaussian(rng) * 10), 0, 65535);
         // a regular grid of well-separated, unsaturated round stars so the PSF
         // can be measured (≥8 clean probes), plus ONE saturated star at the
-        // centre (200,200) — the one whose ring we check.
+        // centre (200,200), the one whose ring we check.
         void Plant(int cx, int cy, double amp) {
             for (int y = -8; y <= 8; y++)
                 for (int x = -8; x <= 8; x++) {
@@ -147,7 +147,7 @@ public class DeconvolutionServiceTests {
             using (var fs = File.OpenRead(res.OutputPath)) outU = FITSReader.Read(fs).Data;
 
             // Scan the annulus around the saturated star (centre 200,200) for the
-            // darkest pixel — it must not be dug far below the background.
+            // darkest pixel, it must not be dug far below the background.
             double minRing = double.MaxValue;
             for (int y = 200 - 14; y <= 200 + 14; y++)
                 for (int x = 200 - 14; x <= 200 + 14; x++) {

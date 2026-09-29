@@ -71,7 +71,7 @@ public sealed class RmsCalculator {
         // This matches PHD2 (AxisStats::GetPopulationSigma) and N.I.N.A.
         // (RMS via Welford), which is what the ASIAIR also reports. The earlier
         // form sqrt(mean(x^2)) measured RMS about ZERO, which equals
-        // sqrt(sigma^2 + mean^2) >= sigma — so any residual drift / mean offset
+        // sqrt(sigma^2 + mean^2) >= sigma, so any residual drift / mean offset
         // inflated the displayed RMS above what PHD2/ASIAIR show for the same
         // guiding. Clamp the variance at 0 to absorb floating-point noise.
         double meanRa = mr / n, meanDec = md / n;

@@ -442,7 +442,7 @@ public class HardwareAutoConnectService : IHostedService {
                     p.Latitude, p.Longitude, p.Altitude);
             } else {
                 _notify.Push("warn",
-                    "Observatory location is (0,0) — set lat/lon in Settings or slews will be rejected.");
+                    "Observatory location is (0,0), set lat/lon in Settings or slews will be rejected.");
             }
         } catch (NotSupportedException) {
             // Driver doesn't expose GEOGRAPHIC_COORD

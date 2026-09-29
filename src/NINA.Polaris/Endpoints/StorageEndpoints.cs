@@ -21,7 +21,7 @@ namespace NINA.Polaris.Endpoints;
 /// <summary>
 /// REST surface for the auto-push-to-network-storage feature
 /// (<see cref="StoragePushService"/>): read/write config, test connectivity,
-/// retry failed uploads. The password is never returned — GET reports only
+/// retry failed uploads. The password is never returned, GET reports only
 /// whether one is set; PUT keeps the stored password when the field is blank.
 /// </summary>
 public static class StorageEndpoints {

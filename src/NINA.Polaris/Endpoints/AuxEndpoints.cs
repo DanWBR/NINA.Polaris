@@ -55,7 +55,7 @@ public static class AuxEndpoints {
                         rig.AuxCameraPixelSizeUm, rig.AuxCameraBitDepth);
                     loggerFactory.CreateLogger("Polaris.AuxCamera")
                         .LogInformation("Pushed rig aux CCD_INFO into {Dev}: {X}x{Y} px, {P}µm, {B}-bit " +
-                            "(aux camera reported 0 — DSLR bootstrap)", equip.AuxCamera.DeviceName,
+                            "(aux camera reported 0, DSLR bootstrap)", equip.AuxCamera.DeviceName,
                             rig.AuxCameraMaxX, rig.AuxCameraMaxY, rig.AuxCameraPixelSizeUm, rig.AuxCameraBitDepth);
                 }
             } catch (Exception ex) {
@@ -99,13 +99,13 @@ public static class AuxEndpoints {
                 return Results.Json(new { error = "Aux camera has no cooler" }, statusCode: 501);
 
             // COOLRAMP: same ramp as the main camera, on the Aux slot so the two
-            // cameras' setpoints are driven independently — an aux cooldown must
+            // cameras' setpoints are driven independently, an aux cooldown must
             // never cancel a main cooldown that's still descending.
             //
             // This also closes an ordering bug the main endpoint guarded against
             // and this one didn't: it set the cooler FIRST and wrote the target
-            // after, so on SVBony — where writing the target re-asserts
-            // SVB_COOLER_ENABLE — a cooler-OFF would flip straight back on. Going
+            // after, so on SVBony, where writing the target re-asserts
+            // SVB_COOLER_ENABLE, a cooler-OFF would flip straight back on. Going
             // through the ramp makes the ordering structural instead of a comment
             // someone has to remember.
             var rate = req.RampDegPerMinute

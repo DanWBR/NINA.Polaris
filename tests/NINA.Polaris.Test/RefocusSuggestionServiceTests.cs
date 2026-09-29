@@ -160,7 +160,7 @@ public class RefocusSuggestionServiceTests {
         Assert.That(svc.CurrentStatus.Suggesting, Is.False);
 
         // Next samples: star count crashes to 30 (70% drop) but HFR
-        // stays flat at the baseline — this is passing clouds dimming
+        // stays flat at the baseline, this is passing clouds dimming
         // out the faint stars, NOT focus drift. The suggestion must NOT
         // fire (the field-reported false positive this guard fixes).
         for (int i = 21; i <= 30; i++) {

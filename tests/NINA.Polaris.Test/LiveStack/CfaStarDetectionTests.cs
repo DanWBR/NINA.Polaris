@@ -12,7 +12,7 @@ namespace NINA.Polaris.Test.LiveStack;
 /// median + 5 * MAD * 1.4826. On a mosaic the MAD does not measure noise, it
 /// measures the gap between the R, G and B pedestals. Measured on the real
 /// light: MAD 3215, threshold 37705, while the frame's 99.99th percentile was
-/// 23221 — no star could clear it. Through the 2x2 mean: MAD 162, threshold
+/// 23221, no star could clear it. Through the 2x2 mean: MAD 162, threshold
 /// 15423, 85 stars. So these tests give the synthetic field the thing that
 /// actually breaks it, per-channel pedestals, not just a Bayer pattern.
 /// </summary>

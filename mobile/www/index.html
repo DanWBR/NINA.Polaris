@@ -80,7 +80,7 @@
          full-screen layout that never legitimately scrolls, but WebKit
          scrolls/offsets the OUTER document when focus jumps inside the
          cross-origin Polaris iframe (keyboard, input reveal) and can
-         leave it displaced permanently — the whole UI shifts with a
+         leave it displaced permanently, the whole UI shifts with a
          blank band and never recovers (field report on iPhone). Pin
          the root back to 0,0 whenever the viewport settles. iOS only:
          on Android the OS legitimately pans to reveal inputs and the

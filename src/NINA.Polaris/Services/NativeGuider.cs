@@ -46,13 +46,13 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     // Star search half-window (px) around the lock position each frame.
     private const int SearchRegion = 15;
     // GUIDEREC: how far the per-frame search may widen while the star is lost.
-    // Capped because GuideStar.Find takes the BRIGHTEST peak in the window — search
+    // Capped because GuideStar.Find takes the BRIGHTEST peak in the window, search
     // too wide and it locks a neighbour, and the jump lands as a correction that
     // walks the target out of frame. Past this, re-acquisition takes over (it picks
     // by proximity, so it can look further safely).
     private const int MaxRecoverySearchRegion = 60;
     // Lost frames before the one-shot full-frame re-acquisition fires. ~10 frames
-    // is a few seconds of thin cloud at typical guide exposures — long enough not to
+    // is a few seconds of thin cloud at typical guide exposures, long enough not to
     // fire on a satellite streak or a gust, short enough that a real cloud-out
     // recovers on its own instead of waiting for the operator.
     private const int ReacquireAfterLostFrames = 10;
@@ -85,7 +85,7 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     // Running pier-side reference for the guide loop's meridian-flip watch.
     // Seeded from the mount at guiding start (and lazily on the first frame that
     // reports a side). The loop mirrors the calibration only when the pier side
-    // CHANGES relative to this baseline while guiding — it must never mirror a
+    // CHANGES relative to this baseline while guiding, it must never mirror a
     // freshly measured calibration, which is already ground truth for the
     // current side, just because the side stamped at calibration time is stale.
     /// <summary>Set when a restore was refused because the stored calibrations
@@ -308,7 +308,7 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     /// <summary>The gain the guide loop actually captures with: the rig's
     /// stored value clamped to the connected camera's advertised range.
     /// ToupTek's INDI driver publishes Gain min=100, and the rig default is
-    /// 40 — the driver then rejected the write, and worse, the dark library
+    /// 40, the driver then rejected the write, and worse, the dark library
     /// was keyed by the STORED gain while the frames came off the sensor at
     /// the driver's minimum, so the darks no longer matched the lights.
     /// One resolver, used by the capture path, the dark library and the log.
@@ -443,7 +443,7 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
         // is now on the other side from where the saved calibration was measured
         // (a meridian flip happened between sessions), mirror it up front so
         // guiding starts with the right directions. A fresh calibration is exempt
-        // — mirroring it would guide the wrong way, which is exactly the post-flip
+        //, mirroring it would guide the wrong way, which is exactly the post-flip
         // recalibration failure. Only when the driver reports a definite side both
         // then and now, and only in the default "mirror" mode.
         var startSide = startMount.SideOfPier;
@@ -914,7 +914,7 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     /// toggled so a later auto-detect stays consistent.</summary>
     public Task FlipCalibrationAsync(CancellationToken ct = default) {
         if (!_calibration.IsValid) {
-            RaiseAlert("No calibration to flip — calibrate first.");
+            RaiseAlert("No calibration to flip, calibrate first.");
             return Task.CompletedTask;
         }
         // Toggle the recorded pier side (East<->West); leave Unknown as Unknown
@@ -947,8 +947,8 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     /// <summary>Write the current (just-flipped) calibration angles + pier side
     /// back to the persisted record for the active rig so the mirror survives a
     /// restart. Updates the keyed entry matching the current equipment (or the
-    /// legacy slot on a pre-migration rig) — the same record
-    /// <see cref="TryRestoreCalibration"/> would pick — leaving the rates,
+    /// legacy slot on a pre-migration rig), the same record
+    /// <see cref="TryRestoreCalibration"/> would pick, leaving the rates,
     /// declination, backlash and scatter untouched.</summary>
     private void PersistFlippedCalibration() {
         var cal = _calibration;
@@ -957,7 +957,7 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
         // Review-Calibration scatter reflects the mirror (the field report:
         // "flip doesn't change the graph"). A 180° axis rotation negates both
         // coordinates. RA always flips (+180°); Dec only when the rig reverses
-        // Dec after a flip — the same rule FlipForPierChange applies to the
+        // Dec after a flip, the same rule FlipForPierChange applies to the
         // angles. Applying the mirror twice restores the original (involutive),
         // consistent with flipping the angles twice.
         bool reverseDec = Rig.NativeReverseDecAfterFlip;

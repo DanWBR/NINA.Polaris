@@ -72,7 +72,7 @@ public class TonalServiceTests {
     [Test]
     public void Clahe_FlatField_StaysUniform_NoSeams() {
         // Equalization maps a single-valued tile to the top of its CDF, so a
-        // perfectly flat field becomes uniformly bright (not identity) — but it
+        // perfectly flat field becomes uniformly bright (not identity), but it
         // must stay UNIFORM: no tile-boundary seams, no NaN.
         int w = 32, h = 32;
         var data = new ushort[w * h];

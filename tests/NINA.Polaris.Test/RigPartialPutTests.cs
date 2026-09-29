@@ -29,7 +29,7 @@ namespace NINA.Polaris.Test;
 /// RIGPUT-1: a PARTIAL rig PUT must not reset the per-rig value-type fields to
 /// model defaults. Two callers send a one-field body (a LIVE compute-mode toggle,
 /// a slew-safety patch); the handler used to write gain/offset/binning/cooler
-/// unconditionally, so those partial saves silently zeroed them — the offset→0
+/// unconditionally, so those partial saves silently zeroed them, the offset→0
 /// case clipped the SV405CC to black.
 ///
 /// The fix makes every value-type field nullable with no initializer, so an
@@ -47,7 +47,7 @@ public class RigPartialPutTests {
     /// exactly what app.js patches) must leave every value-type field null,
     /// so the handler's `if (HasValue)` skips them and the rig keeps its values.
     /// If any came back non-null (e.g. a lingering initializer), the handler would
-    /// write the model default over the rig — the bug.</summary>
+    /// write the model default over the rig, the bug.</summary>
     [Test]
     public void PartialBody_LeavesValueTypeFieldsNull() {
         const string partial = """
@@ -67,7 +67,7 @@ public class RigPartialPutTests {
         });
     }
 
-    /// <summary>An EXPLICIT 0 / false must survive — that's the whole reason for
+    /// <summary>An EXPLICIT 0 / false must survive, that's the whole reason for
     /// nullable over a `> 0` guard. Offset 0 (a real setting on some cameras) and
     /// flip false are distinguishable from "absent".</summary>
     [Test]
@@ -88,7 +88,7 @@ public class RigPartialPutTests {
     }
 
     /// <summary>A genuinely NEW rig must NOT be all-null (which would resolve offset
-    /// to 0 at the read site — black-level clipping). CreateEquipmentProfile sets
+    /// to 0 at the read site, black-level clipping). CreateEquipmentProfile sets
     /// the sensible defaults the model used to carry.</summary>
     [Test]
     public void CreateEquipmentProfile_GivesSensibleNonNullDefaults() {
@@ -117,7 +117,7 @@ public class RigPartialPutTests {
     /// <summary>End-to-end through ProfileService.UpdateEquipmentProfile, mimicking
     /// what the endpoint does: a rig with real values, then a "partial patch" that
     /// only touches one field must leave the numerics intact. This is the closest
-    /// we can get to the endpoint without a WebApplication — the patch lambda here
+    /// we can get to the endpoint without a WebApplication, the patch lambda here
     /// mirrors the handler's HasValue guards.</summary>
     [Test]
     public void PartialUpdate_PreservesExistingNumerics() {
@@ -159,7 +159,7 @@ public class RigPartialPutTests {
     // values: Name = "Default", NativeRaAlgorithm = "hysteresis",
     // NativeDecAlgorithm = "resistswitch", NativePierSideHandling = "mirror".
     // A one-field body bound straight to EquipmentProfile therefore arrived at
-    // the handler claiming the rig was called "Default" — non-blank, so the
+    // the handler claiming the rig was called "Default", non-blank, so the
     // blank-guard let it through and the operator's "SV503" rig was renamed.
     // RigPatch.Merge seeds the model from the STORED rig instead.
 

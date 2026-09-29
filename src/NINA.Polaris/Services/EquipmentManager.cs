@@ -116,7 +116,7 @@ public class EquipmentManager : IDisposable {
         CameraDriver = driver;
         CameraDeviceId = deviceId;
         // Defensive: if this device was previously the guide camera its
-        // CCD_EXPOSURE writes were demoted to Debug — the imaging camera's
+        // CCD_EXPOSURE writes were demoted to Debug, the imaging camera's
         // frame requests should log normally again.
         if (driver == "indi") _indiClient.SetQuietGuideLogging(deviceId, false);
         _logger.LogInformation("Camera selected: driver={Driver}, id={DeviceId}",
@@ -864,7 +864,7 @@ public class EquipmentManager : IDisposable {
         // self-relaunched child (DriverAccess on an STA + message pump). An old
         // WinForms/.NET driver that fast-fails on connect inside the loaded
         // server process connects fine in the clean child, and if it crashes
-        // anyway only the child dies — the server surfaces a clean error and
+        // anyway only the child dies, the server surfaces a clean error and
         // stays up. Zero extra packaging (the child is this same exe).
         return new NINA.Ascom.Com.AscomComFilterWheelHosted(progId);
     }

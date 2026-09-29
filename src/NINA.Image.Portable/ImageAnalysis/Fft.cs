@@ -15,7 +15,7 @@ namespace NINA.Image.ImageAnalysis;
 
 /// <summary>
 /// Minimal, dependency-free 2-D complex FFT (iterative radix-2 Cooley-Tukey),
-/// used to make convolution cost independent of the kernel size — the key to
+/// used to make convolution cost independent of the kernel size, the key to
 /// keeping measured-PSF deconvolution viable at full resolution on a low-power
 /// SBC, where the O(N·k²) spatial path is hopeless for large PSF stamps.
 /// Power-of-two dimensions only (the convolver zero-pads up to the next pow2).
@@ -29,7 +29,7 @@ public static class Fft {
     }
 
     /// <summary>In-place 1-D FFT (forward when <paramref name="inverse"/> is
-    /// false). Length must be a power of two. No 1/N scaling — applied once in
+    /// false). Length must be a power of two. No 1/N scaling, applied once in
     /// the 2-D inverse.</summary>
     public static void Transform1D(float[] re, float[] im, bool inverse)
         => Transform1D(re, im, 0, 1, re.Length, inverse);

@@ -644,7 +644,7 @@ public static class SystemEndpoints {
         });
 
         // Scheduled rig teardown ("sleep timer"): stop capture + guiding, park,
-        // warm + cooler off, optionally power off the host — at a set time.
+        // warm + cooler off, optionally power off the host, at a set time.
         group.MapGet("/scheduled-shutdown", (ScheduledShutdownService svc) => Results.Ok(new {
             utc = svc.ScheduledUtc?.ToString("o"),
             shutdownHost = svc.ShutdownHost,

@@ -14,16 +14,16 @@ using System.Collections.Generic;
 namespace NINA.Image.ImageAnalysis;
 
 /// <summary>
-/// A measured, per-pixel noise model — the differentiator over tools that
+/// A measured, per-pixel noise model, the differentiator over tools that
 /// assume a single flat background σ. Astronomical noise follows a
 /// photon-transfer law: variance grows linearly with signal,
 ///     σ²(S) = a·S + b   (a = 1/gain shot term, b = read-noise floor).
 /// Both coefficients are estimated from the frame itself (no header / gain
 /// guess needed) by measuring the high-frequency noise across many tiles at
-/// different signal levels — a single-frame photon-transfer curve. The σ map
+/// different signal levels, a single-frame photon-transfer curve. The σ map
 /// then drives noise-aware deconvolution: amplify where SNR is high, hold back
 /// where it's noise-dominated, per pixel, accounting for shot noise on bright
-/// nebulosity and for vignetting / gradients — not just a flat threshold.
+/// nebulosity and for vignetting / gradients, not just a flat threshold.
 /// </summary>
 public static class NoiseMap {
     public readonly record struct Model(double A, double B) {
@@ -68,7 +68,7 @@ public static class NoiseMap {
 
         // If the tiles don't span a meaningful signal range (flat field / very
         // low dynamic range), the photon-transfer slope is unidentifiable and
-        // the regression is degenerate — report a flat noise floor instead.
+        // the regression is degenerate, report a flat noise floor instead.
         double minS = double.MaxValue, maxS = double.MinValue;
         foreach (var s in sig) { if (s < minS) minS = s; if (s > maxS) maxS = s; }
         if (maxS - minS < 0.05 * Math.Max(1.0, Median(sig)))

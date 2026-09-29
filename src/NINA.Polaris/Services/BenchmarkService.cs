@@ -174,7 +174,7 @@ public class BenchmarkService {
             } catch (OperationCanceledException) { throw; }
             catch (Exception ex) { _logger.LogWarning(ex, "GPU benchmark workload failed"); }
 
-            // QNN-5: NPU (AI inference) — times a real GraXpert denoise on the
+            // QNN-5: NPU (AI inference), times a real GraXpert denoise on the
             // Hexagon/Rockchip NPU (Ran=false off an NPU host, like the GPU row).
             NpuResult? npuRes = null;
             try {
@@ -722,8 +722,8 @@ public class BenchmarkService {
     private GpuResult RunGpuWorkload(CancellationToken ct) {
         if (!_gpu.IsHardware)
             return new GpuResult(false, _gpu.BackendName, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-        // The GPU section reports the *raw* per-op GPU-vs-CPU speed — that's what
-        // justifies the offload policy — so measure with every kernel forced on
+        // The GPU section reports the *raw* per-op GPU-vs-CPU speed, that's what
+        // justifies the offload policy, so measure with every kernel forced on
         // even if the production policy declines some on this discrete device.
         return _gpu is NINA.Polaris.Services.OpenCl.OpenClGpuCompute ocl
             ? ocl.WithAllKernels(() => MeasureGpu(ct))
@@ -794,8 +794,8 @@ public class BenchmarkService {
 
     /// <summary>
     /// Time a real GraXpert Denoise on the board's NPU and report per-tile cost.
-    /// Picks the available lane — Qualcomm Hexagon (QAIRT) first, then Rockchip
-    /// RKNPU2 — both of which run the same tiled GraXpert pipeline. Off an NPU
+    /// Picks the available lane, Qualcomm Hexagon (QAIRT) first, then Rockchip
+    /// RKNPU2, both of which run the same tiled GraXpert pipeline. Off an NPU
     /// host, or when no denoise model is bundled, returns <c>Ran=false</c> with a
     /// reason (same convention as the GPU row). 1024×1024 mono → enough tiles for
     /// a stable per-tile number without dragging the suite out.

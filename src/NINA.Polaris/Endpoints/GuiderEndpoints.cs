@@ -188,7 +188,7 @@ public static class GuiderEndpoints {
                 return Results.BadRequest(new { error = "Save/load calibration is only available on the native guider." });
             var data = ng.ExportCalibrationData();
             if (data == null)
-                return Results.BadRequest(new { error = "No calibration to save yet — calibrate first." });
+                return Results.BadRequest(new { error = "No calibration to save yet, calibrate first." });
             return Results.Ok(new { calibration = data });
         });
 
@@ -541,7 +541,7 @@ public static class GuiderEndpoints {
         group.MapGet("/exposure", async (PHD2Client phd2) => {
             // "Not connected" is a normal state for a status probe (e.g. the
             // native guider is active, or PHD2 hasn't been launched yet), not a
-            // client error — return 200 so it doesn't spam the debug log.
+            // client error, return 200 so it doesn't spam the debug log.
             if (!phd2.IsConnected) return Results.Ok(new { connected = false });
             try {
                 var current = await phd2.GetExposureAsync();
@@ -561,7 +561,7 @@ public static class GuiderEndpoints {
         // ---- Dec guide mode ----
 
         group.MapGet("/dec-mode", async (PHD2Client phd2) => {
-            // Status probe — benign when PHD2 isn't connected (see /exposure).
+            // Status probe, benign when PHD2 isn't connected (see /exposure).
             if (!phd2.IsConnected) return Results.Ok(new { connected = false });
             try { return Results.Ok(new { mode = await phd2.GetDecGuideModeAsync() }); }
             catch (Exception ex) { return Results.Problem(ex.Message); }

@@ -24,14 +24,14 @@ namespace NINA.Polaris.Services;
 /// sanitising the result (see <see cref="FileBrowserService"/>).
 ///
 /// Token grammar:
-///   • <c>{KEYWORD}</c>  — any FITS header keyword (case-insensitive),
+///   • <c>{KEYWORD}</c> , any FITS header keyword (case-insensitive),
 ///                         e.g. {OBJECT}, {FILTER}, {EXPTIME}, {DATE-OBS}.
 ///                         Missing keyword → empty string.
-///   • <c>{n}</c>        — the 1-based sequence number, no padding.
-///   • <c>{n:0N}</c>     — the sequence number zero-padded to N digits
+///   • <c>{n}</c>       , the 1-based sequence number, no padding.
+///   • <c>{n:0N}</c>    , the sequence number zero-padded to N digits
 ///                         (e.g. {n:03} → 001). The leading zero is
 ///                         conventional; {n:3} works too.
-///   • anything else     — literal text, passed through unchanged.
+///   • anything else    , literal text, passed through unchanged.
 /// </summary>
 public static class BatchRenameTemplate {
     // One {...} placeholder. [^{}]+ keeps it from spanning braces.

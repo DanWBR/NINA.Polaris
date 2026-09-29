@@ -62,7 +62,7 @@ public static class UpdateEndpoints {
 
         // Install (or roll back to) a SPECIFIC release by tag. The asset URL is
         // resolved server-side from the releases list, never taken from the
-        // caller. No "must be newer" gate — apt runs with --allow-downgrades.
+        // caller. No "must be newer" gate, apt runs with --allow-downgrades.
         group.MapPost("/install-version", async (UpdateService svc, HostActivityService activity,
                                                 InstallVersionRequest req, bool? force,
                                                 CancellationToken ct) => {

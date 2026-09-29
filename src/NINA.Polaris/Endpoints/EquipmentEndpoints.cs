@@ -125,7 +125,7 @@ public static class EquipmentEndpoints {
         // every absent property its C# initialiser, and those initialisers are
         // real-looking values: a compute-mode-only PUT arrived carrying
         // Name = "Default", NativeRaAlgorithm = "hysteresis", NativeDecAlgorithm
-        // = "resistswitch", NativePierSideHandling = "mirror" — which is exactly
+        // = "resistswitch", NativePierSideHandling = "mirror", which is exactly
         // how a rig named "SV503" came back as "Default" with its guiding setup
         // reset. After the merge, absent ⇒ the stored value, so the guards and
         // clamps below run against real input only.
@@ -190,7 +190,7 @@ public static class EquipmentEndpoints {
                 // guarded, so a PARTIAL PUT (the {liveStackComputeMode} and
                 // {slewConfirmDeg,slewFloorDeg} patches below omit everything else)
                 // no longer resets these to the model defaults. Before this, a
-                // compute-mode toggle silently zeroed gain/offset/binning/cooler —
+                // compute-mode toggle silently zeroed gain/offset/binning/cooler,
                 // the offset→0 case clipped the SV405CC to black. An explicit 0 /
                 // false still writes; only ABSENT (null) is left alone.
                 if (update.CoolerTargetTemperature.HasValue)
@@ -305,7 +305,7 @@ public static class EquipmentEndpoints {
                 r.RequiredBackspacingMm = update.RequiredBackspacingMm;
                 if (update.GuiderFocalLengthMm > 0) r.GuiderFocalLengthMm = update.GuiderFocalLengthMm;
                 // OAG mode: a plain bool is safe here because `update` is
-                // RigPatch.Merge(stored, patch) — an omitting client yields the
+                // RigPatch.Merge(stored, patch), an omitting client yields the
                 // stored value (no-op) and an explicit false is a real "OAG off".
                 r.GuiderIsOag = update.GuiderIsOag;
                 // OAG prism geometry (drives the guide FOV square). Both are
@@ -372,7 +372,7 @@ public static class EquipmentEndpoints {
                 // straight to the profile); accepting it on the full-rig PUT
                 // let any client holding a stale rigs list (the GUIDE dropdown
                 // doesn't refresh that list) silently revert the exposure on
-                // the next unrelated rig save — the "always back to 0.1 s" bug.
+                // the next unrelated rig save, the "always back to 0.1 s" bug.
                 if (update.NativeCalibrationStepMs > 0)
                     r.NativeCalibrationStepMs = update.NativeCalibrationStepMs;
                 if (update.NativeMinMoveRaPx >= 0)

@@ -693,7 +693,7 @@ public static class FilesEndpoints {
 
         // Silent "discard": move a file into a `discarded/` folder at the studio
         // root instead of deleting it, so a mis-click in the viewer's cull loop
-        // is recoverable. No confirmation — that's the point of a quick cull.
+        // is recoverable. No confirmation, that's the point of a quick cull.
         // The destination folder is created on demand and names are de-duped.
         g.MapPost("/discard", async (FileBrowserService svc, ProfileService profiles,
                                      DiscardRequest req, CancellationToken ct) => {

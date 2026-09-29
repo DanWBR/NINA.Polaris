@@ -9,7 +9,7 @@
 // Interactive introductory tour (coach-marks + auto panel switching).
 //
 // Self-contained module (same IIFE pattern as virtual-keyboard.js). It is
-// PURELY additive: it never touches equipment or fires API calls — it only
+// PURELY additive: it never touches equipment or fires API calls, it only
 // reads/sets the Alpine UI navigation state (window.__alpineRoot.tab and the
 // sub-tab fields) and draws a spotlight + arrow + tooltip over real controls.
 // So it cannot disturb Slew & Center, plate solving, captures, or any in-flight
@@ -312,7 +312,7 @@
 
     var state = { active: false, steps: null, idx: 0, dir: 1, els: null, raf: 0, onResize: null, onKey: null };
 
-    // Tour registry — start(id) picks the step list. 'intro' is the main
+    // Tour registry, start(id) picks the step list. 'intro' is the main
     // overview; 'statusbars' and 'settings' are the optional deep-dives.
     function tourSteps(id) {
         if (id === 'statusbars') return statusbarSteps();
@@ -426,7 +426,7 @@
     }
 
     // Resolve a step's target: wait (briefly) for it to exist + be visible,
-    // scrolling it into view. Calls cb(found) — found=false means the anchor
+    // scrolling it into view. Calls cb(found), found=false means the anchor
     // never showed up (e.g. a platform-specific Settings card that isn't
     // rendered on this host).
     function waitForTarget(step, cb) {
@@ -539,7 +539,7 @@
 
     window.PolarisTour = { start: start, stop: stop, maybeOfferFirstRun: maybeOfferFirstRun };
 
-    // Offer the tour after Alpine boots — but wait until the password / location
+    // Offer the tour after Alpine boots, but wait until the password / location
     // setup modals (if any) are dismissed so we never fight them.
     document.addEventListener('alpine:initialized', function () {
         var tries = 0;

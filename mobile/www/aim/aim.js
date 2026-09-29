@@ -118,7 +118,7 @@
   }
   function onOrientation(e) {
     // When the Generic Sensor API AbsoluteOrientationSensor is driving
-    // (Android Chrome/WebView), it owns heading + pitch — ignore the
+    // (Android Chrome/WebView), it owns heading + pitch, ignore the
     // DeviceOrientation events, which on many Android devices are
     // relative-only (no true-north heading).
     if (state._absSensor) return;
@@ -167,7 +167,7 @@
       // events are frequently RELATIVE only (no absolute north), so the
       // compass never locks. The Generic Sensor API's
       // AbsoluteOrientationSensor fuses magnetometer + accel + gyro into a
-      // true-north quaternion — and asking for it is what actually prompts
+      // true-north quaternion, and asking for it is what actually prompts
       // for / grants the underlying sensor permissions on Android. Use it
       // as the primary source when available.
       await startAbsoluteOrientationSensor(hint);
@@ -186,7 +186,7 @@
       // and some devices simply lack an absolute-heading sensor.
       setTimeout(function () {
         if (!state.sensorsOk) {
-          hint.textContent = 'No compass data yet — wave the phone in a figure-8 to calibrate. '
+          hint.textContent = 'No compass data yet, wave the phone in a figure-8 to calibrate. '
             + 'Manual azimuth/altitude inputs still work.';
         }
       }, 2500);

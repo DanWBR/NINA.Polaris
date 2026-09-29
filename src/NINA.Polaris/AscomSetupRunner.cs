@@ -23,21 +23,21 @@ namespace NINA.Polaris;
 /// thread, then exits the process with code 0 on success or 1 on
 /// failure (error text on stderr).
 ///
-/// <para>Why a subprocess: ASCOM drivers — especially the VB6-era
-/// ZWO ones — can throw <see cref="AccessViolationException"/> from
+/// <para>Why a subprocess: ASCOM drivers, especially the VB6-era
+/// ZWO ones, can throw <see cref="AccessViolationException"/> from
 /// inside SetupDialog. .NET 5+ tears down the host process on a
 /// corrupted-state exception regardless of any try/catch and
 /// regardless of <c>LegacyCorruptedStateExceptionsPolicy</c> in
 /// most configurations, so an in-process call gambles the entire
 /// API server every time the user clicks Setup. Isolating it in a
-/// child process means a buggy driver only kills the helper —
+/// child process means a buggy driver only kills the helper,
 /// systemd / Windows services / `dotnet run` keep running and the
 /// HTTP request returns a proper 4xx with the stderr text.</para>
 ///
 /// <para>The dispatch is hardwired at the very top of
 /// <c>Program.cs</c> before <c>WebApplication.CreateBuilder</c>
 /// runs, so the helper path skips all of the HTTP / WS / Kestrel
-/// machinery — fastest start, smallest blast radius.</para>
+/// machinery, fastest start, smallest blast radius.</para>
 /// </summary>
 [SupportedOSPlatform("windows")]
 internal static class AscomSetupRunner {

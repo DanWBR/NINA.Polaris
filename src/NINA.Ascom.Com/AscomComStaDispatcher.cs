@@ -48,7 +48,7 @@ public sealed class AscomComStaDispatcher : IDisposable {
     private readonly Thread _thread;
     // WINEXIT-3: a plain ConcurrentQueue + a wake event, NOT a BlockingCollection.
     // The pump must ALSO service the Windows message queue (see Pump), so it
-    // cannot sit blocked inside BlockingCollection.Take — it waits on
+    // cannot sit blocked inside BlockingCollection.Take, it waits on
     // MsgWaitForMultipleObjectsEx, which wakes on either queued work OR an input
     // message.
     private readonly ConcurrentQueue<Action> _queue = new();
@@ -81,7 +81,7 @@ public sealed class AscomComStaDispatcher : IDisposable {
         // WINEXIT-3: a real STA COM host has to PUMP THE WINDOWS MESSAGE LOOP,
         // not just consume a work queue. Real ASCOM camera / filter-wheel
         // drivers (VB6 / WinForms lineage) create a hidden window on Connect and
-        // deliver their events — image-ready, cooler, position callbacks — as
+        // deliver their events, image-ready, cooler, position callbacks, as
         // window messages; COM itself marshals cross-apartment calls the same
         // way. A thread that blocks on a queue and never pumps starves those
         // messages, and a real driver crashes the process on connect. The ASCOM

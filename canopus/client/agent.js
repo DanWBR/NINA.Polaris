@@ -1,4 +1,4 @@
-// N.I.N.A. Polaris — Canopus Assistant
+// N.I.N.A. Polaris, Canopus Assistant
 // Copyright (C) 2024-2026 Daniel Wagner (DanWBR) and the N.I.N.A. Polaris contributors
 //
 // This program is free software: you can redistribute it and/or modify it under
@@ -7,7 +7,7 @@
 // later version. Distributed WITHOUT ANY WARRANTY; see the GNU AGPL for details.
 // <https://www.gnu.org/licenses/>.
 //
-// CanopusAgent — the agent loop, running IN THE BROWSER for the "On this device"
+// CanopusAgent, the agent loop, running IN THE BROWSER for the "On this device"
 // tier. It is a lean JS port of canopus/server/agent.py's AgentSession, speaking
 // the same message protocol so it drops into the chat client behind the same
 // transport boundary the WebSocket used:
@@ -32,16 +32,16 @@
     "You are Canopus, a concise observing assistant for an astrophotographer using " +
     "N.I.N.A. Polaris. You plan the night, read rig state, drive the rig (with the " +
     "user's approval), and answer questions. Rules:\n" +
-    "1. To act on the rig — slew, autofocus, start/stop capture, dither, or anything " +
-    "that moves hardware or changes a running session — CALL the matching tool " +
+    "1. To act on the rig, slew, autofocus, start/stop capture, dither, or anything " +
+    "that moves hardware or changes a running session, CALL the matching tool " +
     "directly. Polaris automatically shows the user an approval card and runs it only " +
-    "if they accept, so NEVER ask for permission or describe the plan in words — just " +
+    "if they accept, so NEVER ask for permission or describe the plan in words, just " +
     "call the tool (do not stop to say 'shall I proceed?'). A complaint or an " +
     "observation is not a request to act: measure, report, and let the user decide.\n" +
     "2. You do not know the sky from memory. Never state or pass coordinates you " +
     "recalled; use search_catalog to resolve a target. slew_to takes a target NAME " +
     "and Polaris resolves it.\n" +
-    "3. Any question about a value, quality or progress needs a tool — call get_status " +
+    "3. Any question about a value, quality or progress needs a tool, call get_status " +
     "for connection/guiding/sequence/focus. Answer with no tool only for concepts.\n" +
     "4. For a how-to / why / 'where is' question, answer from your astrophotography " +
     "knowledge and be clear when unsure; use show_panel to take the user to the " +
@@ -201,7 +201,7 @@
 
     async execTool(c) {
       const entry = this.toolsByName[c.name] || {};
-      // Knowledge RAG runs only on the server/cloud backends — degrade gracefully.
+      // Knowledge RAG runs only on the server/cloud backends, degrade gracefully.
       if (entry.local === 'knowledge') {
         return { ok: true, result: { passages: [], note: 'The searchable manual is only available on the cloud/server backends. Answer from your own astrophotography knowledge, and say so if unsure.' } };
       }

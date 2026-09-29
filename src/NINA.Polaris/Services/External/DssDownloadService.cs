@@ -41,7 +41,7 @@ public sealed class DssDownloadService {
     };
 
     // Downloads land in a WRITABLE data directory (next to the profiles),
-    // never in the install's wwwroot — on a packaged install (.deb under
+    // never in the install's wwwroot, on a packaged install (.deb under
     // /opt/polaris) wwwroot is root-owned/read-only, so writing there fails
     // with UnauthorizedAccess. Program.cs serves this dir at the same request
     // path the engine fetches (/sky/data/skydata/surveys/dss) with priority
@@ -154,7 +154,7 @@ public sealed class DssDownloadService {
             // Preflight 2: we need internet to fetch tiles. Probe a known
             // order-4 tile fresh (bypassing the already-present check). This
             // is the common field failure: downloading at the telescope with
-            // no connection — previously every tile failed silently and the
+            // no connection, previously every tile failed silently and the
             // job reported a misleading "success".
             try {
                 using var probe = await Http.GetAsync($"{Remote}/Norder4/Dir0/Npix0.jpg", ct);
@@ -163,7 +163,7 @@ public sealed class DssDownloadService {
             } catch (OperationCanceledException) {
                 throw;
             } catch (Exception ex) {
-                Finish(0, 0, "Could not reach the sky imagery server — an internet connection is "
+                Finish(0, 0, "Could not reach the sky imagery server, an internet connection is "
                     + $"required to download (you can be offline afterwards). [{ex.Message}]");
                 return;
             }
@@ -210,10 +210,10 @@ public sealed class DssDownloadService {
                 await Task.WhenAll(tasks);
             }
             // If the connection dropped mid-run, nothing useful landed even
-            // though we got past the preflight — report that honestly rather
+            // though we got past the preflight, report that honestly rather
             // than claiming success.
             string? err = (ok == 0 && errors > 0)
-                ? "Download failed — the connection appears to have dropped (no tiles were saved)."
+                ? "Download failed, the connection appears to have dropped (no tiles were saved)."
                 : null;
             Finish(ok + missing + errors, errors, err);
             _logger.LogInformation("DSS download done: order {Order}, {Ok} saved, {Missing} sparse, {Err} errors",
@@ -228,14 +228,14 @@ public sealed class DssDownloadService {
     }
 
     // Ok    = downloaded now, or already present (in the writable dir OR the
-    //         bundled wwwroot baseline — so we never re-download orders 0-3).
-    // Missing = upstream 404 / empty (sparse survey — normal, not fatal).
+    //         bundled wwwroot baseline, so we never re-download orders 0-3).
+    // Missing = upstream 404 / empty (sparse survey, normal, not fatal).
     // Error = network/IO failure (the caller treats a run of these as fatal).
     private async Task<FetchResult> FetchAsync(string url, string outPath, CancellationToken ct,
             bool forceLocal = false) {
         try {
             if (File.Exists(outPath) && new FileInfo(outPath).Length > 0) return FetchResult.Ok;
-            // Already shipped in the read-only baseline? Don't re-fetch it —
+            // Already shipped in the read-only baseline? Don't re-fetch it,
             // unless forceLocal, used for the survey metadata that MUST exist
             // in the writable dir for the engine's local-source probe.
             if (!forceLocal) {

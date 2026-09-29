@@ -86,7 +86,7 @@ public static class CalibrationMath {
 
     /// <summary>Build the normalised flat: subtract a bias/dark-flat
     /// calibrator if available, divide by mean. The per-pixel result
-    /// is stored as float[] — MEMOPT: it's the largest master buffer
+    /// is stored as float[], MEMOPT: it's the largest master buffer
     /// cached for a whole session (69 MB as double[] on a 9 MP
     /// sensor, half that as float[]) and a normalised flat lives in
     /// [~0.5, ~2.0] where float's 24-bit mantissa is ~1e-7 relative

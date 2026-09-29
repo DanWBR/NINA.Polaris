@@ -23,7 +23,7 @@ namespace NINA.Ascom.Com;
 /// Invokes an ASCOM driver's modal <c>SetupDialog()</c> method on a
 /// one-shot dedicated STA thread. Used before Connect to let the user
 /// pick the serial port, set the COM speed, configure tracking rates,
-/// etc. — anything the driver author put in the setup form.
+/// etc., anything the driver author put in the setup form.
 ///
 /// <para>The dialog blocks the dispatcher thread until the user
 /// dismisses it; the returned Task completes only then. UI callers
@@ -32,7 +32,7 @@ namespace NINA.Ascom.Com;
 ///
 /// <para>Requires an interactive Windows session (Polaris started by
 /// the logged-in user, not from a service). Running Polaris as a
-/// SYSTEM service the SetupDialog() can't render anywhere — the
+/// SYSTEM service the SetupDialog() can't render anywhere, the
 /// driver typically logs a "no interactive desktop" error and the
 /// Task completes with an exception.</para>
 /// </summary>
@@ -41,7 +41,7 @@ public static class AscomComSetup {
 
     /// <summary>Spawn a dedicated one-shot STA thread, create the
     /// driver via its ProgID, call <c>SetupDialog()</c> via late-bound
-    /// reflection (NOT the DLR — many old ZWO/ASCOM drivers fail when
+    /// reflection (NOT the DLR, many old ZWO/ASCOM drivers fail when
     /// invoked through C# <c>dynamic</c>), and dispose. Lifetime of
     /// the thread matches the dialog: nothing tears down until the
     /// user dismisses the form.
@@ -49,8 +49,8 @@ public static class AscomComSetup {
     /// <para>Previously this went through the shared
     /// <see cref="AscomComStaDispatcher"/> with a <c>using</c> block,
     /// but the dispatcher's Dispose() runs synchronously the moment
-    /// the method returns the Task — long before the modal dialog
-    /// closes — so it Joined the still-busy STA thread for its 2s
+    /// the method returns the Task, long before the modal dialog
+    /// closes, so it Joined the still-busy STA thread for its 2s
     /// ceiling and then left the dispatcher in a half-disposed state.
     /// A one-shot thread per call is simpler and has no race.</para>
     ///
@@ -93,7 +93,7 @@ public static class AscomComSetup {
             } catch (Exception ex) {
                 // Includes COMException + InvalidOperationException +
                 // anything else SetupDialog can throw. Surface via the
-                // returned Task — the endpoint handler turns it into a
+                // returned Task, the endpoint handler turns it into a
                 // 400 with the message.
                 tcs.TrySetException(ex);
             } finally {
@@ -120,7 +120,7 @@ public static class AscomComSetup {
     // AccessViolationException that pre-.NET-4-style ASCOM drivers
     // can throw from SetupDialog. By default a .NET 5+ process tears
     // down on a corrupted-state exception regardless of any try/catch
-    // up the stack — which manifested to the user as "the server
+    // up the stack, which manifested to the user as "the server
     // crashes when I click Setup on the ZWO ASCOM driver". The legacy
     // policy lets a [HandleProcessCorruptedStateExceptions] handler
     // catch it; without it nothing can. We don't set HPCSE on the

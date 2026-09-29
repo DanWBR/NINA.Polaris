@@ -25,7 +25,7 @@ namespace NINA.Polaris.Services.Qnn;
 /// Hexagon counterpart to <see cref="RknnInferenceService"/>. When the board is
 /// a Qualcomm SBC (<see cref="QnnRuntime.IsAvailable"/>) and a pre-built HTP
 /// context binary exists for the requested family/version + Hexagon arch
-/// (e.g. <c>qnn/denoise-ai-models/3.0.2/denoise_v68_int16.bin</c> — the QCS6490
+/// (e.g. <c>qnn/denoise-ai-models/3.0.2/denoise_v68_int16.bin</c>, the QCS6490
 /// HTP is integer-only, int16 is the production precision), the model runs on
 /// the NPU; otherwise the caller falls back to the GraXpert CLI.
 ///
@@ -218,8 +218,8 @@ public sealed class QnnInferenceService {
     /// <summary>
     /// Run Halo Removal on the Hexagon NPU. The halo model shares the Denoise
     /// contract (single-input NHWC 256, 3→3, per-channel MAD-normalize + strength
-    /// blend) — the browser's HaloRemovalPipeline just runs DenoisePipeline with
-    /// <c>family:'halo'</c> — so this reuses <see cref="RknnPipelines.RunDenoise"/>
+    /// blend), the browser's HaloRemovalPipeline just runs DenoisePipeline with
+    /// <c>family:'halo'</c>, so this reuses <see cref="RknnPipelines.RunDenoise"/>
     /// and the standard single-input batch verbatim.
     /// </summary>
     public QnnResult RunHalo(BaseImageData img, double strength, string? version = null) {
@@ -304,7 +304,7 @@ public sealed class QnnInferenceService {
 
         // Batch ONE PASS AT A TIME. Multi-pass star removal feeds each pass's
         // starless back as the next pass's input, so a tile's input DOES depend
-        // on the previous pass's output — which would break a single all-passes
+        // on the previous pass's output, which would break a single all-passes
         // record/replay (the record pass returns zeros). Within a single pass,
         // tile inputs are independent, so each pass is a valid record → batch →
         // replay. Stars are derived against the ORIGINAL after the last pass.
@@ -384,7 +384,7 @@ public sealed class QnnInferenceService {
     /// <c>qnn/</c> subtree: <c>{root}/qnn/{family}-ai-models/{version}/*{arch}*.bin</c>.
     /// Precision preference is highest-quality-first: <c>fp16</c> → <c>int16</c> →
     /// <c>int8</c>. NOTE: the QCS6490 HTP (the Q6A) is **integer-only** (INT8/INT16,
-    /// no FP16 — per the Qualcomm AI Hub device matrix), so on that board an fp16
+    /// no FP16, per the Qualcomm AI Hub device matrix), so on that board an fp16
     /// binary simply won't exist and int16 is the quality choice; the fp16 tier is
     /// kept for future SoCs whose HTP does support it.
     /// </summary>

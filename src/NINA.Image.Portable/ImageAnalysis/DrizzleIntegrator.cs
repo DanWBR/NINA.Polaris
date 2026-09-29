@@ -29,7 +29,7 @@ namespace NINA.Image.ImageAnalysis;
 /// Only worthwhile for undersampled data (star FWHM &lt; ~2 px) with many
 /// well-dithered subs; on well/over-sampled data scale &gt; 1 just amplifies
 /// noise and enlarges the file. Drops are treated as axis-aligned squares
-/// (rotation of the drop shape is ignored — a standard simplification that is
+/// (rotation of the drop shape is ignored, a standard simplification that is
 /// accurate for the small field rotations typical between subs).
 ///
 /// One instance accumulates one plane; the caller creates one per colour plane
@@ -135,7 +135,7 @@ public sealed class DrizzleIntegrator {
 
     /// <summary>Fraction of output pixels that received no drop (coverage
     /// holes). High values (a few %+) indicate too few / poorly dithered subs
-    /// for this scale — a hint to lower the scale or raise pixfrac.</summary>
+    /// for this scale, a hint to lower the scale or raise pixfrac.</summary>
     public double EmptyFraction() {
         long empty = 0;
         for (int i = 0; i < _weight.Length; i++) if (_weight[i] <= 0) empty++;

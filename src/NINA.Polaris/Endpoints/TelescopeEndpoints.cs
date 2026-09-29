@@ -377,7 +377,7 @@ public static class TelescopeEndpoints {
             if (equip.Telescope == null)
                 return Results.BadRequest(new { error = "No telescope selected" });
             // Date.UtcNow forbidden in workflow scripts, fine here in a
-            // normal endpoint handler — request handlers ARE the place
+            // normal endpoint handler, request handlers ARE the place
             // where ambient time is read.
             var utc = body?.Utc ?? DateTime.UtcNow;
             var offset = body?.OffsetHoursFromUtc
@@ -400,7 +400,7 @@ public static class TelescopeEndpoints {
         // "sidereal" (default for star tracking) / "solar" (Sun) /
         // "lunar" (Moon's mean motion). Case-insensitive. Some INDI
         // drivers REQUIRE a track mode set before TRACK_ON actually
-        // engages — without it the mount silently ignores enable, so
+        // engages, without it the mount silently ignores enable, so
         // this endpoint is also called by the connect-wizard once on
         // first attach to force a known good baseline.
         group.MapPost("/tracking-mode", async (EquipmentManager equip,
@@ -504,7 +504,7 @@ public static class TelescopeEndpoints {
         });
 
         // SLEWRATE-2: pick one of the advertised rates. ElementName is
-        // case-sensitive per INDI spec (SLEW_FIND, not slew_find) — UI
+        // case-sensitive per INDI spec (SLEW_FIND, not slew_find), UI
         // sends back the exact Name string it got from /slew-rates.
         group.MapPut("/slew-rate", async (EquipmentManager equip, SlewRateRequest req) => {
             if (equip.Telescope == null)
@@ -582,7 +582,7 @@ public static class TelescopeEndpoints {
         // Per-driver telescope discovery. INDI uses device names from
         // the active connection; ASCOM uses registered ProgIDs from
         // the local Windows registry. SynScan-WiFi is host:port-based
-        // (no enumeration possible), so it returns empty here — the
+        // (no enumeration possible), so it returns empty here, the
         // user types the address directly.
         group.MapGet("/discover", (EquipmentManager equip, string? driver) => {
             var d = (driver ?? "indi").Trim().ToLowerInvariant();
@@ -615,7 +615,7 @@ public static class TelescopeEndpoints {
             // projection puts the target "below horizon". The INDI
             // TIME_UTC default is the Unix epoch (2000-01-01), so on a
             // mount that just power-cycled the equator+meridian sit
-            // wherever the year-2000 LST says they sit — random failures
+            // wherever the year-2000 LST says they sit, random failures
             // on every slew until the operator manually opens INDI Web
             // and types the date.
             //
@@ -649,7 +649,7 @@ public static class TelescopeEndpoints {
                 } else {
                     locationStatus = "skipped: observatory location not configured in Settings";
                     logger.LogWarning(
-                        "Telescope auto-sync skipped — observatory location is (0,0). " +
+                        "Telescope auto-sync skipped, observatory location is (0,0). " +
                         "Set latitude/longitude in Settings or the mount won't compute LST correctly.");
                 }
             } catch (NotSupportedException) {
@@ -685,7 +685,7 @@ public static class TelescopeEndpoints {
     public record ZenithSlewRequest(bool Force = false);
     /// <summary>PUT /api/telescope/slew-rate body. ElementName matches
     /// one of the Name strings returned by GET /api/telescope/slew-rates
-    /// — typically <c>SLEW_GUIDE</c> / <c>SLEW_CENTERING</c> /
+    ///, typically <c>SLEW_GUIDE</c> / <c>SLEW_CENTERING</c> /
     /// <c>SLEW_FIND</c> / <c>SLEW_MAX</c> for LX200-class mounts.</summary>
     public record SlewRateRequest(string ElementName);
     /// <summary>Optional override for POST /sync-location. All three

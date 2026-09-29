@@ -196,7 +196,7 @@ public class TonightsBestService {
 
         // …but a single brightness-weighted global cap STARVES whole types:
         // galaxies are intrinsically fainter than stars/open clusters, so they
-        // score low and get buried — the "only Andromeda under Galaxies" report.
+        // score low and get buried, the "only Andromeda under Galaxies" report.
         // Guarantee each DSO sub-type's best few are present regardless of the
         // global cutoff (same spirit as the comet append below).
         var seen = new HashSet<string>(ordered.Select(i => i.Category + "/" + i.Name));
@@ -497,7 +497,7 @@ public class TonightsBestService {
     }
 
     /// <summary>True when the peak (highest point of the night) sits below the
-    /// site's custom horizon — i.e. the target never clears the trees/buildings
+    /// site's custom horizon, i.e. the target never clears the trees/buildings
     /// at that azimuth. Always false when no custom horizon is defined.</summary>
     private bool PeakBlockedByHorizon(double peakAlt, double peakAz) =>
         HorizonProfile.IsBlocked(_profile.Active.HorizonPoints ?? new List<HorizonPoint>(), peakAlt, peakAz);

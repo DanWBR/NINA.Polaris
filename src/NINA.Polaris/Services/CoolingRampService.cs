@@ -21,13 +21,13 @@ namespace NINA.Polaris.Services;
 /// jumping straight to the target.
 ///
 /// WHY: slamming the setpoint runs the TEC at 100% and drops the sensor as fast
-/// as the hardware allows — field log 2026-07-15 shows ~3.7°C/min going from
+/// as the hardware allows, field log 2026-07-15 shows ~3.7°C/min going from
 /// 27°C ambient to 0°C. A fast plunge is the classic way to condense dew on the
 /// sensor window, and thermally shocks the stack. Warming back up uncontrolled is
 /// just as bad (arguably worse for dew: a cold sensor returning to ambient is
 /// exactly when moisture condenses on it).
 ///
-/// The ramp already existed — in ONE of the four places that touch the cooler.
+/// The ramp already existed, in ONE of the four places that touch the cooler.
 /// WarmCameraInstruction has walked the setpoint at 2°C/min "to protect the
 /// sensor from thermal shock" all along, while CoolCameraInstruction and both UI
 /// cooler buttons wrote the setpoint raw. This service is that logic pulled out
@@ -47,7 +47,7 @@ namespace NINA.Polaris.Services;
 /// </summary>
 public class CoolingRampService {
     /// <summary>How often the ramp pushes a new setpoint. Matches the 10s step
-    /// WarmCameraInstruction used, which the SV405CC/ASI drivers handle happily —
+    /// WarmCameraInstruction used, which the SV405CC/ASI drivers handle happily,
     /// short enough that the TEC tracks smoothly, long enough not to spam INDI.</summary>
     internal static readonly TimeSpan StepInterval = TimeSpan.FromSeconds(10);
 
@@ -93,7 +93,7 @@ public class CoolingRampService {
     /// token afterwards. A ramp is minutes long by design (2 C/min, so -10 to
     /// +20 is a quarter of an hour), and during it Stop did nothing observable:
     /// the plan sat in the warm-up with the operator unable to end it until the
-    /// cooler finished. Cancelling the ramp too matters as much as returning —
+    /// cooler finished. Cancelling the ramp too matters as much as returning,
     /// otherwise a stopped plan leaves a setpoint still walking in the
     /// background, moving hardware nobody is watching any more.</summary>
     public async Task WaitAsync(CancellationToken ct, string slot = Main) {
@@ -140,7 +140,7 @@ public class CoolingRampService {
 
     /// <summary>Start (or restart) a ramp to <paramref name="targetC"/>.
     ///
-    /// A new ramp cancels any ramp in flight — the user changing their mind
+    /// A new ramp cancels any ramp in flight, the user changing their mind
     /// mid-cooldown must not leave two loops writing the setpoint. Returns once
     /// the ramp is STARTED, not once it finishes; await <see cref="Current"/> for
     /// that.
@@ -149,7 +149,7 @@ public class CoolingRampService {
     /// once, immediately. That's the pre-ramp behaviour, kept reachable so a rig
     /// can opt out.
     ///
-    /// <paramref name="coolerOffWhenDone"/> powers the TEC down after arriving —
+    /// <paramref name="coolerOffWhenDone"/> powers the TEC down after arriving,
     /// the warm-up case. Cutting the cooler at the START of a warm-up (what the
     /// UI's OFF button used to do) is precisely the uncontrolled return to ambient
     /// we're preventing, so it only ever happens at the END of a ramp.</summary>
@@ -158,7 +158,7 @@ public class CoolingRampService {
                       string slot = Main) {
         lock (_gate) {
             var s = SlotFor(slot);
-            // Cancel only THIS slot's ramp — the other camera keeps cooling.
+            // Cancel only THIS slot's ramp, the other camera keeps cooling.
             s.Cts?.Cancel();
             s.Cts?.Dispose();
             s.Cts = new CancellationTokenSource();
@@ -189,7 +189,7 @@ public class CoolingRampService {
             if (coolerOnFirst) await camera.SetCoolerAsync(true, ct);
 
             if (ratePerMinute <= 0) {
-                // Ramping disabled for this rig — old behaviour, one write.
+                // Ramping disabled for this rig, old behaviour, one write.
                 await camera.SetTemperatureAsync(targetC, ct);
                 lock (_gate) SlotFor(slot).State = new RampState(false, source, startC, targetC, targetC, ratePerMinute);
                 if (coolerOffWhenDone) await camera.SetCoolerAsync(false, ct);
@@ -233,7 +233,7 @@ public class CoolingRampService {
 /// <param name="Source">Who asked (UI / sequencer / aux), for the log + UI.</param>
 /// <param name="StartC">Sensor temperature when the ramp began.</param>
 /// <param name="TargetC">Where it's heading.</param>
-/// <param name="SetpointC">Setpoint currently written to the driver — the
+/// <param name="SetpointC">Setpoint currently written to the driver, the
 /// sensor lags this, which is exactly what makes the ramp gentle.</param>
 /// <param name="RatePerMinute">Configured rate; 0 means ramping is off.</param>
 public sealed record RampState(bool Running, string Source, double StartC,

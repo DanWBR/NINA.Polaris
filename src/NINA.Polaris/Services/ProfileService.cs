@@ -95,7 +95,7 @@ public class ProfileService {
         // with a .bak of the previous good version, so a torn/truncated file
         // from a power cut mid-write (common on field SBCs) can be recovered.
         // The cardinal rule: NEVER silently reset to an empty profile and then
-        // let the next Save() overwrite a recoverable file — that's how rigs
+        // let the next Save() overwrite a recoverable file, that's how rigs
         // vanish. So on a parse failure we preserve the bad file, try the
         // backup, and only fall back to a fresh Default when nothing is usable.
         var bakPath = _activeProfilePath + ".bak";
@@ -398,7 +398,7 @@ public class ProfileService {
 
         // RIGPUT-1: the per-rig value-type fields are nullable (so a partial PUT
         // can't reset them). A genuinely NEW rig gets the sensible defaults set
-        // HERE — otherwise null would resolve to each read site's fallback, which
+        // HERE, otherwise null would resolve to each read site's fallback, which
         // for offset is 0 (camera default) rather than the intended 50, and a
         // fresh rig would run at black-level-clipping offset 0.
         var rig = new EquipmentProfile {
@@ -575,7 +575,7 @@ public class ProfileService {
                 }).ToList()
             }).ToList(),
             // FILTERNAME: a cloned rig keeps the operator's filter labels too,
-            // not just the offsets — otherwise the copy comes up with the
+            // not just the offsets, otherwise the copy comes up with the
             // driver's raw names and the offsets (keyed by the saved names) miss.
             FilterNames = (string[])(src.FilterNames ?? System.Array.Empty<string>()).Clone(),
             // Per-rig power-box channel labels travel with the clone, same
@@ -637,7 +637,7 @@ public class ProfileService {
                 BgeSmoothing          = src.LiveStackPreProcessing.BgeSmoothing,
                 BgeCorrection         = src.LiveStackPreProcessing.BgeCorrection
             },
-            // INDIROB-3: pre-connect delays follow the rig — different
+            // INDIROB-3: pre-connect delays follow the rig, different
             // setups (mini-PC vs Pi, USB hub topology, ESP32 vs FTDI
             // bridges) have different settling needs.
             PreConnectDelayMsByDevice = new Dictionary<string, int>(src.PreConnectDelayMsByDevice),
@@ -822,7 +822,7 @@ public class ProfileService {
     /// builds where LogToDisk/SaveGuideLogs defaulted OFF (those builds wrote
     /// `false` into active.json, which then shadowed the new default-ON
     /// initializers forever). Guarded by <see cref="UserProfile.SettingsMigration"/>
-    /// so it runs once — a deliberate opt-out made after the migration is
+    /// so it runs once, a deliberate opt-out made after the migration is
     /// respected on every later load.</summary>
     private void MigrateLoggingDefaults() {
         const int LoggingDefaultsOnVersion = 1;

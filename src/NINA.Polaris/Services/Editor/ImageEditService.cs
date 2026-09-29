@@ -157,7 +157,7 @@ public class ImageEditService : IDisposable {
             // For linear sources (FITS) we keep the raw ushort data and defer
             // the stretch to the pipeline (EditorStretch), so the operator can
             // re-stretch the linear image from the histogram. 8-bit imports
-            // have no linear data — they go straight into working8.
+            // have no linear data, they go straight into working8.
             byte[]? working8 = null;
             ushort[]? linear = null;
             int bitDepth = 16;

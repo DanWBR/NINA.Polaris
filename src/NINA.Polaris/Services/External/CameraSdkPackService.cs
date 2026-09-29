@@ -65,7 +65,7 @@ public sealed class CameraSdkPackService {
         _ => "x64"
     };
 
-    /// <summary>The pack only applies on Linux x64/arm64 — Windows x64 bundles the
+    /// <summary>The pack only applies on Linux x64/arm64, Windows x64 bundles the
     /// DLLs already, and no native libs exist for win-arm64.</summary>
     public bool Supported =>
         OperatingSystem.IsLinux() &&

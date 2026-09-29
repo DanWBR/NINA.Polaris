@@ -39,7 +39,7 @@ public static class AdvancedSequenceEndpoints {
                 abortReason = engine.AbortReason,
                 // True when a stopped run left partial progress the next
                 // Start can continue from (drives the UI's continue/restart
-                // prompt). In-memory only — a server restart clears it.
+                // prompt). In-memory only, a server restart clears it.
                 hasResumableProgress = engine.HasResumableProgress
             };
             return Results.Text(JsonSerializer.Serialize(payload, SequenceJson.Options),

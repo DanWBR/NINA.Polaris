@@ -19,7 +19,7 @@ namespace NINA.Polaris.Services.Sequencer.Triggers;
 /// <summary>
 /// Re-acquire guiding if it drops mid-session. Once guiding has been seen
 /// active, this fires whenever PHD2 is connected but no longer guiding
-/// (lost lock / stopped) — and is NOT calibrating/paused — and restarts it.
+/// (lost lock / stopped), and is NOT calibrating/paused, and restarts it.
 /// Mirrors NINA desktop's "Restore Guiding". No-op until the first time
 /// guiding actually starts, so it never fights a sequence that hasn't begun
 /// guiding yet.

@@ -78,7 +78,7 @@ public class MountSlewSafetyTests {
         // flip floor (horizon) lets it continue.
         Assert.IsTrue(
             MountSlewSafety.ShouldAbortForAltitude(4, MountSlewSafety.AltitudeFloorDeg, isSlewing: true),
-            "the normal 5° floor aborts the 4° transit — the bug being fixed");
+            "the normal 5° floor aborts the 4° transit, the bug being fixed");
         Assert.IsFalse(
             MountSlewSafety.ShouldAbortForFlipTransit(4, MountSlewSafety.FlipTransitFloorDeg, isSlewing: true),
             "the flip floor lets the legitimate 4° transit continue");

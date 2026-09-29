@@ -89,13 +89,13 @@ public static class SirilEndpoints {
             // Lock-snapshotted copy so the JSON serializer doesn't race
             // against the stdout reader writing new lines. sinceLine
             // lets the UI's polling fetch only the tail since the last
-            // poll — keeps payload tiny for jobs with 500-line buffers.
+            // poll, keeps payload tiny for jobs with 500-line buffers.
             var snap = job.SnapshotLog();
             var since = Math.Max(0, sinceLine ?? 0);
             // totalLines is the absolute end-of-stream index (post-
             // truncation it equals snap.Count; the client uses it to
             // compute the next sinceLine). When the buffer wraps past
-            // 500 we lose the head but that's fine — the UI keeps its
+            // 500 we lose the head but that's fine, the UI keeps its
             // own already-rendered lines and only appends what's new.
             var totalLines = snap.Count;
             var tail = since >= totalLines

@@ -171,7 +171,7 @@ public class PolarAlignmentService {
 
     /// <summary>ASIAIR-style MANUAL refresh: one capture → solve →
     /// sliding-window update → error recompute, then back to Ok. The
-    /// operator adjusts a knob, taps Refresh, reads the new error —
+    /// operator adjusts a knob, taps Refresh, reads the new error,
     /// no continuous loop hammering the camera in between. Returns
     /// false (with the reason in <c>CurrentJob.LastError</c>) when the
     /// single pass couldn't produce a solve; the previous error vector
@@ -273,7 +273,7 @@ public class PolarAlignmentService {
         } catch (OperationCanceledException) { throw; }
         catch (Exception ex) {
             _logger.LogWarning(ex, "Refine: capture failed");
-            job.LastError = "Refine: capture failed — " + ex.Message;
+            job.LastError = "Refine: capture failed, " + ex.Message;
             return false;
         }
         if (image == null || image.Properties.Width <= 0) {
@@ -288,19 +288,19 @@ public class PolarAlignmentService {
         } catch (OperationCanceledException) { throw; }
         catch (Exception ex) {
             _logger.LogDebug(ex, "Refine: solve threw");
-            job.LastError = "Refine: plate solve failed — " + ex.Message;
+            job.LastError = "Refine: plate solve failed, " + ex.Message;
             return false;
         }
         if (!solve.Success) {
             _logger.LogDebug("Refine: solve failed ({Err})", solve.Error);
             job.LastError = "Refine: plate solve failed" +
-                (string.IsNullOrEmpty(solve.Error) ? "." : " — " + solve.Error);
+                (string.IsNullOrEmpty(solve.Error) ? "." : ", " + solve.Error);
             return false;
         }
 
         // 3. POLARUI2: displacement-to-target refinement. Precess the
         //    solve → of-date, then measure the rotation still needed to
-        //    take the current pointing to the ANCHORED target — the
+        //    take the current pointing to the ANCHORED target, the
         //    RA/Dec the pointing will have once the knobs are fully
         //    corrected. One solve per refresh; no 3-point re-fit, so
         //    there is no sliding-window degeneracy at a fixed pointing
@@ -327,7 +327,7 @@ public class PolarAlignmentService {
         }
 
         // Guard: a slew (or a bad solve) moved the pointing far away
-        // from the anchor — the knob decomposition would be garbage.
+        // from the anchor, the knob decomposition would be garbage.
         double sepDeg = PolarAlignmentMath.AngularSeparationDeg(
             raNow, decNow, job.RefineTargetRaHours.Value, job.RefineTargetDecDeg.Value);
         if (sepDeg > 20.0) {
@@ -344,7 +344,7 @@ public class PolarAlignmentService {
         if (remaining == null) {
             job.LastError =
                 "Refine: pointing is too close to the zenith or the due " +
-                "east/west horizon for a stable alt/az decomposition — " +
+                "east/west horizon for a stable alt/az decomposition, " +
                 "re-run TPPA from a different part of the sky.";
             return false;
         }
@@ -399,7 +399,7 @@ public class PolarAlignmentService {
 
             // Meridian-aware sweep direction: always slew AWAY from the
             // meridian. A fixed +RA sweep could cross it mid-routine on a
-            // GEM, triggering a pier flip between points — cone error flips
+            // GEM, triggering a pier flip between points, cone error flips
             // sign across the pier, which shifts the small-circle centre and
             // silently corrupts the 3-point fit (and some mounts, e.g. the
             // ZWO AM series over LX200, reject near-limit GoTos outright).
@@ -434,7 +434,7 @@ public class PolarAlignmentService {
                 // CRITICAL: SlewAsync only waits for the driver to ACK the
                 // coord write (slew accepted/started), NOT for the mount to
                 // arrive. Without blocking on IsSlewing the capture below
-                // fires mid-slew — the frame is trailed and the plate solve
+                // fires mid-slew, the frame is trailed and the plate solve
                 // fails or solves a position that isn't the intended RA,
                 // which silently corrupts the 3-point fit. Wait for arrival,
                 // THEN settle.
@@ -480,7 +480,7 @@ public class PolarAlignmentService {
 
                 // ASTAP solves in J2000; the polar-axis fit works in the
                 // of-date Alt/Az frame (LST-based), so precess the solved
-                // coords to the equinox of date before storing the point —
+                // coords to the equinox of date before storing the point,
                 // otherwise the whole 3-point set is biased by ~0.35° of
                 // accumulated precession and the reported polar error is
                 // systematically wrong.
@@ -496,7 +496,7 @@ public class PolarAlignmentService {
 
                 // POLARUI2c field diagnostics. The 3-point fit is only
                 // valid if the mount rotated PURELY about its RA axis
-                // between points — a firmware pointing model that re-aims
+                // between points, a firmware pointing model that re-aims
                 // the DEC axis on each GoTo silently breaks that and the
                 // fitted "axis error" becomes garbage. The mount's own
                 // reported coordinates expose it: its Dec reading must sit
@@ -536,21 +536,21 @@ public class PolarAlignmentService {
             // commanded the SAME Dec; if the mount's own Dec readout
             // moved by more than a few arcmin between points, its
             // firmware re-aimed the Dec axis (pointing model / plate-
-            // solve sync interplay) and the cone assumption — hence the
-            // error vector — is invalid. Surface that loudly instead of
+            // solve sync interplay) and the cone assumption, hence the
+            // error vector, is invalid. Surface that loudly instead of
             // letting the user chase a fictitious axis.
             var validDecs = mountDecReadings.Where(d => !double.IsNaN(d)).ToList();
             if (validDecs.Count == 3) {
                 double decSpreadDeg = validDecs.Max() - validDecs.Min();
                 if (decSpreadDeg > 0.1) {
                     _logger.LogWarning(
-                        "Polar align: mount-reported Dec drifted {Spread}° across the sweep (readings: {D0}/{D1}/{D2}) — Dec axis moved between points, fit unreliable",
+                        "Polar align: mount-reported Dec drifted {Spread}° across the sweep (readings: {D0}/{D1}/{D2}), Dec axis moved between points, fit unreliable",
                         decSpreadDeg.ToString("F3"),
                         validDecs[0].ToString("F3"), validDecs[1].ToString("F3"), validDecs[2].ToString("F3"));
                     job.LastError =
                         $"Warning: the mount moved its Dec axis between sweep points " +
                         $"(Dec readout drifted {decSpreadDeg:F2}°). The error vector may be " +
-                        "invalid — disable any hand-controller pointing model / star " +
+                        "invalid, disable any hand-controller pointing model / star " +
                         "alignment and re-run the sweep.";
                 }
             }
@@ -577,7 +577,7 @@ public class PolarAlignmentService {
             //     job still owns the mount and the operator cannot have
             //     touched the knobs yet. Anchoring lazily on the first
             //     Refresh (previous behaviour) silently assumed the knobs
-            //     were untouched between TPPA and that refresh — an
+            //     were untouched between TPPA and that refresh, an
             //     operator who cranks the azimuth right after reading the
             //     error and THEN hits Refresh got a stale target, and
             //     walking the dot to that target parked the axis ~1× the
@@ -605,12 +605,12 @@ public class PolarAlignmentService {
                     job.RefineTargetRaHours = tRa;
                     job.RefineTargetDecDeg = tDec;
                     _logger.LogInformation(
-                        "Polar align: refine anchor set at sweep end — pointing {Ra}h/{Dec}° → target {TRa}h/{TDec}°",
+                        "Polar align: refine anchor set at sweep end, pointing {Ra}h/{Dec}° → target {TRa}h/{TDec}°",
                         aRa.ToString("F4"), aDec.ToString("F4"),
                         tRa.ToString("F4"), tDec.ToString("F4"));
                 } else {
                     _logger.LogWarning(
-                        "Polar align: anchor solve failed ({Err}); will anchor on the first Refresh — do NOT adjust knobs before it",
+                        "Polar align: anchor solve failed ({Err}); will anchor on the first Refresh, do NOT adjust knobs before it",
                         anchorSolve.Error);
                 }
             } catch (OperationCanceledException) { throw; }
@@ -623,7 +623,7 @@ public class PolarAlignmentService {
             // one-shot refinement geometry (and any pointing model the
             // mount holds) accumulates percent-level cross-terms, and a
             // single knob turn covers many arcminutes. Rough-correct,
-            // then RE-RUN the sweep — the 3-point fit is the ground
+            // then RE-RUN the sweep, the 3-point fit is the ground
             // truth; refine is for the final arcminutes.
             if (job.TotalErrorArcsec > 1.5 * 3600.0 && job.LastError == null) {
                 job.LastError =
@@ -664,7 +664,7 @@ public class PolarAlignmentService {
             // hint (rudimentary mode passes the target, which is valid even
             // when no mount is connected), then the live mount pointing,
             // else leave null for a blind solve. Reading telescope.* when
-            // telescope is null would NRE — rudimentary manual-mount mode
+            // telescope is null would NRE, rudimentary manual-mount mode
             // legitimately runs with no telescope connected.
             double? hintRa = hintRaHours ?? (telescope != null ? telescope.RightAscension : null);
             double? hintDec = hintDecDeg ?? (telescope != null ? telescope.Declination : null);
@@ -684,7 +684,7 @@ public class PolarAlignmentService {
     /// <summary>Block until the mount finishes slewing (IsSlewing clears)
     /// or a timeout elapses. <see cref="ITelescope.SlewAsync"/> only waits
     /// for the driver to acknowledge the coord write (slew accepted), not
-    /// for the mount to physically arrive — so every TPPA / rudimentary
+    /// for the mount to physically arrive, so every TPPA / rudimentary
     /// capture has to gate on this first, otherwise it shoots a frame
     /// while the mount is still moving. Mirrors
     /// SlewCenterService.WaitForSlewComplete.</summary>
@@ -771,7 +771,7 @@ public class PolarAlignmentService {
     // target, Polaris slews + captures + solves once, then reports the
     // pointing error attributed to polar misalignment. The user walks
     // to the mount, nudges azimuth/altitude knobs, and clicks
-    // "re-solve" — repeat until happy. No 3-point sweep, no auto
+    // "re-solve", repeat until happy. No 3-point sweep, no auto
     // convergence threshold (the user decides).
     //
     // Reuses the same PolarAlignmentJob + WS broadcast plumbing so the
@@ -909,7 +909,7 @@ public class PolarAlignmentService {
             // rescue TPPA uses for marginal star count on first try).
             SetPhase(job, PolarAlignmentPhase.RudimentarySolving);
             // Hint with the TARGET coords (valid even on a manual mount with
-            // no telescope connected — passing telescope! here would NRE in
+            // no telescope connected, passing telescope! here would NRE in
             // SolveOnceAsync when reading RightAscension).
             var solve = await SolveOnceAsync(image, telescope, ct,
                 hintRaHours: job.TargetRaHours, hintDecDeg: job.TargetDecDeg);

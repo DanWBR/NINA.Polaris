@@ -99,7 +99,7 @@ public static class PolarAlignmentMath {
 
     /// <summary>Great-circle separation between two RA/Dec positions, in
     /// degrees. Used to reject a degenerate 3-point set (points too close
-    /// together) before feeding them to <see cref="ComputeError"/> — three
+    /// together) before feeding them to <see cref="ComputeError"/>, three
     /// near-coincident directions give a cross-product dominated by noise,
     /// so the fitted axis (and the error vector) would be garbage.</summary>
     public static double AngularSeparationDeg(
@@ -183,14 +183,14 @@ public static class PolarAlignmentMath {
     /// will have once the user fully corrects the mount.
     ///
     /// Why this works: turning the az/alt bolts rotates the ENTIRE mount
-    /// rigidly — the correction rotation C (about the zenith by −azErr,
+    /// rigidly, the correction rotation C (about the zenith by −azErr,
     /// about the east-west hinge by the angle that moves the axis
     /// −altErr) maps every direction, so C·(current pointing) is where
     /// the pointing lands when the axis lands on the pole. And because
     /// the pointing tracks about the mount axis while the target RA/Dec
     /// tracks about the true pole = C·axis, the SAME ground-frame C maps
     /// pointing→target at every instant: the target RA/Dec is constant
-    /// in time. Each refresh then needs only ONE solve — no 3-point
+    /// in time. Each refresh then needs only ONE solve, no 3-point
     /// re-sweep, no sliding window, no degeneracy. (This is the NINA
     /// desktop TPPA adjustment-phase approach.)
     /// </summary>
@@ -274,7 +274,7 @@ public static class PolarAlignmentMath {
     /// Why this is needed: plate solvers (ASTAP) return J2000, but the
     /// Alt/Az transform here uses Local *Sidereal* Time of date. Feeding
     /// J2000 coordinates straight in offsets every direction by the
-    /// accumulated precession since 2000 (~0.35° in 2026) — for a single
+    /// accumulated precession since 2000 (~0.35° in 2026), for a single
     /// set of points compared against the true (of-date) pole, as TPPA
     /// does, that becomes a real systematic polar-error bias far larger
     /// than the arcminute alignment goal. So the caller must precess the

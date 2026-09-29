@@ -54,7 +54,7 @@ public static class StatusStreamHandler {
     // every client loop building + serializing the full ~50-100 KB payload
     // independently. The only per-client part of the old payload was the
     // debugLog cursor; it becomes a shared cursor here (the frontend dedups
-    // log entries by id, so shared delivery is safe — a client that misses
+    // log entries by id, so shared delivery is safe, a client that misses
     // a window backfills via GET /api/logs). Keyed by 1-second tick so two
     // clients within the same second reuse one serialization.
     private static readonly object _statusCacheLock = new();

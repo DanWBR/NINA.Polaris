@@ -45,7 +45,7 @@ public static class AlpacaEndpoints {
             cache.Replace(flat);
 
             // autoConnect is true only for an explicit user "Discover"
-            // click (the boot-time per-client discovery passes false — see
+            // click (the boot-time per-client discovery passes false, see
             // discoverAlpaca in app.js). PUT connected=true on each device
             // so they're warm when the user picks one in a card dropdown.
             // Truly idempotent: read `connected` first and skip the PUT if
@@ -137,7 +137,7 @@ public static class AlpacaEndpoints {
             // Reject obvious garbage upfront so the user sees a clean
             // 400 with an actionable message instead of a generic 500
             // wrapping a SocketException. Common typo: "1270.0.0.1"
-            // (extra zero) — DNS won't resolve, .NET surfaces a
+            // (extra zero), DNS won't resolve, .NET surfaces a
             // System.Net.Sockets.SocketException which isn't useful
             // to a non-technical user. Same logic as the JS
             // _isValidHostOrIp helper, kept here as defence-in-depth
@@ -155,7 +155,7 @@ public static class AlpacaEndpoints {
             if (hostKind == UriHostNameType.Unknown) {
                 return Results.BadRequest(new {
                     error = $"'{host}' is not a valid IP address or hostname.",
-                    hint = "Check for typos — '1270.0.0.1' is invalid (octet > 255); use '127.0.0.1'."
+                    hint = "Check for typos, '1270.0.0.1' is invalid (octet > 255); use '127.0.0.1'."
                 });
             }
 
@@ -174,7 +174,7 @@ public static class AlpacaEndpoints {
                     })
                 });
             } catch (HttpRequestException ex) {
-                // Connection refused / DNS / timeout — server not reachable.
+                // Connection refused / DNS / timeout, server not reachable.
                 // 502 Bad Gateway is the right status: our endpoint is up
                 // but the upstream Alpaca server isn't.
                 return Results.Json(new {

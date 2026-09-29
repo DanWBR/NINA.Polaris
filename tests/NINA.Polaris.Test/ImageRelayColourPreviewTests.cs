@@ -29,14 +29,14 @@ namespace NINA.Polaris.Test;
 /// /api/livestack/preview.
 ///
 /// The field bug (2026-07-16): RelayRgbJpegAsync rendered a correct RGB JPEG,
-/// broadcast it (client shows COLOUR), then set _latestJpeg = null — believing
+/// broadcast it (client shows COLOUR), then set _latestJpeg = null, believing
 /// that would make the preview "re-encode from THIS colour stack". The re-encode
 /// path is GetLatestJpeg -> ImageBuffer.ToJpeg -> JpegHelper.EncodeGrayscale,
 /// which has no colour path at all. So the preview served greyscale and the
 /// client painted it over the colour frame: "o frame colorido aparece rapidamente
 /// e depois é substituido pelo em preto e branco".
 ///
-/// It hid for months because both halves looked right in isolation — the WS path
+/// It hid for months because both halves looked right in isolation, the WS path
 /// was colour (LIVE-TRACE proved every frame took branch=COLOUR ch=3) and the
 /// greyscale encoder is correct for the mono/raw path. Nothing compared them.
 /// That's what this fixture does.
@@ -62,7 +62,7 @@ public class ImageRelayColourPreviewTests {
 
     /// <summary>Number of colour components declared in the JPEG's SOF marker:
     /// 1 = greyscale, 3 = colour. Read from the bytes rather than trusting the
-    /// call chain — the whole bug was a call chain that looked right.</summary>
+    /// call chain, the whole bug was a call chain that looked right.</summary>
     private static int JpegComponents(byte[] jpeg) {
         // SOI, then marker segments: FF <id> <len-hi> <len-lo> <payload...>
         int i = 2;
@@ -102,7 +102,7 @@ public class ImageRelayColourPreviewTests {
 
     /// <summary>THE regression. After a colour frame is relayed, the one-shot JPEG
     /// that /api/livestack/preview serves must be COLOUR. Before the fix this
-    /// returned a 1-component (greyscale) JPEG — the B&W frame the user saw paint
+    /// returned a 1-component (greyscale) JPEG, the B&W frame the user saw paint
     /// over the colour one.</summary>
     [Test]
     public async Task AfterColourRelay_PreviewJpegIsColour_NotGreyscale() {
@@ -153,7 +153,7 @@ public class ImageRelayColourPreviewTests {
     }
 
     /// <summary>A colour frame followed by a mono frame must not keep serving the
-    /// stale colour JPEG — RelayImageAsync's cache invalidation still has to work.
+    /// stale colour JPEG, RelayImageAsync's cache invalidation still has to work.
     /// This is the hazard the original `_latestJpeg = null` was defending against;
     /// it was right about the danger, wrong about which method needed the guard.</summary>
     [Test]

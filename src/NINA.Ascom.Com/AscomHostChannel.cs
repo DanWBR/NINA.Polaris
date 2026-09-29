@@ -31,7 +31,7 @@ public sealed class AscomHostException : Exception {
 /// <summary>
 /// WINEXIT-2: parent side of the out-of-process ASCOM filter-wheel host. Starts
 /// the driver host by re-launching THIS Polaris exe with <c>--ascom-com-host</c>
-/// (self-relaunch — zero extra packaging), and marshals member access to it over
+/// (self-relaunch, zero extra packaging), and marshals member access to it over
 /// a newline-delimited JSON protocol on stdin/stdout. A driver crash is an OS
 /// process exit the reader turns into a clean <see cref="AscomHostException"/>,
 /// so the API server survives. See <see cref="AscomComHostRunner"/>.

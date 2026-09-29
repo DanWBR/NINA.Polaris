@@ -298,7 +298,7 @@ public sealed class StoragePushService : BackgroundService {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken) {
         _writer.ImageSaved += Enqueue;
         // Planetary recordings never go through the image writer, so they need
-        // their own subscription — otherwise the share got every FITS of the
+        // their own subscription, otherwise the share got every FITS of the
         // night and not one .ser.
         _video.RecordingSaved += EnqueueVideo;
         try {
@@ -326,7 +326,7 @@ public sealed class StoragePushService : BackgroundService {
         private readonly string _name;
 
         private readonly Channel<QueueItem> _queue =
-            // SHARESYNC-2: NOT SingleReader — Clear queue drains it from the
+            // SHARESYNC-2: NOT SingleReader, Clear queue drains it from the
             // request thread concurrently with the consumer's ReadAllAsync.
             Channel.CreateUnbounded<QueueItem>(new UnboundedChannelOptions { SingleReader = false });
         private readonly ConcurrentQueue<QueueItem> _failed = new();
@@ -339,7 +339,7 @@ public sealed class StoragePushService : BackgroundService {
         // this lane's consumer. Each failed SMB attempt blocks for the client
         // timeout (~15s, with SMB2 encryption burning CPU) and, with
         // reconnect-per-failure, steals CPU/network from the capture +
-        // live-view pipeline — a failing NAS was starving the
+        // live-view pipeline, a failing NAS was starving the
         // /ws/image-stream frame send so the preview went blank. After
         // CircuitThreshold consecutive failures we stop attempting and park
         // new items for a growing cooldown; a single success closes it.
@@ -431,7 +431,7 @@ public sealed class StoragePushService : BackgroundService {
             if (!File.Exists(item.LocalPath)) return;               // local gone, nothing to push
 
             // Breaker open: the target is known-down. Park the item immediately
-            // instead of blocking the consumer on another timeout — this is what
+            // instead of blocking the consumer on another timeout, this is what
             // keeps a dead NAS from stealing CPU/network from the live view.
             if (CircuitOpen) {
                 Failed++;

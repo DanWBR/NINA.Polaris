@@ -259,7 +259,7 @@ public class ChannelCombineService {
                     // / different framing offsets, and we have observed
                     // 250+ px Y shifts on real SHO masters. The matcher's
                     // coarse-translation pre-alignment makes this radius
-                    // safe — it caps the offset-histogram search window
+                    // safe, it caps the offset-histogram search window
                     // but does not relax the tight per-pair tolerance
                     // used after pre-alignment, so admitting a larger
                     // window does not re-introduce false pairings.

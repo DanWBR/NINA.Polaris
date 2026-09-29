@@ -69,7 +69,7 @@ Thread.CurrentThread.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
 // Sub-process entry: when the parent server spawns us with
 // `--ascom-setup <ProgID>` we run the ASCOM SetupDialog and exit,
 // skipping all of the HTTP/Kestrel boot. See AscomSetupRunner +
-// AscomEndpoints for the rationale (driver AVE isolation — keeps a
+// AscomEndpoints for the rationale (driver AVE isolation, keeps a
 // crashing ZWO ASCOM driver from killing the main API server).
 if (args.Length >= 2
     && args[0] == "--ascom-setup"
@@ -253,7 +253,7 @@ builder.Services.AddHostedService<FilterNameRestoreService>();
 builder.Services.AddSingleton<DiskInstallService>();
 builder.Services.AddSingleton<ImageRelayService>();
 builder.Services.AddSingleton<CameraStreamService>();
-// Server-owned LIVE capture loop — now the only LIVE loop (the LIVE shutter
+// Server-owned LIVE capture loop, now the only LIVE loop (the LIVE shutter
 // always starts/stops this; the browser never drives repeated captures).
 builder.Services.AddSingleton<LiveCaptureService>();
 // Auxiliary (second) camera capture+save loop, runs alongside LIVE/AUTORUN.
@@ -292,7 +292,7 @@ builder.Services.AddSingleton<LiveStackCheckpointService>();
 builder.Services.AddSingleton<LiveStackWatchdogService>();
 // REFSUG-1: trend-based refocus suggestion. Listens to the same
 // FrameIntegrated event as LSTR-3 but only when RefocusEnabled is
-// OFF — covers manual-focuser users who cannot be auto-fired.
+// OFF, covers manual-focuser users who cannot be auto-fired.
 // Eager-resolved below alongside LSTR so the subscription is wired
 // before the first /api/livestack/start hit.
 builder.Services.AddSingleton<RefocusSuggestionService>();
@@ -350,7 +350,7 @@ builder.Services.AddSingleton<CoolingRampService>();
 // Server-side progress + ETA for the tiled classical RL deconvolution.
 builder.Services.AddSingleton<DeconProgressService>();
 builder.Services.AddSingleton<SlewCenterService>();
-// "Center on Sun/Moon/planet" — solve-near-and-offset (Mode A) for
+// "Center on Sun/Moon/planet", solve-near-and-offset (Mode A) for
 // solar-system objects plate solving can't handle directly.
 builder.Services.AddSingleton<SolarSystemCenterService>();
 builder.Services.AddSingleton<ProfileService>();
@@ -760,7 +760,7 @@ var app = builder.Build();
 
 // Export the writable native-SDK pack dir so the per-vendor camera resolvers
 // (SvbonyRegistry etc., in decoupled SDK assemblies) probe it for the on-demand
-// camera-SDK pack — the .deb app dir (/opt/polaris) isn't writable, so the pack
+// camera-SDK pack, the .deb app dir (/opt/polaris) isn't writable, so the pack
 // lands under the profile data dir instead. Set before any camera probe runs.
 try {
     var _sdkDir = NINA.Polaris.Services.External.CameraSdkPackService.PackDir(
@@ -775,7 +775,7 @@ try {
 // 500 GB SSD attached. Path.GetTempPath() honours $TMPDIR on Unix and reads it
 // fresh each call, so pointing it at the (SSD-backed) data dir fixes every temp
 // writer at once, and child processes (ASTAP, astrometry.net, GraXpert) inherit
-// it too. Linux/macOS only — Windows temp already lives on disk.
+// it too. Linux/macOS only, Windows temp already lives on disk.
 if (!OperatingSystem.IsWindows()) {
     try {
         var _dataDir = app.Services.GetRequiredService<NINA.Polaris.Services.ProfileService>().DataDir;
@@ -863,7 +863,7 @@ app.Services.GetRequiredService<RefocusSuggestionService>();
 // INDIROB-3: sync the active rig's PreConnectDelayMsByDevice dict
 // into IndiClient.PreConnectDelaysMs so ConnectDeviceAsync honours
 // per-device sleep windows before sending CONNECTION. Runs on
-// startup and on every rig switch — operators with multiple
+// startup and on every rig switch, operators with multiple
 // rigs (mini-PC + Pi, different mounts) can have different
 // settling needs per setup.
 {
@@ -966,7 +966,7 @@ contentTypes.Mappings[".eph"] = "application/octet-stream";
 // present there falls through (next()) to the bundled baseline (orders 0-3)
 // in the wwwroot passes below.
 //
-// Served by a hand-rolled middleware doing a plain stream copy — NOT
+// Served by a hand-rolled middleware doing a plain stream copy, NOT
 // UseStaticFiles. On the Pi the static-file handler reset the connection
 // ("Empty reply from server", no logged exception) when serving this
 // PhysicalFileProvider rooted under /home, most likely a sendfile / OnStarting
@@ -1007,7 +1007,7 @@ contentTypes.Mappings[".eph"] = "application/octet-stream";
                 FileShare.Read, 65536, useAsync: true);
             await fs.CopyToAsync(ctx.Response.Body, ctx.RequestAborted);
         } catch (OperationCanceledException) {
-            /* client went away mid-tile — normal during fast panning */
+            /* client went away mid-tile, normal during fast panning */
         } catch (Exception ex) {
             app.Logger.LogWarning(ex, "Failed to serve downloaded DSS tile {Path}", full);
             if (!ctx.Response.HasStarted) ctx.Response.StatusCode = 500;
@@ -1039,10 +1039,10 @@ contentTypes.Mappings[".eph"] = "application/octet-stream";
 // THUMBPACK: serve /sky/data/skydata/dso-thumbs/{slug}.jpg from the DOWNLOADED
 // pack (data dir) first, then the bundled CORE subset (wwwroot/dso-thumbs-core).
 // The full dso-thumbs/ dir is excluded from publish, so on a packaged install
-// this middleware is the only thing that answers these URLs — a hit on a
+// this middleware is the only thing that answers these URLs, a hit on a
 // downloaded or curated thumb, a fall-through (404) otherwise. In a source-tree
 // dev run the full dir still exists in wwwroot, so a miss here falls through to
-// UseStaticFiles and serves it — dev sees every thumb without downloading.
+// UseStaticFiles and serves it, dev sees every thumb without downloading.
 {
     var pack = app.Services.GetRequiredService<NINA.Polaris.Services.External.DsoThumbPackService>();
     var packRoot = Path.GetFullPath(pack.PackDir);
@@ -1078,7 +1078,7 @@ contentTypes.Mappings[".eph"] = "application/octet-stream";
                 FileShare.Read, 65536, useAsync: true);
             await fs.CopyToAsync(ctx.Response.Body, ctx.RequestAborted);
         } catch (OperationCanceledException) {
-            /* client navigated away — normal */
+            /* client navigated away, normal */
         } catch (Exception ex) {
             app.Logger.LogWarning(ex, "Failed to serve DSO thumb {Path}", resolved);
             if (!ctx.Response.HasStarted) ctx.Response.StatusCode = 500;
@@ -1277,7 +1277,7 @@ app.Map("/phd2-vnc-ws", async (HttpContext ctx, Phd2VncSessionService vnc,
     }
 
     // Negotiate subprotocol. Modern noVNC (1.0+) doesn't request any
-    // subprotocol — empty WebSocketRequestedProtocols, SubProtocol
+    // subprotocol, empty WebSocketRequestedProtocols, SubProtocol
     // stays null, and the connection is binary by default which is
     // what RFB needs. Older noVNC + websockify-compat clients ask
     // for "binary" explicitly; honour that so the wire stays
@@ -1334,7 +1334,7 @@ app.Map("/phd2-vnc-ws", async (HttpContext ctx, Phd2VncSessionService vnc,
             }
         } catch (OperationCanceledException) { /* normal teardown */ }
         catch (Exception ex) {
-            // Was silent before — meant "TightVNC dropped us" looked
+            // Was silent before, meant "TightVNC dropped us" looked
             // identical to "browser closed tab". Logged at Debug so
             // it doesn't spam Warning on every normal disconnect but
             // a tail -f when troubleshooting catches it.
@@ -1374,7 +1374,7 @@ app.Map("/phd2-vnc-ws", async (HttpContext ctx, Phd2VncSessionService vnc,
 // Same shape as /phd2-gui/* above: same-origin proxy so the iframe
 // gets indi-web's HTML / JS / XHR / WebSocket without CORS dance,
 // and Polaris's outer auth layer (Relay tokens / LAN-only) covers
-// driver management. indi-web binds to 127.0.0.1 only — never
+// driver management. indi-web binds to 127.0.0.1 only, never
 // directly exposed to the network even when Polaris listens on
 // 0.0.0.0.
 var indiWebForwarder = app.Services.GetRequiredService<IHttpForwarder>();
@@ -1646,7 +1646,7 @@ try {
 
 // Reached when the host shuts down cleanly (Ctrl-C, SIGTERM,
 // IHostApplicationLifetime.StopApplication). Returning 0 here is
-// what gives top-level Main its `int` return type — required
+// what gives top-level Main its `int` return type, required
 // because the --ascom-setup helper path above returns 1/2 on
 // driver-side failures, and the C# compiler insists every code
 // path of an `int`-returning Main produces an int.

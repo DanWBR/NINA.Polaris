@@ -28,7 +28,7 @@ namespace NINA.Polaris.Services.Logging;
 /// (UTF-8, append-only, one JSON object per line). A second timer (hourly)
 /// sweeps files older than 7 days.
 ///
-/// The service stays alive even when persistence is OFF — the toggle is
+/// The service stays alive even when persistence is OFF, the toggle is
 /// re-read each tick so a Settings change takes effect immediately without
 /// a restart. When OFF, the buffered queue is drained and discarded so we
 /// don't hold onto entries that the operator opted not to persist.
@@ -72,7 +72,7 @@ public sealed class LogRotatorService : BackgroundService {
     }
 
     protected override async Task ExecuteAsync(CancellationToken ct) {
-        // Subscribe lazily — _logService might not exist at construction
+        // Subscribe lazily, _logService might not exist at construction
         // time depending on DI ordering, but ExecuteAsync runs after the
         // host is fully composed.
         try {
@@ -147,7 +147,7 @@ public sealed class LogRotatorService : BackgroundService {
 
     private void MaybeSweepRetention() {
         // Hourly cadence. Cheap enough we could check every flush, but
-        // the disk hit (enumerate + stat) is wasted work — files don't
+        // the disk hit (enumerate + stat) is wasted work, files don't
         // expire on a 2-s tempo.
         if (DateTime.UtcNow - _lastRetentionSweep < TimeSpan.FromHours(1)) return;
         _lastRetentionSweep = DateTime.UtcNow;

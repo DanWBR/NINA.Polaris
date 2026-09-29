@@ -49,7 +49,7 @@ public static class FilterSwitcher {
         CancellationToken ct) {
 
         if (string.IsNullOrWhiteSpace(targetFilter)) return;
-        // Already on this filter (and its offset already applied) — nothing to do.
+        // Already on this filter (and its offset already applied), nothing to do.
         if (string.Equals(state.CurrentFilter, targetFilter, StringComparison.OrdinalIgnoreCase))
             return;
 

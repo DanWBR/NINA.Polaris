@@ -102,7 +102,7 @@ public class ImageWriterService {
     public int SessionFrameCount => _sessionFrameNumber;
 
     /// <summary>Raised with the absolute path right after a frame is written to
-    /// disk. The single post-save choke point — every SaveImage call site
+    /// disk. The single post-save choke point, every SaveImage call site
     /// (sequence, live stack, flat wizard, ADV sequencer) funnels through here.
     /// Used by <see cref="StoragePushService"/> to auto-push to network storage.
     /// Handlers must be fast + non-throwing; the invocation is wrapped so a
@@ -130,7 +130,7 @@ public class ImageWriterService {
 
     /// <summary>True when an image output directory is configured. When false,
     /// <see cref="SaveImage"/> silently no-ops, so callers (e.g. the live stack)
-    /// can surface a "frames not being saved — set an output folder" warning
+    /// can surface a "frames not being saved, set an output folder" warning
     /// instead of dropping frames quietly.</summary>
     public bool HasOutputDir =>
         !string.IsNullOrWhiteSpace(_profile.Active.ImageOutputDir);
@@ -148,7 +148,7 @@ public class ImageWriterService {
         var profile = _profile.Active;
         var dir = profile.ImageOutputDir;
         if (string.IsNullOrWhiteSpace(dir)) {
-            _logger.LogWarning("ImageWriter: no output folder configured — frame NOT saved. " +
+            _logger.LogWarning("ImageWriter: no output folder configured, frame NOT saved. " +
                 "Set an image output folder in the FILES tab to keep individual frames.");
             return null;
         }
@@ -159,7 +159,7 @@ public class ImageWriterService {
             // When the caller didn't supply a meaningful target name (LIVE
             // "(unnamed)", a blank AUTORUN target, etc.), auto-resolve the
             // most important catalog object in the camera FOV at the current
-            // pointing — preferring the last successful plate solve — so the
+            // pointing, preferring the last successful plate solve, so the
             // saved-frame folder gets a real name instead of "Unknown".
             // Only for science frames (lights/snaps); calibration frames are
             // foldered by exposure/filter and have no sky target.
@@ -343,7 +343,7 @@ public class ImageWriterService {
     /// Resolve a meaningful target name for a science frame about to be saved.
     /// If the caller already supplied a real name it's kept; otherwise the most
     /// important catalog object inside the camera FOV at the current pointing is
-    /// used — preferring a recent successful plate solve over the mount's
+    /// used, preferring a recent successful plate solve over the mount's
     /// open-loop coordinates. Keeps capture folders named (e.g. "M_42") instead
     /// of "Unknown". Returns the original value when nothing can be resolved.
     /// </summary>
@@ -352,7 +352,7 @@ public class ImageWriterService {
 
         var trimmed = (targetName ?? "").Trim();
         if (!string.IsNullOrEmpty(trimmed) && !PlaceholderTargetNames.Contains(trimmed))
-            return trimmed;   // caller gave a real name — respect it
+            return trimmed;   // caller gave a real name, respect it
 
         // Only science frames carry a sky target; calibration frames are
         // foldered by exposure/filter and have no object.
@@ -430,7 +430,7 @@ public class ImageWriterService {
     /// <summary>Fill <see cref="ImageMetaData.Guiding"/> from the guide steps
     /// recorded inside this frame's exposure window. No-ops when the frame
     /// already carries stats, when no guider is attached, or when the exposure
-    /// time is unknown — the header then simply omits the guiding keys rather
+    /// time is unknown, the header then simply omits the guiding keys rather
     /// than claiming a zero RMS, which would read as perfect tracking.</summary>
     private void StampGuiding(ImageMetaData m) {
         if (m.Guiding.SampleCount > 0) return;
@@ -502,14 +502,14 @@ public class ImageWriterService {
                 && _equip.Camera is { IsConnected: true } ncam)
             m.Camera.Name = ncam.DeviceName;
 
-        // Bayer pattern, same gap class — this is the fix for OSC frames
+        // Bayer pattern, same gap class, this is the fix for OSC frames
         // that occasionally save WITHOUT a BAYERPAT card and reopen as
         // "mono" (raw mosaic shown in the editor). Two distinct holes
         // funnel through this one chokepoint:
         //   (1) The ASI native SDK adapter only stamps
         //       Properties.BayerPattern, never MetaData.Camera.BayerPattern,
         //       yet both FITSWriter and XISFWriter emit BAYERPAT from the
-        //       MetaData side — so ASI OSC saves never carried the card.
+        //       MetaData side, so ASI OSC saves never carried the card.
         //   (2) INDI OSC drivers advertise the CFA via the CCD_CFA property
         //       (read live per frame); when that property is momentarily
         //       absent (right after a reconnect / driver re-publish) a frame

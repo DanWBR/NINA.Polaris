@@ -19,7 +19,7 @@ using PortableGuideStep = NINA.Guider.Portable.GuideStep;
 
 namespace NINA.Polaris.Services;
 
-// Part of the NativeGuider class — split from NativeGuider.cs for
+// Part of the NativeGuider class, split from NativeGuider.cs for
 // readability. See NativeGuider.cs for the type overview + fields.
 public sealed partial class NativeGuider {
     // ----- Calibration -----
@@ -101,7 +101,7 @@ public sealed partial class NativeGuider {
                 }
                 (curX, curY, found) = await FindStarWithRetryAsync(cam, ct, calRegion);
                 if (!found) {
-                    RaiseAlert("Calibration failed: star lost mid-sequence (no frame after retries — check guide camera USB/power, especially at slew/reversal).");
+                    RaiseAlert("Calibration failed: star lost mid-sequence (no frame after retries, check guide camera USB/power, especially at slew/reversal).");
                     SetAppState("Stopped");
                     return;
                 }
@@ -341,8 +341,8 @@ public sealed partial class NativeGuider {
 
     /// <summary>Load a calibration from a saved file into the running guider and
     /// persist it. Re-keys the record to the equipment currently fitted so it
-    /// becomes the one restored for this gear from now on — the point of loading a
-    /// known-good file is to make it stick — while keeping every measured value.
+    /// becomes the one restored for this gear from now on, the point of loading a
+    /// known-good file is to make it stick, while keeping every measured value.
     /// Returns false when the file carries no usable rates.</summary>
     public bool ImportCalibrationData(NativeCalibrationData d) {
         if (d == null) return false;

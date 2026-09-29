@@ -21,7 +21,7 @@ namespace NINA.Polaris.Services.External;
 /// THUMBPACK: on-demand downloader for the full DSO thumbnail set.
 ///
 /// The ~215 MB of DSS2 cutouts (one per catalogued object) is EXCLUDED from the
-/// distribution package (NINA.Polaris.csproj) — shipping it took the .deb from
+/// distribution package (NINA.Polaris.csproj), shipping it took the .deb from
 /// ~80 MB to ~450 MB. A small curated subset (Messier + named showpieces) ships
 /// bundled in <c>wwwroot/…/dso-thumbs-core</c> so common targets render offline
 /// out of the box; the full set is downloaded here, once, into the writable data
@@ -30,8 +30,8 @@ namespace NINA.Polaris.Services.External;
 /// Mirrors <see cref="DssDownloadService"/> (the offline DSS survey downloader):
 /// same status/start/cancel shape, same "serve from the downloaded dir, else the
 /// bundled dir" resolution, same writable/preflight guards. The difference is the
-/// payload — one zip asset from the GitHub release rather than thousands of tiles
-/// — so progress is download bytes then extraction entries.
+/// payload, one zip asset from the GitHub release rather than thousands of tiles
+///, so progress is download bytes then extraction entries.
 /// </summary>
 public sealed class DsoThumbPackService {
     // Default: a stable, version-independent release tag so the ~215 MB asset is
@@ -131,7 +131,7 @@ public sealed class DsoThumbPackService {
         var tmpZip = Path.Combine(_packDir, ".pack-download.zip.part");
         try {
             // Preflight: writable data dir. On a packaged install this is the
-            // per-user data dir (not wwwroot), so it should be writable — but fail
+            // per-user data dir (not wwwroot), so it should be writable, but fail
             // loudly rather than stream 215 MB into a doomed write.
             try {
                 Directory.CreateDirectory(_packDir);
@@ -179,7 +179,7 @@ public sealed class DsoThumbPackService {
                 int done = 0;
                 foreach (var entry in jpgEntries) {
                     ct.ThrowIfCancellationRequested();
-                    // Flatten to the pack root by file name and guard traversal —
+                    // Flatten to the pack root by file name and guard traversal,
                     // the archive is trusted, but never write outside _packDir.
                     var name = Path.GetFileName(entry.Name);
                     if (string.IsNullOrEmpty(name)) continue;

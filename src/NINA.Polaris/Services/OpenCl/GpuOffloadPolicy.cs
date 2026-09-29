@@ -27,19 +27,19 @@ public enum GpuOp { Warp, Debayer, SeparableBlur, BoxBlur8, ApplyLut8, Accumulat
 /// ordinary buffers (e.g. Qualcomm Adreno on the QCS6490), so the light
 /// memory-bound kernels (warp, debayer) lose while the same code wins on Mali.
 /// For the light kernels that transfer/copy can dominate and make the GPU path
-/// <i>slower</i> than the CPU — only the heavier blur reliably wins. Offloading
+/// <i>slower</i> than the CPU, only the heavier blur reliably wins. Offloading
 /// everything blindly is then a net regression.
 ///
 /// Two factories encode the policy:
 /// <list type="bullet">
-/// <item><see cref="FromProbe"/> — the production path for both discrete and
+/// <item><see cref="FromProbe"/>, the production path for both discrete and
 /// unified-memory devices: offload only the ops whose one-time micro-probe
 /// measured the GPU at least <see cref="MinSpeedup"/>× the CPU. The probe
 /// measures the actual condition that matters (does the GPU win for this op on
 /// this hardware?), so it is robust to driver/board differences rather than
 /// guessing from device class. It records <see cref="UnifiedMemory"/> for
 /// diagnostics.</item>
-/// <item><see cref="AllowAll"/> — force every op on, used by the self-test and
+/// <item><see cref="AllowAll"/>, force every op on, used by the self-test and
 /// benchmark (via <c>WithAllKernels</c>) to validate/measure every kernel
 /// regardless of the production decision.</item>
 /// </list>
@@ -54,7 +54,7 @@ public sealed class GpuOffloadPolicy {
 
     private readonly HashSet<GpuOp> _allow;
 
-    /// <summary>True when built for a unified-memory (SBC) device — every op is
+    /// <summary>True when built for a unified-memory (SBC) device, every op is
     /// allowed and no probe was run.</summary>
     public bool UnifiedMemory { get; }
 
@@ -98,16 +98,16 @@ public sealed class GpuOffloadPolicy {
     /// <summary>
     /// Probe-derived policy: offload an op only where the probe measured the GPU
     /// at least <paramref name="minSpeedup"/>× the CPU. Used for both discrete
-    /// GPUs and unified-memory SBCs — the assumption that "unified memory ⇒ every
+    /// GPUs and unified-memory SBCs, the assumption that "unified memory ⇒ every
     /// op wins" is false on some stacks (e.g. Qualcomm Adreno copies host↔device
-    /// for ordinary buffers, so the light memory-bound kernels — warp, debayer —
+    /// for ordinary buffers, so the light memory-bound kernels, warp, debayer,
     /// actually lose, while the same code wins on Mali). Measuring the real
     /// condition per op makes the decision robust to driver/board differences.
     /// Pass <paramref name="unifiedMemory"/> through purely for diagnostics/status.
     ///
     /// <see cref="GpuOp.BoxBlur8"/> has no <c>CpuGpuCompute</c> reference (the CPU
     /// backend declines it), so it can't be probed directly; it follows the
-    /// <see cref="GpuOp.SeparableBlur"/> result — both are convolution blurs and
+    /// <see cref="GpuOp.SeparableBlur"/> result, both are convolution blurs and
     /// the box blur is multi-pass, i.e. at least as GPU-favourable, so if the
     /// separable blur wins the box blur wins too.
     /// </summary>

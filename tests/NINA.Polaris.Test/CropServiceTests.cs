@@ -23,7 +23,7 @@ namespace NINA.Polaris.Test;
 /// <summary>
 /// Pins the CropService contract. Every test writes a synthetic FITS
 /// to a temp dir, crops it, reads the result, and asserts on pixel
-/// values + dimensions. No SkiaSharp involved — pure FITSReader /
+/// values + dimensions. No SkiaSharp involved, pure FITSReader /
 /// FITSWriter / Array.Copy.
 /// </summary>
 [TestFixture]
@@ -137,7 +137,7 @@ public class CropServiceTests {
 
     [Test]
     public void CropFits_FullImage_RoundTrips() {
-        // Crop to the same size as the source — output should match
+        // Crop to the same size as the source, output should match
         // pixel-for-pixel. Acts as a regression check on the slicing
         // math (off-by-one in row stride would break this immediately).
         var src = MakeMono(16, 16, (x, y) => (ushort)(x * 257 + y));

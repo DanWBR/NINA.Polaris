@@ -40,7 +40,7 @@ public sealed record FocusMemoryOutcome(
 /// <summary>
 /// Learns the optimal focuser position per filter (recorded by autofocus) and,
 /// on a manual filter change, reuses a still-valid point instead of forcing a
-/// fresh sweep — moving straight there, deriving it from another freshly
+/// fresh sweep, moving straight there, deriving it from another freshly
 /// focused filter via a learned offset, or recommending autofocus when nothing
 /// can be trusted. Scoped per rig via <see cref="EquipmentProfile.FilterFocusMemory"/>.
 /// </summary>

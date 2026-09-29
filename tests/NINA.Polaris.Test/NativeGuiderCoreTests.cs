@@ -290,7 +290,7 @@ public class NativeGuiderCoreTests {
     public void RmsCalculator_SubtractsMean_NotRmsAboutZero() {
         // Regression guard for the PHD2/ASIAIR/NINA parity fix: the RMS is the
         // standard deviation ABOUT THE MEAN, not RMS about zero. A constant
-        // (pure offset / drift, zero scatter) must read sigma=0 — the old
+        // (pure offset / drift, zero scatter) must read sigma=0, the old
         // sqrt(mean(x^2)) form would have returned the offset itself (10).
         var rms = new RmsCalculator(10);
         rms.Add(10, -7);
@@ -309,7 +309,7 @@ public class NativeGuiderCoreTests {
     public void RmsCalculator_OffsetPlusScatter_MatchesPopulationSigma() {
         // {2, 4} → mean 3, population sigma = sqrt(((2-3)^2+(4-3)^2)/2) = 1,
         // regardless of the +3 offset. RMS-about-zero would give sqrt((4+16)/2)
-        // = sqrt(10) ≈ 3.16 — the inflation the user saw vs the ASIAIR.
+        // = sqrt(10) ≈ 3.16, the inflation the user saw vs the ASIAIR.
         var rms = new RmsCalculator(10);
         rms.Add(2, 0);
         rms.Add(4, 0);

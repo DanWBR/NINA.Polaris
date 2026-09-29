@@ -19,7 +19,7 @@ namespace NINA.Polaris.Services;
 /// plate-solve solution (field centre, pixel scale, rotation). Used by the
 /// "Annotate" feature to place DSO labels over a solved LIVE/PREVIEW frame.
 ///
-/// Uses the gnomonic (TAN) projection — the standard for the small fields a
+/// Uses the gnomonic (TAN) projection, the standard for the small fields a
 /// telescope sees. Pixel convention (rotation 0, no flip): north is up, east
 /// is left, matching a normal non-mirrored image with the sky's north at the
 /// top. <paramref name="rotationDeg"/> rotates the sky frame into the image;

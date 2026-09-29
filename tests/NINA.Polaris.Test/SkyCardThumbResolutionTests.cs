@@ -27,13 +27,13 @@ using NINA.Polaris.Services.Sky;
 namespace NINA.Polaris.Test;
 
 /// <summary>
-/// SKYTHUMB: pins the premise behind the SKY info card's offline thumbnail —
+/// SKYTHUMB: pins the premise behind the SKY info card's offline thumbnail,
 /// that a COMMON name the Stellarium engine reports ("Lagoon Nebula") resolves,
 /// through the bundled catalogue, to a slug that has a JPEG in
 /// wwwroot/sky/data/skydata/dso-thumbs/.
 ///
-/// The field bug: the SKY card took only `thumbnailUrl` from /api/sky/image — a
-/// Wikipedia/NASA CDN link — making it the ONE thumbnail path in the app that
+/// The field bug: the SKY card took only `thumbnailUrl` from /api/sky/image, a
+/// Wikipedia/NASA CDN link, making it the ONE thumbnail path in the app that
 /// needed internet. On a dark-site SBC with no connection it always showed the
 /// icon, while Tonight's Best (bundled cutouts) and the AUTORUN cards
 /// (localUrl-first) both worked. Forgotten pair: three paths, only one of them
@@ -53,7 +53,7 @@ public class SkyCardThumbResolutionTests {
                      "sky", "data", "skydata", "dso-thumbs");
 
     /// <summary>Repo root from THIS file's compile-time path, not
-    /// AppContext.BaseDirectory — the latter breaks under --artifacts-path.</summary>
+    /// AppContext.BaseDirectory, the latter breaks under --artifacts-path.</summary>
     private static string RepoRoot([CallerFilePath] string thisFile = "") =>
         Path.GetFullPath(Path.Combine(Path.GetDirectoryName(thisFile)!, "..", ".."));
 
@@ -87,7 +87,7 @@ public class SkyCardThumbResolutionTests {
             "Lagoon Nebula", "Trifid Nebula", "Orion Nebula",
             "Eagle Nebula", "Ring Nebula", "Andromeda Galaxy" }) {
 
-            // The raw name can't slug on its own — that's the whole problem.
+            // The raw name can't slug on its own, that's the whole problem.
             Assert.That(SlugFor(commonName), Is.Empty,
                 $"'{commonName}' should not slug directly (no digits); " +
                 "if this fails the card's fallback is untested");
@@ -107,7 +107,7 @@ public class SkyCardThumbResolutionTests {
         }
     }
 
-    /// <summary>Catalogue names must keep working WITHOUT a search round-trip —
+    /// <summary>Catalogue names must keep working WITHOUT a search round-trip,
     /// that's the fast path the card tries first, and the one Tonight's Best has
     /// always used.</summary>
     [Test]

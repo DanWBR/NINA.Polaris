@@ -20,7 +20,7 @@ namespace NINA.Polaris.Test;
 /// <summary>
 /// FIELD7-3 (critical): a plan's "shut down the host at end of session" action
 /// must fire ONLY when the run completed normally. The bug powered off the SBC
-/// after a recoverable capture failure — reported as "completed" — while the INDI
+/// after a recoverable capture failure, reported as "completed", while the INDI
 /// watchdog was mid-restart with a healthy camera about to come back.
 ///
 /// The whole decision is <see cref="PlanRunnerService.ShouldShutdownHost"/>. The

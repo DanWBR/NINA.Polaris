@@ -101,7 +101,7 @@ public class AutoFocusFittingTests {
 
     [Test]
     public void Quadratic_HugePositionOffset_StaysWellConditioned() {
-        // (x-500000)²/2500 + 1.5 sampled at ±150 — the centered normal
+        // (x-500000)²/2500 + 1.5 sampled at ±150, the centered normal
         // equations must keep the vertex accurate despite x ~ 5e5 (the raw
         // {1,x,x²} basis cancels catastrophically without centering).
         var pts = new List<FocusPoint>();
@@ -150,7 +150,7 @@ public class AutoFocusFittingTests {
     [Test]
     public void Trendlines_FlatTipWithMultiplePoints_ExcludesNearMinimumScatter() {
         // The flat tip points (2.1 within +0.1 of the 2.0 minimum) must NOT
-        // join the arms — arm membership requires Y > minimum + 0.1.
+        // join the arms, arm membership requires Y > minimum + 0.1.
         var points = Pts(
             (5, 2.1), (6, 2), (7, 2.1),
             (1, 10), (2, 8), (3, 6), (4, 4),

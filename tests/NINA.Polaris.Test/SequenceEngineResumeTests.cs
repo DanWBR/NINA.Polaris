@@ -27,7 +27,7 @@ namespace NINA.Polaris.Test;
 /// loop index against the LIVE <c>CurrentItemIndex</c> (rewritten to the
 /// loop index at the top of every iteration, so always equal) instead of the
 /// resume snapshot, which made every item after the first inherit the
-/// previous item's finished frame counter — its frame for-loop started at
+/// previous item's finished frame counter, its frame for-loop started at
 /// Count and captured nothing. Runs the REAL RunAsync loop end-to-end
 /// against the simulator camera (zero-second calibration frames, no INDI).
 /// </summary>
@@ -94,7 +94,7 @@ public class SequenceEngineResumeTests {
         await cam.ConnectAsync();
 
         engine.LoadSequence(new List<SequenceItem> {
-            // Calibration types: no slew, no meridian flip, no dither — the
+            // Calibration types: no slew, no meridian flip, no dither, the
             // loop reduces to pure capture, which is exactly what the
             // item-advance regression needs.
             new() { Name = "Bias set", ImageType = "BIAS", Exposure = 0, Count = 2 },

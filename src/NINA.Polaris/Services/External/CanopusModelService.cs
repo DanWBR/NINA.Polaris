@@ -23,7 +23,7 @@ namespace NINA.Polaris.Services.External;
 
 /// <summary>
 /// CANOPUS: on-demand downloader for the local-LLM assets the "On this server
-/// (SBC)" Canopus backend needs — the Qwen3-4B Q4_0 GGUF (~2.4 GB) and an
+/// (SBC)" Canopus backend needs, the Qwen3-4B Q4_0 GGUF (~2.4 GB) and an
 /// arch-matched llama.cpp <c>llama-server</c> binary. Both are EXCLUDED from the
 /// distribution package (they would balloon the .deb, same reasoning as the DSO
 /// thumbnail pack / ncnn models), and pulled here into the writable data dir on
@@ -125,7 +125,7 @@ public sealed class CanopusModelService {
     }
 
     /// <summary>True when the bundled index lists a runtime for this arch (so a
-    /// download can succeed) — used to gate the "download" offer in the UI.</summary>
+    /// download can succeed), used to gate the "download" offer in the UI.</summary>
     public bool RuntimeAvailableForArch => LoadIndex()?.Runtimes?.ContainsKey(Rid) == true;
 
     public CanopusModelStatus GetStatus() {
@@ -230,7 +230,7 @@ public sealed class CanopusModelService {
             ZipFile.ExtractToDirectory(archive, destDir, overwriteFiles: true);
             return;
         }
-        // .tar.gz — TarFile preserves the versioned-lib symlinks llama.cpp ships
+        // .tar.gz, TarFile preserves the versioned-lib symlinks llama.cpp ships
         // (a plain copy would drop the *.so.0 links the loader resolves).
         using var fs = File.OpenRead(archive);
         using var gz = new GZipStream(fs, CompressionMode.Decompress);

@@ -27,12 +27,12 @@ namespace NINA.Polaris.Services.Tls;
 ///     the old one. We can't park multiple values, so wildcard certs
 ///     (which need two TXT records simultaneously) don't work here;
 ///     Polaris only issues single-name certs against the bare domain.
-///   • The endpoint returns plain text "OK" or "KO" — no JSON, no
+///   • The endpoint returns plain text "OK" or "KO", no JSON, no
 ///     useful error detail. "KO" can mean wrong token, wrong domain,
 ///     network error upstream, or rate limit. Best we can do is log
 ///     "KO" verbatim and let the user re-check the token / domain in
 ///     Settings.
-///   • DuckDNS handles the _acme-challenge prefix internally — we
+///   • DuckDNS handles the _acme-challenge prefix internally, we
 ///     pass <c>domains=nina-polaris</c> (no prefix, no .duckdns.org),
 ///     and DuckDNS publishes the TXT at <c>_acme-challenge.nina-polaris
 ///     .duckdns.org</c>. ACME clients query the prefixed name; the
@@ -129,7 +129,7 @@ public class DuckDnsClient {
             attempts++;
             try {
                 // Resolve TXT via Google's DoH (HTTPS-wrapped DNS), no
-                // raw UDP needed — keeps us portable and avoids per-OS
+                // raw UDP needed, keeps us portable and avoids per-OS
                 // resolver libraries. Returns JSON.
                 var dohUrl = $"https://dns.google/resolve?name={WebUtility.UrlEncode(fqdn)}&type=TXT&cd=1";
                 using var resp = await _http.GetAsync(dohUrl, ct);

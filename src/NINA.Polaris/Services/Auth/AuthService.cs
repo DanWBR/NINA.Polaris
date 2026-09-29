@@ -67,7 +67,7 @@ public class AuthService : IDisposable {
         // Restore sessions from disk so a `systemctl restart polaris`
         // doesn't invalidate every logged-in browser. Without this,
         // any redeploy boots every device out + the user has to
-        // re-type the password — and worse, in-flight <img>/<ws>
+        // re-type the password, and worse, in-flight <img>/<ws>
         // requests fail silently with 401 because they can't
         // intercept and prompt for re-login the way JSON fetches can.
         LoadSessionsFromDisk();

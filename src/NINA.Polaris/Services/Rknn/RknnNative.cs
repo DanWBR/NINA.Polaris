@@ -42,7 +42,7 @@ internal static class RknnNative {
     // default resolver finds it without LD_LIBRARY_PATH fiddling.
     private const string Lib = "rknnrt";
 
-    // rknn_context is `typedef uint64_t rknn_context;` — an opaque handle.
+    // rknn_context is `typedef uint64_t rknn_context;`, an opaque handle.
 
     // ─── flags (rknn_init) ──────────────────────────────────────────────
     public const uint RKNN_FLAG_PRIOR_HIGH = 0x00000000;

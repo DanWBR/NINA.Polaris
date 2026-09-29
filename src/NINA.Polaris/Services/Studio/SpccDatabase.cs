@@ -25,7 +25,7 @@ namespace NINA.Polaris.Services.Studio;
 ///   - Pickles stellar template library (<c>pickles.json</c>, produced by
 ///     <c>scripts/download-pickles.py</c>).
 ///   - Gaia DR3 sampled-spectra subset (<c>gaia-spcc.db</c>, produced by
-///     <c>scripts/download-gaia-spcc.py</c>) — availability only for now;
+///     <c>scripts/download-gaia-spcc.py</c>), availability only for now;
 ///     per-star retrieval is a planned upgrade.
 ///
 /// The curve database is intentionally generic + editable so any offline

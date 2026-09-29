@@ -15,7 +15,7 @@
 namespace NINA.Polaris.Services.Workflow;
 
 /// <summary>
-/// Disk-backed library of saved "Auto Workflow" definitions — the ordered list
+/// Disk-backed library of saved "Auto Workflow" definitions, the ordered list
 /// of post-processing steps the STUDIO Auto Workflow tab applies to a source
 /// image. Stored as one JSON file per workflow under
 /// <c>{profiles.DataDir}/workflows</c>.

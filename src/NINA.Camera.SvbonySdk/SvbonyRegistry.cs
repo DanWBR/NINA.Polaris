@@ -37,7 +37,7 @@ public static class SvbonyRegistry {
         _resolverRegistered = true;
         try {
             NativeLibrary.SetDllImportResolver(typeof(SvbonyNative).Assembly, Resolve);
-        } catch { /* already set by another caller — fine */ }
+        } catch { /* already set by another caller, fine */ }
     }
 
     private static IntPtr Resolve(string libraryName, Assembly assembly, DllImportSearchPath? searchPath) {

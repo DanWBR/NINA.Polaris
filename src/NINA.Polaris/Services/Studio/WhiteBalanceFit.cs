@@ -15,7 +15,7 @@
 namespace NINA.Polaris.Services.Studio;
 
 /// <summary>
-/// Builds the "White Balance summary" that PCC and SPCC return for display —
+/// Builds the "White Balance summary" that PCC and SPCC return for display,
 /// the scatter of measured (image) channel ratio against expected (catalog)
 /// channel ratio, one panel for B/G and one for R/G, each with a robust
 /// straight-line fit, exactly like the summary PixInsight SPCC and Siril show

@@ -35,7 +35,7 @@ public class Field4RowShiftBayerTests {
     public void RowShift_RGGB_BecomesGBRG() {
         // FIELD4-2: a top-down row flip moves the original row-1
         // (G/B in RGGB) to row-0, so the new top-left 2x2 cell is
-        // G B / R G — i.e. GBRG. Symmetric pair.
+        // G B / R G, i.e. GBRG. Symmetric pair.
         Assert.That(ImageRelayService.RowShiftBayer(BayerPatternEnum.RGGB),
             Is.EqualTo(BayerPatternEnum.GBRG));
         Assert.That(ImageRelayService.RowShiftBayer(BayerPatternEnum.GBRG),
@@ -148,7 +148,7 @@ public class Field4CameraQuirksMigrationTests {
 
             var profiles = new ProfileService(cfg, NullLogger<ProfileService>.Instance);
 
-            // Per-camera entry wins — the explicit RGGB / flip=false
+            // Per-camera entry wins, the explicit RGGB / flip=false
             // survives, the legacy GRBG / flip=true on the rig is
             // ignored.
             var quirks = profiles.GetActiveCameraQuirks();

@@ -51,7 +51,7 @@ public sealed class LogBufferLogger : ILogger {
             // Guiding traffic is frame-cadence chatter that drowned the main
             // LOG panel (field report): divert it to the dedicated per-day
             // file next to the PHD2-format guide logs. Warnings and errors
-            // ALSO stay in the main buffer — a guiding failure must remain
+            // ALSO stay in the main buffer, a guiding failure must remain
             // visible without opening the side file.
             bool guiding = _categoryName.Contains(".NativeGuider", StringComparison.Ordinal)
                 || _categoryName.StartsWith("NINA.Guider", StringComparison.Ordinal);

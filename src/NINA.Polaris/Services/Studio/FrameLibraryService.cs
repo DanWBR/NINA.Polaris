@@ -47,7 +47,7 @@ public class FrameLibraryService {
 
     // Rescan coalescing state. The previous implementation used a
     // SemaphoreSlim with non-blocking acquire which silently no-op'd
-    // overlapping callers — fine for fire-and-forget kickers but
+    // overlapping callers, fine for fire-and-forget kickers but
     // wrong for an explicit `await RescanAsync()` that expected the
     // index to reflect disk state on return. New semantics:
     //   - Idle: start a fresh rescan, return its Task.

@@ -23,7 +23,7 @@ namespace NINA.Ascom.Com;
 /// + <see cref="AscomComHostRunner"/>, using ASCOM Platform DriverAccess), and
 /// marshals every call to it. A driver that fast-fails on connect inside the
 /// loaded server process connects (or throws a clean error) in the clean child;
-/// and if it crashes anyway, only the child dies — the API server surfaces a
+/// and if it crashes anyway, only the child dies, the API server surfaces a
 /// clean <see cref="AscomHostException"/> and stays up.
 ///
 /// <para>Position semantics follow the ASCOM spec: -1 ("moving") is folded to
@@ -80,13 +80,13 @@ public sealed class AscomComFilterWheelHosted : IFilterWheel, IDisposable {
             // hosts these old drivers in the desktop environment they need.
             if (ex.HResult == unchecked((int)0x800706BA)) {
                 throw new InvalidOperationException(
-                    $"The ASCOM driver '{_progId}' crashed while connecting. Polaris stayed up — only " +
+                    $"The ASCOM driver '{_progId}' crashed while connecting. Polaris stayed up, only " +
                     "the isolated driver process was affected. This driver needs a Windows desktop " +
                     "app environment (like NINA) that a headless server does not provide. Connect this " +
                     "wheel over ASCOM Remote → Alpaca instead: in RIGS, choose the Alpaca driver for it.",
                     ex);
             }
-            // A real driver error (e.g. wrong COM port) — surface it with its HRESULT.
+            // A real driver error (e.g. wrong COM port), surface it with its HRESULT.
             throw AscomComActivation.ConnectFailed(_progId, ex);
         }
         try { _deviceName = await channel.GetStringAsync("Name", ct).ConfigureAwait(false); }

@@ -69,7 +69,7 @@
     justify-content: center;
 }
 /* AUTORUN docks the histogram panel along the bottom of the frame, where
-   the image-adjust toolbar normally sits — they overlap. Move the toolbar
+   the image-adjust toolbar normally sits, they overlap. Move the toolbar
    to the top-left corner here so both stay usable. */
 .autorun-preview .pz-toolbar {
     bottom: auto;
@@ -168,7 +168,7 @@
                 inset 0 0 14px rgba(250, 204, 21, 0.35);
 }
 /* The one interactive thing while locked. Pinned to the TOP-RIGHT so it sits
-   where the status-bar padlock the user just tapped lives — "tap the same
+   where the status-bar padlock the user just tapped lives, "tap the same
    padlock to unlock". Corner stays clear of the centred live view. */
 .ui-lock-pill {
     position: absolute;
@@ -770,7 +770,7 @@
     pointer-events: none !important;
 }
 /* Panel-level click-to-dismiss surface. Pointer hint so the user
-   sees that the whole popup is interactive and dismissible — even
+   sees that the whole popup is interactive and dismissible, even
    when the X button in the corner is somehow blocked by some
    stacking-context regression. Belt-and-suspenders with the X. */
 .cam-float-clickable {
@@ -1581,7 +1581,7 @@
     opacity: 0.6;
 }
 
-/* AI Tools — dedicated second toolbar row directly under the main FILES
+/* AI Tools, dedicated second toolbar row directly under the main FILES
    toolbar. Visually distinct (subtle accent-tinted background + a leading
    label) so the in-browser ONNX/AI model tools read as their own group. */
 .files-ai-toolbar {
@@ -1657,7 +1657,7 @@
 
 /* Short viewports (landscape phones, small windows): vertical space is
    the scarce resource, so the two toolbar ROWS become icon-only vertical
-   RAILS to the RIGHT of the file list — the list gets their height back.
+   RAILS to the RIGHT of the file list, the list gets their height back.
    Tooltips (title/long-press) still carry each button's name. */
 @media (max-height: 600px) {
     .files-body {
@@ -2674,7 +2674,7 @@
 }
 
 /* .input-sm is width:80% of its flex-column label, and these labels are
-   sized by their own text — so short-labelled number fields (Step Size,
+   sized by their own text, so short-labelled number fields (Step Size,
    Frames/pt, Min Stars, Top stars) collapsed to the label's text width
    and cropped the value behind the native spinner. Fixed width instead;
    matches the 100px the exposure-preset inputs already use. Selects

@@ -53,7 +53,7 @@ public static class LibRawDecoder {
                     if (NativeLibrary.TryLoad(c, out var h)) return h;
                 return IntPtr.Zero;
             });
-        } catch { /* resolver already set / not supported — DllImport still tries */ }
+        } catch { /* resolver already set / not supported, DllImport still tries */ }
     }
 
     [DllImport(Lib, EntryPoint = "libraw_init")] private static extern IntPtr libraw_init(uint flags);
@@ -63,7 +63,7 @@ public static class LibRawDecoder {
     [DllImport(Lib, EntryPoint = "libraw_dcraw_process")] private static extern int libraw_dcraw_process(IntPtr p);
     [DllImport(Lib, EntryPoint = "libraw_dcraw_make_mem_image")] private static extern IntPtr libraw_dcraw_make_mem_image(IntPtr p, out int errc);
     [DllImport(Lib, EntryPoint = "libraw_dcraw_clear_mem")] private static extern void libraw_dcraw_clear_mem(IntPtr img);
-    // Stable setter helpers (libraw C API ≥0.18) — avoid struct marshaling.
+    // Stable setter helpers (libraw C API ≥0.18), avoid struct marshaling.
     [DllImport(Lib, EntryPoint = "libraw_set_output_bps")] private static extern void libraw_set_output_bps(IntPtr p, int value);
     [DllImport(Lib, EntryPoint = "libraw_set_output_color")] private static extern void libraw_set_output_color(IntPtr p, int value);
     [DllImport(Lib, EntryPoint = "libraw_set_no_auto_bright")] private static extern void libraw_set_no_auto_bright(IntPtr p, int value);
@@ -100,7 +100,7 @@ public static class LibRawDecoder {
     /// <summary>
     /// Decode a RAW file to a 16-bit linear RGGB Bayer mosaic so it flows through
     /// the mono+Bayer pipeline (the client debayers it back to colour). Returns
-    /// false (and null outputs) if libraw is unavailable or the decode fails —
+    /// false (and null outputs) if libraw is unavailable or the decode fails,
     /// the caller should fall back to the embedded JPEG.
     /// </summary>
     public static bool TryDecodeToRggb(byte[] rawBytes, out int width, out int height, out ushort[]? mosaic) {

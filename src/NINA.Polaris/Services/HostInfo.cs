@@ -95,7 +95,7 @@ public static class HostInfo {
             var dt = File.ReadAllText(dtPath).TrimEnd('\0', ' ', '\n', '\r');
             if (!string.IsNullOrWhiteSpace(dt)) {
                 // Some vendor images (e.g. Orange Pi's stock Ubuntu) put only the
-                // SoC CODENAME in the model node — "sun60iw2", "rk3588s" — instead
+                // SoC CODENAME in the model node, "sun60iw2", "rk3588s", instead
                 // of a human board name. When it looks like a bare codename, try
                 // /proc/device-tree/compatible, whose "vendor,board" tuples (e.g.
                 // "xunlong,orangepi-4-pro") yield the real board.
@@ -205,7 +205,7 @@ public static class HostInfo {
         // Orange Pi must come before the rk35 rule below: the Orange Pi 5
         // family is RK3588, which would otherwise be classified as "rockpi".
         if (m.Contains("orange pi") || m.Contains("orangepi")) return "orangepi";
-        // Radxa Dragon (Qualcomm QCS6490 / QCM6490) — a Qualcomm SoC board, so it
+        // Radxa Dragon (Qualcomm QCS6490 / QCM6490), a Qualcomm SoC board, so it
         // must come BEFORE the rk35/rockpi rule (it's not Rockchip) and is given
         // its own kind for the dragon glyph.
         if ((m.Contains("radxa") && m.Contains("dragon")) || m.Contains("dragon q6")

@@ -25,7 +25,7 @@ namespace NINA.Camera.SvbonySdk.Native;
 ///
 /// Names / argument order mirror <c>SVBCameraSDK.h</c>. The SDK uses C
 /// <c>long</c> for control values and buffer sizes, which is 32-bit on
-/// Windows but 64-bit on 64-bit Linux — <see cref="CLong"/> models that
+/// Windows but 64-bit on 64-bit Linux, <see cref="CLong"/> models that
 /// per-platform width correctly (do NOT use int/nint here).
 /// </summary>
 internal static class SvbonyNative {

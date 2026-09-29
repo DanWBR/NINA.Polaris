@@ -26,7 +26,7 @@ namespace NINA.Ascom.Com;
 /// <see cref="ICamera"/> contract. Late-binds to the driver via the
 /// ProgID + <see cref="Type.GetTypeFromProgID(string)"/> so no
 /// compile-time reference to the ASCOM Platform assemblies is
-/// required — Polaris ships without any ASCOM bits and starts fine on
+/// required, Polaris ships without any ASCOM bits and starts fine on
 /// machines that have never installed the Platform.
 ///
 /// <para>Every COM interaction is funnelled through an
@@ -35,7 +35,7 @@ namespace NINA.Ascom.Com;
 /// rationale.</para>
 ///
 /// <para>Supported subset of ICameraV3: connect/disconnect, sensor
-/// metadata, cooler controls, binning, gain (numeric range only —
+/// metadata, cooler controls, binning, gain (numeric range only,
 /// named-gain string lists are not exposed), single-frame capture
 /// via <c>StartExposure</c> + <c>ImageReady</c> poll + <c>ImageArray</c>,
 /// abort, subframe / ROI. Out of scope for v1: <c>FastReadout</c>,
@@ -67,7 +67,7 @@ public sealed class AscomComCamera : ICamera, IDisposable {
     // we project that onto Polaris's BayerPatternEnum + SensorType so
     // the downstream WebGL debayer shader knows to demosaic. Without
     // these the preview rendered the raw Bayer pattern as grayscale
-    // — visible to the user as a high-frequency checkerboard.
+    //, visible to the user as a high-frequency checkerboard.
     private SensorTypeEnum _sensorType = SensorTypeEnum.Monochrome;
     private BayerPatternEnum _bayerPattern = BayerPatternEnum.None;
 
@@ -174,10 +174,10 @@ public sealed class AscomComCamera : ICamera, IDisposable {
         // Late-bound activation. GetTypeFromProgID returns null when
         // the ProgID isn't registered (driver uninstalled OR wrong
         // bitness). Activator.CreateInstance throws COMException with
-        // a clear HRESULT when the COM server can't be launched —
+        // a clear HRESULT when the COM server can't be launched,
         // surface that to the caller verbatim so the toast shows the
         // real reason.
-        // WINEXIT-3: activate through the diagnostic choke point — it refuses a
+        // WINEXIT-3: activate through the diagnostic choke point, it refuses a
         // 32-bit-only driver in this 64-bit host with a clean error instead of a
         // crash, and leaves a synchronously-flushed breadcrumb around the two
         // calls a real driver can die in (activation, then Connected=true).
@@ -230,11 +230,11 @@ public sealed class AscomComCamera : ICamera, IDisposable {
             _offsetMax = (int)_driver.OffsetMax;
             _hasOffset = _offsetMax > _offsetMin;
         } catch { _hasOffset = false; }
-        // ICameraV3.SensorType — int enum, values mirror our
+        // ICameraV3.SensorType, int enum, values mirror our
         // SensorTypeEnum (0=Monochrome, 1=Color, 2=RGGB, 3=CMYG,
         // 4=CMYG2, 5=LRGB, 6=BGGR, 7=GBRG, 8=GRBG). Mono cameras +
         // drivers that don't implement the property fall to
-        // Monochrome / no Bayer (safe default — debayer skipped).
+        // Monochrome / no Bayer (safe default, debayer skipped).
         // ZWO's ASCOM driver for the ASI715MC reports 2 (RGGB) here.
         // Read it as NULLABLE: the fallback for a driver that does not
         // implement SensorType is 0, which is indistinguishable from a
@@ -262,7 +262,7 @@ public sealed class AscomComCamera : ICamera, IDisposable {
             // SensorTypeEnum.Color = generic OSC without a specific
             // matrix advertised. Most colour-CMOS ASCOM drivers do
             // advertise RGGB explicitly, so this fallback only fires
-            // for older / quirkier drivers — leave debayer off and
+            // for older / quirkier drivers, leave debayer off and
             // let the user set the pattern in the rig profile.
             _ => BayerPatternEnum.None,
         };
@@ -280,7 +280,7 @@ public sealed class AscomComCamera : ICamera, IDisposable {
     public async Task<IImageData> CaptureAsync(double exposureSeconds, CaptureOptions? opts = null,
                                                 CancellationToken ct = default) {
         // Step 1: apply per-capture overrides + StartExposure on the STA
-        // (quick — a handful of property writes + one method call).
+        // (quick, a handful of property writes + one method call).
         await _disp.Invoke(() => {
             if (_driver == null)
                 throw new InvalidOperationException("ASCOM camera not connected.");
@@ -303,8 +303,8 @@ public sealed class AscomComCamera : ICamera, IDisposable {
             // Set the readout frame to the FULL sensor (in binned pixels) before
             // StartExposure. The ICameraV3 contract says a client sets StartX/Y +
             // NumX/Y; a spec-compliant driver defaults NumX/NumY to the full
-            // frame on connect, but DSLR/MTP drivers — the dougforpres Sony ASCOM
-            // driver in particular — leave them at 0, and StartExposure then
+            // frame on connect, but DSLR/MTP drivers, the dougforpres Sony ASCOM
+            // driver in particular, leave them at 0, and StartExposure then
             // "succeeds" but never produces an image (ImageReady stays false →
             // the 120 s poll timeout → a 500 on /api/camera/capture). This path
             // is always a full-frame capture, so pin the frame explicitly, as
@@ -325,7 +325,7 @@ public sealed class AscomComCamera : ICamera, IDisposable {
         });
 
         // Step 2: poll ImageReady. CRITICAL: each tick is its own quick
-        // Invoke that releases the dispatcher between polls — the WS
+        // Invoke that releases the dispatcher between polls, the WS
         // status broadcast (State, Temperature, Gain) keeps flowing
         // without queueing behind us. The previous implementation ran
         // the whole capture (including the polling Thread.Sleep) inside
@@ -353,7 +353,7 @@ public sealed class AscomComCamera : ICamera, IDisposable {
 
         // Step 3: fetch ImageArray on the STA (single property read,
         // quick) + capture dimensions. ICameraV3.ImageArray is a 2-D
-        // SAFEARRAY of int (mono / Bayer) — colour OSCs like the
+        // SAFEARRAY of int (mono / Bayer), colour OSCs like the
         // ASI715MC return the raw Bayer plane here, not a 3-D RGB
         // array; downstream debayer happens in Polaris's pipeline.
         var (raw, width, height, isComObject) = await _disp.Invoke(() => {
@@ -423,11 +423,11 @@ public sealed class AscomComCamera : ICamera, IDisposable {
     /// <c>ICameraV3.ImageArray</c> into a row-major <c>ushort[]</c>.
     /// Tries typed fast paths (<c>int[,]</c>, <c>short[,]</c>) before
     /// falling back to reflective <c>GetValue</c> for exotic drivers.
-    /// Pure function — safe to run off the COM apartment.
+    /// Pure function, safe to run off the COM apartment.
     /// </summary>
     private static ushort[] ConvertImageArrayToUInt16(Array raw, int width, int height) {
         var px = new ushort[width * height];
-        // Fast path 1: int[,] — what ICameraV3 mandates for ImageArray
+        // Fast path 1: int[,], what ICameraV3 mandates for ImageArray
         // when SensorType is Monochrome or single-plane Color (Bayer).
         if (raw is int[,] ints) {
             for (int y = 0; y < height; y++) {
@@ -441,7 +441,7 @@ public sealed class AscomComCamera : ICamera, IDisposable {
             }
             return px;
         }
-        // Fast path 2: short[,] — non-spec but a few CMOS drivers
+        // Fast path 2: short[,], non-spec but a few CMOS drivers
         // hand back 16-bit signed instead of int.
         if (raw is short[,] shorts) {
             for (int y = 0; y < height; y++) {

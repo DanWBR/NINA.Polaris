@@ -94,7 +94,7 @@ public class PolarAlignmentJob {
     public double? TargetDecDeg { get; set; }
     public string? TargetName { get; set; }
 
-    /// <summary>POLARUI2: refinement anchor — the of-date RA/Dec the
+    /// <summary>POLARUI2: refinement anchor, the of-date RA/Dec the
     /// pointing will land on once the axis error is fully corrected.
     /// Computed on the FIRST refine solve after TPPA (before the user
     /// touches the knobs) via PolarAlignmentMath.ComputeRefineTarget

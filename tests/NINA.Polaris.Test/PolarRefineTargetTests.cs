@@ -20,10 +20,10 @@ namespace NINA.Polaris.Test;
 /// <summary>
 /// POLARUI2: displacement-to-target refinement math. The invariants:
 ///
-///   1. Anchoring is self-consistent — decomposing the rotation from
+///   1. Anchoring is self-consistent, decomposing the rotation from
 ///      the reference pointing to its own target must recover exactly
 ///      the axis error the target was built from.
-///   2. The target RA/Dec is constant in time — solving the SAME
+///   2. The target RA/Dec is constant in time, solving the SAME
 ///      pointing RA/Dec minutes later must still report the full
 ///      original error (the whole point of storing the anchor as
 ///      RA/Dec instead of alt/az).
@@ -46,7 +46,7 @@ public class PolarRefineTargetTests {
     [TestCase(-5.18, -37.36, TestName = "RoundTrip_South")]
     [TestCase(30.0, -37.36, TestName = "RoundTrip_North")]
     public void Target_ThenError_RecoversInput(double lat, double lng) {
-        // 10.7' az / -4.1' alt — same order as a rough tripod drop.
+        // 10.7' az / -4.1' alt, same order as a rough tripod drop.
         const double azErr = 644.0, altErr = -246.0;
 
         var (tRa, tDec) = PolarAlignmentMath.ComputeRefineTarget(
@@ -79,7 +79,7 @@ public class PolarRefineTargetTests {
         // a real mount tracks about its OWN axis, where the anchor is
         // exact. The modelling gap ≈ totalError × sky rotation:
         // 690″ × sin(2.5°) ≈ 30″ here (~4% of the error), and it
-        // shrinks quadratically as the user walks the error to zero —
+        // shrinks quadratically as the user walks the error to zero,
         // irrelevant for knob guidance. Assert within that bound.
         Assert.That(rem!.Value.azErrSec, Is.EqualTo(azErr).Within(40.0));
         Assert.That(rem.Value.altErrSec, Is.EqualTo(altErr).Within(40.0));

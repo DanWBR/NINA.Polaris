@@ -81,7 +81,7 @@ public sealed class SequencingStatusContributor : IStatusContributor {
                     meridianFlip.Settings.MinutesAfterMeridian);
                 // Time until the target sets below the horizon. For a
                 // target already past the meridian (descending west),
-                // this is the useful countdown — "time until meridian"
+                // this is the useful countdown, "time until meridian"
                 // is meaningless there (it already crossed). Needs Dec.
                 var decDeg = equip.Telescope.Declination;
                 if (!double.IsNaN(decDeg)) {

@@ -26,7 +26,7 @@ namespace NINA.Polaris.Endpoints;
 /// property INITIALISER, not into "nothing". <c>EquipmentProfile.Name</c>
 /// initialises to "Default", so a body like <c>{"liveStackComputeMode":"server"}</c>
 /// bound to a fresh EquipmentProfile arrived at the handler carrying
-/// <c>Name = "Default"</c> — a perfectly non-blank string that sailed past the
+/// <c>Name = "Default"</c>, a perfectly non-blank string that sailed past the
 /// blank-guard and RENAMED the operator's rig. Field report: a rig called
 /// "SV503" came back as "Default" after an update, with the guide algorithms,
 /// pier-side handling and Dec guide mode likewise reset to their initialisers
@@ -41,7 +41,7 @@ namespace NINA.Polaris.Endpoints;
 /// </summary>
 public static class RigPatch {
 
-    // Web defaults = camelCase out, case-insensitive in — matching both what
+    // Web defaults = camelCase out, case-insensitive in, matching both what
     // the client sends and what ProfileService persists.
     private static readonly JsonSerializerOptions Opts = new(JsonSerializerDefaults.Web);
 
@@ -49,7 +49,7 @@ public static class RigPatch {
     ///
     /// Case-SENSITIVE on purpose. A JsonObject built with case-insensitive
     /// options backs itself with a case-insensitive dictionary, and that
-    /// dictionary is created lazily on the FIRST enumeration — so a body
+    /// dictionary is created lazily on the FIRST enumeration, so a body
     /// carrying two spellings of one property ("phd2Host" and "PHD2Host")
     /// did not fail at parse time, it threw ArgumentException the moment
     /// Merge looked at it, and the rig save came back 500 (field report).
@@ -74,7 +74,7 @@ public static class RigPatch {
         patch = Normalise(patch);
         if (patch != null) {
             // Last spelling wins, and the order is the body's own order, so a
-            // client that sends both gets the value it wrote last — the same
+            // client that sends both gets the value it wrote last, the same
             // rule JavaScript object literals follow.
             foreach (var kv in patch.ToList()) {
                 // Deserialization is case-insensitive, so a client sending

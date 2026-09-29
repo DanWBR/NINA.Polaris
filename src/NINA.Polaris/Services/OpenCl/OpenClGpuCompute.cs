@@ -43,7 +43,7 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
 
     /// <summary>Per-op offload allow-list, decided once at init from the device's
     /// memory model (see <see cref="GpuOffloadPolicy"/>). <c>null</c> means "allow
-    /// every op" — the state while the discrete-device probe is running (so each
+    /// every op", the state while the discrete-device probe is running (so each
     /// kernel can execute to be measured) and before init.</summary>
     private volatile GpuOffloadPolicy? _policy;
 
@@ -128,7 +128,7 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
                 var src = LoadKernelSource();
                 _ctx = new OpenClContext(src);
                 // Decide the per-op offload policy by probing each kernel
-                // GPU-vs-CPU on this exact device — for both discrete GPUs and
+                // GPU-vs-CPU on this exact device, for both discrete GPUs and
                 // unified-memory SBCs. "Unified memory ⇒ everything wins" is false
                 // on some stacks (e.g. Qualcomm Adreno copies host↔device for
                 // ordinary buffers, so warp/debayer lose while the same code wins
@@ -179,7 +179,7 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
     /// with <see cref="_policy"/> still null so the gate lets every kernel
     /// execute. BoxBlur8 isn't measured (the CPU backend declines it); the policy
     /// derives it from the separable-blur result. <paramref name="unifiedMemory"/>
-    /// is recorded on the policy for diagnostics only — the gating is identical.
+    /// is recorded on the policy for diagnostics only, the gating is identical.
     /// </summary>
     private GpuOffloadPolicy ProbeOffloadPolicy(bool unifiedMemory) {
         const int w = ProbeDim, h = ProbeDim, n = w * h;
@@ -212,7 +212,7 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
 
     /// <summary>GPU/CPU speedup (>1 means the GPU is faster) from the best (min)
     /// time of each side over a few iterations; min reduces GC/scheduler noise.
-    /// Returns 0 — i.e. "GPU not faster", so the op is not offloaded — if either
+    /// Returns 0, i.e. "GPU not faster", so the op is not offloaded, if either
     /// side declines or is unmeasurable.</summary>
     private static double Speedup(Func<bool> gpu, Func<bool> cpu) {
         double g = BestMs(gpu), c = BestMs(cpu);
@@ -499,7 +499,7 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
     // On a discrete GPU every input must be copied host→device and every result
     // copied back, so CreateFrom(CopyHostPtr)+ReadInto (real DMA) is correct and
     // unavoidable. But on a unified-memory device (CL_DEVICE_HOST_UNIFIED_MEMORY)
-    // host and GPU share physical RAM, so those copies are pure waste — yet some
+    // host and GPU share physical RAM, so those copies are pure waste, yet some
     // stacks (notably Qualcomm Adreno on the QCS6490) still perform a genuine
     // memcpy for an ordinary buffer, which is exactly why the light memory-bound
     // kernels (warp, debayer) measured *slower* than the CPU there.
@@ -509,7 +509,7 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
     // data through clEnqueueMapBuffer / clEnqueueUnmapMemObject. On unified memory
     // the map is a pointer hand-back into the same pages (no transfer); we still do
     // one plain CPU memcpy to/from the caller's managed array, but the device-side
-    // staging copy — the part the Adreno stack was charging us for — is gone. The
+    // staging copy, the part the Adreno stack was charging us for, is gone. The
     // discrete path is left byte-for-byte unchanged (it legitimately needs copies).
     // Map/unmap doesn't alter any computed value, so CPU-parity stays bit-exact.
 

@@ -118,7 +118,7 @@ public class ImageStatisticsSnrTests {
         // explicitly; a realistic ~5% border should still produce a
         // sane SNR in the same ballpark as the un-bordered version.
         //
-        // Note: the limit here is the median-via-histogram pass — when
+        // Note: the limit here is the median-via-histogram pass, when
         // zeros dominate the histogram (large borders), the median
         // would shift to 0 and the algorithm loses meaning. Real
         // stacks have <5% border so this is OK in practice; the test
@@ -143,7 +143,7 @@ public class ImageStatisticsSnrTests {
     [Test]
     public void ExplicitMedianAndMad_OverloadAgreesWithFromData() {
         // The two overloads must produce the same SNR when fed the
-        // same median + MAD — guarantees ComputeBackgroundSnrFromData
+        // same median + MAD, guarantees ComputeBackgroundSnrFromData
         // is just a convenience wrapper, no algorithmic drift.
         var data = MakeNoisyFrameWithStamp(100, 100, signalValue: 20000, seed: 99);
         var snrFromData = ImageStatistics.ComputeBackgroundSnrFromData(data);

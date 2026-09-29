@@ -28,13 +28,13 @@ namespace NINA.Polaris.Endpoints;
 ///
 /// These are the server-side halves of the Auto Workflow "Tools" steps
 /// (scnr, ...) and can also be driven directly from the Files toolbar.
-/// Synchronous on the wire — each is a single buffer transform + FITS write.
+/// Synchronous on the wire, each is a single buffer transform + FITS write.
 /// </summary>
 public static class PostProcessEndpoints {
     public static void MapPostProcessEndpoints(this IEndpointRouteBuilder app) {
         var g = app.MapGroup("/api/post");
 
-        // SCNR — green-cast removal on RGB. Mono is a passthrough no-op.
+        // SCNR, green-cast removal on RGB. Mono is a passthrough no-op.
         g.MapPost("/scnr", async (
                 ScnrService svc,
                 FrameLibraryService library,
@@ -264,7 +264,7 @@ public static class PostProcessEndpoints {
             return Results.Ok(new { results, failures });
         });
 
-        // CLAHE — local contrast (best after a stretch).
+        // CLAHE, local contrast (best after a stretch).
         g.MapPost("/clahe", async (
                 TonalService svc,
                 FrameLibraryService library,
@@ -284,7 +284,7 @@ public static class PostProcessEndpoints {
             return Results.Ok(new { results, failures });
         });
 
-        // Highlight recovery — soft-knee compression of blown cores.
+        // Highlight recovery, soft-knee compression of blown cores.
         g.MapPost("/highlight-recovery", async (
                 TonalService svc,
                 FrameLibraryService library,

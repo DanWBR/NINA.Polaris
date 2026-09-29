@@ -80,7 +80,7 @@ public class LiveStackingService {
     private BayerPatternEnum _lastGoodBayer = BayerPatternEnum.None;
     // Bayer-dropout guard for the FIRST frame's colour decision. If the very
     // first frame of a colour session arrives with BayerPattern=None (a CFA
-    // dropout), committing to mono here poisons the WHOLE session — every
+    // dropout), committing to mono here poisons the WHOLE session, every
     // subsequent frame stacks as grey until restart. Instead we DEFER: drop
     // the frame and wait for one that actually carries a pattern (or use the
     // per-rig override). Capped so a genuinely-mono camera that somehow has
@@ -144,7 +144,7 @@ public class LiveStackingService {
     // Integration-time stopwatch. ElapsedSeconds must reflect the time
     // spent ACTIVELY stacking, not raw wall-clock since the first frame:
     // a stopped/paused stack (or one past the duration cap) has to FREEZE
-    // (field report — the "Total integration time" counter kept climbing
+    // (field report, the "Total integration time" counter kept climbing
     // after Stop). _elapsedAccrued banks completed running segments;
     // _elapsedSegmentStart marks the start of the segment currently
     // running (null while paused/stopped). Reset() clears both.
@@ -155,7 +155,7 @@ public class LiveStackingService {
     /// <see cref="AddFrameAsync"/> is also persisted to disk via
     /// <see cref="ImageWriterService.SaveImage"/> with imageType
     /// "LIGHT", landing in {rig}/{target}/lights/{date}
-    /// like a regular sequence capture. Default ON — most users
+    /// like a regular sequence capture. Default ON, most users
     /// want both the integrated preview AND an archive of the raw
     /// frames so they can re-stack offline in Siril / PixInsight
     /// later. UI checkbox in LIVE tab persists the choice per-rig
@@ -171,7 +171,7 @@ public class LiveStackingService {
     /// toggle had already been removed in favour of automatic detection, so
     /// nothing ever wrote it: colour stacking was unreachable. Every OSC
     /// session took the mono branch, which relays the WARPED CFA mosaic and
-    /// tells the client to debayer it — the alignment has already destroyed the
+    /// tells the client to debayer it, the alignment has already destroyed the
     /// Bayer phase by then, so frame #0 looked right and everything after it
     /// came out grey with mosaic banding (field, Q6A, 2026-08-09).</summary>
     public bool? ColorStacking { get; set; }
@@ -235,7 +235,7 @@ public class LiveStackingService {
     // that never leave AddFrameAsync (calibrated frame, debayered planes,
     // warped planes, SNR reconstruction). Frame geometry is constant within
     // a session, so reusing these instead of new[]-ing per frame removes
-    // ~150 MB of large-object-heap churn PER FRAME on a 9 MP OSC camera —
+    // ~150 MB of large-object-heap churn PER FRAME on a 9 MP OSC camera,
     // the churn (not the accumulators) was what ballooned RSS to ~1 GB.
     // Only buffers that are consumed inside AddFrameAsync may live here;
     // anything handed to the relay/writer escapes and must stay per-frame.
@@ -286,11 +286,11 @@ public class LiveStackingService {
     /// RGB accumulators + 16 scratch planes + transient) and ~30 in mono, so an
     /// 11.7 MP OSC frame is ~440 MB at 1:1 and a 26 MP one ~990 MB. Budgeting a
     /// quarter of physical RAM keeps that from crowding out the capture path,
-    /// INDI and the OS — which is exactly what pushed a 1 GB board over.</para>
+    /// INDI and the OS, which is exactly what pushed a 1 GB board over.</para>
     /// </summary>
     /// <summary>Resolve the divisor for this session: the operator's per-rig
     /// choice when they made one, otherwise the auto pick. Auto is only the
-    /// INITIAL state — once a value is stored it always wins.</summary>
+    /// INITIAL state, once a value is stored it always wins.</summary>
     private int ResolveStackBinning(ImageProperties props) {
         var configured = _profiles?.ActiveEquipmentProfile?.LiveStackBinning ?? 0;
         if (configured is 1 or 2 or 4) return configured;
@@ -520,7 +520,7 @@ public class LiveStackingService {
     /// about ten times the bytes: at 1536 a frame is ~9 MB before LZ4, at 2048
     /// ~17 MB, and at a 4144x2822 native size 70 MB. One integrated frame every
     /// few seconds at 9 MB is already a real load on a field WiFi link, and
-    /// "native" would be hopeless — so the native sentinel maps here instead of
+    /// "native" would be hopeless, so the native sentinel maps here instead of
     /// to full resolution.</para></summary>
     public int RawColorPreviewMaxDim { get; set; } = 1536;
 
@@ -601,7 +601,7 @@ public class LiveStackingService {
 
     /// <summary>Why the most recent rejected frame was dropped (alignment failed,
     /// size mismatch, meridian flip in progress, …), null until one is rejected.
-    /// Frames are silently skipped otherwise — this makes the reason visible.</summary>
+    /// Frames are silently skipped otherwise, this makes the reason visible.</summary>
     public string? LastRejectReason { get; private set; }
     /// <summary>UTC time of the last rejected frame (null until one happens).</summary>
     public DateTime? LastRejectAt { get; private set; }
@@ -611,7 +611,7 @@ public class LiveStackingService {
     public double LastFrameMedianHfr { get; private set; }
     public int LastFrameStarCount { get; private set; }
     // SNR-4: background SNR per-frame + cumulative-stack. CumulativeSnr
-    // is the headline number in the LIVE-tab "stack quality" widget —
+    // is the headline number in the LIVE-tab "stack quality" widget,
     // it's the SNR of the running-mean accumulator, growing ~√N as
     // frames stack.
     public double LastFrameSnr { get; private set; }
@@ -641,7 +641,7 @@ public class LiveStackingService {
         double FrameSnr, double MedianHfr, int StarCount, double FrameMean);
 
     /// <summary>Rolling quality timeline used by the ETA fit, the LIVE
-    /// chart, and the report/alert helpers. Capped at 300 entries —
+    /// chart, and the report/alert helpers. Capped at 300 entries,
     /// enough to draw a whole session and fit the √N model, and trivial
     /// in memory.</summary>
     public IReadOnlyList<LiveStackQualitySample> QualityHistory => _qualityHistory;
@@ -673,7 +673,7 @@ public class LiveStackingService {
     public LiveStackPreProcStatus PreProcStatus { get; } = new();
 
     /// <summary>
-    /// Whether BGE can run with the current setup — computed live (so the LIVE
+    /// Whether BGE can run with the current setup, computed live (so the LIVE
     /// settings panel reflects it even while idle, not just mid-stack). True
     /// when the stack is computed client-side (the browser runs GraXpert ONNX
     /// over a GraXpert backend on the host (CLI or RK3588 NPU). A host with no
@@ -713,7 +713,7 @@ public class LiveStackingService {
         if (profiles != null) {
             TargetSnr = profiles.ActiveEquipmentProfile?.TargetSnr;
             profiles.EquipmentProfileActivated += rig => {
-                // Refresh only if no override is in place — the user's
+                // Refresh only if no override is in place, the user's
                 // session-level number sticks until they clear it.
                 if (_targetSnrOverride == null) TargetSnr = rig?.TargetSnr;
                 // LSPP-3: switching rigs invalidates the master cache
@@ -823,7 +823,7 @@ public class LiveStackingService {
 
     /// <summary>Clear the accumulator + reference + counters and
     /// start a fresh stack on the next incoming frame. Does NOT
-    /// flip IsRunning off — stacking stays armed and the new
+    /// flip IsRunning off, stacking stays armed and the new
     /// stack begins immediately when the next frame arrives. Used
     /// when the user switches targets and wants to start over.</summary>
     public void Reset() {
@@ -901,9 +901,9 @@ public class LiveStackingService {
     /// preferring dropout-proof sources over the per-frame CFA:
     ///   1. The frame's own <c>props.BayerPattern</c> if it carries one.
     ///   2. The per-rig BayerPatternOverride (camera-quirks map, else the
-    ///      legacy per-rig field) — user-set, so it never drops out.
+    ///      legacy per-rig field), user-set, so it never drops out.
     /// Returns None when nothing resolves (mono camera, or an OSC frame-0
-    /// CFA dropout with no override — the caller then DEFERS rather than
+    /// CFA dropout with no override, the caller then DEFERS rather than
     /// commit the session to mono). Mirrors ImageRelayService's override
     /// resolution so the stack and the raw relay agree on the pattern.</summary>
     private BayerPatternEnum ResolveSessionBayer(ImageProperties props) {
@@ -939,7 +939,7 @@ public class LiveStackingService {
     }
 
     /// <summary>Arm stacking AND clear the current accumulator. The
-    /// "fresh start" path — use when the operator wants to begin a
+    /// "fresh start" path, use when the operator wants to begin a
     /// new target / discard whatever was stacked before. Prefer
     /// <see cref="Resume"/> when the operator paused mid-session
     /// and wants to keep building on the existing stack.</summary>
@@ -977,11 +977,11 @@ public class LiveStackingService {
     /// <summary>Re-arm stacking WITHOUT clearing the accumulator. New
     /// frames continue to integrate into the running mean. Lets the
     /// operator pause (e.g. clouds rolled in), fix things, then pick
-    /// up where they left off — typical workflow when wifi drops or
+    /// up where they left off, typical workflow when wifi drops or
     /// you need to disconnect the laptop for a minute.</summary>
     public void Resume() {
         if (_frameCount == 0) {
-            // Nothing to resume FROM — fall through to Start so the
+            // Nothing to resume FROM, fall through to Start so the
             // first frame still establishes the reference. Avoids a
             // confusing state where Resume succeeds but the next
             // frame can't align to an empty buffer.
@@ -1001,13 +1001,13 @@ public class LiveStackingService {
     /// <see cref="Start"/> to begin a new stack.</summary>
     public void Stop() {
         _isRunning = false;
-        // Freeze the integration-time counter — a stopped stack must
+        // Freeze the integration-time counter, a stopped stack must
         // not keep climbing (field report).
         FreezeElapsedSegment();
         // MEMOPT2: release the per-frame SCRATCH (~200 MB at 11 MP) while the
         // stack is stopped/paused. These are all reallocated lazily by
         // EnsureScratch on the next frame, so dropping them is invisible to a
-        // resume — which CONTINUES the same stack, so the accumulators
+        // resume, which CONTINUES the same stack, so the accumulators
         // (_stackR/G/B, _countBuffer, _m2/_lumSum) must stay resident and are
         // deliberately NOT freed here (that's what Reset() is for). Under the
         // lock so we don't null a buffer a frame in flight is mid-write on.
@@ -1036,14 +1036,14 @@ public class LiveStackingService {
         LastRejectReason = reason;
         LastRejectAt = DateTime.UtcNow;
         RejectedFrames++;
-        _logger.LogInformation("Live stack: frame rejected — {Reason} (total dropped {N})",
+        _logger.LogInformation("Live stack: frame rejected, {Reason} (total dropped {N})",
             reason, RejectedFrames);
     }
 
     public async Task AddFrameAsync(IImageData imageData, CancellationToken ct = default) {
         // Disk persistence runs INDEPENDENTLY of whether the stacker
         // is currently armed and INDEPENDENTLY of whether the
-        // duration cap was reached — the user opted to keep raw
+        // duration cap was reached, the user opted to keep raw
         // frames, so we should keep ALL of them. Stacking math
         // below short-circuits when disarmed / past cap, but the
         // archive doesn't.
@@ -1052,13 +1052,13 @@ public class LiveStackingService {
         if (!_isRunning) return;
 
         // Duration cap. Once the elapsed time crosses
-        // MaxDurationSeconds, stop touching the accumulator —
+        // MaxDurationSeconds, stop touching the accumulator,
         // further frames are saved to disk (above) and relayed to
         // clients, but the stacked preview holds steady at the
         // master that completed at the cap. Reset clears _startedAt
         // and the timer restarts on the next frame.
         if (DurationCapReached) {
-            // Freeze the integration counter at the cap — past-cap frames
+            // Freeze the integration counter at the cap, past-cap frames
             // are saved/relayed but don't integrate, so they must not
             // advance the "total integration time" either.
             FreezeElapsedSegment();
@@ -1138,7 +1138,7 @@ public class LiveStackingService {
         }
 
         // HOTPX: per-sub cosmetic correction. Kill fixed hot/cold sensor pixels
-        // at the SOURCE — full-res, sensor orientation, BEFORE debayer + warp.
+        // at the SOURCE, full-res, sensor orientation, BEFORE debayer + warp.
         // Debayer (bilinear) + warp (bilinear) smear a single hot Bayer site into
         // a sub-pixel-wandering fractional cloud, so per-pixel sigma rejection
         // never sees any one contribution exceed kappa*sigma yet the sum builds a
@@ -1177,11 +1177,11 @@ public class LiveStackingService {
 
         // MEMOPT3: reduce the WORKING resolution of the stack. Every per-pixel
         // buffer of a session (count, R/G/B accumulators, the eight scratch
-        // planes) scales with this, ~38 B/px in colour — 440 MB for an 11.7 MP
+        // planes) scales with this, ~38 B/px in colour, 440 MB for an 11.7 MP
         // OSC frame at 1:1, ~990 MB for a 26 MP one, which simply does not fit
         // a 1-1.5 GB SBC. Binning happens AFTER calibration/BGE (their masters
         // are full-resolution) and AFTER SaveFrameIfEnabled, so the subs on disk
-        // are always full res — only the EAA preview is reduced. Star detection
+        // are always full res, only the EAA preview is reduced. Star detection
         // and alignment also get ~bin^2 cheaper, which helps the SBC keep
         // cadence. Reassigning `props` propagates the new size to everything
         // downstream, which all reads props.Width/Height.
@@ -1217,7 +1217,7 @@ public class LiveStackingService {
         // between the R, G and B pedestals, which on an OSC sensor is thousands
         // of counts. Measured on a real 60 s light (ASI585MC, RGGB, gain 200,
         // 2026-09-05): mosaic MAD 3215, so the threshold landed at 37705 while
-        // the frame's 99.99th percentile was 23221 — nothing but saturated
+        // the frame's 99.99th percentile was 23221, nothing but saturated
         // pixels could clear it, and the detector reported 2 to 3 stars in a
         // whole 8 MP frame while live stacking rejected perfectly good frames
         // for "alignment failed". The same frame through the 2x2 mean: MAD 162,
@@ -1266,7 +1266,7 @@ public class LiveStackingService {
                 if (needsInit) {
                     // Resolve the effective Bayer pattern for the whole
                     // session from the most reliable source: the frame's own
-                    // CFA, else the per-rig override (dropout-proof — the user
+                    // CFA, else the per-rig override (dropout-proof, the user
                     // set it, it never disappears). See ResolveSessionBayer.
                     var effectivePattern = ResolveSessionBayer(props);
                     bool wantColour = ColourWantedFor(effectivePattern);
@@ -1275,7 +1275,7 @@ public class LiveStackingService {
 
                     // Bayer-dropout DEFER: colour is wanted but the first
                     // frame carries no pattern and no override is set. Don't
-                    // lock the session to mono on a transient CFA drop — skip
+                    // lock the session to mono on a transient CFA drop, skip
                     // this frame (LIVE keeps the last good frame) and retry on
                     // the next, which almost always carries the pattern. Cap
                     // it so a genuinely-mono setup with colour left on still
@@ -1296,7 +1296,7 @@ public class LiveStackingService {
                         if (_colorDeferrals < MaxColorDeferrals && waited < MaxColorDeferSeconds) {
                             _colorDeferrals++;
                             _logger.LogWarning(
-                                "Live stack: first frame has no Bayer pattern (CFA dropout) but colour is on — deferring init ({N}/{Max}, {Waited:F0}s of {Budget:F0}s) instead of falling back to mono",
+                                "Live stack: first frame has no Bayer pattern (CFA dropout) but colour is on, deferring init ({N}/{Max}, {Waited:F0}s of {Budget:F0}s) instead of falling back to mono",
                                 _colorDeferrals, MaxColorDeferrals, waited, MaxColorDeferSeconds);
                             RecordReject("waiting for a Bayer pattern (CFA dropout on first frame)");
                             return;
@@ -1323,7 +1323,7 @@ public class LiveStackingService {
                     // Colour session? OSC frame + the per-rig toggle. Allocate
                     // the 3 plane accumulators once; the rest of the session
                     // debayers + integrates in colour. The mono accumulator is
-                    // only allocated in the mono branch — a colour session
+                    // only allocated in the mono branch, a colour session
                     // never writes it, so allocating it there was ~35 MB of
                     // dead weight on a 9 MP sensor (MEMOPT).
                     _bayerPattern = effectivePattern;
@@ -1395,7 +1395,7 @@ public class LiveStackingService {
                     // reference, no warp). Interpolation stays within a
                     // colour channel, so no CFA smear. Accumulate per channel
                     // into the 3 buffers, sharing one coverage count.
-                    // MEMOPT: both stages write into session scratch — these
+                    // MEMOPT: both stages write into session scratch, these
                     // planes are consumed by the accumulate loop below and
                     // never escape, so 6× ushort[N] (~108 MB on 9 MP) of
                     // per-frame LOH churn becomes a fixed session allocation.
@@ -1474,7 +1474,7 @@ public class LiveStackingService {
 
             // LIVE-TRACE (FIELD6-8): one line per integrated frame answering
             // "why is the LIVE view mono?" end-to-end. Deliberately verbose and
-            // deliberately at Information so it lands in the in-app LOG panel —
+            // deliberately at Information so it lands in the in-app LOG panel,
             // LIVE frames are minutes apart, so this is not spam. Reads:
             //   in{}      what the camera/driver actually handed us THIS frame
             //             (bayer=None here on an OSC == a CCD_CFA dropout)
@@ -1482,7 +1482,7 @@ public class LiveStackingService {
             //             colorActive is THE switch that picks the branch below
             //   align{}   identity on the reference frame; "warped" afterwards.
             //             In the mono branch the warp is applied to the RAW CFA
-            //             mosaic, which destroys the Bayer phase — if out{} then
+            //             mosaic, which destroys the Bayer phase, if out{} then
             //             still claims bayer=<pattern>, the client debayers
             //             mush and renders grey. That combination is the bug.
             //   out{}     what we are about to tell the client this frame IS
@@ -1490,7 +1490,7 @@ public class LiveStackingService {
             // Log the DECISION and its inputs, not just the override. The
             // previous line printed only the override, so a session reading
             // `colorStackingToggle=False` looked like a user setting when it
-            // was really "nobody ever set this" — which is what hid the bug.
+            // was really "nobody ever set this", which is what hid the bug.
             var traceOverride = ColorStacking?.ToString() ?? "auto";
             var traceSensor = _equipment?.Camera?.IsColorSensor?.ToString() ?? "unknown";
             var traceSession = $"session{{colorActive={_colorActive} pattern={_bayerPattern} lastGood={_lastGoodBayer} deferrals={_colorDeferrals} colourWanted={ColourWanted} override={traceOverride} sensorIsColour={traceSensor}}}";
@@ -1523,7 +1523,7 @@ public class LiveStackingService {
                 // native means tens of megabytes per integrated frame over a
                 // field WiFi link. The full-resolution stack is still what the
                 // relay caches for annotate, plate solve and the preview
-                // endpoint — only the wire copy is reduced.
+                // endpoint, only the wire copy is reduced.
                 int rawDim = PreviewMaxDim <= 0
                     ? RawColorPreviewMaxDim
                     : Math.Clamp(PreviewMaxDim, 512, RawColorPreviewMaxDim);
@@ -1558,7 +1558,7 @@ public class LiveStackingService {
                 // right, every frame after it degrades: exactly "colour flashes,
                 // then B&W". Same defect the WASM client-mode stacker had
                 // (fixed 7f2a7d17 by debayering+warping per plane, then
-                // re-mosaicing) — the server's mono branch never got that fix.
+                // re-mosaicing), the server's mono branch never got that fix.
                 _logger.LogInformation(
                     "LIVE-TRACE   -> RelayImageAsync kind=LiveStack ch=1 isBayered={IsB} bayer={Bayer} (client WILL debayer this) srcBayerThisFrame={Src} usedLastGoodFallback={Fallback}",
                     stackedProps.IsBayered, relayBayer, props.BayerPattern,
@@ -1634,7 +1634,7 @@ public class LiveStackingService {
                 // The 50 px default is the fast common case (consecutive frames
                 // barely move); when it fails on a frame that plainly has stars,
                 // the cause is almost always that the accumulated offset simply
-                // exceeded that window — a long pause and resume is the extreme
+                // exceeded that window, a long pause and resume is the extreme
                 // of it (field, 2026-08-13: a resumed stack dropped frame after
                 // frame, each with 200 stars, until a reset re-anchored). So on
                 // failure, retry once with the wide radius the flip path uses,
@@ -1648,7 +1648,7 @@ public class LiveStackingService {
                     if (t != null) {
                         _logger.LogInformation(
                             "Frame aligned only at the wide radius: drift dx={Tx:F0} dy={Ty:F0} px "
-                            + "from the reference — the tight window would have dropped it",
+                            + "from the reference, the tight window would have dropped it",
                             t.Tx, t.Ty);
                     }
                 }
@@ -1692,7 +1692,7 @@ public class LiveStackingService {
         // mixes neighbours that are different colours, and the shift moves the
         // pattern off phase. The client is then told to debayer the result, so
         // frame #0 (identity, never warped) looked right and every frame after
-        // it degraded into grey with mosaic banding — the exact field report on
+        // it degraded into grey with mosaic banding, the exact field report on
         // the Q6A. Debayer, warp each plane, remosaic back onto the reference
         // phase; interpolation then stays inside one colour channel.
         //
@@ -1721,7 +1721,7 @@ public class LiveStackingService {
         // MEMOPT: the CPU-warped mono frame is only accumulated, never
         // retained, so it reuses one session scratch instead of a fresh
         // ~18 MB LOH array per frame. (The GPU path keeps its own output
-        // buffer — changing IGpuCompute isn't worth it for that branch.)
+        // buffer, changing IGpuCompute isn't worth it for that branch.)
         EnsureScratch(ref _warpMono, _width * _height);
         return ImageResampler.ApplyTransform(data, _width, _height, t, _warpMono!);
     }
@@ -1748,7 +1748,7 @@ public class LiveStackingService {
     // TargetSnr + ExposureSecondsHint are caller-set knobs (the LIVE
     // tab pushes them via /api/livestack/target-snr + the capture
     // endpoint hands us the last exposure). Both nullable: when null
-    // the ETA computation returns null and the UI shows "—".
+    // the ETA computation returns null and the UI shows ", ".
 
     /// <summary>Target SNR for the ETA widget. Frontend sets via the
     /// LIVE tab's override input (which itself defaults to the
@@ -1787,7 +1787,7 @@ public class LiveStackingService {
         // MEMOPT: reconstruct into session scratch (frames are strictly
         // sequential through AddFrameAsync, so the scratch is never read
         // and rewritten concurrently). Cells with no coverage are zeroed
-        // explicitly — the scratch carries the previous frame's values.
+        // explicitly, the scratch carries the previous frame's values.
         ushort[] stacked;
         lock (_lock) {
             if (_countBuffer == null) return 0;
@@ -1800,7 +1800,7 @@ public class LiveStackingService {
                 // Rec.601 luminance of the running mean. (Before MEMOPT this
                 // path read the never-written mono buffer and reported the SNR
                 // of an all-zero image, so colour sessions always showed
-                // cumulative SNR 0 — reconstructing luminance fixes that.)
+                // cumulative SNR 0, reconstructing luminance fixes that.)
                 var r = _stackR; var g = _stackG; var b = _stackB;
                 Parallel.ForEach(Partitioner.Create(0, n), range => {
                     for (int i = range.Item1; i < range.Item2; i++) {
@@ -1832,7 +1832,7 @@ public class LiveStackingService {
         var sample = new LiveStackQualitySample(
             frame, ElapsedSeconds, CumulativeSnr, LastFrameSnr,
             double.IsFinite(medianHfr) ? medianHfr : 0, starCount, LastFrameMean);
-        // Deduplicate identical frame numbers (defensive — a duplicated
+        // Deduplicate identical frame numbers (defensive, a duplicated
         // integration shouldn't append two points for the same frame).
         if (_qualityHistory.Count > 0 && _qualityHistory[_qualityHistory.Count - 1].Frame == frame) {
             _qualityHistory[_qualityHistory.Count - 1] = sample;
@@ -1988,7 +1988,7 @@ public class LiveStackingService {
         public double? EtaSeconds { get; set; }
         public double? EtaConfidence { get; set; }
         /// <summary>True while a frame is being detected/aligned/integrated right
-        /// now — the UI shows a "Stacking…" indicator.</summary>
+        /// now, the UI shows a "Stacking…" indicator.</summary>
         public bool IsStacking { get; set; }
         /// <summary>How many frames were dropped (not integrated) this session.</summary>
         public int RejectedFrames { get; set; }
@@ -2000,7 +2000,7 @@ public class LiveStackingService {
 }
 /// <summary>One live-stack working-resolution choice, costed for the camera
 /// that is actually attached. <c>Fits</c> is false when the session's per-pixel
-/// working set would exceed the memory budget — the UI greys those out with the
+/// working set would exceed the memory budget, the UI greys those out with the
 /// numbers instead of letting the operator pick something that takes the host
 /// down mid-session.</summary>
 /// <param name="Bin">1 = full, 2 = half, 4 = quarter.</param>

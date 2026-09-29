@@ -80,7 +80,7 @@ public class CometElementsUpdater {
 
     /// <summary>Build the SBDB query. The perihelion window is applied on JPL's
     /// side, so the host downloads ~12 KB instead of the full ~1200-comet table
-    /// — this often runs over a phone hotspot. Verified against the live API:
+    ///, this often runs over a phone hotspot. Verified against the live API:
     /// a +/-550-day window returns 118 rows.</summary>
     internal static string BuildQueryUrl(DateTime nowUtc) {
         // tp is a Julian Date in the SBDB, so the window is expressed in JD.

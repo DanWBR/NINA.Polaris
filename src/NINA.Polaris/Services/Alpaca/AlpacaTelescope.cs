@@ -259,7 +259,7 @@ public sealed class AlpacaTelescope : ITelescope, IDisposable {
 
     /// <summary>Push UTC date to the mount via Alpaca's <c>utcdate</c>
     /// PUT. Alpaca expects ISO-8601 with a trailing Z. Offset is NOT
-    /// part of ASCOM's mount surface — the mount itself stores UTC
+    /// part of ASCOM's mount surface, the mount itself stores UTC
     /// and derives local time from <see cref="SetSiteLocationAsync"/>
     /// plus host timezone if relevant. So <paramref name="offsetHoursFromUtc"/>
     /// is accepted for interface parity with the INDI side but ignored.</summary>

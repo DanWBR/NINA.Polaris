@@ -119,7 +119,7 @@ public class FileBrowserService {
     /// Resolve the effective Studio root. Returns <paramref name="configured"/>
     /// (the profile's ImageOutputDir) when it points at an existing directory;
     /// otherwise falls back to the user's home directory, and as a last resort
-    /// the first available platform root. Never throws — callers use this so a
+    /// the first available platform root. Never throws, callers use this so a
     /// stale / deleted Studio root doesn't error the FILES + STUDIO tabs.
     /// </summary>
     public string ResolveStudioRoot(string? configured) {
@@ -344,7 +344,7 @@ public class FileBrowserService {
     /// counts FITS files only. Non-FITS files are skipped. Names are
     /// sanitised via <see cref="SanitiseSegment"/> (which also blocks path
     /// separators, so a template can never escape the file's folder); on a
-    /// collision — within this batch or against a file already on disk — a
+    /// collision, within this batch or against a file already on disk, a
     /// numeric <c>_1</c>, <c>_2</c>… suffix is appended.</summary>
     public async Task<BatchRenameResult> BatchRenameAsync(IReadOnlyList<string> paths,
             string template, bool dryRun, CancellationToken ct) {

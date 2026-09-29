@@ -151,14 +151,14 @@ public class AlpacaDiscovery {
 
     /// <summary>Enumerate every IPv4 endpoint we should send the
     /// discovery probe to. Always includes:
-    ///   - 255.255.255.255 (limited broadcast — main LAN sweep)
+    ///   - 255.255.255.255 (limited broadcast, main LAN sweep)
     ///   - 127.0.0.1 unicast (local-machine Alpaca server, since
     ///     limited broadcast on Windows doesn't deliver to loopback)
     /// Plus one directed broadcast per up + IPv4 interface
     ///   (e.g. 192.168.1.255 for a 192.168.1.0/24 NIC). This catches
     ///   Alpaca servers on the same /24 even when the host has
     ///   multiple NICs and the primary one isn't the right path.
-    /// Loopback as a sender doesn't help — we already cover it with
+    /// Loopback as a sender doesn't help, we already cover it with
     /// the explicit 127.0.0.1 entry.</summary>
     private static List<IPEndPoint> BuildBroadcastTargets() {
         var targets = new List<IPEndPoint> {

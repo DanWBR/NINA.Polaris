@@ -25,8 +25,8 @@ public readonly struct GifFrame {
 }
 
 /// <summary>
-/// Self-contained animated-GIF (GIF89a) encoder. Pure managed code — no ffmpeg,
-/// no native GIF library (SkiaSharp ships no multi-frame encoder) — so a
+/// Self-contained animated-GIF (GIF89a) encoder. Pure managed code, no ffmpeg,
+/// no native GIF library (SkiaSharp ships no multi-frame encoder), so a
 /// time-lapse GIF can always be produced regardless of what is installed on the
 /// host. Writes a global 256-colour table (256 grays for a mono sequence, a
 /// median-cut palette for colour), a Netscape loop extension, and one LZW image

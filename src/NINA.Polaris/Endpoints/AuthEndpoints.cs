@@ -145,8 +145,8 @@ public static class AuthEndpoints {
         // Path-embedded token for cross-origin embedded sub-apps (xpra PHD2
         // GUI). The Capacitor wrapper loads the Polaris UI in a cross-origin
         // iframe, so the Android/iOS WebView blocks the third-party session
-        // cookie and the embedded xpra client — whose own asset + WebSocket
-        // requests we can't add an Authorization header to — has no way to
+        // cookie and the embedded xpra client, whose own asset + WebSocket
+        // requests we can't add an Authorization header to, has no way to
         // authenticate. The client carries the token as a path segment
         // (/phd2-gui/t/<token>/...) so every relative sub-request AND the
         // WebSocket inherit it; the proxy strips /t/<token> before forwarding

@@ -196,7 +196,7 @@ public static class FitsThumbnailer {
     /// that survive the dark-background stretch as a swarm of little white dots
     /// over the real stars. This replaces a pixel with the max of its 8
     /// neighbours ONLY when it is a strict local maximum that towers far above
-    /// them — the signature of a 1-pixel defect. A real star is a cluster of
+    /// them, the signature of a 1-pixel defect. A real star is a cluster of
     /// bright pixels, so its neighbours are nearly as bright and it is left
     /// untouched. Returns a filtered COPY (the camera's raw buffer feeds star
     /// detection and must never be mutated). Threshold is derived from a robust
@@ -219,7 +219,7 @@ public static class FitsThumbnailer {
         double mad = sample[sample.Count / 2];
         double sigma = Math.Max(1.0, mad * 1.4826);
         // An isolated speck is a pixel that clears the background AND whose
-        // brightest neighbour is still back down at the background floor — i.e.
+        // brightest neighbour is still back down at the background floor, i.e.
         // it stands completely alone. A real star is a cluster, so its
         // neighbours are also above the floor and it is left untouched. This
         // distinction is signal-independent, so a sharp/undersampled star core
@@ -322,7 +322,7 @@ public static class FitsThumbnailer {
         // Guide preview: knock out isolated single-pixel hot/warm pixels before
         // the stretch. The PHD2-style stretch already makes its black/white
         // points robust to them (3x3 median), but the LUT still maps a raw hot
-        // pixel to white — PHD2 shows those specks; we suppress them so the view
+        // pixel to white, PHD2 shows those specks; we suppress them so the view
         // is cleaner than PHD2 without changing the stretch character. Done on a
         // COPY so the camera's raw buffer (star detection) is never mutated.
         if (guideStretch) pixels = SuppressHotPixels(pixels, width, height);
@@ -340,7 +340,7 @@ public static class FitsThumbnailer {
         // guideStretch picks the dark-background guide-camera preset
         // instead of the DSO 15%-grey default (see AutoStretch.ApplyGuide).
         // asinh (auto-HDR): a hyperbolic tone curve computed per frame,
-        // ignoring any pinned params — it lifts shadows and compresses
+        // ignoring any pinned params, it lifts shadows and compresses
         // highlights so an eclipse frame shows corona and disc together.
         byte[] stretched = asinh
             ? NINA.Image.ImageAnalysis.AutoStretch.ApplyAsinh(pixels, width, height, bitDepth)

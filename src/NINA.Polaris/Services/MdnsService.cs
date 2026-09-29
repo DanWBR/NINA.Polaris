@@ -61,9 +61,9 @@ public class MdnsService : IHostedService, IDisposable {
         Advertise();
         // Re-announce when the machine's addresses change. The A/AAAA
         // records are snapshotted inside Advertise(), so an interface that
-        // appears AFTER startup — most importantly the hotspot AP interface
+        // appears AFTER startup, most importantly the hotspot AP interface
         // when the user (or the auto-fallback watchdog) enables the Polaris
-        // hotspot at runtime — was never advertised and hotspot clients
+        // hotspot at runtime, was never advertised and hotspot clients
         // could not discover the server. Debounced: NetworkAddressChanged
         // fires in bursts while NetworkManager reconfigures.
         NetworkChange.NetworkAddressChanged += OnNetworkAddressChanged;

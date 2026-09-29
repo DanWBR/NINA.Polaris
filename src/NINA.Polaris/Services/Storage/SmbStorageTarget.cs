@@ -62,8 +62,8 @@ public sealed class SmbStorageTarget : IStorageTarget {
         // One-way-sync idempotency: skip when the destination already exists with
         // the same size. Without this, a backfill (or a retry) would re-copy the
         // whole tree, because the create below opens with FILE_OVERWRITE_IF.
-        // Size-only is the right check for capture files — FITS/SER are written
-        // once and never edited in place — and it keeps the normal push path
+        // Size-only is the right check for capture files, FITS/SER are written
+        // once and never edited in place, and it keeps the normal push path
         // one cheap metadata round-trip away from its previous behaviour (a new
         // file simply isn't found and uploads as before).
         long localLen;
@@ -219,7 +219,7 @@ public sealed class SmbStorageTarget : IStorageTarget {
     }
 
     /// <summary>SHARESYNC: recursively enumerate the share so the backfill can
-    /// skip files already present with the same size — one directory walk
+    /// skip files already present with the same size, one directory walk
     /// instead of a per-file round-trip for every local file. Keys are the
     /// forward-slash relative path; values are sizes. Best-effort: returns null
     /// on any failure so the caller falls back to enqueue-all.</summary>
@@ -305,7 +305,7 @@ public sealed class SmbStorageTarget : IStorageTarget {
 
         // Try the name as given, then an mDNS `.local` fallback. Bare Windows/
         // NetBIOS box names (e.g. "DESKTOP-ABC") aren't resolvable by a plain
-        // DNS lookup on the SBC — getaddrinfo returns "Name or service not
+        // DNS lookup on the SBC, getaddrinfo returns "Name or service not
         // known". Most Windows/NAS boxes with Bonjour/avahi also answer at
         // "<name>.local", which the SBC can resolve via mDNS (avahi/libnss-mdns).
         var candidates = new List<string> { host };

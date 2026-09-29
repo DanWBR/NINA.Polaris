@@ -65,7 +65,7 @@ public class MeridianFlipService {
 
     /// <summary>
     /// Block until no exposure is integrating, so the flip's slew never fires
-    /// mid-frame — the mount will not move during a capture anyway, and a slew
+    /// mid-frame, the mount will not move during a capture anyway, and a slew
     /// then would ruin the sub. The caller has already set State away from Idle,
     /// so the LIVE loop's ShouldPause() is holding off the NEXT exposure while
     /// this waits out the current one. Bounded: a capture wedged in the driver
@@ -87,7 +87,7 @@ public class MeridianFlipService {
         }
         if (_captureProgress.Snapshot().Active) {
             _logger.LogWarning(
-                "Meridian flip: exposure still active after the wait cap — proceeding with the flip anyway");
+                "Meridian flip: exposure still active after the wait cap, proceeding with the flip anyway");
         }
     }
 
@@ -405,7 +405,7 @@ public class MeridianFlipSettings {
     /// <summary>Anti-crash altitude floor (degrees). While the mount is slewing,
     /// if its pointing drops below this the guard aborts the slew + stops (a
     /// wrong-way slew driving the OTA down toward the pier/tripod). 0 disables.
-    /// Default 5° — below any sane imaging target, so it only ever catches a
+    /// Default 5°, below any sane imaging target, so it only ever catches a
     /// slew heading for the ground.</summary>
     public double MinAltitudeLimitDeg { get; set; } = 5.0;
 

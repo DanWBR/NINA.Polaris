@@ -139,7 +139,7 @@ public class SlewCenterService {
         // PREVIEW solves use (one solve at a time). Link the run to this job's
         // token: without it the snapshot advertised Cancellable=true and
         // POST /api/platesolve/cancel tripped a CTS nobody observed, so the API
-        // answered {cancelled:true} while the solve ran on — the exact dishonesty
+        // answered {cancelled:true} while the solve ran on, the exact dishonesty
         // PlateSolveProgressService.Cancel's own doc-comment warns against. All
         // five endpoint sites already pass their token here; this caller didn't.
         _progress?.Begin("SKY (slew & center)", ct);
@@ -160,7 +160,7 @@ public class SlewCenterService {
             // possibly-confused pointing model until the mount is re-homed.
             // A confirmed override (Force) still gets through.
             if (!job.Force && Guard is { RequireHomeAfterTrip: true }) {
-                job.Error = "Mount safety stop is active — Find Home before slewing "
+                job.Error = "Mount safety stop is active, Find Home before slewing "
                     + "(or re-run with confirmation to override).";
                 job.State = SlewCenterState.Failed;
                 _logger.LogWarning("Slew-and-center blocked: {Reason}", job.Error);
@@ -168,7 +168,7 @@ public class SlewCenterService {
             }
 
             // Safety #1: if the mount is already sitting on the target, DON'T
-            // re-command a full GoTo — go straight to center-only. A fresh GoTo
+            // re-command a full GoTo, go straight to center-only. A fresh GoTo
             // to a target you're already on is what let the AM3 pick the
             // un-flipped side and swing the long way toward the tripod. Only when
             // the driver reports a usable position and we weren't already told to
@@ -182,7 +182,7 @@ public class SlewCenterService {
                     if (sepDeg <= MountSlewSafety.AlreadyOnTargetDeg) {
                         job.SkipInitialSlew = true;
                         _logger.LogInformation(
-                            "Already on target ({Sep:F2}° away) — center-only, not re-slewing "
+                            "Already on target ({Sep:F2}° away), center-only, not re-slewing "
                             + "(avoids an un-flip / wrong-way GoTo).", sepDeg);
                     }
                 }
@@ -402,7 +402,7 @@ public class SlewCenterService {
                 // FOV hint: ASTAP without a scale hint has to search its whole
                 // range, which is the main cause of slow/failed solves. ASTAP's
                 // -fov is the field *height* (vertical), so derive it from the
-                // image HEIGHT + Y pixel size — using the width here over-states
+                // image HEIGHT + Y pixel size, using the width here over-states
                 // the FOV on any non-square sensor and makes the hinted solve
                 // fail at the wrong image scale (N.I.N.A. desktop passes FoVH too).
                 double fovDeg = 0;

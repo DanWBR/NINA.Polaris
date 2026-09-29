@@ -71,7 +71,7 @@ public class FlatWizardSettings {
 
     /// <summary>Flat-panel brightness 0-100 to apply (via flat-panel
     /// driver) before the wizard starts. 0 means "don't touch the
-    /// panel" — useful for sky / T-shirt flats where there's no panel
+    /// panel", useful for sky / T-shirt flats where there's no panel
     /// connected. The wizard itself doesn't drive the panel; the
     /// frontend POSTs to <c>/api/flatdevice/brightness</c> before
     /// kicking <c>/api/flatwizard/start</c>.</summary>

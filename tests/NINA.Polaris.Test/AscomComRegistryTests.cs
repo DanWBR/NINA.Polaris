@@ -47,7 +47,7 @@ public class AscomComRegistryTests {
 
     [Test]
     public void IsPlatformInstalled_ReturnsBool() {
-        // No assertion on the actual value — the CI box might or
+        // No assertion on the actual value, the CI box might or
         // might not have ASCOM installed. We just want the probe to
         // not throw and to come back with a bool.
         var v = AscomComRegistry.IsPlatformInstalled();

@@ -25,7 +25,7 @@ namespace NINA.Polaris.Test;
 /// in for the NPU so the log-mean-std normalize → residual-subtract → inverse-log
 /// tiling math is verified with no hardware.
 ///
-/// Core invariant: a ZERO residual is a perfect round-trip — normOut = normIn, and
+/// Core invariant: a ZERO residual is a perfect round-trip, normOut = normIn, and
 /// the inverse-log exactly cancels the forward log-mean-std normalize, so the
 /// output image == the input (within u16 rounding). This pins the padding, tiling,
 /// per-tile stats, inner-crop reassembly, and denormalize end to end.

@@ -23,7 +23,7 @@ namespace NINA.Image.Interfaces;
 /// on/off) from an analog channel (PWM dew heater 0-100, an adjustable
 /// voltage rail). <see cref="Writable"/> is false for read-only sensor
 /// channels (voltage / current / temperature / humidity). <see cref="Id"/>
-/// is a stable index the API/UI use to address the channel for writes —
+/// is a stable index the API/UI use to address the channel for writes,
 /// it must not shift between refreshes of the same connected device.</para>
 ///
 /// <para><see cref="Key"/> is a stable identity that survives RECONNECTS and
@@ -66,7 +66,7 @@ public sealed record SwitchChannel(
 /// power-box instructions can drive INDI / ASCOM-COM / Alpaca power hubs the
 /// same way. The device model is intentionally brand-agnostic: outlets and
 /// dew/PWM channels are just boolean vs analog channels, and voltage/current/
-/// temperature readouts are read-only channels — no per-vendor curation.
+/// temperature readouts are read-only channels, no per-vendor curation.
 /// </summary>
 public interface ISwitchDevice {
     string DeviceName { get; }
@@ -92,7 +92,7 @@ public interface ISwitchDevice {
 
     /// <summary>Select option <paramref name="index"/> of a selector channel (a
     /// mutually-exclusive group, e.g. a OneOfMany port-role vector). Default:
-    /// unsupported — only backends that publish selectors (INDI) override it.</summary>
+    /// unsupported, only backends that publish selectors (INDI) override it.</summary>
     Task SetSelectedAsync(int id, int index, CancellationToken ct = default) =>
         throw new NotSupportedException("This device has no selector channels.");
 

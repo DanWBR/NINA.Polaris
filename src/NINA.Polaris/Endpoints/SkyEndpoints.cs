@@ -636,7 +636,7 @@ public static class SkyEndpoints {
             DateTime darkEnd = haveLoc ? window.AstronomicalDawnUtc : to;
 
             // Longest contiguous stretch the core is above `floor` AND the sky is
-            // dark — the window worth shooting.
+            // dark, the window worth shooting.
             DateTime? bStart = null, bEnd = null;
             double bMax = double.MinValue, bLen = 0;
             DateTime? curStart = null, curEnd = null;
@@ -843,7 +843,7 @@ public static class SkyEndpoints {
 
     /// <summary>
     /// Great-circle distance between two RA/Dec points in degrees.
-    /// Haversine formula in spherical coordinates — accurate at the
+    /// Haversine formula in spherical coordinates, accurate at the
     /// arcsec level which is way more than we need to pick "the closest
     /// planet". RA in hours, Dec in degrees, like the rest of the
     /// codebase. Reused by the nearest-planet probe + any future

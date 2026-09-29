@@ -24,7 +24,7 @@ namespace NINA.Polaris.Middleware;
 /// <c>http://host:5000/</c> (typed by hand, or from an old bookmark) opens a
 /// TCP connection that the TLS listener cannot make sense of, so Kestrel
 /// closes it and the browser shows ERR_EMPTY_RESPONSE / "Empty reply from
-/// server" — while a phone that opened the app over https works on the same
+/// server", while a phone that opened the app over https works on the same
 /// hotspot, which looks like a network fault when it is only the scheme.
 ///
 /// This connection middleware runs BEFORE the TLS handshake on the HTTPS

@@ -18,7 +18,7 @@ using NINA.Polaris.Services.OpenCl;
 namespace NINA.Polaris.Test;
 
 /// <summary>
-/// Unit tests for <see cref="GpuOffloadPolicy"/> — the per-op decision that keeps
+/// Unit tests for <see cref="GpuOffloadPolicy"/>, the per-op decision that keeps
 /// the GPU offload a win on unified-memory SBCs (offload everything) while
 /// avoiding the regression on a discrete GPU (offload only the ops the probe
 /// measured as actually faster). The decision is a pure function of its inputs,
@@ -82,7 +82,7 @@ public class GpuOffloadPolicyTests {
         // device reports unified memory, yet warp (0.69x) and debayer (0.34x) are
         // SLOWER than the CPU because the Qualcomm stack copies host<->device for
         // ordinary buffers. Only blur (2.56x) wins. The probe must therefore gate
-        // out warp/debayer even on a unified-memory device — "unified ⇒ everything
+        // out warp/debayer even on a unified-memory device, "unified ⇒ everything
         // wins" is false here. The unified flag is recorded for diagnostics but the
         // gating is purely by measured speedup.
         var speedups = new Dictionary<GpuOp, double> {

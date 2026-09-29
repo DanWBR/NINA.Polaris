@@ -18,7 +18,7 @@ using System.Collections.Generic;
 namespace NINA.Image.ImageAnalysis;
 
 /// <summary>
-/// Removes dust motes — the soft, roughly circular shadows a speck of dust on
+/// Removes dust motes, the soft, roughly circular shadows a speck of dust on
 /// the sensor, filter or camera window casts on the sky. A mote is not added
 /// darkness, it is a smooth MULTIPLICATIVE dip: the dust transmits a fraction
 /// t(x,y) &lt; 1 of the light. The physically correct fix is therefore to divide
@@ -30,7 +30,7 @@ namespace NINA.Image.ImageAnalysis;
 /// <list type="number">
 ///   <item>a star-rejected background <c>B</c> (the smooth sky, stars removed);</item>
 ///   <item>a large-scale background <c>Blarge</c> (the sky WITHOUT the mote);</item>
-///   <item><c>ratio = B / Blarge</c> dips below 1 exactly on the motes — that is
+///   <item><c>ratio = B / Blarge</c> dips below 1 exactly on the motes, that is
 ///         the detector;</item>
 ///   <item>per channel, multiply by <c>S / B</c> inside each mote (S = the sky
 ///         level in a ring just outside it), tapered to 1 over a feather so no
@@ -300,7 +300,7 @@ public static class DustMoteRemoval {
         }
     }
 
-    /// <summary>Median ratio within <paramref name="r"/> px of a centre — the
+    /// <summary>Median ratio within <paramref name="r"/> px of a centre, the
     /// mote's core depth, robust to the odd star pixel.</summary>
     private static double CoreMedian(double[] ratio, int ww, int wh,
                                      double cx, double cy, double r) {
@@ -320,7 +320,7 @@ public static class DustMoteRemoval {
 
     /// <summary>Walk outward from a mote centre in radial bins and return the
     /// radius at which the median ratio has climbed back above ~1 and stays
-    /// there — the outer edge of the shadow including its soft wings.</summary>
+    /// there, the outer edge of the shadow including its soft wings.</summary>
     private static double RecoveryRadius(double[] ratio, int ww, int wh,
                                          double cx, double cy, int maxR) {
         const int step = 4;
@@ -384,7 +384,7 @@ public static class DustMoteRemoval {
     // --- background estimation ---------------------------------------------
 
     /// <summary>Smooth sky with stars rejected. A star spike must be capped
-    /// BEFORE the first blur — blurring first would smear its huge value across
+    /// BEFORE the first blur, blurring first would smear its huge value across
     /// a dozen pixels and leave a bump the later passes cannot fully undo, which
     /// both hides the true sky under a star sitting on a mote and fakes a ring of
     /// ratio&lt;1 around every star on clean sky. So hard-clip to a sky ceiling up
@@ -408,7 +408,7 @@ public static class DustMoteRemoval {
     }
 
     /// <summary>Where NOT to look for motes. Two exclusions: the bright object
-    /// itself (<c>B &gt; 1.15·sky</c>), and — crucially — its HALO. A bright
+    /// itself (<c>B &gt; 1.15·sky</c>), and, crucially, its HALO. A bright
     /// nebula lifts the large-scale background <c>Blarge</c> over a region wider
     /// than the nebula, and just outside its edge <c>B</c> has returned to sky
     /// while <c>Blarge</c> has not, so <c>ratio = B/Blarge</c> dips below 1 in a

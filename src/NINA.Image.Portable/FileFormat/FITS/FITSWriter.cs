@@ -122,7 +122,7 @@ public static class FITSWriter {
         var local = meta.CreationTime.ToLocalTime();
         // DATE-OBS is the FITS-standard UTC start-of-observation keyword,
         // and the one PixInsight / astropy / Siril / ASTAP read for the
-        // observation time (SPCC refuses a frame without it — field
+        // observation time (SPCC refuses a frame without it, field
         // report). DATE-UTC/DATE-LOC are NINA conveniences kept alongside.
         AddStr(cards, "DATE-OBS", utc.ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture));
         AddStr(cards, "DATE-LOC", local.ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture));
@@ -343,7 +343,7 @@ public static class FITSWriter {
     /// The metadata contract is RA in HOURS (0–24), so the normal case is
     /// hours × 15. Defensive guard: if a mount adapter ever hands us a value
     /// already in degrees (> 24, which is impossible as hours), pass it through
-    /// instead of multiplying again — otherwise we'd write a garbage RA like
+    /// instead of multiplying again, otherwise we'd write a garbage RA like
     /// 1263° (84.2° × 15) that breaks plate solving. A no-op for valid hours.
     /// </summary>
     private static double RaToDeg(double ra) => ra > 24.0 ? ra : ra * 15.0;

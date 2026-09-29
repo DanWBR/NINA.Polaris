@@ -100,7 +100,7 @@ public static class FrameGrading {
             Math.Round(x.score, 4), keepPaths.Contains(x.m.Path))).ToList();
     }
 
-    /// <summary>The subset of ranked frames marked keep, in ranked order —
+    /// <summary>The subset of ranked frames marked keep, in ranked order,
     /// the paths to hand straight to batch integration.</summary>
     public static IReadOnlyList<string> Selected(IReadOnlyList<GradedFrame> ranked) =>
         ranked.Where(f => f.Keep).Select(f => f.Path).ToList();

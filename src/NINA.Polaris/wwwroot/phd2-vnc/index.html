@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PHD2 — Remote Desktop</title>
+    <title>PHD2, Remote Desktop</title>
     <style>
         /* The page is loaded inside an <iframe> in the GUIDE tab.
            Flex column so the toolbar pins to the top and the
@@ -79,7 +79,7 @@
     <script type="module">
         // noVNC is loaded as an ES module from the vendored
         // wwwroot/js/lib/novnc/core bundle (MPL 2.0). We use only
-        // the RFB class — the project also ships an `app/ui.js`
+        // the RFB class, the project also ships an `app/ui.js`
         // full-blown chrome, but we want a minimal viewport so the
         // GUIDE iframe stays visually clean.
         import RFB from '/js/lib/novnc/core/rfb.js';
@@ -108,7 +108,7 @@
         const wsScheme = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl    = `${wsScheme}//${window.location.host}/phd2-vnc-ws`;
 
-        // Empty password — noVNC will prompt the user when TightVNC
+        // Empty password, noVNC will prompt the user when TightVNC
         // sends its authentication challenge. Storing the password
         // here would defeat the user_privacy posture (the project
         // never authorizes password-based access on the user's
@@ -120,7 +120,7 @@
         // intermediate proxies / older websockify-compat tooling
         // refuse to forward bytes until "binary" is in the
         // Sec-WebSocket-Protocol header. Listing it explicitly
-        // makes the bridge robust across both modes — the Polaris
+        // makes the bridge robust across both modes, the Polaris
         // server-side accepts the "binary" protocol if asked and
         // ignores it if not.
         const rfb = new RFB(
@@ -167,7 +167,7 @@
         });
         // (Removed: standalone wsCheck probe that opened a second WS
         // just to detect 501/503 bridge errors. Worked once the pako
-        // vendor dir was in place — but TightVNC only accepts ONE
+        // vendor dir was in place, but TightVNC only accepts ONE
         // viewer connection at a time, and the probe's open+close
         // raced with RFB's real connection, making TightVNC kick the
         // real one as 'second client'. The 'Connection lost' overlay
@@ -175,7 +175,7 @@
         // cover the diagnostic surface without competing for the
         // single viewer slot.)
         rfb.addEventListener('credentialsrequired', () => {
-            // Native noVNC prompt — keeps the password client-side.
+            // Native noVNC prompt, keeps the password client-side.
             // The user types it once per session; not stored anywhere.
             const pw = window.prompt('TightVNC password');
             if (pw !== null) rfb.sendCredentials({ password: pw });

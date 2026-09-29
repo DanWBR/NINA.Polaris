@@ -153,7 +153,7 @@ public interface ITelescope {
     /// (lat, lon, utc) together to compute local sidereal time, which
     /// drives every RA → alt/az conversion. A correct location with a
     /// stale clock causes the same systematic GoTo error as a wrong
-    /// location with a correct clock — both inputs need to be right.
+    /// location with a correct clock, both inputs need to be right.
     ///
     /// utc is the wall clock in UTC; offsetHoursFromUtc is the local
     /// timezone offset in hours east of UTC (INDI standard, e.g.
@@ -166,7 +166,7 @@ public interface ITelescope {
     /// <summary>Select the tracking rate model. Sidereal follows the
     /// stars (default), Lunar follows the Moon's mean motion, Solar
     /// follows the Sun. Required by some INDI drivers BEFORE
-    /// <see cref="SetTrackingAsync"/> can actually engage — without
+    /// <see cref="SetTrackingAsync"/> can actually engage, without
     /// a mode selected they silently ignore TRACK_ON. Throws on
     /// backends without the capability; UI checks
     /// <see cref="MountCapabilities.SupportsTrackingModes"/>.</summary>
@@ -181,7 +181,7 @@ public interface ITelescope {
     /// / etc). Default impl returns empty so the UI hides the slider on
     /// backends without rate selection (e.g. ASCOM mounts where rate
     /// is set via a different API). Order in the returned list is the
-    /// order the driver reported — typically slow-to-fast, which matches
+    /// order the driver reported, typically slow-to-fast, which matches
     /// what a left-to-right slider expects.</summary>
     IReadOnlyList<SlewRateStep> GetSlewRates() => Array.Empty<SlewRateStep>();
 
@@ -214,7 +214,7 @@ public interface ITelescope {
 /// the driver advertises (e.g. <c>SLEW_FIND</c>) and is what the
 /// <see cref="ITelescope.SetSlewRateAsync"/> caller passes back.
 /// <see cref="Label"/> is the human-readable label the driver attached
-/// (sometimes localised, e.g. "Find") — preferred for UI display when
+/// (sometimes localised, e.g. "Find"), preferred for UI display when
 /// non-empty, falls back to Name otherwise. <see cref="Active"/> is
 /// the live state read from the property snapshot at call time.</summary>
 public record SlewRateStep(string Name, string Label, bool Active);

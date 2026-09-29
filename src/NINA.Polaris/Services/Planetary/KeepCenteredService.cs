@@ -44,7 +44,7 @@ namespace NINA.Polaris.Services.Planetary;
 ///         vector back to a (tN, tE) pair of pulse durations with the
 ///         right sign.</item>
 ///   <item>Simple P-controller with dead zone + rate limit + gain &lt; 1.
-///         No I or D term to tune — gain 0.6 + 250 ms inter-pulse gap
+///         No I or D term to tune, gain 0.6 + 250 ms inter-pulse gap
 ///         converges in 3-5 frames on a typical 5-10 fps stream.</item>
 ///   <item>Refuses to start when prerequisites are wrong (no stream, no
 ///         mount, not tracking, parked) so the operator gets an

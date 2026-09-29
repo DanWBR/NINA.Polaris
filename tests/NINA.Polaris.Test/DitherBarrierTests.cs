@@ -19,7 +19,7 @@ using Row = NINA.Polaris.Services.DitherBarrier.CadenceRow;
 namespace NINA.Polaris.Test;
 
 /// <summary>Unit tests for the pure decision helpers of
-/// <see cref="DitherBarrier"/> — cadence ownership (the slowest camera drives
+/// <see cref="DitherBarrier"/>, cadence ownership (the slowest camera drives
 /// dither) and the every-N due rule. The async rendezvous needs a live guider
 /// and is exercised on the bench, not here.</summary>
 [TestFixture]
@@ -58,7 +58,7 @@ public class DitherBarrierTests {
 
     [Test]
     public void CadenceOwner_IgnoresInactiveParticipants() {
-        // aux is registered but not active (refcount 0) — must not win even
+        // aux is registered but not active (refcount 0), must not win even
         // though its sub length is longer.
         var owner = DitherBarrier.SelectCadenceOwner(new[] {
             new Row("main", 1, true, 60),

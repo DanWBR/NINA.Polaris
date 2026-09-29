@@ -107,7 +107,7 @@ html[data-font="system"] {
 :root {
     /* The whole app is dark (default + night themes; there is no light
        theme). Declaring the document color-scheme dark makes Chromium/
-       Firefox render ALL native controls + their popups dark — most
+       Firefox render ALL native controls + their popups dark, most
        importantly the <select> option list, which otherwise falls back to
        a white popup with washed-out light text (the per-select
        color-scheme hack elsewhere is unreliable on some Chromium/Windows
@@ -131,7 +131,7 @@ html[data-font="system"] {
     --accent-text: #9fcdf6;
     /* Secondary "icy-cyan" brand accent (side drawer, focus/QC rings,
        progress fills, video controls). Tokenised so night mode recolours
-       the whole cyan family to red — same approach as --accent-rgb. The
+       the whole cyan family to red, same approach as --accent-rgb. The
        brand-badge logo gradient keeps its literal cyan (identity). */
     --accent2: #38bdf8;            /* sky cyan */
     --accent2-rgb: 56, 189, 248;
@@ -146,7 +146,7 @@ html[data-font="system"] {
     --success: #4caf50;
     --warning: #ff9800;
     --danger: #f44336;
-    /* RGB triples of the status colours, for rgba() tints — same role as
+    /* RGB triples of the status colours, for rgba() tints, same role as
        --accent-rgb. Lets night mode desaturate every success/warning
        tint by overriding one token instead of each rgba() call site. */
     --success-rgb: 76, 175, 80;
@@ -154,7 +154,7 @@ html[data-font="system"] {
     --border: #2a2a4a;
 
     /* Aliases for token names that grew up across the codebase as
-       var(--name, #fallback) where --name was never defined — so the
+       var(--name, #fallback) where --name was never defined, so the
        hard-coded fallback rendered (and the call sites that forgot the
        fallback rendered an invalid value). Defining them here as aliases
        of the core palette makes every call site real, centralised, and
@@ -316,7 +316,7 @@ body.asst-dock-dragging {
     margin-top: 6px;
 }
 
-/* Remote-terminal modal — a floating window styled like a standard
+/* Remote-terminal modal, a floating window styled like a standard
    terminal app. Backdrop dims the page; the window centres with a
    title bar (traffic-light dots) over a dark xterm body. */
 .term-modal-overlay {
@@ -647,7 +647,7 @@ body.asst-dock-dragging {
        one continuous mark, not name+subtitle. */
     font-weight: 800;
     font-size: 17px;
-    /* Same tightened tracking as .brand-name — keeps POLARIS as a
+    /* Same tightened tracking as .brand-name, keeps POLARIS as a
        solid block instead of  P O L A R I S  spread out. */
     letter-spacing: 1px;
     line-height: 1;

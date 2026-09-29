@@ -21,7 +21,7 @@ public interface IStorageTargetFactory {
 
 /// <summary>
 /// Creates a fresh <see cref="IStorageTarget"/> per connect cycle. Adapters own
-/// a live connection so they are NOT DI singletons — the factory hands out new
+/// a live connection so they are NOT DI singletons, the factory hands out new
 /// instances that <see cref="StoragePushService"/> disposes on drop.
 /// </summary>
 public sealed class StorageTargetFactory : IStorageTargetFactory {

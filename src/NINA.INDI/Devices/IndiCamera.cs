@@ -28,7 +28,7 @@ public class IndiCamera : ICamera, IDisposable {
     private TaskCompletionSource<IImageData>? _exposureTcs;
     // FIELD7-1: true from the moment CCD_EXPOSURE is sent until the driver is done
     // exposing (BLOB delivered, timed out, or aborted). Guards SetSubframeAsync so
-    // CCD_FRAME is never rewritten mid-exposure — that re-allocates the driver's
+    // CCD_FRAME is never rewritten mid-exposure, that re-allocates the driver's
     // capture buffer and makes the readout time out (field log 2026-07-16: an
     // AF/solve teardown reset the SV405CC to full frame while a sub was still
     // exposing → SVB_ERROR_TIMEOUT). Deliberately NOT cleared when CaptureAsync is
@@ -420,7 +420,7 @@ public class IndiCamera : ICamera, IDisposable {
     }
 
     /// <summary>Write the offset wherever this driver keeps it (see
-    /// <see cref="ResolveControl"/>). Offset is the sensor bias pedestal —
+    /// <see cref="ResolveControl"/>). Offset is the sensor bias pedestal,
     /// leaving it at 0 pins the background near black and clips the left of
     /// the histogram; most OSC/CMOS rigs want a small positive offset (per-rig
     /// DefaultOffset).</summary>
@@ -432,7 +432,7 @@ public class IndiCamera : ICamera, IDisposable {
         if (!force && AlreadyAt(vec, wanted)) return;   // already at this offset
         try {
             await _client.SetNumberAsync(DeviceName, ctl.Property, wanted, ct);
-        } catch { /* out of range / rejected — non-fatal */ }
+        } catch { /* out of range / rejected, non-fatal */ }
     }
 
     /// <summary>The offset the driver reports right now, or null when this
@@ -473,13 +473,13 @@ public class IndiCamera : ICamera, IDisposable {
         if (sw.Values.TryGetValue(member, out var isOn) && isOn) return;
         try {
             await _client.SetSwitchAsync(DeviceName, "CCD_FRAME_TYPE", payload, ct);
-        } catch { /* driver rejected — non-fatal */ }
+        } catch { /* driver rejected, non-fatal */ }
     }
 
     // ── Capture bit-depth (RAW16) enforcement ──────────────────────────
     // The SVBONY SV405CC (and ASI) INDI drivers expose a switch to pick the
-    // frame format. If it gets left on RAW8 — e.g. after a fast video-stream
-    // session, or a stale driver default — a 60 s light comes back as 8-bit
+    // frame format. If it gets left on RAW8, e.g. after a fast video-stream
+    // session, or a stale driver default, a 60 s light comes back as 8-bit
     // data stuffed into a 16-bit FITS (pixel max stuck at 255), so the frame
     // looks almost black no matter the stretch. Real capture apps select the
     // 16-bit RAW format for stills; do the same before every capture so a
@@ -492,7 +492,7 @@ public class IndiCamera : ICamera, IDisposable {
     /// <summary>True when this is a DSLR driven by indi_gphoto. CCD_CAPTURE_TARGET
     /// (RAM / SD Card) is a gphoto-only property, so its presence is a reliable
     /// tell. gphoto's bundled FITS converter wedges on newer bodies (Canon SL2
-    /// etc.) — capture fires but no BLOB is ever delivered — so for these we
+    /// etc.), capture fires but no BLOB is ever delivered, so for these we
     /// request the camera-native RAW and decode the embedded JPEG ourselves.</summary>
     private bool IsGphotoNative => _client.GetProperty(DeviceName, "CCD_CAPTURE_TARGET") != null;
 
@@ -518,10 +518,10 @@ public class IndiCamera : ICamera, IDisposable {
         }
         if (_formatProp == null || _raw16Element == null) return;   // 8-bit-only / no such property
         if (_client.GetProperty(DeviceName, _formatProp) is not IndiSwitchProperty cur) return;
-        // Already on 16-bit? Normally skip — switching re-inits some drivers
+        // Already on 16-bit? Normally skip, switching re-inits some drivers
         // and can reset gain/offset, so only write when needed. BUT the SVBONY
         // SV405CC driver REPORTS SVB_IMG_RAW16 as the selected element while
-        // still delivering RAW8 frames until the switch is actually written —
+        // still delivering RAW8 frames until the switch is actually written,
         // a state/output desync. So on the first call of each session
         // (_raw16Forced == false) we write it even when it reads as already
         // on, which forces the driver to truly apply 16-bit. Subsequent
@@ -533,7 +533,7 @@ public class IndiCamera : ICamera, IDisposable {
         try {
             await _client.SetSwitchAsync(DeviceName, _formatProp, payload, ct);
             _raw16Forced = true;
-        } catch { /* driver rejected; non-fatal — manual INDI panel still works */ }
+        } catch { /* driver rejected; non-fatal, manual INDI panel still works */ }
     }
 
     // Force the transfer/encode format (CCD_TRANSFER_FORMAT, "Encode" in the
@@ -563,7 +563,7 @@ public class IndiCamera : ICamera, IDisposable {
     /// <summary>indi_gphoto (DSLR) capture-target + upload-mode safety. When the
     /// camera is set to save to the SD card (CCD_CAPTURE_TARGET = SD_CARD), the
     /// exposure fires but the frame lands on the card and NO BLOB is delivered to
-    /// us — PREVIEW stays blank and the capture eventually times out. Force the
+    /// us, PREVIEW stays blank and the capture eventually times out. Force the
     /// capture target to internal RAM and the upload mode to client so the frame
     /// streams back to Polaris. Best-effort + idempotent: dedicated astro cameras
     /// don't expose these properties and just no-op, and we only write when the
@@ -696,7 +696,7 @@ public class IndiCamera : ICamera, IDisposable {
         // format switch already *reports* 16-bit (see _raw16Forced).
         _raw16Forced = false;
         await _client.ConnectDeviceAsync(DeviceName, ct);
-        // EnableBLOB is idempotent — INDI just notes the preference for
+        // EnableBLOB is idempotent, INDI just notes the preference for
         // future BLOB delivery. Always re-send after connect so a
         // restarted camera driver still streams FITS frames to us.
         await _client.EnableBlobAsync(DeviceName, ct);
@@ -725,7 +725,7 @@ public class IndiCamera : ICamera, IDisposable {
     /// back, so it self-heals: when the watchdog restarts a driver the properties
     /// come back at their defaults (or vanish entirely), the comparison fails, and
     /// we re-send everything. A local cache would instead "remember" a value the
-    /// restarted driver no longer has and silently skip the write — the exact
+    /// restarted driver no longer has and silently skip the write, the exact
     /// stale-cache trap that made the native ROI guard need a connect-time seed.
     /// Missing property (null) => not satisfied => write, same as before.</summary>
     internal static bool AlreadyAt(IndiNumberProperty? prop, IReadOnlyDictionary<string, double> wanted) {
@@ -864,7 +864,7 @@ public class IndiCamera : ICamera, IDisposable {
 
         // Force FITS encode + 16-bit RAW capture format first: a still left
         // on RAW8 (e.g. after a video stream) comes back as 8-bit data in a
-        // 16-bit FITS — near-black; and a driver left on FORMAT_NATIVE sends a
+        // 16-bit FITS, near-black; and a driver left on FORMAT_NATIVE sends a
         // blob our FITS pipeline can't decode. Done before gain because a
         // format switch can reset the driver's controls on some cameras.
         await EnsureFitsTransferAsync(ct);
@@ -878,14 +878,14 @@ public class IndiCamera : ICamera, IDisposable {
         // that's 4 property writes per sub; on a GUIDE camera at ~2.4s/frame it's
         // ~100 writes a minute, all night, for values that never change. Field log
         // (2026-07-15): every guide cycle sent ASI678MC CCD_BINNING + CCD_CONTROLS
-        // + CCD_FRAME_TYPE + CCD_EXPOSURE — which is precisely the per-frame
+        // + CCD_FRAME_TYPE + CCD_EXPOSURE, which is precisely the per-frame
         // reconfig we already know wedges indi_asi_ccd. The setters are now
         // idempotent (they compare against the client's property snapshot first),
         // so a steady-state capture loop sends CCD_EXPOSURE and nothing else.
         //
         // This is the INDI twin of the ROI/stop-before-start idempotency added to
         // the native SDK cameras (SvbonySdk/Zwo/PlayerOne). That guard shipped on
-        // the native side only — while the field failures were worse over INDI.
+        // the native side only, while the field failures were worse over INDI.
         // After a failed capture or a reconnect the snapshot cannot be trusted
         // (see _resendControls), so this one time every control is written.
         bool force = _resendControls;
@@ -975,7 +975,7 @@ public class IndiCamera : ICamera, IDisposable {
     }
 
     /// <summary>Force the driver's CCD_INFO pixel size, in micrometres.
-    /// Meant for backends that don't report it — notably <c>indi_gphoto</c>
+    /// Meant for backends that don't report it, notably <c>indi_gphoto</c>
     /// (DSLRs), which leaves CCD_PIXEL_SIZE at 0. Writes the square pixel
     /// element (CCD_PIXEL_SIZE) plus the X/Y pair so the getters above return
     /// the supplied value. Best-effort: drivers that lock CCD_INFO just
@@ -983,7 +983,7 @@ public class IndiCamera : ICamera, IDisposable {
     public async Task TrySetCcdInfoAsync(int maxX, int maxY, double pixelUm, int bitDepth = 0,
                                          CancellationToken ct = default) {
         // indi_gphoto rejects every exposure ("Please update the CCD Information
-        // ... before proceeding") until CCD_INFO carries a non-zero resolution —
+        // ... before proceeding") until CCD_INFO carries a non-zero resolution,
         // a DSLR only learns its geometry after the first frame, so we bootstrap
         // it from the rig (derived from the DSLR catalogue). Must be COMPLETE:
         // writing pixel size alone (Max X/Y still 0) is what was breaking
@@ -1076,7 +1076,7 @@ public class IndiCamera : ICamera, IDisposable {
         }
         // If we still don't know the real geometry (e.g. CCD_INFO hasn't
         // arrived yet right after connect), don't write a zero/garbage
-        // CCD_FRAME — that would corrupt the ROI instead of resetting it.
+        // CCD_FRAME, that would corrupt the ROI instead of resetting it.
         // Say so instead of returning quietly: this call is the only full-frame
         // assertion a session gets, so skipping it leaves whatever CCD_FRAME the
         // driver happens to hold in force for every frame that follows.
@@ -1093,7 +1093,7 @@ public class IndiCamera : ICamera, IDisposable {
         // so without this guard we poked CCD_FRAME on every single guide frame.
         // On a USB2 cam (ASI120MM Mini) that repeated re-init is a way to wedge
         // the driver into dropping a BLOB, especially when it overlaps a mount
-        // guide pulse on the shared indiserver connection — which is exactly
+        // guide pulse on the shared indiserver connection, which is exactly
         // the deterministic "calibration stalls at RA reversal" failure. PHD2
         // sets the frame once and then just loops exposures; match that by
         // skipping the write when CCD_FRAME already holds the requested
@@ -1107,12 +1107,12 @@ public class IndiCamera : ICamera, IDisposable {
         if (!geometryChanges) return;
 
         // FIELD7-1: the geometry IS changing. Never write CCD_FRAME while the
-        // driver is mid-exposure — that re-allocates its capture buffer and the
+        // driver is mid-exposure, that re-allocates its capture buffer and the
         // readout times out (field 2026-07-16: an AF/solve teardown reset the
         // SV405CC to full frame during a live sub → SVB_ERROR_TIMEOUT → a wasted
         // frame + a driver-restart cycle). The in-flight frame is being torn down
         // anyway (nobody changes ROI meaning to keep the current frame), so abort
-        // it cleanly first, then reconfigure — the same stop-before-start the
+        // it cleanly first, then reconfigure, the same stop-before-start the
         // native SDK path already does. This also covers the nasty case: a
         // cancelled AF/solve leaves the driver soft-trigger exposing (cancelling
         // CaptureAsync only cancels the awaiting task, not the driver), so its
@@ -1199,7 +1199,7 @@ public class IndiCamera : ICamera, IDisposable {
 
     /// <summary>FIELD7-1 guard: writing CCD_FRAME mid-exposure wedges the readout,
     /// so a geometry change while an exposure is in flight must abort that exposure
-    /// first. No abort when nothing is exposing (the common path — AF/guide teardown
+    /// first. No abort when nothing is exposing (the common path, AF/guide teardown
     /// after its own capture already completed) or when the geometry is unchanged
     /// (the idempotency guard handles that before we get here).</summary>
     internal static bool ShouldAbortInFlightBeforeSubframe(bool exposureInFlight, bool geometryChanges)
@@ -1213,7 +1213,7 @@ public class IndiCamera : ICamera, IDisposable {
 
             try {
                 // gphoto (FORMAT_NATIVE) delivers a camera-native RAW (.cr2/.nef/
-                // .arw) or a JPEG, not FITS — the BLOB's format attribute tells us
+                // .arw) or a JPEG, not FITS, the BLOB's format attribute tells us
                 // which. Decode the embedded full-res JPEG for the preview/stats/
                 // stack; the untouched RAW rides on IHasRawFile so save-to-disk
                 // writes the real .cr2. Anything FITS (or no format hint) stays on
@@ -1314,7 +1314,7 @@ public class IndiCamera : ICamera, IDisposable {
                 // Also propagate into MetaData so FITSWriter emits
                 // the BAYERPAT keyword when saving frames to disk. Use the
                 // EFFECTIVE pattern: prefer the driver-advertised CFA, but
-                // fall back to whatever the BLOB header itself carried — a
+                // fall back to whatever the BLOB header itself carried, a
                 // driver that DOES embed BAYERPAT in the FITS but has a
                 // momentarily-empty CCD_CFA would otherwise save with the
                 // pattern in Properties yet a None in MetaData, and the
@@ -1362,7 +1362,7 @@ public class IndiCamera : ICamera, IDisposable {
     /// or JPEG). Preferred: decode the real RAW with libraw into a true 16-bit
     /// linear RGGB Bayer mosaic (full dynamic range for the live stack). If
     /// libraw is unavailable or fails, fall back to the embedded full-res JPEG
-    /// (every CR2/NEF carries one), re-mosaiced to RGGB for a colour preview —
+    /// (every CR2/NEF carries one), re-mosaiced to RGGB for a colour preview,
     /// the vendor-SDK DSLR behaviour. Either way the original RAW bytes ride on
     /// IHasRawFile so save-to-disk writes the real .cr2. Returns null if nothing
     /// decodes.</summary>
@@ -1392,7 +1392,7 @@ public class IndiCamera : ICamera, IDisposable {
         // The whole BLOB might already be a JPEG (gphoto delivering .jpg), else
         // it's a TIFF-based RAW (CR2/NEF/ARW) with one or more embedded JPEGs.
         // Try the candidates largest-first and take the first that actually
-        // decodes — robust across Canon/Nikon/Sony (and skips any false SOI/EOI
+        // decodes, robust across Canon/Nikon/Sony (and skips any false SOI/EOI
         // hit inside the compressed raw data, which simply won't decode).
         SKBitmap? bmp = null;
         if (LooksLikeJpeg(data)) {
@@ -1449,7 +1449,7 @@ public class IndiCamera : ICamera, IDisposable {
     /// <summary>Enumerate the complete JPEGs embedded in a container (CR2/NEF/ARW
     /// are TIFF-based and carry one or more), largest first. JPEG byte-stuffing
     /// guarantees an unescaped 0xFFD9 only ends a real JPEG, but a TIFF wrapper /
-    /// compressed raw plane can still produce a coincidental SOI..EOI span — so
+    /// compressed raw plane can still produce a coincidental SOI..EOI span, so
     /// the caller decodes candidates in turn and keeps the first that's valid.</summary>
     private static IEnumerable<byte[]> EnumerateJpegCandidates(byte[] data) {
         var found = new List<(int off, int len)>();
@@ -1463,7 +1463,7 @@ public class IndiCamera : ICamera, IDisposable {
                     i = j + 2;
                     continue;
                 }
-                break;   // SOI with no EOI — truncated, stop
+                break;   // SOI with no EOI, truncated, stop
             }
             i++;
         }
@@ -1560,7 +1560,7 @@ public class IndiCamera : ICamera, IDisposable {
         // UPLOAD_LOCAL fallback. Some indi_gphoto builds refuse UPLOAD_CLIENT
         // (the switch reverts to UPLOAD_LOCAL even when set manually), so the
         // captured frame is written to the server's filesystem instead of being
-        // delivered as a BLOB — OnBlobReceived never fires and the capture times
+        // delivered as a BLOB, OnBlobReceived never fires and the capture times
         // out. When the driver saves locally it reports the absolute path in the
         // CCD_FILE_PATH text vector; read that file ourselves and complete the
         // pending exposure. Harmless when UPLOAD_CLIENT works (no FILE_PATH is
@@ -1581,8 +1581,8 @@ public class IndiCamera : ICamera, IDisposable {
 
     /// <summary>Read a driver-saved capture from disk (UPLOAD_LOCAL path reported
     /// via CCD_FILE_PATH) and resolve the pending exposure with it. The local
-    /// copy is a transfer artefact — Polaris keeps the bytes (IHasRawFile) and
-    /// writes its own copy when the user asked to save — so we delete it after
+    /// copy is a transfer artefact, Polaris keeps the bytes (IHasRawFile) and
+    /// writes its own copy when the user asked to save, so we delete it after
     /// reading to keep the driver's upload dir from filling up.</summary>
     private void CompleteFromLocalFile(string path, TaskCompletionSource<IImageData> tcs) {
         try {

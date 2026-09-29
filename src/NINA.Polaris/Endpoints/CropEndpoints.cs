@@ -83,7 +83,7 @@ public static class CropEndpoints {
         });
 
         // Auto-crop: detect + remove the black/ragged stacking borders on
-        // slightly-misaligned integrations. No ROI needed — the largest
+        // slightly-misaligned integrations. No ROI needed, the largest
         // fully-covered inner rectangle is found per file. Same response
         // shape as /run so the Auto Workflow post-runner can drive it.
         g.MapPost("/auto", async (
@@ -115,7 +115,7 @@ public static class CropEndpoints {
         });
 
         // Auto-crop SUGGEST: run the same content-rect detection but write
-        // nothing — return the ROI as normalised fractions so the crop picker
+        // nothing, return the ROI as normalised fractions so the crop picker
         // can pre-fill its rectangle for the user to review/adjust before
         // committing with /run. One file (the modal shows one image).
         g.MapPost("/auto-suggest", (CropService svc, AutoCropRequest req) => {

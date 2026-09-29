@@ -244,8 +244,8 @@ public sealed class PlayerOneSdkCamera : ICamera {
         // Idempotency guard, mirroring SVBony (SvbonySdkCamera.ApplyRoi) and the
         // INDI CCD_FRAME guard: skip the SDK writes when the geometry is already
         // what we asked for. Slew-and-centre, plate solve and autofocus all call
-        // SetSubframeAsync(0,0,0,0) around every capture — always the SAME
-        // full-frame geometry — so without this each one was three redundant SDK
+        // SetSubframeAsync(0,0,0,0) around every capture, always the SAME
+        // full-frame geometry, so without this each one was three redundant SDK
         // writes on a driver whose own comment (above) says ROI must not change
         // during capture. It also closes most of the mid-still race: `_streaming`
         // only covers the video stream, so a SetSubframeAsync landing during a
@@ -283,7 +283,7 @@ public sealed class PlayerOneSdkCamera : ICamera {
                 // the call that wedges the driver when the SDK still thinks it's
                 // exposing). Stills churn a full start/stop PER FRAME, so bursts
                 // of slew+solve / autofocus captures hit this far harder than
-                // video ever does — that's how the SVBony twin failed in the
+                // video ever does, that's how the SVBony twin failed in the
                 // field. A stop on an idle camera is a harmless no-op.
                 try { POAStopExposure(_cameraId); } catch { }
                 Check(POAStartExposure(_cameraId, POABool.POA_TRUE), "POAStartExposure");
@@ -349,7 +349,7 @@ public sealed class PlayerOneSdkCamera : ICamera {
             t = _streamThread; _streamThread = null;
         }
         // Join the pull thread BEFORE touching the SDK so its in-flight
-        // POAGetImageData (holding _sdk) has finished — then POAStopExposure under
+        // POAGetImageData (holding _sdk) has finished, then POAStopExposure under
         // _sdk can't run concurrently with it. Generous timeout so a long-exposure
         // GetImageData can return first.
         try { t?.Join(5000); } catch { }
@@ -491,7 +491,7 @@ public sealed class PlayerOneSdkCamera : ICamera {
         // Stamp the integration time so the FITS/XISF writers emit EXPTIME /
         // EXPOSURE (otherwise native-SDK frames saved with no exposure value).
         meta.Exposure.ExposureTime = _exposureSec;
-        // Binning + sensor temperature — essential for matching calibration
+        // Binning + sensor temperature, essential for matching calibration
         // frames (darks/flats); otherwise absent from native-SDK FITS.
         meta.Camera.BinX = (short)_bin;
         meta.Camera.BinY = (short)_bin;
@@ -500,7 +500,7 @@ public sealed class PlayerOneSdkCamera : ICamera {
         meta.Camera.PixelSizeX = _pixelSize;
         meta.Camera.PixelSizeY = _pixelSize;
         // FITS/XISF writers stamp BAYERPAT from meta.Camera.BayerPattern, not
-        // props — propagate the detected pattern so OSC frames save with it.
+        // props, propagate the detected pattern so OSC frames save with it.
         meta.Camera.BayerPattern = _bayer;
         return new BaseImageData(pixels, props, meta);
     }

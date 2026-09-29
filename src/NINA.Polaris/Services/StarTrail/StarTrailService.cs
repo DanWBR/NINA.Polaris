@@ -151,7 +151,7 @@ public class StarTrailService {
                     lastMeta = image.MetaData;
                     var raw = image.Data;
 
-                    // Cosmetic (hot/cold pixel) correction on a COPY — never
+                    // Cosmetic (hot/cold pixel) correction on a COPY, never
                     // mutate the raw frame the archive keeps. Skipped when off.
                     var work = raw;
                     var resolvedBayer = props.BayerPattern;
@@ -213,7 +213,7 @@ public class StarTrailService {
                     }
                 }
             } catch (OperationCanceledException) {
-                // Aborted mid-session — fall through and finalize what we have.
+                // Aborted mid-session, fall through and finalize what we have.
             }
 
             // Finalize: write the master (+ a stretched JPEG) from whatever the

@@ -33,7 +33,7 @@ public class MoveFocuserInstruction : SequenceInstruction {
 /// <summary>
 /// Run the V-curve auto-focus routine; the engine waits for it to finish
 /// and bubbles up whatever HFR it landed on. <see cref="FocuserSource"/> picks
-/// the optical train: "main" (default) / "aux" / "guide" — the AutoFocusService
+/// the optical train: "main" (default) / "aux" / "guide", the AutoFocusService
 /// pairs the matching camera + focuser.
 /// </summary>
 public class AutoFocusInstruction : SequenceInstruction {

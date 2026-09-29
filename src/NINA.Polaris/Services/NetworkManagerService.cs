@@ -123,7 +123,7 @@ public class NetworkManagerService : BackgroundService {
     private readonly bool _stationAutoReconnect;
     private readonly TimeSpan _stationRetryGrace;
     private DateTime _lastStationRetryAt = DateTime.MinValue;
-    // Consecutive retries whose scan came back completely empty — the
+    // Consecutive retries whose scan came back completely empty, the
     // signature of a single-radio adapter that refuses to scan while it is
     // running the AP. After a few we fall back to a blind reactivate.
     private int _emptyScanStreak;
@@ -549,7 +549,7 @@ public class NetworkManagerService : BackgroundService {
             var parts = SplitNmcliTerse(line);
             if (parts.Length < 4) continue;
             var ssid = parts[0];
-            if (string.IsNullOrEmpty(ssid)) continue; // hidden networks (--) — skip
+            if (string.IsNullOrEmpty(ssid)) continue; // hidden networks (--), skip
             if (CurrentMode == WifiMode.Hotspot
                 && ssid.Equals(HotspotSsid, StringComparison.OrdinalIgnoreCase)) {
                 continue;   // our own AP, beaconing at us
@@ -1071,7 +1071,7 @@ public class NetworkManagerService : BackgroundService {
         // the brief blip to join it is worth it.
         var visible = await ScanAsync(ct);
         if (visible.Count == 0) {
-            // Scan came back empty — likely the adapter won't scan while it is
+            // Scan came back empty, likely the adapter won't scan while it is
             // running the AP. After a few of these, try a blind reactivate of
             // the best saved network rather than staying stuck in hotspot.
             if (++_emptyScanStreak >= 3) {
@@ -1096,7 +1096,7 @@ public class NetworkManagerService : BackgroundService {
         if (match == null) return;   // nothing to go back to yet; keep the AP steady
 
         _logger.LogInformation(
-            "NetworkManagerService: saved station '{Ssid}' back in range — handing the rig back from hotspot.",
+            "NetworkManagerService: saved station '{Ssid}' back in range, handing the rig back from hotspot.",
             match.Value.Ssid);
         await TryReactivateStationAsync(match.Value.Name, ct);
     }

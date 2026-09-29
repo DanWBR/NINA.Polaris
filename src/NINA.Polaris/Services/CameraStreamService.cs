@@ -427,7 +427,7 @@ public class CameraStreamService : IDisposable {
 
     /// <summary>Percent of the last sampled frame at or near the sensor ceiling.
     /// The video preview auto-stretches every frame, so a blown highlight still
-    /// looks correctly exposed on screen — this is the honest read of exposure.
+    /// looks correctly exposed on screen, this is the honest read of exposure.
     /// ~0 is good; a high value on a planetary target means gain/exposure is too
     /// high and detail is being clipped away before it reaches the SER.</summary>
     public double ClipPercent { get; private set; }

@@ -28,7 +28,7 @@ public static class MeridianFlipEndpoints {
         });
 
         // Clear a standing safety-guard trip (UI "dismiss"). Does not restart
-        // anything — the operator decides whether to resume.
+        // anything, the operator decides whether to resume.
         group.MapPost("/safety/reset", (MountSafetyGuardService guard) => {
             guard.Reset();
             return Results.Ok(new { tripped = guard.Tripped });

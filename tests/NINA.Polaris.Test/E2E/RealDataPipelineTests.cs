@@ -407,7 +407,7 @@ public class RealDataPipelineTests {
         // The Polaris pipeline through Step 05 produces a SHO RGB
         // master but BatchStackingService currently emits an
         // integrated master that ASTAP cannot plate-solve (~500 stars
-        // detected, zero quads match the catalog — likely a
+        // detected, zero quads match the catalog, likely a
         // cross-frame alignment smearing bug; tracked as a separate
         // task). Until that lands, validate the PCC chain against a
         // known-plate-solvable input: the Siril-stacked Ha master

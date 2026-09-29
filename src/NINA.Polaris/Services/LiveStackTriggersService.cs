@@ -154,8 +154,8 @@ public class LiveStackTriggersService : IDisposable {
             // REFSOLVE (#633): the reference solve exists ONLY to give the
             // recenter trigger a coordinate baseline to measure drift against
             // (see ComputeDriftAsync / ExecuteRecenterAsync). With recenter off
-            // it was pure waste — a 5-10 s ASTAP run per session that can fail
-            // intermittently and spam the log — so only solve when recenter is on.
+            // it was pure waste, a 5-10 s ASTAP run per session that can fail
+            // intermittently and spam the log, so only solve when recenter is on.
             if (Settings.RecenterEnabled)
                 _ = Task.Run(() => SolveReferenceAsync(info.Frame));
             return;
@@ -360,7 +360,7 @@ public class LiveStackTriggersService : IDisposable {
         _executingKind = "dither";
         // A real dither is starting (guider IS guiding now), so any stale
         // "Dither skipped: ..." notice from a previous frame no longer applies
-        // — clear it so the message disappears once dithering resumes normally.
+        //, clear it so the message disappears once dithering resumes normally.
         if (_lastError != null && _lastError.StartsWith("Dither skipped", StringComparison.Ordinal))
             _lastError = null;
         Notify();

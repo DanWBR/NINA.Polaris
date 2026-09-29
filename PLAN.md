@@ -119,42 +119,42 @@ inference primitive changes.
    GPU path that already works on this board.
 
 ### Tasks
-- **QNN-0 (spike) — DONE 2026-06-26 = GO.** Runtime confirmed present and the
+- **QNN-0 (spike), DONE 2026-06-26 = GO.** Runtime confirmed present and the
   Hexagon reachable (V68) on the Radxa OS image; QAIRT 2.45 libs extracted from
   the qcom-ppa .debs; unsigned PD is the exec path (see STATUS above).
   `scripts/qnn-probe.sh` is the read-only probe deliverable. **MEASURED 2026-06-26:
   Hexagon V68 denoise (256×256×3) ≈ 7.3 ms/tile (~130 tiles/s) at INT8.** Caveat:
   this is int8, NOT a fair head-to-head with the fp16 RK3588 (91 ms) or fp32 CPU
-  baselines — int8 trades precision for speed, so it's the speed CEILING, not a
+  baselines, int8 trades precision for speed, so it's the speed CEILING, not a
   precision-matched comparison. What's proven: the Hexagon executes GraXpert
-  denoise (the gate). **UPDATE 2026-06-27 — fp16 is IMPOSSIBLE on this NPU.** Per
+  denoise (the gate). **UPDATE 2026-06-27, fp16 is IMPOSSIBLE on this NPU.** Per
   the Qualcomm AI Hub device matrix the QCS6490 **HTP is integer-only: INT8 + INT16,
   NO FP16** (fp16 on this chip runs on the GPU/CPU, not the Hexagon). So the
   precision-fair NPU comparison is **int16 (w8a16, ~fp16 quality)**, MEASURED at
-  **≈ 29.5 ms/tile** ((15.101−0.394)/499) — ~4× int8 but ~152× the CPU fp32 4488 ms,
+  **≈ 29.5 ms/tile** ((15.101−0.394)/499), ~4× int8 but ~152× the CPU fp32 4488 ms,
   at near-fp16 quality. → **int16 is the production NPU path**, int8 is the "turbo"
   option. Run via an AI Hub-built context binary (targets the
   QCS6490, loads on the device's native QAIRT 2.45 runtime) +
   `qnn-net-run --retrieve_context ... --config_file <unsigned-pd>`. NOTE:
   the public x86 SDK is 2.31 and does NOT interop with the device's 2.45 runtime
-  (.bin/.dlc/libs all version-locked) — so device-matched binaries come from AI Hub
+  (.bin/.dlc/libs all version-locked), so device-matched binaries come from AI Hub
   OR a matched 2.45 SDK; the Services/Qnn build will BUNDLE the QAIRT 2.45 aarch64
   runtime in the .deb (like librknnrt.so) to control versions. **Gate passed with a
   measured number; QNN-1..5 unblocked.**
-- **QNN-1 — DONE (commit 9e13d904):** `QnnRuntime` probe (Linux+arm64 +
+- **QNN-1, DONE (commit 9e13d904):** `QnnRuntime` probe (Linux+arm64 +
   /dev/fastrpc-cdsp + bundled QAIRT under POLARIS_QAIRT_ROOT) + `Services/Qnn/`.
-- **QNN-2 — code-complete (commit 9e13d904), pending on-device run:**
+- **QNN-2, code-complete (commit 9e13d904), pending on-device run:**
   `QnnInferenceService` reuses the validated `RknnPipelines` tile math UNCHANGED
   via a record/replay trick (capture tiles → one batched `qnn-net-run` →
   replay), instead of P/Invoking the QNN interface API. The batched subprocess
   (`QnnNetRunBatch`, unsigned-PD config) is isolated behind `IQnnTileBatch`;
   9 unit tests pass incl. 2 GOLD tests proving record/replay == direct pipeline
   byte-for-byte. Only the `qnn-net-run` I/O remains to validate on the Q6A.
-- **QNN-3 — DONE (commit 9e13d904):** wired into `GraXpertService` (`NpuAvailable`
+- **QNN-3, DONE (commit 9e13d904):** wired into `GraXpertService` (`NpuAvailable`
   OR'd, `TryRunQnn` parallel to `TryRunRknn`, mutually exclusive by hardware) +
   DI. Status flows through the existing `/api/graxpert/status` NpuAvailable.
-- **QNN-4 — DONE 2026-06-27 (model prep proven on Q6A):** the QCS6490 HTP is
-  int8/int16-only (no fp16 — hardware limit), so production models are **int16
+- **QNN-4, DONE 2026-06-27 (model prep proven on Q6A):** the QCS6490 HTP is
+  int8/int16-only (no fp16, hardware limit), so production models are **int16
   (w8a16)** via AI Hub (compile→onnx, quantize weights=INT8/activations=INT16,
   compile→qnn_context_binary --quantize_io). denoise_v68_int16.bin built + run on
   the device = 29.5 ms/tile. `QnnInferenceService.QnnBinaryFor` now prefers
@@ -162,79 +162,79 @@ inference primitive changes.
   fp16 tier kept for future fp16-capable SoCs. Still TODO under QNN-5: build the
   bge + denoise-v2 int16 binaries and drop them at
   `qnn/{family}-ai-models/{ver}/*v68_int16*.bin` (convention set, .gitignored).
-- **QNN-5 — packaging in progress.** DONE: the arm64 .deb now bundles the QAIRT
+- **QNN-5, packaging in progress.** DONE: the arm64 .deb now bundles the QAIRT
   2.45 aarch64 runtime at `/opt/polaris/qairt` (the default `POLARIS_QAIRT_ROOT`),
-  mirroring the librknnrt.so pattern — `scripts/fetch-qairt.{sh,ps1}` assemble
+  mirroring the librknnrt.so pattern, `scripts/fetch-qairt.{sh,ps1}` assemble
   `external/qairt/aarch64/{bin,lib,dsp}` from a device/SDK source (no public
   download: 2.31 SDK is version-locked, so it COPIES from a provided 2.45 root),
   the csproj recursively copies that tree into the publish (Exists+linux-arm64
   guarded), build-deb.sh chmods `qairt/bin/qnn-net-run`, `external/qairt/` is
   gitignored, and `licenses/QAIRT-LICENSE.txt` + NOTICE + docs
   (`docs/user-guide/npu-acceleration.md` Qualcomm section) cover attribution.
-  DONE (b): the Benchmark now has an **NPU (AI denoise)** row — BenchmarkService
+  DONE (b): the Benchmark now has an **NPU (AI denoise)** row, BenchmarkService
   times a real GraXpert denoise on the Hexagon (QAIRT) or Rockchip (RKNN) lane
   over a 1024×1024 synthetic frame and reports backend/model/precision +
   ms/tile + tiles/s (Ran=false off an NPU host, like the GPU row); NpuResult DTO,
   index.html rows, PrecisionFromName unit-tested.
   DEVICE-VERIFIED 2026-06-27 on the Q6A: bge + denoise **v2 (2.0.0)** int16 run on
   the Hexagon end-to-end (BGE before/after confirmed clean). **denoise v3 (3.0.2)
-  does NOT run on the QCS6490 V68 HTP** — it uses LayerNorm, which the V68
+  does NOT run on the QCS6490 V68 HTP**, it uses LayerNorm, which the V68
   op-package rejects ("_layernorm_0 ... Value 68, expected >= 73"; LayerNorm needs
   HTP **V73+**), and AI Hub compiled it for a V73 profile (hence the earlier 4 MB
   VTCM ask, also > the V68 limit). So on this NPU **denoise = v2 only**; for v3
   quality run fp16 on browser/GPU/CPU. Context binaries must be generated **on the
-  device** from an AI Hub **DLC** (`--target_runtime qnn_dlc --quantize_io` — the
+  device** from an AI Hub **DLC** (`--target_runtime qnn_dlc --quantize_io`, the
   `--quantize_io` is required, else a float→ufixed16 input convert forces fp16 the
   V68 rejects) so the QAIRT version + VTCM match. v2 int16 w8a16 showed per-channel
   star fringing on OSC (RGB = channel-by-channel + average on the NPU); **w16a16**
-  is the mitigation under test. The V68 HTP limits — int8/int16 only, VTCM < 4 MB,
-  no LayerNorm (needs V73+) — are recorded so v3/LayerNorm isn't re-attempted.
-- **Decon stays CLI-only — DECIDED 2026-06-27, not deferred.** Deconvolution
+  is the mitigation under test. The V68 HTP limits, int8/int16 only, VTCM < 4 MB,
+  no LayerNorm (needs V73+), are recorded so v3/LayerNorm isn't re-attempted.
+- **Decon stays CLI-only, DECIDED 2026-06-27, not deferred.** Deconvolution
   (stars/objects) has a fundamentally different model shape than BGE/Denoise:
   **512² tiles** (not 256²), **NCHW mono** `[1,1,512,512]` (one channel per
   inference, not NHWC RGB), and **two input tensors** (pixels + a params tensor
   `[1,2]` = `[sigma, strength]` from the PSF FWHM→σ mapping). The shared
   `RknnPipelines` record/replay contract is single-input / single-output /
-  256×256×3, so decon doesn't fit it — `TryFamily` returns false for
+  256×256×3, so decon doesn't fit it, `TryFamily` returns false for
   Deconvolution on BOTH the RKNN and QNN lanes and it runs on the GraXpert CLI.
   This mirrors the Rockchip choice and is intentional; accelerating decon would
   be a separate epic (decon pipeline + multi-input batch in QnnNetRunBatch +
   quantized two-input model). Not planned.
 
-### SNNPU — Star removal on the NPU (epic, in progress)
+### SNNPU, Star removal on the NPU (epic, in progress)
 
 Star removal (StarNet v1) on the NPU. Only **starnet** fits the shared lane: it
-is single-input `[1,256,256,3]` NHWC, one inference per tile — the SAME contract
-as Denoise/BGE — so it reuses `RknnPipelines` + the QNN record/replay unchanged.
-(`starrem2k13` = 512²/mono single-input, `nox-color/gray` = 512² — different
+is single-input `[1,256,256,3]` NHWC, one inference per tile, the SAME contract
+as Denoise/BGE, so it reuses `RknnPipelines` + the QNN record/replay unchanged.
+(`starrem2k13` = 512²/mono single-input, `nox-color/gray` = 512², different
 shapes, deferred; they'd need a 512 pipeline.)
 
-- **SNNPU-1 — DONE.** `RknnPipelines.RunStarRemoval` (+ `RunStarRemovalMono`):
-  faithful port of the browser starnet pipeline — MTF autostretch ("15% bg, 3σ")
+- **SNNPU-1, DONE.** `RknnPipelines.RunStarRemoval` (+ `RunStarRemovalMono`):
+  faithful port of the browser starnet pipeline, MTF autostretch ("15% bg, 3σ")
   into the trained domain, tile (stride 96 / 80px margin), model output IS the
   starless, inverse-stretch back, mono replicate+average / RGB together, optional
   ≤3 passes; returns `(starless, stars=clamp(orig−starless,0))`.
-- **SNNPU-2 — DONE.** `RknnInferenceService.RunStarRemoval` (real per-tile
+- **SNNPU-2, DONE.** `RknnInferenceService.RunStarRemoval` (real per-tile
   session) + `QnnInferenceService.RunStarRemoval` (record→batch→replay). KEY:
-  multi-pass must batch **one pass at a time** — a tile's input in pass N depends
+  multi-pass must batch **one pass at a time**, a tile's input in pass N depends
   on pass N−1's output, so a single all-passes record/replay corrupts later
   passes (record returns zeros). The QNN path loops per pass; RKNN (real session)
   is naturally fine. 3 gold tests prove record/replay == direct (single + per-pass
   multi-pass), 11/11 QnnLaneTests green.
-- **SNNPU-3/4 — PARKED 2026-06-27: star removal stays browser/CPU on this HW.**
+- **SNNPU-3/4, PARKED 2026-06-27: star removal stays browser/CPU on this HW.**
   The starnet ONNX does NOT convert to a QCS6490 HTP context binary: its op set
   includes `ReduceMean` + `ReduceSumSquare` → `Sub`/`Div` (variance computed at
-  RUNTIME) plus training-mode `BatchNormalization` — i.e. StarNet normalizes with
+  RUNTIME) plus training-mode `BatchNormalization`, i.e. StarNet normalizes with
   per-tile statistics computed on the fly. The QAIRT/HTP converter can't lower
   runtime-statistics normalization (AI Hub compile + int8/int16 quantize both
   succeed; the final qnn_context_binary convert fails with "exit 255"). At
   batch=1 that normalization is mathematically InstanceNormalization (which the
   HTP supports), so a re-export collapsing it to `InstanceNormalization` (or
-  folding BN to constant mean/var) WOULD convert — but the user opted not to
+  folding BN to constant mean/var) WOULD convert, but the user opted not to
   re-export. Decision: **star removal runs browser/CPU (as today); NPU is for
   denoise/BGE only on the Q6A.** SNNPU-3 (server `StarRemovalService` + endpoint)
   and SNNPU-4 (UI) are NOT pursued. The SNNPU-1/2 `RunStarRemoval` lane stays as
-  dormant, tested infrastructure — it plugs in unchanged if a foldable-BN starnet
+  dormant, tested infrastructure, it plugs in unchanged if a foldable-BN starnet
   export (`qnn/starnet-ai-models/{ver}/starnet_v68_int16.bin`) or another SoC ever
   appears; no wiring references it today.
 
@@ -1438,7 +1438,7 @@ were already wired through `IndiClient`.
 - **`RequestLoggingMiddleware`**: logs every HTTP request
   (method, path, status, duration ms, remote IP) BEFORE
   AuthMiddleware so 401s also surface. Skip-list covers static
-  assets + `/api/logs*` (loop-breaker — POSTing client logs
+  assets + `/api/logs*` (loop-breaker, POSTing client logs
   shouldn't itself log an HTTP entry).
 - **`LogsEndpoints`** under `/api/logs`: GET with filters
   (since/max/level/source/search), GET `/export?format=jsonl|txt`
@@ -1614,7 +1614,7 @@ model. Side effects:
 
 ---
 
-# Previous chapter: PH2VNC — embedded PHD2 GUI on Windows via TightVNC + noVNC
+# Previous chapter: PH2VNC, embedded PHD2 GUI on Windows via TightVNC + noVNC
 
 > The GUIDE tab's "PHD2 GUI" embed was Linux-only (xpra). The user
 > runs Polaris on a Windows mini-PC too; on that host the tab just
@@ -1622,7 +1622,7 @@ model. Side effects:
 > fragile path (dummy display driver issues + Python/GTK stack),
 > so instead we leveraged TightVNC's Windows service as the desktop
 > capturer and noVNC as the HTML5 client. The result: Windows
-> hosts now embed PHD2's full native GUI inside the GUIDE tab —
+> hosts now embed PHD2's full native GUI inside the GUIDE tab,
 > Profile Wizard, Brain dialog, Guiding Assistant, dark library,
 > the whole thing.
 
@@ -1664,7 +1664,7 @@ model. Side effects:
   the parent Polaris auth (Bearer + `polaris_session` cookie)
   covering the iframe. `scaleViewport=true` so the remote desktop
   letterboxes inside the iframe instead of producing scrollbars.
-  Password prompt is the native noVNC one — Polaris never stores
+  Password prompt is the native noVNC one, Polaris never stores
   the VNC password (privacy posture).
 
 - **PH2VNC-4 (endpoints + WS payload)**
@@ -1681,8 +1681,8 @@ model. Side effects:
     banner pointing the user at PHD2's native window.
   - **Linux** (xpra path): the existing 4 states (32-bit ARM
     warning, xpra not installed, session not running, iframe with
-    toolbar) — unchanged behavior.
-  - **Windows** (VNC path): 4 parallel states — TightVNC not
+    toolbar), unchanged behavior.
+  - **Windows** (VNC path): 4 parallel states, TightVNC not
     installed (with download link + Re-detect button), service
     stopped (with Start-service + Re-detect buttons), service up
     but not listening (config hint), and the working iframe with
@@ -1708,7 +1708,7 @@ model. Side effects:
 - `dotnet test --filter "FullyQualifiedName~Phd2Vnc"` → 10
   passed, 4 ignored (Windows-only runtime tests)
 - Linux regression: existing `/phd2-gui/*` xpra path on the Pi 5
-  unchanged — iframe loads, sessions start/stop normally
+  unchanged, iframe loads, sessions start/stop normally
 - Windows: needs a TightVNC install + Polaris run on a Windows
   mini-PC to confirm the end-to-end flow. The state machine,
   endpoints, and bridge are all unit-covered cross-platform; the
@@ -1719,7 +1719,7 @@ model. Side effects:
 ## Licenses
 
 - **TightVNC**: GPLv2. Polaris invokes it via the Windows
-  Service Controller — no code mixing. User installs from the
+  Service Controller, no code mixing. User installs from the
   official site (we never bundle).
 - **noVNC**: MPL 2.0. Compatible with Polaris MPL 2.0. Vendored
   under `wwwroot/js/lib/novnc/` with the upstream `LICENSE.txt`
@@ -1730,7 +1730,7 @@ model. Side effects:
 
 ---
 
-# Previous chapter: CROP — quick rectangular trim before BGE/decon/denoise
+# Previous chapter: CROP, quick rectangular trim before BGE/decon/denoise
 
 > The user normally drops their masters into GraXpert to crop off
 > the noisy stack borders before running BGE, deconvolution, or
@@ -1756,7 +1756,7 @@ model. Side effects:
   JPEG from `/api/files/preview`) plus an overlay `<div>` that
   tracks the user-drawn rectangle in DISPLAY pixels. On submit
   the client converts to IMAGE pixels using the natural-vs-display
-  width ratio captured when the `<img>` loaded — keeps server
+  width ratio captured when the `<img>` loaded, keeps server
   slice math in real pixel space regardless of how the browser
   scaled the preview. Touch + mouse both supported via pointer
   helpers. Click-without-drag clears instead of producing a
@@ -1880,7 +1880,7 @@ on boot + filter by SessionTtl so a week-old session doesn't
 reanimate. Password-reset workaround still works: delete the
 file or clear the hash in `profile.json`.
 
-### 6. Root cause — `libSkiaSharp.so` symbol lookup error (`f279248`)
+### 6. Root cause, `libSkiaSharp.so` symbol lookup error (`f279248`)
 
 After all the auth fixes shipped, user still saw
 `ERR_CONNECTION_REFUSED` on `/api/files/preview` even with a
@@ -1897,7 +1897,7 @@ polaris.service: Main process exited, code=exited, status=127
 
 `SkiaSharp.NativeAssets.Linux 3.119.0` ships a `libSkiaSharp.so`
 for `linux-arm64` that dynamic-links system FreeType and calls
-`FT_Get_BDF_Property` — only present when FreeType is built with
+`FT_Get_BDF_Property`, only present when FreeType is built with
 `FT_CONFIG_OPTION_BDF`. Debian Bookworm / Pi OS 64-bit ship
 FreeType 2.12.1 **without** BDF. Any code path that lazy-inits
 SkiaSharp's font subsystem (every FITS preview through
@@ -1935,16 +1935,16 @@ GraXpert denoise save round-trip works.
 
 ## Files modified during the sweep
 
-- `src/NINA.Polaris/wwwroot/js/app.js` — bare fetch sweep,
+- `src/NINA.Polaris/wwwroot/js/app.js`, bare fetch sweep,
   authUrl helper + bindings, WS URL auth, transfer chip site
   cleanup
-- `src/NINA.Polaris/wwwroot/index.html` — STUDIO thumbnail
+- `src/NINA.Polaris/wwwroot/index.html`, STUDIO thumbnail
   authUrl
-- `src/NINA.Polaris/Services/Auth/AuthService.cs` — session
+- `src/NINA.Polaris/Services/Auth/AuthService.cs`, session
   persistence + restore
-- `src/NINA.Polaris/Services/ProfileService.cs` — expose
+- `src/NINA.Polaris/Services/ProfileService.cs`, expose
   `DataDir` so other services can park sibling state files
-- `src/NINA.Image.Portable/NINA.Image.Portable.csproj` — switch
+- `src/NINA.Image.Portable/NINA.Image.Portable.csproj`, switch
   SkiaSharp native package
 
 ## Tests
@@ -1968,7 +1968,7 @@ package change with no API delta, no test code touched.
 > auth header injection that AUTH-1..5 wired into apiFetch. The
 > editor upload was the visible symptom (HTTP 401 when dragging a
 > FITS into the editor on the Pi 5). Swept every `/api/*` bare
-> fetch over to `this.apiFetch` so the bearer token rides along —
+> fetch over to `this.apiFetch` so the bearer token rides along,
 > the three `/api/auth/*` sites stay bare on purpose (the auth
 > middleware exempts them so they can run pre-login).
 
@@ -1999,7 +1999,7 @@ Decisions confirmed via AskUserQuestion:
   Multiple parallel transfers stack horizontally with overflow
   scroll. Auto-removed ~800ms after completion (3000ms when failed
   so the error stays readable).
-- **Scope**: all four checkboxes — editor + FILES + ONNX + WS
+- **Scope**: all four checkboxes, editor + FILES + ONNX + WS
   image-stream frames. Maximum coverage.
 
 ## Architecture
@@ -2025,7 +2025,7 @@ helpers `formatTransferLine(t)` + `transferPercent(t)` drive the
 chip template; both return null/empty for total=0 so the chip
 falls back to an indeterminate bar.
 
-### 2. `apiUpload(url, body, opts)` — XHR-based
+### 2. `apiUpload(url, body, opts)`, XHR-based
 
 Drop-in replacement for `apiFetch` when the body has a meaningful
 size. Returns a `Response` so callers can still `.json()` /
@@ -2041,7 +2041,7 @@ size. Returns a `Response` so callers can still `.json()` /
   `Response` object before resolving.
 - 401 → calls `_handle401` exactly like `apiFetch`.
 
-### 3. `apiDownload(url, opts)` — fetch + ReadableStream
+### 3. `apiDownload(url, opts)`, fetch + ReadableStream
 
 Wraps `apiFetch` (so all existing auth + dedup + 401 plumbing
 keeps working) then pumps the response body through a reader,
@@ -2080,30 +2080,30 @@ use) shows the same chip as everything else.
 
 ### 6. Sites wired in v1
 
-- **Editor upload** (`/api/editor/upload`) — via `apiUpload`.
+- **Editor upload** (`/api/editor/upload`), via `apiUpload`.
   Label: "Upload {filename}".
-- **Editor raw download** (`/api/editor/raw/{sessionId}`) — via
+- **Editor raw download** (`/api/editor/raw/{sessionId}`), via
   `apiDownload`. Label: "Load editor session". This is the
   50-200 MB blob ED-6 fetches when WASM compute mode opens; used
   to feel like a freeze on first open.
-- **FILES download-zip** (`/api/files/download-zip`) — via
+- **FILES download-zip** (`/api/files/download-zip`), via
   `apiDownload`. Label: "Download {fileName}.zip".
-- **ONNX model fetch** (`/api/onnx/model/{family}/{version}`) —
+- **ONNX model fetch** (`/api/onnx/model/{family}/{version}`),
   via the global bridge from `onnx-pipelines.js`. Also fixed an
   AUTH miss (bare `fetch()` without bearer token would have 401-d
   here too).
-- **ONNX save** (`/api/onnx/save`) — via `apiUpload`. Label:
+- **ONNX save** (`/api/onnx/save`), via `apiUpload`. Label:
   "Save {filename}".
-- **ONNX source pixels** (`/api/onnx/source-pixels?path=`) — via
+- **ONNX source pixels** (`/api/onnx/source-pixels?path=`), via
   `apiDownload`. Label: "Read {filename}".
 - **Livestack upload-result** (`/api/livestack/upload-result?...`)
-  — via `apiUpload`. Label: "Save stack ({target})".
-- **WS image-stream frames** — `handleImageFrame` registers a
+ , via `apiUpload`. Label: "Save stack ({target})".
+- **WS image-stream frames**, `handleImageFrame` registers a
   pre-completed transfer (loaded = total = byteLength) so the
   chip flashes the frame size for ~800ms. Skipped for frames
   < 64 KB (thumbnails / stats-only payloads). Browsers don't
   expose mid-frame WS progress, so a "done" pulse is the best
-  we can do — fills the gap between rx-rate ambient signal and
+  we can do, fills the gap between rx-rate ambient signal and
   "I just received a 12 MB frame" awareness.
 
 ## Phases (one commit each)
@@ -2142,27 +2142,27 @@ use) shows the same chip as everything else.
 ## Files created / modified
 
 ### Modified
-- `src/NINA.Polaris/wwwroot/js/app.js` — `transfers` state,
+- `src/NINA.Polaris/wwwroot/js/app.js`, `transfers` state,
   helpers, `apiUpload`, `apiDownload`, init() bridge globals,
   six call-site migrations, WS image-frame chip
-- `src/NINA.Polaris/wwwroot/js/onnx-pipelines.js` — AUTH header +
+- `src/NINA.Polaris/wwwroot/js/onnx-pipelines.js`, AUTH header +
   bridge wiring around the model fetch stream reader
-- `src/NINA.Polaris/wwwroot/index.html` — `.activity-bar-transfers`
+- `src/NINA.Polaris/wwwroot/index.html`, `.activity-bar-transfers`
   chip row
-- `src/NINA.Polaris/wwwroot/css/app.css` — `.activity-transfer*`
+- `src/NINA.Polaris/wwwroot/css/app.css`, `.activity-transfer*`
   pill + bar + indeterminate animation
 
 ### Reuse of existing code
 
-- **`apiFetch`** (AUTH-3 / AUTH-4) — apiDownload wraps it so all
+- **`apiFetch`** (AUTH-3 / AUTH-4), apiDownload wraps it so all
   the auth + dedup + 401 retries keep working without duplication
-- **`_netTx` / `_netRx`** (NET-1) — apiUpload calls `_netTx` on
+- **`_netTx` / `_netRx`** (NET-1), apiUpload calls `_netTx` on
   each upload progress delta so the ambient rate stays accurate
   (apiDownload doesn't call `_netRx` to avoid double-counting,
   the Performance API entry covers it)
-- **`_handle401`** (AUTH-3) — apiUpload calls it for 401
+- **`_handle401`** (AUTH-3), apiUpload calls it for 401
   responses, so an expired token mid-upload pops the login overlay
-- **`formatBytes`** (existing helper) — drives the chip's
+- **`formatBytes`** (existing helper), drives the chip's
   loaded/total display
 
 ## End-to-end verification
@@ -2240,7 +2240,7 @@ use) shows the same chip as everything else.
 > Weather → Tonight.
 >
 > One small UX fix shipped alongside AUTOED but didn't get its
-> own plan section: the **activity bar dock** — the bottom strip
+> own plan section: the **activity bar dock**, the bottom strip
 > used to be `position: fixed` and overlay content (the last rows
 > of Settings + the Sky controls disappeared behind it). Converted
 > `<body>` to a flex column so the activity bar sits as a regular
@@ -2255,7 +2255,7 @@ zero. Coming from Lightroom, the first reflex is to hit "Auto" to
 get a sensible starting point, then refine from there. Polaris
 had only `editorReset()` (zero everything) + the GraXpert
 AutoStretch (which operates on the preview byte buffer outside
-the EditPipeline) — nothing that would set the EditPipeline
+the EditPipeline), nothing that would set the EditPipeline
 sliders from frame statistics.
 
 Existing material this plan reused, confirmed by exploration:
@@ -2353,7 +2353,7 @@ Body: `{ sessionId }`. Response: JSON-serialised `AutoSuggestion`
 (light + color). The endpoint:
 
 1. Resolves the session via the existing
-   `ImageEditService.GetWorkingBuffer(sessionId)` — which already
+   `ImageEditService.GetWorkingBuffer(sessionId)`, which already
    returns `(data, w, h, channels)` for ED-6's WASM dispatch, so
    no new accessor was needed.
 2. Calls `EditAutoTuner.Compute(...)`.
@@ -2471,34 +2471,34 @@ commit (`a1b0bcd`):
 
 ## Files modified
 
-- `src/NINA.Polaris/Endpoints/EditorEndpoints.cs` — new
+- `src/NINA.Polaris/Endpoints/EditorEndpoints.cs`, new
   `POST /api/editor/auto`
-- `src/NINA.Polaris/wwwroot/index.html` — Auto + Reset header in
+- `src/NINA.Polaris/wwwroot/index.html`, Auto + Reset header in
   `.editor-controls-col`
-- `src/NINA.Polaris/wwwroot/js/app.js` — `editorAuto()` method +
+- `src/NINA.Polaris/wwwroot/js/app.js`, `editorAuto()` method +
   `editorState.autoBusy`
-- `src/NINA.Polaris/wwwroot/css/app.css` — `.editor-controls-header`
-- `docs/user-guide/editor.md` — "Auto adjust" section
-- `README.md` — short bullet under EDITOR pointing at the docs
+- `src/NINA.Polaris/wwwroot/css/app.css`, `.editor-controls-header`
+- `docs/user-guide/editor.md`, "Auto adjust" section
+- `README.md`, short bullet under EDITOR pointing at the docs
 
 ## Reuse of existing code
 
-- **`NINA.Image.Portable/ImageAnalysis/AutoStretch.cs`** —
+- **`NINA.Image.Portable/ImageAnalysis/AutoStretch.cs`**,
   reference implementation of the histogram + median + MAD
   sigma-clipping pattern. The auto-tuner doesn't call into it
   directly (different output shape) but borrows the percentile-via-
   cumulative-count technique.
-- **`NINA.Image.Portable/Editor/EditParams.cs`** — `LightParams` +
+- **`NINA.Image.Portable/Editor/EditParams.cs`**, `LightParams` +
   `ColorParams` records with documented ranges and IsDefault
   helpers. EditAutoTuner returns these directly.
-- **`NINA.Image.Portable/Editor/EditPipeline.cs`** — unchanged;
+- **`NINA.Image.Portable/Editor/EditPipeline.cs`**, unchanged;
   consumes the resulting params like any manual edit.
 - **`editorSetLight(key, val)` / `editorSetColor(key, val)`** in
-  `app.js` — Auto goes through these for free reactivity +
+  `app.js`, Auto goes through these for free reactivity +
   sidecar dirty + history snapshot.
-- **`editorState.edits` + history stack** — `editorReset()` and
+- **`editorState.edits` + history stack**, `editorReset()` and
   Undo already restore the pre-Auto state without new code.
-- **`ImageEditService.GetWorkingBuffer(sessionId)`** — already
+- **`ImageEditService.GetWorkingBuffer(sessionId)`**, already
   exposed for ED-6's WASM dispatch, returns `(data, w, h, channels)`.
   Zero new accessor needed.
 
@@ -2538,7 +2538,7 @@ commit (`a1b0bcd`):
 ## Design notes
 
 - **Why no ML**: Lightroom Sensei uses ML; PixInsight has nothing
-  equivalent. Polaris focuses on predictability — statistic-based
+  equivalent. Polaris focuses on predictability, statistic-based
   heuristics are deterministic, debuggable, and run on any
   hardware without dependencies. ML is left as a follow-up
   (AUTOED-4) if demand surfaces.
@@ -2627,7 +2627,7 @@ The stellarium-web-engine already labels NGC/IC/Messier on the
 **map itself** (via HiPS tiles bundled under
 `wwwroot/sky/data/skydata/dso/`), so when the user zooms in they
 see the labels. But search / filter / Tonight runs against the
-C# `SkyCatalogService` — that's the bottleneck this plan addresses.
+C# `SkyCatalogService`, that's the bottleneck this plan addresses.
 
 Decisions (locked in via AskUserQuestion):
 
@@ -2639,7 +2639,7 @@ Decisions (locked in via AskUserQuestion):
 - **v1 scope**: Caldwell + complete Messier + complete NGC/IC +
   ARP + Sharpless 2 + Abell PN + Hickson Compact Groups + Abell
   galaxy clusters. ~17k objects targeted, ~14.5k actually shipped
-  (V/84 PN catalog deferred — Vizier only exposes B1950
+  (V/84 PN catalog deferred, Vizier only exposes B1950
   sexagesimal columns for it, would require a separate parse path).
 - **Distribution**: bundled in the repo (under
   `wwwroot/catalogs/dso/`). The catalog is small enough (~2.6 MB)
@@ -2676,7 +2676,7 @@ committed). It downloads from:
 All Vizier downloads go through the `asu-tsv` REST endpoint with
 `-out=_RAJ2000` + `-out=_DEJ2000` so we always get decimal-degree
 coordinates regardless of the catalog's native epoch (B1900 /
-B1950 / etc) — no precession code on our side.
+B1950 / etc), no precession code on our side.
 
 The script also synthesizes Caldwell rows: an embedded mapping
 table (109 entries) joins each Caldwell number to its underlying
@@ -2719,19 +2719,19 @@ searches.
 
 Public API:
 
-- `IsAvailable` / `ObjectCount` / `DbPath` — status + sanity check.
-- `GetByNameAsync(name)` — exact-name (case-insensitive) or alias
+- `IsAvailable` / `ObjectCount` / `DbPath`, status + sanity check.
+- `GetByNameAsync(name)`, exact-name (case-insensitive) or alias
   substring lookup.
-- `SearchAsync(query, limit)` — prefix-match on name, LIKE on
+- `SearchAsync(query, limit)`, prefix-match on name, LIKE on
   `common_name` + `aliases`, ranked by exact-match-first then
   magnitude-ascending.
-- `FilterAsync(DsoFilter)` — combines type / catalog / constellation
+- `FilterAsync(DsoFilter)`, combines type / catalog / constellation
   / magnitude range / dec range / limit, magnitude-ascending ranked.
 - `QueryRegionAsync(raHours, decDeg, radiusDeg, magLimit, limit)`
-  — cone search with RA-wrap handling (splits at 0h/24h).
-- `GetCatalogsAsync()` / `GetTypesAsync()` — distinct-list helpers
+ , cone search with RA-wrap handling (splits at 0h/24h).
+- `GetCatalogsAsync()` / `GetTypesAsync()`, distinct-list helpers
   for the Atlas filter dropdowns.
-- `LoadAllAsync(magCap = 12.0)` — streams every row brighter than
+- `LoadAllAsync(magCap = 12.0)`, streams every row brighter than
   the cap for `SkyCatalogService`'s lazy `AllObjects` cache.
 
 ### `SkyCatalogService` becomes a facade
@@ -2769,12 +2769,12 @@ no-op in the legacy fallback path.
 
 ### New endpoints (`Endpoints/SkyEndpoints.cs`)
 
-- `GET /api/sky/catalog/catalogs` — list of distinct catalog
+- `GET /api/sky/catalog/catalogs`, list of distinct catalog
   sources (`['NGC','IC','M','C','Arp','Sh2','HCG','AGC']`). Feeds
   the Atlas filter's catalog dropdown.
 - `GET /api/sky/catalog/filter` extended with `?catalogId=` +
   `?constellation=` (back-compat: old clients omit them).
-- `GET /api/sky/catalog/near?ra=&dec=&radius=&maxMag=&limit=` —
+- `GET /api/sky/catalog/near?ra=&dec=&radius=&maxMag=&limit=`,
   cone search. Returns 503 with a clear "run
   build-dso-catalog.py" message when the expanded DB is missing.
 
@@ -2783,17 +2783,17 @@ no-op in the legacy fallback path.
 The Atlas filter panel gains two new chips, visible only when
 `atlasCatalogs.length > 0` (i.e. the expanded DB is loaded):
 
-1. **Catalog** dropdown — "Any" + every source in the DB.
+1. **Catalog** dropdown, "Any" + every source in the DB.
 2. **Constellation** 3-letter IAU free-text input ("Cyg", "Ori",
    ...). Free text because the constellation set is fixed + tiny
-   — quicker to type than scroll.
+  , quicker to type than scroll.
 
 Both stay hidden on old installs so the UI doesn't show
 broken-looking empty dropdowns. `atlasSearch()` forwards the new
 params; `loadAtlasTypes()` also pulls the catalogs list at boot;
 `resetAtlasFilters()` clears the new fields.
 
-Search box behaviour unchanged — already pulls from
+Search box behaviour unchanged, already pulls from
 `SkyCatalogService.Search`, so the new ~14.5k entries are reachable
 without any frontend changes.
 
@@ -2801,16 +2801,16 @@ without any frontend changes.
 
 ### CAT-1 (`f49f059`): build script + bundled `dso.db` + LICENSE
 
-- `scripts/build-dso-catalog.py` (~430 lines) — orchestrates
+- `scripts/build-dso-catalog.py` (~430 lines), orchestrates
   downloads + ETL + writes `wwwroot/catalogs/dso/dso.db`.
   Dependencies: Python 3.8+ stdlib only (`urllib` + `sqlite3` +
   `csv`). Idempotent, caches downloads under `scripts/.dso-cache/`
   for fast re-runs.
-- `wwwroot/catalogs/dso/LICENSE.txt` — attribution for OpenNGC
+- `wwwroot/catalogs/dso/LICENSE.txt`, attribution for OpenNGC
   (CC BY-SA 4.0) + per-catalog CDS Vizier license notes +
   Vizier acknowledgment boilerplate.
 - The Web SDK's default `wwwroot/**` Content include picks the new
-  tree up on `dotnet publish` automatically — no csproj change
+  tree up on `dotnet publish` automatically, no csproj change
   needed (same as `apass/*` + `sky/data/` already do).
 - Committed `dso.db` (~2.6 MB, 14,555 rows). Per-catalog counts:
   NGC 7572, IC 5000, M 107, C 104, Arp 592, Sh2 313, HCG 100,
@@ -2868,39 +2868,39 @@ without any frontend changes.
 
 ## Files modified
 
-- `src/NINA.Polaris/Services/SkyCatalogService.cs` — facade
+- `src/NINA.Polaris/Services/SkyCatalogService.cs`, facade
   delegating to DsoCatalog, public shape preserved.
-- `src/NINA.Polaris/Endpoints/SkyEndpoints.cs` —
+- `src/NINA.Polaris/Endpoints/SkyEndpoints.cs`,
   `/catalogs`, `/near`, `/filter` extended.
-- `src/NINA.Polaris/Program.cs` — register `DsoCatalog`
+- `src/NINA.Polaris/Program.cs`, register `DsoCatalog`
   singleton.
-- `src/NINA.Polaris/wwwroot/index.html` — Atlas filter panel
+- `src/NINA.Polaris/wwwroot/index.html`, Atlas filter panel
   (catalog dropdown + constellation input).
-- `src/NINA.Polaris/wwwroot/js/app.js` — `atlasCatalog` /
+- `src/NINA.Polaris/wwwroot/js/app.js`, `atlasCatalog` /
   `atlasConstellation` state + extended methods.
-- `docs/user-guide/sky-explorer.md` — Catalogs bundled section,
+- `docs/user-guide/sky-explorer.md`, Catalogs bundled section,
   Filters section updated.
-- `README.md` — Sky Catalog & Sky Atlas bullet expanded.
+- `README.md`, Sky Catalog & Sky Atlas bullet expanded.
 
 ## Reused code
 
-- **`Services/Sky/ApassCatalog.cs`** — template literal for the
+- **`Services/Sky/ApassCatalog.cs`**, template literal for the
   SQLite + R*tree pattern, lazy-connection-per-query, Haversine
   cone search. Copied shape into DsoCatalog.
-- **`scripts/download-apass.py`** — template for the orchestrator
+- **`scripts/download-apass.py`**, template for the orchestrator
   shell (stdlib-only Python, cache directory pattern,
   argparse + Path).
-- **`Services/SkyCatalogService.CatalogObject` record** — only
+- **`Services/SkyCatalogService.CatalogObject` record**, only
   gained 4 optional fields, existing callers don't break because
   the new properties have safe defaults.
-- **`Endpoints/SkyEndpoints.cs:/api/sky/catalog/filter`** —
+- **`Endpoints/SkyEndpoints.cs:/api/sky/catalog/filter`**,
   endpoint kept, extended with 2 new optional query params.
-- **stellarium-web-engine HiPS DSO tiles** — not touched. Still
+- **stellarium-web-engine HiPS DSO tiles**, not touched. Still
   labels NGC/IC/M on the map. The DsoCatalog layer powers
   search / filter / Tonight only.
-- **`TonightsBestService`** — iterates `catalog.AllObjects`
+- **`TonightsBestService`**, iterates `catalog.AllObjects`
   unchanged. Picks up the new ~5000 mag≤12 objects automatically.
-- **Frontend `atlasSearch()`** — only added the 2 new params to
+- **Frontend `atlasSearch()`**, only added the 2 new params to
   the querystring when set. Result rendering unchanged (already
   shows name / type / magnitude / commonName).
 
@@ -2911,9 +2911,9 @@ without any frontend changes.
 - `python scripts/build-dso-catalog.py` on the release machine
   produces `dso.db` ~2.6 MB with 14,555 entries
   (`SELECT COUNT(*) FROM objects`).
-- `dotnet build src/NINA.Polaris/NINA.Polaris.csproj` — clean.
+- `dotnet build src/NINA.Polaris/NINA.Polaris.csproj`, clean.
 - `dotnet test tests/NINA.Polaris.Test --filter "FullyQualifiedName~DsoCatalog"`
-  — 11 new cases pass.
+ , 11 new cases pass.
 
 ### Smoke API
 
@@ -2964,7 +2964,7 @@ without any frontend changes.
   on the stellarium engine. The engine already has NGC/IC/M
   natively via HiPS; ARP + Sh2 markers would need to push geojson
   + a toggle UI. Follow-up CAT-6.
-- **PN-G / Strasbourg-ESO PN catalog (V/84)** — attempted but
+- **PN-G / Strasbourg-ESO PN catalog (V/84)**, attempted but
   Vizier only exposes B1950 sexagesimal columns for it; would
   need a sexagesimal-string parse path in
   `ingest_vizier_tsv`. OpenNGC already covers the PNe with
@@ -2994,7 +2994,7 @@ per filter and persisted the trained time in `trained-flats.json`
 for the next session to reuse.
 
 Until FW-1..3, that service was reachable only via curl to
-`/api/flatwizard/start` — users operating Polaris from the browser
+`/api/flatwizard/start`, users operating Polaris from the browser
 had no way to run flats without dropping to a terminal. This plan
 adds the missing UI panel.
 
@@ -3127,20 +3127,20 @@ Right column (sidebar, 320 px):
 
 ## Reused code
 
-- `FlatWizardService` (D6) — backend complete, zero change.
+- `FlatWizardService` (D6), backend complete, zero change.
 - 4 existing routes consumed verbatim.
-- `LiveStackTriggers` pattern (LSTR-2) — mirror for the new
+- `LiveStackTriggers` pattern (LSTR-2), mirror for the new
   `EquipmentProfile.FlatWizard` field (clone path,
   EquipmentEndpoints PUT, hydrate on tab-enter, debounced save).
-- `polaris-shutter` component (SHUT-1) — reused with new ctx
+- `polaris-shutter` component (SHUT-1), reused with new ctx
   object. Zero new CSS, zero new gesture code.
-- `.live-pane / .preview-pane / .autorun-pane` comma-list —
+- `.live-pane / .preview-pane / .autorun-pane` comma-list,
   `.flatwiz-pane` slots in and inherits 2-col layout + mobile
   fallback.
 
 ## Verification
 
-- `dotnet build` clean; `dotnet test --filter ~FlatWizard` — new
+- `dotnet build` clean; `dotnet test --filter ~FlatWizard`, new
   round-trip cases pass.
 - Manual with INDI simulator: pre-flight ✓ all three rows; pick
   L+R+G+B; settings; tap shutter; ring fills as binary search
@@ -3158,7 +3158,7 @@ Right column (sidebar, 320 px):
 
 ---
 
-# Previous plan: Polaris Shutter (SHUT-1..5) — ASIAIR-style circular capture button
+# Previous plan: Polaris Shutter (SHUT-1..5), ASIAIR-style circular capture button
 
 > Previous plan (REFSUG, refocus suggestion) preserved below.
 
@@ -3181,7 +3181,7 @@ with a single gesture vocabulary:
 
 Centered vertically + horizontally inside the existing
 `.quick-controls` right sidebar (320 px). AUTORUN didn't have
-that sidebar before — gets one as part of SHUT-4.
+that sidebar before, gets one as part of SHUT-4.
 
 **Decisions** (AskUserQuestion):
 - **Tap + long-press, not multiple buttons.** One shutter, gesture
@@ -3190,7 +3190,7 @@ that sidebar before — gets one as part of SHUT-4.
 - **AUTORUN gets a right sidebar.** Sequence list on the left
   (flex:1), shutter + Pause/Resume + Add/Edit on the right (320 px).
 - **Scope: LIVE + PREVIEW + FOCUS Manual + VIDEO Capture + AUTORUN.**
-  FLAT WIZARD has backend but no browser UI yet — out of scope here
+  FLAT WIZARD has backend but no browser UI yet, out of scope here
   (the UI panel comes next as FW-1..3).
 
 ## Architecture
@@ -3299,7 +3299,7 @@ Before SHUT-4: AUTORUN was full-width sequence list + footer-style
 buttons. After: `.autorun-pane` flex-row; sequence list left, new
 `.autorun-sidebar` (320 px) on the right with centered shutter +
 Pause/Resume toggle + progress numbers (frames, ETA, elapsed) that
-used to live in the horizontal `seq-progress-section` (removed —
+used to live in the horizontal `seq-progress-section` (removed,
 the ring now visually represents progress).
 
 CSS reuses `.live-pane,.preview-pane,.autorun-pane` comma-list
@@ -3334,13 +3334,13 @@ selectors. Mobile (≤900 px) collapses to flex-column.
 
 ## Reused code
 
-- `.live-pane / .preview-pane` CSS pattern — `.autorun-pane`
+- `.live-pane / .preview-pane` CSS pattern, `.autorun-pane`
   inherits via comma-selector.
 - Existing state (`capturing`, `looping`, `preview.busy`,
   `preview.looping`, `manualFocus.running`,
   `videoRecording.recording`, `seqState`).
 - Existing methods (`capture()`, `loopCapture()`, `stopCapture()`,
-  `previewTakeSnap()`, etc.) — called verbatim from shutter ctx.
+  `previewTakeSnap()`, etc.), called verbatim from shutter ctx.
 - `seqProgress()` for the AUTORUN ring.
 - `setInterval` pattern (used by `updateClock` 1 Hz and
   `_skyTicker`).
@@ -3363,11 +3363,11 @@ selectors. Mobile (≤900 px) collapses to flex-column.
 ## Out of scope (deferred)
 
 - Inner ring (sub-exposure progress overlaid on whole-sequence
-  ring) — polish, SHUT-6 follow-up.
+  ring), polish, SHUT-6 follow-up.
 - Haptic feedback on mobile when long-press arms loop (vibrate
   API).
-- FLAT WIZARD shutter — needs the panel UI first (covered in FW-1..3).
-- WS payload exposure-remaining field — server-pushed timer.
+- FLAT WIZARD shutter, needs the panel UI first (covered in FW-1..3).
+- WS payload exposure-remaining field, server-pushed timer.
   Client-side timer suffices for v1.
 - Configurable long-press duration. Hardcoded 600 ms in v1.
 
@@ -3381,7 +3381,7 @@ selectors. Mobile (≤900 px) collapses to flex-column.
 
 Live stacking already has two paths to handle focus drift:
 
-1. **LSTR-3 `LiveStackTriggersService`** — auto-refocus when
+1. **LSTR-3 `LiveStackTriggersService`**, auto-refocus when
    enabled, fires `AutoFocusService` automatically on HFR /
    temperature / frame-count / minutes thresholds the user
    configures per-rig. Requires a motorised focuser and
@@ -3507,9 +3507,9 @@ touches one file.
 ### LIVE tab callout
 
 Small yellow box above the live-stack canvas with three buttons:
-- **I refocused** — dismisses + replaces baseline with rolling mean.
-- **Open FOCUS** — jumps to FOCUS Manual Assist without dismiss.
-- **Dismiss** — clears chip without resetting baseline.
+- **I refocused**, dismisses + replaces baseline with rolling mean.
+- **Open FOCUS**, jumps to FOCUS Manual Assist without dismiss.
+- **Dismiss**, clears chip without resetting baseline.
 
 ## Phases (3 commits)
 
@@ -3541,14 +3541,14 @@ Small yellow box above the live-stack canvas with three buttons:
 
 ## Reused code
 
-- `LiveStackingService.SubscribeFrameIntegrated` (LSTR-1) — same
+- `LiveStackingService.SubscribeFrameIntegrated` (LSTR-1), same
   hook LSTR-3 uses; second subscriber is fine.
 - `LiveStackingService.Reset()` event (LSTR-3 already listens).
-- `NotificationService.Push(kind, text, ttlMs)` — direct call;
+- `NotificationService.Push(kind, text, ttlMs)`, direct call;
   client-side pump already wired.
-- `ProfileService.EquipmentProfileActivated` event — hook for rig
+- `ProfileService.EquipmentProfileActivated` event, hook for rig
   switch reset.
-- `app.js` toast pump — handles the warn toast automatically.
+- `app.js` toast pump, handles the warn toast automatically.
 
 ## Verification
 
@@ -3588,14 +3588,14 @@ Small yellow box above the live-stack canvas with three buttons:
 
 ---
 
-# Previous plan: HELP tab — in-app stepper tutorials (HELP-1..5)
+# Previous plan: HELP tab, in-app stepper tutorials (HELP-1..5)
 
 > Previous plan (AUTH, basic auth) preserved below.
 
 ## Context
 
 Polaris has 33 Markdown docs under `docs/user-guide/` covering
-basically everything — but they live outside the app. Someone who
+basically everything, but they live outside the app. Someone who
 just installs the `.deb` and opens `https://polaris-pi.local:5000`
 for the first time encounters 17 sidebar tabs (Home, Rigs, Sky,
 Guide, Polar, Focus, Preview, Video, Autorun, Live, Adv, Studio,
@@ -3656,7 +3656,7 @@ help: {
 ```
 
 Tutorial content lives in a `_helpTutorials()` method (returns
-the catalog) so the data sits next to the code rendering it — no
+the catalog) so the data sits next to the code rendering it, no
 separate JSON file, no fetch. Each step:
 
 ```js
@@ -3691,12 +3691,12 @@ localStorage per tutorial so re-entry resumes mid-stream.
 
 ### Methods
 
-- `helpOnTabEnter()` — restore tutorial + step from localStorage.
+- `helpOnTabEnter()`, restore tutorial + step from localStorage.
 - `helpStart(key)` / `helpExit()` / `helpNext()` / `helpPrev()`
   / `helpJumpTo(idx)`.
-- `helpOpenTab(tabId)` — switches tabs + remembers HELP position
+- `helpOpenTab(tabId)`, switches tabs + remembers HELP position
   so coming back lands on the same step.
-- `helpCurrentStep()` — derived from `tutorial + step`.
+- `helpCurrentStep()`, derived from `tutorial + step`.
 
 ### Screenshot placeholder pattern
 
@@ -3780,22 +3780,22 @@ link. Final card: "Didn't find what you need? Full docs index"
 
 ## Files modified
 
-- `wwwroot/index.html` — sidebar button #18 + tab panel + landing
+- `wwwroot/index.html`, sidebar button #18 + tab panel + landing
   grid + stepper shell + workflows sub-picker + troubleshoot
   accordion.
-- `wwwroot/js/app.js` — `help` state, 7 methods,
+- `wwwroot/js/app.js`, `help` state, 7 methods,
   `_helpTutorials()` catalog (~300 lines of data).
-- `wwwroot/css/app.css` — `.help-*` block (~150 lines).
-- `README.md` — bullet under Features pointing at the HELP tab.
+- `wwwroot/css/app.css`, `.help-*` block (~150 lines).
+- `README.md`, bullet under Features pointing at the HELP tab.
 
 ## Reused code
 
-- All `docs/user-guide/*.md` pages — body content + "Read more"
+- All `docs/user-guide/*.md` pages, body content + "Read more"
   link targets.
-- TONIGHT tab pattern (button + tab-panel) — template for HELP.
-- `<details>` collapsible pattern (600+ uses in index.html) —
+- TONIGHT tab pattern (button + tab-panel), template for HELP.
+- `<details>` collapsible pattern (600+ uses in index.html),
   direct lift for troubleshoot section.
-- `app.js` localStorage helpers — pattern for persisting
+- `app.js` localStorage helpers, pattern for persisting
   `polaris-help-pos`.
 - `.btn` / `.btn-primary` / `.text-muted` / `.text-warn` /
   `.tonight-card` / `.settings-section` existing CSS.
@@ -3814,7 +3814,7 @@ link. Final card: "Didn't find what you need? Full docs index"
 7. Drop a real PNG at the placeholder path, hard-refresh →
    placeholder gone, image rendered.
 8. localStorage `polaris-help-pos` carries
-   `{ tutorial: "capture", step: 4 }` — refresh browser, lands on
+   `{ tutorial: "capture", step: 4 }`, refresh browser, lands on
    same step.
 
 ## Notes
@@ -3825,7 +3825,7 @@ link. Final card: "Didn't find what you need? Full docs index"
   would lift step bodies into a `help-en.js` / `help-pt.js`
   switch.
 - **Print / PDF export deferred**.
-- **Embedded videos deferred** — text + screenshot is enough for
+- **Embedded videos deferred**, text + screenshot is enough for
   v1.
 - **Auth scope**: HELP tab gated by AUTH-2 like everything else.
 
@@ -3843,7 +3843,7 @@ can open `https://polaris-pi.local:5000` and have full control:
 stop the sequence, slew the mount, turn off the cooler, delete
 files via the FILES tab, capture frames to the operator's disk,
 etc. HTTPS protects the wire from sniffing but **does not
-authenticate clients** — it's just encryption.
+authenticate clients**, it's just encryption.
 
 `Services/SelfSignedCertService` documents this explicitly
 ("Polaris assumes trusted LAN"), but "trusted LAN" doesn't hold
@@ -3874,13 +3874,13 @@ Phase 1 + 2 research confirmed:
   concept; typical operator is one person. Multi-user is a
   follow-up if demanded.
 - **First-run**: wizard forces password creation on first access.
-  No default printed in postinst — avoids leaving someone stuck
+  No default printed in postinst, avoids leaving someone stuck
   with a hardcoded "polaris1234".
 - **Opt-out**: toggle in Settings, default ON. Cover for the
   field-isolated remote observatory case. Requires current
   password to turn off.
 - **Loopback bypass**: `127.0.0.1` / `::1` skip auth. Jupyter /
-  Grafana / RStudio pattern — whoever's on the Pi is trusted.
+  Grafana / RStudio pattern, whoever's on the Pi is trusted.
   Simplifies SSH tunnels + local scripts + dev.
 
 ## Architecture
@@ -3914,7 +3914,7 @@ public class AuthService {
 - **Session store**: `ConcurrentDictionary<string, SessionInfo>`
   in memory. `SessionInfo { Token, CreatedAt, LastActivityAt }`.
   Sliding 24 h default. Sweeper background task removes expired
-  sessions every 10 min. Not persisted on disk — restart
+  sessions every 10 min. Not persisted on disk, restart
   invalidates all sessions (intentional: simple + reacts to
   "forgot password → reset via SSH"). Tokens are 32 bytes random
   base64-url (~43 chars).
@@ -3969,10 +3969,10 @@ mirrors the sessionStorage timing on the frontend.
 
 | Method | Route | Body | Behaviour |
 |---|---|---|---|
-| GET | `/api/auth/status` | — | `{configured, enabled, authenticated}` |
+| GET | `/api/auth/status` |, | `{configured, enabled, authenticated}` |
 | POST | `/api/auth/setup` | `{password}` | Only when `!IsConfigured`; creates hash + returns token + sets cookie |
 | POST | `/api/auth/login` | `{password}` | `{token}` + cookie. Rate-limited. |
-| POST | `/api/auth/logout` | — | Invalidate token + clear cookie |
+| POST | `/api/auth/logout` |, | Invalidate token + clear cookie |
 | POST | `/api/auth/change-password` | `{current, new}` | Requires auth |
 | POST | `/api/auth/disable` | `{password}` | Toggle off (needs current pwd) |
 | POST | `/api/auth/enable` | `{password}` | Toggle on |
@@ -4011,7 +4011,7 @@ auth: {
    wizard overlay; configured + not-authenticated → login overlay;
    authenticated → app loads.
 
-**Overlay** — new `<div id="auth-overlay">` at the top of `<body>`,
+**Overlay**, new `<div id="auth-overlay">` at the top of `<body>`,
 `position: fixed; z-index: 99999; backdrop-filter: blur(8px);`.
 Shows either login form (1 password input + remember-me + Sign
 In) or first-run wizard (2 password inputs + confirm + min-8-chars
@@ -4090,7 +4090,7 @@ session timeout input.
 - Integration tests via WebApplicationFactory: 401 without token,
   200 with token, loopback bypass, first-run flow, WS handshake
   reject.
-- `docs/user-guide/authentication.md` — first-run wizard, change
+- `docs/user-guide/authentication.md`, first-run wizard, change
   password, reset forgotten password (SSH + clear ProfileService
   fields), disable auth for trusted LAN + warning.
 - README "Authentication" section.
@@ -4164,7 +4164,7 @@ The FOCUS tab originally only had **V-curve auto-focus**
 (`AutoFocusService`), which requires a motorised focuser. Users
 with manual focusers (Crayford / rack&pinion without motors,
 budget refractors, kid scopes) arrived at FOCUS and found a grey
-"Connect a focuser to use" — end of story.
+"Connect a focuser to use", end of story.
 
 Standard solutions in astrophotography:
 1. **Live HFR feedback**: user turns the knob, watches HFR update
@@ -4174,7 +4174,7 @@ Standard solutions in astrophotography:
    through the intersection of the other two. Software measures
    the central-spike offset and says "still 3.5 px off, turn in".
 3. **HFR trend over time**: chart showing "you were at 2.8 px
-   12 s ago, now jumped to 3.4 — you overshot".
+   12 s ago, now jumped to 3.4, you overshot".
 
 Research (Explore phase):
 - `AutoFocusService.MeasureHFR(image, minStars)` reusable: returns
@@ -4187,7 +4187,7 @@ Research (Explore phase):
   (Bahtinov uses 1 bright star).
 - Chart.js wrapper from V-curve already mountable: clone for
   time-series.
-- `focusConnected` flag in JS state — gate to show/hide the
+- `focusConnected` flag in JS state, gate to show/hide the
   motorised Auto-focus panel.
 - **Bahtinov**: zero code in repo (`bahtinov|diffraction` no
   match). Algorithm from scratch.
@@ -4196,10 +4196,10 @@ Research (Explore phase):
   Focus so it doesn't compete with/duplicate state.
 
 **Decisions** (AskUserQuestion):
-- **Bahtinov mask analysis in scope now** — algorithm from
+- **Bahtinov mask analysis in scope now**, algorithm from
   scratch, detects 3 spikes + central offset to say "clockwise /
   stop", visual canvas overlay.
-- **Always available** even with motor connected — user with
+- **Always available** even with motor connected, user with
   auto-focus can use Manual for fine-tuning after a V-curve, or
   just check HFR between exposures. Tabstrip in FOCUS:
   "Manual" + "Auto V-curve" coexist.
@@ -4280,7 +4280,7 @@ returns `BahtinovResult` JSON.
 - Tabstrip with `focusTab = 'manual' | 'auto'`. Default:
   `focusConnected ? 'auto' : 'manual'`.
 - **Manual subtab**: 2-col layout (canvas left, controls right,
-  chart full-width below) — same pattern as VIDEO Capture.
+  chart full-width below), same pattern as VIDEO Capture.
 - **Auto subtab**: existing V-curve markup unchanged.
 
 ### State + capture loop
@@ -4345,9 +4345,9 @@ draws over canvas:
 - `BahtinovAnalyzerTests.cs`: 6 synthetic cases (exact in-focus,
   positive offset, negative offset, faint star error, 2-spike
   error, 4+ spikes pick the 3 strongest).
-- `docs/user-guide/focus.md` — update with Manual Focus +
+- `docs/user-guide/focus.md`, update with Manual Focus +
   Bahtinov workflow.
-- README — short bullet.
+- README, short bullet.
 
 ## Phases (5 commits)
 
@@ -4453,7 +4453,7 @@ draws over canvas:
   lunar surface, pure nebula). Second Y axis on chart.
 - **Performance**: 2 s capture loop doesn't stress Pi 4/5.
   Bahtinov call adds ~50-200 ms.
-- **Persistence**: nothing saved in rig profile — sample buffer
+- **Persistence**: nothing saved in rig profile, sample buffer
   in-memory, clears on tab switch / reload (intentional: ad-hoc
   focus assist).
 
@@ -4499,7 +4499,7 @@ wants a hotspot has to configure it manually via `nmcli` or
   to Station, Polaris applies + waits for DHCP + gateway ping
   for 30 s. If neither comes, auto-reverts to hotspot. Prevents
   bricking access when password is wrong / network gone.
-- **Hotspot defaults**: **fixed** — SSID `Polaris-Hotspot`,
+- **Hotspot defaults**: **fixed**, SSID `Polaris-Hotspot`,
   password `polaris1234`. Astrophotography community memorises
   once. Paranoid user can change via UI.
 - **Distribution**: **`.deb` + bootstrap script only**. SD card
@@ -4511,7 +4511,7 @@ wants a hotspot has to configure it manually via `nmcli` or
 
 **Target platform**: **Linux + NetworkManager only**. Pi OS
 Bookworm (Pi 4/5) uses NM by default since 2023. Pi OS Bullseye
-(pre-2023) uses `dhcpcd` + `wpa_supplicant` — we document as
+(pre-2023) uses `dhcpcd` + `wpa_supplicant`, we document as
 "v1 not supported, please upgrade to Bookworm". Windows/macOS:
 panel shows "Network management requires Linux + NetworkManager.
 On this OS, manage WiFi via the OS settings." Same pattern as
@@ -4660,7 +4660,7 @@ WantedBy=multi-user.target
 
 Enabled via postinst. Sentinel file
 `/var/lib/polaris/wifi-bootstrap.done` prevents re-execution on
-upgrades — but deleting it re-runs the script (idempotent via the
+upgrades, but deleting it re-runs the script (idempotent via the
 `grep -q` check).
 
 ### UI (Settings → Network panel)
@@ -4744,7 +4744,7 @@ Polaris-Hotspot" or "📡 Station mode · HomeNet5G · IP
 ## Verification
 
 ### Smoke install
-1. `sudo apt install ./polaris_arm64.deb` — postinst clean.
+1. `sudo apt install ./polaris_arm64.deb`, postinst clean.
 2. Reboot.
 3. After ~30 s, `Polaris-Hotspot` visible on phone.
 4. Connect with `polaris1234` → IP `10.42.0.1` (NM default).
@@ -4783,7 +4783,7 @@ Polaris-Hotspot" or "📡 Station mode · HomeNet5G · IP
 
 ### Build + tests
 - `dotnet build` clean.
-- `dotnet test` — 700-ish atual + ~10 novos = ~710.
+- `dotnet test`, 700-ish atual + ~10 novos = ~710.
 
 ### Windows / macOS regression
 - Windows mini-PC: Settings → Network shows banner "Network
@@ -4800,7 +4800,7 @@ Polaris-Hotspot" or "📡 Station mode · HomeNet5G · IP
 - **Password at rest**: NetworkManager stores in
   `/etc/NetworkManager/system-connections/*.nmconnection` (mode
   600, root-owned). Polaris doesn't persist anything in
-  `profile.json` — avoids drift + leak.
+  `profile.json`, avoids drift + leak.
 - **Hotspot default credentials**: documented clearly as public
   (`polaris1234`). User who cares changes on first access.
 - **Polkit reload**: `systemctl restart polkit` in postinst is
@@ -4812,7 +4812,7 @@ Polaris-Hotspot" or "📡 Station mode · HomeNet5G · IP
   first `wifi` reported by `nmcli device status` wins. v1 doesn't
   support selecting between multiple WiFi NICs.
 - **Concurrent users**: two clients on the hotspot open Network
-  panel simultaneously, one switches — WS payload updates for the
+  panel simultaneously, one switches, WS payload updates for the
   other. No race in commands (nmcli serialises via D-Bus).
 - **Hidden SSID**: modal has "Other (hidden SSID)" opening
   manual SSID + password input.
@@ -4848,7 +4848,7 @@ master, the user jumps straight to GraXpert AI cleanup, then to
 the editor. Missing the step Siril does at this point: **color
 calibration**. Without it, the RGB comes out with cast (usually
 green-yellow from sensor bias + sky glow), and the user has to
-fix manually with Temp/Tint sliders in the editor — eyeball work
+fix manually with Temp/Tint sliders in the editor, eyeball work
 and guesswork.
 
 Siril solves with 3 tools:
@@ -5020,19 +5020,19 @@ Apply: out[c, i] = (in[c, i] - offset[c]) * gain[c]
 ## Phases (10 commits)
 
 ### CCALB-0a: WCS read/write helpers
-- `WcsHeaders.cs` (new) — Add/Read/PixelToRaDec/RaDecToPixel.
-- `FITSWriter.cs` modified — accepts `WcsInfo?` and emits the
+- `WcsHeaders.cs` (new), Add/Read/PixelToRaDec/RaDecToPixel.
+- `FITSWriter.cs` modified, accepts `WcsInfo?` and emits the
   WCS keywords.
-- `FITSReader.cs` modified — populates `ImageProperties.Wcs`.
-- `AstapSolver.cs` modified — after solve, re-stamps source FITS
+- `FITSReader.cs` modified, populates `ImageProperties.Wcs`.
+- `AstapSolver.cs` modified, after solve, re-stamps source FITS
   (write-temp + atomic rename).
-- `BatchStackingService.cs` modified — if input frames carry
+- `BatchStackingService.cs` modified, if input frames carry
   WCS, persist the reference's WCS on the output master.
 - Tests: roundtrip; pixel↔RA/Dec invertible within 0.1 px;
   AstapSolver stamps the source FITS.
 
 ### CCALB-0b: per-channel star photometry
-- `StarPhotometer.cs` (new) — `MeasureRgb(planeSequentialUshort,
+- `StarPhotometer.cs` (new), `MeasureRgb(planeSequentialUshort,
   w, h, channels, stars)` returns
   `List<StarPhotometry>` with X/Y + FluxR/G/B. Aperture circle
   r = 2 * HFR. Background sub via local annulus mean. Per-pixel
@@ -5060,9 +5060,9 @@ Apply: out[c, i] = (in[c, i] - offset[c]) * gain[c]
   neutral color.
 
 ### CCALB-3a: APASS catalog service + download script
-- `ApassCatalog.cs` (new in `Services/Sky/`) — SQLite loader,
+- `ApassCatalog.cs` (new in `Services/Sky/`), SQLite loader,
   R*tree cone search. Graceful fail when DB missing.
-- `scripts/download-apass.py` (new) — wget APASS DR10 subset +
+- `scripts/download-apass.py` (new), wget APASS DR10 subset +
   build SQLite with R*tree.
 - `.gitignore`: ignore `src/NINA.Polaris/wwwroot/catalogs/apass/`.
 - `NINA.Polaris.csproj`: `<Content Include="wwwroot\catalogs\**\*">`
@@ -5121,24 +5121,24 @@ Apply: out[c, i] = (in[c, i] - offset[c]) * gain[c]
 
 ## Files modified
 
-- `src/NINA.Image.Portable/FileFormat/FITS/FITSWriter.cs` — WCS opcional
-- `src/NINA.Image.Portable/FileFormat/FITS/FITSReader.cs` — WCS extract
-- `src/NINA.Image.Portable/ImageData/ImageProperties.cs` — `WcsInfo?`
-- `src/NINA.Polaris/Services/PlateSolving/AstapSolver.cs` — re-stamp
-- `src/NINA.Polaris/Services/Studio/BatchStackingService.cs` —
+- `src/NINA.Image.Portable/FileFormat/FITS/FITSWriter.cs`, WCS opcional
+- `src/NINA.Image.Portable/FileFormat/FITS/FITSReader.cs`, WCS extract
+- `src/NINA.Image.Portable/ImageData/ImageProperties.cs`, `WcsInfo?`
+- `src/NINA.Polaris/Services/PlateSolving/AstapSolver.cs`, re-stamp
+- `src/NINA.Polaris/Services/Studio/BatchStackingService.cs`,
   propagate WCS
-- `src/NINA.Polaris/Endpoints/StudioEndpoints.cs` — 3 new endpoints
-- `src/NINA.Polaris/Program.cs` — register `ColorCalibrationService`
+- `src/NINA.Polaris/Endpoints/StudioEndpoints.cs`, 3 new endpoints
+- `src/NINA.Polaris/Program.cs`, register `ColorCalibrationService`
   + `ApassCatalog` singletons
-- `src/NINA.Polaris/wwwroot/index.html` — new 3-tab modal + STUDIO
+- `src/NINA.Polaris/wwwroot/index.html`, new 3-tab modal + STUDIO
   toolbar item
-- `src/NINA.Polaris/wwwroot/js/app.js` — state + methods +
+- `src/NINA.Polaris/wwwroot/js/app.js`, state + methods +
   canvas patch picker
-- `src/NINA.Polaris/wwwroot/css/app.css` — `.colorcal-*` +
+- `src/NINA.Polaris/wwwroot/css/app.css`, `.colorcal-*` +
   `.patch-picker` overlay
-- `src/NINA.Polaris/NINA.Polaris.csproj` — `<Content Include>` for
+- `src/NINA.Polaris/NINA.Polaris.csproj`, `<Content Include>` for
   the APASS bundle
-- `Dockerfile` — COPY of the bundle
+- `Dockerfile`, COPY of the bundle
 - Docs + README + LICENSE entries
 
 ## Verification
@@ -5235,7 +5235,7 @@ Polaris.
 Missing the **channel combine** step: take separate mono masters
 and assemble a single RGB or LRGB. PixInsight does this with
 `ChannelCombination`, `LRGBCombination`, and `PixelMath`. Without
-it, Polaris doesn't close the mono workflow end-to-end — which
+it, Polaris doesn't close the mono workflow end-to-end, which
 is exactly what `end-to-end-workflow.md` just promised to close.
 
 **Research** (Explore agents Phase 1):
@@ -5258,7 +5258,7 @@ is exactly what `end-to-end-workflow.md` just promised to close.
    FITS, silently flattening RGB combine results to mono in the
    EDITOR.
 3. `DenoisePipeline` + `DeconPipeline` in `onnx-pipelines.js`
-   (`runPerChannel` line 904) force mono input — same problem on
+   (`runPerChannel` line 904) force mono input, same problem on
    AI cleanup post-combine.
 
 **Decisions** (AskUserQuestion in the Plan phase):
@@ -5482,58 +5482,58 @@ inline error ("variable 'X' undefined" / "unbalanced parenthesis").
 
 ## Files modified
 
-- `Endpoints/StudioEndpoints.cs` — 2 new endpoints
-- `Program.cs` — register `ChannelCombineService` singleton
-- `Services/ImageWriterService.cs` — case `"COMPOSED"` in
+- `Endpoints/StudioEndpoints.cs`, 2 new endpoints
+- `Program.cs`, register `ChannelCombineService` singleton
+- `Services/ImageWriterService.cs`, case `"COMPOSED"` in
   `BuildSubDir`
-- `Services/Editor/ImageEditService.cs` — fix line 129
+- `Services/Editor/ImageEditService.cs`, fix line 129
   (`channels = img.Properties.Channels`)
-- `Services/Editor/EditPipeline.cs` — audit RGB path (if any gap)
-- `wwwroot/js/onnx-pipelines.js` — RGB path on Denoise + Decon
-- `wwwroot/index.html` — Combine button + modal
-- `wwwroot/js/app.js` — state + `studioCombine*` methods
-- `wwwroot/css/app.css` — `.studio-combine-modal` (small)
-- `docs/user-guide/end-to-end-workflow.md` — "Mono LRGB variation"
+- `Services/Editor/EditPipeline.cs`, audit RGB path (if any gap)
+- `wwwroot/js/onnx-pipelines.js`, RGB path on Denoise + Decon
+- `wwwroot/index.html`, Combine button + modal
+- `wwwroot/js/app.js`, state + `studioCombine*` methods
+- `wwwroot/css/app.css`, `.studio-combine-modal` (small)
+- `docs/user-guide/end-to-end-workflow.md`, "Mono LRGB variation"
   section
-- `docs/user-guide/studio.md` — Combine tool doc
-- `docs/user-guide/README.md` — new link
-- `README.md` — short mention
+- `docs/user-guide/studio.md`, Combine tool doc
+- `docs/user-guide/README.md`, new link
+- `README.md`, short mention
 
 ## Reused code
 
-- `Services/Studio/BatchStackingService.cs:37-276` — literal
+- `Services/Studio/BatchStackingService.cs:37-276`, literal
   template for the job pattern AND the registration pipeline
   (lines 72-148 do exactly Star detect → Match → Resample we
   want to replicate cross-channel).
-- `Services/Studio/MasterFrameService.cs` — pattern of combining
+- `Services/Studio/MasterFrameService.cs`, pattern of combining
   N frames per-pixel (sigma-clipped); reuse the per-pixel loop
   structure.
-- `Services/Studio/FrameLibraryService.GetById` — load inputs.
-- `Image.Portable/ImageAnalysis/StarDetector.cs` —
+- `Services/Studio/FrameLibraryService.GetById`, load inputs.
+- `Image.Portable/ImageAnalysis/StarDetector.cs`,
   `Detect(ushort[], w, h)` stateless, returns
   `List<DetectedStar>` (X, Y, HFR, Peak, Flux).
-- `Image.Portable/ImageAnalysis/StarMatcher.cs` —
+- `Image.Portable/ImageAnalysis/StarMatcher.cs`,
   `Match(refStars, currentStars, maxSearchRadius, maxStarsToUse,
   ransacIterations)` static, returns `AffineTransform?`.
 - `Image.Portable/ImageAnalysis/AffineTransform.cs` +
-  `ImageResampler.cs` — `ApplyTransform(ushort[] source, w, h,
+  `ImageResampler.cs`, `ApplyTransform(ushort[] source, w, h,
   T)` returns aligned grid.
-- `Image.Portable/FileFormat/FITS/FITSReader.cs:17-46` — already
+- `Image.Portable/FileFormat/FITS/FITSReader.cs:17-46`, already
   reads NAXIS=3 → `Channels=3`.
-- `Image.Portable/FileFormat/FITS/FITSWriter.cs:57-80` — already
+- `Image.Portable/FileFormat/FITS/FITSWriter.cs:57-80`, already
   writes 3-channel plane-sequential.
-- `Image.Portable/ImageData/ImageProperties.cs:21` — `Channels`
+- `Image.Portable/ImageData/ImageProperties.cs:21`, `Channels`
   property.
-- `Image.Portable/ImageAnalysis/ColorSpace.cs` — RGB↔HSL
+- `Image.Portable/ImageAnalysis/ColorSpace.cs`, RGB↔HSL
   helpers (add Lab in the same file if absent).
-- `Services/ImageWriterService.cs:250-275 BuildSubDir` — switch
+- `Services/ImageWriterService.cs:250-275 BuildSubDir`, switch
   pattern to extend with `"COMPOSED"`.
-- `Services/Editor/EditPipeline.cs` — verify RGB-aware.
+- `Services/Editor/EditPipeline.cs`, verify RGB-aware.
 - `wwwroot/js/onnx-pipelines.js BgePipeline.runRgb` (line ~675)
-  — exact pattern to mirror in Denoise + Decon.
-- `wwwroot/js/app.js studioStartIntegrate()` — model for
+ , exact pattern to mirror in Denoise + Decon.
+- `wwwroot/js/app.js studioStartIntegrate()`, model for
   `studioRunCombine()`.
-- HTML `studio-integrate-modal` (~line 4469) — model for
+- HTML `studio-integrate-modal` (~line 4469), model for
   `studio-combine-modal`.
 - Selection-bar (~line 4258), 4 existing buttons, add 5th in the
   same row.
@@ -5565,7 +5565,7 @@ inline error ("variable 'X' undefined" / "unbalanced parenthesis").
    library, "RGB" badge visible. FITS headers `REGISTER=T`,
    `REGREF=L`, `REG_R=...` etc.
 8. Crop 200% in PixInsight to check stars: no colour fringes
-   (registration worked). Compare with registration OFF — fringes
+   (registration worked). Compare with registration OFF, fringes
    clearly visible.
 9. Click "Open in editor" from the toast, editor loads RGB FITS
    (Color sliders active with Temp/Tint/Vibrance/Saturation/Hue
@@ -5665,7 +5665,7 @@ ONNX models** (~1.5 GB total):
 
 Models are **float32 NHWC** (BGE/Denoise) or **NCHW** (Decon,
 single channel). License: **CC BY-NC-SA 4.0** (different from
-the GPL-3 code — non-commercial use).
+the GPL-3 code, non-commercial use).
 
 **Decisions**:
 - **OS-independent implementation**: server is just a CDN for
@@ -5739,7 +5739,7 @@ the GPL-3 code — non-commercial use).
 2. Padding: `(window_size − stride) / 2 = 64` on every border.
 3. Per-tile MAD normalise (global subsampled median+MAD), clip ±10
    (v2) or ±1 (v3).
-4. Batch tiles (8 per call — power-of-2, configurable).
+4. Batch tiles (8 per call, power-of-2, configurable).
 5. De-tile: extract `[64:64+128, 64:64+128, :]` from each tile,
    paste on stride-aligned grid.
 6. Blend strength: `out = denoised × s + original × (1−s)`.
@@ -5766,7 +5766,7 @@ Server:
   UI grey with banner asking to configure.
 - SHA-256 hash computed lazily + cached in memory.
 - Serves bytes with `ETag: "{hash}"` + `Cache-Control: immutable,
-  max-age=31536000` — first GET downloads, subsequent 304.
+  max-age=31536000`, first GET downloads, subsequent 304.
 
 Client:
 - ORT Web bootstrap lazy: only loads when user invokes a GraXpert
@@ -5795,7 +5795,7 @@ depth. Editor today works in 8-bit display-stretched. Simple v1
 solution:
 - "AI" section in the editor with 3 buttons (BGE, Denoise, Decon).
 - Each one: takes the current session via
-  `/api/editor/raw/{sessionId}` (already exists — returns the
+  `/api/editor/raw/{sessionId}` (already exists, returns the
   8-bit working buffer), processes, OR alternatively fetches the
   source FITS via new `/api/editor/source-raw/{sessionId}`
   returning the ushort[] pre-stretch.
@@ -5805,11 +5805,11 @@ solution:
 ### CC BY-NC-SA 4.0 license
 
 - First time user clicks a GraXpert op: consent modal ("Models by
-  GraXpert dev team, CC BY-NC-SA 4.0, non-commercial use — read
+  GraXpert dev team, CC BY-NC-SA 4.0, non-commercial use, read
   more / I agree"). Flag saved in localStorage + on server
   profile.
 - Settings panel shows link to licenses.
-- Polaris does NOT redistribute the models in the installer —
+- Polaris does NOT redistribute the models in the installer,
   discovered only via GraXpert install OR upstream download under
   consent.
 
@@ -5863,7 +5863,7 @@ solution:
   swaps the session's cached buffer with the new; next preview
   reflects it).
 - Non-destructive: reopening the source removes the effect
-  (not persisted in sidecar — operation is in-session).
+  (not persisted in sidecar, operation is in-session).
 
 ### GX-6: License consent + first-time UX
 - Consent modal CC BY-NC-SA 4.0 on first invocation.
@@ -5875,7 +5875,7 @@ solution:
 
 ### GX-7: CLI hidden behind advanced toggle
 - Settings adds toggle "Use GraXpert CLI subprocess instead of
-  in-browser inference" — default OFF.
+  in-browser inference", default OFF.
 - When OFF: GraXpert UI (FILES tab buttons + editor AI section)
   hides CLI controls and shows the browser-pipeline.
 - When ON: existing behavior (subprocess via GraXpertService).
@@ -5883,13 +5883,13 @@ solution:
   GPU/RAM for the models".
 
 ### GX-8: Tests + docs + parity verification
-- `OnnxModelRegistryTests.cs` — auto-discovery, manifest shape,
+- `OnnxModelRegistryTests.cs`, auto-discovery, manifest shape,
   hash stability.
-- `OnnxEndpointsTests.cs` — model serve with ETag, conditional
+- `OnnxEndpointsTests.cs`, model serve with ETag, conditional
   GET, save endpoint.
 - Manual parity script: 3 synthetic + real frames, run CLI +
   browser pipeline, measure pixel diff. Accept ≤1% RMSE.
-- `docs/user-guide/onnx-inference.md` — workflow + supported
+- `docs/user-guide/onnx-inference.md`, workflow + supported
   browsers + license + mobile constraints.
 - README section "AI processing (ONNX)" + attribution.
 
@@ -5912,42 +5912,42 @@ solution:
 
 ## Files modified
 
-- `Services/ProfileService.cs` — `Onnx:ModelsPath` (string?),
+- `Services/ProfileService.cs`, `Onnx:ModelsPath` (string?),
   `Onnx:LicenseAcknowledged` (bool),
   `Onnx:DefaultDenoiseVersion` (string, default "2.0.0").
-- `Program.cs` — register `OnnxModelRegistry` +
+- `Program.cs`, register `OnnxModelRegistry` +
   `MapOnnxEndpoints()`.
-- `wwwroot/index.html` — script tag ORT Web (lazy import); new
+- `wwwroot/index.html`, script tag ORT Web (lazy import); new
   "AI" section in editor; license consent modal; FILES tab modal
   toggle "Run in browser"; Settings section "AI inference".
-- `wwwroot/js/app.js` — pipeline wiring, IndexedDB cache,
+- `wwwroot/js/app.js`, pipeline wiring, IndexedDB cache,
   dispatch toggle, license modal.
-- `wwwroot/css/app.css` — small additions for license modal + AI
+- `wwwroot/css/app.css`, small additions for license modal + AI
   section.
-- `Endpoints/EditorEndpoints.cs` — new
+- `Endpoints/EditorEndpoints.cs`, new
   `POST /api/editor/replace-working/{sessionId}` for GX-5 to
   inject AI op result back into the editor session.
-- `Services/Editor/ImageEditService.cs` — method
+- `Services/Editor/ImageEditService.cs`, method
   `ReplaceWorkingBuffer(sessionId, bytes, w, h, channels)` called
   by the new endpoint.
-- `README.md` — "AI processing (ONNX)" section.
+- `README.md`, "AI processing (ONNX)" section.
 
 ## Reused code
 
-- `Services/External/GraXpertService.cs` — KEEP as CLI fallback;
+- `Services/External/GraXpertService.cs`, KEEP as CLI fallback;
   just hide by default.
-- `Services/External/BinaryLocator.cs` — pattern of cross-OS
+- `Services/External/BinaryLocator.cs`, pattern of cross-OS
   auto-discovery (replicate for `OnnxModelRegistry`).
-- `Services/Editor/ImageEditService.cs` — session pattern; new
+- `Services/Editor/ImageEditService.cs`, session pattern; new
   `ReplaceWorkingBuffer` reuses `_sessions` dict + reuses the
   stretching done at Load.
-- `Endpoints/EditorEndpoints.cs::raw` — pattern of binary stream
-  with `X-Width/X-Height/X-Channels` headers — replicate for
+- `Endpoints/EditorEndpoints.cs::raw`, pattern of binary stream
+  with `X-Width/X-Height/X-Channels` headers, replicate for
   ONNX models.
-- `wwwroot/js/app.js _editorLoadWasmBuffer` — pattern of binary
+- `wwwroot/js/app.js _editorLoadWasmBuffer`, pattern of binary
   buffer fetch + IndexedDB cache (already implemented for ED-6
   WASM).
-- `wwwroot/js/lib/lz4.js` — not used here, but the vendored
+- `wwwroot/js/lib/lz4.js`, not used here, but the vendored
   library pattern serves as reference for ORT Web vendoring.
 
 ## Verification
@@ -6052,7 +6052,7 @@ solution:
 
 ---
 
-# Previous plan: Activity bar — client↔server network indicator (NET)
+# Previous plan: Activity bar, client↔server network indicator (NET)
 
 > Previous plan (ED, Editor Lightroom-style) preserved below.
 
@@ -6060,7 +6060,7 @@ solution:
 
 The activity bar at the footer (lines 5251-5304 in `index.html`)
 today shows CPU%, RAM%, host icon at right; activity chips on
-the left. Missing: data **traffic** indication — when the
+the left. Missing: data **traffic** indication, when the
 image-stream WS is gushing LZ4 frames at 5-20 MB/s, or when
 `/api/editor/raw` is downloading 50-200 MB of the master, the
 user has no visual feedback that the link is busy. When the
@@ -6076,7 +6076,7 @@ activity, beside the CPU/RAM block.
   the 3 WebSockets + 6 raw editor fetches to accumulate bytes.
 - **Visibility**: always visible. CPU/RAM always present; chip
   row appears when there's an active op, empty when idle.
-- **Update cadence**: 4 Hz (250 ms) — responsive without
+- **Update cadence**: 4 Hz (250 ms), responsive without
   flooding the RAF queue.
 - **Units**: auto-scale (B/s / KB/s / MB/s), 1 decimal.
 - **Zero backend**: no new endpoint, no extra payload.
@@ -6095,43 +6095,43 @@ window → current rate. Write to `rxRate` / `txRate`. Pulse: set
 `rxPulse=true`, `setTimeout(120 ms)` to clear.
 
 Functions:
-- `_netRx(bytes)` — called by each arrival handler.
-- `_netTx(bytes)` — called by each send wrapper.
-- `_netStartMeter()` — 250 ms timer.
-- `formatBytesPerSec(bps)` — autoscale B→KB→MB with 1 decimal.
+- `_netRx(bytes)`, called by each arrival handler.
+- `_netTx(bytes)`, called by each send wrapper.
+- `_netStartMeter()`, 250 ms timer.
+- `formatBytesPerSec(bps)`, autoscale B→KB→MB with 1 decimal.
 
 ### Instrumentation points
 
 **RX (server → client)**:
-1. `/ws/status` `.onmessage` (`app.js:1392`) — small JSON but
+1. `/ws/status` `.onmessage` (`app.js:1392`), small JSON but
    continuous (1 Hz × ~2 KB). `this._netRx(event.data.length)`.
-2. `/ws/image-stream` `.onmessage` (`app.js:1453`) — binary
+2. `/ws/image-stream` `.onmessage` (`app.js:1453`), binary
    `arraybuffer`. `this._netRx(event.data.byteLength)`. Heaviest
    path: live stack in raw mode reaches 5-20 MB/s.
-3. `/ws/terminal` `.onmessage` (`app.js:1278`) — SSH text.
+3. `/ws/terminal` `.onmessage` (`app.js:1278`), SSH text.
    Negligible but instrumented for consistency.
-4. **`apiFetch` wrapper** (`app.js:1088-1152`) — single point for
+4. **`apiFetch` wrapper** (`app.js:1088-1152`), single point for
    all `apiPost`/`apiGet`. Use **Performance Resource Timing**:
    `performance.getEntriesByType('resource')` returns
    `PerformanceResourceTiming` with `transferSize`. Drain via
    `performance.clearResourceTimings()` after each tick.
    Captures HTTP RX + thumbnails + sky tiles automatically.
-5. **6 raw editor fetches** — covered automatically via the
+5. **6 raw editor fetches**, covered automatically via the
    Performance API.
 
 **TX (client → server)**:
-1. **WS sends** — wrap each `ws.send(...)`:
+1. **WS sends**, wrap each `ws.send(...)`:
    - `/ws/status`: subscribe message on open.
    - `/ws/image-stream`: client-stack-progress, capability.
    - `/ws/terminal`: keystrokes.
    Helper `_wsSendTracked(ws, payload)` does
    `ws.send(payload)` + `this._netTx(byteLength(payload))`.
    Refactor ~10 call sites.
-2. **`apiFetch` requests** — body length. For
+2. **`apiFetch` requests**, body length. For
    `JSON.stringify(body)` count string length pre-send. For
    `FormData` (multipart), sum `file.size`. Performance API does
    NOT give upload size, so TX needs manual instrumentation.
-3. **Editor raw fetches** — count body explicitly at call sites
+3. **Editor raw fetches**, count body explicitly at call sites
    since they bypass `apiFetch`.
 
 ### Performance Resource Timing for RX (design choice)
@@ -6170,14 +6170,14 @@ Tooltip shows session cumulative totals ("12.4 MB ↓ · 230 KB ↑").
 
 ### CSS
 
-`.activity-net` — narrow column (~70-90 px), font 11 px, spacing
+`.activity-net`, narrow column (~70-90 px), font 11 px, spacing
 similar to `.activity-host-stat`. `.activity-net-arrow` coloured
 green (rx) / blue (tx). `@keyframes net-pulse` 120 ms (brightness
 + small scale).
 
 ## Phases
 
-Single commit — small feature.
+Single commit, small feature.
 
 ### NET-1: Counter + meter loop + instrumentation
 - `net` state in `app.js`.
@@ -6206,16 +6206,16 @@ No files to create. No backend changes.
 ## Reused code
 
 - 250 ms timer pattern like `_skyTicker` in app.js.
-- `host` block in `.activity-bar-host` — clone layout.
-- `formatRam` in app.js — reference for `formatBytesPerSec`
+- `host` block in `.activity-bar-host`, clone layout.
+- `formatRam` in app.js, reference for `formatBytesPerSec`
   (same aesthetic: number + compact unit).
-- `apiFetch` (app.js:1088-1152) — single TX chokepoint, already
+- `apiFetch` (app.js:1088-1152), single TX chokepoint, already
   has timeout/error handling, just adds 2 lines.
 - 3 WebSocket sites + 6 editor fetch sites already mapped.
 
 ## Verification
 
-1. **Build**: `dotnet build` — no-op (no C# changes).
+1. **Build**: `dotnet build`, no-op (no C# changes).
 2. **Smoke idle**: open browser, DevTools Network, leave still.
    Bar should show `↓ 0.0 B/s · ↑ 0.0 B/s` (or low KB/s from the
    1 Hz `/ws/status`).
@@ -6235,7 +6235,7 @@ No files to create. No backend changes.
 7. **Tooltip**: hover over the net block shows cumulative
    totals.
 8. **Session reset**: closing/reopening the browser zeroes
-   totals. (Doesn't persist — by design.)
+   totals. (Doesn't persist, by design.)
 
 ## Notes
 
@@ -6243,7 +6243,7 @@ No files to create. No backend changes.
   of short fetches (thumbnails).
   `performance.clearResourceTimings()` per tick keeps it at 0.
 - Small WebSocket sends (subscribe, keystrokes) may round to
-  0.0 B/s even when active. Acceptable — goal is to visualise
+  0.0 B/s even when active. Acceptable, goal is to visualise
   significant traffic.
 - Pulse animation is purely visual; perf impact negligible even
   on Pi 2.
@@ -6282,7 +6282,7 @@ upload through the tab itself.
 **Decisions** (with the user):
 - **Compute**: hybrid WASM (when available) + server (Skia + libs)
   as fallback. CLST pattern.
-- **Sources**: 3 paths — Library masters, FILES tab "Open in
+- **Sources**: 3 paths, Library masters, FILES tab "Open in
   editor", direct upload / drag-and-drop.
 - **Edit model**: non-destructive. Sidecar JSON beside the file
   preserves adjustments. Final export applies + writes to
@@ -6294,7 +6294,7 @@ upload through the tab itself.
 
 ```
 ┌─ Polaris main app ───────────────────────────────────────────────┐
-│  STUDIO panel — new "Editor" sub-tab                             │
+│  STUDIO panel, new "Editor" sub-tab                             │
 │                                                                   │
 │  ┌──── Editor view ───────────────────────────────────────────┐  │
 │  │  • Source picker: Library card / FILES file / Upload       │  │
@@ -6324,7 +6324,7 @@ upload through the tab itself.
 │        POST /api/studio/editor/preview → <img src>                │
 └───────────────────────────────────────────────────────────────────┘
 
-┌─ NINA.Polaris.Wasm (extended — Interop.cs) ──────────────────────┐
+┌─ NINA.Polaris.Wasm (extended, Interop.cs) ──────────────────────┐
 │  LoadEditorFrame(pixels[], w, h, bitDepth, bayer) → sessionId     │
 │  ApplyEdit(sessionId, paramsJson) → previewBytes (8-bit JPEG)     │
 │  ComputeHistogram(sessionId) → int[256*3]                         │
@@ -6334,9 +6334,9 @@ upload through the tab itself.
 
 ┌─ Server ─────────────────────────────────────────────────────────┐
 │  Services/Editor/                                                 │
-│    ImageEditService.cs       — LRU cache + apply edits + preview  │
-│    EditSidecarStore.cs       — read/write {source}.edit.json      │
-│    EditOperations.cs         — canonical-order pipeline (shared   │
+│    ImageEditService.cs      , LRU cache + apply edits + preview  │
+│    EditSidecarStore.cs      , read/write {source}.edit.json      │
+│    EditOperations.cs        , canonical-order pipeline (shared   │
 │                                via NINA.Image.Portable so WASM    │
 │                                and server use same math)          │
 │  Endpoints/EditorEndpoints.cs                                     │
@@ -6351,7 +6351,7 @@ upload through the tab itself.
 └───────────────────────────────────────────────────────────────────┘
 ```
 
-### Canonical pipeline (order matters — server and WASM apply identical)
+### Canonical pipeline (order matters, server and WASM apply identical)
 
 ```
 1. Decode → float[] working buffer (mono or RGB linear-light)
@@ -6360,7 +6360,7 @@ upload through the tab itself.
 4. Contrast (S-curve around 0.5)
 5. Highlights / Shadows (anchored tone curve)
 6. Whites / Blacks (point movement at extremes)
-7. Tone curve (spline LUT 256 entries — RGB master + per-channel)
+7. Tone curve (spline LUT 256 entries, RGB master + per-channel)
 8. Vibrance / Saturation (HSL multiply; vibrance protects already-saturated pixels)
 9. Hue shift (HSL rotation)
 10. Clarity (large-radius USM + low amount on luminance)
@@ -6373,7 +6373,7 @@ upload through the tab itself.
 17. Encode (Skia: JPEG quality 0-100, PNG 8-bit or 16-bit, TIFF 16-bit)
 ```
 
-Skip any step where the param is at default — passes the buffer
+Skip any step where the param is at default, passes the buffer
 forward without copy.
 
 ### Sidecar JSON
@@ -6410,26 +6410,26 @@ Values 0/null = default (skip). Reopening rehydrates the sliders.
 
 ### Reuse (explicit, do NOT reinvent)
 
-Everything below already exists — confirmed via exploration:
+Everything below already exists, confirmed via exploration:
 
-- **`AutoStretch.cs`** — `ApplyManual(buf, black, mid, white)` is
+- **`AutoStretch.cs`**, `ApplyManual(buf, black, mid, white)` is
   the base for stretch / black / white points.
-- **`UnsharpMask.cs`** — sharpening, texture, clarity.
-- **`GaussianBlur.cs`** — kernel for USM.
-- **`ImageResampler.cs`** — bilinear resize.
-- **`JpegEncoder.cs`** — encode with quality.
-- **`ImageStatistics.cs`** — per-channel histogram.
-- **`BayerDebayer.cs`** — debayer for raw color sources.
-- **`FitsThumbnailer.cs`** — Skia Gray8/RGB encode pipeline.
-- **`FrameProcessingService.cs`** — LRU cache of 4 decoded frames
+- **`UnsharpMask.cs`**, sharpening, texture, clarity.
+- **`GaussianBlur.cs`**, kernel for USM.
+- **`ImageResampler.cs`**, bilinear resize.
+- **`JpegEncoder.cs`**, encode with quality.
+- **`ImageStatistics.cs`**, per-channel histogram.
+- **`BayerDebayer.cs`**, debayer for raw color sources.
+- **`FitsThumbnailer.cs`**, Skia Gray8/RGB encode pipeline.
+- **`FrameProcessingService.cs`**, LRU cache of 4 decoded frames
   + `RenderJpegAsync` / `RenderPngAsync` / `ExportAsync`.
-- **`FrameOperationsService.cs`** — RemoveGradient polynomial,
+- **`FrameOperationsService.cs`**, RemoveGradient polynomial,
   NoiseReduction, Sharpen async wrappers.
-- **`NINA.Polaris.Wasm/Interop.cs`** — `[JSExport]` pattern +
+- **`NINA.Polaris.Wasm/Interop.cs`**, `[JSExport]` pattern +
   primitive types passed at the boundary.
-- **`NINA.Polaris.Wasm.csproj`** — net10.0 / browser-wasm / AOT
+- **`NINA.Polaris.Wasm.csproj`**, net10.0 / browser-wasm / AOT
   / SIMD already configured.
-- **`wwwroot/js/wasm/main.js`** + `nina-wasm-ready` event —
+- **`wwwroot/js/wasm/main.js`** + `nina-wasm-ready` event,
   handshake already in production.
 - **OpenSeadragon** (vendored in `wwwroot/js/lib/openseadragon/`).
 - **Chart.js** for the histogram.
@@ -6439,20 +6439,20 @@ Everything below already exists — confirmed via exploration:
 ### To build from scratch
 
 In `NINA.Image.Portable/ImageAnalysis/`:
-- **`ColorSpace.cs`** — RGB↔HSL, RGB↔Lab (CIE D65),
+- **`ColorSpace.cs`**, RGB↔HSL, RGB↔Lab (CIE D65),
   temperature/tint → RGB gains.
-- **`ToneCurve.cs`** — natural cubic spline interpolating control
+- **`ToneCurve.cs`**, natural cubic spline interpolating control
   points, generates LUT 256.
-- **`BilateralFilter.cs`** — optional (expensive, ~2-5× slower
+- **`BilateralFilter.cs`**, optional (expensive, ~2-5× slower
   than gaussian); used by Clarity/Dehaze.
-- **`Vignette.cs`** — radial falloff with feather.
+- **`Vignette.cs`**, radial falloff with feather.
 
 In `NINA.Polaris.Portable/Editor/` (new namespace shared between
 WASM and server):
-- **`EditParams.cs`** — record with sub-records (WhiteBalance,
+- **`EditParams.cs`**, record with sub-records (WhiteBalance,
   Light, Color, Detail, Effects, ToneCurve, Crop). Immutable;
   rehydratable via System.Text.Json.
-- **`EditPipeline.cs`** — `Apply(EditParams, float[] working) →
+- **`EditPipeline.cs`**, `Apply(EditParams, float[] working) →
   float[]`. Applies the 16 steps in order, skipping defaults.
 
 ## Phases (7 commits)
@@ -6466,7 +6466,7 @@ WASM and server):
   spline, input `Point[]` (0-255 domain), produces `byte[256]`
   LUT.
 - `NINA.Polaris.Portable/Editor/EditParams.cs` (records).
-- `NINA.Polaris.Portable/Editor/EditPipeline.cs` —
+- `NINA.Polaris.Portable/Editor/EditPipeline.cs`,
   `Apply(buf, w, h, channels, EditParams)`.
 - Tests: ColorSpace roundtrip RGB↔HSL preserves ±1 in 8-bit;
   identity ToneCurve produces linear LUT; default EditParams =
@@ -6475,15 +6475,15 @@ WASM and server):
 ### ED-2: ImageEditService server-side
 - LRU cache of 4 decoded frames (same pattern as
   `FrameProcessingService.cs`).
-- `LoadAsync(string path)` — opens FITS/XISF/PNG/JPG/TIFF,
+- `LoadAsync(string path)`, opens FITS/XISF/PNG/JPG/TIFF,
   returns session `{sessionId, w, h, channels, bitDepth}`.
-- `RenderPreviewAsync(sessionId, EditParams, maxDim, quality)` —
+- `RenderPreviewAsync(sessionId, EditParams, maxDim, quality)`,
   applies pipeline, downsamples to maxDim (default 1600 px for
   snappy preview), encodes JPEG.
-- `ComputeHistogramAsync(sessionId, EditParams)` — post-pipeline,
+- `ComputeHistogramAsync(sessionId, EditParams)`, post-pipeline,
   256×3 RGB or 256×1 mono.
 - `ExportAsync(sessionId, EditParams, format, quality, resize,
-  outputPath)` — full-res pipeline + encode to disk; reuses
+  outputPath)`, full-res pipeline + encode to disk; reuses
   `ImageWriterService.BuildSubDir` for
   `processed/{target}/edited/`.
 - Registered as singleton in `Program.cs`.
@@ -6493,9 +6493,9 @@ WASM and server):
   - `LoadAsync(sourcePath)` reads `{sourcePath}.edit.json`.
   - `SaveAsync(sourcePath, EditParams)` atomic write (temp +
     rename).
-  - Versioning — if `version` mismatch, migrate or ignore.
+  - Versioning, if `version` mismatch, migrate or ignore.
 - `EditorEndpoints.cs` with the 6 routes.
-- `POST /api/editor/upload` — multipart, saves at
+- `POST /api/editor/upload`, multipart, saves at
   `{AppData}/Polaris/uploads/{guid}/{filename}`, returns path;
   housekeeping cron cleans uploads > 24 h later.
 
@@ -6539,7 +6539,7 @@ WASM and server):
     int[]`.
   - `ReleaseEditorFrame(string sessionId)`.
 - `EditPipeline.cs` (ED-1) is already AOT-compiled via project
-  reference — only needs to be **reached** by the new JSExports
+  reference, only needs to be **reached** by the new JSExports
   so the trimmer keeps it.
 - Rebuild WASM bundle: `dotnet publish src/NINA.Polaris.Wasm
   -p:PublishAot=true -r browser-wasm -c Release -o
@@ -6564,9 +6564,9 @@ WASM and server):
 - Tests:
   - `EditPipelineTests` end-to-end with synthetic frame (known
     gradient), verifies each step changes output as expected.
-  - `EditSidecarStoreTests` — roundtrip + version migration.
-  - `ImageEditServiceTests` — LRU eviction + cancel handling.
-  - `EditorEndpointsTests` (integration via TestServer) —
+  - `EditSidecarStoreTests`, roundtrip + version migration.
+  - `ImageEditServiceTests`, LRU eviction + cancel handling.
+  - `EditorEndpointsTests` (integration via TestServer),
     load → preview → histogram → export → sidecar PUT/GET.
 - Docs: `docs/user-guide/editor.md` (workflow + shortcuts +
   differences vs Lightroom).
@@ -6590,26 +6590,26 @@ WASM and server):
 - `src/NINA.Polaris/Services/Editor/ImageEditService.cs`
 - `src/NINA.Polaris/Services/Editor/EditSidecarStore.cs`
 - `src/NINA.Polaris/Endpoints/EditorEndpoints.cs`
-- `tests/NINA.Polaris.Test/Editor/` — 4 test files
+- `tests/NINA.Polaris.Test/Editor/`, 4 test files
 - `docs/user-guide/editor.md`
 
 ## Files modified
 
-- `src/NINA.Polaris.Wasm/Interop.cs` — 4 new `[JSExport]` editor
+- `src/NINA.Polaris.Wasm/Interop.cs`, 4 new `[JSExport]` editor
   methods.
-- `src/NINA.Polaris/Program.cs` — register singletons + map
+- `src/NINA.Polaris/Program.cs`, register singletons + map
   endpoints.
-- `src/NINA.Polaris/Services/ImageWriterService.cs` — extend
+- `src/NINA.Polaris/Services/ImageWriterService.cs`, extend
   `BuildSubDir` with case `"EDITED"` →
   `processed/{target}/edited/`.
-- `src/NINA.Polaris/Services/Studio/FrameLibraryService.cs` —
+- `src/NINA.Polaris/Services/Studio/FrameLibraryService.cs`,
   rescan after export (already a pattern from GraXpert).
-- `src/NINA.Polaris/wwwroot/index.html` — Editor sub-tab in
+- `src/NINA.Polaris/wwwroot/index.html`, Editor sub-tab in
   STUDIO + Editor modal/panel + Export modal.
-- `src/NINA.Polaris/wwwroot/js/app.js` — state `editor`,
+- `src/NINA.Polaris/wwwroot/js/app.js`, state `editor`,
   methods.
-- `src/NINA.Polaris/wwwroot/css/app.css` — `.editor-*` styles.
-- `README.md` — Editor section.
+- `src/NINA.Polaris/wwwroot/css/app.css`, `.editor-*` styles.
+- `README.md`, Editor section.
 - ARCHITECTURE.md updates.
 
 ## Verification
@@ -6619,7 +6619,7 @@ WASM and server):
 - `dotnet publish src/NINA.Polaris.Wasm -p:PublishAot=true
   -r browser-wasm -c Release` rebuild artifacts in
   `wwwroot/js/wasm/`.
-- `dotnet test` — ~510 atuais + ~25 novos = ~535 verdes.
+- `dotnet test`, ~510 atuais + ~25 novos = ~535 verdes.
 
 ### Server-mode (no WASM)
 1. STUDIO → Library → select M31 master → "Open in editor".
@@ -6670,22 +6670,22 @@ WASM and server):
   defaults.
 - **Huge master (8 GB)** → WASM load fails (heap limit),
   automatically falls back to server-mode (which can do tile-by-
-  tile pipeline if needed — TODO in ED-6 v2).
+  tile pipeline if needed, TODO in ED-6 v2).
 
 ## Out of scope (deferred)
 
-- **Layers** (Lightroom doesn't have, but Photoshop does) —
+- **Layers** (Lightroom doesn't have, but Photoshop does),
   huge scope.
-- **Local adjustments** (brush, gradient, radial — Lightroom has
+- **Local adjustments** (brush, gradient, radial, Lightroom has
   but requires complex mask UI). v2 separate if demand.
-- **Shared presets / preset catalog** — user can still save
+- **Shared presets / preset catalog**, user can still save
   sidecars manually and copy between projects.
 - **Advanced crop with aspect ratio lock and freehand rotation**
-  — v1 only rectangular axis-aligned crop + 90° rotation.
-- **AI denoise (DxO PureRAW / Topaz style)** — out of scope; user
+ , v1 only rectangular axis-aligned crop + 90° rotation.
+- **AI denoise (DxO PureRAW / Topaz style)**, out of scope; user
   can use GraXpert v3 denoise (already wired) before opening the
   editor.
-- **RAW/CR2/NEF decode** — scope restricted to FITS/XISF/PNG/JPG/
+- **RAW/CR2/NEF decode**, scope restricted to FITS/XISF/PNG/JPG/
   TIFF v1; CR2/NEF deferred (would need LibRaw bindings).
 
 ## License + compatibility notes
@@ -6694,7 +6694,7 @@ WASM and server):
   FitsThumbnailer.
 - **System.Text.Json**: BCL.
 - **WASM AOT**: already in production via CLST.
-- **Sidecar pattern**: Lightroom (.xmp) precedent — our format,
+- **Sidecar pattern**: Lightroom (.xmp) precedent, our format,
   no patent.
 - **Performance**:
   - Server preview on 6000×4000 RGB master: ~400 ms on Pi 4
@@ -6730,7 +6730,7 @@ wanted to swap for **stellarium-web-engine** to get:
   Gaia stars to mag 16 (vs Hipparcos mag 6), DSOs from SDSS/DSS
   surveys with real images (not just names).
 - Constellation art (stick figures + names in multiple cultures).
-- Behaviour identical to Stellarium desktop — user already knows.
+- Behaviour identical to Stellarium desktop, user already knows.
 
 **Decisions** (confirmed):
 
@@ -6740,13 +6740,13 @@ wanted to swap for **stellarium-web-engine** to get:
    sub-application served in an iframe** (`/sky/index.html`).
    UI crosses data via `postMessage`. Stellarium-web stays AGPL
    inside the iframe, Polaris stays MPL.
-2. **HiPS data**: bundle locally — package the tile pyramids
+2. **HiPS data**: bundle locally, package the tile pyramids
    (stars / DSOs / surveys / landscapes) inside the Polaris
    publish to work offline (remote observatory). Cost ~500 MB-1 GB
    added to installer / Docker image, accepted.
 3. **WebGL**: SKY tab becomes **desktop-browser-only**. RPi 2/3
    still serves the files but warns "WebGL not available" if
-   anyone opens the local browser on the Pi. Realistic — no one
+   anyone opens the local browser on the Pi. Realistic, no one
    opens the Sky map in a Pi browser.
 
 ## Architecture
@@ -6775,21 +6775,21 @@ wanted to swap for **stellarium-web-engine** to get:
 ### postMessage RPC contract
 
 Messages parent → iframe:
-- `{type:'set-observer', lat, lng}` — observer location (deg).
-- `{type:'set-time', utc}` — epoch ms.
-- `{type:'look-at', raDeg, decDeg, fovDeg}` — point camera.
-- `{type:'search', query}` — search object; reply via
+- `{type:'set-observer', lat, lng}`, observer location (deg).
+- `{type:'set-time', utc}`, epoch ms.
+- `{type:'look-at', raDeg, decDeg, fovDeg}`, point camera.
+- `{type:'search', query}`, search object; reply via
   `search-result`.
-- `{type:'set-fov-overlays', mount, target}` — geojson FOV
+- `{type:'set-fov-overlays', mount, target}`, geojson FOV
   rectangles (computed parent-side).
-- `{type:'set-drag-mode', mode}` — `'free'` | `'fixed-target'`.
+- `{type:'set-drag-mode', mode}`, `'free'` | `'fixed-target'`.
 
 Messages iframe → parent:
-- `{type:'ready', version, webgl}` — bridge initialised.
+- `{type:'ready', version, webgl}`, bridge initialised.
 - `{type:'search-result', query, result}`.
-- `{type:'center', raDeg, decDeg, fovDeg}` — current map centre.
+- `{type:'center', raDeg, decDeg, fovDeg}`, current map centre.
 - `{type:'map-click', raDeg, decDeg, objectName}`.
-- `{type:'webgl-unavailable'}` — UI should show fallback.
+- `{type:'webgl-unavailable'}`, UI should show fallback.
 
 `sky-bridge.js` in the sub-app:
 1. Initialises `StelWebEngine({wasmFile, canvas, onReady})`.
@@ -6810,7 +6810,7 @@ Messages iframe → parent:
 
 stellarium-web-engine needs Emscripten to compile. We don't
 require Emscripten installed by everyone building Polaris day-
-to-day — solution:
+to-day, solution:
 
 1. **Git submodule** `external/stellarium-web-engine/` pointing
    at a dedicated fork (commit pinned for reproducibility).
@@ -6818,10 +6818,10 @@ to-day — solution:
    Emscripten via Docker (`emscripten/emsdk:3.x.x`), calls
    `make js`, copies `build/stellarium-web-engine.{js,wasm}` to
    `src/NINA.Polaris/wwwroot/sky/js/wasm/`. Output committed in
-   the repo — whoever builds Polaris on Windows/Linux doesn't
+   the repo, whoever builds Polaris on Windows/Linux doesn't
    need Emscripten to run `dotnet build`.
 3. Manual refresh when upstream stellarium-web-engine updates
-   (rare — engine is stable); script-driven, not automatic.
+   (rare, engine is stable); script-driven, not automatic.
 
 ### HiPS tile bundle
 
@@ -6846,7 +6846,7 @@ skeleton (empty properties files). The real dataset lives at
 
 ### SWE-1: iframe scaffold + WebGL detection + fallback
 - Creates `wwwroot/sky/index.html` minimal: `<canvas>` + script
-  loader + WebGL detection. No stellarium-web yet — just the
+  loader + WebGL detection. No stellarium-web yet, just the
   empty iframe showing "Loading sky engine…" or "WebGL not
   available".
 - `wwwroot/sky/js/sky-bridge.js` skeleton: listens to `message`,
@@ -6868,11 +6868,11 @@ skeleton (empty properties files). The real dataset lives at
   `src/NINA.Polaris/wwwroot/sky/js/wasm/{stellarium-web-engine.js,
   stellarium-web-engine.wasm}`.
 - Run script manually once, commit the 2 outputs (gitignored
-  sources, committed builds — pattern for expensive generated
+  sources, committed builds, pattern for expensive generated
   binaries).
 - `wwwroot/sky/index.html` now loads
   `stellarium-web-engine.js` + calls `StelWebEngine({...})`.
-  No data yet — engine initialises showing empty sky.
+  No data yet, engine initialises showing empty sky.
 - README + `docs/architecture-sky.md`: explain how to re-build
   the WASM, link to AGPL license at `wwwroot/sky/LICENSE-AGPL`.
 
@@ -6890,7 +6890,7 @@ skeleton (empty properties files). The real dataset lives at
 - `csproj` `<Content Include="wwwroot\sky\data\skydata\**\*">`
   for recursive publish.
 
-### SWE-4: postMessage RPC — observer + look-at + search
+### SWE-4: postMessage RPC, observer + look-at + search
 - `sky-bridge.js` implements handlers for `set-observer`,
   `set-time`, `look-at`, `search`, `get-center`.
 - `look-at` converts RA/Dec → alt/az via
@@ -6955,31 +6955,31 @@ skeleton (empty properties files). The real dataset lives at
 - `src/NINA.Polaris/wwwroot/sky/data/skydata/...` (gitignored,
   in publish output via csproj Content Include)
 - `src/NINA.Polaris/wwwroot/sky/LICENSE-AGPL.txt` (copy of
-  AGPLv3 stellarium-web-engine license — required by AGPL)
+  AGPLv3 stellarium-web-engine license, required by AGPL)
 - `docs/architecture-sky.md` (iframe + AGPL boundary +
   postMessage contract + how to rebuild WASM)
 
 ## Files modified
 
-- `src/NINA.Polaris/NINA.Polaris.csproj` — `<Content Include>`
+- `src/NINA.Polaris/NINA.Polaris.csproj`, `<Content Include>`
   for `wwwroot/sky/**/*` (recursive, including gitignored
   skydata).
-- `src/NINA.Polaris/wwwroot/index.html` — replace
+- `src/NINA.Polaris/wwwroot/index.html`, replace
   `<div id="celestial-map">` with `<iframe id="skyFrame"
   src="/sky/">`, remove `<script>` + `<link>` of celestial in
   SWE-6.
-- `src/NINA.Polaris/wwwroot/js/app.js` — replace ~20+
+- `src/NINA.Polaris/wwwroot/js/app.js`, replace ~20+
   Celestial.* calls with postMessage pattern; add
   `_skySendMessage`, message event listener, FOV geojson
   computation helpers. In SWE-6 delete dead d3-celestial code
   (~200 lines).
-- `.gitignore` — adds
+- `.gitignore`, adds
   `src/NINA.Polaris/wwwroot/sky/data/skydata/`.
-- `Dockerfile` — adds
+- `Dockerfile`, adds
   `COPY src/NINA.Polaris/wwwroot/sky/data/`.
-- `README.md` — "Sky tab requires WebGL + ~300 MB skydata
+- `README.md`, "Sky tab requires WebGL + ~300 MB skydata
   bundle" section.
-- `docs/user-guide/sky-explorer.md` — overhaul describing the
+- `docs/user-guide/sky-explorer.md`, overhaul describing the
   new features (stick figures, surveys, atmosphere).
 - per-project ARCHITECTURE.md.
 
@@ -6991,32 +6991,32 @@ skeleton (empty properties files). The real dataset lives at
 
 ## Reused code
 
-- **Sub-app pattern** — did similar with xpra/PHD2 GUI (PH2X-6:
+- **Sub-app pattern**, did similar with xpra/PHD2 GUI (PH2X-6:
   `Phd2GuiSessionService` + `<iframe>` in the GUIDE panel).
   Same strategy: optional backend service + iframe in the UI
   with same-origin so postMessage works without CORS.
-- **`Services/PHD2ProcessManager.cs`** — Linux/Docker subprocess
+- **`Services/PHD2ProcessManager.cs`**, Linux/Docker subprocess
   pattern for inspiration on `build-stellarium-web.sh`.
-- **`csproj` Content Include patterns** — already have for
+- **`csproj` Content Include patterns**, already have for
   `wwwroot/js/lib/celestial/data/*.json` (provisional). Replicate
   with recursive for the new skydata.
-- **WebGL detection** — already done in `app.js _initWebGL()`
+- **WebGL detection**, already done in `app.js _initWebGL()`
   (lines 1143-...). Reuse the pattern (canvas.getContext('webgl2')
   → fallback message).
-- **`_skyMapCenter()`** (`app.js` ~4194) — existing logic of
+- **`_skyMapCenter()`** (`app.js` ~4194), existing logic of
   RA/Dec extraction from map centre: now becomes "parent asks
   via postMessage `get-center` + receives `center` response
   async". Same semantics, different transport.
-- **FOV ring computation** (`_buildFovRing` in `app.js` ~4030) —
+- **FOV ring computation** (`_buildFovRing` in `app.js` ~4030),
   math of equatorial rectangle from sensor + focal + rotation
   remains **identical** on parent. Only the destination changes:
   instead of feeding a d3-celestial layer, post as GeoJSON to
   iframe.
-- **Slew & Center workflow** (`SlewCenterService.cs`) —
+- **Slew & Center workflow** (`SlewCenterService.cs`),
   completely agnostic to renderer; only consumes final RA/Dec.
   Zero change.
 - **stellarium-web `apps/simple-html/stellarium-web-engine.html`
-  + `tests.js`** — canonical reference for the bridge JS shape.
+  + `tests.js`**, canonical reference for the bridge JS shape.
 
 ## Verification
 
@@ -7029,7 +7029,7 @@ skeleton (empty properties files). The real dataset lives at
   `wwwroot/sky/data/`.
 
 ### Smoke (SWE-1..3)
-1. `dotnet build src/NINA.Polaris/NINA.Polaris.csproj` — clean.
+1. `dotnet build src/NINA.Polaris/NINA.Polaris.csproj`, clean.
 2. SKY tab in the browser → iframe loads → DevTools shows
    `[Sky] bridge ready webgl=true version=x.y.z`. Sky still
    without data in SWE-2; SWE-3 already shows stars to mag 12 +
@@ -7062,12 +7062,12 @@ skeleton (empty properties files). The real dataset lives at
 ### Failure scenarios
 - **WebGL absent** (DevTools toggle "disable WebGL") → iframe
   posts `webgl-unavailable` → parent UI shows "Sky tab requires
-  WebGL — open Polaris from a desktop browser." Other tabs
+  WebGL, open Polaris from a desktop browser." Other tabs
   work.
 - **Skydata folder absent** (Polaris running without the dataset
-  bundled — CI build case without running fetch script) → tile
+  bundled, CI build case without running fetch script) → tile
   404s in console, sky renders empty but engine doesn't crash.
-  Log message "Sky data missing — run
+  Log message "Sky data missing, run
   scripts/fetch-stellarium-skydata.sh".
 - **Iframe doesn't load** (CSP, sandbox) → parent timeout 5 s →
   fallback banner "Sky engine failed to load."
@@ -7111,7 +7111,7 @@ skeleton (empty properties files). The real dataset lives at
   requires Docker Desktop. Documented.
 - **Submodule update friction**: each upstream
   stellarium-web bump requires re-running build + committing new
-  `.js/.wasm`. Accepted — upstream stable, low frequency.
+  `.js/.wasm`. Accepted, upstream stable, low frequency.
 - **API divergence**: canonical reference is
   `apps/simple-html/tests.js` upstream. Some APIs (look-at-by-
   RADec, hit-testing) aren't formally documented; each phase
@@ -7119,13 +7119,13 @@ skeleton (empty properties files). The real dataset lives at
   Mitigation: start with SWE-1..3 conservative, evolve the RPC
   contract as we implement.
 - **Slew preview inset** (lower-right canvas of the Sky tab from
-  VIDPL-10) keeps using the existing local WebGL canvas — not
+  VIDPL-10) keeps using the existing local WebGL canvas, not
   involved in this plan. iframe occupies only the main map
   area.
 - **Tonight tab + Sky catalog filters** (D10) keep using the
   `SkyCatalogService` backend + separate UI; only the visual
   rendering on the SKY tab is swapped.
-- **Stellarium remote control sync** (D11) still holds — sync
+- **Stellarium remote control sync** (D11) still holds, sync
   pushes RA/Dec to Stellarium desktop (other process), no link
   to the embedded engine.
 
@@ -7139,14 +7139,14 @@ skeleton (empty properties files). The real dataset lives at
 
 Polaris today solves most pre-imaging (PHD2 calibration, auto-
 focus, slew & center, meridian flip, sequence, live stacking)
-but still has no polar alignment — the first thing the user does
+but still has no polar alignment, the first thing the user does
 when setting up at night. Without it, they have to open SharpCap
 on Windows or run TPPA from NINA desktop before coming to
 Polaris. ASIAIR, KStars/Ekos, and NINA desktop all have this
 panel; missing on Polaris.
 
 **Objective**: POLAR panel on the sidebar doing TPPA (Three-
-Point Polar Alignment) end-to-end in the browser — captures 3
+Point Polar Alignment) end-to-end in the browser, captures 3
 frames at RA positions ~30° apart, plate-solves each, computes
 the error vector (azimuth + altitude in arcsec/arcmin), and
 draws an arrow over the live frame indicating the direction to
@@ -7156,13 +7156,13 @@ shrink in real time while adjusting (SharpCap-style UX).
 
 **Decisions** (with the user):
 - **TPPA + Refine in the same feature** (don't split). Refine is
-  where the UX shines — without it the user would have to run
+  where the UX shines, without it the user would have to run
   full TPPA every screw turn.
 - **Both hemispheres in v1.** South serves the user (Brazil)
   directly. Cost: ~5 lines + 1 test (polar-axis sign flips with
   negative latitude).
 - **Auto-slew only.** Every modern mount has GoTo. Manual-slew
-  (user spins RA by hand) is a follow-up if demand appears —
+  (user spins RA by hand) is a follow-up if demand appears,
   would add a big branch to the state machine.
 
 ## Architecture
@@ -7213,16 +7213,16 @@ SharpCap use internally.
 
 ### Explicit reuse
 
-Everything below already mapped via exploration — no
+Everything below already mapped via exploration, no
 reinvention:
 
-- `Services/PHD2CalibrationOrchestrator.cs` — copy/paste the
+- `Services/PHD2CalibrationOrchestrator.cs`, copy/paste the
   shape (Job + CTS + ConcurrentDictionary + StartJob/Abort/
   GetJob + RunAsync phase-loop + Fail helper).
 - `Services/PlateSolveService.cs` →
   `SolveAsync(string fitsPath, PlateSolveOptions, ct)` returns
   `{Success, RaHours, DecDeg, ScaleArcsecPerPixel, RotationDeg,
-  Error}`. **Takes a file path**, not IImageData — write each
+  Error}`. **Takes a file path**, not IImageData, write each
   capture to `Path.GetTempPath()` before the solve, try-finally
   `File.Delete`.
 - `Services/ImageWriterService.cs` →
@@ -7233,13 +7233,13 @@ reinvention:
   SideOfPier`, `Camera.CaptureAsync(seconds, opts, ct)`.
 - `Services/ProfileService.cs` → `ActiveEquipmentProfile` getter
   + setter pattern for the PolarAlign* fields.
-- `Services/NotificationService.cs:Push(kind, text)` — toasts on
+- `Services/NotificationService.cs:Push(kind, text)`, toasts on
   each phase transition (reused from auto-connect).
-- `WebSocket/StatusStreamHandler.cs` — pattern of adding a
+- `WebSocket/StatusStreamHandler.cs`, pattern of adding a
   sub-object to the status payload.
 - `wwwroot/js/app.js redrawOverlay() + _drawCrosshairOnOverlay`
-  pattern — clone to `_drawPolarErrorVector`.
-- `wwwroot/index.html` AutoFocus tab (682-770) — layout template
+  pattern, clone to `_drawPolarErrorVector`.
+- `wwwroot/index.html` AutoFocus tab (682-770), layout template
   for the new POLAR tab.
 
 ## Phases (5 commits)
@@ -7320,17 +7320,17 @@ LST of each point (computes local sidereal time from
 DateTime UTC + longitude).
 
 `tests/NINA.Polaris.Test/PolarAlignmentServiceTests.cs`:
-- **Test 1 — perfect mount north**: synthesises 3 points of
+- **Test 1, perfect mount north**: synthesises 3 points of
   perfect sweep at lat=+45°, expects residual error < 10".
-- **Test 2 — known error north**: simulates mount with
+- **Test 2, known error north**: simulates mount with
   Az=+120", Alt=-300", recovers within ±5".
-- **Test 3 — perfect mount south**: lat=-23.5° (Brazil),
+- **Test 3, perfect mount south**: lat=-23.5° (Brazil),
   expects <10".
-- **Test 4 — known error south**: mount with known error in
+- **Test 4, known error south**: mount with known error in
   southern hemisphere, recovers within ±5".
-- **Test 5 — cancel**: stub `EquipmentManager` with blocking
+- **Test 5, cancel**: stub `EquipmentManager` with blocking
   `SlewAsync`, `Abort()` → phase = `Cancelled` in <500 ms.
-- **Test 6 — plate-solve fail**: mock `PlateSolveService`
+- **Test 6, plate-solve fail**: mock `PlateSolveService`
   returns `Success=false`, phase goes to `Failed` with
   descriptive error.
 
@@ -7348,7 +7348,7 @@ Plumb `PolarAlignmentMath.ComputeError` into
     from AutoFocus: header with phase pill + spinner, parameter
     form bound to rig fields (slew deg / exposure / settle /
     gain, POST on blur to `/api/equipment/rigs/{id}`), `Start`
-    button → `polarStart()`, progress bar "Point N/3 — phase",
+    button → `polarStart()`, progress bar "Point N/3, phase",
     result block `Az: {{azArcmin}}' Alt: {{altArcmin}}' Total:
     {{totalArcmin}}'`, `Refine` button, `Stop`/`Abort` buttons.
   - **Manage Rigs modal**: new "Polar alignment" collapsible
@@ -7367,10 +7367,10 @@ Build + manual: POLAR tab shows phases changing + final result
 
 ### PA-5: Live error vector overlay + refinement loop
 - `Services/PolarAlignmentService.cs`: implements
-  `StartRefinement()` — separate Task + CTS, loop
+  `StartRefinement()`, separate Task + CTS, loop
   `while (!ct.IsCancellationRequested)` capturing+solving at
   the current position (no slew), recomputes error using the
-  3 initial points + current sample (sliding window — replaces
+  3 initial points + current sample (sliding window, replaces
   the oldest point), updates `Job.AzErrorArcsec/AltErrorArcsec`
   each iteration, sleeps `settleSeconds` between. `StopRefinement`
   cancels. `finally` guarantees `Phase = Idle`.
@@ -7387,7 +7387,7 @@ Build + manual: POLAR tab shows phases changing + final result
     (logarithmic: 30' fills the canvas, 1' is small).
   - **Colour by magnitude**: red >5', amber 1-5', green <1'.
   - Label "Az: X' / Alt: Y' / Total: Z'" at canvas top.
-- **TODO** comment for meridian-aware point picker (deferred —
+- **TODO** comment for meridian-aware point picker (deferred,
   see edge cases).
 
 Build + verify end-to-end.
@@ -7401,22 +7401,22 @@ Build + verify end-to-end.
 
 ## Files modified
 
-- `src/NINA.Polaris/Services/ProfileService.cs` — 4 fields on
+- `src/NINA.Polaris/Services/ProfileService.cs`, 4 fields on
   `EquipmentProfile`.
-- `src/NINA.Polaris/Endpoints/EquipmentEndpoints.cs` — maps the
+- `src/NINA.Polaris/Endpoints/EquipmentEndpoints.cs`, maps the
   4 new fields on PUT/POST.
-- `src/NINA.Polaris/Program.cs` — DI singleton +
+- `src/NINA.Polaris/Program.cs`, DI singleton +
   `MapPolarAlignmentEndpoints()`.
-- `src/NINA.Polaris/WebSocket/StatusStreamHandler.cs` —
+- `src/NINA.Polaris/WebSocket/StatusStreamHandler.cs`,
   `polarAlignmentPayload` block + `JobUpdated` push hook.
-- `src/NINA.Polaris/wwwroot/index.html` — sidebar button, POLAR
+- `src/NINA.Polaris/wwwroot/index.html`, sidebar button, POLAR
   tab panel, rig modal section.
-- `src/NINA.Polaris/wwwroot/js/app.js` — Alpine state, WS
+- `src/NINA.Polaris/wwwroot/js/app.js`, Alpine state, WS
   handler, 4 methods, `_drawPolarErrorVector` branch in
   `redrawOverlay`.
-- `src/NINA.Polaris/wwwroot/css/app.css` — small additions for
+- `src/NINA.Polaris/wwwroot/css/app.css`, small additions for
   `.polar-result`, `.polar-error-pill`, etc.
-- `README.md` — "Polar Alignment" section.
+- `README.md`, "Polar Alignment" section.
 
 ## Verification end-to-end ("Tonight's first alignment")
 
@@ -7454,7 +7454,7 @@ Build + verify end-to-end.
 
 **Southern hemisphere**:
 - Repeat steps 1-13 with lat=-23.5° (user's Brazil config).
-- Math should be equivalent — pole sign inverts but error
+- Math should be equivalent, pole sign inverts but error
   magnitude stays consistent.
 
 ## Edge cases (declared, deferred)
@@ -7466,7 +7466,7 @@ Build + verify end-to-end.
   `RunAsync` at PA-2, fix in a separate PA-6.
 - **Low star count (solve fail)**: retry once with
   `exposureSec * 2`, then fail with actionable message "Plate
-  solve failed at point N — increase exposure or gain".
+  solve failed at point N, increase exposure or gain".
   Already in PA-3.
 - **Camera rotation**: arrow uses `rotationDeg` from the most
   recent solve; if the camera is remounted mid-session, next
@@ -7474,7 +7474,7 @@ Build + verify end-to-end.
 - **Refine Stop mid-solve**: outer `ct` cancels in-flight
   `SolveAsync` and `CaptureAsync` (both accept ct). `finally`
   guarantees `Phase = Idle`. Already in PA-5.
-- **SideOfPier flip during job**: deferred — TODO comment only.
+- **SideOfPier flip during job**: deferred, TODO comment only.
   Realistic? 30° slew rarely crosses, but high latitude near
   the pole can.
 
@@ -7501,7 +7501,7 @@ To test Polaris end-to-end today, the user needs **real hardware**
 simulators manually. The simulators exist (`indi_simulator_ccd`,
 `_telescope`, `_focus`, `_wheel`, `_guide`) and the best of them,
 `indi_simulator_ccd`, **renders real stars** from the GSC catalog
-based on the simulated mount's current RA/Dec — slew to M31, see
+based on the simulated mount's current RA/Dec, slew to M31, see
 M31; defocus, HFR rises; dither, position changes. Perfect suite
 for testing plate-solve + alignment + live stacking + autofocus
 **without hardware**.
@@ -7522,10 +7522,10 @@ parity with the existing `PHD2ProcessManager`.
   TelescopeSim/FocuserSim/FilterWheelSim installs from ASCOM
   Platform). No degradation by OS.
 - **Configurable stack**: checkbox per device type (CCD,
-  Telescope, Focuser, FilterWheel, Guider, Dome, Weather) — user
+  Telescope, Focuser, FilterWheel, Guider, Dome, Weather), user
   picks which to spawn. Sensible default: CCD + Telescope +
   Focuser + FilterWheel.
-- **Lifecycle**: both — "Auto-start on boot" toggle + manual
+- **Lifecycle**: both, "Auto-start on boot" toggle + manual
   Launch/Stop buttons. Mirrors PHD2AutoStartService +
   PHD2ProcessManager pattern.
 
@@ -7536,7 +7536,7 @@ the corresponding filename in `src/NINA.Polaris/Services/`):
 
 ### 1. Per-platform process manager
 
-**`Services/Simulator/ISimulatorBackend.cs`** — thin interface:
+**`Services/Simulator/ISimulatorBackend.cs`**, thin interface:
 
 ```csharp
 public interface ISimulatorBackend {
@@ -7587,7 +7587,7 @@ indiserver. Different strategy:
   `ASCOM.Simulator.Telescope`, etc. present
   (`HKLM\SOFTWARE\Classes\ASCOM.Simulator.Camera`).
 - `LaunchAsync`: does **local Alpaca discovery** (we already
-  have `Services/Alpaca/AlpacaDiscovery.cs`) — user needs to run
+  have `Services/Alpaca/AlpacaDiscovery.cs`), user needs to run
   the **Alpaca Omni Simulator** (single .exe exposing all
   ASCOM sims via Alpaca HTTP). If omni sim not running, we
   `Process.Start("AlpacaOmniSimulator.exe")` if detected on PATH
@@ -7596,7 +7596,7 @@ indiserver. Different strategy:
   https://github.com/ASCOMInitiative/ASCOMSimulators".
 - `ShutdownAsync`: kill `AlpacaOmniSimulator.exe` process if we
   launched it. If user opened it manually, just log "simulator
-  still running, close it manually" — we don't own the PID.
+  still running, close it manually", we don't own the PID.
 - `IsRunningAsync`: TCP probe on `127.0.0.1:32323` (default
   port of Alpaca Omni Sim) + quick check of
   `/management/v1/configureddevices`.
@@ -7607,7 +7607,7 @@ the only viable "single binary, daemon-mode" option on Windows.
 
 ### 2. Orchestrator service
 
-**`Services/Simulator/SimulatorService.cs`** — singleton
+**`Services/Simulator/SimulatorService.cs`**, singleton
 coordinating backends + exposing surface for endpoint/UI:
 
 ```csharp
@@ -7633,7 +7633,7 @@ without changing the above interfaces.
 
 ### 3. Auto-start service
 
-**`Services/Simulator/SimulatorAutoStartService.cs`** —
+**`Services/Simulator/SimulatorAutoStartService.cs`**,
 `BackgroundService`, copies the exact pattern of
 `PHD2AutoStartService`:
 - `ExecuteAsync`: waits 3 s for app to come up, reads
@@ -7642,12 +7642,12 @@ without changing the above interfaces.
   detection OK.
 - Non-blocking: fire-and-forget via `Task.Run` so startup isn't
   delayed.
-- Reacts to toggle changes? NO — only runs on boot. Changes
+- Reacts to toggle changes? NO, only runs on boot. Changes
   require a Polaris restart OR manual Launch button click.
 
 ### 4. Persistence
 
-**`Services/ProfileService.cs`** — adds to `UserProfile`:
+**`Services/ProfileService.cs`**, adds to `UserProfile`:
 ```csharp
 public bool SimulatorAutoStart { get; set; } = false;
 public List<string> SimulatorDevices { get; set; }
@@ -7656,7 +7656,7 @@ public int SimulatorPort { get; set; } = 7624;     // INDI default
 ```
 
 Settings-level (not rig), because "fake hardware" isn't
-equipment-specific — it's a dev-environment toggle.
+equipment-specific, it's a dev-environment toggle.
 
 ### 5. Endpoints
 
@@ -7688,7 +7688,7 @@ existing 1 Hz payload:
 
 ### 7. UI
 
-**New "Simulator" panel in the SETTINGS tab** (not in RIGS —
+**New "Simulator" panel in the SETTINGS tab** (not in RIGS,
 this is dev-mode, not equipment config). Layout:
 
 ```
@@ -7789,44 +7789,44 @@ control file. Lets the UI checkboxes act live.
 
 ## Files modified
 
-- `src/NINA.Polaris/Services/ProfileService.cs` — 3 fields on
+- `src/NINA.Polaris/Services/ProfileService.cs`, 3 fields on
   `UserProfile`.
-- `src/NINA.Polaris/Program.cs` — register `SimulatorService` +
+- `src/NINA.Polaris/Program.cs`, register `SimulatorService` +
   backend + `SimulatorAutoStartService` (hosted), map
   `SimulatorEndpoints`.
-- `src/NINA.Polaris/WebSocket/StatusStreamHandler.cs` —
+- `src/NINA.Polaris/WebSocket/StatusStreamHandler.cs`,
   `simulator` block on payload.
-- `src/NINA.Polaris/wwwroot/index.html` — new "Equipment
+- `src/NINA.Polaris/wwwroot/index.html`, new "Equipment
   simulator" panel on Settings tab.
-- `src/NINA.Polaris/wwwroot/js/app.js` — state + methods.
-- `src/NINA.Polaris/wwwroot/css/app.css` — small tweaks if
+- `src/NINA.Polaris/wwwroot/js/app.js`, state + methods.
+- `src/NINA.Polaris/wwwroot/css/app.css`, small tweaks if
   necessary.
-- `docs/user-guide/README.md` — link to simulator-mode.md under
+- `docs/user-guide/README.md`, link to simulator-mode.md under
   "For developers" section.
-- `README.md` — "Testing without hardware" section.
+- `README.md`, "Testing without hardware" section.
 
 ## Reused code
 
-- **`Services/PHD2ProcessManager.cs`** — direct template for the
+- **`Services/PHD2ProcessManager.cs`**, direct template for the
   process-manager pattern: `which`-style detection, candidate
   paths cross-platform, TCP liveness probe (500 ms timeout),
   graceful shutdown + force-kill timeout. Copy the structure,
   adapt the paths.
-- **`Services/PHD2AutoStartService.cs`** — direct template for
+- **`Services/PHD2AutoStartService.cs`**, direct template for
   BackgroundService auto-start: 3 s stagger, reads profile
   toggle, fire-and-forget launch via Task.Run.
-- **`Services/Phd2GuiSessionService.cs`** — Linux subprocess
+- **`Services/Phd2GuiSessionService.cs`**, Linux subprocess
   launch pattern (xpra). Same spawn + log-redirect shape.
 - **`Services/Alpaca/AlpacaDiscovery.cs`** + `AlpacaClient.cs`
-  — Alpaca Omni Simulator is an Alpaca server; we already have
+ , Alpaca Omni Simulator is an Alpaca server; we already have
   the client. `AscomSimulatorBackend.IsRunningAsync` reuses it
   for health probe.
 - **PHD2 UI pattern in index.html** (Settings/Guide tab, status
-  badge + Launch/Stop buttons + "not detected" banner) —
+  badge + Launch/Stop buttons + "not detected" banner),
   exact copy/paste.
-- **WS status broadcast pattern** — StatusStreamHandler already
+- **WS status broadcast pattern**, StatusStreamHandler already
   has a pattern for all blocks; just add another sub-object.
-- **`UserProfile.PHD2AutoStart`** — exact same toggle shape for
+- **`UserProfile.PHD2AutoStart`**, exact same toggle shape for
   SimulatorAutoStart.
 
 ## Verification end-to-end
@@ -7881,13 +7881,13 @@ control file. Lets the UI checkboxes act live.
   mixing. Polaris stays MPL 2.0.
 - **ASCOM Platform / Alpaca Omni Simulator**: MIT-equivalent
   ASCOM license; same situation (subprocess, no linkage).
-- **Privacy**: nothing leaves the host — simulator is 100% local.
+- **Privacy**: nothing leaves the host, simulator is 100% local.
 - **Performance**: `indiserver` + 4 sim drivers ≈ 30-80 MB RAM
   total on Pi 2. Acceptable; Polaris on Pi 2 is already tight
   (CLST solves the image-math side).
 - **Failure mode**: if `indiserver` dies mid-session (crash),
   the TCP probe sees and marks `isRunning: false` on the next
-  tick. User clicks Launch again. No automatic restart — keep
+  tick. User clicks Launch again. No automatic restart, keep
   it simple; PHD2 doesn't either.
 - **Port conflict**: if the user already has `indiserver`
   running manually on port 7624, our Launch fails (port in
@@ -12833,12 +12833,12 @@ benchmark video probe (ROI + MeasureRecording) on the rig.
 
 ---
 
-## NATIVESDK: native vendor camera backends (SVBony + ZWO + PlayerOne + ToupTek) — #362 item 3
+## NATIVESDK: native vendor camera backends (SVBony + ZWO + PlayerOne + ToupTek), #362 item 3
 
 Talk to SVBony / ZWO cameras through their native USB SDKs, bypassing the
 INDI per-exposure round-trip (which capped the SV405CC at 0.8 fps in loop
 mode). Each vendor is a small managed project (mirrors NINA.Camera.SonySdk),
-referenced by NINA.Polaris, with a runtime Registry availability probe — no
+referenced by NINA.Polaris, with a runtime Registry availability probe, no
 OS attribute, compiles cross-platform.
 
 - src/NINA.Camera.SvbonySdk: SvbonyNative ([DllImport] SVBCameraSDK + CLong
@@ -12899,7 +12899,7 @@ vendored under `camera_sdk/`:
   99-polaris-{playerone,touptek}.rules (PlayerOne vid a0a0 + usbfs bump;
   ToupTek vids 04b4/0547); postinst comment updated.
 - Tests: NativeCameraSdkTests extended (Registry false without lib, discovery
-  empty, constructors safe) — 9 pass. All four SDK projects + NINA.Polaris
+  empty, constructors safe), 9 pass. All four SDK projects + NINA.Polaris
   build clean.
 
 ### NATIVESDK follow-up: Altair backend
@@ -13127,25 +13127,25 @@ WiFi app protocol.
 
 ---
 
-## SIMG: Built-in gear simulator for native-guider testing (PHD2 gear_simulator port) — DONE
+## SIMG: Built-in gear simulator for native-guider testing (PHD2 gear_simulator port), DONE
 
 Goal: validate the native autoguider (calibration, guiding, Dec backlash comp,
 multi-star, pier-side handling) indoors with no hardware and no clear sky, by
 porting PHD2's gear simulator (`gear_simulator.cpp`, BSD-3) as a pure-C#,
 fully-offline `"sim"` driver. The simulator is a guide camera + ST4 guide port
 sharing one virtual-sky state, so a pulse guide on the mount visibly shifts the
-star field the camera captures — the coupling that makes calibration meaningful.
+star field the camera captures, the coupling that makes calibration meaningful.
 
 New files in `src/NINA.Polaris/Services/Simulator/Gear/` (PHD2 BSD-3 headers):
-- `SimGearParams` — tunables with PHD2 defaults (image scale, guide rate 15 a-s/s,
+- `SimGearParams`, tunables with PHD2 defaults (image scale, guide rate 15 a-s/s,
   PE 5 a-s, Dec drift 5 a-s/min, seeing 2 a-s FWHM, Dec backlash 5 a-s, cam angle
   15deg, 20 stars, 8 hot px); each error source can be toggled off for tests.
-- `SimGearState` — shared state behind a lock: cumulative RA offset + Dec offset
+- `SimGearState`, shared state behind a lock: cumulative RA offset + Dec offset
   via ported `BacklashVal` hysteresis; `St4Pulse` (port of ST4PulseGuideScope:
   `d = guideRate*bin*ms/1000/scale`, RA*cos(dec), pier-west N/S reversal);
   `AdvanceAndComputeShift` (PE multi-harmonic + Dec drift + Box-Muller seeing);
   injectable elapsed-seconds clock (Stopwatch default).
-- `SimStarField` — deterministic star list (seed 2) + `FillImage` (5x5 PSF splat,
+- `SimStarField`, deterministic star list (seed 2) + `FillImage` (5x5 PSF splat,
   camera rotation +pi on pier-west, noise, hot pixels), pure given a time.
 - `SimGuideCamera : ICamera`, `SimMount : ITelescope` (GEM with SupportsPulseGuide,
   `SetPierSide` to rehearse a flip), `SimGearService` (DI singleton, shared state).
@@ -13155,7 +13155,7 @@ Wiring: `EquipmentManager` gets `SimGearService` injected; `"sim"` cases in
 registries and discovery lists (so the RIGS dropdowns show "Simulator"
 automatically). `SimGearService` registered as a singleton in `Program.cs`.
 
-Tests: `tests/NINA.Polaris.Test/SimGearTests.cs` — BacklashVal deadband, ST4
+Tests: `tests/NINA.Polaris.Test/SimGearTests.cs`, BacklashVal deadband, ST4
 West-pulse magnitude, RA cos(dec) scaling, pier-west Dec reversal, stable
 star-field centroid, and the camera+mount coupling (capture -> pulse West ->
 re-capture: centroid shifts +15 px on the RA axis). 5 EquipmentManager test
@@ -13167,7 +13167,7 @@ driver = native -> GUIDE -> Loop -> Start Guiding. No INDI/WSL needed.
 Deferred: live SimGearParams editing panel in Settings; auto pier flip on slew
 across the meridian (pier side is settable via SimMount.SetPierSide / state).
 
-## 2026-06-08 session: native-guider polish, dithering, licensing, housekeeping — DONE
+## 2026-06-08 session: native-guider polish, dithering, licensing, housekeeping, DONE
 
 Gear simulator (SIMG, above) plus a batch of native-guider, dithering, UI,
 licensing and project-hygiene work.
@@ -13228,9 +13228,9 @@ licensing and project-hygiene work.
 
 ### Project hygiene
 - Added the 9 missing projects to `NINA.Polaris.slnx` (camera SDKs, Guider.Portable,
-  Mount.SynScanWifi) — they built via ProjectReference but weren't in the solution.
+  Mount.SynScanWifi), they built via ProjectReference but weren't in the solution.
 
-## RKNN — NPU acceleration for GraXpert AI on Rockchip RK3588 (epic)
+## RKNN, NPU acceleration for GraXpert AI on Rockchip RK3588 (epic)
 
 ### Why
 GraXpert's AI models (BGE / denoise / deconvolution) are the heaviest host-side
@@ -13238,11 +13238,11 @@ work on an SBC. Feasibility was proven on an Orange Pi 5 Pro (RK3588S, 6-TOPS NP
 on 2026-06-10:
 
 - The bundled `model.onnx` converts clean to `.rknn` with **100% NPU mapping,
-  fp16, zero CPU fallback** (only Input/Output operators stay on CPU — normal
+  fp16, zero CPU fallback** (only Input/Output operators stay on CPU, normal
   marshaling). No quantization, so no calibration dataset and no quality risk.
 - On-device timing (rknn-toolkit-lite2, 3 NPU cores, fp16, 256x256x3 tile):
   **NPU 91.2 ms/tile vs CPU 457.4 ms/tile (onnxruntime, 8 ARM cores) = 5.0x**,
-  and it frees all 8 CPU cores — which is the real live-stacking bottleneck.
+  and it frees all 8 CPU cores, which is the real live-stacking bottleneck.
 - No OS change needed: the RKNPU driver (v0.9.8) ships in the stock Ubuntu image
   the board already runs. The NPU is a DRM render node `/dev/dri/renderD129`
   (NOT `/dev/rknpu`), driven by `librknnrt.so`.
@@ -13253,15 +13253,15 @@ on 2026-06-10:
    under `wwwroot/graxpert/models`, emit a sibling `model.rknn` (rk3588, fp16).
    The `.rknn` is committed next to the `.onnx`.
 2. **Native binding + host inference service** (C#, no Python on the board):
-   - `Services/Rknn/RknnNative.cs` — P/Invoke of `librknnrt` (rknn_init / query /
+   - `Services/Rknn/RknnNative.cs`, P/Invoke of `librknnrt` (rknn_init / query /
      inputs_set / run / outputs_get / outputs_release / destroy / set_core_mask),
      exact struct layouts from `rknn_api.h`.
-   - `Services/Rknn/RknnSession.cs` — managed `IDisposable` `IRknnTileRunner`:
+   - `Services/Rknn/RknnSession.cs`, managed `IDisposable` `IRknnTileRunner`:
      load `.rknn` bytes, set core mask `0_1_2`, run a `[1,256,256,3]` fp32 NHWC
      tile -> fp32 output.
-   - `Services/Rknn/RknnRuntime.cs` — availability detection: linux-arm64 +
+   - `Services/Rknn/RknnRuntime.cs`, availability detection: linux-arm64 +
      `/dev/dri/renderD129` + `librknnrt.so` loadable.
-   - `Services/Rknn/RknnInferenceService.cs` — tiling pipelines that mirror the
+   - `Services/Rknn/RknnInferenceService.cs`, tiling pipelines that mirror the
      browser `onnx-pipelines.js` math exactly: BGE single-pass (downsample 256,
      MAD*0.04 clip +/-1, denorm, box-blur, resize, subtract/divide); Denoise/Decon
      tiled (256/128/64, median/MAD, CLIP per version, blend-mask + strength).
@@ -13280,16 +13280,16 @@ on 2026-06-10:
 int8 quantization could reach ~45 ms/tile (~10x) but needs a calibration dataset
 and risks denoise quality. fp16 5x is the clean baseline.
 
-## OCL — OpenCL GPU compute backend for classic image math (epic, in progress)
+## OCL, OpenCL GPU compute backend for classic image math (epic, in progress)
 
-> **Live stacking on GPU (OpenCL/Vulkan) — ANALYZED 2026-06-27: not worth it on
+> **Live stacking on GPU (OpenCL/Vulkan), ANALYZED 2026-06-27: not worth it on
 > the Q6A; no further work.** LiveStackingService already routes warp
 > (LiveStackingService.cs:948) + accumulate (:750) through `IGpuCompute`, so the
 > per-op `GpuOffloadPolicy` already gates them and runs them on CPU on the Adreno
 > (where they lose). Reasons GPU live-stack is a dead end here: (1) the stack's
-> heavy ops are the ones the Adreno loses — warp 0.5×, debayer 0.26×, accumulate =
+> heavy ops are the ones the Adreno loses, warp 0.5×, debayer 0.26×, accumulate =
 > pure bandwidth (loses on unified memory), overall 0.67×; (2) live stacking isn't
-> the bottleneck — ~57.9 Mpx/s ≈ 0.29 s/frame at 16.78 MP vs 30–180 s subs (<1% of
+> the bottleneck, ~57.9 Mpx/s ≈ 0.29 s/frame at 16.78 MP vs 30–180 s subs (<1% of
 > the time), and the cores are free during the exposure anyway; (3) Vulkan/Turnip's
 > ~1.58 TFLOPS fp16 is ALU, but warp/accumulate are bandwidth-bound on unified
 > memory, so it can't help, and the zero-copy/texture route already regressed. GPU
@@ -13303,7 +13303,7 @@ A general, reusable GPU backend frees the CPU and holds frame cadence during a
 live-stacking session on a headless SBC, without a browser attached. Target
 board for the main rig: **Radxa Dragon Q6A** (Qualcomm QCS6490, **Adreno 643**
 GPU with OpenCL 2.x, LPDDR5 unified memory). Note the existing RKNN/NPU lane is
-Rockchip-only and does NOT run on the Q6A — on this board the GPU is the primary
+Rockchip-only and does NOT run on the Q6A, on this board the GPU is the primary
 on-device accelerator; the Hexagon NPU (QNN/SNPE/ONNX QNN EP) is a separate
 future track, out of scope here.
 
@@ -13349,13 +13349,13 @@ zero-copy buffers (the win that makes per-op offload viable on an SBC).
   toggle off. Tests green (13). DONE. Pending: record real SBC speedup
   numbers in benchmark memory once run on the Q6A / OPi5.
 
-## NCNN-GPU — open Vulkan GPU lane for AI models (lane built 2026-06-28, BGE + denoise v2)
+## NCNN-GPU, open Vulkan GPU lane for AI models (lane built 2026-06-28, BGE + denoise v2)
 
 **Lane built (C# side, mirrors the RKNN lane):** `src/NINA.Polaris/Services/Ncnn/`
-— `NcnnNative` (P/Invoke to ncnn's stable C API), `NcnnRuntime` (probe: Linux +
+, `NcnnNative` (P/Invoke to ncnn's stable C API), `NcnnRuntime` (probe: Linux +
 libncnn + libvulkan; `POLARIS_DISABLE_NCNN`), `NcnnSession` (implements the shared
 `IRknnTileRunner`, Vulkan + fp16, `in0`/`out0`), `NcnnInferenceService` (reuses
-`RknnPipelines` tiling math; **BGE + denoise v2 only** — v3 excluded as NaN-on-
+`RknnPipelines` tiling math; **BGE + denoise v2 only**, v3 excluded as NaN-on-
 Vulkan, decon excluded). Wired into `GraXpertService` as a fast path after RKNN/QNN
 (`TryRunNcnn`, GPU→CLI fallback) + `NpuAvailable`/diagnostics; DI in `Program.cs`;
 csproj bundles `external/ncnn/aarch64/*.so` for linux-arm64; `scripts/fetch-ncnn.sh`
@@ -13374,23 +13374,23 @@ stages libncnn; `licenses/NCNN-LICENSE.txt` (BSD-3). Build: 0 errors.
 (original spike notes below)
 
 
-**Spike result (`polaris-ai/ncnn/`, see its README) — done incl. on-Q6A:** the
+**Spike result (`polaris-ai/ncnn/`, see its README), done incl. on-Q6A:** the
 route `onnx --onnxsim--> --pnnx--> .ncnn.param/.bin` works, and ncnn's pip wheel
 has Vulkan so it ran on the Adreno 643 (Turnip) with no C++ build. Two gates
-matter — ORT parity AND Vulkan-path correctness (some ops are fine on ncnn-CPU but
+matter, ORT parity AND Vulkan-path correctness (some ops are fine on ncnn-CPU but
 NaN on Vulkan):
 - **BGE**: converts (9.1e-04), Vulkan ✅, **5.1× fp16** on the Adreno → usable.
 - **denoise v2**: converts (1.5e-03), Vulkan ✅ (fp16 4e-3) → usable.
 - **denoise v3**: CPU parity 7.5e-04 BUT **NaN on the Vulkan path** (its LayerNorm/
   Div/Sqrt chain). So the model the NPU can't run also can't run on Vulkan
-  as-converted — not usable without patching the op.
+  as-converted, not usable without patching the op.
 - **decon stars/object**: not numerically faithful even on CPU (Swin window
   partition + ConvTranspose) → stay on ORT/NPU.
 
 fp16 ≈ 2× over fp32 and is the production mode (`bench.py` now also flags NaN
 output so a fast-but-broken run isn't mistaken for a win). **Verdict: a real lane
 exists for BGE + denoise v2 (fp16, ~5×); v3 needs a Vulkan-op fix, decon needs
-conversion work.** Lane (C# P/Invoke etc.) still NOT built — decide whether BGE+v2
+conversion work.** Lane (C# P/Invoke etc.) still NOT built, decide whether BGE+v2
 alone justify it.
 
 The home for the AI models the **Hexagon HTP can't run** (denoise v3 / LayerNorm,
@@ -13401,7 +13401,7 @@ vendor-neutral** path.
 
 **Why ncnn (Tencent, BSD-3):** pure C++, no deps, tiny binary, ARM-NEON CPU +
 **Vulkan compute GPU**. Vulkan runs on the **Adreno 643 (Q6A, via Turnip)**, Mali,
-Intel, etc. — one framework, any Vulkan GPU, no per-vendor SDK. Fits the
+Intel, etc., one framework, any Vulkan GPU, no per-vendor SDK. Fits the
 all-open direction (our own models in `polaris-ai/` are open too). Supports
 fp16 + int8.
 
@@ -13411,7 +13411,7 @@ fp16 + int8.
   `POLARIS_DISABLE_NCNN` to force off).
 - `NCNN-2`: `NcnnInferenceService` reusing the `RknnPipelines` tiling math via the
   same record/replay trick (or a direct tile runner).
-- `NCNN-3`: model conversion — **PyTorch → ncnn via `pnnx`** (the author's tool,
+- `NCNN-3`: model conversion, **PyTorch → ncnn via `pnnx`** (the author's tool,
   more robust than the old `onnx2ncnn`); our `polaris-ai` decon model is PyTorch,
   so pnnx is the clean route. fp16 by default; int8 with a calibration set.
 - `NCNN-4`: wire into `GraXpertService` chooser (HTP for BGE+denoise-v2, **ncnn-
@@ -13421,20 +13421,20 @@ fp16 + int8.
 **Boundaries / honesty:** ncnn does NOT use the Hexagon NPU (no QNN/HTP backend);
 it covers CPU (NEON) + GPU (Vulkan). So it complements, not replaces, the RKNN/QNN
 NPU lanes. Same caveat as before: Vulkan `shader-f16` maturity on Turnip/Adreno is
-the risk to validate first — but ncnn is widely deployed on Adreno phones, so it's
+the risk to validate first, but ncnn is widely deployed on Adreno phones, so it's
 a much safer bet than the ORT-Web WebGPU path that died on Adreno fp16. Spike
 first: convert one `polaris-ai` decon tile via pnnx → ncnn-Vulkan on the Q6A, time
 GPU vs CPU, confirm fp16 runs, before building the lane.
 
 Related: `polaris-ai/` (the open models this serves), the QNN-NPU section above
 (HTP limits + the parked libQnnGpu spike), and the OCL section (classic-math
-OpenCL, a separate concern — that's image math, this is AI inference).
+OpenCL, a separate concern, that's image math, this is AI inference).
 
-## PWRBOX — Power Box (Switch) accessory + Advanced Sequencer control (done 2026-07-12)
+## PWRBOX, Power Box (Switch) accessory + Advanced Sequencer control (done 2026-07-12)
 
 Added a generic multi-channel **Power Box** device (ASCOM ISwitchV2 semantics)
 so users can drive Pegasus-class power/dew hubs from RIGS and the Advanced
-Sequencer — a common NINA rig accessory that was missing.
+Sequencer, a common NINA rig accessory that was missing.
 
 - **Device**: new `ISwitchDevice` (`NINA.Image.Portable/Interfaces`) with a
   `SwitchChannel` model (id/name/boolean/value/min/max/step/writable). Three
@@ -13446,15 +13446,15 @@ Sequencer — a common NINA rig accessory that was missing.
   `GetDiscoveredSwitchesFor` + `powerBox` status block; `EquipmentProfile.Switch`
   + `SwitchDriver`; new `SwitchEndpoints` (`/api/switch/*`) registered in
   Program.cs; HardwareAutoConnect tuple; EquipmentEndpoints profile PUT.
-- **Sequencer**: `PowerBoxInstructions.cs` — SetPowerOutlet, SetDewHeater,
-  PowerCycleOutlet, SetSwitchValue — registered in `SequenceEntityJsonConverter`
+- **Sequencer**: `PowerBoxInstructions.cs`, SetPowerOutlet, SetDewHeater,
+  PowerCycleOutlet, SetSwitchValue, registered in `SequenceEntityJsonConverter`
   (ResolveBuiltIn + `_known`, category "Power Box"). Palette + editor are
   data-driven, no frontend changes needed for the tree.
 - **Frontend**: RIGS Power Box card (driver picker + per-channel outlet
   toggles / dew inputs / read-only sensors), Alpine state, connect/toggle/set,
   WS ingest, auto-connect-all, `app.js` cache-bust.
 - **Tests**: `PowerBoxInstructionsTests` (round-trip, palette registration,
-  Validate) — suite green (1434 passed). Docs updated in rigs.md,
+  Validate), suite green (1434 passed). Docs updated in rigs.md,
   adv-sequencer.md, handbook adv-sequencer, and website features.
 
 Scope is the generic ISwitchV2 channel model (no per-brand curation), matching

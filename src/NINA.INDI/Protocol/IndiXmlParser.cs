@@ -241,7 +241,7 @@ public class IndiXmlParser {
     /// which materialised the ENTIRE base64 text first. For a 22 MB FITS that is
     /// ~31 M chars = a <b>62 MB</b> <c>char[]</c>, plus a second 62 MB copy from
     /// <c>Trim()</c> (INDI wraps the payload in newlines, so it always copied),
-    /// before the 23 MB result — roughly 3x the image size in Large Object Heap
+    /// before the 23 MB result, roughly 3x the image size in Large Object Heap
     /// churn per frame. A heap dump on the Orange Pi showed that single char[] as
     /// the biggest object in the process. <c>ReadElementContentAsBase64</c> decodes
     /// incrementally and skips whitespace itself, so no text is ever built.</para>

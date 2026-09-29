@@ -56,7 +56,7 @@ public class MasterFrameService {
     private readonly ProfileService _profile;
     private readonly ILogger<MasterFrameService> _logger;
     // Optional: drives the pre-flight RAM guard. Null in unit tests that
-    // construct the service directly — the guard then fails open.
+    // construct the service directly, the guard then fails open.
     private readonly HostMetricsService? _metrics;
     private readonly ConcurrentDictionary<string, MasterProgress> _jobs = new();
 
