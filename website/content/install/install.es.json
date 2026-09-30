@@ -69,10 +69,6 @@
     "bootNote": "Enciende la placa y ya está. Polaris arranca solo: sin instalación, sin cuenta, sin configuración. Si la placa tiene WiFi y no reconoce ninguna red cercana, crea la suya propia, llamada Polaris-Hotspot-XXXX (la contraseña es polaris1234). Conecta tu móvil o portátil a esa red y abre Polaris en el navegador.",
     "tips": [
       {
-        "icon": "⚠️",
-        "body": "<strong>Las imágenes listas para grabar se están rehaciendo.</strong> Todas las imágenes publicadas hasta ahora llevan una versión de Polaris cuya interfaz no carga: un error de script dejaba el navegador en la pantalla de carga. Está corregido en la v0.98.143 y las imágenes nuevas se están generando. Mientras tanto, el paquete de abajo se instala en una tarjeta normal con Raspberry Pi OS, Armbian, Ubuntu o Debian y no está afectado."
-      },
-      {
         "icon": "🔎",
         "body": "<strong>¿Cómo abro Polaris?</strong> Lo más fácil es la aplicación para móvil o tableta, para Android e iOS. Busca las placas de tu red por su cuenta y muestra las que encuentra, así que no necesitas saber ninguna dirección: abres la app, tocas tu placa y listo. También recuerda varias placas y las mantiene en pestañas.<br><strong>¿Sin la app? Cualquier navegador también sirve.</strong> Abres Polaris igual que abres una web, escribiendo una dirección.<br><strong>La dirección es el número de tu placa.</strong> Abre la página o la app de tu router y mira la lista de dispositivos conectados (suele llamarse DHCP o Clientes). Tu placa está ahí, con un número como 192.168.1.42. Escribe <code>https://192.168.1.42:5000</code> en el navegador, con tu propio número.<br><strong>Un atajo:</strong> en Raspberry Pi puedes escribir el nombre, como <code>https://polaris-pi.local:5000</code>. Algunas imágenes de Orange Pi no pueden hacerlo, así que ahí usa el número.<br><strong>El navegador te avisará del certificado.</strong> Es lo esperado y no es un problema: la placa firma el suyo, porque vive en tu red de casa y no en internet. Acéptalo una vez y deja de preguntar.<br><strong>¿No encuentras la placa?</strong> Seguramente aún no se ha unido a tu WiFi, así que sigue ofreciendo su propio Polaris-Hotspot-XXXX. Conéctate a ese hotspot (o enchufa un cable de red) y configura tu WiFi en Ajustes, Red."
       },
@@ -88,68 +84,68 @@
         "color": "#8b5cf6",
         "emoji": "🖥️",
         "os": "Ubuntu 24.04.4 LTS (x86-64)",
-        "polaris": "0.98.137 (2026-09-27)",
-        "size": "3.10 GB (.7z)",
+        "polaris": "0.98.143 (2026-09-30)",
+        "size": "3.08 GB (.7z)",
         "access": "https://polaris-linux.local:5000/",
         "note": "La forma más rápida de usar Polaris, y gratis si ya tienes un mini PC o un portátil viejo sin uso. Extrae el .7z, graba el .img en un pendrive con balenaEtcher o Rufus y arranca desde él. Con el sistema en marcha, sudo polaris-install-to-disk lo copia todo al disco interno y puedes quitar el pendrive.",
-        "urlWithheld": "https://drive.google.com/uc?export=download&id=1xHjeHH90uDB6vjMHiUE6IMpFiKBZtRL3"
+        "url": "https://drive.google.com/uc?export=download&id=1_cMJhE0BkrhXNYOGOU2Guk48-X5yLPZq"
       },
       {
         "device": "Raspberry Pi 4",
         "badge": "arm64",
         "color": "#e11d6b",
         "os": "Raspberry Pi OS de 64 bits (Debian Trixie)",
-        "polaris": "0.98.137 (2026-09-27)",
+        "polaris": "0.98.143 (2026-09-30)",
         "size": "5.22 GB (.7z)",
         "access": "https://polaris-pi4-1.local:5000/",
         "note": "La placa más lenta de esta página, y aun así suficiente para una noche normal: captura, guiado, plate solving y live stacking funcionan. Los sensores grandes y las herramientas de IA son donde se nota. Extrae el .7z y graba el .img con Raspberry Pi Imager, balenaEtcher o Rufus.",
-        "urlWithheld": "https://drive.google.com/uc?export=download&id=1vX5fQ25B3friYTn0Bw_4Dma76A3pW8Oy"
+        "url": "https://drive.google.com/uc?export=download&id=1mcEaQMzwB7s1DIW19en2eWaAvWw_0elp"
       },
       {
         "device": "Raspberry Pi 5",
         "badge": "arm64",
         "color": "#e11d6b",
         "os": "Raspberry Pi OS de 64 bits (Debian Trixie)",
-        "polaris": "0.98.137 (2026-09-27)",
-        "size": "7.64 GB (.7z)",
+        "polaris": "0.98.143 (2026-09-30)",
+        "size": "7.69 GB (.7z)",
         "access": "https://polaris-pi.local:5000/",
         "note": "Alrededor del doble de rápida que la Pi 4 y la más fácil de encontrar en tienda. Buena opción general si ya te manejas con Raspberry Pi. Extrae el .7z y graba el .img con Raspberry Pi Imager, balenaEtcher o Rufus.",
-        "urlWithheld": "https://drive.google.com/uc?export=download&id=1cSjaxzbMtkv1MUuBBRgN1uNb8Hjws-FL"
+        "url": "https://drive.google.com/uc?export=download&id=1AJio61MkErYqKG4KWU_WSjZfU34-P8WL"
       },
       {
         "device": "Orange Pi Zero 3",
         "badge": "arm64",
         "color": "#ff7a18",
         "os": "Armbian 25.5.1 XFCE (Ubuntu 24.04, kernel 6.12.23)",
-        "polaris": "0.98.137 (2026-09-27)",
+        "polaris": "0.98.143 (2026-09-30)",
         "size": "2.52 GB (.7z)",
         "access": "https://orangepizero3.local:5000/",
         "note": "La entrada más barata. Con 1,5 GB de RAM va bien para captura, guiado y plate solving; el live stacking de un sensor grande y las herramientas de IA pondrán a prueba tu paciencia. Esta placa no tiene aceleración por GPU, así que la IA corre en la CPU. Extrae el .7z y graba el .img en una tarjeta SD con HDD Raw Copy Tool, balenaEtcher o Rufus. Contraseña de acceso: polaris.",
-        "urlWithheld": "https://drive.google.com/uc?export=download&id=1BK_FfEyVA11GeWPy_dD8meHs_oKAHz7v"
+        "url": "https://drive.google.com/uc?export=download&id=1dJQkgbaF1zsu4WrRf0VFCwT486mQAUOT"
       },
       {
         "device": "Orange Pi 4 Pro",
         "badge": "arm64",
         "color": "#ff7a18",
         "os": "Ubuntu 22.04 (arm64)",
-        "polaris": "0.98.137 (2026-09-27)",
+        "polaris": "0.98.143 (2026-09-30)",
         "size": "2.52 GB (.7z)",
         "access": "https://polaris-opi4pro-1.local:5000/",
         "note": "La que comprar si tienes dudas. Unos 50 US$, bastante más rápida que una Pi 4 y el mejor equilibrio entre precio y capacidad de esta lista. Extrae el .7z y graba el .img en el almacenamiento interno de la placa con HDD Raw Copy Tool, balenaEtcher o Rufus. Contraseña de acceso: polaris.",
-        "urlWithheld": "https://drive.google.com/uc?export=download&id=14xR6ptitdHB53gE6TT6tACzb45Xv52fE"
+        "url": "https://drive.google.com/uc?export=download&id=1PkI99tgOV_ZaXdbXl2d-8f2xhSVFn8ZE"
       },
       {
         "device": "Orange Pi 5 Pro",
         "badge": "arm64",
         "color": "#ff7a18",
         "os": "Armbian 26.8.0 KDE (Ubuntu 26.04, kernel 6.1.115)",
-        "polaris": "0.98.137 (2026-09-27)",
+        "polaris": "0.98.143 (2026-09-30)",
         "size": "8.27 GB (.7z)",
         "access": "https://polaris-opi5pro-1.local:5000/",
         "note": "Dos veces y media una Pi 4, con aceleración por GPU para las herramientas de IA. Merece la pena si la extracción de fondo, la reducción de ruido y la deconvolución forman parte de tu acabado. Extrae el .7z y graba el .img con balenaEtcher o Rufus.",
         "gpu": "sí",
         "npu": "sí",
-        "urlWithheld": "https://drive.google.com/uc?export=download&id=1Xb8MGqeLoctufMVvcfhcwf6hwLyv35WV"
+        "url": "https://drive.google.com/uc?export=download&id=1yTn7404XMXNvqs-OtnkT14mMi1Yy0KVr"
       },
       {
         "device": "Radxa Dragon Q6A",
@@ -157,13 +153,13 @@
         "color": "#10b981",
         "emoji": "🐉",
         "os": "Ubuntu 24.04 LTS (arm64)",
-        "polaris": "0.98.137 (2026-09-27)",
-        "size": "6.46 GB (.7z)",
+        "polaris": "0.98.143 (2026-09-30)",
+        "size": "6.41 GB (.7z)",
         "access": "https://radxa-dragon-q6a.local:5000/",
         "note": "La placa más rápida de aquí, con aceleración por GPU y NPU. Elígela si usas mucho las herramientas de IA o apilas fotogramas grandes mientras sigues fotografiando. Extrae el .7z y graba el .img con balenaEtcher o Rufus.",
         "gpu": "sí",
         "npu": "sí",
-        "urlWithheld": "https://drive.google.com/uc?export=download&id=1nczaY7VILSmDrZU_sP3BumBn_ynAJogu"
+        "url": "https://drive.google.com/uc?export=download&id=10Fqt47DjxajhYDWrUEl2s23xSND8IURd"
       }
     ],
     "update": {
@@ -172,8 +168,7 @@
       "selfBadge": "Recomendado",
       "selfBody": "Toda instalación por .deb, incluidas las imágenes ya preparadas de arriba, se actualiza sola. Polaris consulta GitHub al arrancar y una vez por hora a partir de ahí. Cuando hay una versión más nueva para tu placa, aparece una insignia verde de Update en la barra superior con el número de versión. Haz clic para leer qué ha cambiado y luego en descargar e instalar: Polaris coge el archivo correcto, lo instala y vuelve ya en la versión nueva. Sin SSH, sin apt, sin contraseña de sudo. Solo deja la página abierta mientras se recarga. Tus perfiles y tus fotos se quedan donde están.",
       "selfImage": "/assets/screenshots/self-update.jpg"
-    },
-    "soonLabel": "En reconstrucción"
+    }
   },
   "download": {
     "title": "Instala en un sistema que ya tienes",
