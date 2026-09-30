@@ -48,6 +48,24 @@ def _slug(*parts) -> str:
     return s or "x"
 
 
+def _require_unique(entries, what):
+    """Refuse to write a database with a repeated id.
+
+    A chip sold in both mono and colour reaches us as two entries sharing one
+    manufacturer and model, so keying on those alone collided for the IMX178,
+    IMX183 and IMX585. Downstream that is not a small thing: the SPCC modal
+    keys its dropdown on the id, and a repeated key empties the whole list, so
+    no sensor at all could be chosen. Fail here instead, where the message can
+    name the offender.
+    """
+    seen = {}
+    for e in entries:
+        seen.setdefault(e["id"], []).append(e.get("name"))
+    dupes = {k: v for k, v in seen.items() if len(v) > 1}
+    if dupes:
+        raise SystemExit("duplicate %s ids: %s" % (what, dupes))
+
+
 def _curve(o):
     """Extract a {wl, v} curve from a Siril entry. Wavelengths are normalised to
     nm: sensor/filter curves are already nm, but the WB_REF spectra (SWIRE
@@ -139,11 +157,11 @@ def main():
             if t == "OSC_SENSOR" and ch in ("RED", "GREEN", "BLUE"):
                 osc_channels.setdefault(path, {"man": man, "model": model, "src": src})[ch] = cur
             elif t == "MONO_SENSOR":
-                sensors.append({"id": "siril-" + _slug(man, model), "type": "mono",
+                sensors.append({"id": "siril-" + _slug(man, model) + "-mono", "type": "mono",
                                 "name": _display(man, model) + " (Siril)",
                                 "source": src, "qe": cur})
             elif t in ("OSC_FILTER", "OSC_LPF"):
-                filter_sets.append({"id": "siril-" + _slug(man, model), "for": "osc",
+                filter_sets.append({"id": "siril-" + _slug(man, model) + "-osc", "for": "osc",
                                     "name": _display(man, model) + " (Siril)",
                                     "source": src, "all": cur})
             elif t == "MONO_FILTER" and ch in ("RED", "GREEN", "BLUE"):
@@ -161,20 +179,24 @@ def main():
     # Assemble grouped OSC sensors (need all three channels).
     for g in osc_channels.values():
         if all(k in g for k in ("RED", "GREEN", "BLUE")):
-            sensors.append({"id": "siril-" + _slug(g["man"], g["model"]), "type": "osc",
+            sensors.append({"id": "siril-" + _slug(g["man"], g["model"]) + "-osc", "type": "osc",
                             "name": _display(g["man"], g["model"]) + " (Siril)",
                             "source": g["src"],
                             "r": g["RED"], "g": g["GREEN"], "b": g["BLUE"]})
     # Grouped mono RGB filter sets (need all three of R/G/B).
     for g in mono_filter_channels.values():
         if all(k in g for k in ("r", "g", "b")):
-            filter_sets.append({"id": "siril-" + _slug(g["man"], g["model"]), "for": "mono",
+            filter_sets.append({"id": "siril-" + _slug(g["man"], g["model"]) + "-mono", "for": "mono",
                                 "name": _display(g["man"], g["model"]) + " (Siril)",
                                 "source": g["src"], "r": g["r"], "g": g["g"], "b": g["b"]})
 
     sensors.sort(key=lambda x: x["name"])
     filter_sets.sort(key=lambda x: x["name"])
     white_refs.sort(key=lambda x: x["name"])
+
+    _require_unique(sensors, "sensor")
+    _require_unique(filter_sets, "filter set")
+    _require_unique(white_refs, "white reference")
 
     out = {
         "_license": "GPL-3.0-or-later",

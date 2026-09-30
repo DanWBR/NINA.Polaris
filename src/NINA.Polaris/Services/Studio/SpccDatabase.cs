@@ -116,24 +116,51 @@ public class SpccDatabase {
 
     public record CurveOption(string Id, string Name, string Kind);
 
+    /// <summary>
+    /// Drop any option whose id was already used, keeping the first, which is
+    /// the entry <see cref="FindById"/> would resolve to.
+    ///
+    /// <para>A repeated id used to cost the whole dropdown rather than one
+    /// entry: the modal keys its option loop on the id, and a repeated key
+    /// leaves the select empty, so an install listing dozens of sensor profiles
+    /// offered none of them. The generator now refuses to emit a collision and
+    /// a test pins the shipped files, so this should never fire; it is here
+    /// because losing one sensor is a far better failure than losing the
+    /// feature.</para>
+    /// </summary>
+    private List<CurveOption> Distinct(List<CurveOption> options, string what) {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var kept = new List<CurveOption>(options.Count);
+        List<string>? dropped = null;
+        foreach (var o in options) {
+            if (seen.Add(o.Id)) kept.Add(o);
+            else (dropped ??= new List<string>()).Add(o.Id);
+        }
+        if (dropped != null)
+            _logger.LogWarning(
+                "SPCC: {Count} {What} entries share an id with an earlier one and were hidden: {Ids}. "
+                + "Check the curve databases in {Dir}.", dropped.Count, what, string.Join(", ", dropped), _spccDir);
+        return kept;
+    }
+
     /// <summary>Lists for the SPCC modal's dropdowns plus which spectral
     /// sources are installed.</summary>
     public object Options() {
-        var sensors = EnumerateAll("sensors")
+        var sensors = Distinct(EnumerateAll("sensors")
             .Select(s => new CurveOption(
                 s.GetProperty("id").GetString()!,
                 s.GetProperty("name").GetString()!,
-                s.GetProperty("type").GetString()!)).ToList();
-        var filters = EnumerateAll("filterSets")
+                s.GetProperty("type").GetString()!)).ToList(), "sensor");
+        var filters = Distinct(EnumerateAll("filterSets")
             .Select(f => new CurveOption(
                 f.GetProperty("id").GetString()!,
                 f.GetProperty("name").GetString()!,
-                f.TryGetProperty("for", out var fr) ? fr.GetString()! : "any")).ToList();
-        var whiteRefs = EnumerateAll("whiteRefs")
+                f.TryGetProperty("for", out var fr) ? fr.GetString()! : "any")).ToList(), "filter set");
+        var whiteRefs = Distinct(EnumerateAll("whiteRefs")
             .Select(w => new CurveOption(
                 w.GetProperty("id").GetString()!,
                 w.GetProperty("name").GetString()!,
-                w.GetProperty("kind").GetString()!)).ToList();
+                w.GetProperty("kind").GetString()!)).ToList(), "white reference");
         return new {
             curvesAvailable = CurvesAvailable,
             sirilCurves = SirilAvailable,

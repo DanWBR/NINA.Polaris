@@ -23747,7 +23747,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     <label class="editor-slider-row" style="display:flex;align-items:center;gap:8px;margin:8px 0">
                         <span style="min-width:90px">Sensor</span>
                         <select class="input-sm" style="flex:1" x-model="spcc.sensorId">
-                            <template x-for="s in spcc.options.sensors" :key="s.id">
+                            <template x-for="(s, i) in spcc.options.sensors" :key="i">
                                 <option :value="s.id" x-text="s.name + ' (' + s.kind + ')'"></option>
                             </template>
                         </select>
@@ -23755,7 +23755,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     <label class="editor-slider-row" style="display:flex;align-items:center;gap:8px;margin:8px 0">
                         <span style="min-width:90px">Filter set</span>
                         <select class="input-sm" style="flex:1" x-model="spcc.filterSetId">
-                            <template x-for="f in spccFilterSetsForSensor()" :key="f.id">
+                            <template x-for="(f, i) in spccFilterSetsForSensor()" :key="i">
                                 <option :value="f.id" x-text="f.name"></option>
                             </template>
                         </select>
@@ -23763,7 +23763,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     <label class="editor-slider-row" style="display:flex;align-items:center;gap:8px;margin:8px 0">
                         <span style="min-width:90px">White ref</span>
                         <select class="input-sm" style="flex:1" x-model="spcc.whiteRefId">
-                            <template x-for="w in spcc.options.whiteRefs" :key="w.id">
+                            <template x-for="(w, i) in spcc.options.whiteRefs" :key="i">
                                 <option :value="w.id" x-text="w.name"></option>
                             </template>
                         </select>
