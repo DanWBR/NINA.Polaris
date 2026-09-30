@@ -380,10 +380,19 @@ public class EquipmentManager : IDisposable {
         // SVBony native USB SDK. Cross-platform (Linux arm64/x64 + Windows
         // x64); bypasses INDI for high-fps planetary video. Available when
         // the bundled native lib loads on this host/arch.
+        var svbAvailable = NINA.Camera.SvbonySdk.SvbonyRegistry.IsAvailable;
+        // When the SDK is held back deliberately, say so here rather than
+        // letting the driver disappear with no explanation. The one reason
+        // that exists is a missing libusb, and the SDK would take the whole
+        // server down rather than fail politely, so being absent is the
+        // correct outcome and the operator still deserves the sentence.
+        var svbWhy = NINA.Camera.SvbonySdk.SvbonyRegistry.UnavailableReason;
         list.Add(new("svbony-sdk", "SVBony (SDK, native)",
-            Available: NINA.Camera.SvbonySdk.SvbonyRegistry.IsAvailable,
-            Description: "SVBony cameras via the native USB SDK. Direct, " +
-                "low-overhead path for high-fps video (bypasses INDI)."));
+            Available: svbAvailable,
+            Description: svbWhy != null
+                ? "SVBony cameras via the native USB SDK. Unavailable: " + svbWhy
+                : "SVBony cameras via the native USB SDK. Direct, " +
+                  "low-overhead path for high-fps video (bypasses INDI)."));
         // ZWO ASI native USB SDK. Cross-platform; the high-fps path for ZWO
         // planetary cameras (ASI462/678 etc).
         list.Add(new("zwo-sdk", "ZWO ASI (SDK, native)",
