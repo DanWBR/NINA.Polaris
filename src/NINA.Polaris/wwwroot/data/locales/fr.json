@@ -5210,5 +5210,11 @@
   "{e}, in hardware": "{e}, en matériel",
   "{e}, in software": "{e}, en logiciel",
   "{n} frames dropped": "{n} images perdues",
-  "reconnected {n} times": "reconnecté {n} fois"
+  "reconnected {n} times": "reconnecté {n} fois",
+  "Second picture, bottom left": "Seconde image, en bas à gauche",
+  "A small frame in the bottom left corner. The guide and auxiliary frames are the ones those loops already took, so they cost no exposure; a snapshot URL is for an all sky or IP camera and costs nothing on the rig at all.": "Une petite vignette en bas à gauche. Les images de guidage et de la caméra auxiliaire sont celles que ces boucles ont déjà prises, donc elles ne coûtent aucune pose ; une URL de capture sert à une caméra all-sky ou IP et ne coûte rien sur le matériel.",
+  "Auxiliary camera": "Caméra auxiliaire",
+  "Camera at a web address": "Caméra à une adresse web",
+  "Snapshot address": "Adresse de la capture",
+  "Caption for it": "Légende associée"
 }

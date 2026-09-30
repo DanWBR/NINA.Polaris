@@ -62,6 +62,17 @@ public sealed record BroadcastLayout {
     /// <summary>The strip along the bottom holding the session numbers.</summary>
     public required BroadcastRect Banner { get; init; }
 
+    /// <summary>
+    /// The second picture, bottom left: an all sky camera, a camera pointed at
+    /// the rig, or the guide frame.
+    ///
+    /// <para>Bottom left because the other three corners are taken. The card
+    /// owns the right column down to the banner, and by 720p it already uses
+    /// every pixel of that, so there is nothing to put underneath it.</para>
+    /// </summary>
+    public required BroadcastRect Pip { get; init; }
+    public required float PipLabelSize { get; init; }
+
     /// <summary>The strip along the top: the name of the broadcast on one
     /// line, the equipment on the next. Empty when the broadcast has no
     /// header, and the card then starts at the top margin instead.</summary>
@@ -99,6 +110,13 @@ public sealed record BroadcastLayout {
             ? new BroadcastRect(pad, pad, w - pad * 2, headerH)
             : new BroadcastRect(pad, pad, 0, 0);
 
+        // A fixed 4:3 slot, and whatever arrives is fitted into it rather
+        // than cropped: an all sky camera puts a circular fisheye in a square
+        // frame, and cropping that cuts the horizon off all four sides.
+        var pipW = Math.Clamp((int)(w * 0.22), 120, 380);
+        var pipH = pipW * 3 / 4;
+        var pip = new BroadcastRect(pad, banner.Y - pad - pipH, pipW, pipH);
+
         // The card's height is set by its content, which only the renderer
         // knows once the text is wrapped. This is the room it may use: below
         // the header, down to the banner.
@@ -119,6 +137,8 @@ public sealed record BroadcastLayout {
             Pad = pad,
             Card = card,
             Banner = banner,
+            Pip = pip,
+            PipLabelSize = Math.Max(8f, pipW * 0.075f),
             Header = header,
             HeaderTitleSize = Math.Max(12f, headerH * 0.34f),
             HeaderRigSize = Math.Max(9f, headerH * 0.23f),

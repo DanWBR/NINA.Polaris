@@ -45,7 +45,7 @@ public sealed class FrameComposer : IDisposable {
     private readonly BroadcastLayout _l;
     private readonly BroadcastFonts _fonts;
     private readonly SKFont _title, _subtitle, _chip, _body, _banner, _credit;
-    private readonly SKFont _headerTitle, _headerRig;
+    private readonly SKFont _headerTitle, _headerRig, _pipLabel;
     private readonly SKBitmap _canvasBitmap;
     private readonly byte[] _rgb;
 
@@ -60,8 +60,9 @@ public sealed class FrameComposer : IDisposable {
         _credit = new SKFont(fonts.Regular, layout.CreditSize);
         _headerTitle = new SKFont(fonts.Bold, layout.HeaderTitleSize);
         _headerRig = new SKFont(fonts.Regular, layout.HeaderRigSize);
+        _pipLabel = new SKFont(fonts.Bold, layout.PipLabelSize);
         foreach (var f in new[] { _title, _subtitle, _chip, _body, _banner, _credit,
-                                  _headerTitle, _headerRig }) {
+                                  _headerTitle, _headerRig, _pipLabel }) {
             f.Edging = SKFontEdging.SubpixelAntialias;
             f.Subpixel = true;
         }
@@ -81,15 +82,20 @@ public sealed class FrameComposer : IDisposable {
     /// with the numbers that change.</param>
     /// <param name="waitingText">Shown in the middle when there is no picture
     /// yet. Null leaves the frame bare.</param>
+    /// <param name="pip">The second picture, bottom left. Null draws nothing,
+    /// including no empty box: a broadcast with no all sky camera should not
+    /// carry a black rectangle all night.</param>
     public byte[] Compose(SKBitmap? picture, ObjectCard? card, string? bannerText,
                           string? headerTitle = null, string? headerRig = null,
-                          string? waitingText = null) {
+                          string? waitingText = null,
+                          SKBitmap? pip = null, string? pipLabel = null) {
         using var surface = new SKCanvas(_canvasBitmap);
         surface.Clear(new SKColor(0x05, 0x07, 0x0C));
 
         if (picture != null) DrawPicture(surface, picture);
         else if (!string.IsNullOrWhiteSpace(waitingText)) DrawWaiting(surface, waitingText!);
         if (!_l.Header.IsEmpty) DrawHeader(surface, headerTitle, headerRig);
+        if (pip != null) DrawPip(surface, pip, pipLabel);
         if (card != null) DrawCard(surface, card);
         if (!string.IsNullOrWhiteSpace(bannerText)) DrawBanner(surface, bannerText);
         surface.Flush();
@@ -192,6 +198,52 @@ public sealed class FrameComposer : IDisposable {
         var m = _subtitle.Metrics;
         using var paint = new SKPaint { Color = Dim, IsAntialias = true };
         c.DrawText(line, (_l.Width - width) / 2f, _l.Height / 2f - m.Ascent / 2, _subtitle, paint);
+    }
+
+    /// <summary>
+    /// The second picture, bottom left, with its own name over the corner.
+    ///
+    /// <para>Fitted, not filled. The main picture is letterboxed for the same
+    /// reason and this one has a stronger case: an all sky lens puts a round
+    /// image in a square sensor, and cropping it to a 4:3 slot removes the
+    /// horizon, which is the part people are looking at.</para>
+    /// </summary>
+    private void DrawPip(SKCanvas c, SKBitmap frame, string? label) {
+        var r = _l.Pip;
+        if (r.IsEmpty) return;
+        var radius = Math.Max(3, r.Height * 0.06f);
+        Panel(c, r, radius);
+
+        var inset = Math.Max(2, r.Width / 60);
+        var slot = new BroadcastRect(r.X + inset, r.Y + inset,
+                                     r.Width - inset * 2, r.Height - inset * 2);
+        var fitted = BroadcastLayout.Letterbox(frame.Width, frame.Height, slot);
+        if (!fitted.IsEmpty) {
+            using var paint = new SKPaint { IsAntialias = true };
+            using var image = SKImage.FromBitmap(frame);
+            c.Save();
+            c.ClipRoundRect(new SKRoundRect(
+                new SKRect(slot.X, slot.Y, slot.Right, slot.Bottom), radius / 2), antialias: true);
+            c.DrawImage(image, new SKRect(fitted.X, fitted.Y, fitted.Right, fitted.Bottom),
+                        new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear), paint);
+            c.Restore();
+        }
+
+        if (string.IsNullOrWhiteSpace(label)) return;
+        var m = _pipLabel.Metrics;
+        var padX = r.Width * 0.04f;
+        var text = Fit(label!, _pipLabel, r.Width - padX * 2);
+        var textW = _pipLabel.MeasureText(text);
+        var boxH = (m.Descent - m.Ascent) * 1.5f;
+        // Over the picture rather than beside it: the slot is small and a
+        // caption bar under it would take a fifth of the height.
+        using (var scrim = new SKPaint { Color = new SKColor(0x0B, 0x0F, 0x18, 0xB4), IsAntialias = true })
+            c.DrawRoundRect(new SKRect(r.X + inset, r.Y + inset,
+                                       r.X + inset + textW + padX * 2, r.Y + inset + boxH),
+                            radius / 2, radius / 2, scrim);
+        using var ink = new SKPaint { Color = Ink, IsAntialias = true };
+        c.DrawText(text, r.X + inset + padX, r.Y + inset + (boxH - (m.Descent - m.Ascent)) / 2 - m.Ascent,
+                   _pipLabel, ink);
     }
 
     // --- The header -------------------------------------------------
@@ -339,6 +391,7 @@ public sealed class FrameComposer : IDisposable {
     public void Dispose() {
         _title.Dispose(); _subtitle.Dispose(); _chip.Dispose();
         _body.Dispose(); _banner.Dispose(); _credit.Dispose();
+        _headerTitle.Dispose(); _headerRig.Dispose(); _pipLabel.Dispose();
         _canvasBitmap.Dispose();
     }
 }

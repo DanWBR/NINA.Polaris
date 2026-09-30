@@ -273,6 +273,9 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Broadcast.BroadcastConfigSer
 builder.Services.AddSingleton<NINA.Polaris.Services.Broadcast.ObjectCardService>();
 // The broadcast itself: composes frames and keeps an ffmpeg fed with them.
 // Nothing here starts on its own; it waits for the button.
+// The corner picture on a broadcast: the guide frame, the auxiliary camera,
+// or a snapshot URL such as an all sky camera.
+builder.Services.AddSingleton<NINA.Polaris.Services.Broadcast.BroadcastPipService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Broadcast.BroadcastService>();
 // Star trails: fixed-camera (tracking off) capture + per-pixel MAX composite,
 // previewed live and saved as a FITS master + JPEG; can feed the time-lapse builder.

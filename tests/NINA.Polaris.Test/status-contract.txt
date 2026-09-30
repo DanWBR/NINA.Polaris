@@ -43,6 +43,8 @@ broadcast.frameSource
 broadcast.framesSent
 broadcast.hardwareEncoder
 broadcast.lastError
+broadcast.pipError
+broadcast.pipSource
 broadcast.quality
 broadcast.reconnects
 broadcast.recordPath

@@ -4592,5 +4592,11 @@
   "{e}, in hardware": "{e}, in hardware",
   "{e}, in software": "{e}, in software",
   "{n} frames dropped": "{n} frames dropped",
-  "reconnected {n} times": "reconnected {n} times"
+  "reconnected {n} times": "reconnected {n} times",
+  "Second picture, bottom left": "Second picture, bottom left",
+  "A small frame in the bottom left corner. The guide and auxiliary frames are the ones those loops already took, so they cost no exposure; a snapshot URL is for an all sky or IP camera and costs nothing on the rig at all.": "A small frame in the bottom left corner. The guide and auxiliary frames are the ones those loops already took, so they cost no exposure; a snapshot URL is for an all sky or IP camera and costs nothing on the rig at all.",
+  "Auxiliary camera": "Auxiliary camera",
+  "Camera at a web address": "Camera at a web address",
+  "Snapshot address": "Snapshot address",
+  "Caption for it": "Caption for it"
 }

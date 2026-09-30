@@ -49,6 +49,21 @@ public sealed class AuxCaptureService {
 
     public bool IsRunning { get; private set; }
     public long FrameCount { get; private set; }
+
+    // The frame this loop last captured, kept so something else can look at it
+    // without asking the camera for one of its own. The broadcast's second
+    // picture reads this: an exposure of its own would go through the same
+    // AuxCameraCaptureGate as this loop and the operator's focus snaps, and
+    // three parties taking turns on one camera is how a session stalls.
+    private IImageData? _lastFrame;
+    private long _lastFrameSeq;
+
+    /// <summary>The last captured frame and a counter that changes with it, so
+    /// a reader can tell a new frame from the one it already drew. Null until
+    /// the loop has taken one.</summary>
+    public (IImageData? Image, long Seq) LastFrame() {
+        lock (_lock) return (_lastFrame, _lastFrameSeq);
+    }
     public string? LastError { get; private set; }
 
     /// <summary>True when aux capture is enabled but no image output folder is
@@ -161,6 +176,7 @@ public sealed class AuxCaptureService {
                 }
 
                 if (image?.Data != null) {
+                    lock (_lock) { _lastFrame = image; _lastFrameSeq++; }
                     try {
                         var path = _writer.SaveImage(image, imageType: "AUX",
                             gain: gain ?? 0,

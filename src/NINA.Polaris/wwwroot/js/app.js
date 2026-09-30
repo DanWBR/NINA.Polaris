@@ -606,13 +606,15 @@ function ninaApp() {
         broadcastCfg: {
             destination: 'youtube', rtmpUrl: '', streamKey: '', hasStreamKey: false,
             quality: 'medium', title: '', showHeader: true, showObjectCard: true,
+            pipSource: 'off', pipUrl: '', pipLabel: '',
             showBanner: true, fetchDescriptions: true, recordToDisk: false,
             destinations: [], qualities: [], loaded: false, saving: false, busy: false
         },
         broadcastStatus: {
             running: false, quality: 'medium', encoder: null, hardwareEncoder: false,
             uptimeSec: 0, fps: 0, bitrateKbps: 0, droppedFrames: 0, reconnects: 0,
-            recording: false, recordPath: null, lastError: null, frameSource: 'none'
+            recording: false, recordPath: null, lastError: null, frameSource: 'none',
+            pipSource: 'off', pipError: null
         },
         broadcastFf: {
             loaded: false, available: false, path: '', version: '',
@@ -31995,6 +31997,9 @@ function ninaApp() {
                 c.title = d.title || '';
                 c.showHeader = !!d.showHeader;
                 c.showObjectCard = !!d.showObjectCard;
+                c.pipSource = d.pipSource || 'off';
+                c.pipUrl = d.pipUrl || '';
+                c.pipLabel = d.pipLabel || '';
                 c.showBanner = !!d.showBanner;
                 c.fetchDescriptions = !!d.fetchDescriptions;
                 c.recordToDisk = !!d.recordToDisk;
@@ -32055,6 +32060,9 @@ function ninaApp() {
                     title: c.title || '',
                     showHeader: !!c.showHeader,
                     showObjectCard: !!c.showObjectCard,
+                    pipSource: c.pipSource,
+                    pipUrl: c.pipUrl || '',
+                    pipLabel: c.pipLabel || '',
                     showBanner: !!c.showBanner,
                     fetchDescriptions: !!c.fetchDescriptions,
                     recordToDisk: !!c.recordToDisk
@@ -35973,9 +35981,26 @@ function ninaApp() {
         },
         // Group the settings cards by category (with a header row per group)
         // and sort alphabetically within each group. Pure DOM reorder of the
-        // existing card nodes — preserves all Alpine bindings/x-init. Runs once.
+        // existing card nodes, preserves all Alpine bindings/x-init. Runs once.
+        // Moving the cards has to be invisible to Alpine. Its MutationObserver
+        // treats a node leaving the document as destroyed and releases every
+        // effect under it, and putting the node back does not re-initialise
+        // one that is still marked as initialised. The cards then render once
+        // and freeze: the storage card could not switch its SMB / SFTP /
+        // local fields, the relay pill never moved off its first state, and
+        // every x-show in Settings was stuck at whatever it evaluated to on
+        // the first paint. Alpine.mutateDom suspends the observer for the
+        // duration, which is exactly what it exists for.
         reorderSettings(gridEl) {
             if (!gridEl || gridEl._settingsReordered) return;
+            if (window.Alpine && typeof window.Alpine.mutateDom === 'function') {
+                window.Alpine.mutateDom(() => this._reorderSettingsNow(gridEl));
+            } else {
+                this._reorderSettingsNow(gridEl);
+            }
+        },
+
+        _reorderSettingsNow(gridEl) {
             // category name -> exact normalized titles it contains (emoji
             // stripped, lowercased). Category order is the display order.
             const CATS = [

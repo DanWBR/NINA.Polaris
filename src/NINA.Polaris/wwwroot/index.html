@@ -15283,6 +15283,25 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     </template>
                                 </select>
                             </label>
+                            <label><span class="lbl">Second picture, bottom left</span>
+                                <select class="input input-sm" x-model="broadcastCfg.pipSource"
+                                        title="A small frame in the bottom left corner. The guide and auxiliary frames are the ones those loops already took, so they cost no exposure; a snapshot URL is for an all sky or IP camera and costs nothing on the rig at all.">
+                                    <option value="off">Off</option>
+                                    <option value="guide">Guide camera</option>
+                                    <option value="aux">Auxiliary camera</option>
+                                    <option value="url">Camera at a web address</option>
+                                </select>
+                            </label>
+                            <label x-show="broadcastCfg.pipSource === 'url'" x-cloak>
+                                <span class="lbl">Snapshot address</span>
+                                <input class="input input-sm" type="text" x-model="broadcastCfg.pipUrl"
+                                       placeholder="http://192.168.1.50/snapshot.jpg" autocomplete="off">
+                            </label>
+                            <label x-show="broadcastCfg.pipSource !== 'off'" x-cloak>
+                                <span class="lbl">Caption for it</span>
+                                <input class="input input-sm" type="text" x-model="broadcastCfg.pipLabel"
+                                       placeholder="All sky" autocomplete="off">
+                            </label>
                             <label><span class="lbl">Broadcast title</span>
                                 <input class="input input-sm" type="text" x-model="broadcastCfg.title"
                                        placeholder="Polaris Live Stream" autocomplete="off">
@@ -15339,6 +15358,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         </p>
                         <p class="text-warn" style="font-size:12px; margin-top:8px"
                            x-show="broadcastStatus.lastError" x-cloak x-text="broadcastStatus.lastError"></p>
+                        <!-- The corner picture failing is invisible on air: the
+                             broadcast carries on without it. Say so here. -->
+                        <p class="text-warn" style="font-size:12px; margin-top:4px"
+                           x-show="broadcastStatus.running && broadcastStatus.pipError" x-cloak
+                           x-text="broadcastStatus.pipError"></p>
                     </div>
                 </div>
 

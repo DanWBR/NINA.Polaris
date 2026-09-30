@@ -143,6 +143,48 @@ carries a small credit line, which is not optional: it is published
 under a licence that requires attribution, and a broadcast is
 publishing.
 
+## A second camera in the corner
+
+The question every astrophotography chat asks after "what scope is that" is
+"what does it look like out there". A small frame in the bottom left corner
+answers it: an all sky camera, a camera pointed at the rig, or the guide frame.
+
+Three sources, and the difference between them is what they cost.
+
+**The guide camera** costs nothing. Polaris draws the frame the guide loop has
+already taken, so no exposure is spent and nothing competes for the camera. It
+needs the loop running, and it works with the built in guider only, because
+PHD2 draws its own window and hands Polaris no pixels. What it shows is a
+starfield at high magnification, which is interesting to an audience watching
+guiding work and not at all a view of the sky.
+
+**The auxiliary camera** also costs nothing, for the same reason: it is the
+frame that camera's own capture loop took. Polaris never asks either camera for
+an exposure of its own. It would have to queue behind that loop and behind your
+focus snaps on the same capture gate, and three parties taking turns on one
+camera is how a session stalls.
+
+**A camera at a web address** is the one that answers the original question,
+because an all sky camera is usually an IP camera rather than an astronomy one.
+Give Polaris the address of a snapshot, the still image almost every such
+camera serves, and it fetches one every few seconds. This costs nothing at the
+telescope at all: no driver, no equipment slot, no contention. A stream address
+(`rtsp://`) is not the same thing and will not work here; it wants a still.
+
+Whichever you choose, give it a caption. Polaris has no way to know whether the
+camera is pointed at the sky, at the mount or at the dog.
+
+The corner never delays a frame. It draws whatever picture is already in hand,
+and a source with nothing to show draws nothing rather than an empty box. When
+a snapshot camera stops answering, the last picture stays up and the reason
+appears under the buttons in Settings, where it is visible to you and not to
+the audience.
+
+One honest cost: the corner is more pixels to encode, and unlike the main
+picture, which is unchanged between subs, it never stops moving. On a board
+encoding in software that shows up in the bitrate and in the dropped frame
+counter.
+
 ## What the host has to be able to do
 
 Encoding H.264 is real work, and it happens next to the capture loop

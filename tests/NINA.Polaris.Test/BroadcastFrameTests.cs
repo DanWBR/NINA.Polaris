@@ -75,6 +75,29 @@ public class BroadcastLayoutTests {
             "the title leads and the equipment is secondary");
     }
 
+    [TestCase(854, 480)]
+    [TestCase(1280, 720)]
+    [TestCase(1920, 1080)]
+    public void TheSecondPictureSitsInTheOneFreeCorner(int w, int h) {
+        var l = BroadcastLayout.For(w, h, hasHeader: true);
+        Assert.That(l.Pip.X, Is.EqualTo(l.Pad), "bottom left, against the margin");
+        Assert.That(l.Pip.Bottom, Is.LessThanOrEqualTo(l.Banner.Y), "and clear of the banner");
+        Assert.That(l.Pip.Right, Is.LessThan(l.Card.X), "and clear of the object card");
+        Assert.That(l.Pip.Y, Is.GreaterThan(l.Header.Bottom), "and below the header");
+        // Big enough to make out a horizon, small enough to leave the picture
+        // the frame is actually about.
+        Assert.That(l.Pip.Width, Is.LessThan(w / 3));
+        Assert.That(l.PipLabelSize, Is.GreaterThan(7f));
+    }
+
+    [Test]
+    public void TheSecondPictureIsFourThree() {
+        // An all sky lens puts a round image in a square frame and a webcam is
+        // 16:9. Neither is cropped, so the slot only has to be a sane shape.
+        var l = BroadcastLayout.For(1280, 720, hasHeader: true);
+        Assert.That((double)l.Pip.Width / l.Pip.Height, Is.EqualTo(4.0 / 3).Within(0.05));
+    }
+
     [Test]
     public void TheCutoutSlotIsWiderThanItIsTall() {
         // A square cutout at card width takes half the panel, and with a
@@ -305,6 +328,74 @@ public class FrameComposerTests {
         }
         Assert.That(litBare, Is.Zero);
         Assert.That(litMessage, Is.GreaterThan(0));
+    }
+
+    [Test]
+    public void TheSecondPictureIsDrawnInTheBottomLeft() {
+        using var composer = new FrameComposer(_layout, _fonts);
+        using var picture = Picture(1600, 900, 200);
+        using var allSky = Picture(640, 480, 120);
+
+        var without = (byte[])composer.Compose(picture, null, null).Clone();
+        var with = composer.Compose(picture, null, null, null, null, null, allSky, "Live");
+
+        var p = _layout.Pip;
+        var probe = (p.X + p.Width / 2, p.Y + p.Height / 2);
+        Assert.That(At(without, probe.Item1, probe.Item2).R, Is.GreaterThan(150),
+            "picture only, before the corner is drawn");
+        // The corner holds the mid grey of the second picture, not the bright
+        // grey of the main one.
+        var inside = At(with, probe.Item1, probe.Item2);
+        Assert.That(inside.R, Is.InRange(90, 150));
+    }
+
+    [Test]
+    public void NoSecondPictureDrawsNoEmptyBox() {
+        // A broadcast with no all sky camera must not carry a black rectangle
+        // in the corner all night.
+        using var composer = new FrameComposer(_layout, _fonts);
+        using var picture = Picture(1600, 900, 200);
+        var rgb = composer.Compose(picture, null, null, null, null, null, null, null);
+        var p = _layout.Pip;
+        Assert.That(At(rgb, p.X + p.Width / 2, p.Y + p.Height / 2).R, Is.GreaterThan(150));
+    }
+
+    [Test]
+    public void AnAllSkyCircleIsFittedRatherThanCropped() {
+        // A square fisheye in a 4:3 slot: cropping to fill would cut the
+        // horizon off the left and right, which is the part people watch.
+        using var composer = new FrameComposer(_layout, _fonts);
+        using var square = Picture(600, 600, 120);
+        var rgb = composer.Compose(null, null, null, null, null, null, square, null);
+
+        var p = _layout.Pip;
+        var mid = p.Y + p.Height / 2;
+        // Fitted to the height, so the sides of the slot keep the panel
+        // backing rather than the picture.
+        Assert.That(At(rgb, p.X + p.Width / 2, mid).R, Is.InRange(90, 150));
+        Assert.That(At(rgb, p.X + 3, mid).R, Is.LessThan(90), "panel, not picture, at the edge");
+    }
+
+    [Test]
+    public void TheSourceIsNamedOverTheCorner() {
+        using var composer = new FrameComposer(_layout, _fonts);
+        using var allSky = Picture(640, 480, 120);
+        var plain = (byte[])composer.Compose(null, null, null, null, null, null, allSky, null).Clone();
+        var labelled = composer.Compose(null, null, null, null, null, null, allSky, "All sky");
+
+        // The caption sits over the top left of the corner, on its own scrim.
+        // Scan the band the caption occupies rather than one row: where the
+        // glyphs land inside it depends on the font metrics.
+        var p = _layout.Pip;
+        var plainLit = 0;
+        var labelledLit = 0;
+        for (var y = p.Y; y < p.Y + p.Height / 3; y++) {
+            for (var x = p.X; x < p.Right; x++) {
+                if (At(plain, x, y).R > 200) plainLit++;
+                if (At(labelled, x, y).R > 200) labelledLit++;
+            }
+        }
+        Assert.That(labelledLit, Is.GreaterThan(plainLit + 20), "the caption is white text on a scrim");
     }
 
     [Test]
