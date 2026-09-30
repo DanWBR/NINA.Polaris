@@ -35967,8 +35967,25 @@ function ninaApp() {
         // Group the settings cards by category (with a header row per group)
         // and sort alphabetically within each group. Pure DOM reorder of the
         // existing card nodes, preserves all Alpine bindings/x-init. Runs once.
+        // Moving the cards has to be invisible to Alpine. Its MutationObserver
+        // treats a node leaving the document as destroyed and releases every
+        // effect under it, and putting the node back does not re-initialise
+        // one that is still marked as initialised. The cards then render once
+        // and freeze: the storage card could not switch its SMB / SFTP /
+        // local fields, the relay pill never moved off its first state, and
+        // every x-show in Settings was stuck at whatever it evaluated to on
+        // the first paint. Alpine.mutateDom suspends the observer for the
+        // duration, which is exactly what it exists for.
         reorderSettings(gridEl) {
             if (!gridEl || gridEl._settingsReordered) return;
+            if (window.Alpine && typeof window.Alpine.mutateDom === 'function') {
+                window.Alpine.mutateDom(() => this._reorderSettingsNow(gridEl));
+            } else {
+                this._reorderSettingsNow(gridEl);
+            }
+        },
+
+        _reorderSettingsNow(gridEl) {
             // category name -> exact normalized titles it contains (emoji
             // stripped, lowercased). Category order is the display order.
             const CATS = [
