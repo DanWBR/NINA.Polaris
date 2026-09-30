@@ -4610,5 +4610,9 @@
   "Shuffle the music folder": "Shuffle the music folder",
   "A file or a folder on this host. One file loops; a folder plays through and starts again.": "A file or a folder on this host. One file loops; a folder plays through and starts again.",
   "Only means anything for a folder. A single file loops on its own.": "Only means anything for a folder. A single file loops on its own.",
-  "Polaris plays your own music and ships none of its own. You are responsible for the rights: platforms scan live audio, and a track being free to download does not make it free to broadcast.": "Polaris plays your own music and ships none of its own. You are responsible for the rights: platforms scan live audio, and a track being free to download does not make it free to broadcast."
+  "Polaris plays your own music and ships none of its own. You are responsible for the rights: platforms scan live audio, and a track being free to download does not make it free to broadcast.": "Polaris plays your own music and ships none of its own. You are responsible for the rights: platforms scan live audio, and a track being free to download does not make it free to broadcast.",
+  "Choose a music file": "Choose a music file",
+  "Choose a music folder": "Choose a music folder",
+  "📄 Choose a file…": "📄 Choose a file…",
+  "📁 Choose a folder…": "📁 Choose a folder…"
 }

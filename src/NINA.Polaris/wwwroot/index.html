@@ -15070,6 +15070,19 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                        placeholder="/home/polaris/music  (a file or a folder)"
                                        autocomplete="off"
                                        title="A file or a folder on this host. One file loops; a folder plays through and starts again.">
+                                <!-- Two buttons rather than one that guesses: a single
+                                     track and a folder are different intentions, and the
+                                     host dialog has a mode for each. Typing a path by
+                                     hand still works, which is what an SSH user wants. -->
+                                <span style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px">
+                                    <button type="button" class="btn btn-sm"
+                                            @click="broadcastPickMusicFile()">📄 Choose a file…</button>
+                                    <button type="button" class="btn btn-sm"
+                                            @click="broadcastPickMusicFolder()">📁 Choose a folder…</button>
+                                    <button type="button" class="btn btn-sm"
+                                            x-show="(broadcastCfg.musicPath || '').trim()" x-cloak
+                                            @click="broadcastClearMusic()">Clear</button>
+                                </span>
                             </label>
                             <label x-show="(broadcastCfg.musicPath || '').trim()" x-cloak>
                                 <span class="lbl">Music volume</span>

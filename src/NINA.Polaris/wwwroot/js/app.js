@@ -604,7 +604,7 @@ function ninaApp() {
             destination: 'youtube', rtmpUrl: '', streamKey: '', hasStreamKey: false,
             quality: 'medium', title: '', showHeader: true, showObjectCard: true,
             pipSource: 'off', pipUrl: '', pipLabel: '',
-            musicPath: '', musicVolume: 50, musicShuffle: true,
+            musicPath: '', musicVolume: 50, musicShuffle: true, musicExtensions: [],
             showBanner: true, fetchDescriptions: true, recordToDisk: false,
             destinations: [], qualities: [], loaded: false, saving: false, busy: false
         },
@@ -32008,6 +32008,7 @@ function ninaApp() {
                 c.pipUrl = d.pipUrl || '';
                 c.pipLabel = d.pipLabel || '';
                 c.musicPath = d.musicPath || '';
+                c.musicExtensions = d.musicExtensions || [];
                 // Number(), not ||, or a deliberate 0 would come back as 50.
                 c.musicVolume = Number.isFinite(d.musicVolume) ? d.musicVolume : 50;
                 c.musicShuffle = d.musicShuffle !== false;
@@ -32054,6 +32055,24 @@ function ninaApp() {
                 .find(x => x.id === this.broadcastCfg.destination);
             if (d && d.rtmpUrl) this.broadcastCfg.rtmpUrl = d.rtmpUrl;
         },
+
+        // Music is a file or a folder, so there are two buttons rather than
+        // one that guesses. Both reuse the host dialog the Studio already
+        // uses; the file one filters on the extensions the host says it can
+        // decode, so the list cannot offer something ffmpeg will refuse.
+        async broadcastPickMusicFile() {
+            const accept = this.broadcastCfg.musicExtensions || [];
+            const p = await this._openHostFileDialog({
+                mode: 'open', title: this.$t('Choose a music file'),
+                accept: accept.length ? accept : undefined
+            });
+            if (p) this.broadcastCfg.musicPath = p;
+        },
+        async broadcastPickMusicFolder() {
+            const p = await this._hostPickFolder({ title: this.$t('Choose a music folder') });
+            if (p) this.broadcastCfg.musicPath = p;
+        },
+        broadcastClearMusic() { this.broadcastCfg.musicPath = ''; },
 
         async saveBroadcastConfig() {
             if (!this.broadcastCfg.loaded) return;

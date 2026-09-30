@@ -5228,5 +5228,9 @@
   "Shuffle the music folder": "Embaralhar a pasta de música",
   "A file or a folder on this host. One file loops; a folder plays through and starts again.": "Um arquivo ou uma pasta neste host. Um arquivo toca em laço; uma pasta toca até o fim e recomeça.",
   "Only means anything for a folder. A single file loops on its own.": "Só faz diferença para uma pasta. Um arquivo único já toca em laço.",
-  "Polaris plays your own music and ships none of its own. You are responsible for the rights: platforms scan live audio, and a track being free to download does not make it free to broadcast.": "O Polaris toca a sua própria música e não traz nenhuma. Os direitos são sua responsabilidade: as plataformas analisam o áudio ao vivo, e uma faixa ser grátis para baixar não a torna livre para transmitir."
+  "Polaris plays your own music and ships none of its own. You are responsible for the rights: platforms scan live audio, and a track being free to download does not make it free to broadcast.": "O Polaris toca a sua própria música e não traz nenhuma. Os direitos são sua responsabilidade: as plataformas analisam o áudio ao vivo, e uma faixa ser grátis para baixar não a torna livre para transmitir.",
+  "Choose a music file": "Escolher um arquivo de música",
+  "Choose a music folder": "Escolher uma pasta de música",
+  "📄 Choose a file…": "📄 Escolher um arquivo…",
+  "📁 Choose a folder…": "📁 Escolher uma pasta…"
 }

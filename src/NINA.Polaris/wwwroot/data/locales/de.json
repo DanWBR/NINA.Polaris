@@ -5228,5 +5228,9 @@
   "Shuffle the music folder": "Musikordner mischen",
   "A file or a folder on this host. One file loops; a folder plays through and starts again.": "Eine Datei oder ein Ordner auf diesem Host. Eine Datei läuft in Schleife, ein Ordner wird durchgespielt und beginnt von vorn.",
   "Only means anything for a folder. A single file loops on its own.": "Betrifft nur einen Ordner. Eine einzelne Datei läuft ohnehin in Schleife.",
-  "Polaris plays your own music and ships none of its own. You are responsible for the rights: platforms scan live audio, and a track being free to download does not make it free to broadcast.": "Polaris spielt Ihre eigene Musik und liefert keine mit. Die Rechte liegen bei Ihnen: Die Plattformen prüfen den Live-Ton, und ein kostenloser Download ist noch keine Sendeerlaubnis."
+  "Polaris plays your own music and ships none of its own. You are responsible for the rights: platforms scan live audio, and a track being free to download does not make it free to broadcast.": "Polaris spielt Ihre eigene Musik und liefert keine mit. Die Rechte liegen bei Ihnen: Die Plattformen prüfen den Live-Ton, und ein kostenloser Download ist noch keine Sendeerlaubnis.",
+  "Choose a music file": "Musikdatei wählen",
+  "Choose a music folder": "Musikordner wählen",
+  "📄 Choose a file…": "📄 Datei wählen…",
+  "📁 Choose a folder…": "📁 Ordner wählen…"
 }
