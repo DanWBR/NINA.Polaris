@@ -55,6 +55,12 @@ public class NetworkManagerService : BackgroundService {
     public bool HasWifiInterface { get; private set; }
     public string? WifiInterface { get; private set; }
 
+    /// <summary>A wireless adapter that exists but that NetworkManager has
+    /// been told not to touch. Null when there is none, which is the normal
+    /// case. Named rather than counted, because the operator needs the
+    /// interface name to put it right.</summary>
+    public string? UnmanagedWifiInterface { get; private set; }
+
     public WifiMode CurrentMode { get; private set; } = WifiMode.Unknown;
     public string? CurrentSsid { get; private set; }
     public string? CurrentIp { get; private set; }
@@ -133,6 +139,28 @@ public class NetworkManagerService : BackgroundService {
     /// UI surfaces this directly in the Settings → Network banner so
     /// the user does not see a generic "click Switch" button on a
     /// platform that physically cannot drive nmcli.</summary>
+    /// <summary>
+    /// Why WiFi cannot be used although the hardware is there, with the
+    /// commands that fix it. Null when nothing is wrong.
+    ///
+    /// <para>Polaris does not edit /etc/network/interfaces by itself. That
+    /// file is the operator's, it can carry the configuration keeping the
+    /// machine reachable, and a controller rewriting it unasked is how a
+    /// remote host stops answering.</para>
+    /// </summary>
+    public string? WifiUnmanagedReason {
+        get {
+            var iface = UnmanagedWifiInterface;
+            if (iface == null || HasWifiInterface) return null;
+            return $"{iface} is a wireless adapter, but NetworkManager has been told not to manage it, "
+                 + "so the hotspot and the network switcher cannot use it. On a Debian install this is "
+                 + $"usually a static stanza for {iface} in /etc/network/interfaces. "
+                 + $"To hand it over for now: sudo nmcli device set {iface} managed yes. "
+                 + $"To make that survive a reboot, remove the {iface} stanza from "
+                 + "/etc/network/interfaces and run: sudo systemctl restart NetworkManager";
+        }
+    }
+
     public string? UnsupportedReason {
         get {
             if (!IsSupportedOs)
@@ -233,8 +261,23 @@ public class NetworkManagerService : BackgroundService {
 
     private async Task DetectWifiInterfaceAsync(CancellationToken ct) {
         try {
-            var wifis = await ListWifiInterfacesAsync(ct);
-            if (wifis.Count == 0) { HasWifiInterface = false; return; }
+            var devices = await ListWifiDevicesAsync(ct);
+            var wifis = new List<string>();
+            string? unmanaged = null;
+            foreach (var d in devices) {
+                if (d.IsUnmanaged) unmanaged ??= d.Name;
+                else wifis.Add(d.Name);
+            }
+            UnmanagedWifiInterface = unmanaged;
+            if (unmanaged != null && wifis.Count == 0) {
+                // Worth a log line at warning level: every hotspot attempt
+                // from here on fails, and the reason is nowhere near the
+                // error nmcli prints.
+                _logger.LogWarning(
+                    "NetworkManagerService: {Iface} is wireless but unmanaged, so NetworkManager "
+                    + "cannot use it. Usually a static stanza in /etc/network/interfaces.", unmanaged);
+            }
+            if (wifis.Count == 0) { HasWifiInterface = false; WifiInterface = null; return; }
             // Honour the user's chosen adapter (e.g. an external USB antenna)
             // when it is present; otherwise fall back to the first wifi device.
             var preferred = _profiles.Active.HotspotWifiInterface;
@@ -321,21 +364,65 @@ public class NetworkManagerService : BackgroundService {
 
     /// <summary>All wireless devices NetworkManager sees (DEVICE names, in the
     /// order nmcli reports them). Empty on a non-Linux / no-nmcli host.</summary>
+    /// <summary>
+    /// The wireless adapters Polaris can actually drive.
+    ///
+    /// <para>An unmanaged device is left out. It is present, it is wireless,
+    /// and NetworkManager will refuse every command aimed at it, so counting
+    /// it as available produces a rig that believes it has WiFi, fails every
+    /// hotspot attempt with "no suitable device", and reports itself as wired.
+    /// That is a field report from a clean Debian install, where a static
+    /// stanza in /etc/network/interfaces hands the adapter to ifupdown and
+    /// NetworkManager steps aside.</para>
+    /// </summary>
     public async Task<List<string>> ListWifiInterfacesAsync(CancellationToken ct = default) {
+        var devices = await ListWifiDevicesAsync(ct);
         var list = new List<string>();
-        if (!IsSupportedOs || !NmcliInstalled) return list;
-        try {
-            var res = await RunCommandAsync("nmcli", "-t -f DEVICE,TYPE device status", ct);
-            foreach (var line in res.stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries)) {
-                var parts = SplitNmcliTerse(line);
-                if (parts.Length >= 2 && parts[1].Equals("wifi", StringComparison.OrdinalIgnoreCase)
-                        && !string.IsNullOrWhiteSpace(parts[0]) && !list.Contains(parts[0]))
-                    list.Add(parts[0]);
-            }
-        } catch (Exception ex) {
-            _logger.LogDebug(ex, "wifi interface enumeration failed");
+        foreach (var d in devices) if (!d.IsUnmanaged) list.Add(d.Name);
+        return list;
+    }
+
+    /// <summary>One wireless device as <c>nmcli device status</c> reports it.</summary>
+    public readonly record struct WifiDevice(string Name, string State) {
+        /// <summary>NetworkManager has been told to keep its hands off this
+        /// device, so every nmcli command aimed at it will be refused.</summary>
+        public bool IsUnmanaged =>
+            State.StartsWith("unmanaged", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Parse <c>nmcli -t -f DEVICE,TYPE,STATE device status</c>.
+    ///
+    /// <para>Pure so the shapes nmcli actually emits are pinned by tests: the
+    /// terse format escapes colons inside a field, and the state can carry a
+    /// reason in parentheses ("unmanaged (explicitly unmanaged)").</para>
+    /// </summary>
+    public static List<WifiDevice> ParseWifiDevices(string? nmcliOutput) {
+        var list = new List<WifiDevice>();
+        if (string.IsNullOrWhiteSpace(nmcliOutput)) return list;
+        foreach (var line in nmcliOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries)) {
+            var parts = SplitNmcliTerse(line);
+            if (parts.Length < 2) continue;
+            if (!parts[1].Equals("wifi", StringComparison.OrdinalIgnoreCase)) continue;
+            var name = parts[0].Trim();
+            if (name.Length == 0) continue;
+            var state = parts.Length >= 3 ? parts[2].Trim() : "";
+            if (list.Exists(d => string.Equals(d.Name, name, StringComparison.OrdinalIgnoreCase))) continue;
+            list.Add(new WifiDevice(name, state));
         }
         return list;
+    }
+
+    /// <summary>Every wireless device and the state nmcli reports for it.</summary>
+    public async Task<List<WifiDevice>> ListWifiDevicesAsync(CancellationToken ct = default) {
+        if (!IsSupportedOs || !NmcliInstalled) return new List<WifiDevice>();
+        try {
+            var res = await RunCommandAsync("nmcli", "-t -f DEVICE,TYPE,STATE device status", ct);
+            return ParseWifiDevices(res.stdout);
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "wifi device enumeration failed");
+            return new List<WifiDevice>();
+        }
     }
 
     /// <summary>Bind the hotspot/station to a specific wireless adapter (e.g. an

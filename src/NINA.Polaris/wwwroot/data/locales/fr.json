@@ -5216,5 +5216,9 @@
   "Auxiliary camera": "Caméra auxiliaire",
   "Camera at a web address": "Caméra à une adresse web",
   "Snapshot address": "Adresse de la capture",
-  "Caption for it": "Légende associée"
+  "Caption for it": "Légende associée",
+  "is a wireless adapter, but NetworkManager has been told not to manage it, so the hotspot and the network switcher cannot use it. On a Debian install this is usually a static stanza for it in": "est un adaptateur sans fil, mais NetworkManager a reçu l'instruction de ne pas le gérer, donc le point d'accès et le sélecteur de réseau ne peuvent pas l'utiliser. Sur une installation Debian, c'est en général une déclaration statique le concernant dans",
+  "To hand it over now:": "Pour le lui confier maintenant :",
+  "To make it survive a reboot, remove that stanza from": "Pour que cela survive à un redémarrage, retirez cette déclaration de",
+  "and then:": "puis :"
 }

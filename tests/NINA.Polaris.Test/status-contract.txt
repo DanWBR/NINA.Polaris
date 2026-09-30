@@ -321,6 +321,8 @@ network.unsupportedReason
 network.wifiInterface
 network.wifiOffWhenWired
 network.wifiRadioOff
+network.wifiUnmanagedIface
+network.wifiUnmanagedReason
 network.wired
 network.wiredInterface
 network.wiredIp

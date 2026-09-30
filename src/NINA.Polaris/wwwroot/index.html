@@ -16978,7 +16978,37 @@ Windows  winget install Rclone.Rclone</code></pre>
                             and reboot, then the WiFi panel will appear here.
                         </p>
                     </template>
-                    <template x-if="network && network?.supportedOs && network?.nmcliInstalled && !network?.hasWifi">
+                    <!-- The adapter is there and NetworkManager will not touch
+                         it. Saying "no WiFi interface" here is what sent a user
+                         hunting through nmcli logs on a machine that plainly has
+                         wireless: the honest message names the interface and the
+                         two commands that fix it. Polaris does not edit
+                         /etc/network/interfaces on its own. -->
+                    <template x-if="network && network?.supportedOs && network?.nmcliInstalled
+                                    && !network?.hasWifi && network?.wifiUnmanagedReason">
+                        <div class="img-boot" style="max-width:640px">
+                            <span class="img-boot-ico" aria-hidden="true">📶</span>
+                            <div>
+                                <p style="margin:0 0 6px">
+                                    <strong x-text="network?.wifiUnmanagedIface"></strong>
+                                    is a wireless adapter, but NetworkManager has been told not to
+                                    manage it, so the hotspot and the network switcher cannot use it.
+                                    On a Debian install this is usually a static stanza for it in
+                                    <code>/etc/network/interfaces</code>.
+                                </p>
+                                <p style="margin:0 0 4px">To hand it over now:</p>
+                                <p style="margin:0 0 6px"><code
+                                    x-text="'sudo nmcli device set ' + (network?.wifiUnmanagedIface || 'wlan0') + ' managed yes'"></code></p>
+                                <p style="margin:0 0 4px">
+                                    To make it survive a reboot, remove that stanza from
+                                    <code>/etc/network/interfaces</code> and then:
+                                </p>
+                                <p style="margin:0"><code>sudo systemctl restart NetworkManager</code></p>
+                            </div>
+                        </div>
+                    </template>
+                    <template x-if="network && network?.supportedOs && network?.nmcliInstalled
+                                    && !network?.hasWifi && !network?.wifiUnmanagedReason">
                         <p class="text-muted" style="font-size: 12px; max-width:560px">
                             No WiFi interface detected on this host. Ethernet-only
                             mini-PCs are managed via the OS settings.
@@ -22297,7 +22327,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     </div>
                 </template>
                 <template x-if="!(network && network.supportedOs && network.hasWifi)">
-                    <div class="bs-cnote" x-text="(network && network.unsupportedReason) || 'WiFi management is not available on this host.'"></div>
+                    <div class="bs-cnote" x-text="(network && (network.wifiUnmanagedReason || network.unsupportedReason)) || 'WiFi management is not available on this host.'"></div>
                 </template>
             </div>
 
