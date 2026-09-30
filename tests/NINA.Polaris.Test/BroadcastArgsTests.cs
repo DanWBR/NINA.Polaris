@@ -199,4 +199,134 @@ public class BroadcastArgsTests {
         Assert.That(args, Does.Not.Contain("-filter_complex"));
         Assert.That(Flat(args), Does.Contain("-map 0:v"));
     }
+
+    // --- background music -------------------------------------------------
+
+    [Test]
+    public void WithNoMusicTheAudioIsStillThereAndSilent() {
+        // A video-only RTMP stream is refused by YouTube, so the silent track
+        // is not optional.
+        var args = Flat(BroadcastArgs.Build(Plan()));
+        Assert.That(args, Does.Contain("anullsrc"));
+        Assert.That(args, Does.Not.Contain("volume="));
+    }
+
+    [Test]
+    public void OneMusicFileIsLoopedForever() {
+        var args = BroadcastArgs.Build(Plan() with { MusicFile = "/music/night.mp3" });
+        var flat = Flat(args);
+        Assert.That(flat, Does.Not.Contain("anullsrc"));
+        // -stream_loop scopes to the input that follows it, so the order is
+        // the behaviour: after the -i it would apply to nothing.
+        var loop = args.IndexOf("-stream_loop");
+        Assert.That(loop, Is.GreaterThanOrEqualTo(0));
+        Assert.That(args[loop + 1], Is.EqualTo("-1"));
+        Assert.That(args[loop + 2], Is.EqualTo("-i"));
+        Assert.That(args[loop + 3], Is.EqualTo("/music/night.mp3"));
+    }
+
+    [Test]
+    public void APlaylistIsConcatAndIsNotStreamLooped() {
+        // Measured: -stream_loop does not loop the concat demuxer, it plays
+        // the list once and reports an error. The playlist repeats its own
+        // entries instead, so asking for the loop here would be wrong.
+        var args = BroadcastArgs.Build(Plan() with { MusicPlaylistFile = "/data/broadcast/music.ffconcat" });
+        var flat = Flat(args);
+        Assert.That(flat, Does.Contain("-f concat -safe 0 -i /data/broadcast/music.ffconcat"));
+        Assert.That(args, Does.Not.Contain("-stream_loop"));
+        Assert.That(flat, Does.Not.Contain("anullsrc"));
+    }
+
+    [Test]
+    public void ASingleFileWinsOverAPlaylistRatherThanAddingTwoInputs() {
+        // Both set would mean two audio inputs and a mapping that points at
+        // the wrong one.
+        var args = BroadcastArgs.Build(Plan() with {
+            MusicFile = "/music/a.mp3", MusicPlaylistFile = "/data/music.ffconcat" });
+        Assert.That(Flat(args), Does.Contain("/music/a.mp3"));
+        Assert.That(Flat(args), Does.Not.Contain("music.ffconcat"));
+        Assert.That(args.Count(x => x == "-i"), Is.EqualTo(2));   // the picture and the music
+    }
+
+    [Test]
+    public void TheVolumeFilterCarriesTheChosenLevel() {
+        var args = Flat(BroadcastArgs.Build(Plan() with { MusicFile = "/m/a.mp3", MusicVolume = 35 }));
+        Assert.That(args, Does.Contain("-filter:a volume=0.35"));
+    }
+
+    [Test]
+    public void FullVolumeAddsNoFilterAtAll() {
+        var args = Flat(BroadcastArgs.Build(Plan() with { MusicFile = "/m/a.mp3", MusicVolume = 100 }));
+        Assert.That(args, Does.Not.Contain("volume="));
+    }
+
+    [Test]
+    public void VolumeIsIgnoredWhenThereIsNoMusicToTurnDown() {
+        var args = Flat(BroadcastArgs.Build(Plan() with { MusicVolume = 20 }));
+        Assert.That(args, Does.Not.Contain("volume="));
+    }
+
+    [Test]
+    public void TheAudioMapStillPointsAtTheMusicWhenTheCardIsOn() {
+        // The card is input 1, so the audio is input 2 whether it is silence
+        // or the operator's music. Getting this wrong maps the card PNG as
+        // audio and ffmpeg refuses the whole command.
+        var args = Flat(BroadcastArgs.Build(Plan(card: "/tmp/card.png") with { MusicFile = "/m/a.mp3" }));
+        Assert.That(args, Does.Contain("-map 2:a"));
+    }
+
+    // --- per-output options ------------------------------------------------
+
+    [Test]
+    public void TheRecordingGetsTheSameEncoderAsTheStream() {
+        // ffmpeg scopes an output option to the next file on the command line.
+        // With one block of options and two outputs, the recording fell back
+        // to the container defaults: software x264 at ffmpeg's own bitrate,
+        // which on a board that was using a hardware encoder started a second
+        // software encode nobody asked for.
+        var args = BroadcastArgs.Build(Plan(encoder: "h264_v4l2m2m", record: "/data/night.mp4"));
+        Assert.That(args.Count(x => x == "-c:v"), Is.EqualTo(2));
+        Assert.That(args.Count(x => x == "h264_v4l2m2m"), Is.EqualTo(2));
+        Assert.That(args.Count(x => x == "-c:a"), Is.EqualTo(2));
+    }
+
+    [Test]
+    public void EachOutputCarriesItsOwnOptionsBeforeItsOwnFileName() {
+        var args = BroadcastArgs.Build(Plan(record: "/data/night.mp4"));
+        var flv = args.IndexOf("flv");
+        var mp4 = args.LastIndexOf("mp4");
+        Assert.That(flv, Is.LessThan(mp4), "the stream is written before the recording");
+        // An encoder option on each side of the first output.
+        Assert.That(args.Take(flv).Count(x => x == "-c:v"), Is.EqualTo(1));
+        Assert.That(args.Skip(flv).Count(x => x == "-c:v"), Is.EqualTo(1));
+    }
+
+    [Test]
+    public void BothOutputsAreShortest() {
+        // Without it on each one, the endless music keeps ffmpeg running after
+        // stdin closes and the recording is killed mid-write.
+        var args = BroadcastArgs.Build(Plan(record: "/data/night.mp4"));
+        Assert.That(args.Count(x => x == "-shortest"), Is.EqualTo(2));
+    }
+
+    [Test]
+    public void RecordingOnlyStillCarriesTheOptionsOnce() {
+        var args = BroadcastArgs.Build(Plan(url: null, key: null, record: "/data/night.mp4"));
+        Assert.That(args.Count(x => x == "-c:v"), Is.EqualTo(1));
+        Assert.That(args.Count(x => x == "-shortest"), Is.EqualTo(1));
+        Assert.That(Flat(args), Does.Not.Contain("flv"));
+    }
+
+    [Test]
+    public void TheMusicPathIsNeverPastedIntoAFilterString() {
+        // A path with a colon or a quote in a filter value is the bug that
+        // cost a day on the banner. As a plain -i argument there is nothing
+        // to escape and nothing to get wrong.
+        var odd = "/music/C:weird's night.mp3";
+        var args = BroadcastArgs.Build(Plan() with { MusicFile = odd });
+        Assert.That(args, Does.Contain(odd));
+        foreach (var a in args)
+            if (a.StartsWith("volume=") || a.Contains("drawtext"))
+                Assert.That(a, Does.Not.Contain("weird"));
+    }
 }

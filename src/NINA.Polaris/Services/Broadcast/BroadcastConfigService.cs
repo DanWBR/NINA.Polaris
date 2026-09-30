@@ -73,6 +73,20 @@ public sealed record BroadcastConfig {
     public bool FetchDescriptions { get; init; } = true;
     public bool RecordToDisk { get; init; }
 
+    /// <summary>A file or a folder on the host to play under the broadcast.
+    /// Empty means the silent track.
+    ///
+    /// <para>The operator's own music, never ours. Polaris ships none: the
+    /// usual free libraries license a track into your video and forbid
+    /// redistributing the file, which is what putting one in the package would
+    /// be. It also puts the licence where the account is, since the platform
+    /// sends its claim to whoever is broadcasting.</para></summary>
+    public string MusicPath { get; init; } = "";
+    /// <summary>0 to 100.</summary>
+    public int MusicVolume { get; init; } = 50;
+    /// <summary>Only means anything for a folder.</summary>
+    public bool MusicShuffle { get; init; } = true;
+
     public static readonly BroadcastConfig Default = new();
 
     public bool HasStreamKey => !string.IsNullOrEmpty(StreamKey);
@@ -88,7 +102,8 @@ public sealed record BroadcastConfigUpdate(
     string? Quality = null, bool? ShowObjectCard = null, bool? ShowBanner = null,
     bool? FetchDescriptions = null, bool? RecordToDisk = null,
     string? Title = null, bool? ShowHeader = null,
-    string? PipSource = null, string? PipUrl = null, string? PipLabel = null);
+    string? PipSource = null, string? PipUrl = null, string? PipLabel = null,
+    string? MusicPath = null, int? MusicVolume = null, bool? MusicShuffle = null);
 
 /// <summary>
 /// The broadcast configuration, in its own file under the data dir rather than
@@ -191,7 +206,12 @@ public sealed class BroadcastConfigService {
                 PipLabel = req.PipLabel == null ? cur.PipLabel : Cap(req.PipLabel.Trim(), 30),
                 ShowBanner = req.ShowBanner ?? cur.ShowBanner,
                 FetchDescriptions = req.FetchDescriptions ?? cur.FetchDescriptions,
-                RecordToDisk = req.RecordToDisk ?? cur.RecordToDisk
+                RecordToDisk = req.RecordToDisk ?? cur.RecordToDisk,
+                MusicPath = req.MusicPath == null ? cur.MusicPath : req.MusicPath.Trim(),
+                // Clamped rather than rejected: a slider that refuses to save
+                // teaches nothing, and the value is only a gain.
+                MusicVolume = Math.Clamp(req.MusicVolume ?? cur.MusicVolume, 0, 100),
+                MusicShuffle = req.MusicShuffle ?? cur.MusicShuffle
             };
             Save(next);
             _cached = next;
@@ -218,6 +238,10 @@ public sealed class BroadcastConfigService {
             showBanner = c.ShowBanner,
             fetchDescriptions = c.FetchDescriptions,
             recordToDisk = c.RecordToDisk,
+            musicPath = c.MusicPath,
+            musicVolume = c.MusicVolume,
+            musicShuffle = c.MusicShuffle,
+            musicExtensions = BroadcastMusic.Extensions,
             destinations = BroadcastDestinations.All.Select(d => new { id = d.Id, label = d.Label, rtmpUrl = d.RtmpUrl }),
             qualities = BroadcastQuality.All.Select(q => new {
                 id = q.Id, label = q.Label, width = q.Width, height = q.Height, bitrateKbps = q.BitrateKbps
@@ -266,7 +290,10 @@ public sealed class BroadcastConfigService {
         PipLabel = s.PipLabel?.Trim() ?? "",
         ShowBanner = s.ShowBanner ?? true,
         FetchDescriptions = s.FetchDescriptions ?? true,
-        RecordToDisk = s.RecordToDisk ?? false
+        RecordToDisk = s.RecordToDisk ?? false,
+        MusicPath = s.MusicPath?.Trim() ?? "",
+        MusicVolume = Math.Clamp(s.MusicVolume ?? 50, 0, 100),
+        MusicShuffle = s.MusicShuffle ?? true
     };
 
     private void Save(BroadcastConfig c) {
@@ -286,6 +313,7 @@ public sealed class BroadcastConfigService {
             Title = c.Title, ShowHeader = c.ShowHeader,
             ShowObjectCard = c.ShowObjectCard, ShowBanner = c.ShowBanner,
             PipSource = c.PipSource, PipUrl = c.PipUrl, PipLabel = c.PipLabel,
+            MusicPath = c.MusicPath, MusicVolume = c.MusicVolume, MusicShuffle = c.MusicShuffle,
             FetchDescriptions = c.FetchDescriptions, RecordToDisk = c.RecordToDisk
         }, _json));
         if (!OperatingSystem.IsWindows()) {
@@ -309,6 +337,9 @@ public sealed class BroadcastConfigService {
         public string? PipUrl { get; set; }
         public string? PipLabel { get; set; }
         public bool? ShowBanner { get; set; }
+        public string? MusicPath { get; set; }
+        public int? MusicVolume { get; set; }
+        public bool? MusicShuffle { get; set; }
         public bool? FetchDescriptions { get; set; }
         public bool? RecordToDisk { get; set; }
     }

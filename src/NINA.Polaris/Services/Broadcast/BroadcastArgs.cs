@@ -58,6 +58,15 @@ public sealed record BroadcastPlan {
     /// Null when the banner is off or drawtext is missing.</summary>
     public string? BannerTextPath { get; init; }
     public string? FontFile { get; init; }
+
+    /// <summary>A single audio file, looped for the whole broadcast. Null when
+    /// there is no music, or when a playlist is used instead.</summary>
+    public string? MusicFile { get; init; }
+    /// <summary>An ffconcat playlist written by the service. Null when there is
+    /// no music, or when a single file is used instead.</summary>
+    public string? MusicPlaylistFile { get; init; }
+    /// <summary>0 to 100. Ignored when there is no music.</summary>
+    public int MusicVolume { get; init; } = 50;
 }
 
 /// <summary>
@@ -70,8 +79,18 @@ public sealed record BroadcastPlan {
 ///
 /// <para>What the platforms require, and why the arguments look like this:
 /// H.264 video and an AAC audio track (YouTube rejects a video-only RTMP
-/// stream, hence the silent <c>anullsrc</c>), and a keyframe at least every
-/// four seconds, hence the GOP of twice the output frame rate.</para>
+/// stream, hence the silent <c>anullsrc</c> when the operator chose no music),
+/// and a keyframe at least every four seconds, hence the GOP of twice the
+/// output frame rate.</para>
+///
+/// <para>The encoding options are emitted again before every output, which
+/// looks redundant and is not. ffmpeg scopes an output option to the next file
+/// on the command line, so with a stream and a recording a single block would
+/// configure the stream and leave the recording on the container defaults:
+/// software x264 at ffmpeg's own bitrate. On a board where the operator picked
+/// a hardware encoder precisely to save the CPU, that silently started a second
+/// software encode. Measured with two outputs and a deliberately odd codec: the
+/// first file came out as asked and the second did not.</para>
 /// </summary>
 public static class BroadcastArgs {
 
@@ -98,34 +117,58 @@ public static class BroadcastArgs {
         var hasCard = !string.IsNullOrWhiteSpace(plan.CardPngPath);
         if (hasCard) a.AddRange(new[] { "-f", "image2", "-loop", "1", "-i", plan.CardPngPath! });
 
-        // Last: silence, because a video-only RTMP stream is refused.
-        a.AddRange(new[] { "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo" });
+        // Last: the audio. The operator's own music when they pointed at
+        // some, silence otherwise, because a video-only RTMP stream is refused.
+        var music = false;
+        if (!string.IsNullOrWhiteSpace(plan.MusicFile)) {
+            // -stream_loop belongs to the input it precedes, and -1 is forever.
+            a.AddRange(new[] { "-stream_loop", "-1", "-i", plan.MusicFile! });
+            music = true;
+        } else if (!string.IsNullOrWhiteSpace(plan.MusicPlaylistFile)) {
+            // No -stream_loop here: it does not loop the concat demuxer, it
+            // plays the list once and stops. The playlist repeats its own
+            // contents instead. -safe 0 because the entries are absolute paths.
+            a.AddRange(new[] { "-f", "concat", "-safe", "0", "-i", plan.MusicPlaylistFile! });
+            music = true;
+        } else {
+            a.AddRange(new[] { "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo" });
+        }
 
         var filter = BuildFilter(plan, hasCard);
         if (filter != null) a.AddRange(new[] { "-filter_complex", filter, "-map", "[v]" });
         else a.AddRange(new[] { "-map", "0:v" });
         a.AddRange(new[] { "-map", hasCard ? "2:a" : "1:a" });
 
-        a.AddRange(new[] { "-c:v", plan.Encoder,
-                           "-b:v", $"{q.BitrateKbps}k",
-                           "-maxrate", $"{q.BitrateKbps}k",
-                           "-bufsize", $"{q.BitrateKbps * 2}k",
-                           "-pix_fmt", "yuv420p",
-                           "-r", outFps.ToString(),
-                           "-g", (outFps * 2).ToString() });
+        // Everything from here to the file name is per-output, so it is built
+        // once and written again before each one. See the note on the class.
+        var enc = new List<string> { "-c:v", plan.Encoder,
+                                     "-b:v", $"{q.BitrateKbps}k",
+                                     "-maxrate", $"{q.BitrateKbps}k",
+                                     "-bufsize", $"{q.BitrateKbps * 2}k",
+                                     "-pix_fmt", "yuv420p",
+                                     "-r", outFps.ToString(),
+                                     "-g", (outFps * 2).ToString() };
         // Software x264 needs telling to hurry; the hardware encoders have no
         // equivalent knob and reject the option.
-        if (plan.Encoder == "libx264") a.AddRange(new[] { "-preset", "veryfast", "-tune", "zerolatency" });
-        a.AddRange(new[] { "-c:a", "aac", "-b:a", "128k", "-ar", "44100" });
+        if (plan.Encoder == "libx264") enc.AddRange(new[] { "-preset", "veryfast", "-tune", "zerolatency" });
+        enc.AddRange(new[] { "-c:a", "aac", "-b:a", "128k", "-ar", "44100" });
+        // Only when it would do something. At full volume the filter is a no-op.
+        if (music && plan.MusicVolume != 100)
+            enc.AddRange(new[] { "-filter:a", "volume=" + BroadcastMusic.VolumeArg(plan.MusicVolume) });
+        // -shortest on every output, because the picture is the only input that
+        // ever ends. The silent track, the music and the card PNG are endless by
+        // construction, so without this ffmpeg keeps running after stdin closes,
+        // the stop times out and the process is killed instead of being allowed
+        // to finish. Every recording would arrive truncated.
+        enc.Add("-shortest");
 
         var publishing = !string.IsNullOrWhiteSpace(plan.RtmpUrl) && !string.IsNullOrWhiteSpace(plan.StreamKey);
-        // -shortest on every output, because the picture is the only input that
-        // ever ends. The silent track and the card PNG are endless by
-        // construction, so without this ffmpeg keeps running after stdin
-        // closes, the stop times out and the process is killed instead of being
-        // allowed to finish. Every recording would arrive truncated.
-        if (publishing) a.AddRange(new[] { "-shortest", "-f", "flv", JoinUrl(plan.RtmpUrl!, plan.StreamKey!) });
-        if (!string.IsNullOrWhiteSpace(plan.RecordPath))
+        if (publishing) {
+            a.AddRange(enc);
+            a.AddRange(new[] { "-f", "flv", JoinUrl(plan.RtmpUrl!, plan.StreamKey!) });
+        }
+        if (!string.IsNullOrWhiteSpace(plan.RecordPath)) {
+            a.AddRange(enc);
             // Fragmented MP4 rather than +faststart. A broadcast recording runs
             // for hours on a board that can lose power, and a plain MP4 keeps
             // its index in memory until the writer exits: a power cut, an OOM
@@ -133,9 +176,10 @@ public static class BroadcastArgs {
             // Fragments are written as they go, so what reached the disk plays.
             // It also means stopping is instant, where faststart would rewrite
             // several gigabytes before the process could exit.
-            a.AddRange(new[] { "-shortest", "-f", "mp4",
+            a.AddRange(new[] { "-f", "mp4",
                                "-movflags", "+frag_keyframe+empty_moov+default_base_moof",
                                plan.RecordPath! });
+        }
         if (!publishing && string.IsNullOrWhiteSpace(plan.RecordPath))
             throw new InvalidOperationException("A broadcast needs somewhere to go: an RTMP destination, a recording, or both.");
         return a;

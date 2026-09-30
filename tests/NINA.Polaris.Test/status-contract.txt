@@ -43,6 +43,7 @@ broadcast.frameSource
 broadcast.framesSent
 broadcast.hardwareEncoder
 broadcast.lastError
+broadcast.music
 broadcast.pipError
 broadcast.pipSource
 broadcast.quality

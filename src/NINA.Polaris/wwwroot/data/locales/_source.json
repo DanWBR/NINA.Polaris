@@ -4602,5 +4602,15 @@
   "is a wireless adapter, but NetworkManager has been told not to manage it, so the hotspot and the network switcher cannot use it. On a Debian install this is usually a static stanza for it in": "is a wireless adapter, but NetworkManager has been told not to manage it, so the hotspot and the network switcher cannot use it. On a Debian install this is usually a static stanza for it in",
   "To hand it over now:": "To hand it over now:",
   "To make it survive a reboot, remove that stanza from": "To make it survive a reboot, remove that stanza from",
-  "and then:": "and then:"
+  "and then:": "and then:",
+  "Background music": "Background music",
+  "Music volume": "Music volume",
+  "Shuffle the music folder": "Shuffle the music folder",
+  "A file or a folder on this host. One file loops; a folder plays through and starts again.": "A file or a folder on this host. One file loops; a folder plays through and starts again.",
+  "Only means anything for a folder. A single file loops on its own.": "Only means anything for a folder. A single file loops on its own.",
+  "Polaris plays your own music and ships none of its own. You are responsible for the rights: platforms scan live audio, and a track being free to download does not make it free to broadcast.": "Polaris plays your own music and ships none of its own. You are responsible for the rights: platforms scan live audio, and a track being free to download does not make it free to broadcast.",
+  "Choose a music file": "Choose a music file",
+  "Choose a music folder": "Choose a music folder",
+  "📄 Choose a file…": "📄 Choose a file…",
+  "📁 Choose a folder…": "📁 Choose a folder…"
 }
