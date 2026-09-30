@@ -603,13 +603,15 @@ function ninaApp() {
         broadcastCfg: {
             destination: 'youtube', rtmpUrl: '', streamKey: '', hasStreamKey: false,
             quality: 'medium', title: '', showHeader: true, showObjectCard: true,
+            pipSource: 'off', pipUrl: '', pipLabel: '',
             showBanner: true, fetchDescriptions: true, recordToDisk: false,
             destinations: [], qualities: [], loaded: false, saving: false, busy: false
         },
         broadcastStatus: {
             running: false, quality: 'medium', encoder: null, hardwareEncoder: false,
             uptimeSec: 0, fps: 0, bitrateKbps: 0, droppedFrames: 0, reconnects: 0,
-            recording: false, recordPath: null, lastError: null, frameSource: 'none'
+            recording: false, recordPath: null, lastError: null, frameSource: 'none',
+            pipSource: 'off', pipError: null
         },
         broadcastFf: {
             loaded: false, available: false, path: '', version: '',
@@ -32001,6 +32003,9 @@ function ninaApp() {
                 c.title = d.title || '';
                 c.showHeader = !!d.showHeader;
                 c.showObjectCard = !!d.showObjectCard;
+                c.pipSource = d.pipSource || 'off';
+                c.pipUrl = d.pipUrl || '';
+                c.pipLabel = d.pipLabel || '';
                 c.showBanner = !!d.showBanner;
                 c.fetchDescriptions = !!d.fetchDescriptions;
                 c.recordToDisk = !!d.recordToDisk;
@@ -32061,6 +32066,9 @@ function ninaApp() {
                     title: c.title || '',
                     showHeader: !!c.showHeader,
                     showObjectCard: !!c.showObjectCard,
+                    pipSource: c.pipSource,
+                    pipUrl: c.pipUrl || '',
+                    pipLabel: c.pipLabel || '',
                     showBanner: !!c.showBanner,
                     fetchDescriptions: !!c.fetchDescriptions,
                     recordToDisk: !!c.recordToDisk

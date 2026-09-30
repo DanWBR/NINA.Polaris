@@ -59,6 +59,11 @@ public sealed class BroadcastStatusContributor : IStatusContributor {
             // Which of the three pictures the last frame came from, which is
             // what makes a broadcast showing a stale image diagnosable.
             frameSource = s.FrameSource,
+            // The corner picture: which source, and why it is blank when it
+            // is. A guide frame needs the loop running, a snapshot URL needs
+            // a camera that answers, and neither failure is visible on air.
+            pipSource = s.PipSource,
+            pipError = s.PipError,
             framesSent = s.FramesSent
         };
     }

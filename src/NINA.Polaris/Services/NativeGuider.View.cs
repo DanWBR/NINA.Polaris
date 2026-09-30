@@ -296,6 +296,11 @@ public sealed partial class NativeGuider {
 
     /// <summary>Encode the latest guide frame as an auto-stretched JPEG for the
     /// PHD2-style camera view. Returns null when no frame is available yet.</summary>
+    /// <summary>Counter of the frame currently in the view, so a reader can
+    /// tell whether re-encoding it would produce anything new. Zero before the
+    /// guide loop has processed a frame.</summary>
+    public long ViewFrameId => _view?.FrameId ?? 0;
+
     public byte[]? EncodeViewJpeg(int maxDim = 600, int quality = 75, double gamma = 1.0) {
         var vf = _view;
         if (vf == null || vf.Pixels.Length < (long)vf.Width * vf.Height) return null;

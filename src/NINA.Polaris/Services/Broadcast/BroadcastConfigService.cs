@@ -55,6 +55,17 @@ public sealed record BroadcastConfig {
     /// <summary>The header strip: the title, and the equipment under it.</summary>
     public bool ShowHeader { get; init; } = true;
     public bool ShowObjectCard { get; init; } = true;
+    /// <summary>Where the second picture in the bottom left corner comes from:
+    /// off, guide, aux or url.</summary>
+    public string PipSource { get; init; } = PipSources.Off;
+    /// <summary>Snapshot URL for the url source: an all sky camera, an IP
+    /// camera, anything that answers a GET with a JPEG.</summary>
+    public string PipUrl { get; init; } = "";
+    /// <summary>What to call the second picture on screen. Empty uses a
+    /// default for the source, which for a snapshot URL can only be generic:
+    /// Polaris has no way to know whether the camera is pointed at the sky,
+    /// at the rig or at the dog.</summary>
+    public string PipLabel { get; init; } = "";
     public bool ShowBanner { get; init; } = true;
     /// <summary>Look descriptions up online for objects Polaris ships no text
     /// for. On by default: it never blocks a frame, and with no network the
@@ -76,7 +87,8 @@ public sealed record BroadcastConfigUpdate(
     string? Destination = null, string? RtmpUrl = null, string? StreamKey = null,
     string? Quality = null, bool? ShowObjectCard = null, bool? ShowBanner = null,
     bool? FetchDescriptions = null, bool? RecordToDisk = null,
-    string? Title = null, bool? ShowHeader = null);
+    string? Title = null, bool? ShowHeader = null,
+    string? PipSource = null, string? PipUrl = null, string? PipLabel = null);
 
 /// <summary>
 /// The broadcast configuration, in its own file under the data dir rather than
@@ -147,6 +159,16 @@ public sealed class BroadcastConfigService {
                 quality = BroadcastQuality.Parse(req.Quality).Id;
             }
 
+            var pipSource = cur.PipSource;
+            if (req.PipSource != null) {
+                if (!PipSources.IsValid(req.PipSource))
+                    throw new ArgumentException($"Unknown second picture source '{req.PipSource}'.");
+                pipSource = PipSources.Parse(req.PipSource);
+            }
+            var pipUrl = req.PipUrl != null ? req.PipUrl.Trim() : cur.PipUrl;
+            if (pipUrl.Length > 0 && !IsHttpUrl(pipUrl))
+                throw new ArgumentException("The snapshot address must be an http:// or https:// URL.");
+
             var url = req.RtmpUrl != null ? req.RtmpUrl.Trim() : cur.RtmpUrl;
             if (url.Length > 0 && !IsRtmpUrl(url))
                 throw new ArgumentException("The destination must be an rtmp:// or rtmps:// URL. "
@@ -164,6 +186,9 @@ public sealed class BroadcastConfigService {
                 Title = req.Title == null ? cur.Title : Cap(req.Title.Trim(), 80),
                 ShowHeader = req.ShowHeader ?? cur.ShowHeader,
                 ShowObjectCard = req.ShowObjectCard ?? cur.ShowObjectCard,
+                PipSource = pipSource,
+                PipUrl = pipUrl,
+                PipLabel = req.PipLabel == null ? cur.PipLabel : Cap(req.PipLabel.Trim(), 30),
                 ShowBanner = req.ShowBanner ?? cur.ShowBanner,
                 FetchDescriptions = req.FetchDescriptions ?? cur.FetchDescriptions,
                 RecordToDisk = req.RecordToDisk ?? cur.RecordToDisk
@@ -186,6 +211,10 @@ public sealed class BroadcastConfigService {
             title = c.Title,
             showHeader = c.ShowHeader,
             showObjectCard = c.ShowObjectCard,
+            pipSource = c.PipSource,
+            pipUrl = c.PipUrl,
+            pipLabel = c.PipLabel,
+            pipSources = PipSources.All,
             showBanner = c.ShowBanner,
             fetchDescriptions = c.FetchDescriptions,
             recordToDisk = c.RecordToDisk,
@@ -216,6 +245,10 @@ public sealed class BroadcastConfigService {
 
     private static string Cap(string s, int max) => s.Length <= max ? s : s[..max].TrimEnd();
 
+    private static bool IsHttpUrl(string url) =>
+        url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+        || url.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+
     private static bool IsRtmpUrl(string url) =>
         url.StartsWith("rtmp://", StringComparison.OrdinalIgnoreCase)
         || url.StartsWith("rtmps://", StringComparison.OrdinalIgnoreCase);
@@ -228,6 +261,9 @@ public sealed class BroadcastConfigService {
         Title = s.Title?.Trim() ?? "",
         ShowHeader = s.ShowHeader ?? true,
         ShowObjectCard = s.ShowObjectCard ?? true,
+        PipSource = PipSources.Parse(s.PipSource),
+        PipUrl = s.PipUrl?.Trim() ?? "",
+        PipLabel = s.PipLabel?.Trim() ?? "",
         ShowBanner = s.ShowBanner ?? true,
         FetchDescriptions = s.FetchDescriptions ?? true,
         RecordToDisk = s.RecordToDisk ?? false
@@ -249,6 +285,7 @@ public sealed class BroadcastConfigService {
             Destination = c.Destination, RtmpUrl = c.RtmpUrl, StreamKey = c.StreamKey, Quality = c.Quality,
             Title = c.Title, ShowHeader = c.ShowHeader,
             ShowObjectCard = c.ShowObjectCard, ShowBanner = c.ShowBanner,
+            PipSource = c.PipSource, PipUrl = c.PipUrl, PipLabel = c.PipLabel,
             FetchDescriptions = c.FetchDescriptions, RecordToDisk = c.RecordToDisk
         }, _json));
         if (!OperatingSystem.IsWindows()) {
@@ -268,6 +305,9 @@ public sealed class BroadcastConfigService {
         public string? Title { get; set; }
         public bool? ShowHeader { get; set; }
         public bool? ShowObjectCard { get; set; }
+        public string? PipSource { get; set; }
+        public string? PipUrl { get; set; }
+        public string? PipLabel { get; set; }
         public bool? ShowBanner { get; set; }
         public bool? FetchDescriptions { get; set; }
         public bool? RecordToDisk { get; set; }

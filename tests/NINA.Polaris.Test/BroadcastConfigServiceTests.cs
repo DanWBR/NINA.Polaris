@@ -181,6 +181,30 @@ public class BroadcastConfigServiceTests {
     }
 
     [Test]
+    public void TheSecondPictureSourceIsMatchedAgainstTheAllowlist() {
+        Assert.Throws<ArgumentException>(() => _svc.Update(new BroadcastConfigUpdate(PipSource: "webcam")));
+        Assert.DoesNotThrow(() => _svc.Update(new BroadcastConfigUpdate(PipSource: "url")));
+        Assert.That(_svc.Get().PipSource, Is.EqualTo("url"));
+    }
+
+    [Test]
+    public void ASnapshotAddressHasToBeAnHttpUrl() {
+        // The commonest mistake is an rtsp:// address from the camera's manual,
+        // which this cannot fetch: it wants a still, not a stream.
+        Assert.Throws<ArgumentException>(
+            () => _svc.Update(new BroadcastConfigUpdate(PipUrl: "rtsp://192.168.1.50/stream")));
+        Assert.DoesNotThrow(
+            () => _svc.Update(new BroadcastConfigUpdate(PipUrl: "http://192.168.1.50/snapshot.jpg")));
+        Assert.DoesNotThrow(() => _svc.Update(new BroadcastConfigUpdate(PipUrl: "")));
+    }
+
+    [Test]
+    public void TheSecondPictureIsOffUntilItIsAskedFor() {
+        Assert.That(BroadcastConfig.Default.PipSource, Is.EqualTo(PipSources.Off));
+        Assert.That(BroadcastConfig.Default.PipUrl, Is.Empty);
+    }
+
+    [Test]
     [Platform(Exclude = "Win", Reason = "Unix file modes")]
     public void TheFileIsReadableOnlyByTheAccountRunningPolaris() {
         _svc.Update(new BroadcastConfigUpdate(StreamKey: "abcd-1234"));

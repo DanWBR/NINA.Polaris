@@ -50,6 +50,27 @@ public static class BroadcastStrings {
         _ => "Waiting for the first image"
     };
 
+    /// <summary>Caption over the second picture when it is the guide frame.</summary>
+    public static string PipGuideLabel(string? language) => Normalise(language) switch {
+        "pt" => "Guiagem", "es" => "Guiado", "fr" => "Guidage", "de" => "Nachführung",
+        _ => "Guiding"
+    };
+
+    /// <summary>Caption when it is the auxiliary camera.</summary>
+    public static string PipAuxLabel(string? language) => Normalise(language) switch {
+        "pt" => "Câmera auxiliar", "es" => "Cámara auxiliar",
+        "fr" => "Caméra auxiliaire", "de" => "Hilfskamera",
+        _ => "Auxiliary camera"
+    };
+
+    /// <summary>Caption for a snapshot URL, which is usually an all sky camera
+    /// or one pointed at the rig. Deliberately generic: Polaris has no way to
+    /// know what the camera is looking at.</summary>
+    public static string PipCameraLabel(string? language) => Normalise(language) switch {
+        "pt" => "Ao vivo", "es" => "En vivo", "fr" => "En direct", "de" => "Live",
+        _ => "Live"
+    };
+
     /// <summary>The card fragments for a language, falling back to English for
     /// anything not on the list.</summary>
     public static ObjectCardTemplates TemplatesFor(string? language) => Normalise(language) switch {

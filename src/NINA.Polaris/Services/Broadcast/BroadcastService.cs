@@ -41,6 +41,10 @@ public sealed record BroadcastStatus {
     public string? RecordPath { get; init; }
     public string? LastError { get; init; }
     public string FrameSource { get; init; } = "none";
+    /// <summary>Which source the corner picture is drawn from, and why it is
+    /// missing when it is.</summary>
+    public string PipSource { get; init; } = PipSources.Off;
+    public string? PipError { get; init; }
     public long FramesSent { get; init; }
 }
 
@@ -81,6 +85,7 @@ public sealed class BroadcastService : IDisposable {
     private readonly BroadcastConfigService _config;
     private readonly FfmpegService _ffmpeg;
     private readonly ObjectCardService _cards;
+    private readonly BroadcastPipService _pip;
     private readonly ImageRelayService _relay;
     private readonly CameraStreamService _stream;
     private readonly LiveStackingService _liveStack;
@@ -118,6 +123,7 @@ public sealed class BroadcastService : IDisposable {
     private string? _cardTarget;
 
     public BroadcastService(BroadcastConfigService config, FfmpegService ffmpeg, ObjectCardService cards,
+                            BroadcastPipService pip,
                             ImageRelayService relay, CameraStreamService stream,
                             LiveStackingService liveStack, LiveCaptureService liveCapture,
                             ActiveGuiderProvider guiders, EquipmentManager equipment,
@@ -127,6 +133,7 @@ public sealed class BroadcastService : IDisposable {
         _config = config;
         _ffmpeg = ffmpeg;
         _cards = cards;
+        _pip = pip;
         _relay = relay;
         _stream = stream;
         _liveStack = liveStack;
@@ -163,6 +170,8 @@ public sealed class BroadcastService : IDisposable {
             RecordPath = _recordPath,
             LastError = _lastError,
             FrameSource = _frameSource,
+            PipSource = cfg.PipSource,
+            PipError = cfg.PipSource == PipSources.Off ? null : _pip.LastError,
             FramesSent = Interlocked.Read(ref _framesSent)
         };
     }
@@ -370,8 +379,22 @@ public sealed class BroadcastService : IDisposable {
             // going back to a message.
             var waiting = picture == null ? BroadcastStrings.WaitingForFirstFrame(_cards.Language) : null;
 
+            // The second picture, bottom left. Whatever is already in hand:
+            // it never waits, and a source with nothing to show simply draws
+            // no corner at all rather than an empty box.
+            SKBitmap? pip = null;
+            string? pipLabel = null;
+            if (cfg.PipSource != PipSources.Off) {
+                pip = _pip.Current(cfg.PipSource, cfg.PipUrl);
+                if (pip != null) {
+                    pipLabel = string.IsNullOrWhiteSpace(cfg.PipLabel)
+                        ? BroadcastPipService.LabelFor(cfg.PipSource, _cards.Language)
+                        : cfg.PipLabel;
+                }
+            }
+
             byte[] frame;
-            try { frame = composer.Compose(picture, card, banner, title, rig, waiting); }
+            try { frame = composer.Compose(picture, card, banner, title, rig, waiting, pip, pipLabel); }
             catch (Exception ex) {
                 // One bad frame is not a reason to end a broadcast. Skip it
                 // and let the next tick try again.

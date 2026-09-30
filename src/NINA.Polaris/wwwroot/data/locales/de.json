@@ -5212,5 +5212,11 @@
   "{e}, in hardware": "{e}, in Hardware",
   "{e}, in software": "{e}, in Software",
   "{n} frames dropped": "{n} Bilder verworfen",
-  "reconnected {n} times": "{n} mal neu verbunden"
+  "reconnected {n} times": "{n} mal neu verbunden",
+  "Second picture, bottom left": "Zweites Bild, unten links",
+  "A small frame in the bottom left corner. The guide and auxiliary frames are the ones those loops already took, so they cost no exposure; a snapshot URL is for an all sky or IP camera and costs nothing on the rig at all.": "Ein kleines Bild unten links. Die Bilder von Nachführung und Hilfskamera sind die, die diese Schleifen ohnehin aufgenommen haben, kosten also keine Belichtung; eine Snapshot-URL ist für eine All-Sky- oder IP-Kamera und kostet an der Montierung gar nichts.",
+  "Auxiliary camera": "Hilfskamera",
+  "Camera at a web address": "Kamera unter einer Webadresse",
+  "Snapshot address": "Snapshot-Adresse",
+  "Caption for it": "Beschriftung dafür"
 }

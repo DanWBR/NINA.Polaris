@@ -58,6 +58,33 @@ It also never waits. A deep sky sub takes minutes and a plate solve
 takes seconds; a broadcast that paused for those would stop every few
 minutes.
 
+## The corner picture
+
+A small frame in the bottom left: an all sky camera, a camera pointed at the
+rig, or the guide frame. Settings -> Live broadcast -> Second picture.
+
+| Source | Where the frame comes from | Cost |
+|---|---|---|
+| `guide` | the frame the guide loop already took | none; needs the loop running, built in guider only |
+| `aux` | the frame the auxiliary capture loop already took | none; needs that loop running |
+| `url` | a snapshot address, polled every 5 s | none at the telescope |
+
+Polaris never commands an exposure for the corner. Both camera sources read a
+frame that was already taken; asking for one of our own would queue behind the
+aux archiving loop and the operator's focus snaps on the same capture gate.
+
+The URL source wants a **still**, the JPEG almost every IP and all sky camera
+serves at a fixed address. An `rtsp://` stream is refused. The fetch is
+detached and one at a time, so a camera that stops answering slows the polling
+and never the broadcast; the last picture stays on screen and the reason
+appears in `broadcast.pipError`.
+
+The caption is yours to write: Polaris cannot know what the camera is pointed
+at. Empty falls back to a generic word per source.
+
+Fitted, never cropped: an all sky lens puts a round image in a square frame and
+cropping it to the slot would cut the horizon off all four sides.
+
 ## Setting it up
 
 | Platform | Where the URL and key come from |

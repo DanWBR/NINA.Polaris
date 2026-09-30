@@ -5212,5 +5212,11 @@
   "{e}, in hardware": "{e}, em hardware",
   "{e}, in software": "{e}, em software",
   "{n} frames dropped": "{n} quadros descartados",
-  "reconnected {n} times": "reconectou {n} vezes"
+  "reconnected {n} times": "reconectou {n} vezes",
+  "Second picture, bottom left": "Segunda imagem, canto inferior esquerdo",
+  "A small frame in the bottom left corner. The guide and auxiliary frames are the ones those loops already took, so they cost no exposure; a snapshot URL is for an all sky or IP camera and costs nothing on the rig at all.": "Um quadro pequeno no canto inferior esquerdo. Os quadros da guiagem e da auxiliar são os que aqueles laços já tiraram, então não custam exposição; a URL de snapshot serve para uma all-sky ou câmera IP e não custa nada no rig.",
+  "Auxiliary camera": "Câmera auxiliar",
+  "Camera at a web address": "Câmera em um endereço web",
+  "Snapshot address": "Endereço do snapshot",
+  "Caption for it": "Legenda dela"
 }
