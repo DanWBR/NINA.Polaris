@@ -132,6 +132,12 @@ public sealed class EquipmentStatusContributor : IStatusContributor {
                 hotspotSsid       = network.HotspotSsid,
                 lastError         = network.LastError,
                 unsupportedReason = network.UnsupportedReason,
+                // A wireless adapter that exists and that NetworkManager
+                // refuses to drive. Without this the card shows "no WiFi
+                // hardware" on a machine that plainly has some, and every
+                // hotspot attempt fails somewhere the operator never looks.
+                wifiUnmanagedIface = network.UnmanagedWifiInterface,
+                wifiUnmanagedReason = network.WifiUnmanagedReason,
                 lastRefreshAt     = network.LastRefreshAt,
                 // Auto AP fallback: when the rig is carried
                 // out of range of every saved network the

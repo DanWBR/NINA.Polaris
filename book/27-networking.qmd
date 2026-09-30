@@ -213,6 +213,38 @@ Polaris refuses to enable it when there is no wired address yet, since
 parking the radio then would leave a headless rig with no way in. While
 the option is off, Polaris never touches the radio at all.
 
+### When the adapter is there and nothing works
+
+One failure looks like missing hardware and is not. On a host installed from
+a plain Debian image, the wireless adapter is often declared in
+`/etc/network/interfaces`, the older Debian networking file. That hands the
+adapter to `ifupdown`, and NetworkManager, seeing another subsystem already
+owns it, marks it **unmanaged** and refuses every command aimed at it.
+
+What that looks like from the outside is confusing in a specific way: the
+hotspot fallback never starts and fills the log with complaints that there is
+no suitable device, and the network panel decides the host is on a wired
+connection, because as far as NetworkManager is concerned there is no wireless
+here at all. The card in Settings used to agree with it and say no WiFi
+interface was detected, on a machine you could see had one.
+
+Polaris now names the adapter and says so. Handing it to NetworkManager for
+the current boot is one command:
+
+```bash
+sudo nmcli device set wlp2s0 managed yes
+```
+
+To make it survive a reboot, remove that adapter's stanza from
+`/etc/network/interfaces` and restart the service:
+
+```bash
+sudo systemctl restart NetworkManager
+```
+
+Polaris will not edit that file for you. It is yours, and on a remote host it
+may hold the very configuration that keeps the machine answering.
+
 ## Finding the host by name {#sec-mdns}
 
 The URLs in this book use names like `polaris-pi.local` rather than

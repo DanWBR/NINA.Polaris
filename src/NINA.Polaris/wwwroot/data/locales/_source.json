@@ -4600,5 +4600,9 @@
   "Auxiliary camera": "Auxiliary camera",
   "Camera at a web address": "Camera at a web address",
   "Snapshot address": "Snapshot address",
-  "Caption for it": "Caption for it"
+  "Caption for it": "Caption for it",
+  "is a wireless adapter, but NetworkManager has been told not to manage it, so the hotspot and the network switcher cannot use it. On a Debian install this is usually a static stanza for it in": "is a wireless adapter, but NetworkManager has been told not to manage it, so the hotspot and the network switcher cannot use it. On a Debian install this is usually a static stanza for it in",
+  "To hand it over now:": "To hand it over now:",
+  "To make it survive a reboot, remove that stanza from": "To make it survive a reboot, remove that stanza from",
+  "and then:": "and then:"
 }
