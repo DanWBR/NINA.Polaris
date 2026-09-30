@@ -84,11 +84,11 @@
         "color": "#8b5cf6",
         "emoji": "🖥️",
         "os": "Ubuntu 24.04.4 LTS (x86-64)",
-        "polaris": "0.98.143 (2026-09-30)",
-        "size": "3.08 GB (.7z)",
+        "polaris": "0.98.146 (2026-09-30)",
+        "size": "3.14 GB (.7z)",
         "access": "https://polaris-linux.local:5000/",
         "note": "The fastest way to run Polaris, and free if you already have a mini PC or an old laptop lying around. Extract the .7z, write the .img to a USB stick with balenaEtcher or Rufus, and boot from it. Once it is running, sudo polaris-install-to-disk copies everything to the machine's internal drive so you can take the stick out.",
-        "url": "https://drive.google.com/uc?export=download&id=1_cMJhE0BkrhXNYOGOU2Guk48-X5yLPZq"
+        "url": "https://drive.google.com/uc?export=download&id=13lMndY2IQckOrsg1GHhjpL_acoqc5TVr"
       },
       {
         "device": "Raspberry Pi 4",
