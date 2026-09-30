@@ -192,10 +192,40 @@ uplink; climbing fast, with an error beside them, is worth reading.
 and exits on its own. Killing it instead is what leaves an unplayable
 file, so the stop is allowed ten seconds before the process is killed.
 
+## Music
+
+The operator points at **their own** file or folder; Polaris ships no
+music. The usual free libraries license a track into a video and
+forbid redistributing the file, so shipping one in the package or an
+image would breach them; only CC0 and Creative Commons could travel
+that way. It also keeps the licence with the account that is
+broadcasting, which is where the platform sends a claim.
+
+- A **single file** is looped with `-stream_loop -1`.
+- A **folder** becomes an ffconcat playlist. `-stream_loop` does not
+  loop the concat demuxer (it plays the list once, errors, and stops),
+  so the playlist repeats its own entries instead, padded to 500.
+- Extensions: `.mp3 .m4a .aac .flac .ogg .oga .opus .wav .wma`.
+- `musicVolume` is 0 to 100 and becomes `-filter:a volume=`. At 100 no
+  filter is emitted at all.
+- A missing or unreadable path **never stops a broadcast**: it falls
+  back to the silent track, reports it in `broadcast.music` and pushes
+  one notification.
+
+If a user asks whether Polaris can supply music, the answer is no, and
+the reason is licensing, not effort. If they ask what is safe to use:
+CC0 or public domain recordings, or Creative Commons with the
+attribution shown. Warn them that "royalty free" does not mean "will
+not be claimed": Content ID scans live audio, Twitch needs the VOD and
+clips covered separately, and a public-domain composition does not make
+a modern recording of it public domain.
+
 ## Limits, stated up front
 
-- **No audio.** A silent AAC track is sent because YouTube refuses a
-  video-only stream. Commentary would mean a microphone on the host.
+- **No commentary.** Background music is the operator's own file (see
+  above); a voice track would mean a microphone on the host. With no
+  music configured a silent AAC track is sent, because YouTube refuses
+  a video-only stream.
 - **Instagram** caps a session at about an hour. That is Instagram,
   not Polaris.
 - **The frame rate into the encoder is two per second.** The picture

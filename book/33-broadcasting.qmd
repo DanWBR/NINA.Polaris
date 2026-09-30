@@ -237,11 +237,57 @@ resumes after the host restarts. A broadcast puts your sky, your
 equipment list and your session out under your own name, and it begins
 when you press the button and at no other moment.
 
+## Music, if you want it
+
+Polaris ships no music, and that is deliberate rather than an
+omission. Nearly every library that advertises itself as royalty free
+licenses you to put a track into your video and forbids passing the
+file on, which is exactly what shipping one inside a `.deb` or an SD
+card image would be. Only CC0 and Creative Commons material could
+travel that way, and someone would still have to carry the
+attribution. So the field asks for **your** file.
+
+Point **Background music** at either:
+
+- **a single file**, which loops for the whole broadcast, or
+- **a folder**, whose audio files play through and then start again.
+  Tick **Shuffle** and the order is drawn fresh each time you press
+  Start.
+
+`.mp3`, `.m4a`, `.aac`, `.flac`, `.ogg`, `.opus`, `.wav` and `.wma`
+all work. **Music volume** is a percentage, and 50 is the default:
+there is nothing else in the mix, so this is simply how loud the
+broadcast is.
+
+If the path is wrong, or the stick it was on came out, the broadcast
+does not stop. It loses the music, says so in the status line, and
+carries on silent. A night is worth more than a soundtrack.
+
+### The part that costs people their channel
+
+You are responsible for the rights, and the trap is specific: **free
+to download is not free to broadcast.** A track can be royalty free,
+properly licensed, and still be registered in Content ID, and YouTube
+scans live audio as it goes out. Twitch is stricter again, because
+the licence has to cover the stream, the recording, the clips and the
+highlights separately, and it is usually the recording that gets
+taken down days later.
+
+Public domain is not automatic cover either. Beethoven is out of
+copyright; the 1998 recording of an orchestra playing him is not.
+
+The two categories that are genuinely safe to use are **CC0 or public
+domain recordings**, and **Creative Commons tracks whose attribution
+you actually display**. The Free Music Archive and ccMixter let you
+filter by licence. Whatever you pick, keep the licence page with the
+files: if a claim arrives, that is what settles it.
+
 ## What it does not do
 
-- **No sound.** A silent audio track is sent because YouTube refuses a
-  video-only stream, but there is no commentary: that would mean a
-  microphone on the host, which is a different feature.
+- **No commentary.** You can put your own music under the broadcast
+  (above), but a voice track would mean a microphone on the host,
+  which is a different feature. With no music chosen, a silent audio
+  track goes out, because YouTube refuses a video-only stream.
 - **Instagram limits a session to about an hour.** That is Instagram.
 - **Two frames a second reach the encoder.** For deep sky that is
   generous, since the picture changes once per sub. For planetary,

@@ -5222,5 +5222,11 @@
   "is a wireless adapter, but NetworkManager has been told not to manage it, so the hotspot and the network switcher cannot use it. On a Debian install this is usually a static stanza for it in": "é um adaptador sem fio, mas o NetworkManager foi instruído a não gerenciá-lo, então o hotspot e o seletor de rede não conseguem usá-lo. Numa instalação Debian isso costuma ser uma configuração estática dele em",
   "To hand it over now:": "Para entregá-lo agora:",
   "To make it survive a reboot, remove that stanza from": "Para que isso sobreviva a um reinício, remova essa configuração de",
-  "and then:": "e então:"
+  "and then:": "e então:",
+  "Background music": "Música de fundo",
+  "Music volume": "Volume da música",
+  "Shuffle the music folder": "Embaralhar a pasta de música",
+  "A file or a folder on this host. One file loops; a folder plays through and starts again.": "Um arquivo ou uma pasta neste host. Um arquivo toca em laço; uma pasta toca até o fim e recomeça.",
+  "Only means anything for a folder. A single file loops on its own.": "Só faz diferença para uma pasta. Um arquivo único já toca em laço.",
+  "Polaris plays your own music and ships none of its own. You are responsible for the rights: platforms scan live audio, and a track being free to download does not make it free to broadcast.": "O Polaris toca a sua própria música e não traz nenhuma. Os direitos são sua responsabilidade: as plataformas analisam o áudio ao vivo, e uma faixa ser grátis para baixar não a torna livre para transmitir."
 }

@@ -64,7 +64,8 @@ public sealed class BroadcastStatusContributor : IStatusContributor {
             // a camera that answers, and neither failure is visible on air.
             pipSource = s.PipSource,
             pipError = s.PipError,
-            framesSent = s.FramesSent
+            framesSent = s.FramesSent,
+            music = s.Music
         };
     }
 }

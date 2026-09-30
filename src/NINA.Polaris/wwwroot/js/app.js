@@ -604,6 +604,7 @@ function ninaApp() {
             destination: 'youtube', rtmpUrl: '', streamKey: '', hasStreamKey: false,
             quality: 'medium', title: '', showHeader: true, showObjectCard: true,
             pipSource: 'off', pipUrl: '', pipLabel: '',
+            musicPath: '', musicVolume: 50, musicShuffle: true,
             showBanner: true, fetchDescriptions: true, recordToDisk: false,
             destinations: [], qualities: [], loaded: false, saving: false, busy: false
         },
@@ -32006,6 +32007,10 @@ function ninaApp() {
                 c.pipSource = d.pipSource || 'off';
                 c.pipUrl = d.pipUrl || '';
                 c.pipLabel = d.pipLabel || '';
+                c.musicPath = d.musicPath || '';
+                // Number(), not ||, or a deliberate 0 would come back as 50.
+                c.musicVolume = Number.isFinite(d.musicVolume) ? d.musicVolume : 50;
+                c.musicShuffle = d.musicShuffle !== false;
                 c.showBanner = !!d.showBanner;
                 c.fetchDescriptions = !!d.fetchDescriptions;
                 c.recordToDisk = !!d.recordToDisk;
@@ -32069,6 +32074,9 @@ function ninaApp() {
                     pipSource: c.pipSource,
                     pipUrl: c.pipUrl || '',
                     pipLabel: c.pipLabel || '',
+                    musicPath: c.musicPath || '',
+                    musicVolume: Number.isFinite(c.musicVolume) ? c.musicVolume : 50,
+                    musicShuffle: !!c.musicShuffle,
                     showBanner: !!c.showBanner,
                     fetchDescriptions: !!c.fetchDescriptions,
                     recordToDisk: !!c.recordToDisk

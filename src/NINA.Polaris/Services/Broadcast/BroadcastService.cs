@@ -46,6 +46,9 @@ public sealed record BroadcastStatus {
     public string PipSource { get; init; } = PipSources.Off;
     public string? PipError { get; init; }
     public long FramesSent { get; init; }
+    /// <summary>The music this run is playing, or why it is not. Null when the
+    /// operator asked for none, which is the default and not a problem.</summary>
+    public string? Music { get; init; }
 }
 
 /// <summary>
@@ -109,6 +112,10 @@ public sealed class BroadcastService : IDisposable {
     private volatile string? _encoder;
     private volatile string? _recordPath;
     private volatile string? _lastError;
+    /// <summary>What the music setting resolved to for this run, so the status
+    /// block can say "3 tracks" rather than leaving the operator to guess
+    /// whether the folder they typed was found.</summary>
+    private volatile string? _musicNote;
     private long _framesSent;
     private long _dropped;
     private int _reconnects;
@@ -172,7 +179,8 @@ public sealed class BroadcastService : IDisposable {
             FrameSource = _frameSource,
             PipSource = cfg.PipSource,
             PipError = cfg.PipSource == PipSources.Off ? null : _pip.LastError,
-            FramesSent = Interlocked.Read(ref _framesSent)
+            FramesSent = Interlocked.Read(ref _framesSent),
+            Music = _wanted ? _musicNote : null
         };
     }
 
@@ -270,6 +278,8 @@ public sealed class BroadcastService : IDisposable {
         using var composer = new FrameComposer(layout, fonts);
         _recordPath = cfg.RecordToDisk ? NewRecordingPath() : null;
 
+        var (musicFile, musicList) = PrepareMusic(cfg);
+
         using var streamSub = _stream.SubscribeFrames(OnStreamFrame);
 
         var attempt = 0;
@@ -283,7 +293,10 @@ public sealed class BroadcastService : IDisposable {
                 StreamKey = cfg.CanPublish ? cfg.StreamKey : null,
                 // A restart opens a new file rather than overwriting the one
                 // the first half of the night is in.
-                RecordPath = _recordPath == null ? null : (attempt == 0 ? _recordPath : NewRecordingPath())
+                RecordPath = _recordPath == null ? null : (attempt == 0 ? _recordPath : NewRecordingPath()),
+                MusicFile = musicFile,
+                MusicPlaylistFile = musicList,
+                MusicVolume = cfg.MusicVolume
             };
             if (plan.RecordPath != null) _recordPath = plan.RecordPath;
 
@@ -636,6 +649,51 @@ public sealed class BroadcastService : IDisposable {
     }
 
     // --- Odds and ends ----------------------------------------------
+
+    /// <summary>
+    /// Turn the operator's music setting into something ffmpeg can open, or
+    /// into nothing at all.
+    ///
+    /// <para>Never throws and never refuses to start. A broadcast that dies
+    /// because a USB stick with the music on it was unplugged would be a worse
+    /// failure than a silent one, so a missing folder costs the music, says so
+    /// in the status block and in one notification, and the night carries
+    /// on.</para>
+    /// </summary>
+    private (string? File, string? Playlist) PrepareMusic(BroadcastConfig cfg) {
+        _musicNote = null;
+        try {
+            var list = BroadcastMusic.Resolve(cfg.MusicPath, cfg.MusicShuffle,
+                Environment.TickCount, File.Exists, Directory.Exists,
+                d => Directory.EnumerateFiles(d));
+
+            if (list.Problem != null) {
+                _musicNote = list.Problem;
+                _notify.Push("warn", "Broadcast music: " + list.Problem, 6000);
+                _logger.LogWarning("Broadcast: {Problem}", list.Problem);
+            }
+            if (!list.HasMusic) return (null, null);
+
+            if (list.IsSingleTrack) {
+                _musicNote = Path.GetFileName(list.Tracks[0]);
+                return (list.Tracks[0], null);
+            }
+
+            var dir = Path.Combine(_profiles.DataDir, "broadcast");
+            Directory.CreateDirectory(dir);
+            var path = Path.Combine(dir, "music.ffconcat");
+            File.WriteAllText(path, BroadcastMusic.RenderPlaylist(list.Tracks));
+            _musicNote = $"{list.Tracks.Count} tracks"
+                       + (cfg.MusicShuffle ? ", shuffled" : "");
+            return (null, path);
+        } catch (Exception ex) {
+            // Reading a folder can fail for reasons the operator can do
+            // nothing about mid-session. Silence is the safe answer.
+            _logger.LogWarning(ex, "Broadcast: could not prepare the music, continuing without it");
+            _musicNote = "could not be read";
+            return (null, null);
+        }
+    }
 
     private string NewRecordingPath() {
         var root = _profiles.Active?.ImageOutputDir;

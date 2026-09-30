@@ -15059,6 +15059,23 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <input class="input input-sm" type="text" x-model="broadcastCfg.title"
                                        placeholder="Polaris Live Stream" autocomplete="off">
                             </label>
+                            <!-- Background music. Polaris ships none and points at the
+                                 operator's own file instead: the free libraries license a
+                                 track into a video and forbid redistributing the file, which
+                                 is what shipping one in the package would be, and the
+                                 platform sends its copyright claim to whoever is
+                                 broadcasting. Hence the note under the field. -->
+                            <label><span class="lbl">Background music</span>
+                                <input class="input input-sm" type="text" x-model="broadcastCfg.musicPath"
+                                       placeholder="/home/polaris/music  (a file or a folder)"
+                                       autocomplete="off"
+                                       title="A file or a folder on this host. One file loops; a folder plays through and starts again.">
+                            </label>
+                            <label x-show="(broadcastCfg.musicPath || '').trim()" x-cloak>
+                                <span class="lbl">Music volume</span>
+                                <input class="input input-sm" type="number" min="0" max="100" step="5"
+                                       x-model.number="broadcastCfg.musicVolume">
+                            </label>
                         </div>
 
                         <div style="display:flex; flex-wrap:wrap; gap:14px; margin-top:12px">
@@ -15075,6 +15092,12 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 Session numbers along the bottom
                             </label>
                             <label class="chk" style="display:flex; align-items:center; gap:8px"
+                                   x-show="(broadcastCfg.musicPath || '').trim()" x-cloak
+                                   title="Only means anything for a folder. A single file loops on its own.">
+                                <input type="checkbox" x-model="broadcastCfg.musicShuffle">
+                                Shuffle the music folder
+                            </label>
+                            <label class="chk" style="display:flex; align-items:center; gap:8px"
                                    title="Only for objects Polaris ships no text for. The lookup never delays a frame, and with no connection the card falls back to a sentence built from the catalogue.">
                                 <input type="checkbox" x-model="broadcastCfg.fetchDescriptions">
                                 Look up descriptions online
@@ -15085,6 +15108,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 Also record to a file
                             </label>
                         </div>
+
+                        <!-- Said once, under the controls, rather than as a tooltip on
+                             each one. It is the part that costs a channel a strike, and
+                             "free to download" is exactly the confusion that causes it. -->
+                        <p class="text-muted" x-show="(broadcastCfg.musicPath || '').trim()" x-cloak
+                           style="font-size:12px; margin:10px 0 0; max-width:640px">
+                            Polaris plays your own music and ships none of its own. You are responsible for the rights: platforms scan live audio, and a track being free to download does not make it free to broadcast.
+                        </p>
 
                         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:12px">
                             <button class="btn" :disabled="broadcastCfg.saving" @click="saveBroadcastConfig()">
