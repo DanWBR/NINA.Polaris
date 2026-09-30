@@ -137,6 +137,55 @@ public sealed class DiagnosticsService {
         return s;
     }
 
+    // ---- "it keeps disconnecting" ------------------------------------------
+
+    /// <summary>
+    /// How to read the number of times systemd has restarted Polaris.
+    ///
+    /// <para>This exists because the same report keeps arriving: the interface
+    /// disconnects over and over, the operator calls it a network problem, and
+    /// twice now it was the service dying and systemd starting it again five
+    /// seconds later. From the browser the two are indistinguishable. This
+    /// number tells them apart in one line, so the report says which it is
+    /// before anyone starts swapping cables.</para>
+    /// </summary>
+    public static (string Sev, string Detail, string? Fix) JudgeRestarts(int restarts) {
+        if (restarts <= 0)
+            return (DiagSeverity.Ok, "0 since boot", null);
+        // One restart is an update, a manual restart, or a single bad night.
+        if (restarts <= 2)
+            return (DiagSeverity.Warn, $"{restarts} since boot",
+                "Not necessarily a fault, but check journalctl -u polaris -b if you did not restart it yourself.");
+        return (DiagSeverity.Fail, $"{restarts} since boot",
+            "Polaris is crashing and systemd is restarting it, which looks exactly like a network "
+            + "problem from the browser. The reason is in: journalctl -u polaris -b");
+    }
+
+    /// <summary>
+    /// How to read an interface's carrier transition count.
+    ///
+    /// <para>The kernel counts every time the link goes up or down in
+    /// /sys/class/net/&lt;iface&gt;/carrier_changes. A cable plugged in once
+    /// before boot gives 1, sometimes 2. A high count on a host that has been
+    /// up for hours is an adapter dropping its link, which is the other thing
+    /// that produces "it keeps disconnecting" and the one Polaris cannot fix.
+    /// Cheap, world readable, and it needs no root and no dmesg.</para>
+    /// </summary>
+    public static (string Sev, string Detail, string? Fix) JudgeLink(
+            string iface, string driver, int carrierChanges, TimeSpan uptime) {
+        var hours = Math.Max(uptime.TotalHours, 0.05);
+        var perHour = carrierChanges / hours;
+        var detail = $"{iface} ({driver}): {carrierChanges} carrier changes in {uptime.TotalHours:F1} h";
+        if (carrierChanges <= 2) return (DiagSeverity.Ok, detail, null);
+        // Two or more flaps an hour is not a cable someone walked past.
+        var sev = perHour >= 2 ? DiagSeverity.Fail : DiagSeverity.Warn;
+        return (sev, detail,
+            $"The {iface} link keeps dropping, which the interface shows as losing connection to the rig. "
+            + "This is the adapter or the cable, not Polaris. On a 2.5GbE mini PC (Realtek r8169 or Intel igc) "
+            + "it is usually energy-efficient ethernet or ASPM: try "
+            + $"sudo ethtool --set-eee {iface} eee off, and check dmesg for \"Link is Down\".");
+    }
+
     // ---- categories --------------------------------------------------------
 
     private async Task Units(List<DiagnosticCheck> into, CancellationToken ct) {
@@ -176,6 +225,14 @@ public sealed class DiagnosticsService {
                 return (DiagSeverity.Ok, detail, null);
             });
         }
+
+        // The number that answers "why does it keep disconnecting".
+        await Add(into, "unit.polaris.restarts", "units", "Polaris restarts", async () => {
+            var raw = (await Run("systemctl", "show polaris.service -p NRestarts --value", ct)).Trim();
+            if (!int.TryParse(raw, out var n))
+                return (DiagSeverity.Unknown, $"systemd reported {Blank(raw)}", null);
+            return JudgeRestarts(n);
+        });
     }
 
     private async Task Binaries(List<DiagnosticCheck> into, CancellationToken ct) {
@@ -352,7 +409,41 @@ public sealed class DiagnosticsService {
                 "Over 398 days: iOS and Chrome on iOS reject it. Delete the cert folder and restart Polaris.");
             return (DiagSeverity.Ok, detail, null);
         });
+
+        // Link stability. The other half of "it keeps disconnecting", and the
+        // half Polaris cannot do anything about except name it.
+        _ = Add(into, "net.link", "network", "Network link stability", () => {
+            if (!OperatingSystem.IsLinux()) return (DiagSeverity.Skipped, "not a Linux host", null);
+            const string root = "/sys/class/net";
+            if (!Directory.Exists(root)) return (DiagSeverity.Skipped, "no /sys/class/net", null);
+            var uptime = TimeSpan.FromMilliseconds(Environment.TickCount64);
+            var worst = (Sev: DiagSeverity.Ok, Detail: "", Fix: (string?)null);
+            var seen = new List<string>();
+            foreach (var dir in Directory.GetDirectories(root)) {
+                var iface = Path.GetFileName(dir);
+                if (iface == "lo" || iface.StartsWith("veth") || iface.StartsWith("docker")) continue;
+                var operPath = Path.Combine(dir, "operstate");
+                if (!File.Exists(operPath) || File.ReadAllText(operPath).Trim() != "up") continue;
+                var ccPath = Path.Combine(dir, "carrier_changes");
+                if (!File.Exists(ccPath) || !int.TryParse(File.ReadAllText(ccPath).Trim(), out var cc)) continue;
+                var driver = "?";
+                try {
+                    var link = Path.Combine(dir, "device", "driver");
+                    if (Directory.Exists(link)) driver = Path.GetFileName(Directory.ResolveLinkTarget(link, true)?.FullName ?? "?");
+                } catch (IOException) { /* a virtual interface has no driver link */ }
+                var judged = JudgeLink(iface, driver, cc, uptime);
+                seen.Add(judged.Detail);
+                if (Rank(judged.Sev) > Rank(worst.Sev)) worst = judged;
+            }
+            if (seen.Count == 0) return (DiagSeverity.Skipped, "no interface is up", null);
+            return (worst.Sev, string.Join("; ", seen), worst.Fix);
+        });
     }
+
+    /// <summary>Order the severities so the worst interface decides the check.</summary>
+    private static int Rank(string sev) => sev switch {
+        DiagSeverity.Fail => 3, DiagSeverity.Warn => 2, DiagSeverity.Unknown => 1, _ => 0,
+    };
 
     private void Equipment(List<DiagnosticCheck> into) {
         _ = Add(into, "equip.indiweb", "equipment", "INDI Web Manager", () => {

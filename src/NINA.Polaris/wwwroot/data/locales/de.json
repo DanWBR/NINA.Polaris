@@ -5230,5 +5230,7 @@
   "Choose a music file": "Musikdatei wählen",
   "Choose a music folder": "Musikordner wählen",
   "📄 Choose a file…": "📄 Datei wählen…",
-  "📁 Choose a folder…": "📁 Ordner wählen…"
+  "📁 Choose a folder…": "📁 Ordner wählen…",
+  "Polaris restarts": "Neustarts von Polaris",
+  "Network link stability": "Stabilität der Netzwerkverbindung"
 }
