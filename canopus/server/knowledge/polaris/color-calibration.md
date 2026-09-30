@@ -315,6 +315,9 @@ Polaris ships **two** curve databases, both merged into the same dropdowns:
 For gear that is in neither list, edit `curves.json` and drop in your own filter
 transmission and sensor QE curves - each is `{ "wl": [nm...], "v": [0..1...] }`
 with wavelength strictly increasing. Channel total response is `sensor x filter`.
+Give every entry an `id` no other entry uses, in either curve file: a repeated id
+hides the later entry from the dropdowns, and a chip you own in both a mono and a
+colour version needs two ids, not one.
 
 You can check what's installed under **Config -> Colour calibration data**: the
 APASS catalog status, which SPCC spectral sources are present (Blackbody always,
