@@ -210,6 +210,9 @@ if [ -f "$BUILD_DIR/opt/polaris/bin/polaris-wifi-bootstrap.sh" ]; then
 fi
 # Self-update helper script must be executable (root runs it from the
 # polaris-self-update.service oneshot unit).
+if [ -f "$BUILD_DIR/opt/polaris/bin/polaris-sdk-symlinks.sh" ]; then
+    chmod 0755 "$BUILD_DIR/opt/polaris/bin/polaris-sdk-symlinks.sh"
+fi
 if [ -f "$BUILD_DIR/opt/polaris/bin/polaris-self-update.sh" ]; then
     chmod 0755 "$BUILD_DIR/opt/polaris/bin/polaris-self-update.sh"
 fi

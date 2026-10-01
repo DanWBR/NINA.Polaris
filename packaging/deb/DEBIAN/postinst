@@ -130,6 +130,7 @@ case "$1" in
         chmod 0755 /opt/polaris/bin/polaris-growroot.sh 2>/dev/null || true
         chmod 0755 /opt/polaris/bin/polaris-sshkeys.sh 2>/dev/null || true
         chmod 0755 /opt/polaris/bin/polaris-diagnostics-dump.sh 2>/dev/null || true
+        chmod 0755 /opt/polaris/bin/polaris-sdk-symlinks.sh 2>/dev/null || true
         chmod 0755 /opt/polaris/bin/polaris-solverdb-install.sh 2>/dev/null || true
         # ExecStart of polaris-indiweb.service, the unit that keeps indi-web
         # (and therefore indiserver and every driver) out of polaris.service's
@@ -432,5 +433,12 @@ BRLTTY
         exit 1
         ;;
 esac
+
+# Vendor SDK sonames, repaired now rather than at the next start. A host that
+# already had the archive's libasi put over its source-built SDK is running a
+# downgraded camera library this minute and nothing on screen says so.
+if [ -x /opt/polaris/bin/polaris-sdk-symlinks.sh ]; then
+    /opt/polaris/bin/polaris-sdk-symlinks.sh || true
+fi
 
 exit 0
