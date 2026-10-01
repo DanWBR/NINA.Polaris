@@ -85,14 +85,19 @@ public sealed class FrameComposer : IDisposable {
     /// <param name="pip">The second picture, bottom left. Null draws nothing,
     /// including no empty box: a broadcast with no all sky camera should not
     /// carry a black rectangle all night.</param>
+    /// <param name="fill">Scale the picture until it covers the frame and let
+    /// the overflow be cropped, instead of fitting the whole sensor in with
+    /// bars beside it. A square sensor on a 16:9 frame loses a third of the
+    /// width to black otherwise, which is what it looks like in practice.</param>
     public byte[] Compose(SKBitmap? picture, ObjectCard? card, string? bannerText,
                           string? headerTitle = null, string? headerRig = null,
                           string? waitingText = null,
-                          SKBitmap? pip = null, string? pipLabel = null) {
+                          SKBitmap? pip = null, string? pipLabel = null,
+                          bool fill = false) {
         using var surface = new SKCanvas(_canvasBitmap);
         surface.Clear(new SKColor(0x05, 0x07, 0x0C));
 
-        if (picture != null) DrawPicture(surface, picture);
+        if (picture != null) DrawPicture(surface, picture, fill);
         else if (!string.IsNullOrWhiteSpace(waitingText)) DrawWaiting(surface, waitingText!);
         if (!_l.Header.IsEmpty) DrawHeader(surface, headerTitle, headerRig);
         if (pip != null) DrawPip(surface, pip, pipLabel);
@@ -104,12 +109,21 @@ public sealed class FrameComposer : IDisposable {
         return _rgb;
     }
 
-    private void DrawPicture(SKCanvas c, SKBitmap picture) {
-        var r = BroadcastLayout.Letterbox(picture.Width, picture.Height, _l.Picture);
+    private void DrawPicture(SKCanvas c, SKBitmap picture, bool fill) {
+        var r = fill
+            ? BroadcastLayout.Cover(picture.Width, picture.Height, _l.Picture)
+            : BroadcastLayout.Letterbox(picture.Width, picture.Height, _l.Picture);
         using var paint = new SKPaint { IsAntialias = true };
         using var image = SKImage.FromBitmap(picture);
+        if (fill) {
+            // Cover deliberately overflows, so the canvas has to be clipped or
+            // the overflow would paint over the strips drawn after it.
+            c.Save();
+            c.ClipRect(new SKRect(_l.Picture.X, _l.Picture.Y, _l.Picture.Right, _l.Picture.Bottom));
+        }
         c.DrawImage(image, new SKRect(r.X, r.Y, r.Right, r.Bottom),
                     new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear), paint);
+        if (fill) c.Restore();
     }
 
     // --- The card ---------------------------------------------------
@@ -128,8 +142,22 @@ public sealed class FrameComposer : IDisposable {
             ? Array.Empty<string>() : Wrap(copy.Subtitle, _subtitle, textW, 1);
         var chipLines = copy.Facts.Count == 0
             ? Array.Empty<string>() : Wrap(string.Join("  ·  ", copy.Facts), _chip, textW, 2);
+        // How many lines of description there is room for. Five is what fits
+        // beside a thumbnail in a content-sized panel; when the card may use
+        // the whole column, work out what actually fits rather than leaving
+        // the rest of the panel empty.
+        var bodyMax = 5;
+        if (_l.CardFullHeight) {
+            var used = inset * 2
+                     + (_l.CardThumb.Height + inset)
+                     + Height(Wrap(copy.Title, _title, textW, 2), _title)
+                     + LineHeight(_subtitle) + LineHeight(_chip) * 2
+                     + LineHeight(_credit);
+            var room = _l.Card.Height - used;
+            bodyMax = Math.Clamp((int)(room / Math.Max(1f, LineHeight(_body))), 3, 40);
+        }
         var bodyLines = string.IsNullOrWhiteSpace(copy.Description)
-            ? Array.Empty<string>() : Wrap(copy.Description, _body, textW, 5);
+            ? Array.Empty<string>() : Wrap(copy.Description, _body, textW, bodyMax);
         var creditLines = string.IsNullOrWhiteSpace(copy.Credit)
             ? Array.Empty<string>() : Wrap(copy.Credit!, _credit, textW, 1);
 
@@ -145,6 +173,8 @@ public sealed class FrameComposer : IDisposable {
         if (creditLines.Length > 0) height += gap / 2 + Height(creditLines, _credit);
         height += inset;
         height = Math.Min(height, (float)_l.Card.Height);
+        // Asked for the full column: take it, whatever the text came to.
+        if (_l.CardFullHeight) height = _l.Card.Height;
 
         var panel = new SKRect(_l.Card.X, _l.Card.Y, _l.Card.Right, _l.Card.Y + height);
         var radius = Math.Max(4, inset * 0.8f);
@@ -305,9 +335,12 @@ public sealed class FrameComposer : IDisposable {
 
     // --- Text -------------------------------------------------------
 
-    private float Height(string[] lines, SKFont font) {
+    private float Height(string[] lines, SKFont font) => lines.Length * LineHeight(font);
+
+    /// <summary>One line of this font, leading included.</summary>
+    private static float LineHeight(SKFont font) {
         var m = font.Metrics;
-        return lines.Length * (m.Descent - m.Ascent + m.Leading);
+        return m.Descent - m.Ascent + m.Leading;
     }
 
     private float DrawLines(SKCanvas c, string[] lines, SKFont font, float x, float y, SKColor colour) {

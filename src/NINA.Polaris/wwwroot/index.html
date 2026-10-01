@@ -15283,19 +15283,33 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     </template>
                                 </select>
                             </label>
+                            <label><span class="lbl">Picture</span>
+                                <select class="input input-sm" x-model="broadcastCfg.pictureFit"
+                                        title="Fit shows the whole sensor, with bars where its shape differs from the broadcast frame. Fill covers the frame and crops the overflow: a square sensor loses a third of the width to black otherwise.">
+                                    <option value="fit">Fit the whole sensor (bars at the sides)</option>
+                                    <option value="fill">Fill the frame (crop the edges)</option>
+                                </select>
+                            </label>
+                            <label><span class="lbl">Text size</span>
+                                <input class="input input-sm" type="number" min="50" max="200" step="5"
+                                       x-model.number="broadcastCfg.textScale"
+                                       title="Percent. 100 is the size the layout was designed at; how big it should be depends on the screen your viewers are on.">
+                            </label>
                             <label><span class="lbl">Second picture, bottom left</span>
                                 <select class="input input-sm" x-model="broadcastCfg.pipSource"
                                         title="A small frame in the bottom left corner. The guide and auxiliary frames are the ones those loops already took, so they cost no exposure; a snapshot URL is for an all sky or IP camera and costs nothing on the rig at all.">
                                     <option value="off">Off</option>
                                     <option value="guide">Guide camera</option>
                                     <option value="aux">Auxiliary camera</option>
-                                    <option value="url">Camera at a web address</option>
+                                    <option value="url">Camera at a web address or RTSP stream</option>
                                 </select>
                             </label>
                             <label x-show="broadcastCfg.pipSource === 'url'" x-cloak>
-                                <span class="lbl">Snapshot address</span>
+                                <span class="lbl">Camera address</span>
                                 <input class="input input-sm" type="text" x-model="broadcastCfg.pipUrl"
-                                       placeholder="http://192.168.1.50/snapshot.jpg" autocomplete="off">
+                                       placeholder="rtsp://192.168.1.50:554/stream1  or  http://.../snapshot.jpg"
+                                       autocomplete="off"
+                                       title="A snapshot URL, or an rtsp:// stream. Most all sky and IP cameras only offer the stream, and Polaris takes one frame from it every few seconds.">
                             </label>
                             <label x-show="broadcastCfg.pipSource !== 'off'" x-cloak>
                                 <span class="lbl">Caption for it</span>
@@ -15346,6 +15360,12 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <label class="chk" style="display:flex; align-items:center; gap:8px">
                                 <input type="checkbox" x-model="broadcastCfg.showObjectCard">
                                 Object card
+                            </label>
+                            <label class="chk" style="display:flex; align-items:center; gap:8px"
+                                   x-show="broadcastCfg.showObjectCard" x-cloak
+                                   title="The card runs the whole column instead of shrinking to its text, and the description gets as many lines as fit.">
+                                <input type="checkbox" x-model="broadcastCfg.cardFullHeight">
+                                Card uses the full height
                             </label>
                             <label class="chk" style="display:flex; align-items:center; gap:8px">
                                 <input type="checkbox" x-model="broadcastCfg.showBanner">

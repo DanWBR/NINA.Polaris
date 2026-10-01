@@ -5232,5 +5232,12 @@
   "📄 Choose a file…": "📄 Choisir un fichier…",
   "📁 Choose a folder…": "📁 Choisir un dossier…",
   "Polaris restarts": "Redémarrages de Polaris",
-  "Network link stability": "Stabilité du lien réseau"
+  "Network link stability": "Stabilité du lien réseau",
+  "Picture": "Image",
+  "Text size": "Taille du texte",
+  "Fit the whole sensor (bars at the sides)": "Afficher tout le capteur (bandes sur les côtés)",
+  "Fill the frame (crop the edges)": "Remplir le cadre (rogner les bords)",
+  "Card uses the full height": "La fiche occupe toute la hauteur",
+  "Camera address": "Adresse de la caméra",
+  "Camera at a web address or RTSP stream": "Caméra à une adresse web ou un flux RTSP"
 }

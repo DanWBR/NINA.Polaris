@@ -71,6 +71,7 @@ public sealed class BroadcastPipService : IDisposable {
     private readonly ActiveGuiderProvider _guiders;
     private readonly AuxCaptureService _aux;
     private readonly IHttpClientFactory _http;
+    private readonly NINA.Polaris.Services.External.FfmpegService _ffmpeg;
     private readonly ILogger<BroadcastPipService> _logger;
 
     private readonly object _lock = new();
@@ -82,7 +83,10 @@ public sealed class BroadcastPipService : IDisposable {
     private volatile string? _lastError;
 
     public BroadcastPipService(ActiveGuiderProvider guiders, AuxCaptureService aux,
-                               IHttpClientFactory http, ILogger<BroadcastPipService> logger) {
+                               IHttpClientFactory http,
+                               NINA.Polaris.Services.External.FfmpegService ffmpeg,
+                               ILogger<BroadcastPipService> logger) {
+        _ffmpeg = ffmpeg;
         _guiders = guiders;
         _aux = aux;
         _http = http;
@@ -195,7 +199,30 @@ public sealed class BroadcastPipService : IDisposable {
         return Reuse(PipSources.Url);
     }
 
+    /// <summary>True for a URL only ffmpeg can open.</summary>
+    public static bool IsStreamUrl(string? url) =>
+        url != null && (url.StartsWith("rtsp://", StringComparison.OrdinalIgnoreCase)
+                     || url.StartsWith("rtsps://", StringComparison.OrdinalIgnoreCase)
+                     || url.StartsWith("rtmp://", StringComparison.OrdinalIgnoreCase));
+
     private async Task<byte[]?> FetchAsync(string url) {
+        // An RTSP camera has no snapshot to GET: ffmpeg connects, takes one
+        // frame and leaves. Most all-sky and IP cameras are this, which is
+        // why pointing the corner picture at one used to fail with what
+        // looked like a dead address.
+        if (IsStreamUrl(url)) {
+            if (!_ffmpeg.IsAvailable) {
+                _lastError = "That is a stream address, and reading one needs ffmpeg, which is not installed.";
+                return null;
+            }
+            var frame = await _ffmpeg.GrabFrameAsync(url, TimeSpan.FromSeconds(8)).ConfigureAwait(false);
+            if (frame == null) {
+                _lastError = "The camera stream did not deliver a frame.";
+                return null;
+            }
+            return frame;
+        }
+
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(4));
         using var resp = await _http.CreateClient().GetAsync(url, cts.Token).ConfigureAwait(false);
         if (!resp.IsSuccessStatusCode) {

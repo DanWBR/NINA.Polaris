@@ -608,6 +608,7 @@ function ninaApp() {
             quality: 'medium', title: '', showHeader: true, showObjectCard: true,
             pipSource: 'off', pipUrl: '', pipLabel: '',
             musicPath: '', musicVolume: 50, musicShuffle: true, musicExtensions: [],
+            textScale: 100, pictureFit: 'fit', cardFullHeight: false,
             showBanner: true, fetchDescriptions: true, recordToDisk: false,
             destinations: [], qualities: [], loaded: false, saving: false, busy: false
         },
@@ -32001,6 +32002,9 @@ function ninaApp() {
                 c.pipSource = d.pipSource || 'off';
                 c.pipUrl = d.pipUrl || '';
                 c.pipLabel = d.pipLabel || '';
+                c.textScale = Number.isFinite(d.textScale) ? d.textScale : 100;
+                c.pictureFit = d.pictureFit || 'fit';
+                c.cardFullHeight = !!d.cardFullHeight;
                 c.musicPath = d.musicPath || '';
                 c.musicExtensions = d.musicExtensions || [];
                 // Number(), not ||, or a deliberate 0 would come back as 50.
@@ -32087,6 +32091,9 @@ function ninaApp() {
                     pipSource: c.pipSource,
                     pipUrl: c.pipUrl || '',
                     pipLabel: c.pipLabel || '',
+                    textScale: Number.isFinite(c.textScale) ? c.textScale : 100,
+                    pictureFit: c.pictureFit || 'fit',
+                    cardFullHeight: !!c.cardFullHeight,
                     musicPath: c.musicPath || '',
                     musicVolume: Number.isFinite(c.musicVolume) ? c.musicVolume : 50,
                     musicShuffle: !!c.musicShuffle,

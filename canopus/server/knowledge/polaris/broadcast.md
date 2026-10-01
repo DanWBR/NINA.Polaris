@@ -85,6 +85,18 @@ at. Empty falls back to a generic word per source.
 Fitted, never cropped: an all sky lens puts a round image in a square frame and
 cropping it to the slot would cut the horizon off all four sides.
 
+### The corner camera's address
+
+Two forms are accepted: an HTTP(S) snapshot URL, fetched every few
+seconds, and an `rtsp://` (or `rtsps://`, `rtmp://`) stream, from
+which ffmpeg grabs one frame per poll with `-rtsp_transport tcp`.
+Most all sky and IP cameras only offer the stream, so a user reporting
+that their camera address "does not work" on an older version is
+probably giving an RTSP URL to a version that only did HTTP. Reading a
+stream needs ffmpeg installed; without it the corner says so rather
+than failing silently. Credentials in the URL are redacted before any
+logging.
+
 ## Setting it up
 
 | Platform | Where the URL and key come from |
@@ -173,8 +185,17 @@ ARM boards expose); on x86 `h264_qsv`, `h264_nvenc`, `h264_vaapi`.
 Software `libx264` is the floor everywhere.
 
 The status block reports which one is in use and whether it is
-hardware. A Pi 4 encoding 1080p in software while it captures will not
-keep up; use Low there, or a board with a hardware encoder.
+hardware.
+
+**CPU is rarely the limit.** Measured on an Orange Pi 4 Pro during a
+real session: 1080p on software `libx264` costs about 3% CPU, and
+480p is not detectably cheaper. The input rate is two frames a second
+and ffmpeg duplicates up to the output rate; a duplicated frame
+compresses to almost nothing, so the board encodes two new frames a
+second whatever the resolution says. Earlier text here warned that
+such a board could not keep up; that was a guess and it was wrong.
+Advise users to choose quality by their upload bandwidth, not by the
+board.
 
 ## While it runs
 

@@ -188,14 +188,25 @@ public class BroadcastConfigServiceTests {
     }
 
     [Test]
-    public void ASnapshotAddressHasToBeAnHttpUrl() {
-        // The commonest mistake is an rtsp:// address from the camera's manual,
-        // which this cannot fetch: it wants a still, not a stream.
-        Assert.Throws<ArgumentException>(
-            () => _svc.Update(new BroadcastConfigUpdate(PipUrl: "rtsp://192.168.1.50/stream")));
+    public void TheCameraAddressIsASnapshotOrAStream() {
+        // This used to reject rtsp:// and say the corner wanted a still. It
+        // was the commonest thing people typed, because most all sky and IP
+        // cameras offer nothing else, so ffmpeg now takes a frame from the
+        // stream and the address is accepted.
+        Assert.DoesNotThrow(
+            () => _svc.Update(new BroadcastConfigUpdate(PipUrl: "rtsp://192.168.1.50:554/stream1")));
         Assert.DoesNotThrow(
             () => _svc.Update(new BroadcastConfigUpdate(PipUrl: "http://192.168.1.50/snapshot.jpg")));
         Assert.DoesNotThrow(() => _svc.Update(new BroadcastConfigUpdate(PipUrl: "")));
+    }
+
+    [Test]
+    public void SomethingThatIsNotAnAddressIsStillRefused() {
+        // Widening the rule must not turn it off: whatever is stored here is
+        // handed to ffmpeg or to an HTTP client.
+        foreach (var bad in new[] { "192.168.1.50", "file:///etc/passwd", "just some words" })
+            Assert.Throws<ArgumentException>(
+                () => _svc.Update(new BroadcastConfigUpdate(PipUrl: bad)), bad);
     }
 
     [Test]
