@@ -69,6 +69,15 @@ sdk_present() {
         libplayerone) lib=libPlayerOneCamera ;;
         libtoupcam)   lib=libtoupcam ;;
         libaltaircam) lib=libaltaircam ;;
+        # The INDI stack itself is source-built on these images, and the
+        # archive's indi-bin lands indiserver and ~280 drivers over it. A
+        # field report had both: indi-bin and libasi installed by this loop
+        # on one card, and the archive's libasi then repointed all four ZWO
+        # sonames at older builds. The focuser failed loudly on a missing
+        # symbol; the camera just quietly dropped from SDK 1.41 to 1.27.
+        indi-bin|indi-full)
+            [ -e /usr/bin/indiserver ] && ! dpkg -S /usr/bin/indiserver >/dev/null 2>&1 && return 0
+            return 1 ;;
         *) return 1 ;;
     esac
     ldconfig -p 2>/dev/null | grep -q "$lib" && return 0
