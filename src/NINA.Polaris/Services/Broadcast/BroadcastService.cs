@@ -273,7 +273,8 @@ public sealed class BroadcastService : IDisposable {
     private async Task RunAsync(CancellationToken ct) {
         var cfg = _config.Get();
         var quality = BroadcastQuality.Parse(cfg.Quality);
-        var layout = BroadcastLayout.For(quality.Width, quality.Height, cfg.ShowHeader);
+        var layout = BroadcastLayout.For(quality.Width, quality.Height, cfg.ShowHeader,
+                                         cfg.TextScale, cfg.CardFullHeight);
         using var fonts = new BroadcastFonts(_env.WebRootPath ?? Path.Combine(_env.ContentRootPath, "wwwroot"));
         using var composer = new FrameComposer(layout, fonts);
         _recordPath = cfg.RecordToDisk ? NewRecordingPath() : null;
@@ -407,7 +408,10 @@ public sealed class BroadcastService : IDisposable {
             }
 
             byte[] frame;
-            try { frame = composer.Compose(picture, card, banner, title, rig, waiting, pip, pipLabel); }
+            try {
+                frame = composer.Compose(picture, card, banner, title, rig, waiting, pip, pipLabel,
+                                         fill: cfg.PictureFit == PictureFits.Fill);
+            }
             catch (Exception ex) {
                 // One bad frame is not a reason to end a broadcast. Skip it
                 // and let the next tick try again.

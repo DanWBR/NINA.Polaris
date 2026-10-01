@@ -166,10 +166,19 @@ camera is how a session stalls.
 
 **A camera at a web address** is the one that answers the original question,
 because an all sky camera is usually an IP camera rather than an astronomy one.
-Give Polaris the address of a snapshot, the still image almost every such
-camera serves, and it fetches one every few seconds. This costs nothing at the
-telescope at all: no driver, no equipment slot, no contention. A stream address
-(`rtsp://`) is not the same thing and will not work here; it wants a still.
+Two kinds of address work. A **snapshot URL**, the still image many such
+cameras serve, which Polaris fetches every few seconds. Or an **`rtsp://`
+stream**, which is what most all sky and IP cameras actually offer, often with
+no snapshot at all or with the snapshot behind a login while the stream is
+open. For a stream Polaris has ffmpeg connect, take a single frame and
+disconnect, on the same few-second rhythm. Either way this costs nothing at the
+telescope: no driver, no equipment slot, no contention.
+
+The stream is read over TCP rather than UDP on purpose. Over WiFi a UDP frame
+arrives torn often enough to be the normal case, and a torn frame is a corner
+full of grey blocks; one picture every few seconds is not worth the latency UDP
+would save. If your camera URL carries a password, as most do, it is removed
+before anything is written to the log.
 
 Whichever you choose, give it a caption. Polaris has no way to know whether the
 camera is pointed at the sky, at the mount or at the dog.
@@ -210,9 +219,22 @@ then the kernel encoder most other boards expose, then software. On
 x86 it is Quick Sync, NVENC, VAAPI, then software. The status line
 tells you which was chosen and whether it is hardware.
 
-If it is not hardware, be modest with the quality setting. A Pi 4
-encoding 1080p in software while capturing and guiding will not keep
-up, and the dropped-frame counter is where you will see it.
+It matters less than you would think. Measured on an Orange Pi 4 Pro
+broadcasting a real session: **1080p on software x264 costs about 3%
+of the CPU**, and 480p is no cheaper in any way you can notice. This
+chapter used to warn that a board like that would not keep up, which
+was a guess, and the guess was wrong.
+
+The reason is the frame rate into the encoder. Polaris feeds two
+frames a second and lets ffmpeg duplicate them up to the output rate,
+and a duplicated frame is almost free: nothing in it has changed, so
+it compresses to nearly nothing. What the board actually encodes is
+two new frames a second, which even a modest ARM core does without
+noticing.
+
+So pick the quality your **uplink** can carry, not the one you think
+your board can encode. If something is wrong the dropped-frame counter
+in the status line is where it shows.
 
 ## While it is running
 
@@ -236,6 +258,31 @@ Nothing starts by itself. There is no scheduled broadcast and nothing
 resumes after the host restarts. A broadcast puts your sky, your
 equipment list and your session out under your own name, and it begins
 when you press the button and at no other moment.
+
+## Making it fit your screen
+
+Three settings change how the frame is laid out, and all three came
+from the first operator to broadcast a whole session with it.
+
+**Picture** chooses between showing the whole sensor and filling the
+frame. A broadcast frame is 16:9 and most sensors are not, so
+**Fit** leaves bars at the sides: a square sensor loses about a third
+of the width to black. **Fill** scales the picture until it covers
+the frame and crops what hangs over. Fit if the framing matters to the
+last pixel, Fill if you would rather use the screen.
+
+**Text size** is a percentage, 100 being the size everything was
+designed at, and it moves the object card, the corner caption and both
+strips together. The strips are fixed-height bands, so their type
+stops growing before it would fall out of its own strip. How big it
+should be depends on whether people are watching on a phone or a
+television, which is why there is no right answer baked in.
+
+**Card uses the full height** lets the object card run the whole
+column from the header to the banner instead of shrinking to its text.
+The description then gets as many lines as fit, so a long one stops
+being cut off with an ellipsis. Without it the panel is only as tall
+as its contents, which looks tidier on short entries.
 
 ## Music, if you want it
 

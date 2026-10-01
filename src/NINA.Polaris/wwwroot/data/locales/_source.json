@@ -4616,5 +4616,12 @@
   "📄 Choose a file…": "📄 Choose a file…",
   "📁 Choose a folder…": "📁 Choose a folder…",
   "Polaris restarts": "Polaris restarts",
-  "Network link stability": "Network link stability"
+  "Network link stability": "Network link stability",
+  "Picture": "Picture",
+  "Text size": "Text size",
+  "Fit the whole sensor (bars at the sides)": "Fit the whole sensor (bars at the sides)",
+  "Fill the frame (crop the edges)": "Fill the frame (crop the edges)",
+  "Card uses the full height": "Card uses the full height",
+  "Camera address": "Camera address",
+  "Camera at a web address or RTSP stream": "Camera at a web address or RTSP stream"
 }

@@ -278,6 +278,84 @@ public sealed partial class FfmpegService {
     /// <param name="redactedCommandForLog">What to write in the log instead of
     /// the arguments. The caller redacts, because only the caller knows which of
     /// its arguments is a secret.</param>
+    /// <summary>
+    /// Pull one frame from a stream and return it as a JPEG.
+    ///
+    /// <para>For the corner picture when it points at an RTSP camera, which
+    /// is what most IP and all-sky cameras actually speak: they have no
+    /// snapshot URL at all, or it is behind a login while the RTSP stream is
+    /// open. HTTP cannot fetch one, so ffmpeg connects, takes a frame and
+    /// leaves.</para>
+    ///
+    /// <para>TCP transport rather than the default UDP: over WiFi a UDP frame
+    /// arrives torn often enough to be the normal case, and a torn JPEG is a
+    /// corner picture full of grey blocks. One frame every few seconds is not
+    /// worth the latency UDP would save.</para>
+    /// </summary>
+    public async Task<byte[]?> GrabFrameAsync(string url, TimeSpan timeout, CancellationToken ct = default) {
+        ArgumentException.ThrowIfNullOrWhiteSpace(url);
+        var bin = BinaryPath;
+        if (bin == null) return null;
+
+        var psi = new ProcessStartInfo {
+            FileName = bin,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+        foreach (var a in GrabArgs(url)) psi.ArgumentList.Add(a);
+
+        using var proc = new Process { StartInfo = psi };
+        if (!proc.Start()) return null;
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        linked.CancelAfter(timeout);
+        try {
+            using var ms = new MemoryStream();
+            var copy = proc.StandardOutput.BaseStream.CopyToAsync(ms, linked.Token);
+            var errTask = proc.StandardError.ReadToEndAsync(linked.Token);
+            await copy.ConfigureAwait(false);
+            await proc.WaitForExitAsync(linked.Token).ConfigureAwait(false);
+            var bytes = ms.ToArray();
+            if (bytes.Length < 512) {
+                var err = (await errTask.ConfigureAwait(false)) ?? "";
+                _logger.LogDebug("ffmpeg returned no frame from {Url}: {Err}",
+                    Redact(url), err.Length > 300 ? err[^300..] : err);
+                return null;
+            }
+            return bytes;
+        } catch (OperationCanceledException) {
+            try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
+            return null;
+        } finally {
+            try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch (InvalidOperationException) { }
+        }
+    }
+
+    /// <summary>The argument list for one frame. Separated so the shape is
+    /// testable without a camera on the other end.</summary>
+    public static List<string> GrabArgs(string url) => new() {
+        "-hide_banner", "-loglevel", "error",
+        "-rtsp_transport", "tcp",
+        // Give up rather than retry for ever on a camera that has gone away.
+        "-rw_timeout", "4000000",
+        "-i", url,
+        "-frames:v", "1",
+        "-q:v", "4",
+        "-f", "image2",
+        "-c:v", "mjpeg",
+        "pipe:1",
+    };
+
+    /// <summary>An RTSP URL very often carries the camera password in it, and
+    /// this one gets logged.</summary>
+    public static string Redact(string url) {
+        var i = url.IndexOf("://", StringComparison.Ordinal);
+        if (i < 0) return url;
+        var at = url.IndexOf('@', i);
+        return at < 0 ? url : url[..(i + 3)] + "<credentials>" + url[at..];
+    }
+
     public async Task<FfmpegRunResult> RunLiveAsync(
             IReadOnlyList<string> args,
             Func<Stream, CancellationToken, Task> pumpFrames,

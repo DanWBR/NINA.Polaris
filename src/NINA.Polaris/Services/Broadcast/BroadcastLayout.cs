@@ -14,6 +14,26 @@
 
 namespace NINA.Polaris.Services.Broadcast;
 
+/// <summary>How the picture is placed in the frame.</summary>
+public static class PictureFits {
+    /// <summary>Whole sensor visible, bars where the shapes differ.</summary>
+    public const string Fit = "fit";
+    /// <summary>Fill the frame and let the overflow be cropped.</summary>
+    public const string Fill = "fill";
+
+    public static readonly string[] All = { Fit, Fill };
+
+    public static bool IsValid(string? id) {
+        foreach (var f in All) if (string.Equals(f, id, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    public static string Parse(string? id) {
+        foreach (var f in All) if (string.Equals(f, id, StringComparison.OrdinalIgnoreCase)) return f;
+        return Fit;
+    }
+}
+
 /// <summary>An integer rectangle. Deliberately not a Skia type: the geometry
 /// is arithmetic and is tested without a graphics library.</summary>
 public readonly record struct BroadcastRect(int X, int Y, int Width, int Height) {
@@ -83,14 +103,31 @@ public sealed record BroadcastLayout {
     /// <summary>The widest the card text may run before it has to wrap.</summary>
     public int CardTextWidth => Card.Width - CardInset * 2;
 
+    /// <summary>Draw the card at the full height available to it instead of
+    /// shrinking it to its contents. The description then gets as many lines
+    /// as fit, which is the point: a taller panel with the same three lines
+    /// in it would just be a bigger empty box.</summary>
+    public bool CardFullHeight { get; init; }
+
     /// <param name="hasHeader">Whether to reserve the top strip. Decided once
     /// when the broadcast starts rather than per frame: a card that jumped
     /// down the screen the moment a rig name appeared would be worse than
     /// either arrangement on its own.</param>
-    public static BroadcastLayout For(int width, int height, bool hasHeader = false) {
+    /// <param name="textScale">Percent, 100 being the size everything was
+    /// designed at. The right size depends on how far away the viewer is and
+    /// on the shape of the rig line, so it is a preference rather than
+    /// something to derive: the first operator to run this in the field asked
+    /// for smaller text on the same frame it was tuned on.</param>
+    /// <param name="cardFullHeight">Let the object card use the whole column
+    /// instead of shrinking to its text.</param>
+    public static BroadcastLayout For(int width, int height, bool hasHeader = false,
+                                      int textScale = 100, bool cardFullHeight = false) {
         var w = Math.Max(160, width);
         var h = Math.Max(120, height);
         var pad = Math.Max(6, w / 64);
+        // Clamped here rather than trusted: it reaches this from a stored
+        // configuration, and a zero would make every font size zero.
+        var ts = Math.Clamp(textScale, 50, 200) / 100f;
 
         // A quarter of the width is enough for a name, a few facts and three
         // lines of description, and leaves three quarters of the frame as
@@ -138,18 +175,22 @@ public sealed record BroadcastLayout {
             Card = card,
             Banner = banner,
             Pip = pip,
-            PipLabelSize = Math.Max(8f, pipW * 0.075f),
+            PipLabelSize = Math.Max(8f, pipW * 0.075f) * ts,
             Header = header,
-            HeaderTitleSize = Math.Max(12f, headerH * 0.34f),
-            HeaderRigSize = Math.Max(9f, headerH * 0.23f),
+            // The header strip is a fixed band, so its text is clamped to what
+            // still fits in it: scaling the type up without the band would
+            // push the rig line out of its own strip.
+            HeaderTitleSize = Math.Min(headerH * 0.42f, Math.Max(12f, headerH * 0.34f) * ts),
+            HeaderRigSize = Math.Min(headerH * 0.28f, Math.Max(9f, headerH * 0.23f) * ts),
             CardInset = inset,
             CardThumb = thumb,
-            TitleSize = Math.Max(11f, cardW / 11f),
-            SubtitleSize = Math.Max(9f, cardW / 21f),
-            ChipSize = Math.Max(9f, cardW / 22f),
-            BodySize = Math.Max(9f, cardW / 20f),
-            CreditSize = Math.Max(8f, cardW / 26f),
-            BannerSize = Math.Max(11f, bannerH * 0.42f)
+            CardFullHeight = cardFullHeight,
+            TitleSize = Math.Max(11f, cardW / 11f) * ts,
+            SubtitleSize = Math.Max(9f, cardW / 21f) * ts,
+            ChipSize = Math.Max(9f, cardW / 22f) * ts,
+            BodySize = Math.Max(9f, cardW / 20f) * ts,
+            CreditSize = Math.Max(8f, cardW / 26f) * ts,
+            BannerSize = Math.Min(bannerH * 0.55f, Math.Max(11f, bannerH * 0.42f) * ts)
         };
     }
 

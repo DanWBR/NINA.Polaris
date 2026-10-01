@@ -81,6 +81,16 @@ public sealed record BroadcastConfig {
     /// redistributing the file, which is what putting one in the package would
     /// be. It also puts the licence where the account is, since the platform
     /// sends its claim to whoever is broadcasting.</para></summary>
+    /// <summary>Percent. 100 is the size the layout was designed at; the
+    /// right value depends on the viewer's screen and on taste, which is why
+    /// it is a setting and not a formula.</summary>
+    public int TextScale { get; init; } = 100;
+    /// <summary>fit (whole sensor, bars at the sides) or fill (cover the
+    /// frame, crop the overflow).</summary>
+    public string PictureFit { get; init; } = PictureFits.Fit;
+    /// <summary>Let the object card use the whole column rather than
+    /// shrinking to its text.</summary>
+    public bool CardFullHeight { get; init; }
     public string MusicPath { get; init; } = "";
     /// <summary>0 to 100.</summary>
     public int MusicVolume { get; init; } = 50;
@@ -103,7 +113,8 @@ public sealed record BroadcastConfigUpdate(
     bool? FetchDescriptions = null, bool? RecordToDisk = null,
     string? Title = null, bool? ShowHeader = null,
     string? PipSource = null, string? PipUrl = null, string? PipLabel = null,
-    string? MusicPath = null, int? MusicVolume = null, bool? MusicShuffle = null);
+    string? MusicPath = null, int? MusicVolume = null, bool? MusicShuffle = null,
+    int? TextScale = null, string? PictureFit = null, bool? CardFullHeight = null);
 
 /// <summary>
 /// The broadcast configuration, in its own file under the data dir rather than
@@ -181,8 +192,17 @@ public sealed class BroadcastConfigService {
                 pipSource = PipSources.Parse(req.PipSource);
             }
             var pipUrl = req.PipUrl != null ? req.PipUrl.Trim() : cur.PipUrl;
-            if (pipUrl.Length > 0 && !IsHttpUrl(pipUrl))
-                throw new ArgumentException("The snapshot address must be an http:// or https:// URL.");
+            if (pipUrl.Length > 0 && !IsHttpUrl(pipUrl) && !BroadcastPipService.IsStreamUrl(pipUrl))
+                throw new ArgumentException(
+                    "The camera address must be an http:// or https:// snapshot, "
+                    + "or an rtsp:// stream.");
+
+            var fit = cur.PictureFit;
+            if (req.PictureFit != null) {
+                if (!PictureFits.IsValid(req.PictureFit))
+                    throw new ArgumentException($"Unknown picture fit '{req.PictureFit}'. Use fit or fill.");
+                fit = PictureFits.Parse(req.PictureFit);
+            }
 
             var url = req.RtmpUrl != null ? req.RtmpUrl.Trim() : cur.RtmpUrl;
             if (url.Length > 0 && !IsRtmpUrl(url))
@@ -211,7 +231,12 @@ public sealed class BroadcastConfigService {
                 // Clamped rather than rejected: a slider that refuses to save
                 // teaches nothing, and the value is only a gain.
                 MusicVolume = Math.Clamp(req.MusicVolume ?? cur.MusicVolume, 0, 100),
-                MusicShuffle = req.MusicShuffle ?? cur.MusicShuffle
+                MusicShuffle = req.MusicShuffle ?? cur.MusicShuffle,
+                // Clamped, not rejected: it is only a type size, and a slider
+                // that refuses to save teaches nothing.
+                TextScale = Math.Clamp(req.TextScale ?? cur.TextScale, 50, 200),
+                PictureFit = fit,
+                CardFullHeight = req.CardFullHeight ?? cur.CardFullHeight
             };
             Save(next);
             _cached = next;
@@ -242,6 +267,10 @@ public sealed class BroadcastConfigService {
             musicVolume = c.MusicVolume,
             musicShuffle = c.MusicShuffle,
             musicExtensions = BroadcastMusic.Extensions,
+            textScale = c.TextScale,
+            pictureFit = c.PictureFit,
+            pictureFits = PictureFits.All,
+            cardFullHeight = c.CardFullHeight,
             destinations = BroadcastDestinations.All.Select(d => new { id = d.Id, label = d.Label, rtmpUrl = d.RtmpUrl }),
             qualities = BroadcastQuality.All.Select(q => new {
                 id = q.Id, label = q.Label, width = q.Width, height = q.Height, bitrateKbps = q.BitrateKbps
@@ -293,7 +322,10 @@ public sealed class BroadcastConfigService {
         RecordToDisk = s.RecordToDisk ?? false,
         MusicPath = s.MusicPath?.Trim() ?? "",
         MusicVolume = Math.Clamp(s.MusicVolume ?? 50, 0, 100),
-        MusicShuffle = s.MusicShuffle ?? true
+        MusicShuffle = s.MusicShuffle ?? true,
+        TextScale = Math.Clamp(s.TextScale ?? 100, 50, 200),
+        PictureFit = PictureFits.Parse(s.PictureFit),
+        CardFullHeight = s.CardFullHeight ?? false
     };
 
     private void Save(BroadcastConfig c) {
@@ -314,6 +346,7 @@ public sealed class BroadcastConfigService {
             ShowObjectCard = c.ShowObjectCard, ShowBanner = c.ShowBanner,
             PipSource = c.PipSource, PipUrl = c.PipUrl, PipLabel = c.PipLabel,
             MusicPath = c.MusicPath, MusicVolume = c.MusicVolume, MusicShuffle = c.MusicShuffle,
+            TextScale = c.TextScale, PictureFit = c.PictureFit, CardFullHeight = c.CardFullHeight,
             FetchDescriptions = c.FetchDescriptions, RecordToDisk = c.RecordToDisk
         }, _json));
         if (!OperatingSystem.IsWindows()) {
@@ -337,6 +370,9 @@ public sealed class BroadcastConfigService {
         public string? PipUrl { get; set; }
         public string? PipLabel { get; set; }
         public bool? ShowBanner { get; set; }
+        public int? TextScale { get; set; }
+        public string? PictureFit { get; set; }
+        public bool? CardFullHeight { get; set; }
         public string? MusicPath { get; set; }
         public int? MusicVolume { get; set; }
         public bool? MusicShuffle { get; set; }
