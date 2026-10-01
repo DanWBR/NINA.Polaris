@@ -100,6 +100,17 @@ public class CelestialImageService {
                 result = await TryNasaAsync(name, ct);
                 if (!result.Available) result = await TryWikipediaAsync(name, ct);
             }
+        } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
+            // The sky endpoint passes its request token here. Browsers cancel
+            // the lookup when the user changes target or leaves the view; this
+            // is normal control flow, not a failed image provider.
+            result = CelestialImage.NotAvailable("Lookup canceled");
+        } catch (TaskCanceledException ex) {
+            // HttpClient surfaces its 8-second timeout as TaskCanceledException
+            // even when the caller did not cancel. Keep it visible without a
+            // noisy stack trace, and let the normal placeholder/cache path run.
+            _logger.LogWarning("Image lookup timed out for {Name}: {Message}", name, ex.Message);
+            result = CelestialImage.NotAvailable("Lookup timed out");
         } catch (Exception ex) {
             _logger.LogWarning(ex, "Image lookup failed for {Name}", name);
             result = CelestialImage.NotAvailable("Lookup failed");
