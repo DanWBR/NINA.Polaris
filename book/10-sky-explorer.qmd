@@ -133,12 +133,11 @@ pwsh scripts/fetch-stellarium-dss.ps1 -MaxOrder 4
 
 The script is resumable: it skips tiles already present, so you can
 re-run it later to top up to a higher order. It writes to
-`src/NINA.Polaris/wwwroot/sky/data/skydata/surveys/dss/`, a path
-tracked with Git LFS^[Git LFS (Large File Storage) is an extension
-to the Git version-control system that keeps big binary files out of
-the normal repository history and downloads them only when needed.]
-(see `.gitattributes`) so the binary tiles do not bloat a working
-clone but still ship in `dotnet publish` and the installer.
+`src/NINA.Polaris/wwwroot/sky/data/skydata/surveys/dss/`. The tiles
+are committed as ordinary files, so every clone has them and they ship
+in `dotnet publish` and the installer. The bundled survey stops at
+order 3 (about 45 MB) because each order up multiplies the tile count
+by four and every byte stays in the repository history.
 Contributors who fetch tiles commit them afterwards:
 
 ```bash

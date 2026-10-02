@@ -65,8 +65,8 @@ jobs:
     name: Build and test on Linux
     runs-on: ubuntu-latest
     steps:
-      # lfs: false on purpose. The only LFS content is the DSS sky survey,
-      # which nothing in the test project reads, and it is 440 MB.
+      # lfs: false on purpose: LFS bandwidth is metered, and nothing the
+      # test project reads lives in LFS.
       - uses: actions/checkout@v4
         with:
           lfs: false
