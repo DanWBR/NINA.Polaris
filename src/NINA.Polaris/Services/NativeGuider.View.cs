@@ -213,6 +213,30 @@ public sealed partial class NativeGuider {
         _view = vf;
     }
 
+    /// <summary>Drop the session's markers from the frame on screen: the lock
+    /// crosshair and the star boxes go, the picture stays. A new ViewFrame
+    /// rather than an edit in place, because the WS payload reads _view from
+    /// another thread; the pixel buffer is shared, not copied.
+    ///
+    /// Without this, STOP left the previous session's stars drawn over the
+    /// live frame, so the display claimed a lock the guider no longer had.
+    /// Field report 2026-10-01.</summary>
+    private void ClearViewMarkers() {
+        var vf = _view;
+        if (vf == null) return;
+        _view = new ViewFrame {
+            Pixels = vf.Pixels,
+            Width = vf.Width,
+            Height = vf.Height,
+            BitDepth = vf.BitDepth,
+            IsBayered = vf.IsBayered,
+            OriginX = vf.OriginX,
+            OriginY = vf.OriginY,
+            HaveLock = false,
+            FrameId = ++_viewSeq
+        };
+    }
+
     /// <summary>WS-serializable view: frame geometry, lock, star markers, and a
     /// star-profile cross-section + FWHM. Coordinates are full-sensor pixels;
     /// the frame buffer's top-left maps to (OriginX, OriginY).</summary>

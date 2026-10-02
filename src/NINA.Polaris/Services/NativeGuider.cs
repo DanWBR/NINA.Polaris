@@ -164,6 +164,13 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
 
     // Dither bookkeeping.
     private volatile bool _paused;
+    // Raised for the whole of a stop, which is not instant: the wait for the
+    // loop task to observe its cancellation can take seconds, and AppState
+    // still reads "Guiding" until the teardown finishes. A dither request
+    // arriving in that window passed its IsGuiding check and installed itself
+    // after the cleanup had already run, leaving IsDithering raised with no
+    // loop to lower it.
+    private volatile bool _stopping;
     // Guards every write to the settle state (_settler, IsSettling, IsDithering,
     // _settleActive and the progress snapshot). The guide loop advances the
     // settler on its own thread while DitherAsync arrives from the caller's
@@ -383,14 +390,14 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     }
 
     public async Task DisconnectAsync(CancellationToken ct = default) {
-        await StopLoopAsync();
+        _stopping = true;
+        try { await StopLoopAsync(); } finally { _stopping = false; }
         IsConnected = false;
-        IsSettling = false;
-        _haveLock = false;
-        _multiStar.Clear();
+        // StopLoopAsync's session reset already dropped the lock, the settle
+        // and the frame markers. A disconnect goes further and drops the
+        // picture too: there is no camera behind it any more.
         _view = null;
         _lastFrame = null;
-        SetAppState("Stopped");
         _logger.LogInformation("Native guider disconnected");
     }
 
@@ -420,7 +427,10 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
         // pending exposure: calibration read "no frame from the guide camera"
         // and failed at its first step. Stop the loop first; it is restarted in
         // Guide mode at the end either way. The dark-library build does the same.
-        await StopLoopAsync();
+        // No session reset: the star the operator just tapped during the Loop is
+        // the one this run must guide on, and the pick below only runs when
+        // there is no lock.
+        await StopLoopAsync(resetSession: false);
         // A fresh calibration is ground truth for the CURRENT pier side; a reused
         // (restored) one may be for the other side if a flip happened while we
         // weren't guiding. Remember which case this is before calibrating.
@@ -482,10 +492,11 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
         await StartLoopAsync(LoopMode.Guide);
     }
 
-    public Task StopAsync(CancellationToken ct = default) {
+    public async Task StopAsync(CancellationToken ct = default) {
         // Cancel an in-progress calibration too (it runs outside the loop CTS).
         try { _calCts?.Cancel(); } catch { }
-        return StopLoopAsync();
+        _stopping = true;
+        try { await StopLoopAsync(); } finally { _stopping = false; }
     }
 
     public Task LoopAsync(CancellationToken ct = default) {
@@ -522,7 +533,12 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
 
     public Task DitherAsync(double pixels = 5.0, bool raOnly = false, double settlePixels = 1.5,
             int settleTime = 10, int settleTimeout = 40, CancellationToken ct = default) {
-        if (!IsGuiding || !_haveLock) {
+        // Only the guide loop advances a settle to its end, so a dither without
+        // one behind it can never finish: it would sit on the frame as
+        // "Dithering: settling" and hold the LIVE loop with it. IsGuiding alone
+        // does not say the loop is there, because a stop keeps that state until
+        // its teardown completes.
+        if (!IsGuiding || !_haveLock || _stopping || _loopCts == null) {
             return Task.CompletedTask;
         }
         // Offset the lock position by a random vector of the requested
