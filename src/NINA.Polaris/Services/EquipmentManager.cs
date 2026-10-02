@@ -1154,6 +1154,14 @@ public class EquipmentManager : IDisposable {
                 currentFilter = FilterWheel.CurrentFilterName,
                 filters = FilterWheel.FilterNames,
                 moving = FilterWheel.IsMoving,
+                // What the DRIVER says the wheel has, and the names the rig
+                // configured that there was no slot for. A wheel that
+                // misreports its own slot count (an 8-position EFW claiming 4)
+                // used to look exactly like a correctly reported small wheel.
+                slotCount = (FilterWheel as EffectiveFilterWheel)?.SlotCount
+                            ?? FilterWheel.FilterNames.Length,
+                namesBeyondSlots = (FilterWheel as EffectiveFilterWheel)?.NamesBeyondSlots
+                                   ?? Array.Empty<string>(),
                 capabilities = new {
                     editNames = true
                 }

@@ -5241,5 +5241,9 @@
   "Fill the frame (crop the edges)": "Preencher o quadro (cortar as bordas)",
   "Card uses the full height": "Card ocupa toda a altura",
   "Camera address": "Endereço da câmera",
-  "Camera at a web address or RTSP stream": "Câmera num endereço web ou stream RTSP"
+  "Camera at a web address or RTSP stream": "Câmera num endereço web ou stream RTSP",
+  "Driver reports": "O driver reporta",
+  "positions": "posicoes",
+  "This rig has filters the wheel has no slot for, so they are not offered:": "Este rig tem filtros para os quais a roda nao tem slot, por isso eles nao aparecem:",
+  "The count comes from the wheel itself, through its driver. If it disagrees with the wheel on the telescope, power-cycle the wheel and recalibrate it; its own firmware is what reports the number.": "O numero vem da propria roda, atraves do driver. Se ele discordar da roda que esta no telescopio, desligue e religue a roda e recalibre: quem reporta esse numero e o firmware dela."
 }

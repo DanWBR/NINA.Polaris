@@ -32,6 +32,10 @@ public static class FilterWheelEndpoints {
                 currentFilter = equip.FilterWheel.CurrentFilterName,
                 filters = equip.FilterWheel.FilterNames,
                 moving = equip.FilterWheel.IsMoving,
+                slotCount = (equip.FilterWheel as EffectiveFilterWheel)?.SlotCount
+                            ?? equip.FilterWheel.FilterNames.Length,
+                namesBeyondSlots = (equip.FilterWheel as EffectiveFilterWheel)?.NamesBeyondSlots
+                                   ?? Array.Empty<string>(),
                 capabilities = new {
                     // FILTERNAME: renaming is profile-side now (EffectiveFilterWheel),
                     // so it's offered for every driver, not just INDI.

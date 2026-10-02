@@ -8267,8 +8267,29 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <div class="equip-detail-props">
                                     <span>Current: <strong class="text-ok" x-text="filterWheel.currentFilter || '--'"></strong></span>
                                     <span>Slot: <strong x-text="filterWheel.position"></strong></span>
+                                    <!-- The count the DRIVER reports. A wheel that gets its
+                                         own slot number wrong looks exactly like a smaller
+                                         wheel unless this is on screen. -->
+                                    <span x-show="filterWheel.slotCount > 0">
+                                        <span x-text="$t('Driver reports')"></span>
+                                        <strong x-text="filterWheel.slotCount"></strong>
+                                        <span x-text="$t('positions')"></span>
+                                    </span>
                                     <span x-show="filterWheel.moving" class="text-warn">MOVING</span>
                                 </div>
+                                <!-- The rig has more filters configured than the wheel has
+                                     slots. The extra names are dropped, and saying so is the
+                                     whole point: it is either a wheel misreporting itself or a
+                                     profile left over from different hardware. -->
+                                <div class="equip-detail-props text-warn"
+                                     x-show="(filterWheel.namesBeyondSlots || []).length > 0">
+                                    <span x-text="$t('This rig has filters the wheel has no slot for, so they are not offered:')"></span>
+                                    <strong x-text="(filterWheel.namesBeyondSlots || []).join(', ')"></strong>
+                                </div>
+                                <p class="hint" style="margin:2px 0 0;font-size:11px"
+                                   x-show="(filterWheel.namesBeyondSlots || []).length > 0">
+                                    <span x-text="$t('The count comes from the wheel itself, through its driver. If it disagrees with the wheel on the telescope, power-cycle the wheel and recalibrate it; its own firmware is what reports the number.')"></span>
+                                </p>
                                 <div class="equip-filter-buttons" x-show="filterWheel.filters.length > 0">
                                     <template x-for="f in filterWheel.filters" :key="'fb-'+f">
                                         <button class="btn btn-sm" @click="setFilter(f)"

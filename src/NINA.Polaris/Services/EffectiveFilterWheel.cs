@@ -87,6 +87,31 @@ public sealed class EffectiveFilterWheel : IFilterWheel {
         }
     }
 
+    /// <summary>Filter names the rig has configured beyond the slots the driver
+    /// offers, which this decorator drops because there is no slot to put them in.
+    /// Empty in the ordinary case.
+    ///
+    /// It is not an error, but it was invisible, and that cost a field trip: an
+    /// 8-position EFW that reported itself to the ZWO SDK as a 4-position wheel
+    /// showed four slots in Polaris and nothing anywhere said why, or that the
+    /// operator's fifth name had been dropped on the way through. The driver's
+    /// own count and the names that did not fit are now in the status feed, so
+    /// the question is answerable without reading the journal over SSH.
+    /// Field report 2026-10-02.</summary>
+    public string[] NamesBeyondSlots {
+        get {
+            var slots = (_inner.FilterNames ?? Array.Empty<string>()).Length;
+            var saved = _profiles.ActiveEquipmentProfile?.FilterNames ?? Array.Empty<string>();
+            if (saved.Length <= slots) return Array.Empty<string>();
+            return saved.Skip(slots).Where(n => !string.IsNullOrWhiteSpace(n)).ToArray();
+        }
+    }
+
+    /// <summary>How many slots the DRIVER says the wheel has, before any
+    /// overlay. The number to show the operator when it disagrees with the
+    /// wheel on the telescope.</summary>
+    public int SlotCount => (_inner.FilterNames ?? Array.Empty<string>()).Length;
+
     /// <summary>The effective name of the slot the wheel currently sits on.
     /// Resolved by matching the driver's own current name to its slot (so the
     /// per-driver position base, 0 vs 1, never enters into it) and returning the

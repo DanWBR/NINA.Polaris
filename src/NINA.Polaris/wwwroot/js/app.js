@@ -771,6 +771,11 @@ function ninaApp() {
             currentFilter: '',
             filters: [],
             moving: false,
+            // What the driver says the wheel holds, and the rig's filter names
+            // that had no slot to go in. A wheel can misreport its own slot
+            // count, and that used to be indistinguishable from a small wheel.
+            slotCount: 0,
+            namesBeyondSlots: [],
             // Spec-compliance v2: hidrated from filterWheel.capabilities
             // in the WS payload. UI hides the "Edit names" affordance
             // for wheels that don't advertise edit support (ASCOM/Alpaca,
@@ -49018,6 +49023,9 @@ function ninaApp() {
                     currentFilter: eq.filterWheel.currentFilter,
                     filters: eq.filterWheel.filters || [],
                     moving: eq.filterWheel.moving,
+                    slotCount: eq.filterWheel.slotCount
+                        ?? (eq.filterWheel.filters || []).length,
+                    namesBeyondSlots: eq.filterWheel.namesBeyondSlots || [],
                     // FILTERWHEEL-SPEC v2: editNames flag drives
                     // whether the "Edit names" affordance renders.
                     // Backward compat: missing capabilities object on
