@@ -176,7 +176,7 @@ jobs:
             polaris-*.tar.gz
             polaris-*.zip
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 3
 
   # Render The Polaris Handbook (book/) to PDF so every release ships
   # the manual that describes exactly that version. HTML lives on the
@@ -230,7 +230,7 @@ jobs:
           name: handbook
           path: book/_build/The-Polaris-Handbook.pdf
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 3
 
   # Android APK, attached to the same GitHub Release. Signed with the
   # keystore secrets when present (upgrade-in-place across versions);
@@ -324,7 +324,7 @@ jobs:
           name: android-apk
           path: polaris-android.apk
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 3
 
   # Lint .deb files (non-fatal style checks). Only runs when at least
   # one .deb artifact is in the matrix.
@@ -500,3 +500,25 @@ jobs:
 
             All packages are self-contained: bundle .NET 10 runtime, no
             separate dotnet install required.
+
+  # The artifacts only carry the packages from the build jobs to the release
+  # job. Once they are attached to the GitHub Release they are dead weight:
+  # release assets are free, while Actions artifact storage is metered (2 GB
+  # on the account plan) and every tag used to park about 1.3 GB there for
+  # 30 days. Runs after lint-deb so it never deletes a .deb that job still reads.
+  cleanup-artifacts:
+    name: Delete this run's artifacts
+    needs: [release, lint-deb]
+    if: always() && needs.release.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Delete the artifacts now attached to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts" --paginate -q '.artifacts[].id' |
+            while read -r id; do
+              gh api -X DELETE "repos/${{ github.repository }}/actions/artifacts/$id"
+            done
