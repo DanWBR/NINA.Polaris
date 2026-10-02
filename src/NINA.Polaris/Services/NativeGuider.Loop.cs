@@ -27,7 +27,11 @@ public sealed partial class NativeGuider {
     private enum LoopMode { Loop, Guide }
 
     private async Task StartLoopAsync(LoopMode mode) {
-        await StopLoopAsync();
+        // Guide mode keeps the session state: StartGuidingAsync has already
+        // installed this run's settler and lock, and resetting here threw both
+        // away whenever a Loop was running first, which is the documented way
+        // to pick a star. Loop mode is a fresh session and resets.
+        await StopLoopAsync(resetSession: mode == LoopMode.Loop);
         _loopCts = new CancellationTokenSource();
         var token = _loopCts.Token;
         _paused = false;
@@ -38,36 +42,89 @@ public sealed partial class NativeGuider {
         _loopTask = Task.Run(() => LoopAsync(mode, token), token);
     }
 
-    private async Task StopLoopAsync() {
+    /// <summary>Tear the guide loop down, and optionally end the session with
+    /// it. <paramref name="resetSession"/> is what STOP means: no settle, no
+    /// dither, no lock, no markers on the frame, badge back to Stopped.
+    ///
+    /// The old version returned early when no loop was running, which made STOP
+    /// a no-op in exactly the case that needed it. A dither installed while a
+    /// stop was in flight (the wait for the loop task below can take seconds,
+    /// and IsGuiding is still true throughout) ended up with no loop to finish
+    /// it, and every later press of STOP took that early return: the
+    /// "Dithering: settling" banner stayed up for the rest of the night, and
+    /// LiveCaptureService.ShouldPause, which holds the LIVE loop while
+    /// IsDithering is raised, held it for just as long. Field report
+    /// 2026-10-01: target behind the roof during a guided live stack.</summary>
+    private async Task StopLoopAsync(bool resetSession = true) {
         var cts = _loopCts;
         var task = _loopTask;
-        if (cts == null) return;
-        try { cts.Cancel(); } catch { }
-        if (task != null) {
-            try { await task.WaitAsync(TimeSpan.FromSeconds(10)); } catch { }
+        if (cts != null) {
+            try { cts.Cancel(); } catch { }
+            if (task != null) {
+                try { await task.WaitAsync(TimeSpan.FromSeconds(10)); } catch { }
+            }
+            _loopCts = null;
+            _loopTask = null;
+            // Keep what the predictive algorithm learned about this mount's worm
+            // before the run's state goes away. Here rather than per frame: one
+            // profile write per session instead of one per guide frame.
+            PersistPredictiveModel();
         }
-        _loopCts = null;
-        _loopTask = null;
-        // Keep what the predictive algorithm learned about this mount's worm
-        // before the run's state goes away. Here rather than per frame: one
-        // profile write per session instead of one per guide frame.
-        PersistPredictiveModel();
-        lock (_settleLock) {
-            IsSettling = false;
-            IsDithering = false;
-            _settleActive = false;
-            _settler = null;
-        }
-        SetActivity(null);
-        if (AppState is "Guiding" or "Looping" or "Paused" or "LostLock") SetAppState("Stopped");
+        if (resetSession) ResetSessionState();
         // MEMOPT2: guiding retains almost nothing but churns ~2-3 full guide
         // frames + a preview JPEG per capture; under Workstation GC those freed
         // LOH segments sit as a high plateau (hundreds of MB) until the next
         // collection. Stopping the loop is a user-paced action, so compact once
         // here to hand that memory back to the OS on the SBC. Never per frame.
-        System.Runtime.GCSettings.LargeObjectHeapCompactionMode =
-            System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
-        GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+        if (cts != null) {
+            System.Runtime.GCSettings.LargeObjectHeapCompactionMode =
+                System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+        }
+    }
+
+    /// <summary>Everything a guiding session owns, dropped in one place: the
+    /// settle and dither state with the settler behind it, the activity phase,
+    /// the lock and the multi-star references, the markers drawn on the guide
+    /// frame, and the badge. Unconditional on purpose, so pressing STOP twice,
+    /// or pressing it when the loop has already gone, still leaves the guider
+    /// in the one state the operator asked for.
+    ///
+    /// The frame itself stays: the operator keeps seeing the guide camera's
+    /// last picture, without the crosshair and star boxes of a session that is
+    /// over. They come back when guiding starts again, from their own pick or
+    /// from the auto-selection.</summary>
+    private void ResetSessionState() {
+        SettleResult? abandoned = null;
+        lock (_settleLock) {
+            // A waiter (the live-stack dither trigger, the sequencer) is owed an
+            // answer. Dropping the settler without one left it waiting for an
+            // event that could no longer come.
+            if (_settler != null) {
+                abandoned = new SettleResult {
+                    Status = 1, Error = "Guiding stopped before the settle finished",
+                    TotalFrames = 0, DroppedFrames = 0
+                };
+            }
+            IsSettling = false;
+            IsDithering = false;
+            _settleActive = false;
+            _settler = null;
+            LastSettleStatus = null;
+            _settleErrPx = 0; _settleBelowSec = 0; _settleElapsedSec = 0;
+        }
+        _paused = false;
+        // Preview carries its own slew hold beside HandleMountSlewAsync; the
+        // session owns it too, so the reset drops it with the rest.
+        _slewHold = false;
+        _starLostCount = 0;
+        _haveLock = false;
+        _calAnchorActive = false;
+        _multiStar.Clear();
+        ClearViewMarkers();
+        SetActivity(null);
+        SetAppState("Stopped");
+        if (abandoned != null) RaiseSettled(abandoned);
     }
 
     private async Task LoopAsync(LoopMode mode, CancellationToken ct) {
@@ -346,6 +403,25 @@ public sealed partial class NativeGuider {
         await Task.CompletedTask;
     }
 
+    /// <summary>Test seam: a guiding session as the loop leaves it between
+    /// frames, without a camera, a mount or a star: a lock, a frame with the
+    /// marker drawn on it, and the state the operator reads on the badge. What
+    /// STOP has to undo.</summary>
+    internal void InstallSessionForTest(string appState) {
+        _lockX = 8; _lockY = 8;
+        _haveLock = true;
+        _view = new ViewFrame {
+            Pixels = new ushort[16 * 16], Width = 16, Height = 16, BitDepth = 16,
+            LockX = 8, LockY = 8, HaveLock = true, FrameId = ++_viewSeq
+        };
+        _view.Stars.Add((8, 8, 42.0, true, true));
+        SetAppState(appState);
+    }
+
+    /// <summary>Test seam: is a star locked? The lock itself is internal
+    /// geometry; whether there is one decides if a start picks again.</summary>
+    internal bool HasLockForTest => _haveLock;
+
     /// <summary>Test seam: install a settle exactly as DitherAsync or StartAsync
     /// would, without needing a camera, a mount or a star. The state machine is
     /// what the tests drive; the guide loop that normally feeds it is not.</summary>
@@ -414,6 +490,12 @@ public sealed partial class NativeGuider {
                 DroppedFrames = 0
             };
         }
+        RaiseSettled(result);
+    }
+
+    /// <summary>Raised outside the settle lock, always: a handler that turns
+    /// straight around and dithers again would otherwise deadlock.</summary>
+    private void RaiseSettled(SettleResult result) {
         if (result.Status != 0)
             _logger.LogWarning("Native settle failed: {Why}", result.Error);
         Settled?.Invoke(result);
