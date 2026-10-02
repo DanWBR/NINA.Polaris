@@ -738,6 +738,43 @@ public class EquipmentProfile {
     public double GuiderFocalLengthMm { get; set; } = 200;
 
     /// <summary>
+    /// Off-axis guider mode. An OAG picks light off the MAIN optical train,
+    /// so the guide camera sees the main OTA's focal length, not a separate
+    /// guide scope. When true, everything that derives the guider's pixel
+    /// scale / calibration / FOV uses <see cref="FocalLengthMm"/> instead of
+    /// <see cref="GuiderFocalLengthMm"/> (the guide camera's own pixel size
+    /// is unchanged). Default false = separate guide scope.
+    /// </summary>
+    public bool GuiderIsOag { get; set; }
+
+    /// <summary>Focal length (mm) the guider actually images at: the main OTA
+    /// for an OAG, otherwise the dedicated guide scope. Call sites still apply
+    /// their own &gt;0 fallback.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public double EffectiveGuiderFocalLengthMm => GuiderIsOag ? FocalLengthMm : GuiderFocalLengthMm;
+
+    /// <summary>OAG prism pick-off geometry, radial distance (mm, in the focal
+    /// plane) from the optical axis to the centre of the guide chip's field.
+    /// Drives where the guide FOV "square" is drawn on the SKY map relative to
+    /// the main-scope solve. 0 = concentric with the main field. Only meaningful
+    /// when <see cref="GuiderIsOag"/> is true.</summary>
+    public double OagOffsetMm { get; set; }
+
+    /// <summary>OAG prism position angle, rotation (degrees) of the pick-off
+    /// offset direction around the optical axis, measured from the camera's
+    /// +Y (up) axis. Combined with the field rotation to place the guide FOV
+    /// square. Only meaningful when <see cref="GuiderIsOag"/> is true.</summary>
+    public double OagPositionAngleDeg { get; set; }
+
+    /// <summary>Last-known guide-camera sensor geometry, mirrored from the
+    /// connected guide camera so the OAG FOV square can be drawn even while the
+    /// guide camera is offline (same rationale as the aux-camera geometry
+    /// fields). 0 = unknown (square is suppressed).</summary>
+    public int GuiderCameraMaxX { get; set; }
+    public int GuiderCameraMaxY { get; set; }
+    public double GuiderCameraPixelSizeUm { get; set; }
+
+    /// <summary>
     /// Guide-scope aperture. Used for record-keeping and as the
     /// denominator of the guidescope f-ratio displayed in the
     /// Guidescope card on the RIGS tab. Default 50 mm matches the

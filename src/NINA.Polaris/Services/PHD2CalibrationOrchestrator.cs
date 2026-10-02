@@ -91,11 +91,13 @@ public class PHD2CalibrationOrchestrator {
                 // aren't filled in the profile. Fall back to computing
                 // from the rig's guider focal length if we can.
                 var rig = _profiles.ActiveEquipmentProfile;
-                if (rig.GuiderFocalLengthMm > 0) {
+                // OAG: image through the main OTA, so use its focal length.
+                var fl = rig.EffectiveGuiderFocalLengthMm;
+                if (fl > 0) {
                     // Without a known pixel size, assume 4 µm (typical guide
                     // cam). User can fix the PHD2 profile to get a real value.
                     double assumedPxUm = 4.0;
-                    pxScale = assumedPxUm * 206.265 / rig.GuiderFocalLengthMm;
+                    pxScale = assumedPxUm * 206.265 / fl;
                     job.Warnings.Add($"PHD2 pixel scale unknown, assuming {pxScale:F2}\"/px from rig focal length");
                 } else {
                     Fail(job, "PHD2 pixel scale unavailable and rig guider focal length not set");

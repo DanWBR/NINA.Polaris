@@ -473,6 +473,12 @@ public class ProfileService {
             CameraMaxY = src.CameraMaxY,
             CameraBitDepth = src.CameraBitDepth,
             GuiderFocalLengthMm = src.GuiderFocalLengthMm,
+            GuiderIsOag = src.GuiderIsOag,
+            OagOffsetMm = src.OagOffsetMm,
+            OagPositionAngleDeg = src.OagPositionAngleDeg,
+            GuiderCameraMaxX = src.GuiderCameraMaxX,
+            GuiderCameraMaxY = src.GuiderCameraMaxY,
+            GuiderCameraPixelSizeUm = src.GuiderCameraPixelSizeUm,
             // Auxiliary (second) camera + its optics/focuser.
             AuxCamera = src.AuxCamera, AuxCameraDriver = src.AuxCameraDriver,
             AuxFocalLengthMm = src.AuxFocalLengthMm,
