@@ -30,17 +30,12 @@ external/stellarium-web-engine/** -text
 ###############################################################################
 src/NINA.Polaris/wwwroot/sky/data/skydata/** -text
 ###############################################################################
-# Offline sky imagery (DSS Color HiPS background + curated DSO preview
-# thumbnails) is large binary (tens to hundreds of MB depending on the
-# HEALPix order fetched). Track it with Git LFS so the working clone isn't
-# permanently bloated — the bytes still ship in `dotnet publish` / the
-# installer (LFS smudges real content on checkout), they just live in the
-# LFS store instead of git history. These rules are MORE specific than the
-# skydata `-text` line above and win by being last-matching. Populate via
-# scripts/fetch-stellarium-dss.sh and the DSO-thumbnail fetcher; both
-# write under these paths.
+# The DSS Color HiPS background under skydata/surveys/dss/ (order 3, about
+# 45 MB) is stored as ordinary git objects. It used to be tracked with Git
+# LFS, and then every clone and every release-matrix job downloaded it from
+# the metered LFS store. The skydata `-text` rule above keeps the tiles
+# byte-exact. Populate it with scripts/fetch-stellarium-dss.sh.
 ###############################################################################
-src/NINA.Polaris/wwwroot/sky/data/skydata/surveys/dss/** filter=lfs diff=lfs merge=lfs -text
 ###############################################################################
 # Set default behavior for command prompt diff.
 #
