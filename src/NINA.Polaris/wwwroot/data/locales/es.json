@@ -5253,5 +5253,17 @@
   "The wheel will turn to find its index. It takes about a minute and cannot be used until it finishes.": "La rueda girara para encontrar su indice. Tarda alrededor de un minuto y no se puede usar hasta que termine.",
   "Turn the carousel to find its index and relearn the slot positions. Needed after a firmware update.": "Gira el carrusel para encontrar su indice y reaprender las posiciones. Necesario tras actualizar el firmware.",
   "Calibrating the filter wheel": "Calibrando la rueda de filtros",
-  "Filter wheel calibration failed": "Fallo la calibracion de la rueda de filtros"
+  "Filter wheel calibration failed": "Fallo la calibracion de la rueda de filtros",
+  "Compute the model on": "Calcular el modelo en",
+  "Recompute every": "Recalcular cada",
+  "The gradient barely moves between subs, so the model runs once every few frames while every sub is still corrected.": "El gradiente apenas cambia entre subs, así que el modelo se ejecuta una vez cada pocos fotogramas mientras cada sub sigue corrigiéndose.",
+  "corrected · ⚠": "corregidos · ⚠",
+  "stacked with their gradient": "apilados con su gradiente",
+  "This browser": "Este navegador",
+  "Model runs": "El modelo se ejecuta",
+  "on the host": "en el host",
+  "in this browser": "en este navegador",
+  "nowhere available": "en ningún lugar disponible",
+  "background age": "antigüedad del fondo",
+  "Background extraction has nowhere to run right now. It needs an accelerator on the host (an NPU, or a GPU through Vulkan), or a browser tab open to run the model in. Subs keep stacking with their gradient and are counted.": "La extracción de fondo no tiene dónde ejecutarse ahora. Necesita un acelerador en el host (una NPU, o una GPU mediante Vulkan), o una pestaña del navegador abierta para ejecutar el modelo. Las subs se siguen apilando con su gradiente y se cuentan."
 }

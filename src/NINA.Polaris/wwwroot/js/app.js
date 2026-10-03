@@ -447,7 +447,14 @@ function ninaApp() {
             masterBiasOverrideId: null,
             bgeEnabled: false,
             bgeSmoothing: 1.0,
-            bgeCorrection: 'Subtraction'
+            bgeCorrection: 'Subtraction',
+            // Where the background model runs: 'Auto' (host accelerator if it
+            // has one, else this browser), 'Host' or 'Client'.
+            bgeWhere: 'Auto',
+            // One model serves this many subs. The gradient is optics plus sky
+            // in sensor coordinates and barely moves between frames, so every
+            // sub is still corrected while the model runs once every N.
+            bgeRecomputeEveryFrames: 10
         },
         // Master calibration frames available in the FrameLibrary, grouped by
         // type, for the per-frame calibration override dropdowns. Each entry:
@@ -31116,6 +31123,117 @@ function ninaApp() {
                 }
             }, 500);
         },
+
+        // ─── Background extraction: run the host's model job in this tab ───
+        //
+        // The host parks one 256x256x3 tensor; this fetches it, runs the single
+        // forward pass on the GPU through ORT Web, and posts the answer back.
+        // The host keeps the frame-sized half (denormalise, blur, upsample,
+        // correct), so the traffic is about 768 KB each way whatever the sensor.
+        //
+        // This is NOT a revival of client-driven stacking (retired in August).
+        // The host owns the stack throughout and never waits for this tab: a
+        // job this browser does not answer expires, and the sub goes into the
+        // stack with its gradient and is counted. So the failure mode of a
+        // closed tab is a slightly worse picture, not a stalled session.
+        //
+        // One job at a time, and the next poll is armed only after the current
+        // one finishes. That ordering is the lesson from the retired client
+        // loop, where a hidden tab deferred a loop and a retry that then fired
+        // together and two loops fought over one camera.
+        _bge: { want: false, busy: false, timer: null, done: 0, lastMs: null, lastError: null },
+
+        // Heartbeat while BGE is enabled and this tab is a candidate. The poll
+        // is also how the host learns a browser is here at all, so an empty
+        // 204 is useful work, not a wasted request.
+        _bgeHeartbeatMs: 8000,
+
+        _syncBgeClientWorker(ls) {
+            const bge = ls?.preProc?.bge;
+            const where = bge?.whereSetting || 'Auto';
+            // 'Host' means host: do not make this tab a candidate, so Auto's
+            // fallback cannot quietly become the operator's explicit choice.
+            const want = !!(bge?.enabled && ls?.isRunning && where !== 'Host'
+                            && window.OnnxRegistry?.runBgeTensor);
+            this._bge.want = want;
+            if (!want) {
+                if (this._bge.timer) { clearTimeout(this._bge.timer); this._bge.timer = null; }
+                return;
+            }
+            // A job is already waiting: go now instead of at the next beat.
+            if (bge.jobPending && !this._bge.busy) this._bgeArm(0);
+            else if (!this._bge.timer && !this._bge.busy) this._bgeArm(this._bgeHeartbeatMs);
+        },
+
+        _bgeArm(delayMs) {
+            if (this._bge.timer) clearTimeout(this._bge.timer);
+            this._bge.timer = setTimeout(() => {
+                this._bge.timer = null;
+                this._bgeRunOnce();
+            }, delayMs);
+        },
+
+        async _bgeRunOnce() {
+            if (this._bge.busy || !this._bge.want) return;
+            this._bge.busy = true;
+            let nextMs = this._bgeHeartbeatMs;
+            try {
+                // 204 is the usual answer and is declared, so the heartbeat
+                // logs at debug instead of filling the LOG panel all night.
+                const r = await this.apiFetch('/api/livestack/bge/job',
+                    { expectStatuses: [204, 404] });
+                if (r.status === 200) {
+                    const id = r.headers.get('X-Bge-Job-Id');
+                    const tile = +(r.headers.get('X-Bge-Tile') || 256) || 256;
+                    const buf = await r.arrayBuffer();
+                    const res = await window.OnnxRegistry.runBgeTensor(
+                        new Float32Array(buf), tile, {});
+                    const out = res.output;
+                    await this.apiFetch('/api/livestack/bge/job/' + encodeURIComponent(id), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/octet-stream' },
+                        body: new Uint8Array(out.buffer, out.byteOffset, out.byteLength)
+                    });
+                    this._bge.done++;
+                    this._bge.lastMs = Math.round(res.inferenceMs);
+                    this._bge.lastError = null;
+                    // A job just now means the next one is a few subs away, so
+                    // look again sooner than the idle beat.
+                    nextMs = 2000;
+                }
+            } catch (e) {
+                // Nothing here is worth a toast: the session carries on either
+                // way, and the status line already shows the uncorrected count.
+                this._bge.lastError = (e && e.message) ? e.message : String(e);
+                nextMs = 15000;
+            } finally {
+                this._bge.busy = false;
+                if (this._bge.want) this._bgeArm(nextMs);
+            }
+        },
+
+        // One line for the BGE fieldset: where the model ran, how long its
+        // forward pass took, and how old the one in hand is. Built here rather
+        // than in the template so the translated pieces stay whole phrases.
+        bgeModelStatusText() {
+            const bge = this.liveStackStatus?.preProc?.bge;
+            if (!bge) return '';
+            const where = bge.whereChosen === 'host' ? this.$t('on the host')
+                        : bge.whereChosen === 'client' ? this.$t('in this browser')
+                        : this.$t('nowhere available');
+            const bits = [this.$t('Model runs') + ' ' + where];
+            if (bge.whereChosen === 'host' && bge.hostLane) bits.push(bge.hostLane);
+            if (bge.whereChosen === 'client' && this._bge.lastMs != null) {
+                bits.push(this._bge.lastMs + ' ms');
+            } else if (bge.lastInferenceMs != null) {
+                bits.push(Math.round(bge.lastInferenceMs) + ' ms');
+            }
+            if (bge.backgroundAgeFrames != null && bge.recomputeEveryFrames) {
+                bits.push(this.$t('background age') + ' ' + bge.backgroundAgeFrames
+                          + '/' + bge.recomputeEveryFrames);
+            }
+            return bits.join(' · ');
+        },
         async recenterNow() {
             try {
                 await this.apiPost('/api/livestack/triggers/recenter-now');
@@ -49371,6 +49489,10 @@ function ninaApp() {
                 // a second source of truth.
                 const _wasLiveRunning = this.liveStackStatus?.isRunning;
                 this.liveStackStatus = msg.liveStack;
+                // Background extraction may be waiting on this tab to run one
+                // 256x256 forward pass. jobPending is the cue; the poll itself
+                // is how the host learns a browser is here to ask.
+                try { this._syncBgeClientWorker(msg.liveStack); } catch (e) {}
                 // Auto-open the quality HUD when a stack starts, so SNR / ETA /
                 // sub-exposure advice + the SNR-HFR chart are visible without
                 // hunting for the overlay toggle (they used to be gated behind
