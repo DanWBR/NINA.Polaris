@@ -220,6 +220,52 @@ public class OnnxModelRegistry {
     public static bool IsValidVersion(string version)
         => version != null && VersionRegex.IsMatch(version);
 
+    /// <summary>The directory names to try in an accelerator subtree
+    /// (<c>rknn/</c>, <c>ncnn/</c>, <c>qnn/</c>) for an ONNX version directory,
+    /// most specific first.
+    ///
+    /// The two trees are named by different hands and they drifted. The ONNX
+    /// BGE directories carry a source prefix, <c>graxpert-1.0.1</c>, while the
+    /// converted ones do not, <c>rknn/bge-ai-models/1.0.1</c>. Every resolver
+    /// used the ONNX directory name verbatim, so BGE missed on every
+    /// accelerator and fell through to the GraXpert CLI, which costs seconds
+    /// per frame instead of about ninety milliseconds. Denoise never showed it:
+    /// its directories are <c>2.0.0</c> on both sides and match by luck. The
+    /// badge said "BGE + Denoise accelerated" and half of it was true.
+    ///
+    /// The quant tag is dropped as a candidate because a converted model
+    /// carries its own precision: a .rknn is compiled fp16, ncnn runs fp16, and
+    /// the QNN resolver picks by filename. So <c>graxpert-1.0.1-fp16</c> may
+    /// legitimately resolve to the accelerator's <c>1.0.1</c>.
+    /// Field session 2026-10-03.</summary>
+    public static IReadOnlyList<string> VersionDirCandidates(string versionDir) {
+        if (string.IsNullOrWhiteSpace(versionDir)) return Array.Empty<string>();
+        var m = VersionRegex.Match(versionDir);
+        if (!m.Success) return new[] { versionDir };
+
+        var prefix = m.Groups[1].Value;          // "graxpert-" or empty
+        var core = m.Groups[2].Value;            // "1.0.1"
+        var norm = m.Groups[4].Value;            // "-log" / "-pct" or empty
+        var tile = m.Groups[6].Value;            // "-512" or empty
+
+        // Most specific first: exactly what was asked for, then the same
+        // version without the source prefix, then without the quant tag, then
+        // the bare version. Duplicates collapse, so an unprefixed untagged
+        // version yields a single candidate.
+        var ordered = new[] {
+            versionDir,
+            string.Concat(core, norm, tile, m.Groups[7].Value),
+            string.Concat(prefix, core, norm, tile),
+            string.Concat(core, norm, tile),
+        };
+        var seen = new List<string>(ordered.Length);
+        foreach (var c in ordered) {
+            if (!string.IsNullOrEmpty(c) && !seen.Contains(c, StringComparer.Ordinal))
+                seen.Add(c);
+        }
+        return seen;
+    }
+
     /// <summary>True when {family-dir}/{version}/model.onnx exists in any of
     /// the resolved model paths. <paramref name="familyDir"/> is the on-disk
     /// directory name, e.g. "nox-color-ai-models".</summary>

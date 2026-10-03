@@ -137,7 +137,11 @@ public sealed class NcnnInferenceService : IDisposable {
         return true;
     }
 
-    private (string paramPath, string version)? ResolveModel(string family, string? requestedVersion) {
+    /// <remarks>internal so a test can exercise the lookup against a model
+    /// tree on disk: the native probe that CanHandle checks first is not
+    /// available on a dev box, and the lookup is where BGE silently
+    /// missed.</remarks>
+    internal (string paramPath, string version)? ResolveModel(string family, string? requestedVersion) {
         // Exact requested version, if compatible and it has a converted model.
         if (!string.IsNullOrEmpty(requestedVersion)) {
             var exact = _registry.Find(family, requestedVersion);
@@ -174,9 +178,14 @@ public sealed class NcnnInferenceService : IDisposable {
         var familyDir = Path.GetDirectoryName(versionDir);
         var root = familyDir != null ? Path.GetDirectoryName(familyDir) : null;
         if (root != null) {
-            var parallel = Path.Combine(root, "ncnn",
-                Path.GetFileName(familyDir!), Path.GetFileName(versionDir), "model.ncnn.param");
-            if (File.Exists(parallel)) return parallel;
+            // See OnnxModelRegistry.VersionDirCandidates: the ONNX and converted
+            // trees disagree about the source prefix.
+            foreach (var v in Onnx.OnnxModelRegistry.VersionDirCandidates(
+                         Path.GetFileName(versionDir))) {
+                var parallel = Path.Combine(root, "ncnn",
+                    Path.GetFileName(familyDir!), v, "model.ncnn.param");
+                if (File.Exists(parallel)) return parallel;
+            }
         }
         return null;
     }

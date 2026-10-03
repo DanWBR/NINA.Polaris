@@ -361,7 +361,11 @@ public sealed class QnnInferenceService {
 
     /// <summary>Resolve a context binary for a family: exact requested version
     /// first, else newest registered version that has a matching-arch <c>.bin</c>.</summary>
-    private (string binPath, string version)? ResolveModel(string family, string? requestedVersion) {
+    /// <remarks>internal so a test can exercise the lookup against a model
+    /// tree on disk: the native probe that CanHandle checks first is not
+    /// available on a dev box, and the lookup is where BGE silently
+    /// missed.</remarks>
+    internal (string binPath, string version)? ResolveModel(string family, string? requestedVersion) {
         if (!string.IsNullOrEmpty(requestedVersion)) {
             var exact = _registry.Find(family, requestedVersion);
             if (exact != null) {
@@ -395,9 +399,15 @@ public sealed class QnnInferenceService {
         var root = familyDir != null ? Path.GetDirectoryName(familyDir) : null;
         if (root == null) return null;
 
-        var qnnDir = Path.Combine(root, "qnn",
-            Path.GetFileName(familyDir!), Path.GetFileName(versionDir));
-        if (!Directory.Exists(qnnDir)) return null;
+        // See OnnxModelRegistry.VersionDirCandidates: the ONNX and converted
+        // trees disagree about the source prefix.
+        string? qnnDir = null;
+        foreach (var v in Onnx.OnnxModelRegistry.VersionDirCandidates(
+                     Path.GetFileName(versionDir))) {
+            var cand = Path.Combine(root, "qnn", Path.GetFileName(familyDir!), v);
+            if (Directory.Exists(cand)) { qnnDir = cand; break; }
+        }
+        if (qnnDir == null) return null;
 
         var matches = Directory.EnumerateFiles(qnnDir, "*.bin")
             .Where(f => Path.GetFileName(f).Contains(Arch, StringComparison.OrdinalIgnoreCase))

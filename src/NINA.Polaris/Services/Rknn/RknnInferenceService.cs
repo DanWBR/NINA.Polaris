@@ -160,7 +160,11 @@ public sealed class RknnInferenceService : IDisposable {
     /// requested version when it has a sibling .rknn; otherwise scans every
     /// registered version of the family (newest first) for one that does.
     /// </summary>
-    private (string rknnPath, string version)? ResolveModel(string family, string? requestedVersion) {
+    /// <remarks>internal so a test can exercise the lookup against a model
+    /// tree on disk: the native probe that CanHandle checks first is not
+    /// available on a dev box, and the lookup is where BGE silently
+    /// missed.</remarks>
+    internal (string rknnPath, string version)? ResolveModel(string family, string? requestedVersion) {
         // Exact requested version, if its dir actually has a .rknn.
         if (!string.IsNullOrEmpty(requestedVersion)) {
             var exact = _registry.Find(family, requestedVersion);
@@ -200,9 +204,14 @@ public sealed class RknnInferenceService : IDisposable {
         var familyDir = Path.GetDirectoryName(versionDir);
         var root = familyDir != null ? Path.GetDirectoryName(familyDir) : null;
         if (root != null) {
-            var parallel = Path.Combine(root, "rknn",
-                Path.GetFileName(familyDir!), Path.GetFileName(versionDir), "model.rknn");
-            if (File.Exists(parallel)) return parallel;
+            // The converted tree is named by a different hand than the ONNX one,
+            // so try the version with and without its source prefix.
+            foreach (var v in Onnx.OnnxModelRegistry.VersionDirCandidates(
+                         Path.GetFileName(versionDir))) {
+                var parallel = Path.Combine(root, "rknn",
+                    Path.GetFileName(familyDir!), v, "model.rknn");
+                if (File.Exists(parallel)) return parallel;
+            }
         }
         return null;
     }
