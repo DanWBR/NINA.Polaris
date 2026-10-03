@@ -345,6 +345,29 @@ function ninaApp() {
         // NOT persisted: that tab exists to drive the focuser, so it always
         // opens expanded. Folding it is still allowed for the current session.
         focusTabGroupOpen: true,
+
+        // Rotator control strip (FOCUS + VIDEO). Mirrors focusGroupOpen:
+        // collapsed by default on VIDEO/PREVIEW sidebars; FOCUS tab stays open.
+        rotatorGroupOpen: (function() {
+            try { return localStorage.getItem('polaris.rotatorGroupOpen') === '1'; }
+            catch { return false; }
+        })(),
+        rotatorTabGroupOpen: true,
+        rotatorStepSlow: (function() {
+            try { const v = Number(localStorage.getItem('polaris.rotatorStepSlow')); return Number.isFinite(v) && v > 0 ? v : 1; }
+            catch { return 1; }
+        })(),
+        rotatorStepFast: (function() {
+            try { const v = Number(localStorage.getItem('polaris.rotatorStepFast')); return Number.isFinite(v) && v > 0 ? v : 5; }
+            catch { return 5; }
+        })(),
+        rotatorGotoTarget: 0,
+        _rotatorGotoSeeded: false,
+        _rotatorNudgeTimer: null,
+        _rotatorNudgeInterval: null,
+        _rotatorNudgePending: false,
+        _rotatorNudgeTarget: 0,
+
         // Which tab of the native guiding side-panel is shown: status | settings
         // | calibration. Groups the panel's controls by function instead of one
         // long scroll.
@@ -42401,6 +42424,63 @@ function ninaApp() {
             }
         },
 
+
+        setRotatorGroupOpen(open) {
+            this.rotatorGroupOpen = !!open;
+            try { localStorage.setItem('polaris.rotatorGroupOpen', this.rotatorGroupOpen ? '1' : '0'); }
+            catch {}
+        },
+        saveRotatorSteps() {
+            try {
+                localStorage.setItem('polaris.rotatorStepSlow', String(this.rotatorStepSlow));
+                localStorage.setItem('polaris.rotatorStepFast', String(this.rotatorStepFast));
+            } catch {}
+        },
+        startRotatorNudgeRepeat(delta) {
+            this.stopRotatorNudgeRepeat();
+            this._rotatorNudgePending = false;
+            this._rotatorNudgeTick(delta);
+            this._rotatorNudgeTimer = setTimeout(() => {
+                this._rotatorNudgeInterval = setInterval(() => this._rotatorNudgeTick(delta), 120);
+            }, 400);
+        },
+        _rotatorNudgeTick(delta) {
+            if (this.rotator?.moving) return;
+            const base = this._rotatorNudgePending
+                ? this._rotatorNudgeTarget
+                : (Number.isFinite(this.rotator?.position) ? this.rotator.position : 0);
+            let p = Number(base) + Number(delta);
+            // Keep a usable absolute angle without wrapping mid-nudge so
+            // multi-turn holds still accumulate the intended direction.
+            this._rotatorNudgeTarget = p;
+            this._rotatorNudgePending = true;
+            this.rotatorGotoTarget = Math.round(p * 10) / 10;
+        },
+        stopRotatorNudgeRepeat() {
+            if (this._rotatorNudgeTimer) { clearTimeout(this._rotatorNudgeTimer); this._rotatorNudgeTimer = null; }
+            if (this._rotatorNudgeInterval) { clearInterval(this._rotatorNudgeInterval); this._rotatorNudgeInterval = null; }
+            if (this._rotatorNudgePending) {
+                this._rotatorNudgePending = false;
+                this.rotatorMoveToAngle(this._rotatorNudgeTarget);
+            }
+        },
+        async rotatorMoveToAngle(angle) {
+            if (!this.rotator?.connected) return;
+            const a = Number(angle);
+            if (!Number.isFinite(a)) {
+                this.toast('Invalid rotator angle', 'error');
+                return;
+            }
+            try {
+                this.equipRotatorTarget = a;
+                this.rotatorGotoTarget = a;
+                await this.apiPost('/api/rotator/move', { angle: a });
+                this.toast(`Rotator moving to ${a.toFixed(1)}°`, 'ok');
+            } catch (e) {
+                this.toastFail('Rotator move failed', e);
+            }
+        },
+
         // --- Rotator ---
         async equipConnectRotator() {
             if (!this.equipRotatorChoice) return;
@@ -42432,8 +42512,14 @@ function ninaApp() {
             }
         },
         async rotatorAbort() {
+            if (this._rotatorNudgeTimer) { clearTimeout(this._rotatorNudgeTimer); this._rotatorNudgeTimer = null; }
+            if (this._rotatorNudgeInterval) { clearInterval(this._rotatorNudgeInterval); this._rotatorNudgeInterval = null; }
+            this._rotatorNudgePending = false;
             try {
                 await this.apiPost('/api/rotator/abort');
+                if (Number.isFinite(this.rotator?.position)) {
+                    this.rotatorGotoTarget = Math.round(Number(this.rotator.position) * 100) / 100;
+                }
                 this.toast('Rotator stopped', 'warn');
             } catch (e) { this.toast('Rotator abort failed', 'error'); }
         },
@@ -49067,6 +49153,18 @@ function ninaApp() {
                     moving: eq.rotator.moving,
                     reversed: eq.rotator.reversed
                 };
+                // Seed / follow live angle unless the operator is mid-nudge
+                // or holding a distinct Goto target.
+                if (!this._rotatorNudgePending && Number.isFinite(eq.rotator.position)
+                        && !this.rotator.moving) {
+                    const live = Math.round(Number(eq.rotator.position) * 100) / 100;
+                    if (!this._rotatorGotoSeeded) {
+                        this.rotatorGotoTarget = live;
+                        this._rotatorGotoSeeded = true;
+                    } else if (Math.abs(Number(this.rotatorGotoTarget) - live) < 0.05) {
+                        this.rotatorGotoTarget = live;
+                    }
+                }
             }
             if (eq.powerBox) {
                 this.powerBox = {
