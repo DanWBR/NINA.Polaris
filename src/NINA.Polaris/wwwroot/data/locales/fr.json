@@ -5239,5 +5239,17 @@
   "Fill the frame (crop the edges)": "Remplir le cadre (rogner les bords)",
   "Card uses the full height": "La fiche occupe toute la hauteur",
   "Camera address": "Adresse de la caméra",
-  "Camera at a web address or RTSP stream": "Caméra à une adresse web ou un flux RTSP"
+  "Camera at a web address or RTSP stream": "Caméra à une adresse web ou un flux RTSP",
+  "Driver reports": "Le pilote annonce",
+  "positions": "positions",
+  "This rig has filters the wheel has no slot for, so they are not offered:": "Cette configuration a des filtres pour lesquels la roue n'a pas d'emplacement, ils ne sont donc pas proposes :",
+  "The count comes from the wheel itself, through its driver. If it disagrees with the wheel on the telescope, power-cycle the wheel and recalibrate it; its own firmware is what reports the number.": "Le nombre vient de la roue elle-meme, via son pilote. S'il ne correspond pas a la roue montee sur le telescope, coupez et rallumez la roue puis recalibrez-la : c'est son firmware qui annonce ce nombre.",
+  "The wheel does not report a valid position, so it does not know where it is. Nothing it reports is reliable until it is calibrated, including how many slots it has.": "La roue n'annonce pas de position valide, donc elle ne sait pas ou elle est. Rien de ce qu'elle annonce n'est fiable avant une calibration, y compris son nombre d'emplacements.",
+  "The driver reports more slots than it published filter names for, so the list above is short. Reconnect the wheel; if it stays short, the driver's saved configuration is overriding the names and has to be purged.": "Le pilote annonce plus d'emplacements que de noms de filtre publies, la liste ci-dessus est donc incomplete. Reconnectez la roue ; si elle reste incomplete, la configuration enregistree du pilote ecrase les noms et doit etre supprimee.",
+  "Calibrate": "Calibrer",
+  "Calibrate the filter wheel?": "Calibrer la roue a filtres ?",
+  "The wheel will turn to find its index. It takes about a minute and cannot be used until it finishes.": "La roue va tourner pour trouver son index. Cela prend environ une minute et elle est inutilisable jusqu'a la fin.",
+  "Turn the carousel to find its index and relearn the slot positions. Needed after a firmware update.": "Fait tourner le carrousel pour trouver son index et reapprendre les positions. Necessaire apres une mise a jour du firmware.",
+  "Calibrating the filter wheel": "Calibration de la roue a filtres",
+  "Filter wheel calibration failed": "La calibration de la roue a filtres a echoue"
 }

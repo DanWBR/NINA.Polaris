@@ -99,6 +99,59 @@ public class IndiFilterWheel : NINA.Image.Interfaces.IFilterWheel {
         DeviceName = deviceName;
     }
 
+    /// <summary>The slot range the DRIVER publishes on FILTER_SLOT, or (0, 0)
+    /// when the property is not there. Two things are read off it that nothing
+    /// else can tell us:
+    ///
+    /// A position below the minimum means the wheel does not know where it is.
+    /// A ZWO EFW answers -1 to the SDK while it is uncalibrated, which the INDI
+    /// driver publishes as slot 0 against a minimum of 1, and in that state
+    /// nothing the wheel says about itself is true, including how many slots it
+    /// has. A firmware write leaves it exactly there, and it looks like a dead
+    /// wheel: field session 2026-10-02, where the cure was a calibration.
+    ///
+    /// A maximum larger than the number of FILTER_NAME elements means the slot
+    /// count and the name vector disagree, and the name vector is what every
+    /// consumer sizes its filter list from. Reloading the driver rebuilds it;
+    /// when that is not enough, the driver's saved config is in the way.
+    /// Same session: the wheel reported 8 slots behind 4 names for a while.
+    /// </summary>
+    public (int Min, int Max) SlotRange {
+        get {
+            if (_client.GetProperty(DeviceName, "FILTER_SLOT") is Protocol.IndiNumberProperty p
+                && p.Values.TryGetValue("FILTER_SLOT_VALUE", out var el)) {
+                return ((int)Math.Round(el.Min), (int)Math.Round(el.Max));
+            }
+            return (0, 0);
+        }
+    }
+
+    /// <summary>The driver offers a calibration (ZWO's EFW does, as
+    /// FILTER_CALIBRATION). Probed live, so a wheel without one reports false
+    /// and the button stays hidden.</summary>
+    public bool SupportsCalibration
+        => _client.GetProperty(DeviceName, "FILTER_CALIBRATION") is Protocol.IndiSwitchProperty;
+
+    /// <summary>Run the wheel's own calibration: it turns the carousel to find
+    /// its index and relearns its positions. Ack-based, because a refusal here
+    /// (wheel busy, motor stuck) has to reach the operator rather than look
+    /// like a calibration that worked. The wheel is unusable until it finishes,
+    /// and on a ZWO EFW it takes the better part of a minute.</summary>
+    public async Task CalibrateAsync(CancellationToken ct = default) {
+        if (!SupportsCalibration)
+            throw new InvalidOperationException(
+                $"Filter wheel '{DeviceName}' does not offer a calibration.");
+        var ack = await _client.SetSwitchAsyncAck(DeviceName, "FILTER_CALIBRATION",
+            new Dictionary<string, bool> { ["CALIBRATE"] = true }, ct: ct);
+        if (ack.Rejected) {
+            var detail = string.IsNullOrEmpty(ack.AlertMessage)
+                ? "(no message from driver)"
+                : ack.AlertMessage;
+            throw new InvalidOperationException(
+                $"Filter wheel '{DeviceName}' rejected the calibration: {detail}");
+        }
+    }
+
     public Task ConnectAsync(CancellationToken ct = default)
         => _client.ConnectDeviceAsync(DeviceName, ct);
 

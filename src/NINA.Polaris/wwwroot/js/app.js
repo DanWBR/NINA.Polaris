@@ -774,6 +774,20 @@ function ninaApp() {
             currentFilter: '',
             filters: [],
             moving: false,
+            // What the driver says the wheel holds, and the rig's filter names
+            // that had no slot to go in. A wheel can misreport its own slot
+            // count, and that used to be indistinguishable from a small wheel.
+            slotCount: 0,
+            namesBeyondSlots: [],
+            // The driver's own slot range, and the two states where the number
+            // on screen would otherwise be a lie: a wheel that does not know
+            // where it is, and a slot count that disagrees with the names.
+            slotMin: 0,
+            slotMax: 0,
+            needsCalibration: false,
+            namesShortOfSlots: false,
+            healthMessage: '',
+            supportsCalibrate: false,
             // Spec-compliance v2: hidrated from filterWheel.capabilities
             // in the WS payload. UI hides the "Edit names" affordance
             // for wheels that don't advertise edit support (ASCOM/Alpaca,
@@ -34820,6 +34834,25 @@ function ninaApp() {
                 this.toastFail(this.$t('Could not switch the live source'), e);
             }
         },
+        // Run the wheel's own calibration. It turns the carousel to find its
+        // index, takes the better part of a minute on a ZWO EFW, and the wheel
+        // is unusable until it finishes, so it asks first. This is the recovery
+        // for a wheel that does not know where it is, which is the state a
+        // firmware write leaves it in.
+        async calibrateFilterWheel() {
+            if (!this.filterWheel.supportsCalibrate) return;
+            const ok = await this._confirmAsync(
+                this.$t('The wheel will turn to find its index. It takes about a minute and cannot be used until it finishes.'),
+                { title: this.$t('Calibrate the filter wheel?'), okLabel: this.$t('Calibrate') });
+            if (!ok) return;
+            try {
+                await this.apiPost('/api/filterwheel/calibrate');
+                this.toast(this.$t('Calibrating the filter wheel'), 'ok');
+            } catch (e) {
+                this.toastFail(this.$t('Filter wheel calibration failed'), e);
+            }
+        },
+
         async setFilter(filterName) {
             // Immediate ack so the user gets feedback that the click
             // registered; the server-side wait can take a few seconds
@@ -49504,6 +49537,15 @@ function ninaApp() {
                     currentFilter: eq.filterWheel.currentFilter,
                     filters: eq.filterWheel.filters || [],
                     moving: eq.filterWheel.moving,
+                    slotCount: eq.filterWheel.slotCount
+                        ?? (eq.filterWheel.filters || []).length,
+                    namesBeyondSlots: eq.filterWheel.namesBeyondSlots || [],
+                    slotMin: eq.filterWheel.slotMin || 0,
+                    slotMax: eq.filterWheel.slotMax || 0,
+                    needsCalibration: !!eq.filterWheel.needsCalibration,
+                    namesShortOfSlots: !!eq.filterWheel.namesShortOfSlots,
+                    healthMessage: eq.filterWheel.healthMessage || '',
+                    supportsCalibrate: !!eq.filterWheel.supportsCalibrate,
                     // FILTERWHEEL-SPEC v2: editNames flag drives
                     // whether the "Edit names" affordance renders.
                     // Backward compat: missing capabilities object on

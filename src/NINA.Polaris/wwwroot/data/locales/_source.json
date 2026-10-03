@@ -4621,5 +4621,17 @@
   "Fill the frame (crop the edges)": "Fill the frame (crop the edges)",
   "Card uses the full height": "Card uses the full height",
   "Camera address": "Camera address",
-  "Camera at a web address or RTSP stream": "Camera at a web address or RTSP stream"
+  "Camera at a web address or RTSP stream": "Camera at a web address or RTSP stream",
+  "Driver reports": "Driver reports",
+  "positions": "positions",
+  "This rig has filters the wheel has no slot for, so they are not offered:": "This rig has filters the wheel has no slot for, so they are not offered:",
+  "The count comes from the wheel itself, through its driver. If it disagrees with the wheel on the telescope, power-cycle the wheel and recalibrate it; its own firmware is what reports the number.": "The count comes from the wheel itself, through its driver. If it disagrees with the wheel on the telescope, power-cycle the wheel and recalibrate it; its own firmware is what reports the number.",
+  "The wheel does not report a valid position, so it does not know where it is. Nothing it reports is reliable until it is calibrated, including how many slots it has.": "The wheel does not report a valid position, so it does not know where it is. Nothing it reports is reliable until it is calibrated, including how many slots it has.",
+  "The driver reports more slots than it published filter names for, so the list above is short. Reconnect the wheel; if it stays short, the driver's saved configuration is overriding the names and has to be purged.": "The driver reports more slots than it published filter names for, so the list above is short. Reconnect the wheel; if it stays short, the driver's saved configuration is overriding the names and has to be purged.",
+  "Calibrate": "Calibrate",
+  "Calibrate the filter wheel?": "Calibrate the filter wheel?",
+  "The wheel will turn to find its index. It takes about a minute and cannot be used until it finishes.": "The wheel will turn to find its index. It takes about a minute and cannot be used until it finishes.",
+  "Turn the carousel to find its index and relearn the slot positions. Needed after a firmware update.": "Turn the carousel to find its index and relearn the slot positions. Needed after a firmware update.",
+  "Calibrating the filter wheel": "Calibrating the filter wheel",
+  "Filter wheel calibration failed": "Filter wheel calibration failed"
 }
