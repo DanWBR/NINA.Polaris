@@ -190,6 +190,25 @@ public sealed class NcnnInferenceService : IDisposable {
         return null;
     }
 
+    /// <summary>Run a single background-extraction tile in process, for the
+    /// live-stack corrector, which owns the frame-sized arithmetic itself and
+    /// only needs the forward pass. Returns null when no model resolves.
+    ///
+    /// The whole-frame entry (<c>Run</c>) stays for Studio and the batch path.
+    /// This one exists because a live session recomputes the background every N
+    /// frames and corrects every frame, so the two halves run at different
+    /// rates.</summary>
+    internal float[]? RunBgeTile(float[] nhwcTensor, int tile, string? aiVersion,
+                                 out string version) {
+        version = "";
+        var resolved = ResolveModel("bge", aiVersion);
+        if (resolved == null) return null;
+        var session = GetSession(resolved.Value.paramPath);
+        if (session.TileSize != tile) return null;
+        version = resolved.Value.version;
+        return session.RunTile(nhwcTensor);
+    }
+
     private NcnnSession GetSession(string paramPath) {
         return _sessions.GetOrAdd(paramPath, p => {
             _logger.LogInformation("Loading ncnn model {Path}", p);

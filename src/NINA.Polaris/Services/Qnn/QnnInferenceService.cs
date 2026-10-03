@@ -335,6 +335,27 @@ public sealed class QnnInferenceService {
             sw.Elapsed.TotalMilliseconds, totalTiles, version);
     }
 
+    /// <summary>Run a single background-extraction tile in process, for the
+    /// live-stack corrector, which owns the frame-sized arithmetic itself and
+    /// only needs the forward pass. Returns null when no model resolves.
+    ///
+    /// The whole-frame entry (<c>Run</c>) stays for Studio and the batch path.
+    /// This one exists because a live session recomputes the background every N
+    /// frames and corrects every frame, so the two halves run at different
+    /// rates.</summary>
+    internal float[]? RunBgeTile(float[] nhwcTensor, int tile, string? aiVersion,
+                                 out string version) {
+        version = "";
+        if (tile != Tile) return null;
+        var resolved = ResolveModel("bge", aiVersion);
+        if (resolved == null) return null;
+        using var batch = _batchFactory(resolved.Value.binPath, Tile, ModelChannels);
+        var outputs = batch.RunBatch(new[] { nhwcTensor });
+        if (outputs == null || outputs.Length != 1) return null;
+        version = resolved.Value.version;
+        return outputs[0];
+    }
+
     /// <summary>Run the shared GraXpert pipeline with the given tile runner.</summary>
     private static ushort[] RunPipeline(IRknnTileRunner runner, BaseImageData img,
                                         GraXpertOptions opts, int channels, string version,

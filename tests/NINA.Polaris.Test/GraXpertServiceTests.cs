@@ -46,6 +46,33 @@ public class GraXpertServiceTests {
         _gx = new GraXpertService(config, _profile, NullLogger<GraXpertService>.Instance);
     }
 
+    // --- The forward pass on its own ---------------------------------
+
+    /// <summary>With no accelerator in the process, the live-stack path has to
+    /// say so plainly rather than fall back to the CLI.
+    ///
+    /// The GraXpert CLI is excluded from this entry on purpose: it costs
+    /// seconds per frame, which is fine for a file in Studio and ruinous inside
+    /// a capture loop, so a live session would rather stack an uncorrected sub
+    /// and count it. Every development box and every Raspberry Pi takes this
+    /// path, so it is the common case, not an edge one.</summary>
+    [Test]
+    public void WithNoAccelerator_TheForwardPassIsUnavailableRatherThanSlow() {
+        Assert.Multiple(() => {
+            Assert.That(_gx.CanRunBgeTile(), Is.False);
+            Assert.That(_gx.RunBgeTile(new float[256 * 256 * 3]), Is.Null,
+                "no lane served it, and it must not have reached for the CLI");
+        });
+    }
+
+    /// <summary>And it does not throw into the caller: this runs detached from
+    /// the frame that asked for it, so an exception here would be lost and the
+    /// sub would be gone with it.</summary>
+    [Test]
+    public void TheForwardPass_DoesNotThrowOnAnEmptyTensor() {
+        Assert.That(() => _gx.RunBgeTile(Array.Empty<float>(), 256), Throws.Nothing);
+    }
+
     // --- Output naming ----------------------------------------------
 
     [Test]
