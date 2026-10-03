@@ -1147,6 +1147,11 @@ public class EquipmentManager : IDisposable {
             // (EffectiveFilterWheel) and only pushing into the driver when it
             // accepts them. So the edit surface is offered whenever a wheel is
             // connected, not just for INDI's writable FILTER_NAME vector.
+            var fwBackend = (FilterWheel as EffectiveFilterWheel)?.Inner as NINA.INDI.Devices.IndiFilterWheel;
+            var fwRange = fwBackend?.SlotRange ?? (0, 0);
+            var fwNames = FilterWheel.FilterNames ?? Array.Empty<string>();
+            var fwVerdict = FilterWheelHealth.Judge(
+                FilterWheel.Position, fwRange.Min, fwRange.Max, fwNames.Length);
             status["filterWheel"] = new {
                 name = FilterWheel.DeviceName,
                 connected = FilterWheel.IsConnected,
@@ -1162,6 +1167,16 @@ public class EquipmentManager : IDisposable {
                             ?? FilterWheel.FilterNames.Length,
                 namesBeyondSlots = (FilterWheel as EffectiveFilterWheel)?.NamesBeyondSlots
                                    ?? Array.Empty<string>(),
+                // The driver's own slot range, and the two states where the
+                // number on screen would otherwise be a lie: a wheel that does
+                // not know where it is, and a slot count that disagrees with the
+                // names. Only INDI publishes a range; 0 means it did not say.
+                slotMin = fwRange.Min,
+                slotMax = fwRange.Max,
+                needsCalibration = fwVerdict.NeedsCalibration,
+                namesShortOfSlots = fwVerdict.NamesShortOfSlots,
+                healthMessage = fwVerdict.Message,
+                supportsCalibrate = fwBackend?.SupportsCalibration == true,
                 capabilities = new {
                     editNames = true
                 }

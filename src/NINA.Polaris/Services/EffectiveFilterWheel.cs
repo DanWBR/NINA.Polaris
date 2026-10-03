@@ -44,8 +44,11 @@ public sealed class EffectiveFilterWheel : IFilterWheel {
         _profiles = profiles;
     }
 
-    /// <summary>The wrapped backend, for code that legitimately needs the raw
-    /// driver (none today; kept for clarity).</summary>
+    /// <summary>The wrapped backend. Driver-level facts (the slot range a wheel
+    /// publishes, whether it offers a calibration) live on the concrete backend
+    /// and are not part of IFilterWheel, so a caller that needs them reaches
+    /// through here rather than this decorator growing a copy of every
+    /// backend's surface.</summary>
     public IFilterWheel Inner => _inner;
 
     // ── straight pass-through ────────────────────────────────────────

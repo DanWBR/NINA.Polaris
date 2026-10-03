@@ -5245,5 +5245,13 @@
   "Driver reports": "O driver reporta",
   "positions": "posicoes",
   "This rig has filters the wheel has no slot for, so they are not offered:": "Este rig tem filtros para os quais a roda nao tem slot, por isso eles nao aparecem:",
-  "The count comes from the wheel itself, through its driver. If it disagrees with the wheel on the telescope, power-cycle the wheel and recalibrate it; its own firmware is what reports the number.": "O numero vem da propria roda, atraves do driver. Se ele discordar da roda que esta no telescopio, desligue e religue a roda e recalibre: quem reporta esse numero e o firmware dela."
+  "The count comes from the wheel itself, through its driver. If it disagrees with the wheel on the telescope, power-cycle the wheel and recalibrate it; its own firmware is what reports the number.": "O numero vem da propria roda, atraves do driver. Se ele discordar da roda que esta no telescopio, desligue e religue a roda e recalibre: quem reporta esse numero e o firmware dela.",
+  "The wheel does not report a valid position, so it does not know where it is. Nothing it reports is reliable until it is calibrated, including how many slots it has.": "A roda nao reporta uma posicao valida, ou seja ela nao sabe onde esta. Nada que ela informa e confiavel ate ser calibrada, inclusive quantos slots ela tem.",
+  "The driver reports more slots than it published filter names for, so the list above is short. Reconnect the wheel; if it stays short, the driver's saved configuration is overriding the names and has to be purged.": "O driver reporta mais slots do que os nomes de filtro que publicou, por isso a lista acima esta curta. Reconecte a roda; se continuar curta, a configuracao salva do driver esta sobrepondo os nomes e precisa ser apagada.",
+  "Calibrate": "Calibrar",
+  "Calibrate the filter wheel?": "Calibrar a roda de filtros?",
+  "The wheel will turn to find its index. It takes about a minute and cannot be used until it finishes.": "A roda vai girar para achar o indice dela. Leva cerca de um minuto e nao pode ser usada ate terminar.",
+  "Turn the carousel to find its index and relearn the slot positions. Needed after a firmware update.": "Gira o carrossel para achar o indice e reaprender as posicoes dos slots. Necessario depois de atualizar o firmware.",
+  "Calibrating the filter wheel": "Calibrando a roda de filtros",
+  "Filter wheel calibration failed": "A calibracao da roda de filtros falhou"
 }

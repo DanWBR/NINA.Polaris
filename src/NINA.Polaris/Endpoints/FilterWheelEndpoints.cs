@@ -36,12 +36,37 @@ public static class FilterWheelEndpoints {
                             ?? equip.FilterWheel.FilterNames.Length,
                 namesBeyondSlots = (equip.FilterWheel as EffectiveFilterWheel)?.NamesBeyondSlots
                                    ?? Array.Empty<string>(),
+                slotMin = FwRange(equip).Min,
+                slotMax = FwRange(equip).Max,
+                needsCalibration = FwVerdict(equip).NeedsCalibration,
+                namesShortOfSlots = FwVerdict(equip).NamesShortOfSlots,
+                healthMessage = FwVerdict(equip).Message,
+                supportsCalibrate = FwBackend(equip)?.SupportsCalibration == true,
                 capabilities = new {
                     // FILTERNAME: renaming is profile-side now (EffectiveFilterWheel),
                     // so it's offered for every driver, not just INDI.
                     editNames = true
                 }
             });
+        });
+
+        // The wheel's own calibration (INDI FILTER_CALIBRATION). It turns the
+        // carousel to find its index, and it is the recovery for a wheel that
+        // does not know where it is, which is the state a firmware write leaves
+        // it in: on a ZWO EFW that also restores the real slot count. Takes the
+        // better part of a minute, during which the wheel is unusable, so the
+        // client confirms before calling this.
+        group.MapPost("/calibrate", async (EquipmentManager equip) => {
+            if (equip.FilterWheel == null)
+                return Results.BadRequest(new { error = "No filter wheel selected" });
+            var backend = FwBackend(equip);
+            if (backend == null || !backend.SupportsCalibration)
+                return Results.Problem("This filter wheel does not offer a calibration.",
+                    statusCode: 501);
+            try {
+                await backend.CalibrateAsync();
+                return Results.Ok(new { status = "calibrating" });
+            } catch (Exception ex) { return Results.Problem(ex.Message); }
         });
 
         // INDI FILTER_NAME push: rename slots from Polaris into the
@@ -209,6 +234,19 @@ public static class FilterWheelEndpoints {
 
     /// <summary>Body for PUT /names. Required field; Names.Length
     /// must equal the wheel's slot count (validated server-side).</summary>
+    private static NINA.INDI.Devices.IndiFilterWheel? FwBackend(EquipmentManager equip)
+        => (equip.FilterWheel as EffectiveFilterWheel)?.Inner as NINA.INDI.Devices.IndiFilterWheel;
+
+    private static (int Min, int Max) FwRange(EquipmentManager equip)
+        => FwBackend(equip)?.SlotRange ?? (0, 0);
+
+    private static FilterWheelHealth.Verdict FwVerdict(EquipmentManager equip) {
+        var range = FwRange(equip);
+        var names = equip.FilterWheel?.FilterNames ?? Array.Empty<string>();
+        return FilterWheelHealth.Judge(equip.FilterWheel?.Position ?? 0,
+            range.Min, range.Max, names.Length);
+    }
+
     public record FilterNamesRequest(string[] Names);
 
     /// <summary>Serialize a filter-focus-memory outcome for the wire (camelCase

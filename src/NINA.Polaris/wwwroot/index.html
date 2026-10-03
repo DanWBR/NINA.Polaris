@@ -8290,6 +8290,30 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                    x-show="(filterWheel.namesBeyondSlots || []).length > 0">
                                     <span x-text="$t('The count comes from the wheel itself, through its driver. If it disagrees with the wheel on the telescope, power-cycle the wheel and recalibrate it; its own firmware is what reports the number.')"></span>
                                 </p>
+                                <!-- A wheel that does not know where it is. Its own
+                                     firmware reports no valid position, and until it
+                                     is calibrated nothing it says is true, including
+                                     the slot count. This is the state a firmware
+                                     write leaves it in, and it reads as a dead wheel
+                                     unless something says otherwise. -->
+                                <div class="equip-detail-props text-danger"
+                                     x-show="filterWheel.needsCalibration">
+                                    <span x-text="$t(filterWheel.healthMessage)"></span>
+                                </div>
+                                <div class="equip-detail-props text-warn"
+                                     x-show="filterWheel.namesShortOfSlots">
+                                    <span x-text="$t(filterWheel.healthMessage)"></span>
+                                </div>
+                                <div class="control-row" x-show="filterWheel.supportsCalibrate"
+                                     style="margin-top:4px">
+                                    <button class="btn btn-sm"
+                                            :class="filterWheel.needsCalibration ? 'btn-danger' : ''"
+                                            :disabled="filterWheel.moving"
+                                            @click="calibrateFilterWheel()"
+                                            :title="$t('Turn the carousel to find its index and relearn the slot positions. Needed after a firmware update.')">
+                                        <span x-text="$t('Calibrate')"></span>
+                                    </button>
+                                </div>
                                 <div class="equip-filter-buttons" x-show="filterWheel.filters.length > 0">
                                     <template x-for="f in filterWheel.filters" :key="'fb-'+f">
                                         <button class="btn btn-sm" @click="setFilter(f)"
