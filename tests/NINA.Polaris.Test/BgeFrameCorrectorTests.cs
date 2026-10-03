@@ -123,8 +123,13 @@ public class BgeFrameCorrectorTests {
 
     /// <summary>Let the detached request settle. The producer completes on a
     /// thread pool thread, so the corrector only sees it on a later frame,
-    /// which is exactly the production behaviour.</summary>
-    private static void Settle() => Thread.Sleep(50);
+    /// which is exactly the production behaviour.
+    ///
+    /// Waits on the request rather than sleeping: a fixed sleep passed on an
+    /// idle machine and failed inside the full suite, where the thread pool is
+    /// busy and the adoption had not happened yet.</summary>
+    private static void Settle(BgeFrameCorrector c) =>
+        c.WaitForModelForTest(TimeSpan.FromSeconds(10));
 
     [Test]
     public void BeforeAnyModelArrives_FramesAreStackedUncorrectedAndCounted() {
@@ -152,7 +157,7 @@ public class BgeFrameCorrectorTests {
 
         c.Apply(frame, W, H, 1, 0, null);          // starts the request
         p.Complete(32, 0.0f);                       // a flat, zero background
-        Settle();
+        Settle(c);
 
         var r = c.Apply(frame, W, H, 1, 1, null);
 
@@ -174,7 +179,7 @@ public class BgeFrameCorrectorTests {
 
         c.Apply(frame, W, H, 1, 0, null);
         p.Complete(32, 0.0f);
-        Settle();
+        Settle(c);
 
         int corrected = 0;
         for (long i = 1; i <= 4; i++)
@@ -205,7 +210,7 @@ public class BgeFrameCorrectorTests {
         var dark = Gradient(W, H, 1);
         c.Apply(dark, W, H, 1, 0, null);
         p.Complete(32, 0.0f);
-        Settle();
+        Settle(c);
 
         var onDark = c.Apply(dark, W, H, 1, 1, null);
         // The moon comes up: the same gradient on a sky two tenths brighter.
@@ -229,7 +234,7 @@ public class BgeFrameCorrectorTests {
 
         c.Apply(Gradient(W, H, 1), W, H, 1, 0, null);
         p.Complete(32, 0.0f);
-        Settle();
+        Settle(c);
         Assert.That(c.Apply(Gradient(W, H, 1), W, H, 1, 1, null).Corrected, Is.True);
 
         // Binning changed under us: half the frame size.
@@ -247,7 +252,7 @@ public class BgeFrameCorrectorTests {
 
         c.Apply(Gradient(W, H, 1), W, H, 1, 0, "Ha");
         p.Complete(32, 0.0f);
-        Settle();
+        Settle(c);
         Assert.That(c.Apply(Gradient(W, H, 1), W, H, 1, 1, "Ha").Corrected, Is.True);
 
         var r = c.Apply(Gradient(W, H, 1), W, H, 1, 2, "OIII");
@@ -264,7 +269,7 @@ public class BgeFrameCorrectorTests {
 
         c.Apply(Gradient(W, H, 1), W, H, 1, 0, null);   // request for WxH
         p.Complete(32, 0.0f);                            // answer arrives...
-        Settle();
+        Settle(c);
 
         // ...but by now the frames are half the size.
         var r = c.Apply(Gradient(W / 2, H / 2, 1), W / 2, H / 2, 1, 1, null);
@@ -293,7 +298,7 @@ public class BgeFrameCorrectorTests {
 
         c.Apply(Gradient(W, H, 1), W, H, 1, 0, null);
         p.Fail();
-        Settle();
+        Settle(c);
         var r = c.Apply(Gradient(W, H, 1), W, H, 1, 1, null);
         p.WaitUntilRequests(2);   // tries again rather than latching off
 
@@ -310,7 +315,7 @@ public class BgeFrameCorrectorTests {
 
         c.Apply(Gradient(W, H, 1), W, H, 1, 0, null);
         p.CompleteWithNothing();
-        Settle();
+        Settle(c);
 
         Assert.That(c.Apply(Gradient(W, H, 1), W, H, 1, 1, null).Corrected, Is.False);
         Assert.That(c.Current, Is.Null);
@@ -322,7 +327,7 @@ public class BgeFrameCorrectorTests {
         var c = new BgeFrameCorrector(p) { RecomputeEveryFrames = 100, Tile = 32 };
         c.Apply(Gradient(W, H, 1), W, H, 1, 0, null);
         p.Complete(32, 0.0f);
-        Settle();
+        Settle(c);
         c.Apply(Gradient(W, H, 1), W, H, 1, 1, null);
 
         c.Reset();
@@ -344,7 +349,7 @@ public class BgeFrameCorrectorTests {
 
         c.Apply(flat, W, H, 1, 0, null);
         p.Complete(32, 0.0f);
-        Settle();
+        Settle(c);
         var r = c.Apply(flat, W, H, 1, 1, null);
 
         Assert.That(r.Corrected, Is.True);

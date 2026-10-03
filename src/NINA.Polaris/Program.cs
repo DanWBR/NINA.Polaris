@@ -662,6 +662,14 @@ builder.Services.AddSingleton<IndiPackageService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Storage.RcloneOAuthService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.External.SirilService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.External.GraXpertService>();
+// Per-frame background extraction during LIVE stacking. The host producer
+// runs the 256x256 model on whatever accelerator the board has; the client
+// producer parks one job for the operator's browser, which is the only path
+// that works on a board with no NPU and no Vulkan GPU. The router picks
+// between them per the rig's setting.
+builder.Services.AddSingleton<NINA.Polaris.Services.Bge.HostBgeModelProducer>();
+builder.Services.AddSingleton<NINA.Polaris.Services.Bge.ClientBgeModelProducer>();
+builder.Services.AddSingleton<NINA.Polaris.Services.Bge.BgeProducerRouter>();
 // Self-update (SBC .deb installs): checks GitHub releases + installs the new
 // .deb on request. AddHttpClient gives it an IHttpClientFactory.
 builder.Services.AddHttpClient();

@@ -90,6 +90,20 @@ public sealed class BgeFrameCorrector {
     /// session, before any model has come back.</summary>
     public int FramesUncorrected { get; private set; }
 
+    /// <summary>Test seam: block until the outstanding request has finished.
+    /// The request deliberately runs on the thread pool (a host producer makes a
+    /// blocking P/Invoke, which must not happen on the frame's thread), so a
+    /// test that sleeps a fixed interval instead of waiting is a race: it passes
+    /// alone and fails in a loaded suite.</summary>
+    internal void WaitForModelForTest(TimeSpan timeout) {
+        Task<float[]?>? task;
+        lock (_lock) task = _inFlight;
+        if (task == null) return;
+        // A faulted request is an outcome like any other here: the corrector
+        // handles it on the next frame, so the wait must not rethrow it.
+        try { task.Wait(timeout); } catch { }
+    }
+
     /// <summary>Forget the model. Called when the session restarts, or when the
     /// operator changes something the gradient depends on.</summary>
     public void Reset() {
