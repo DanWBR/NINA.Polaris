@@ -703,8 +703,14 @@ public class LiveStackingService {
     /// "npu-qnn", "gpu-ncnn"), or null if it has not served one.</summary>
     public string? BgeHostLane => _bgeRouter?.HostLane;
 
-    /// <summary>How many frames old the background in hand is, and how long its
-    /// forward pass took. Zero and null before the first model arrives.</summary>
+    /// <summary>How many frames old the background in hand is, and how long the
+    /// model took. Zero and null before the first one arrives.
+    ///
+    /// On the client path this is the whole round trip, which includes the
+    /// browser noticing the job, so it is several seconds while the forward pass
+    /// itself is tens of milliseconds. The browser reports its own pass to the
+    /// status line; this number is what the session actually waited for, except
+    /// that the session never waits, which is the point.</summary>
     public int BgeBackgroundAgeFrames { get; private set; }
     public double? BgeLastInferenceMs => _bgeCorrector?.Current?.ElapsedMs;
 
@@ -790,14 +796,12 @@ public class LiveStackingService {
             var res = corrector.Apply(data, props.Width, props.Height, channels: 1,
                 frameIndex: _frameCount + 1, filter: filter);
             BgeBackgroundAgeFrames = res.BackgroundAgeFrames;
-            if (res.Corrected) {
-                PreProcStatus.RecordServerBge(ok: true, error: null);
-            } else {
-                PreProcStatus.RecordServerBge(ok: false,
-                    error: _bgeRouter.CanRun
-                        ? "waiting for the first background model"
-                        : "no background model path is available");
-            }
+            // A sub with no model yet is counted, not reported: it is the
+            // ordinary start of a session, and LastBgeError never clears, so a
+            // benign message here would sit in the red row all night.
+            PreProcStatus.RecordServerBge(res.Corrected,
+                res.Corrected || _bgeRouter.CanRun
+                    ? null : "no background model path is available");
             return res.Pixels;
         } catch (Exception ex) {
             _logger.LogWarning(ex, "Live-stack background extraction error on frame {N}",

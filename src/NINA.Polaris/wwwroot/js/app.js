@@ -31153,6 +31153,7 @@ function ninaApp() {
             const where = bge?.whereSetting || 'Auto';
             // 'Host' means host: do not make this tab a candidate, so Auto's
             // fallback cannot quietly become the operator's explicit choice.
+            const wasWant = this._bge.want;
             const want = !!(bge?.enabled && ls?.isRunning && where !== 'Host'
                             && window.OnnxRegistry?.runBgeTensor);
             this._bge.want = want;
@@ -31161,7 +31162,11 @@ function ninaApp() {
                 return;
             }
             // A job is already waiting: go now instead of at the next beat.
-            if (bge.jobPending && !this._bge.busy) this._bgeArm(0);
+            // So is the first poll of a session: the host cannot ask this tab
+            // for anything until it has seen one, so waiting out a heartbeat
+            // costs the first few subs their correction (measured: four subs
+            // at a 2 s exposure against an 8 s beat).
+            if (!this._bge.busy && (bge.jobPending || !wasWant)) this._bgeArm(0);
             else if (!this._bge.timer && !this._bge.busy) this._bgeArm(this._bgeHeartbeatMs);
         },
 

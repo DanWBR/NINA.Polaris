@@ -2509,6 +2509,24 @@
      * the session affordable on a phone, and more than enough for a background
      * model that is about to be box-blurred and upsampled.
      */
+    // The manifest registers the GraXpert background models as
+    // "graxpert-1.0.1" and "graxpert-1.0.1-fp16" (plus a Polaris-trained
+    // "polaris-1.0.0"), so a bare "1.0.1" matches nothing. That same prefix
+    // mismatch is what kept the host accelerator lanes dead for months while
+    // looking like missing hardware, so resolve against the manifest here
+    // instead of hardcoding a version.
+    //
+    // FP16 by preference: half the download (about 104 MB), which is what makes
+    // the session affordable on a phone, and more than enough for a background
+    // model that is about to be box-blurred and upsampled.
+    async function resolveLiveBgeVersion() {
+        const m = await fetchManifest();
+        const have = (m.models || []).filter(x => x.family === 'bge').map(x => x.version);
+        const pick = (re) => have.find(v => re.test(v));
+        return pick(/^graxpert-1\.0\.1-fp16$/) || pick(/1\.0\.1.*fp16/) || pick(/fp16/)
+            || pick(/1\.0\.1/) || have[0] || '1.0.1';
+    }
+
     async function runBgeTensor(tensorData, tile, opts = {}) {
         const TILE = tile || 256;
         const want = TILE * TILE * 3;
@@ -2518,7 +2536,7 @@
         }
         const data = (tensorData instanceof Float32Array)
             ? tensorData : new Float32Array(tensorData);
-        const version = opts.version || await preferFp16('bge', '1.0.1');
+        const version = opts.version || await resolveLiveBgeVersion();
         const session = await loadSession('bge', version, opts.onProgress, opts.useGpu);
         const ort = await loadOrtWeb();
         const inputName = session.inputNames[0];    // "gen_input_image"
