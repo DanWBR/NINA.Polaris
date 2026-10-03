@@ -137,7 +137,11 @@ public sealed class NcnnInferenceService : IDisposable {
         return true;
     }
 
-    private (string paramPath, string version)? ResolveModel(string family, string? requestedVersion) {
+    /// <remarks>internal so a test can exercise the lookup against a model
+    /// tree on disk: the native probe that CanHandle checks first is not
+    /// available on a dev box, and the lookup is where BGE silently
+    /// missed.</remarks>
+    internal (string paramPath, string version)? ResolveModel(string family, string? requestedVersion) {
         // Exact requested version, if compatible and it has a converted model.
         if (!string.IsNullOrEmpty(requestedVersion)) {
             var exact = _registry.Find(family, requestedVersion);
@@ -174,11 +178,35 @@ public sealed class NcnnInferenceService : IDisposable {
         var familyDir = Path.GetDirectoryName(versionDir);
         var root = familyDir != null ? Path.GetDirectoryName(familyDir) : null;
         if (root != null) {
-            var parallel = Path.Combine(root, "ncnn",
-                Path.GetFileName(familyDir!), Path.GetFileName(versionDir), "model.ncnn.param");
-            if (File.Exists(parallel)) return parallel;
+            // See OnnxModelRegistry.VersionDirCandidates: the ONNX and converted
+            // trees disagree about the source prefix.
+            foreach (var v in Onnx.OnnxModelRegistry.VersionDirCandidates(
+                         Path.GetFileName(versionDir))) {
+                var parallel = Path.Combine(root, "ncnn",
+                    Path.GetFileName(familyDir!), v, "model.ncnn.param");
+                if (File.Exists(parallel)) return parallel;
+            }
         }
         return null;
+    }
+
+    /// <summary>Run a single background-extraction tile in process, for the
+    /// live-stack corrector, which owns the frame-sized arithmetic itself and
+    /// only needs the forward pass. Returns null when no model resolves.
+    ///
+    /// The whole-frame entry (<c>Run</c>) stays for Studio and the batch path.
+    /// This one exists because a live session recomputes the background every N
+    /// frames and corrects every frame, so the two halves run at different
+    /// rates.</summary>
+    internal float[]? RunBgeTile(float[] nhwcTensor, int tile, string? aiVersion,
+                                 out string version) {
+        version = "";
+        var resolved = ResolveModel("bge", aiVersion);
+        if (resolved == null) return null;
+        var session = GetSession(resolved.Value.paramPath);
+        if (session.TileSize != tile) return null;
+        version = resolved.Value.version;
+        return session.RunTile(nhwcTensor);
     }
 
     private NcnnSession GetSession(string paramPath) {

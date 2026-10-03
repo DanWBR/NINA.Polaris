@@ -145,6 +145,25 @@ public sealed class RknnInferenceService : IDisposable {
             sw.Elapsed.TotalMilliseconds, tiles, version);
     }
 
+    /// <summary>Run a single background-extraction tile in process, for the
+    /// live-stack corrector, which owns the frame-sized arithmetic itself and
+    /// only needs the forward pass. Returns null when no model resolves.
+    ///
+    /// The whole-frame entry (<c>Run</c>) stays for Studio and the batch path.
+    /// This one exists because a live session recomputes the background every N
+    /// frames and corrects every frame, so the two halves run at different
+    /// rates.</summary>
+    internal float[]? RunBgeTile(float[] nhwcTensor, int tile, string? aiVersion,
+                                 out string version) {
+        version = "";
+        var resolved = ResolveModel("bge", aiVersion);
+        if (resolved == null) return null;
+        var session = GetSession(resolved.Value.rknnPath);
+        if (session.TileSize != tile) return null;
+        version = resolved.Value.version;
+        return session.RunTile(nhwcTensor);
+    }
+
     // ─── helpers ────────────────────────────────────────────────────────
 
     private static bool TryFamily(GraXpertOperation op, out string family) {
@@ -160,7 +179,11 @@ public sealed class RknnInferenceService : IDisposable {
     /// requested version when it has a sibling .rknn; otherwise scans every
     /// registered version of the family (newest first) for one that does.
     /// </summary>
-    private (string rknnPath, string version)? ResolveModel(string family, string? requestedVersion) {
+    /// <remarks>internal so a test can exercise the lookup against a model
+    /// tree on disk: the native probe that CanHandle checks first is not
+    /// available on a dev box, and the lookup is where BGE silently
+    /// missed.</remarks>
+    internal (string rknnPath, string version)? ResolveModel(string family, string? requestedVersion) {
         // Exact requested version, if its dir actually has a .rknn.
         if (!string.IsNullOrEmpty(requestedVersion)) {
             var exact = _registry.Find(family, requestedVersion);
@@ -200,9 +223,14 @@ public sealed class RknnInferenceService : IDisposable {
         var familyDir = Path.GetDirectoryName(versionDir);
         var root = familyDir != null ? Path.GetDirectoryName(familyDir) : null;
         if (root != null) {
-            var parallel = Path.Combine(root, "rknn",
-                Path.GetFileName(familyDir!), Path.GetFileName(versionDir), "model.rknn");
-            if (File.Exists(parallel)) return parallel;
+            // The converted tree is named by a different hand than the ONNX one,
+            // so try the version with and without its source prefix.
+            foreach (var v in Onnx.OnnxModelRegistry.VersionDirCandidates(
+                         Path.GetFileName(versionDir))) {
+                var parallel = Path.Combine(root, "rknn",
+                    Path.GetFileName(familyDir!), v, "model.rknn");
+                if (File.Exists(parallel)) return parallel;
+            }
         }
         return null;
     }

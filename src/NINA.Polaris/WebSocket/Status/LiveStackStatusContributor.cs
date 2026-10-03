@@ -13,6 +13,7 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using NINA.Polaris.Services;
+using NINA.Polaris.Services.Bge;
 
 namespace NINA.Polaris.WebSocket.Status;
 
@@ -26,12 +27,16 @@ public sealed class LiveStackStatusContributor : IStatusContributor {
     private readonly LiveStackTriggersService _liveStackTriggers;
     private readonly ProfileService _profile;
     private readonly RefocusSuggestionService _refocusSuggest;
+    // The browser polls for background-model work, so the status block has to
+    // say when there is any; otherwise a tab would poll blindly all night.
+    private readonly ClientBgeModelProducer? _clientBge;
 
-    public LiveStackStatusContributor(LiveStackingService liveStack, LiveStackTriggersService liveStackTriggers, ProfileService profile, RefocusSuggestionService refocusSuggest) {
+    public LiveStackStatusContributor(LiveStackingService liveStack, LiveStackTriggersService liveStackTriggers, ProfileService profile, RefocusSuggestionService refocusSuggest, ClientBgeModelProducer? clientBge = null) {
         _liveStack = liveStack;
         _liveStackTriggers = liveStackTriggers;
         _profile = profile;
         _refocusSuggest = refocusSuggest;
+        _clientBge = clientBge;
     }
 
     public IReadOnlyCollection<string> Keys { get; } = new[] { "liveStack" };
@@ -147,7 +152,20 @@ public sealed class LiveStackStatusContributor : IStatusContributor {
                         framesFallback = liveStack.PreProcStatus.FramesBgeFallback,
                         lastError = liveStack.PreProcStatus.LastBgeError,
                         smoothing = profile.ActiveEquipmentProfile?.LiveStackPreProcessing?.BgeSmoothing ?? 1.0,
-                        correction = profile.ActiveEquipmentProfile?.LiveStackPreProcessing?.BgeCorrection ?? "Subtraction"
+                        correction = profile.ActiveEquipmentProfile?.LiveStackPreProcessing?.BgeCorrection ?? "Subtraction",
+                        // Where the model is computed, and the cadence working:
+                        // the age in frames cycles 0 to N, the inference time is
+                        // the last forward pass, and framesUncorrected counts the
+                        // subs that went in with their gradient.
+                        whereSetting = profile.ActiveEquipmentProfile?.LiveStackPreProcessing?.BgeWhere ?? "Auto",
+                        whereChosen = liveStack.BgeWhereChosen,
+                        hostLane = liveStack.BgeHostLane,
+                        recomputeEveryFrames = profile.ActiveEquipmentProfile?.LiveStackPreProcessing?.BgeRecomputeEveryFrames ?? 10,
+                        backgroundAgeFrames = liveStack.BgeBackgroundAgeFrames,
+                        lastInferenceMs = liveStack.BgeLastInferenceMs,
+                        framesUncorrected = liveStack.BgeFramesUncorrected,
+                        // The browser's cue to come and collect a tensor.
+                        jobPending = _clientBge?.JobPending ?? false
                     }
                 }
             };

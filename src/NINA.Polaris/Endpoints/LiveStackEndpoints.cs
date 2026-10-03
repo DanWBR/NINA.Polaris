@@ -14,6 +14,7 @@
 
 using NINA.Image.ImageData;
 using NINA.Polaris.Services;
+using NINA.Polaris.Services.Bge;
 
 namespace NINA.Polaris.Endpoints;
 
@@ -303,6 +304,56 @@ public static class LiveStackEndpoints {
                 preProc.Reset();
                 return Results.Ok(new { saved = true });
             });
+
+        // ----- Background extraction: one 256x256 job for the browser -----
+        //
+        // The host downsamples the frame to the model window and parks the
+        // tensor here; the browser runs the forward pass on its GPU through ORT
+        // Web and posts the answer back. Everything frame-sized, the upsample
+        // and the correction included, stays on the host, so what crosses the
+        // network is 256x256x3 floats each way: about 768 KB, the same for a
+        // guide camera and a 61 MP sensor.
+        //
+        // Raw float32 rather than JSON, which would be three times the size and
+        // would have to be parsed per element. All supported hosts and clients
+        // are little-endian (x64 and arm64), which is what lets both sides use
+        // a plain Float32Array view over the buffer.
+        //
+        // This is deliberately much smaller than the client-driven stacking
+        // that was removed in August: no capability handshake, no watchdog, no
+        // mode evaluator. The host owns the stack throughout and never waits
+        // for an answer, so a tab that closes mid-job costs one uncorrected
+        // sub, counted.
+        group.MapGet("/bge/job", (ClientBgeModelProducer client, HttpResponse res) => {
+            if (!client.TryTakeJob(out var id, out var tensor, out var tile)) {
+                // 204 is also the heartbeat's answer. Asking is what tells the
+                // host a browser is there to ask, so an empty poll is useful.
+                return Results.NoContent();
+            }
+            res.Headers["X-Bge-Job-Id"] = id;
+            res.Headers["X-Bge-Tile"] = tile.ToString();
+            var bytes = new byte[tensor.Length * sizeof(float)];
+            Buffer.BlockCopy(tensor, 0, bytes, 0, bytes.Length);
+            return Results.Bytes(bytes, "application/octet-stream");
+        });
+
+        group.MapPost("/bge/job/{id}", async (string id, ClientBgeModelProducer client,
+                                              HttpRequest req) => {
+            using var ms = new MemoryStream();
+            await req.Body.CopyToAsync(ms);
+            var bytes = ms.ToArray();
+            if (bytes.Length == 0 || bytes.Length % sizeof(float) != 0) {
+                return Results.BadRequest(new { error = "expected raw float32 model output" });
+            }
+            var output = new float[bytes.Length / sizeof(float)];
+            Buffer.BlockCopy(bytes, 0, output, 0, bytes.Length);
+            // A refusal is not an error worth escalating: it means the job
+            // expired while the browser was working, and the host has already
+            // moved on. The browser just stops and waits for the next one.
+            return client.TryCompleteJob(id, output)
+                ? Results.Ok(new { accepted = true })
+                : Results.Ok(new { accepted = false, reason = "job is no longer outstanding" });
+        });
 
         // ----- REFSUG-1: dismiss the refocus suggestion -----
         //

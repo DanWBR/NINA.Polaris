@@ -335,6 +335,27 @@ public sealed class QnnInferenceService {
             sw.Elapsed.TotalMilliseconds, totalTiles, version);
     }
 
+    /// <summary>Run a single background-extraction tile in process, for the
+    /// live-stack corrector, which owns the frame-sized arithmetic itself and
+    /// only needs the forward pass. Returns null when no model resolves.
+    ///
+    /// The whole-frame entry (<c>Run</c>) stays for Studio and the batch path.
+    /// This one exists because a live session recomputes the background every N
+    /// frames and corrects every frame, so the two halves run at different
+    /// rates.</summary>
+    internal float[]? RunBgeTile(float[] nhwcTensor, int tile, string? aiVersion,
+                                 out string version) {
+        version = "";
+        if (tile != Tile) return null;
+        var resolved = ResolveModel("bge", aiVersion);
+        if (resolved == null) return null;
+        using var batch = _batchFactory(resolved.Value.binPath, Tile, ModelChannels);
+        var outputs = batch.RunBatch(new[] { nhwcTensor });
+        if (outputs == null || outputs.Length != 1) return null;
+        version = resolved.Value.version;
+        return outputs[0];
+    }
+
     /// <summary>Run the shared GraXpert pipeline with the given tile runner.</summary>
     private static ushort[] RunPipeline(IRknnTileRunner runner, BaseImageData img,
                                         GraXpertOptions opts, int channels, string version,
@@ -361,7 +382,11 @@ public sealed class QnnInferenceService {
 
     /// <summary>Resolve a context binary for a family: exact requested version
     /// first, else newest registered version that has a matching-arch <c>.bin</c>.</summary>
-    private (string binPath, string version)? ResolveModel(string family, string? requestedVersion) {
+    /// <remarks>internal so a test can exercise the lookup against a model
+    /// tree on disk: the native probe that CanHandle checks first is not
+    /// available on a dev box, and the lookup is where BGE silently
+    /// missed.</remarks>
+    internal (string binPath, string version)? ResolveModel(string family, string? requestedVersion) {
         if (!string.IsNullOrEmpty(requestedVersion)) {
             var exact = _registry.Find(family, requestedVersion);
             if (exact != null) {
@@ -395,9 +420,15 @@ public sealed class QnnInferenceService {
         var root = familyDir != null ? Path.GetDirectoryName(familyDir) : null;
         if (root == null) return null;
 
-        var qnnDir = Path.Combine(root, "qnn",
-            Path.GetFileName(familyDir!), Path.GetFileName(versionDir));
-        if (!Directory.Exists(qnnDir)) return null;
+        // See OnnxModelRegistry.VersionDirCandidates: the ONNX and converted
+        // trees disagree about the source prefix.
+        string? qnnDir = null;
+        foreach (var v in Onnx.OnnxModelRegistry.VersionDirCandidates(
+                     Path.GetFileName(versionDir))) {
+            var cand = Path.Combine(root, "qnn", Path.GetFileName(familyDir!), v);
+            if (Directory.Exists(cand)) { qnnDir = cand; break; }
+        }
+        if (qnnDir == null) return null;
 
         var matches = Directory.EnumerateFiles(qnnDir, "*.bin")
             .Where(f => Path.GetFileName(f).Contains(Arch, StringComparison.OrdinalIgnoreCase))

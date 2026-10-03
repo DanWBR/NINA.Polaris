@@ -615,7 +615,9 @@ public class ProfileService {
                 MasterBiasOverrideId  = src.LiveStackPreProcessing.MasterBiasOverrideId,
                 BgeEnabled            = src.LiveStackPreProcessing.BgeEnabled,
                 BgeSmoothing          = src.LiveStackPreProcessing.BgeSmoothing,
-                BgeCorrection         = src.LiveStackPreProcessing.BgeCorrection
+                BgeCorrection         = src.LiveStackPreProcessing.BgeCorrection,
+                BgeWhere              = src.LiveStackPreProcessing.BgeWhere,
+                BgeRecomputeEveryFrames = src.LiveStackPreProcessing.BgeRecomputeEveryFrames
             },
             // INDIROB-3: pre-connect delays follow the rig — different
             // setups (mini-PC vs Pi, USB hub topology, ESP32 vs FTDI

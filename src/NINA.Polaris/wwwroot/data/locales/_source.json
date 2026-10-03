@@ -4633,5 +4633,17 @@
   "The wheel will turn to find its index. It takes about a minute and cannot be used until it finishes.": "The wheel will turn to find its index. It takes about a minute and cannot be used until it finishes.",
   "Turn the carousel to find its index and relearn the slot positions. Needed after a firmware update.": "Turn the carousel to find its index and relearn the slot positions. Needed after a firmware update.",
   "Calibrating the filter wheel": "Calibrating the filter wheel",
-  "Filter wheel calibration failed": "Filter wheel calibration failed"
+  "Filter wheel calibration failed": "Filter wheel calibration failed",
+  "Compute the model on": "",
+  "Recompute every": "",
+  "The gradient barely moves between subs, so the model runs once every few frames while every sub is still corrected.": "",
+  "corrected · ⚠": "",
+  "stacked with their gradient": "",
+  "This browser": "",
+  "Model runs": "",
+  "on the host": "",
+  "in this browser": "",
+  "nowhere available": "",
+  "background age": "",
+  "Background extraction has nowhere to run right now. It needs an accelerator on the host (an NPU, or a GPU through Vulkan), or a browser tab open to run the model in. Subs keep stacking with their gradient and are counted.": ""
 }

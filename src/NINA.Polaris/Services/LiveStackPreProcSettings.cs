@@ -46,11 +46,24 @@ public class LiveStackPreProcSettings {
     /// available. Null = auto-match by gain.</summary>
     public int? MasterBiasOverrideId { get; set; }
 
-    /// <summary>When true, run GraXpert BGE on every frame BEFORE adding it to
-    /// the stack, using whichever backend (CLI, or RK3588 NPU) is installed on
-    /// the host. No-ops when neither is available; the UI banner explains
-    /// why.</summary>
+    /// <summary>When true, every frame is corrected for its background before
+    /// it goes into the stack. The background model runs on the host's
+    /// accelerator or in the operator's browser, per <see cref="BgeWhere"/>;
+    /// when neither can serve it, subs are stacked with their gradient and
+    /// counted, and the session carries on.</summary>
     public bool BgeEnabled { get; set; } = false;
+
+    /// <summary>Where the background model is computed: "Auto", "Host" or
+    /// "Client". Auto prefers an accelerator in this process and falls back to
+    /// the browser, which is the only path that works on a board with no NPU
+    /// and no Vulkan GPU.</summary>
+    public string BgeWhere { get; set; } = "Auto";
+
+    /// <summary>How many frames one background model serves. The gradient is
+    /// optics plus sky in sensor coordinates and barely moves between subs, so
+    /// every sub is still corrected while the model runs once every N frames.
+    /// 1 means infer on every frame.</summary>
+    public int BgeRecomputeEveryFrames { get; set; } = 10;
 
     /// <summary>BGE smoothing parameter [0.0, 1.0]. Default 1.0
     /// matches the FILES tab + AutoGraXpert default.</summary>

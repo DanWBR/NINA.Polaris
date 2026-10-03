@@ -21,6 +21,7 @@ using NINA.Image.ImageAnalysis;
 using NINA.Image.ImageData;
 using NINA.Image.Interfaces;
 using NINA.Image.FileFormat.FITS;
+using NINA.Polaris.Services.Bge;
 using NINA.Polaris.Services.External;
 
 namespace NINA.Polaris.Services;
@@ -681,27 +682,56 @@ public class LiveStackingService {
     // alignment-based auto-detect (B1) still handles a flip on its own.
     private readonly EquipmentManager? _equipment;
     private readonly MeridianFlipService? _meridian;
-    // Optional GraXpert backend for server-side BGE in Full stack mode.
+    // Optional GraXpert backend, still used by the FILES tab's file-oriented
+    // operations. The per-frame background path no longer goes through it.
     private readonly GraXpertService? _graxpert;
-    // Latches when GraXpert (CLI + NPU) is absent so we stop retrying BGE
-    // every frame and don't spam the log; reset on Reset().
-    private bool _serverBgeUnavailable;
+    // Where a per-frame background model gets computed: an accelerator in this
+    // process, or the operator's browser. Null in the unit-test doubles, which
+    // construct without DI; BGE is then simply off.
+    private readonly BgeProducerRouter? _bgeRouter;
+    // Created on the first frame that wants a background and kept for the
+    // session, because it owns the current model and the recompute cadence.
+    private BgeFrameCorrector? _bgeCorrector;
     public LiveStackPreProcStatus PreProcStatus { get; } = new();
 
     /// <summary>
-    /// Whether BGE can run with the current setup — computed live (so the LIVE
-    /// settings panel reflects it even while idle, not just mid-stack). True
-    /// when the stack is computed client-side (the browser runs GraXpert ONNX
-    /// over a GraXpert backend on the host (CLI or RK3588 NPU). A host with no
-    /// GraXpert at all reports false.
+    /// Whether a background model can be computed right now, read live so the
+    /// LIVE settings panel is right while idle and not just mid-stack.
+    ///
+    /// True when the chosen path can serve a request: an accelerator in this
+    /// process (Rockchip NPU, Hexagon, or a Vulkan GPU through ncnn), or a
+    /// browser that is polling for work. False is a legitimate state and not an
+    /// error: on a board with no accelerator and no tab open, subs are stacked
+    /// with their gradient and counted.
+    ///
+    /// The GraXpert CLI is deliberately not a path here. It is the right
+    /// fallback for a file in Studio and the wrong one inside a capture loop,
+    /// where it costs seconds to tens of seconds of a session per sub.
     /// </summary>
-    public bool BgeSupported {
-        get {
-            return _graxpert != null
-                   && (_graxpert.IsAvailable || _graxpert.NpuAvailable)
-                   && !_serverBgeUnavailable;                 // host CLI / NPU
-        }
-    }
+    public bool BgeSupported => _bgeRouter?.CanRun ?? false;
+
+    /// <summary>"host", "client" or "none": where a background model would be
+    /// computed right now. Reported rather than inferred, so Auto's decision is
+    /// visible instead of guessed at.</summary>
+    public string BgeWhereChosen => _bgeRouter?.Name ?? "none";
+
+    /// <summary>The accelerator the host path last used ("npu-rknn",
+    /// "npu-qnn", "gpu-ncnn"), or null if it has not served one.</summary>
+    public string? BgeHostLane => _bgeRouter?.HostLane;
+
+    /// <summary>How many frames old the background in hand is, and how long the
+    /// model took. Zero and null before the first one arrives.
+    ///
+    /// On the client path this is the whole round trip, which includes the
+    /// browser noticing the job, so it is several seconds while the forward pass
+    /// itself is tens of milliseconds. The browser reports its own pass to the
+    /// status line; this number is what the session actually waited for, except
+    /// that the session never waits, which is the point.</summary>
+    public int BgeBackgroundAgeFrames { get; private set; }
+    public double? BgeLastInferenceMs => _bgeCorrector?.Current?.ElapsedMs;
+
+    /// <summary>Subs stacked without a correction this session.</summary>
+    public int BgeFramesUncorrected => _bgeCorrector?.FramesUncorrected ?? 0;
 
     public LiveStackingService(ImageRelayService relay,
                                 ILogger<LiveStackingService> logger,
@@ -711,7 +741,8 @@ public class LiveStackingService {
                                 EquipmentManager? equipment = null,
                                 MeridianFlipService? meridian = null,
                                 IGpuCompute? gpu = null,
-                                GraXpertService? graxpert = null) {
+                                GraXpertService? graxpert = null,
+                                BgeProducerRouter? bgeRouter = null) {
         _relay = relay;
         _writer = writer;
         _logger = logger;
@@ -720,6 +751,7 @@ public class LiveStackingService {
         _equipment = equipment;
         _meridian = meridian;
         _graxpert = graxpert;
+        _bgeRouter = bgeRouter;
         // GPU compute is optional; null (and the test doubles) get the CPU path.
         _gpu = gpu ?? new CpuGpuCompute();
         // SNR-3: keep TargetSnr aligned with the active rig until the
@@ -739,53 +771,59 @@ public class LiveStackingService {
             };
         }
     }
-    /// <summary>Run GraXpert background extraction on one live-stack frame
-    /// (Full mode). Round-trips through a temp FITS because the GraXpert
-    /// backends (CLI + RK3588 NPU) work on files. Returns the BGE'd pixels, or
-    /// the input unchanged on any failure. Latches <see cref="_serverBgeUnavailable"/>
-    /// when no backend is installed so we don't retry + log every frame.</summary>
-    private async Task<ushort[]> ApplyServerBgeAsync(ushort[] data, ImageProperties props,
-            ImageMetaData meta, LiveStackPreProcSettings s, CancellationToken ct) {
-        var tmpIn = Path.Combine(Path.GetTempPath(), $"polaris_lsbge_{Guid.NewGuid():N}.fits");
-        string? tmpOut = null;
+    /// <summary>
+    /// Correct one frame for its background, and start a new model request when
+    /// one is due.
+    ///
+    /// The model is a fixed 256x256 window whatever the sensor, so it is small
+    /// enough to compute rarely and reuse: the gradient is optics plus sky in
+    /// sensor coordinates and barely moves between subs. Everything frame-sized
+    /// around it is plain arithmetic and stays here.
+    ///
+    /// This never waits for a producer. <c>AddFrameAsync</c> is awaited by the
+    /// capture loop, so a frame corrects with the model already in hand and
+    /// picks up a newer one when it arrives. Until the first one does, subs go
+    /// into the stack with their gradient and are counted.
+    ///
+    /// What it replaces: a full-frame FITS written to a temporary file, a
+    /// GraXpert subprocess (a venv Python interpreter on an SBC) and another
+    /// FITS read back, per sub. About 100 MB of file traffic on a 26 MP frame
+    /// before any inference began.
+    /// </summary>
+    private ushort[] ApplyBge(ushort[] data, ImageProperties props,
+                              LiveStackPreProcSettings settings, string? filter) {
+        if (_bgeRouter == null) return data;
+
+        _bgeRouter.Where = settings.BgeWhere switch {
+            "Host" => BgeWhere.Host,
+            "Client" => BgeWhere.Client,
+            _ => BgeWhere.Auto,
+        };
+
+        var corrector = _bgeCorrector ??= new BgeFrameCorrector(_bgeRouter, _logger);
+        corrector.RecomputeEveryFrames = Math.Max(1, settings.BgeRecomputeEveryFrames);
+        corrector.Correction = string.IsNullOrWhiteSpace(settings.BgeCorrection)
+            ? "Subtraction" : settings.BgeCorrection;
+
         try {
-            FITSWriter.Write(new BaseImageData(data, props, meta), tmpIn);
-            var opts = new GraXpertOptions(
-                Operation: GraXpertOperation.BackgroundExtraction,
-                Correction: string.IsNullOrWhiteSpace(s.BgeCorrection) ? "Subtraction" : s.BgeCorrection,
-                Smoothing: s.BgeSmoothing,
-                UseNpu: true);
-            var res = await _graxpert!.ProcessFrameAsync(tmpIn, opts, ct);
-            if (res.Error != null || string.IsNullOrEmpty(res.OutputPath) || !File.Exists(res.OutputPath)) {
-                if (res.Error != null && res.Error.Contains("not installed", StringComparison.OrdinalIgnoreCase)) {
-                    _serverBgeUnavailable = true;
-                    _logger.LogWarning("Live-stack server BGE unavailable (no GraXpert CLI / NPU); "
-                        + "disabling for this session. Install GraXpert on the host or use client-side stacking.");
-                } else {
-                    _logger.LogWarning("Live-stack server BGE failed for frame {N}: {Err}",
-                        _frameCount + 1, res.Error);
-                }
-                PreProcStatus.RecordServerBge(ok: false, error: res.Error);
-                return data;
-            }
-            tmpOut = res.OutputPath;
-            BaseImageData outImg;
-            using (var fs = File.OpenRead(tmpOut)) outImg = FITSReader.Read(fs);
-            if (outImg?.Data != null
-                    && outImg.Properties.Width == props.Width
-                    && outImg.Properties.Height == props.Height) {
-                PreProcStatus.RecordServerBge(ok: true, error: null);
-                return outImg.Data;
-            }
-            PreProcStatus.RecordServerBge(ok: false, error: "BGE output dimensions mismatch");
-            return data;
+            // Pre-debayer, so one plane: the mosaic. A background model wants
+            // the low-frequency sky, which survives the downsample to 256x256
+            // whether or not the CFA has been separated.
+            var res = corrector.Apply(data, props.Width, props.Height, channels: 1,
+                frameIndex: _frameCount + 1, filter: filter);
+            BgeBackgroundAgeFrames = res.BackgroundAgeFrames;
+            // A sub with no model yet is counted, not reported: it is the
+            // ordinary start of a session, and LastBgeError never clears, so a
+            // benign message here would sit in the red row all night.
+            PreProcStatus.RecordServerBge(res.Corrected,
+                res.Corrected || _bgeRouter.CanRun
+                    ? null : "no background model path is available");
+            return res.Pixels;
         } catch (Exception ex) {
-            _logger.LogWarning(ex, "Live-stack server BGE error on frame {N}", _frameCount + 1);
+            _logger.LogWarning(ex, "Live-stack background extraction error on frame {N}",
+                _frameCount + 1);
             PreProcStatus.RecordServerBge(ok: false, error: ex.Message);
             return data;
-        } finally {
-            try { File.Delete(tmpIn); } catch { }
-            try { if (tmpOut != null) File.Delete(tmpOut); } catch { }
         }
     }
 
@@ -899,7 +937,10 @@ public class LiveStackingService {
             // next frame re-resolves with the new filter/exposure/gain.
             _preProcessor?.Reset();
             PreProcStatus.Reset();
-            _serverBgeUnavailable = false;   // re-probe BGE backend next session
+            // Drop the background model: a new target, binning or filter means a
+        // different gradient, and reusing the old shape would bias the stack.
+        _bgeCorrector?.Reset();
+        BgeBackgroundAgeFrames = 0;
             _logger.LogInformation("Live stacking reset");
         }
         // MEMOPT: a session just released ~300+ MB of accumulators, scratch
@@ -1144,13 +1185,13 @@ public class LiveStackingService {
             }
         }
 
-        // Server-side BGE, so a Pi/SBC session still gets gradient
-        // removal. One BGE per exposure (GraXpert CLI, or the RK3588 NPU when
-        // present) is cheap at capture cadence. Honours the same BgeEnabled
-        // toggle; fully graceful (any failure feeds the un-BGE'd frame).
-        if (preProcSettings.BgeEnabled
-                && _graxpert != null && !_serverBgeUnavailable) {
-            data = await ApplyServerBgeAsync(data, props, imageData.MetaData, preProcSettings, ct);
+        // Background extraction, so a Bortle 8 session can see its target
+        // instead of the gradient. The model runs on the host's accelerator or
+        // in the operator's browser and is reused across several subs; the
+        // correction itself happens on every frame. Fully graceful: a frame
+        // with no model yet goes into the stack uncorrected and counted.
+        if (preProcSettings.BgeEnabled && _bgeRouter != null) {
+            data = ApplyBge(data, props, preProcSettings, imageData.MetaData?.FilterWheel?.Filter);
         }
 
         // HOTPX: per-sub cosmetic correction. Kill fixed hot/cold sensor pixels

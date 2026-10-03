@@ -2490,6 +2490,71 @@
         });
     }
 
+    /**
+     * Run ONE background-model forward pass on a tensor the HOST already built,
+     * for background extraction during live stacking.
+     *
+     * The host downsamples the sub to the model window and normalises it, then
+     * parks the 256x256x3 tensor as a job; this runs the pass and hands the
+     * answer back, and the host does the denormalise, the blur, the upsample and
+     * the correction. So what crosses the network is about 768 KB each way
+     * whatever the sensor, because the model window is fixed, and the
+     * frame-sized arithmetic never leaves the host.
+     *
+     * This is the only path that gives a board with no NPU and no Vulkan GPU a
+     * usable per-frame BGE: a browser has a GPU and ORT Web, and every other AI
+     * operation in this project already runs there.
+     *
+     * FP16 by preference: half the weights (about 104 MB), which is what makes
+     * the session affordable on a phone, and more than enough for a background
+     * model that is about to be box-blurred and upsampled.
+     */
+    // The manifest registers the GraXpert background models as
+    // "graxpert-1.0.1" and "graxpert-1.0.1-fp16" (plus a Polaris-trained
+    // "polaris-1.0.0"), so a bare "1.0.1" matches nothing. That same prefix
+    // mismatch is what kept the host accelerator lanes dead for months while
+    // looking like missing hardware, so resolve against the manifest here
+    // instead of hardcoding a version.
+    //
+    // FP16 by preference: half the download (about 104 MB), which is what makes
+    // the session affordable on a phone, and more than enough for a background
+    // model that is about to be box-blurred and upsampled.
+    async function resolveLiveBgeVersion() {
+        const m = await fetchManifest();
+        const have = (m.models || []).filter(x => x.family === 'bge').map(x => x.version);
+        const pick = (re) => have.find(v => re.test(v));
+        return pick(/^graxpert-1\.0\.1-fp16$/) || pick(/1\.0\.1.*fp16/) || pick(/fp16/)
+            || pick(/1\.0\.1/) || have[0] || '1.0.1';
+    }
+
+    async function runBgeTensor(tensorData, tile, opts = {}) {
+        const TILE = tile || 256;
+        const want = TILE * TILE * 3;
+        if (!tensorData || tensorData.length !== want) {
+            throw new Error('BGE tensor must be ' + want + ' float32 values, got '
+                + (tensorData ? tensorData.length : 0));
+        }
+        const data = (tensorData instanceof Float32Array)
+            ? tensorData : new Float32Array(tensorData);
+        const version = opts.version || await resolveLiveBgeVersion();
+        const session = await loadSession('bge', version, opts.onProgress, opts.useGpu);
+        const ort = await loadOrtWeb();
+        const inputName = session.inputNames[0];    // "gen_input_image"
+        const outputName = session.outputNames[0];
+        const t0 = performance.now();
+        const out = await session.run({
+            [inputName]: new ort.Tensor('float32', data, [1, TILE, TILE, 3])
+        });
+        const inferenceMs = performance.now() - t0;
+        const raw = out[outputName].data;
+        return {
+            output: (raw instanceof Float32Array) ? raw : new Float32Array(raw),
+            inferenceMs,
+            version,
+            backend: window.OnnxRegistry?.__lastBackend || null
+        };
+    }
+
     // ─── Public API ─────────────────────────────────────────────────
     window.OnnxRegistry = {
         loadOrtWeb,
@@ -2510,5 +2575,7 @@
         UpscalePipeline,
         // One-shot runner with post-run memory reclaim (WASM backend).
         runOneShot,
+        // One forward pass on a tensor the host built (live-stack BGE).
+        runBgeTensor,
     };
 })();

@@ -36,76 +36,22 @@ internal static class RknnPipelines {
     /// R then G then B). Returns the corrected image and, when requested, the
     /// modelled background in source brightness space.
     /// </summary>
+    /// <remarks>The body now lives in <see cref="Bge.BgeTensor"/> and
+    /// <see cref="Bge.BgeApply"/>, with only the forward pass left here. The
+    /// split is what lets the model run somewhere other than this process (the
+    /// operator's browser, for a board with no usable accelerator) while the
+    /// frame-sized arithmetic stays on the host, and what lets one background be
+    /// reused across several subs during live stacking. Behaviour is unchanged:
+    /// see BgeRefactorParityTests, which pins the output of this method against
+    /// checksums taken before the split.</remarks>
     public static ushort[] RunBge(IRknnTileRunner runner, ushort[] pixels, int width, int height,
                                   int channels, string correction, bool saveBackground,
                                   out ushort[]? background) {
         int tile = runner.TileSize;
-        int planeLen = width * height;
-        bool division = string.Equals(correction, "Division", StringComparison.OrdinalIgnoreCase);
-
-        // 1) Downsample each plane to tile x tile + per-channel stats.
-        var planesF = new float[channels][];
-        var med = new double[channels];
-        var mad = new double[channels];
-        for (int c = 0; c < channels; c++) {
-            var small = RknnImageMath.BilinearResizeU16(
-                pixels.AsSpan(c * planeLen, planeLen), width, height, tile, tile);
-            var pf = new float[tile * tile];
-            for (int i = 0; i < pf.Length; i++) pf[i] = small[i] / 65535f;
-            planesF[c] = pf;
-            (med[c], mad[c]) = RknnImageMath.MedianMadSampled(pf);
-        }
-
-        // 2-3) Build [1, tile, tile, 3] NHWC. Mono replicates plane 0.
-        var tensor = new float[tile * tile * 3];
-        for (int i = 0; i < tile * tile; i++) {
-            for (int c = 0; c < 3; c++) {
-                int srcC = channels == 3 ? c : 0;
-                double v = ((planesF[srcC][i] - med[srcC]) / mad[srcC]) * 0.04;
-                tensor[i * 3 + c] = (float)Math.Clamp(v, -1.0, 1.0);
-            }
-        }
-
-        // 4) Inference.
+        var (tensor, stats) = Bge.BgeTensor.Build(pixels, width, height, channels, tile);
         var outData = runner.RunTile(tensor);
-
-        // 5) Denormalize each output channel with its own median+MAD.
-        // 6+7) Box-blur then upscale back to source size.
-        var bgFull = new float[channels][];
-        for (int c = 0; c < channels; c++) {
-            var bgSmall = new float[tile * tile];
-            for (int i = 0; i < tile * tile; i++)
-                bgSmall[i] = (float)(outData[i * 3 + c] * mad[c] / 0.04 + med[c]);
-            var smoothed = RknnImageMath.BoxBlurF(bgSmall, tile, tile, 3);
-            bgFull[c] = RknnImageMath.BilinearResizeF(smoothed, tile, tile, width, height);
-        }
-
-        // 8) Apply correction PER CHANNEL, matching the browser onnx-pipelines.js
-        //    BGE (each channel recentred on its OWN median). This preserves the
-        //    image's colour/saturation. (A single global mean -- GraXpert CLI's
-        //    Subtraction -- neutralises the background to grey but shifts each
-        //    channel's level, which visibly changes saturation; the browser/GPU
-        //    path the user compares against does NOT do that.)
-        var result = new ushort[pixels.Length];
-        background = saveBackground ? new ushort[pixels.Length] : null;
-        for (int c = 0; c < channels; c++) {
-            var bg = bgFull[c];
-            double median = med[c];
-            int off = c * planeLen;
-            for (int i = 0; i < planeLen; i++) {
-                double v = pixels[off + i] / 65535.0;
-                double bgv = bg[i];
-                double corrected = division
-                    ? v / Math.Max(1e-6, bgv) * median
-                    : v - bgv + median;
-                result[off + i] = (ushort)Math.Clamp(Math.Round(corrected * 65535.0), 0, 65535);
-                if (background != null) {
-                    double b = division ? Math.Max(1e-6, bgv) : bgv;
-                    background[off + i] = (ushort)Math.Clamp(Math.Round(b * 65535.0), 0, 65535);
-                }
-            }
-        }
-        return result;
+        return Bge.BgeApply.Correct(pixels, width, height, channels, outData, stats, tile,
+                                    correction, saveBackground, out background);
     }
 
     /// <summary>
