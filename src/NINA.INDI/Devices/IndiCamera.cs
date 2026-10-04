@@ -1358,6 +1358,67 @@ public class IndiCamera : ICamera, IDisposable {
 
     // ---- DSLR native-RAW decode (indi_gphoto FORMAT_NATIVE) ----
 
+    /// <summary>Where the pixels of the last DSLR frame actually came from.
+    /// <paramref name="Source"/> is "raw" when libraw decoded the camera's own
+    /// file into linear sensor data, and "embedded-jpeg" when it fell back to
+    /// the 8-bit preview every CR2/CR3/NEF carries.
+    ///
+    /// This exists because the fallback used to be silent, and a night was lost
+    /// to it: a Canon R8 delivered 8-bit data all evening, every value a
+    /// multiple of 257, and nothing on screen or in the log said so. Stars come
+    /// out in steps, colour clips, and autofocus measures a quantised profile.
+    /// </summary>
+    /// <param name="Reason">Why that path was taken, in words the operator can
+    /// act on.</param>
+    /// <param name="Bits">The real precision of the pixels: 16 for a libraw
+    /// decode, 8 for the embedded JPEG whatever the container says.</param>
+    public readonly record struct DslrFrameSource(
+        string Source, string Format, string Reason, int Bits);
+
+    /// <summary>The last DSLR frame's provenance, or null when this camera has
+    /// not delivered a native DSLR frame (every astro camera, and a gphoto in
+    /// FORMAT_FITS).</summary>
+    public DslrFrameSource? LastDslrFrame { get; private set; }
+
+    // Logged at info only when the answer changes, so a night of captures does
+    // not write the same line a thousand times.
+    private string? _lastDslrLogKey;
+
+    /// <summary>Why a DSLR frame ended up on the 8-bit path, in words the
+    /// operator can act on. The three cases need three different actions, and
+    /// the picture looks the same in all of them: a JPEG the camera recorded
+    /// (change the camera), a missing libraw (install it), and a RAW libraw
+    /// will not read (usually a body newer than the installed libraw).</summary>
+    internal static string DslrFallbackReason(bool blobIsJpeg, bool librawAvailable) {
+        if (blobIsJpeg) {
+            return "The camera delivered a JPEG, not a RAW file; "
+                 + "set the camera's image quality to RAW.";
+        }
+        if (!librawAvailable) {
+            return "libraw is not installed on this host, so the camera's RAW could not be read; "
+                 + "install libraw (the polaris package recommends it).";
+        }
+        return "libraw is installed but could not decode this RAW; "
+             + "the body may be newer than the installed libraw.";
+    }
+
+    private void ReportDslrFrame(string source, string format, string reason, int bits) {
+        LastDslrFrame = new DslrFrameSource(source, format, reason, bits);
+        var key = source + '|' + format + '|' + reason;
+        if (key == _lastDslrLogKey) return;
+        _lastDslrLogKey = key;
+        if (bits >= 16) {
+            _client.DiagLogger.LogInformation(
+                "{Device}: DSLR frame decoded from the camera RAW ({Format}) at {Bits}-bit linear",
+                DeviceName, format, bits);
+        } else {
+            _client.DiagLogger.LogWarning(
+                "{Device}: DSLR frame came from the {Bits}-bit embedded JPEG ({Format}). {Reason} "
+                + "Focus and stacking are working on 256 levels per channel, not sensor data.",
+                DeviceName, bits, format, reason);
+        }
+    }
+
     /// <summary>Build an IImageData from a camera-native DSLR BLOB (CR2/NEF/ARW
     /// or JPEG). Preferred: decode the real RAW with libraw into a true 16-bit
     /// linear RGGB Bayer mosaic (full dynamic range for the live stack). If
@@ -1372,6 +1433,9 @@ public class IndiCamera : ICamera, IDisposable {
         // live stack wants (full dynamic range), instead of the 8-bit sRGB
         // embedded JPEG. Falls through to the JPEG path below if libraw is absent
         // or the decode fails (e.g. a plain .jpg BLOB, or an unsupported body).
+        string why = DslrFallbackReason(LooksLikeJpeg(data),
+            NINA.Image.FileFormat.Raw.LibRawDecoder.IsAvailable);
+
         if (!LooksLikeJpeg(data)) {
             try {
                 if (NINA.Image.FileFormat.Raw.LibRawDecoder.TryDecodeToRggb(
@@ -1381,12 +1445,18 @@ public class IndiCamera : ICamera, IDisposable {
                         IsBayered = true, BayerPattern = BayerPatternEnum.RGGB
                     };
                     var rmeta = new ImageMetaData { CreationTime = DateTime.UtcNow };
+                    ReportDslrFrame("raw", ext, "Decoded with libraw.", 16);
                     return new BaseImageData(mosaic, rprops, rmeta) {
                         RawFileBytes = data,
                         RawFileExtension = ext.StartsWith('.') ? ext : "." + ext
                     };
                 }
-            } catch { /* fall back to the embedded-JPEG path */ }
+            } catch (Exception ex) {
+                // Fall back to the embedded JPEG, but say what libraw hit: an
+                // unsupported body and a corrupt download look identical from
+                // the picture alone.
+                why = "libraw failed on this RAW (" + ex.GetType().Name + "): " + ex.Message;
+            }
         }
 
         // The whole BLOB might already be a JPEG (gphoto delivering .jpg), else
@@ -1431,6 +1501,11 @@ public class IndiCamera : ICamera, IDisposable {
                 }
             }
         } finally { bmp.Dispose(); }
+
+        // BitDepth below says 16 because that is the container; the data in it
+        // holds 256 levels per channel. Report the real precision separately so
+        // the operator is not told 16 when the pixels are multiples of 257.
+        ReportDslrFrame("embedded-jpeg", ext, why, 8);
 
         var props = new ImageProperties {
             Width = w, Height = h, BitDepth = 16,

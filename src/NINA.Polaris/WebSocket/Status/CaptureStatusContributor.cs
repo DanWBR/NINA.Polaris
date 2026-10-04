@@ -32,8 +32,12 @@ public sealed class CaptureStatusContributor : IStatusContributor {
     private readonly NINA.Polaris.Services.Timelapse.MediaEncodeService _mediaEncode;
     private readonly NINA.Polaris.Services.StarTrail.StarTrailService _starTrail;
     private readonly DitherBarrier _ditherBarrier;
+    // Only for the last frame's provenance, a plain field read. Nothing here
+    // touches a device property: those are blocking SDK calls and belong on the
+    // snapshot thread (see EquipmentStatusContributor).
+    private readonly EquipmentManager _equip;
 
-    public CaptureStatusContributor(AuxCaptureService auxCapture, CaptureProgressService captureProgress, CoolingRampService coolingRamp, LiveCaptureService liveCapture, SlewPreviewService slewPreview, NINA.Polaris.Services.Planetary.VideoRecordingService videoRecording, NINA.Polaris.Services.Planetary.PlanetaryStackerService videoStacker, NINA.Polaris.Services.Timelapse.MediaEncodeService mediaEncode, NINA.Polaris.Services.StarTrail.StarTrailService starTrail, DitherBarrier ditherBarrier) {
+    public CaptureStatusContributor(AuxCaptureService auxCapture, CaptureProgressService captureProgress, CoolingRampService coolingRamp, LiveCaptureService liveCapture, SlewPreviewService slewPreview, NINA.Polaris.Services.Planetary.VideoRecordingService videoRecording, NINA.Polaris.Services.Planetary.PlanetaryStackerService videoStacker, NINA.Polaris.Services.Timelapse.MediaEncodeService mediaEncode, NINA.Polaris.Services.StarTrail.StarTrailService starTrail, DitherBarrier ditherBarrier, EquipmentManager equip) {
         _auxCapture = auxCapture;
         _captureProgress = captureProgress;
         _coolingRamp = coolingRamp;
@@ -44,6 +48,7 @@ public sealed class CaptureStatusContributor : IStatusContributor {
         _mediaEncode = mediaEncode;
         _starTrail = starTrail;
         _ditherBarrier = ditherBarrier;
+        _equip = equip;
     }
 
     public IReadOnlyCollection<string> Keys { get; } = new[] { "capture", "liveCapture", "auxCapture", "cooling", "videoRecording", "videoStack", "mediaEncode", "starTrail", "slewPreview", "ditherSync" };
@@ -57,7 +62,7 @@ public sealed class CaptureStatusContributor : IStatusContributor {
         var videoRecording = _videoRecording;
         var videoStacker = _videoStacker;
 
-            tick.Blocks["capture"] = BuildCapturePayload(captureProgress);
+            tick.Blocks["capture"] = BuildCapturePayload(captureProgress, _equip);
 
             tick.Blocks["liveCapture"] = new {
                 running = liveCapture.IsRunning,
@@ -204,7 +209,21 @@ public sealed class CaptureStatusContributor : IStatusContributor {
             return new Dictionary<string, object>();
         }
     }
-    private static object BuildCapturePayload(CaptureProgressService svc) {
+    private static object? BuildDslrPayload(EquipmentManager equip) {
+        try {
+            if (equip.Camera is not NINA.INDI.Devices.IndiCamera cam) return null;
+            var f = cam.LastDslrFrame;
+            if (f == null) return null;
+            return new {
+                source = f.Value.Source,       // "raw" or "embedded-jpeg"
+                format = f.Value.Format,
+                reason = f.Value.Reason,
+                bits = f.Value.Bits
+            };
+        } catch { return null; }
+    }
+
+    private static object BuildCapturePayload(CaptureProgressService svc, EquipmentManager equip) {
         try {
             var s = svc.Snapshot();
             return new {
@@ -212,11 +231,17 @@ public sealed class CaptureStatusContributor : IStatusContributor {
                 active = s.Active,
                 source = s.Source,
                 exposureSeconds = s.ExposureSeconds,
-                startedUtc = s.StartedUtc?.ToString("o")
+                startedUtc = s.StartedUtc?.ToString("o"),
+                // Where a DSLR frame's pixels came from. Null for every astro
+                // camera; on a DSLR it is the difference between linear sensor
+                // data and an 8-bit preview JPEG, which the picture alone does
+                // not tell you until the stars come out in steps.
+                dslr = BuildDslrPayload(equip)
             };
         } catch {
             return new { runId = 0L, active = false, source = (string?)null,
-                         exposureSeconds = 0.0, startedUtc = (string?)null };
+                         exposureSeconds = 0.0, startedUtc = (string?)null,
+                         dslr = (object?)null };
         }
     }
 }
