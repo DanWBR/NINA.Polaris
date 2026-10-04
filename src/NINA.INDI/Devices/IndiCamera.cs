@@ -496,22 +496,54 @@ public class IndiCamera : ICamera, IDisposable {
     /// request the camera-native RAW and decode the embedded JPEG ourselves.</summary>
     private bool IsGphotoNative => _client.GetProperty(DeviceName, "CCD_CAPTURE_TARGET") != null;
 
+    /// <summary>Pick the element that means "16-bit raw" out of a driver's
+    /// capture-format switch, or null when the driver has no such thing.
+    ///
+    /// Element names are driver-defined: "SVB_IMG_RAW16", "ASI_IMG_RAW16",
+    /// "RAW 16-bit", "TOUPCAM_RAW16". What they have in common is RAW and 16.
+    ///
+    /// They must NOT be matched by a bare "16" anywhere in the name, which is
+    /// how a Canon R8 spent a night shooting JPEG: on a gphoto DSLR the same
+    /// property name, CCD_CAPTURE_FORMAT, holds the camera's IMAGE QUALITY list
+    /// with elements FORMAT_1 to FORMAT_18. The old rule matched FORMAT_16 and
+    /// wrote it, so before every exposure Polaris set the camera to whatever
+    /// its sixteenth image format happened to be. The driver's saved config on
+    /// the rig still had FORMAT_16 selected. The caller skips DSLRs outright
+    /// now; this also refuses an opaque FORMAT_n on its own.</summary>
+    internal static string? PickRaw16Element(IEnumerable<string> elementNames) {
+        string? loose = null;
+        foreach (var k in elementNames) {
+            var u = k.ToUpperInvariant();
+            if (u.Contains("RGB")) continue;
+            // An enumerated placeholder carries no meaning in its name; the
+            // number is an index, not a bit depth.
+            if (System.Text.RegularExpressions.Regex.IsMatch(u, @"^FORMAT[_ ]?\d+$")) continue;
+            if (!u.Contains("16")) continue;
+            // Unambiguous: the name says raw, or says bits.
+            if (u.Contains("RAW") || u.Contains("16BIT") || u.Contains("16-BIT")
+                    || u.Contains("16 BIT")) {
+                return k;
+            }
+            loose ??= k;   // e.g. "MONO16"; still better than nothing
+        }
+        return loose;
+    }
+
     private async Task EnsureRaw16FormatAsync(CancellationToken ct) {
+        // A DSLR has no raw8/raw16 switch. On indi_gphoto this very property
+        // is the camera's image-quality list (Large Fine JPEG, RAW, cRAW + ...),
+        // and writing it changes what the camera records. Never touch it: the
+        // operator chooses that on the body or in the INDI panel.
+        if (IsGphotoNative) return;
+
         // Resolve the format property + 16-bit element. Re-probe each capture
         // until found (the property may not be enumerated yet right after
         // connect); two dictionary lookups, negligible. INDI standardised
         // CCD_CAPTURE_FORMAT (1.9+); older drivers use CCD_VIDEO_FORMAT.
-        // Element names are driver-defined (e.g. "SVB_IMG_RAW16",
-        // "ASI_IMG_RAW16", "RAW 16-bit"), so match any element carrying "16"
-        // that isn't an RGB/colour format.
         if (_raw16Element == null) {
             foreach (var propName in new[] { "CCD_CAPTURE_FORMAT", "CCD_VIDEO_FORMAT" }) {
                 if (_client.GetProperty(DeviceName, propName) is IndiSwitchProperty sw && sw.Values.Count > 0) {
-                    string? el = null;
-                    foreach (var k in sw.Values.Keys) {
-                        var u = k.ToUpperInvariant();
-                        if (u.Contains("16") && !u.Contains("RGB")) { el = k; break; }
-                    }
+                    var el = PickRaw16Element(sw.Values.Keys);
                     if (el != null) { _formatProp = propName; _raw16Element = el; break; }
                 }
             }
