@@ -4645,5 +4645,8 @@
   "in this browser": "",
   "nowhere available": "",
   "background age": "",
-  "Background extraction has nowhere to run right now. It needs an accelerator on the host (an NPU, or a GPU through Vulkan), or a browser tab open to run the model in. Subs keep stacking with their gradient and are counted.": ""
+  "Background extraction has nowhere to run right now. It needs an accelerator on the host (an NPU, or a GPU through Vulkan), or a browser tab open to run the model in. Subs keep stacking with their gradient and are counted.": "",
+  "Frames are coming from the camera 8-bit preview JPEG, not its RAW.": "",
+  "Frames are coming from the camera 8-bit preview JPEG, not its RAW. Focus and stacking are working on 256 levels per channel.": "",
+  "Frames are decoded from the camera RAW, at full depth.": ""
 }

@@ -71,6 +71,11 @@ cameraStream.transmitFps
 cameraStream.width
 capture
 capture.active
+capture.dslr
+capture.dslr.bits
+capture.dslr.format
+capture.dslr.reason
+capture.dslr.source
 capture.exposureSeconds
 capture.runId
 capture.source

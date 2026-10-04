@@ -69,15 +69,20 @@ public class BgeFrameCorrectorTests {
         /// The count is incremented on the thread pool, so asserting on it
         /// straight after a frame is a race, not a measurement.</summary>
         public void WaitUntilRequests(int n) {
-            var until = DateTime.UtcNow.AddSeconds(5);
+            var until = DateTime.UtcNow.AddSeconds(30);
             while (Requests < n && DateTime.UtcNow < until) Thread.Sleep(5);
             Assert.That(Requests, Is.EqualTo(n), "the corrector did not ask for a model");
         }
 
         /// <summary>Block until the corrector has asked for a model, so a test
-        /// can complete the request it just triggered.</summary>
+        /// can complete the request it just triggered.
+        ///
+        /// The wait is generous on purpose. The request is queued on the thread
+        /// pool, and inside the full suite the pool is busy: a five second
+        /// budget failed this fixture once in a loaded run and never once on
+        /// its own. The wait costs nothing when the code works.</summary>
         public void WaitForRequest() {
-            Assert.That(_asked.Wait(TimeSpan.FromSeconds(5)), Is.True,
+            Assert.That(_asked.Wait(TimeSpan.FromSeconds(30)), Is.True,
                 "the corrector never asked the producer for a model");
             _asked.Reset();
         }

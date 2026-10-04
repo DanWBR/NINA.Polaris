@@ -463,6 +463,13 @@ function ninaApp() {
         // type, for the per-frame calibration override dropdowns. Each entry:
         // { id, fileName, exposureSec, gain, filter }. Loaded on demand.
         calibMasters: { dark: [], flat: [], bias: [], loaded: false },
+        // Where the last DSLR frame's pixels came from: { source: 'raw' |
+        // 'embedded-jpeg', format, reason, bits }. Null for astro cameras and
+        // until the first DSLR frame of the session. A camera shooting JPEG, or
+        // a RAW the host cannot decode, costs the whole night its dynamic range
+        // and used to be invisible: the picture looks plausible until the stars
+        // come out in steps.
+        dslrFrame: null,
         liveStackStatus: null,    // { isRunning, frameCount, ..., triggers: {...}, preProc: {...} }
 
         // Mount
@@ -27600,6 +27607,22 @@ function ninaApp() {
             return Math.max(0, Math.min(1, elapsed / 600));
         },
 
+        // Track where a DSLR's pixels came from, and say it once per session.
+        // Once, not per frame: this is a standing condition for as long as the
+        // camera or the host stays as it is, and a toast per sub would be the
+        // noise that gets the real warning ignored.
+        _dslrWarnedFor: null,
+        _absorbDslrFrameSource(dslr) {
+            if (!dslr || !dslr.source) return;
+            this.dslrFrame = dslr;
+            if (dslr.source !== 'embedded-jpeg') { this._dslrWarnedFor = null; return; }
+            const key = dslr.source + '|' + (dslr.reason || '');
+            if (this._dslrWarnedFor === key) return;
+            this._dslrWarnedFor = key;
+            this.toast(this.$t('Frames are coming from the camera 8-bit preview JPEG, not its RAW.')
+                       + ' ' + (dslr.reason || ''), 'warn');
+        },
+
         // ----- Server-driven current-exposure progress -----
 
         /// Absorb the /ws/status `capture` block. Re-bases the server's
@@ -50126,6 +50149,7 @@ function ninaApp() {
             // null/stale). Pass the server "now" so elapsed is measured in
             // server time and re-based onto the local clock.
             this._absorbCaptureProgress(msg.capture, _serverNowMs);
+            this._absorbDslrFrameSource(msg.capture?.dslr);
             // Server-side classical-RL deconvolution progress + ETA. While a
             // server RL runs, mirror it into the AI-Sharpen modal's progress bar
             // (the work is on the server, so the client has no per-tile signal

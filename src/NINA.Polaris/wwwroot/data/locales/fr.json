@@ -5263,5 +5263,8 @@
   "in this browser": "dans ce navigateur",
   "nowhere available": "nulle part disponible",
   "background age": "âge du fond",
-  "Background extraction has nowhere to run right now. It needs an accelerator on the host (an NPU, or a GPU through Vulkan), or a browser tab open to run the model in. Subs keep stacking with their gradient and are counted.": "L'extraction de fond n'a nulle part où tourner pour le moment. Il lui faut un accélérateur sur l'hôte (un NPU, ou un GPU via Vulkan), ou un onglet de navigateur ouvert pour exécuter le modèle. Les poses continuent d'être empilées avec leur gradient et sont comptées."
+  "Background extraction has nowhere to run right now. It needs an accelerator on the host (an NPU, or a GPU through Vulkan), or a browser tab open to run the model in. Subs keep stacking with their gradient and are counted.": "L'extraction de fond n'a nulle part où tourner pour le moment. Il lui faut un accélérateur sur l'hôte (un NPU, ou un GPU via Vulkan), ou un onglet de navigateur ouvert pour exécuter le modèle. Les poses continuent d'être empilées avec leur gradient et sont comptées.",
+  "Frames are coming from the camera 8-bit preview JPEG, not its RAW.": "Les images viennent du JPEG d'aperçu 8 bits de l'appareil, pas de son RAW.",
+  "Frames are coming from the camera 8-bit preview JPEG, not its RAW. Focus and stacking are working on 256 levels per channel.": "Les images viennent du JPEG d'aperçu 8 bits de l'appareil, pas de son RAW. La mise au point et l'empilement travaillent sur 256 niveaux par canal.",
+  "Frames are decoded from the camera RAW, at full depth.": "Les images sont décodées depuis le RAW de l'appareil, à pleine profondeur."
 }
