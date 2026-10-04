@@ -49865,14 +49865,33 @@ function ninaApp() {
                         this.guideExp = g.exposureMs > 0 ? this._snapExpMs(g.exposureMs) : 1000;
                 }
                 if (!g.connected) {
-                    if (this.guider.connected) {
-                        // server-side disconnect (PHD2 crashed?)
-                        this.guider.connected = false;
-                        this.guider.appState = 'Stopped';
-                        this.guider.guiding = false;
-                        this.guider.activity = null;
-                        this.guider.recentSteps = [];
-                    }
+                    // Unconditional, and it clears everything a session owns.
+                    //
+                    // This used to run only on the connected -> disconnected
+                    // edge, and it cleared four fields out of a dozen. A guide
+                    // camera that dropped mid-dither therefore left `dithering`
+                    // true forever: the disconnected payload carries no such
+                    // field, so nothing overwrote it, and the operator was
+                    // staring at "Dithering: settling to < 1.5 px" with STOP
+                    // doing nothing, because by then there was no session for
+                    // STOP to end. Same reasoning as ResetSessionState on the
+                    // server: when the answer is "no session", say all of it,
+                    // every tick, not once.
+                    this.guider.connected = false;
+                    this.guider.appState = 'Stopped';
+                    this.guider.guiding = false;
+                    this.guider.calibrating = false;
+                    this.guider.looping = false;
+                    this.guider.paused = false;
+                    this.guider.settling = false;
+                    this.guider.dithering = false;
+                    this.guider.settleProgress = null;
+                    this.guider.lastSettleStatus = null;
+                    this.guider.calProgress = null;
+                    this.guider.calDetails = null;
+                    this.guider.activity = null;
+                    this.guider.activityExposureMs = 0;
+                    this.guider.recentSteps = [];
                 } else {
                     // First time we learn PHD2 is connected (typically
                     // after a page refresh while PHD2 was already up):
