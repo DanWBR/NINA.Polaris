@@ -96,10 +96,9 @@ public class TakeExposureInstruction : SequenceInstruction {
         // driver actually receives gain / offset / binning / frame-type / filter
         // — previously the tree sequencer only set binning and captured with
         // defaults, so gain and the CCD_FRAME_TYPE tag were never applied.
-        // Offset falls back to the ADV panel's own field when the instruction
-        // does not pin one: each capturing panel carries its own pedestal, and
-        // this is the tree sequencer's (issue #26).
-        var advOffset = RigCaptureDefaults.AdvOffset(ctx.Profiles);
+        // Offset falls back to the rig's when the instruction does not pin one
+        // of its own (issue #26).
+        var advOffset = RigCaptureDefaults.Offset(ctx.Profiles);
         var capOpts = new NINA.Image.Interfaces.CaptureOptions(
             Gain: Gain,
             Offset: Offset ?? advOffset,
@@ -133,6 +132,24 @@ public class TakeExposureInstruction : SequenceInstruction {
             // CompletedCount (below) already makes a resumed frame idempotent.
             // Park here if a synchronized dither round is in flight (multi-cam).
             await ctx.Barrier.BeforeSubAsync("main", ct);
+
+            // And hold if THIS exposure would run past the meridian flip point.
+            // The flip trigger only asks whether a flip is due right now, which
+            // a sub that starts inside the window and ends outside it answers
+            // with "no" while tracking straight through (issue #30, reported
+            // against AUTORUN; the tree sequencer and PLAN share the gap).
+            // Only for a target: a dark or a flat has nowhere to be.
+            var flipTarget = ctx.CurrentTarget;
+            if (flipTarget != null && ImageType is null or "" or "LIGHT") {
+                var hold = ctx.MeridianFlip.WaitBeforeExposure(flipTarget.RaHours, ExposureSeconds);
+                if (hold > TimeSpan.Zero) {
+                    ctx.Logger.LogInformation(
+                        "TakeExposure '{Name}': holding {Sec:F0}s, a {Exp:F0}s exposure started "
+                        + "now would run past the meridian flip point",
+                        Name, hold.TotalSeconds, ExposureSeconds);
+                    await Task.Delay(hold, ct);
+                }
+            }
 
             NINA.Image.Interfaces.IImageData image =
                 await CaptureFrameWithRetryAsync(ctx, capOpts, ct);

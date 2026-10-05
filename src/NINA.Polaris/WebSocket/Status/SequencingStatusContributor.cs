@@ -153,6 +153,7 @@ public sealed class SequencingStatusContributor : IStatusContributor {
                 elapsedSeconds = seqStatus.ElapsedSeconds,
                 estimatedRemainingSeconds = seqStatus.EstimatedRemainingSeconds,
                 lastError = seqStatus.LastError,
+                waitingFor = seqStatus.WaitingFor,
                 items = seqStatus.Items,
                 dithersIssued = seqStatus.DithersIssued,
                 framesSinceDither = seqStatus.FramesSinceDither,

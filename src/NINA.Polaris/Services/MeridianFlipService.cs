@@ -168,6 +168,37 @@ public class MeridianFlipService {
     }
 
     /// <summary>
+    /// How long to hold before opening the shutter on an exposure of this
+    /// length, so that it does not run past the flip point. Zero when it is
+    /// safe to start now.
+    ///
+    /// <para>Without this, the only question asked was "is a flip due at this
+    /// instant", which a five minute exposure started at meridian plus two
+    /// answers with "no" and then spends until meridian plus seven tracking
+    /// past the point the operator set. Reported from the field with a five
+    /// minute setting: the operator stopped the run by hand rather than find
+    /// out whether the mount would reach the tripod.</para>
+    ///
+    /// <para>The wait is always shorter than one exposure: it is only ever
+    /// returned when the exposure is longer than the time remaining, and what
+    /// it returns is that remaining time. So a run gives up at most one
+    /// exposure's worth of sky, once, at the flip.</para>
+    /// </summary>
+    public TimeSpan WaitBeforeExposure(double raHours, double exposureSeconds) {
+        if (!Settings.Enabled || exposureSeconds <= 0) return TimeSpan.Zero;
+        if (_equip.Telescope == null || !_equip.Telescope.IsConnected) return TimeSpan.Zero;
+
+        double hours = HoursUntilFlip(raHours, DateTime.UtcNow,
+            _profile.Active.Longitude, Settings.MinutesAfterMeridian);
+        // Already past the flip point: ShouldFlipNow owns that case, and
+        // holding here would only delay the flip it is about to perform.
+        if (hours <= 0) return TimeSpan.Zero;
+        // Comfortably inside the window.
+        if (exposureSeconds / 3600.0 <= hours) return TimeSpan.Zero;
+        return TimeSpan.FromHours(hours);
+    }
+
+    /// <summary>
     /// Does the current target require a flip *now*? True when the target has
     /// crossed the meridian by at least Settings.MinutesAfterMeridian, and
     /// the mount currently reports the wrong pier side for the new HA.
@@ -401,6 +432,12 @@ public class MeridianFlipSettings {
     /// <summary>Also park the mount (not just stop tracking) when the safety
     /// guard trips. Opt-in; default off to avoid an unexpected re-home.</summary>
     public bool ParkOnSafetyStop { get; set; }
+
+    /// <summary>How long the OTA may sit below the flip floor during a meridian
+    /// flip before the guard aborts it. A flip's transit legitimately sweeps
+    /// below the horizon for a few seconds on some geometries; 0 restores the
+    /// old behaviour of aborting on the first sample below.</summary>
+    public double FlipTransitGraceSeconds { get; set; } = MountSlewSafety.FlipTransitGraceSeconds;
 
     /// <summary>Anti-crash altitude floor (degrees). While the mount is slewing,
     /// if its pointing drops below this the guard aborts the slew + stops (a

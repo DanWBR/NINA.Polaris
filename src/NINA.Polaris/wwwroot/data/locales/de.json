@@ -1492,7 +1492,7 @@
   "Flip due (auto)…": "Flip fällig (auto)…",
   "Flip due now": "Flip jetzt fällig",
   "Flip failed:": "Flip fehlgeschlagen:",
-  "Flip in": "Flip in",
+  "Flip in": "Meridianflip in",
   "Flip rows": "Zeilen umdrehen",
   "Flip the mount now and keep stacking. Reads the mount's current position; the mount flips when the re-slew crosses its meridian limit, then recenters.": "Drehen Sie die Montierung nun um und fahren Sie mit dem Stapeln fort. Liest die aktuelle Position der Montierung aus; die Montierung dreht sich um, wenn die Rückfahrt ihre Meridiangrenze überschreitet, und zentriert sich anschließend neu.",
   "Flip when past meridian by (min)": "Umschalten, wenn der Meridian um (Min.) überschritten ist",
@@ -5268,5 +5268,6 @@
   "Frames are coming from the camera 8-bit preview JPEG, not its RAW. Focus and stacking are working on 256 levels per channel.": "Die Bilder kommen aus dem 8-Bit-Vorschau-JPEG der Kamera, nicht aus ihrem RAW. Fokus und Stacking arbeiten mit 256 Stufen pro Kanal.",
   "Frames are decoded from the camera RAW, at full depth.": "Die Bilder werden aus dem RAW der Kamera dekodiert, in voller Tiefe.",
   "INDI drivers installed on this host.": "INDI-Treiber auf diesem Host installiert.",
-  "A distribution INDI has about 143 and is missing the recent ones; the INDI PPA has about 330.": "Ein INDI aus der Distribution hat etwa 143 und es fehlen die neueren; das INDI-PPA hat etwa 330."
+  "A distribution INDI has about 143 and is missing the recent ones; the INDI PPA has about 330.": "Ein INDI aus der Distribution hat etwa 143 und es fehlen die neueren; das INDI-PPA hat etwa 330.",
+  "Waiting for the meridian flip point": "Wartet auf den Meridianflip-Punkt"
 }

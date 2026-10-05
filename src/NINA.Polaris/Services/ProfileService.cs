@@ -155,6 +155,11 @@ public class ProfileService {
         // that shadows the new single-star default forever. Re-seed once.
         MigrateAutoFocusSingleStar();
 
+        // Four per-panel offsets became one per rig. Carry whatever the
+        // operator had already dialed in into the single field, rather than
+        // silently reverting their sensor to the driver's pedestal.
+        MigrateSingleOffset();
+
         // Deployment-time override for the capture root. Useful for
         // distribution images (Pi systemd unit, Docker, etc.) that
         // want a sensible default like /home/polaris/files without
@@ -761,6 +766,44 @@ public class ProfileService {
     /// client with an outdated rigs list kept reverting the exposure to an
     /// ancient 100 ms). Re-seed them to the 1 s default. Runs on every load;
     /// idempotent because valid values are never touched.</summary>
+    /// <summary>
+    /// Fold the retired per-panel offsets into the rig's single one.
+    ///
+    /// LIVE, PREVIEW, AUTORUN and ADV each used to carry their own, and an
+    /// upgrading install can have a pedestal in any of them. Taking the rig's
+    /// own field as it stands would quietly drop that and run the sensor at the
+    /// driver's value on the next session, which is exactly the class of
+    /// surprise the consolidation is meant to end.
+    ///
+    /// AUTORUN wins the tie: it is the one that governs real imaging runs.
+    /// Runs once, because it then clears the legacy fields.
+    /// </summary>
+    private void MigrateSingleOffset() {
+        if (_activeProfile.EquipmentProfiles == null) return;
+        var adopted = 0;
+        var cleared = 0;
+        foreach (var rig in _activeProfile.EquipmentProfiles) {
+            bool had = rig.PreviewOffset.HasValue || rig.AutorunOffset.HasValue
+                       || rig.AdvOffset.HasValue;
+            if (!had) continue;
+            if (rig.DefaultOffset is not > 0) {
+                var legacy = new[] { rig.AutorunOffset, rig.PreviewOffset, rig.AdvOffset }
+                    .FirstOrDefault(v => v is > 0);
+                if (legacy is > 0) { rig.DefaultOffset = legacy; adopted++; }
+            }
+            rig.PreviewOffset = null;
+            rig.AutorunOffset = null;
+            rig.AdvOffset = null;
+            cleared++;
+        }
+        if (cleared > 0) {
+            Save();
+            _logger.LogInformation(
+                "Offset migration: one offset per rig now; {Adopted} rig(s) took a value "
+                + "from a retired per-panel field, {Cleared} cleared", adopted, cleared);
+        }
+    }
+
     private void MigrateGuideExposureFloor() {
         if (_activeProfile.EquipmentProfiles == null) return;
         var fixedUp = 0;

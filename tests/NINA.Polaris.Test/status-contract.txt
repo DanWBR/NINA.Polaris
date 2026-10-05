@@ -397,6 +397,7 @@ sequence.lastError
 sequence.state
 sequence.totalFrames
 sequence.totalFramesCompleted
+sequence.waitingFor
 server
 server.clockSyncSupported
 server.utcNow

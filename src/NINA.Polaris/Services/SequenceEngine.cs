@@ -77,6 +77,10 @@ public class SequenceEngine {
     public int CurrentFrameInItem { get; private set; }
     public int TotalFramesCompleted { get; private set; }
     public string? LastError { get; private set; }
+
+    /// <summary>What the run is waiting on while it is not exposing, for the
+    /// status feed. Set around a deliberate hold and cleared after it.</summary>
+    public string? WaitingFor { get; private set; }
     public DateTime? StartedAt { get; private set; }
 
     /// <summary>Dither configuration. Now the GLOBAL per-rig config (the single
@@ -347,6 +351,7 @@ public class SequenceEngine {
             ElapsedSeconds = elapsed.TotalSeconds,
             EstimatedRemainingSeconds = estimatedRemainingSeconds,
             LastError = LastError,
+            WaitingFor = WaitingFor,
             DithersIssued = DithersIssued,
             FramesSinceDither = _framesSinceDither,
             Dither = Dither,
@@ -515,14 +520,30 @@ public class SequenceEngine {
                     await _pauseGate.WaitAsync(ct);
                     _pauseGate.Release();
 
-                    // Meridian flip check, meaningful only for LIGHT frames
-                    // pointed at a real target.
+                    // Meridian flip, meaningful only for LIGHT frames pointed
+                    // at a real target. Two questions, in this order: would THIS
+                    // exposure run past the flip point, and is a flip due now.
+                    //
+                    // The first one used to be missing, so a sub that started
+                    // before the point and ended after it tracked straight
+                    // through (issue #30). Holding for the remainder costs at
+                    // most one exposure, once per flip.
                     if (!isCalibration
                         && item.Ra.HasValue && item.Dec.HasValue
-                        && _meridianFlip.Settings.Enabled
-                        && _meridianFlip.ShouldFlipNow(item.Ra.Value)) {
-                        _logger.LogInformation("Meridian flip due for target {Name}, executing", item.Name);
-                        await _meridianFlip.ExecuteFlipAsync(item.Ra.Value, item.Dec.Value, ct);
+                        && _meridianFlip.Settings.Enabled) {
+                        var hold = _meridianFlip.WaitBeforeExposure(item.Ra.Value, item.Exposure);
+                        if (hold > TimeSpan.Zero) {
+                            _logger.LogInformation(
+                                "Holding {Sec:F0}s before frame {Frame} of '{Name}': a {Exp:F0}s "
+                                + "exposure started now would run past the meridian flip point",
+                                hold.TotalSeconds, f + 1, item.Name, item.Exposure);
+                            WaitingFor = "Waiting for the meridian flip point";
+                            try { await Task.Delay(hold, ct); } finally { WaitingFor = null; }
+                        }
+                        if (_meridianFlip.ShouldFlipNow(item.Ra.Value)) {
+                            _logger.LogInformation("Meridian flip due for target {Name}, executing", item.Name);
+                            await _meridianFlip.ExecuteFlipAsync(item.Ra.Value, item.Dec.Value, ct);
+                        }
                     }
 
                     CurrentFrameInItem = f;
@@ -565,13 +586,13 @@ public class SequenceEngine {
                     // (often a low/8-bit default), so 60 s lights came back
                     // near-black even though item.Gain was only being stamped
                     // into the FITS header at save time.
-                    // Offset is a per-rig setting (DefaultOffset), not per-item:
-                    // a sensible bias pedestal keeps the background off the
-                    // left wall of the histogram. Sent on every frame alongside
-                    // gain so the camera isn't left on a stale/zero offset.
-                    // AUTORUN has its own offset field, so a running sequence
-                    // obeys that one rather than the LIVE panel's.
-                    var autorunOffset = RigCaptureDefaults.AutorunOffset(_profile);
+                    // Offset is a per-rig setting, not per-item: a sensible
+                    // bias pedestal keeps the background off the left wall of
+                    // the histogram. Sent on every frame alongside gain so the
+                    // camera isn't left on a stale or zero offset. One value for
+                    // the rig, so a run uses the same pedestal as the framing
+                    // snap that set it up.
+                    var autorunOffset = RigCaptureDefaults.Offset(_profile);
                     // AUTORUN-TARGET-NAME: a LIGHT frame never takes a per-item
                     // name. The target does not change across a run, so every
                     // light is named after the most relevant object in the FOV —

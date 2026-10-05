@@ -179,9 +179,6 @@ function ninaApp() {
         // PREVIEW and AUTORUN. 0 in any of them means "send nothing, the
         // driver's value stands". All three live on the rig.
         offset: 50,
-        previewOffset: 50,
-        autorunOffset: 50,
-        advOffset: 50,
         binning: '1',
         liveActive: false,
         looping: false,
@@ -25030,9 +25027,6 @@ function ninaApp() {
             // imaging panels show the rig's value rather than whatever this
             // browser last typed.
             if (rig.defaultOffset != null) this.offset = rig.defaultOffset;
-            if (rig.previewOffset != null) this.previewOffset = rig.previewOffset;
-            if (rig.autorunOffset != null) this.autorunOffset = rig.autorunOffset;
-            if (rig.advOffset != null) this.advOffset = rig.advOffset;
             // Guide-star selection: null stays null, which reads as "default"
             // in the inputs and on the host.
             this.starSel = {
@@ -35469,35 +35463,16 @@ function ninaApp() {
         // the client's value per request the way gain is sent. So this field has
         // to write it to the rig, or it only ever changes the display (issue #26:
         // the panel showed 300 while every FITS came out at the stored 50).
+        //
+        // One field now, in the camera card. There were four, one per panel,
+        // and the only thing that bought anyone was a pedestal typed in one
+        // place and a different one coming out of a capture started in
+        // another.
         persistOffset() {
             const v = Number(this.offset);
             if (!Number.isFinite(v) || v < 0) return;
             this.offset = Math.round(v);
             this._persistRigSelection({ defaultOffset: this.offset });
-        },
-
-        // One writer per panel field. The value every capture uses is the
-        // RIG's, so the field has to reach it or it only changes the display
-        // (issue #26).
-        persistPreviewOffset() {
-            const v = Number(this.previewOffset);
-            if (!Number.isFinite(v) || v < 0) return;
-            this.previewOffset = Math.round(v);
-            this._persistRigSelection({ previewOffset: this.previewOffset });
-        },
-
-        persistAutorunOffset() {
-            const v = Number(this.autorunOffset);
-            if (!Number.isFinite(v) || v < 0) return;
-            this.autorunOffset = Math.round(v);
-            this._persistRigSelection({ autorunOffset: this.autorunOffset });
-        },
-
-        persistAdvOffset() {
-            const v = Number(this.advOffset);
-            if (!Number.isFinite(v) || v < 0) return;
-            this.advOffset = Math.round(v);
-            this._persistRigSelection({ advOffset: this.advOffset });
         },
 
         _persistRigSelection(patch) {

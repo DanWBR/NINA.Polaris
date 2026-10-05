@@ -4650,5 +4650,6 @@
   "Frames are coming from the camera 8-bit preview JPEG, not its RAW. Focus and stacking are working on 256 levels per channel.": "",
   "Frames are decoded from the camera RAW, at full depth.": "",
   "INDI drivers installed on this host.": "",
-  "A distribution INDI has about 143 and is missing the recent ones; the INDI PPA has about 330.": ""
+  "A distribution INDI has about 143 and is missing the recent ones; the INDI PPA has about 330.": "",
+  "Waiting for the meridian flip point": ""
 }

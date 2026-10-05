@@ -5268,5 +5268,6 @@
   "Frames are coming from the camera 8-bit preview JPEG, not its RAW. Focus and stacking are working on 256 levels per channel.": "Les images viennent du JPEG d'aperçu 8 bits de l'appareil, pas de son RAW. La mise au point et l'empilement travaillent sur 256 niveaux par canal.",
   "Frames are decoded from the camera RAW, at full depth.": "Les images sont décodées depuis le RAW de l'appareil, à pleine profondeur.",
   "INDI drivers installed on this host.": "pilotes INDI installés sur cet hôte.",
-  "A distribution INDI has about 143 and is missing the recent ones; the INDI PPA has about 330.": "Un INDI de la distribution en a environ 143 et il lui manque les récents ; le PPA INDI en a environ 330."
+  "A distribution INDI has about 143 and is missing the recent ones; the INDI PPA has about 330.": "Un INDI de la distribution en a environ 143 et il lui manque les récents ; le PPA INDI en a environ 330.",
+  "Waiting for the meridian flip point": "En attente du point de retournement au méridien"
 }

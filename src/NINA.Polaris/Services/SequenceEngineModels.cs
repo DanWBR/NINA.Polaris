@@ -97,6 +97,15 @@ public class SequenceStatus {
     public double ElapsedSeconds { get; set; }
     public double EstimatedRemainingSeconds { get; set; }
     public string? LastError { get; set; }
+    /// <summary>What the run is deliberately waiting on, when it is waiting on
+    /// something that is not a frame. Null the rest of the time. A hold with no
+    /// explanation looks exactly like a hang, and the one that matters here can
+    /// last a whole exposure (the meridian flip point).
+    ///
+    /// A whole English sentence, which the client translates as one key, the
+    /// way lastError is handled. Composing it on the client cannot be
+    /// translated: French needs a contraction and German an article.</summary>
+    public string? WaitingFor { get; set; }
     public int DithersIssued { get; set; }
     public int FramesSinceDither { get; set; }
     public DitherSettings? Dither { get; set; }

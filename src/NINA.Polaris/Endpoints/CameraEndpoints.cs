@@ -204,7 +204,7 @@ public static class CameraEndpoints {
                     Gain: request.Gain > 0 ? request.Gain : null,
                     // This is the PREVIEW panel's snap (and the phone shell's),
                     // so it obeys the PREVIEW panel's offset field.
-                    Offset: RigCaptureDefaults.PreviewOffset(profileSvc),
+                    Offset: RigCaptureDefaults.Offset(profileSvc),
                     ImageType: "LIGHT");
                 imageData = await CameraCaptureGate.RunAsync(async () => {
                     using (captureProgress.Begin(captureSource, request.Exposure))

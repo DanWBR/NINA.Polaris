@@ -199,9 +199,6 @@ public static class EquipmentEndpoints {
                     r.CoolerRampDegPerMinute = Math.Max(0, update.CoolerRampDegPerMinute.Value);
                 if (update.DefaultGain.HasValue) r.DefaultGain = update.DefaultGain.Value;
                 if (update.DefaultOffset.HasValue) r.DefaultOffset = update.DefaultOffset.Value;
-                if (update.PreviewOffset.HasValue) r.PreviewOffset = update.PreviewOffset.Value;
-                if (update.AutorunOffset.HasValue) r.AutorunOffset = update.AutorunOffset.Value;
-                if (update.AdvOffset.HasValue) r.AdvOffset = update.AdvOffset.Value;
                 // Guide-star selection. Nullable throughout: absent leaves the
                 // stored choice alone, and null means "the tuned default".
                 if (update.NativeStarSigma.HasValue) r.NativeStarSigma = update.NativeStarSigma;
