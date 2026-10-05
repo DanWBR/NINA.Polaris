@@ -15,6 +15,7 @@
 using System.Collections.Concurrent;
 using NINA.Image.FileFormat.FITS;
 using NINA.Image.Interfaces;
+using NINA.Polaris.Services.PlateSolving;
 
 namespace NINA.Polaris.Services;
 
@@ -658,6 +659,25 @@ public class PolarAlignmentService {
     private async Task<PlateSolveResult> SolveOnceAsync(
         IImageData image, ITelescope? telescope, CancellationToken ct,
         double? hintRaHours = null, double? hintDecDeg = null) {
+        // Geometry first, and into the frame as well as into the options.
+        //
+        // This path used to pass a pixel scale and nothing else: no -fov, and a
+        // temporary FITS with no FOCALLEN, so ASTAP could neither be told the
+        // scale nor work it out. It then guesses, and a guess that is wrong by
+        // enough makes it widen the search until it wants a star database for a
+        // field the operator never photographs. Field report: a 9.5 degree
+        // guess on a TPPA refresh, widened to 10 and 24 degrees, and ASTAP
+        // stopped with "no star database found" on a host that had V50 and D20
+        // installed and had just solved three points.
+        var rig = _profiles.ActiveEquipmentProfile;
+        var cam = _equip.Camera;
+        var geom = PlateSolveHints.From(
+            rig?.FocalLengthMm ?? 0,
+            cam?.PixelSizeX ?? 0,
+            image.Properties.Height,
+            cam?.MaxY ?? 0);
+        PlateSolveHints.StampFocalLength(image, rig?.FocalLengthMm ?? 0);
+
         var path = WriteTempFits(image);
         try {
             // RA hint in hours, Dec hint in degrees. Prefer an explicit
@@ -672,9 +692,8 @@ public class PolarAlignmentService {
                 HintRa = hintRa,
                 HintDec = hintDec,
                 SearchRadiusDeg = 30,
-                ScaleArcsecPerPixel = ComputePixelScaleHint(),
-                FovDeg = 0  // let the solver derive from pixel scale + image size
             };
+            PlateSolveHints.Apply(opts, geom);
             return await _plateSolve.SolveAsync(path, opts, ct);
         } finally {
             try { File.Delete(path); } catch { /* housekeeping */ }
@@ -726,16 +745,10 @@ public class PolarAlignmentService {
     /// the hint narrows search radius (especially on ASTAP) and is
     /// REQUIRED by PlateSolve3. Returns 0 when either input is
     /// missing, the solver chain handles the unknown-scale case.</summary>
-    private double ComputePixelScaleHint() {
-        var cam = _equip.Camera;
-        if (cam == null) return 0;
-        var rig = _profiles.ActiveEquipmentProfile;
-        if (rig.FocalLengthMm <= 0) return 0;
-        // PixelSizeX is in microns. arcsec/pixel = pixelSize_um * 206.265 / focalLength_mm.
-        var px = cam.PixelSizeX;
-        if (double.IsNaN(px) || px <= 0) return 0;
-        return px * 206.265 / rig.FocalLengthMm;
-    }
+    // The scale hint used to be computed here, from the pixel pitch and the
+    // focal length, without the binning correction and without a field of
+    // view. PlateSolveHints does both and is what the SKY tab's solve already
+    // used; SolveOnceAsync now calls it instead.
 
     private void SetPhase(PolarAlignmentJob job, PolarAlignmentPhase phase) {
         job.Phase = phase;

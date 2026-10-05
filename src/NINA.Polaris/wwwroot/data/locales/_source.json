@@ -4651,5 +4651,6 @@
   "Frames are decoded from the camera RAW, at full depth.": "",
   "INDI drivers installed on this host.": "",
   "A distribution INDI has about 143 and is missing the recent ones; the INDI PPA has about 330.": "",
-  "Waiting for the meridian flip point": ""
+  "Waiting for the meridian flip point": "",
+  "The host has not answered yet. It may still be working on the command; this is not necessarily a network fault.": ""
 }
