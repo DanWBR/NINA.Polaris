@@ -99,7 +99,7 @@ public class TakeExposureInstruction : SequenceInstruction {
         // Offset falls back to the ADV panel's own field when the instruction
         // does not pin one: each capturing panel carries its own pedestal, and
         // this is the tree sequencer's (issue #26).
-        var advOffset = RigCaptureDefaults.AdvOffset(ctx.Profiles);
+        var advOffset = RigCaptureDefaults.Offset(ctx.Profiles);
         var capOpts = new NINA.Image.Interfaces.CaptureOptions(
             Gain: Gain,
             Offset: Offset ?? advOffset,

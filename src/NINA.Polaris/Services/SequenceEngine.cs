@@ -553,13 +553,13 @@ public class SequenceEngine {
                     // (often a low/8-bit default), so 60 s lights came back
                     // near-black even though item.Gain was only being stamped
                     // into the FITS header at save time.
-                    // Offset is a per-rig setting (DefaultOffset), not per-item:
-                    // a sensible bias pedestal keeps the background off the
-                    // left wall of the histogram. Sent on every frame alongside
-                    // gain so the camera isn't left on a stale/zero offset.
-                    // AUTORUN has its own offset field, so a running sequence
-                    // obeys that one rather than the LIVE panel's.
-                    var autorunOffset = RigCaptureDefaults.AutorunOffset(_profile);
+                    // Offset is a per-rig setting, not per-item: a sensible
+                    // bias pedestal keeps the background off the left wall of
+                    // the histogram. Sent on every frame alongside gain so the
+                    // camera isn't left on a stale or zero offset. One value for
+                    // the rig, so a run uses the same pedestal as the framing
+                    // snap that set it up.
+                    var autorunOffset = RigCaptureDefaults.Offset(_profile);
                     // AUTORUN-TARGET-NAME: a LIGHT frame never takes a per-item
                     // name. The target does not change across a run, so every
                     // light is named after the most relevant object in the FOV,

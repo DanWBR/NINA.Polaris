@@ -603,21 +603,27 @@ public class EquipmentProfile {
     // null ⇒ "not sent in this PUT, leave the stored value alone". Defaults for a
     // new rig live in CreateEquipmentProfile; read sites resolve `?? <default>`.
     public int? DefaultGain { get; set; }
-    /// <summary>The LIVE panel's offset, and the one every capture that has
-    /// no panel of its own uses (plate solve, autofocus, polar, the stream).
-    /// 0 or null means "leave the driver's setting alone": nothing is written
-    /// and the frame's header records what the driver reports.</summary>
+    /// <summary>The rig's offset: the black-level pedestal every capture on
+    /// this rig uses, wherever it was started from. 0 or null means "leave the
+    /// driver's setting alone": nothing is written and the frame's header
+    /// records what the driver reports.
+    ///
+    /// There used to be four of these, one per panel, on the theory that a
+    /// framing snap and a science frame need not agree about the pedestal. In
+    /// practice nobody wants four, and having them cost a long bug report
+    /// (issue #26) in which the operator typed an offset into one panel and
+    /// watched a different one come out of a capture started from another. The
+    /// pedestal is a property of how the sensor is being run, so it belongs to
+    /// the rig, next to gain.</summary>
     public int? DefaultOffset { get; set; }
-    /// <summary>The PREVIEW panel's offset. Each panel carries its own
-    /// because they are used for different things: a framing snap and a live
-    /// stack do not have to agree about the pedestal, and a single shared
-    /// value meant changing one changed the other silently.</summary>
+
+    // The three per-panel offsets, kept only so MigrateSingleOffset can fold a
+    // value an upgrading install already had into DefaultOffset. Nothing reads
+    // them, the UI no longer writes them, and the migration nulls them on first
+    // load. Delete them, and the migration, once installs have passed through a
+    // release that carries it.
     public int? PreviewOffset { get; set; }
-    /// <summary>The AUTORUN panel's offset, used by every item of a running
-    /// sequence.</summary>
     public int? AutorunOffset { get; set; }
-    /// <summary>The ADV panel's offset: what a tree-sequencer exposure uses
-    /// when the instruction does not pin one of its own.</summary>
     public int? AdvOffset { get; set; }
     public int? DefaultBinning { get; set; }
     public int? FocuserStepSize { get; set; }

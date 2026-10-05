@@ -1382,12 +1382,6 @@
                             <td><input type="number" x-model.number="gain" step="10" min="0" class="input-sm"></td>
                             <td><span class="gain-help" tabindex="0" role="img" aria-label="About gain vs ISO" :title="gainIsoHint()">?</span></td>
                         </tr>
-                        <tr x-show="!cameraUsesIso()">
-                            <td><label>Offset</label></td>
-                            <td><input type="number" x-model.number="offset" step="1" min="0" class="input-sm"
-                                   @change="persistOffset()"></td>
-                            <td><span class="gain-help" tabindex="0" role="img" aria-label="About offset" title="Sensor black-level pedestal (ADU floor) for THIS panel's captures. A small positive value stops the shadow/noise tail clipping to 0 and keeps calibration clean. Polaris sends it to the camera before every capture from this panel, so it wins over the driver's own control panel; 0 means the capture sends nothing and the frame records whatever the driver is set to. Typical: a few tens: SV405CC ~30-64.">?</span></td>
-                        </tr>
                         </tbody>
                         </table>
                         <!-- ZWO L/M/H gain presets, render only when the
@@ -3753,14 +3747,6 @@
                              send THIS value, not LIVE's, so a framing snap and
                              a live stack can differ. Hidden for DSLR/ISO
                              cameras, like Gain. -->
-                        <tr x-show="!previewUsesIso() && !previewAuxUsesIso()">
-                            <td><label>Offset</label></td>
-                            <td><input type="number" x-model.number="previewOffset"
-                                   step="1" min="0" class="input-sm"
-                                   @change="persistPreviewOffset()"
-                                   :disabled="preview.busy"></td>
-                            <td><span class="gain-help" tabindex="0" role="img" aria-label="About offset" title="Sensor black-level pedestal (ADU floor) for THIS panel's captures. A small positive value stops the shadow/noise tail clipping to 0 and keeps calibration clean. Polaris sends it to the camera before every capture from this panel, so it wins over the driver's own control panel; 0 means the capture sends nothing and the frame records whatever the driver is set to. Typical: a few tens: SV405CC ~30-64.">?</span></td>
-                        </tr>
                         </tbody>
                         </table>
                         <span class="zwo-gain-presets" x-show="!previewUsesIso() && !previewAuxUsesIso() && zwoPresetsForActiveCamera() && !preview.busy">
@@ -7020,6 +7006,29 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                      Polaris pushes it into the driver on connect.
                                      Only shown when the camera doesn't report
                                      its own pixel size. -->
+                                <!-- The rig's offset, the only one. It used to
+                                     be four fields, one per panel, and an
+                                     operator could type a pedestal into LIVE
+                                     and get a different one out of a capture
+                                     started from PREVIEW or AUTORUN (issue
+                                     #26). The pedestal is a property of how
+                                     the sensor is run, so it lives here, next
+                                     to the camera, and every capture uses it. -->
+                                <div class="equip-inline-controls" x-show="!cameraUsesIso()">
+                                    <label class="equip-temp-label">
+                                        Offset
+                                        <input type="number" step="1" min="0" class="input-sm"
+                                               x-model.number="offset"
+                                               @change="persistOffset()">
+                                    </label>
+                                    <span class="text-muted" style="font-size:11px"
+                                          x-show="!(offset > 0)"
+                                          x-text="$t('left to the camera driver')"></span>
+                                    <span class="gain-help" tabindex="0" role="img"
+                                          aria-label="About offset"
+                                          title="Sensor black-level pedestal (ADU floor) for every capture on this rig. A small positive value stops the shadow and noise tail clipping to 0 and keeps calibration clean. Polaris sends it to the camera before each capture, so it wins over the driver's own control panel; 0 means nothing is sent and the frame records whatever the driver is set to. Typical: a few tens, SV405CC around 30 to 64.">?</span>
+                                </div>
+
                                 <div class="equip-inline-controls"
                                      x-show="isDslrCamera" x-cloak>
                                     <label class="equip-temp-label">
@@ -11779,15 +11788,6 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <!-- The offset every item of this sequence is taken with. Its
                      own field, so a run is not at the mercy of whatever was
                      last typed in LIVE (issue #27, then #26). -->
-                <div class="autorun-offset-line" x-show="!cameraUsesIso()">
-                    <span>Offset</span>
-                    <input type="number" x-model.number="autorunOffset"
-                           step="1" min="0" class="input-sm" style="width:80px"
-                           @change="persistAutorunOffset()">
-                    <span class="text-muted" x-show="!(autorunOffset > 0)"
-                          x-text="$t('left to the camera driver')"></span>
-                    <span class="gain-help" tabindex="0" role="img" aria-label="About offset" title="Sensor black-level pedestal (ADU floor) for THIS panel's captures. A small positive value stops the shadow/noise tail clipping to 0 and keeps calibration clean. Polaris sends it to the camera before every capture from this panel, so it wins over the driver's own control panel; 0 means the capture sends nothing and the frame records whatever the driver is set to. Typical: a few tens: SV405CC ~30-64.">?</span>
-                </div>
 
                 <!-- Meridian / Dither / End Events as an underline tab strip
                      (same control style as the LIVE refocus/recenter/dither
@@ -12690,15 +12690,6 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <!-- This panel's offset: what an exposure instruction uses
                          when it does not pin one of its own. Its own field,
                          like LIVE, PREVIEW and AUTORUN. -->
-                    <label class="advseq-offset" x-show="!cameraUsesIso()">
-                        <span>Offset</span>
-                        <input type="number" x-model.number="advOffset"
-                               step="1" min="0" class="input-sm" style="width:72px"
-                               @change="persistAdvOffset()">
-                        <span class="text-muted" x-show="!(advOffset > 0)"
-                              x-text="$t('left to the camera driver')"></span>
-                        <span class="gain-help" tabindex="0" role="img" aria-label="About offset" title="Sensor black-level pedestal (ADU floor) for THIS panel's captures. A small positive value stops the shadow/noise tail clipping to 0 and keeps calibration clean. Polaris sends it to the camera before every capture from this panel, so it wins over the driver's own control panel; 0 means the capture sends nothing and the frame records whatever the driver is set to. Typical: a few tens: SV405CC ~30-64.">?</span>
-                    </label>
                     <button class="btn" @click="advSeqSaveDoc()">💾 Save tree</button>
                     <button class="btn" @click="advSeqDownloadJson()">⬇ Download JSON</button>
                     <label class="btn" style="display:inline-flex;align-items:center;gap:6px;cursor:pointer">
