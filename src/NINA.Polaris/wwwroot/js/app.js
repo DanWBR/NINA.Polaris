@@ -2309,6 +2309,15 @@ function ninaApp() {
 
         // Rotator
         rotator: { connected: false, name: '', position: null, moving: false, reversed: false },
+        // Rotator strip on FOCUS and VIDEO (issue #28). Same shape as the
+        // focus-motor strip beside it: two step sizes, an absolute goto, and
+        // hold-to-repeat nudges. Degrees, so the defaults are degrees: a
+        // framing tweak is about a degree, a reframe about ten.
+        rotatorStepSlow: 1,
+        rotatorStepFast: 10,
+        rotatorGotoTarget: 0,
+        rotatorGroupOpenFocus: true,
+        rotatorGroupOpenVideo: false,
 
         // Flat Panel
         flatDevice: { connected: false, name: '', lightOn: false, brightness: 0, coverOpen: false, coverMoving: false },
@@ -42580,6 +42589,54 @@ function ninaApp() {
                 this.toastFail('Rotator move failed', e);
             }
         },
+        // Relative nudge. The rotator API is absolute-only, so a nudge is
+        // read-add-write; the angle wraps, because 359 + 2 is 1 and not 361.
+        // Mirrors startFocusNudgeRepeat: fire once on press, then repeat while
+        // held, and send the accumulated target when the finger lifts, so a
+        // held button is one driver write and not forty.
+        startRotatorNudgeRepeat(deltaDeg) {
+            this.stopRotatorNudgeRepeat();
+            this._rotatorNudgePending = false;
+            this._rotatorNudgeTick(deltaDeg);
+            this._rotatorNudgeTimer = setTimeout(() => {
+                this._rotatorNudgeInterval = setInterval(() => this._rotatorNudgeTick(deltaDeg), 120);
+            }, 400);
+        },
+
+        _rotatorNudgeTick(deltaDeg) {
+            if (!this.rotator.connected) return;
+            const base = this._rotatorNudgePending
+                ? this.rotatorGotoTarget
+                : (Number(this.rotator.position) || 0);
+            let a = base + deltaDeg;
+            a = ((a % 360) + 360) % 360;
+            this.rotatorGotoTarget = Math.round(a * 10) / 10;
+            this._rotatorNudgePending = true;
+        },
+
+        stopRotatorNudgeRepeat() {
+            if (this._rotatorNudgeTimer) { clearTimeout(this._rotatorNudgeTimer); this._rotatorNudgeTimer = null; }
+            if (this._rotatorNudgeInterval) { clearInterval(this._rotatorNudgeInterval); this._rotatorNudgeInterval = null; }
+            if (this._rotatorNudgePending) {
+                this._rotatorNudgePending = false;
+                this.rotatorMoveToAngle(this.rotatorGotoTarget);
+            }
+        },
+
+        // The absolute move the strip uses. equipRotatorTarget belongs to the
+        // RIGS card's own field; this one takes the angle so the strip and the
+        // card cannot fight over one variable.
+        async rotatorMoveToAngle(angleDeg) {
+            const a = Number(angleDeg);
+            if (!Number.isFinite(a)) return;
+            const wrapped = ((a % 360) + 360) % 360;
+            try {
+                await this.apiPost('/api/rotator/move', { angle: wrapped });
+            } catch (e) {
+                this.toastFail('Rotator move failed', e);
+            }
+        },
+
         async rotatorAbort() {
             try {
                 await this.apiPost('/api/rotator/abort');
