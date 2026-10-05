@@ -8836,9 +8836,16 @@ function ninaApp() {
             const kind = e && e.kind;
             if (kind === 'timeout' || kind === 'network') {
                 this._noteLinkFailure();
+                // Two different things used to share one sentence. A dropped
+                // connection is the network; a request of ours that ran out of
+                // budget is not, and saying it is sends the operator to debug
+                // their WiFi while the host is still working on the command.
                 this.toast(
-                    this._t('No reply from the host. This looks like the network, '
-                            + 'not the equipment: the command may still have run.'),
+                    kind === 'network'
+                        ? this._t('No reply from the host. This looks like the network, '
+                                  + 'not the equipment: the command may still have run.')
+                        : this._t('The host has not answered yet. It may still be working '
+                                  + 'on the command; this is not necessarily a network fault.'),
                     'warn', 6500);
                 // The detail still belongs somewhere greppable.
                 this._logFromClient('warn', `${label}: ${(e && e.message) || ''}`,
@@ -34435,7 +34442,12 @@ function ninaApp() {
             if (this.polar.refreshBusy) return;
             this.polar.refreshBusy = true;
             try {
-                const r = await this.apiPostJson('/api/polar/refine/once');
+                // A capture, an ASTAP ladder (hinted, blind, coarser) and
+                // possibly an online blind solve. The default 15 s budget
+                // aborted it mid-solve and reported a network fault on a host
+                // that was working: field report during a TPPA refresh.
+                const r = await this.apiPostJson('/api/polar/refine/once', null,
+                                                 { timeout: 180000 });
                 if (r && r.solved === false) {
                     this.toast('Refresh failed: ' + (r.error || 'solve failed'), 'error');
                 }
