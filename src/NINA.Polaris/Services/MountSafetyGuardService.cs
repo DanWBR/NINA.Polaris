@@ -123,6 +123,11 @@ public class MountSafetyGuardService : BackgroundService {
     // Arm the abort only once the OTA has reached the floor during THIS slew;
     // then a genuine wrong-way descent (starts high, drops below) still trips
     // while climbing out of the stow does not.
+    // When the crossing was observed, so the trip needs that much wall time to
+    // have actually passed and not just an hour angle that says so.
+    private DateTime? _crossingAtUtc;
+    private DateTime? _prevHaAtUtc;
+
     private bool _altGuardSlewingPrev;
     private bool _altGuardArmed;
 
@@ -199,10 +204,35 @@ public class MountSafetyGuardService : BackgroundService {
     /// just west of the meridian) is NOT a cable-wrap crossing, the mount is
     /// being driven to a legitimate pointing, not drifting past the meridian on
     /// the sky, so this returns false while slewing.</summary>
-    public static bool DetectMeridianCrossing(double? prevHa, double ha, bool slewing) {
+    public static bool DetectMeridianCrossing(double? prevHa, double ha, bool slewing,
+            double hoursSincePrev) {
         if (slewing) return false;
-        return prevHa.HasValue && prevHa.Value < 0 && ha >= 0;
+        if (!prevHa.HasValue || prevHa.Value >= 0 || ha < 0) return false;
+        // A tracking mount's hour angle advances one hour per hour, so between
+        // two samples it moves by the time between them. Anything faster is the
+        // mount being driven, and a GoTo is not a cable-wrap crossing however
+        // it lands.
+        //
+        // The slewing flag alone does not catch this: the guard polls every 15
+        // seconds while the mount is idle, and a GoTo that starts and finishes
+        // between two polls is never observed slewing. Starting a session on a
+        // target already west of the meridian then read as a crossing, and with
+        // the target already past the limit the guard tripped within a tick of
+        // the first frame (field report).
+        double advanced = ha - prevHa.Value;
+        double couldHaveTracked = Math.Max(0, hoursSincePrev) * TrackingSlackFactor
+                                  + MinCrossingSlackHours;
+        return advanced <= couldHaveTracked;
     }
+
+    /// <summary>How much faster than the sky a sample gap may look before it is
+    /// treated as a slew. Generous: a late tick or a clock adjustment must not
+    /// turn a real crossing into a missed one.</summary>
+    public const double TrackingSlackFactor = 2.0;
+
+    /// <summary>Floor under the same allowance, for the first sample after a
+    /// gap of nearly nothing. About seventy seconds of hour angle.</summary>
+    public const double MinCrossingSlackHours = 0.02;
 
     // ---------------------------------- loop ------------------------------------
 
@@ -356,7 +386,15 @@ public class MountSafetyGuardService : BackgroundService {
 
         // ---- Guard 1: past-meridian cable wrap ----
         var (haHours, supportsPier, flipped) = UpdateMeridianState();
+        // Belt and braces on top of the crossing detector: the mount must also
+        // have been on this side of the meridian, in wall time, for as long as
+        // the limit says. An hour angle past the limit the moment a target is
+        // acquired west is arithmetic, not an hour of winding.
+        double minutesSinceCrossing = _crossingAtUtc.HasValue
+            ? (DateTime.UtcNow - _crossingAtUtc.Value).TotalMinutes
+            : 0;
         if (haHours.HasValue && _sawCrossing
+                && minutesSinceCrossing >= s.MaxMinutesPastMeridian
                 && ShouldTripMeridian(haHours.Value, supportsPier, flipped, s.MaxMinutesPastMeridian)
                 && _meridian.State == MeridianFlipState.Idle) {
             var mins = haHours.Value * 60.0;
@@ -474,7 +512,8 @@ public class MountSafetyGuardService : BackgroundService {
     private (double? haHours, bool supportsPier, bool flipped) UpdateMeridianState() {
         var scope = _equip.Telescope;
         if (scope == null || !scope.IsConnected) {
-            _prevHa = null; _sawCrossing = false; _flippedSinceCrossing = false;
+            _prevHa = null; _prevHaAtUtc = null;
+            _sawCrossing = false; _crossingAtUtc = null; _flippedSinceCrossing = false;
             return (null, false, false);
         }
 
@@ -493,6 +532,7 @@ public class MountSafetyGuardService : BackgroundService {
         // Clearly east again (new approach / next night): reset the machine.
         if (ha < -0.1) {
             _sawCrossing = false;
+            _crossingAtUtc = null;
             _flippedSinceCrossing = false;
             _pierAtCrossing = PierSide.pierUnknown;
         }
@@ -505,8 +545,13 @@ public class MountSafetyGuardService : BackgroundService {
         // indevido com alvo 1h depois do meridiano saindo do home"). _prevHa is
         // refreshed every tick (below), including during the slew, so the first
         // post-slew tracking tick compares against the SETTLED position.
-        if (DetectMeridianCrossing(_prevHa, ha, slewing)) {
+        var nowUtc = DateTime.UtcNow;
+        double hoursSincePrev = _prevHaAtUtc.HasValue
+            ? (nowUtc - _prevHaAtUtc.Value).TotalHours
+            : 0;
+        if (DetectMeridianCrossing(_prevHa, ha, slewing, hoursSincePrev)) {
             _sawCrossing = true;
+            _crossingAtUtc = nowUtc;
             _pierAtCrossing = pier;
             _flippedSinceCrossing = false;
         }
@@ -519,6 +564,7 @@ public class MountSafetyGuardService : BackgroundService {
         }
 
         _prevHa = ha;
+        _prevHaAtUtc = nowUtc;
         return (ha, supportsPier, _flippedSinceCrossing);
     }
 
