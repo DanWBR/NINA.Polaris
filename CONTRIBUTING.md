@@ -80,6 +80,26 @@ docs/                        # user + dev docs
   *.md                       # per-feature install/setup docs
 ```
 
+## Reporting an equipment problem
+
+Use the **Equipment report** issue template. It asks for four things, and they
+settle most reports in one round: the Polaris version, the host, the output of
+`indi_getprop '<Device>.*'` with the device connected, and `lsusb`.
+
+The property dump is the one that matters. A device that misbehaves through
+INDI is almost always Polaris reading or writing the wrong property name, and
+that dump says which names the driver actually publishes. Two examples from the
+field: a flat panel whose cover never moved because Polaris wrote `DUSTCAP_PARK`
+where INDI publishes `CAP_PARK`, and a filter wheel reporting four slots because
+it was uncalibrated, which `FILTER_SLOT`'s min and max showed at a glance.
+
+If the complaint is "my driver is not in the list", include
+`ls /usr/bin/indi_* | wc -l`. A distribution INDI has about 143 drivers; the
+INDI PPA has about 330. Also check the product name rather than the brand: INDI
+labels devices by product, so a PrimaLuceLab focuser is listed as "Sesto Senso 2"
+and a Wanderer rotator as "Rotator Lite V2". Polaris shows the brand in brackets
+next to the label since v0.98.156.
+
 ## How to add a new INDI device
 
 Concrete walkthrough, add a hypothetical "weather safety monitor":

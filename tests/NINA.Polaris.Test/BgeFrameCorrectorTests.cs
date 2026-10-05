@@ -185,9 +185,14 @@ public class BgeFrameCorrectorTests {
         c.Apply(frame, W, H, 1, 0, null);
         p.Complete(32, 0.0f);
         Settle(c);
+        // Localise a failure: "no sub was corrected" has two very different
+        // causes, a model that never arrived and a correction that did not run.
+        c.Apply(frame, W, H, 1, 1, null);   // adoption happens on the next frame
+        Assert.That(c.Current, Is.Not.Null,
+            $"no model was adopted (producer asked {p.Requests} time(s), tile {p.LastTile})");
 
-        int corrected = 0;
-        for (long i = 1; i <= 4; i++)
+        int corrected = 1;   // the frame just applied above counts
+        for (long i = 2; i <= 4; i++)
             if (c.Apply(frame, W, H, 1, i, null).Corrected) corrected++;
 
         Assert.Multiple(() => {
