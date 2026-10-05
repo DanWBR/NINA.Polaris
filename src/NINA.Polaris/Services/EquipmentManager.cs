@@ -1393,7 +1393,8 @@ public class EquipmentManager : IDisposable {
                 lightOn = FlatDevice.IsLightOn,
                 brightness = FlatDevice.Brightness,
                 coverOpen = FlatDevice.IsCoverOpen,
-                coverMoving = FlatDevice.IsCoverMoving
+                coverMoving = FlatDevice.IsCoverMoving,
+                hasCover = FlatDevice.HasCover
             };
         }
 

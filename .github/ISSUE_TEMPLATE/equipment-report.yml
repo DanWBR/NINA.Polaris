@@ -1,0 +1,119 @@
+name: Equipment report (INDI, ASCOM, Alpaca)
+description: A device that does not appear, does not connect, or does not do what the panel says
+title: "[equipment] "
+labels: ["equipment"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time. Most equipment reports are settled by four
+        things: the device, the driver, what Polaris asked for and what the
+        driver answered. The fields below collect exactly those, and nothing
+        that is not used.
+
+        **Nothing here needs a photograph of a screen.** Text pasted from a
+        terminal is faster for you and far more useful here.
+
+  - type: input
+    id: polaris-version
+    attributes:
+      label: Polaris version
+      description: Bottom of the SETTINGS tab, or `dpkg -l polaris` on the host.
+      placeholder: "0.98.155"
+    validations:
+      required: true
+
+  - type: input
+    id: host
+    attributes:
+      label: Host
+      description: Board or PC, and the operating system.
+      placeholder: "Orange Pi 5 Pro, Ubuntu 24.04 arm64"
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: The device
+      description: Make and model, and how it is attached.
+      placeholder: "QHY 678C, USB 3 straight into the board"
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and what happened
+      description: Two or three sentences is plenty.
+    validations:
+      required: true
+
+  - type: textarea
+    id: indi-version
+    attributes:
+      label: INDI version and driver count
+      description: |
+        On Linux. The count separates "Polaris does not list my driver" from
+        "my INDI is three years old": a distribution INDI has about 143
+        drivers, the INDI PPA about 330.
+      value: |
+        <!-- paste the output of these two -->
+        indiserver --version 2>&1 | head -1
+        ls /usr/bin/indi_* | wc -l
+      render: shell
+
+  - type: textarea
+    id: driver-properties
+    attributes:
+      label: What the driver publishes
+      description: |
+        The single most useful thing in an INDI report. With the device
+        connected, run this for your device and paste the result. If the device
+        does not appear at all, say so and paste the list of device names
+        instead (`indi_getprop '*.CONNECTION.CONNECT'`).
+      value: |
+        indi_getprop '<Device Name>.*' 2>&1 | head -80
+      render: shell
+
+  - type: textarea
+    id: usb
+    attributes:
+      label: The USB bus
+      description: |
+        For a device that does not appear. `lsusb` first: a device the kernel
+        cannot see is never a Polaris problem, and a Billboard entry means the
+        cable negotiated without its data lines.
+      value: |
+        lsusb
+      render: shell
+
+  - type: textarea
+    id: scan
+    attributes:
+      label: The setup assistant's scan (only for a report about the assistant)
+      description: |
+        This is the assistant's whole input and output. It names every device it
+        saw, what it matched and how sure it was.
+      value: |
+        curl -sk https://127.0.0.1:5000/api/indi/detect
+      render: shell
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log
+      description: |
+        The lines around the failure, not the whole night.
+        `~/.local/share/NINA/Logs/nina-polaris-YYYYMMDD.log`, and
+        `journalctl -u polaris --since "1 hour ago"` for anything that happened
+        before the app got far enough to write its own log.
+      render: shell
+
+  - type: checkboxes
+    id: checked
+    attributes:
+      label: Before posting
+      options:
+        - label: The device works outside Polaris (its own vendor tool, KStars/Ekos, or `indi_getprop`), or I said so if it does not.
+        - label: I am on the latest Polaris release, or I said which one I am on and why.

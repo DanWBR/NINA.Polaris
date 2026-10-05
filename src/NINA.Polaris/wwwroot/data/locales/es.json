@@ -5266,5 +5266,7 @@
   "Background extraction has nowhere to run right now. It needs an accelerator on the host (an NPU, or a GPU through Vulkan), or a browser tab open to run the model in. Subs keep stacking with their gradient and are counted.": "La extracción de fondo no tiene dónde ejecutarse ahora. Necesita un acelerador en el host (una NPU, o una GPU mediante Vulkan), o una pestaña del navegador abierta para ejecutar el modelo. Las subs se siguen apilando con su gradiente y se cuentan.",
   "Frames are coming from the camera 8-bit preview JPEG, not its RAW.": "Los fotogramas vienen del JPEG de vista previa de 8 bits de la cámara, no de su RAW.",
   "Frames are coming from the camera 8-bit preview JPEG, not its RAW. Focus and stacking are working on 256 levels per channel.": "Los fotogramas vienen del JPEG de vista previa de 8 bits de la cámara, no de su RAW. El enfoque y el apilado están trabajando con 256 niveles por canal.",
-  "Frames are decoded from the camera RAW, at full depth.": "Los fotogramas se decodifican del RAW de la cámara, a profundidad completa."
+  "Frames are decoded from the camera RAW, at full depth.": "Los fotogramas se decodifican del RAW de la cámara, a profundidad completa.",
+  "INDI drivers installed on this host.": "controladores INDI instalados en este host.",
+  "A distribution INDI has about 143 and is missing the recent ones; the INDI PPA has about 330.": "Un INDI de la distribución tiene unos 143 y le faltan los recientes; el PPA de INDI tiene unos 330."
 }
