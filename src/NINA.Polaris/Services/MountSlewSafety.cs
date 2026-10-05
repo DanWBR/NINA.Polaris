@@ -91,18 +91,39 @@ public static class MountSlewSafety {
         return currentAltDeg < minAltFloorDeg;
     }
 
-    /// <summary>Should the altitude-floor guard abort a slew that is a meridian
-    /// flip in progress? Unlike <see cref="ShouldAbortForAltitude"/>, a floor of
-    /// 0 here means "the horizon" (abort below it), not "off": a flip's transit
-    /// legitimately dips low, so the floor is deliberately at/near the horizon and
-    /// must still catch the OTA actually going below it. The on/off switch for
-    /// flips is the caller's SafetyStopEnabled, checked before this. NaN altitude
-    /// or a stationary mount never aborts.</summary>
+    /// <summary>Seconds the OTA has to stay below the flip floor before a
+    /// meridian flip is aborted.
+    ///
+    /// A flip swings both axes at once and the pointing between the two sides
+    /// is a path, not a position: on a GEM it can sweep through the ground for
+    /// a few seconds while nothing is anywhere near the tripod. Treating the
+    /// first sample below the horizon as a crash is what killed a real flip in
+    /// the field at -5° altitude, and would kill every flip whose transit
+    /// passes under the horizon, which is a property of the geometry and not
+    /// of anything being wrong.
+    ///
+    /// What is still caught, and is the thing worth catching: an OTA that goes
+    /// under and stays under. A flip that ends with the scope pointing at the
+    /// ground, or a slew that keeps driving it down, holds the condition and
+    /// trips within this window.</summary>
+    public const double FlipTransitGraceSeconds = 10.0;
+
+    /// <summary>Should the altitude-floor guard abort a meridian flip in
+    /// progress? Unlike <see cref="ShouldAbortForAltitude"/>, a floor of 0 here
+    /// means "the horizon" (abort below it), not "off": the on/off switch for
+    /// flips is the caller's SafetyStopEnabled, checked before this.
+    ///
+    /// <paramref name="secondsContinuouslyBelow"/> is how long the pointing has
+    /// been under the floor without coming back up, including this sample. The
+    /// slewing flag is deliberately not a parameter: a flip that stops with the
+    /// OTA below the horizon is worse than one still moving through it, not
+    /// better, so the timer keeps running either way.</summary>
     public static bool ShouldAbortForFlipTransit(double currentAltDeg, double floorDeg,
-            bool isSlewing) {
-        if (!isSlewing) return false;
+            double secondsContinuouslyBelow,
+            double graceSeconds = FlipTransitGraceSeconds) {
         if (double.IsNaN(currentAltDeg)) return false;
-        return currentAltDeg < floorDeg;
+        if (currentAltDeg >= floorDeg) return false;
+        return secondsContinuouslyBelow >= graceSeconds;
     }
 
     /// <summary>Evaluate a proposed GoTo before it is issued. <paramref name="mountRaHours"/>

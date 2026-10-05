@@ -433,6 +433,12 @@ public class MeridianFlipSettings {
     /// guard trips. Opt-in; default off to avoid an unexpected re-home.</summary>
     public bool ParkOnSafetyStop { get; set; }
 
+    /// <summary>How long the OTA may sit below the flip floor during a meridian
+    /// flip before the guard aborts it. A flip's transit legitimately sweeps
+    /// below the horizon for a few seconds on some geometries; 0 restores the
+    /// old behaviour of aborting on the first sample below.</summary>
+    public double FlipTransitGraceSeconds { get; set; } = MountSlewSafety.FlipTransitGraceSeconds;
+
     /// <summary>Anti-crash altitude floor (degrees). While the mount is slewing,
     /// if its pointing drops below this the guard aborts the slew + stops (a
     /// wrong-way slew driving the OTA down toward the pier/tripod). 0 disables.

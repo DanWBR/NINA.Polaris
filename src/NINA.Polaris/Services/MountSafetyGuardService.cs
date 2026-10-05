@@ -126,6 +126,11 @@ public class MountSafetyGuardService : BackgroundService {
     private bool _altGuardSlewingPrev;
     private bool _altGuardArmed;
 
+    // When the pointing first went below the flip floor during the current
+    // flip, or null while it is above it. A flip transit dips for a few
+    // seconds by geometry alone, so what counts is how long it stays down.
+    private DateTime? _flipBelowFloorSince;
+
     // ---- guiding circuit breaker ----
     private int _consecutiveGuideFailures;
     private IGuider? _subscribedGuider;
@@ -265,10 +270,45 @@ public class MountSafetyGuardService : BackgroundService {
         // and use ShouldAbortForFlipTransit; every other slew keeps the normal
         // per-rig floor and helper (0 there still means off, as before).
         bool flipping = _meridian.State != MeridianFlipState.Idle;
+        if (!flipping) _flipBelowFloorSince = null;
         bool floorArmed = flipping
             ? s.SafetyStopEnabled
             : (!Tripped && AltitudeFloorDeg > 0);
-        if (!Tripped && floorArmed) {
+        // A flip is watched whether or not the mount reports slewing at this
+        // instant: one that stops with the OTA under the horizon is worse than
+        // one still moving through it.
+        if (!Tripped && floorArmed && flipping) {
+            var fscope = _equip.Telescope;
+            if (fscope is { IsConnected: true }) {
+                double fra = fscope.RightAscension, fdec = fscope.Declination;
+                if (!double.IsNaN(fra) && !double.IsNaN(fdec)) {
+                    double falt = CurrentAltitude(fscope.Altitude, fra, fdec);
+                    double ffloor = FlipFloorDeg;
+                    if (double.IsNaN(falt) || falt >= ffloor) {
+                        _flipBelowFloorSince = null;
+                    } else {
+                        _flipBelowFloorSince ??= DateTime.UtcNow;
+                        double secondsBelow =
+                            (DateTime.UtcNow - _flipBelowFloorSince.Value).TotalSeconds;
+                        double grace = Math.Max(0, s.FlipTransitGraceSeconds);
+                        if (MountSlewSafety.ShouldAbortForFlipTransit(
+                                falt, ffloor, secondsBelow, grace)) {
+                            try { await fscope.AbortSlewAsync(ct); }
+                            catch (Exception ex) {
+                                _logger.LogWarning(ex, "Safety: abort-slew (flip altitude) failed");
+                            }
+                            await TripAsync(
+                                $"Flip aborted: the OTA has been at {falt:F0}° altitude, below the "
+                                + $"{ffloor:F0}° flip floor, for {secondsBelow:F0}s during a meridian flip.",
+                                s, ct);
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!Tripped && floorArmed && !flipping) {
             var scope = _equip.Telescope;
             bool slewingNow = scope is { IsConnected: true, IsSlewing: true };
             // A new slew (idle -> slewing since the last tick) disarms the
@@ -279,23 +319,17 @@ public class MountSafetyGuardService : BackgroundService {
                 double ra = scope.RightAscension, dec = scope.Declination;
                 if (!double.IsNaN(ra) && !double.IsNaN(dec)) {
                     double altDeg = CurrentAltitude(scope.Altitude, ra, dec);
-                    double floorDeg = flipping ? FlipFloorDeg : AltitudeFloorDeg;
+                    double floorDeg = AltitudeFloorDeg;
                     // Arm the ordinary floor once the OTA reaches it this slew.
-                    // Flips keep their own horizon-strict transit logic and
-                    // aren't gated by the arming flag.
-                    if (!flipping && altDeg >= floorDeg) _altGuardArmed = true;
-                    bool abort = flipping
-                        ? MountSlewSafety.ShouldAbortForFlipTransit(altDeg, floorDeg, true)
-                        : (_altGuardArmed && MountSlewSafety.ShouldAbortForAltitude(altDeg, floorDeg, true));
+                    if (altDeg >= floorDeg) _altGuardArmed = true;
+                    bool abort = _altGuardArmed
+                        && MountSlewSafety.ShouldAbortForAltitude(altDeg, floorDeg, true);
                     if (abort) {
                         try { await scope.AbortSlewAsync(ct); }
                         catch (Exception ex) { _logger.LogWarning(ex, "Safety: abort-slew (altitude) failed"); }
                         await TripAsync(
-                            flipping
-                                ? $"Flip aborted: the OTA reached {altDeg:F0}° altitude, below the " +
-                                  $"{floorDeg:F0}° flip floor, below the horizon during a meridian flip."
-                                : $"Slew aborted: the OTA dropped to {altDeg:F0}° altitude, below the " +
-                                  $"{floorDeg:F0}° floor, a wrong-way slew heading for the mount/tripod.",
+                            $"Slew aborted: the OTA dropped to {altDeg:F0}° altitude, below the " +
+                            $"{floorDeg:F0}° floor, a wrong-way slew heading for the mount/tripod.",
                             s, ct);
                         return;
                     }

@@ -80,17 +80,60 @@ public class MountSlewSafetyTests {
             MountSlewSafety.ShouldAbortForAltitude(4, MountSlewSafety.AltitudeFloorDeg, isSlewing: true),
             "the normal 5° floor aborts the 4° transit, the bug being fixed");
         Assert.IsFalse(
-            MountSlewSafety.ShouldAbortForFlipTransit(4, MountSlewSafety.FlipTransitFloorDeg, isSlewing: true),
-            "the flip floor lets the legitimate 4° transit continue");
+            MountSlewSafety.ShouldAbortForFlipTransit(4, MountSlewSafety.FlipTransitFloorDeg,
+                secondsContinuouslyBelow: 60),
+            "the flip floor lets the legitimate 4° transit continue, however long it lasts");
+    }
 
-        // Unlike the normal helper, a 0 flip floor means the horizon, NOT off:
-        // an OTA driven below the horizon during a flip still trips.
-        Assert.IsTrue(
-            MountSlewSafety.ShouldAbortForFlipTransit(-2, MountSlewSafety.FlipTransitFloorDeg, isSlewing: true),
-            "an OTA 2° below the horizon during a flip still aborts");
+    /// <summary>
+    /// A flip's transit is a path, not a position: on some geometries it sweeps
+    /// under the horizon for a few seconds with nothing near the tripod. The
+    /// guard aborted on the first sample below, which killed a real flip at -5°
+    /// altitude and would kill every flip whose transit passes under, since
+    /// that is a property of the sky and the mount, not a fault.
+    ///
+    /// What has to survive is the case worth catching: an OTA that goes under
+    /// and stays under.
+    /// </summary>
+    [Test]
+    public void FlipTransit_ToleratesABriefDipButNotADwell() {
+        const double horizon = MountSlewSafety.FlipTransitFloorDeg;
+
         Assert.IsFalse(
-            MountSlewSafety.ShouldAbortForFlipTransit(-2, 0, isSlewing: false),
-            "a stationary mount never aborts, flip floor or not");
+            MountSlewSafety.ShouldAbortForFlipTransit(-5, horizon, secondsContinuouslyBelow: 1),
+            "the reported case: one sample at -5° during a flip is a transit, not a crash");
+        Assert.IsFalse(
+            MountSlewSafety.ShouldAbortForFlipTransit(-5, horizon, secondsContinuouslyBelow: 9),
+            "still inside the grace window");
+        Assert.IsTrue(
+            MountSlewSafety.ShouldAbortForFlipTransit(-5, horizon, secondsContinuouslyBelow: 10),
+            "ten seconds under the horizon is no longer a transit");
+        Assert.IsTrue(
+            MountSlewSafety.ShouldAbortForFlipTransit(-30, horizon, secondsContinuouslyBelow: 45),
+            "an OTA parked at the ground mid-flip trips");
+    }
+
+    /// <summary>Zero grace restores the old behaviour for anyone who wants
+    /// it.</summary>
+    [Test]
+    public void FlipTransit_ZeroGraceAbortsOnTheFirstSample() {
+        Assert.IsTrue(
+            MountSlewSafety.ShouldAbortForFlipTransit(-1, 0,
+                secondsContinuouslyBelow: 0, graceSeconds: 0));
+    }
+
+    [Test]
+    public void FlipTransit_AboveTheFloorNeverAborts() {
+        Assert.IsFalse(
+            MountSlewSafety.ShouldAbortForFlipTransit(0.5, 0,
+                secondsContinuouslyBelow: 999));
+    }
+
+    [Test]
+    public void FlipTransit_NaNAltitudeNeverAborts() {
+        Assert.IsFalse(
+            MountSlewSafety.ShouldAbortForFlipTransit(double.NaN, 0,
+                secondsContinuouslyBelow: 999));
     }
 
     [Test]
