@@ -171,6 +171,13 @@ public static class FITSWriter {
             Add(cards, "READOUTM", meta.Camera.ReadoutMode.ToString(CultureInfo.InvariantCulture));
         if (meta.Camera.BayerPattern != BayerPatternEnum.None)
             AddStr(cards, "BAYERPAT", meta.Camera.BayerPattern.ToString().ToUpperInvariant());
+        // Vendor readout modes (low noise, conversion gain, high full well...).
+        // Written as strings: they are modes, not measurements, and a reader
+        // matching lights to darks compares them as text.
+        foreach (var c in meta.Camera.VendorCards) {
+            if (!string.IsNullOrWhiteSpace(c.Keyword) && !string.IsNullOrWhiteSpace(c.Value))
+                AddStr(cards, c.Keyword, c.Value, c.Comment);
+        }
 
         // ---- Telescope ----
         // TELESCOP carries the mount device name (existing behaviour); OTA
@@ -324,12 +331,14 @@ public static class FITSWriter {
         cards.Add(card.Length > 80 ? card.Substring(0, 80) : card.PadRight(80));
     }
 
-    private static void AddStr(List<string> cards, string key, string? value) {
+    private static void AddStr(List<string> cards, string key, string? value,
+                               string? comment = null) {
         if (string.IsNullOrWhiteSpace(value)) return;
         var escaped = value.Replace("'", "''");
         if (escaped.Length > 68) escaped = escaped.Substring(0, 68);
         var quoted = $"'{escaped}'";
         var card = $"{key,-8}= {quoted,-20}";
+        if (!string.IsNullOrEmpty(comment)) card += " / " + comment;
         cards.Add(card.Length > 80 ? card.Substring(0, 80) : card.PadRight(80));
     }
 

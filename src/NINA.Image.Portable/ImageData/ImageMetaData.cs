@@ -28,6 +28,19 @@ using NINA.Core.Enum;
 
 namespace NINA.Image.ImageData;
 
+/// <summary>One extra FITS card a camera asked to have recorded, for a
+/// setting that is real, affects the pixels, and has no standard keyword.
+///
+/// Sensor readout modes are the case this exists for: a ToupTek ATR2600C
+/// has low noise, conversion gain and high full well switches, and a light
+/// taken in one mode does not calibrate against a dark taken in another.
+/// Without them in the header there is nothing in the file that says which
+/// mode it was, and the operator finds out when the calibration does not
+/// work (issue #31).</summary>
+/// <param name="Keyword">FITS keyword, eight characters or fewer.</param>
+/// <param name="Value">Already formatted; strings are quoted by the writer.</param>
+public readonly record struct VendorFitsCard(string Keyword, string Value, string? Comment);
+
 public class ImageMetaData {
     public CameraInfo Camera { get; set; } = new();
     public TelescopeInfo Telescope { get; set; } = new();
@@ -89,6 +102,10 @@ public class ImageMetaData {
         public SensorType SensorType { get; set; }
         public BayerPatternEnum BayerPattern { get; set; } = BayerPatternEnum.None;
         public int ReadoutMode { get; set; }
+
+        /// <summary>Vendor readout settings worth recording, collected by the
+        /// camera at capture time. Empty for a camera that exposes none.</summary>
+        public List<VendorFitsCard> VendorCards { get; set; } = [];
     }
 
     public class TelescopeInfo {

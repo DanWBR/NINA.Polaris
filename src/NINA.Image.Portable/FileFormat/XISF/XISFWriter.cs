@@ -251,6 +251,10 @@ public static class XISFWriter {
                 WriteFitsKeyword(xw, "GAIN", meta.Camera.Gain.ToString(CultureInfo.InvariantCulture), null);
             if (meta.Camera.Offset != 0)
                 WriteFitsKeyword(xw, "OFFSET", meta.Camera.Offset.ToString(CultureInfo.InvariantCulture), null);
+            foreach (var vc in meta.Camera.VendorCards) {
+                if (!string.IsNullOrWhiteSpace(vc.Keyword) && !string.IsNullOrWhiteSpace(vc.Value))
+                    WriteFitsKeyword(xw, vc.Keyword, vc.Value, vc.Comment);
+            }
             if (meta.Camera.PixelSizeX > 0)
                 WriteFitsKeyword(xw, "XPIXSZ", Fmt(meta.Camera.PixelSizeX), "Pixel size X (um)");
             if (meta.Camera.PixelSizeY > 0)

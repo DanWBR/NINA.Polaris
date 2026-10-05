@@ -1308,6 +1308,19 @@ public class IndiCamera : ICamera, IDisposable {
                 var appliedOffset = _offset > 0 ? _offset : (DriverOffset ?? 0);
                 if (appliedOffset > 0) imageData.MetaData.Camera.Offset = appliedOffset;
 
+                // Vendor readout modes (low noise, conversion gain, high full
+                // well). They change the pixels and have no standard keyword,
+                // so a light and a dark taken in different modes look alike in
+                // the file and fail to calibrate (issue #31).
+                try {
+                    imageData.MetaData.Camera.VendorCards =
+                        IndiVendorReadoutCards.Collect(name =>
+                            _client.GetProperty(DeviceName, name) as IndiSwitchProperty);
+                } catch (Exception ex) {
+                    _client.DiagLogger.LogDebug(ex,
+                        "{Device}: could not read the vendor readout modes", DeviceName);
+                }
+
                 // FIELD5-CFA: INDI drivers typically do NOT put BAYERPAT
                 // in the FITS BLOB header (the SV405CC indi_svbony_ccd
                 // is a confirmed case). The CFA layout is advertised
