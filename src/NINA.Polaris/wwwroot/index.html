@@ -8500,7 +8500,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     <span>Light: <strong :class="flatDevice.lightOn ? 'text-ok' : 'text-muted'"
                                                           x-text="flatDevice.lightOn ? 'ON' : 'OFF'"></strong></span>
                                     <span>Brightness: <strong x-text="flatDevice.brightness"></strong></span>
-                                    <span>Cover: <strong :class="flatDevice.coverOpen ? 'text-ok' : 'text-warn'"
+                                    <span x-show="flatDevice.hasCover !== false">Cover: <strong :class="flatDevice.coverOpen ? 'text-ok' : 'text-warn'"
                                                           x-text="flatDevice.coverOpen ? 'OPEN' : 'CLOSED'"></strong></span>
                                     <span x-show="flatDevice.coverMoving" class="text-warn">MOVING</span>
                                 </div>
@@ -8514,7 +8514,12 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     </label>
                                     <button class="btn btn-sm" @click="flatSetBrightness()">Set</button>
                                 </div>
-                                <div class="equip-inline-controls">
+                                <!-- A bare light panel has no motorised cap, so
+                                     the driver publishes no CAP_PARK and these
+                                     two have nothing to write to. Hidden rather
+                                     than disabled: a greyed button invites the
+                                     question, an absent one does not. -->
+                                <div class="equip-inline-controls" x-show="flatDevice.hasCover !== false">
                                     <button class="btn btn-sm" @click="flatOpenCover()" :disabled="flatDevice.coverOpen">Open Cover</button>
                                     <button class="btn btn-sm" @click="flatCloseCover()" :disabled="!flatDevice.coverOpen">Close Cover</button>
                                 </div>
