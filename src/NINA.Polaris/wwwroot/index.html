@@ -2872,6 +2872,83 @@
                 </div>
                 </details>
 
+                <!-- Rotator, beside the focus motor rather than three tabs
+                     away in RIGS. Framing happens here: you are looking at
+                     the field, and the angle is part of it (issue #28).
+                     Visible only with a rotator connected, so a rig without
+                     one sees nothing new. -->
+                <details class="focus-group" x-show="rotator.connected" x-cloak
+                         :open="rotatorGroupOpenFocus"
+                         @toggle="rotatorGroupOpenFocus = $event.target.open">
+                    <summary class="focus-group-head">
+                        <span class="focus-group-title">Rotator</span>
+                        <span class="focus-group-pos"
+                              x-text="rotator.position != null ? rotator.position.toFixed(1) + '\u00b0' : '--'">--</span>
+                        <span class="focus-readout-warn" x-show="rotator.moving">MOVING</span>
+                        <span class="focus-readout-warn" x-show="rotator.reversed">REVERSED</span>
+                    </summary>
+                <div class="focus-controls focus-controls-compact">
+                    <div class="stepper stepper-compact">
+                        <button class="btn" style="touch-action:none" :disabled="!rotator.connected"
+                                @pointerdown.prevent="startRotatorNudgeRepeat(-rotatorStepFast)"
+                                @pointerup="stopRotatorNudgeRepeat()" @pointerleave="stopRotatorNudgeRepeat()"
+                                @pointercancel="stopRotatorNudgeRepeat()"
+                                :title="'Rotate by -' + rotatorStepFast + ' degrees (FAST, hold to repeat)'">&laquo;</button>
+                        <button class="btn" style="touch-action:none" :disabled="!rotator.connected"
+                                @pointerdown.prevent="startRotatorNudgeRepeat(-rotatorStepSlow)"
+                                @pointerup="stopRotatorNudgeRepeat()" @pointerleave="stopRotatorNudgeRepeat()"
+                                @pointercancel="stopRotatorNudgeRepeat()"
+                                :title="'Rotate by -' + rotatorStepSlow + ' degrees (SLOW, hold to repeat)'">&lt;</button>
+                        <span class="stepper-value"
+                              x-text="rotator.position != null ? rotator.position.toFixed(1) + '\u00b0' : '--'">--</span>
+                        <button class="btn" style="touch-action:none" :disabled="!rotator.connected"
+                                @pointerdown.prevent="startRotatorNudgeRepeat(rotatorStepSlow)"
+                                @pointerup="stopRotatorNudgeRepeat()" @pointerleave="stopRotatorNudgeRepeat()"
+                                @pointercancel="stopRotatorNudgeRepeat()"
+                                :title="'Rotate by +' + rotatorStepSlow + ' degrees (SLOW, hold to repeat)'">&gt;</button>
+                        <button class="btn" style="touch-action:none" :disabled="!rotator.connected"
+                                @pointerdown.prevent="startRotatorNudgeRepeat(rotatorStepFast)"
+                                @pointerup="stopRotatorNudgeRepeat()" @pointerleave="stopRotatorNudgeRepeat()"
+                                @pointercancel="stopRotatorNudgeRepeat()"
+                                :title="'Rotate by +' + rotatorStepFast + ' degrees (FAST, hold to repeat)'">&raquo;</button>
+                        <!-- Not disabled while it moves, which is when it is
+                             wanted. Same rule as the focuser Stop above. -->
+                        <button class="btn btn-danger focus-stop" :disabled="!rotator.connected"
+                                @click="rotatorAbort()"
+                                title="Stop the rotator now. Cancels a hold-to-repeat nudge as well as a move already running.">&#9632; <span x-text="$t('Stop')"></span></button>
+                    </div>
+                    <div class="focus-meta-strip">
+                        <label class="focus-step-inline">
+                            <span>Slow</span>
+                            <input type="number" min="0.1" max="45" step="0.1"
+                                   x-model.number="rotatorStepSlow">
+                        </label>
+                        <label class="focus-step-inline">
+                            <span>Fast</span>
+                            <input type="number" min="1" max="180" step="1"
+                                   x-model.number="rotatorStepFast">
+                        </label>
+                        <label class="focus-step-inline focus-goto-inline">
+                            <span>Goto</span>
+                            <input type="number" min="0" max="360" step="0.1"
+                                   x-model.number="rotatorGotoTarget"
+                                   :disabled="!rotator.connected"
+                                   @keydown.enter.prevent="rotatorMoveToAngle(rotatorGotoTarget)"
+                                   title="Rotate to this absolute sky angle">
+                        </label>
+                        <button class="btn btn-sm"
+                                :disabled="!rotator.connected"
+                                @click="rotatorMoveToAngle(rotatorGotoTarget)"
+                                title="Go to the absolute angle entered">Go</button>
+                        <button class="btn btn-sm"
+                                @click="rotatorToggleReverse()"
+                                :class="rotator.reversed ? 'btn-active' : ''"
+                                title="Flip the direction the rotator turns for a given angle. Set this once, to whatever makes the field rotate the way you expect."
+                                x-text="rotator.reversed ? $t('Reversed') : $t('Normal')"></button>
+                    </div>
+                </div>
+                </details>
+
                 <!-- MFOC-1: tabstrip splitting Manual Assist (HFR
                      loop + Bahtinov for users without a motor or
                      for fine-tune after a V-curve) from the existing
@@ -4267,6 +4344,46 @@
                             <button class="btn btn-sm btn-danger focus-stop" style="flex:0 0 auto"
                                     :disabled="!focusJogConnected"
                                     @click="focusAbort()" title="Stop the focuser now. Cancels a hold-to-repeat nudge as well as a move already running.">&#9632;</button>
+                            </div>
+                        </details>
+
+                        <!-- Rotator, same shape as the focus group above it:
+                             four nudges and a stop, folded away by default
+                             because planetary work rarely touches it (issue
+                             #28). -->
+                        <details class="focus-group" x-show="rotator.connected" x-cloak
+                                 :open="rotatorGroupOpenVideo"
+                                 @toggle="rotatorGroupOpenVideo = $event.target.open">
+                            <summary class="focus-group-head">
+                                <span class="focus-group-title">Rotator</span>
+                                <span class="focus-group-pos"
+                                      x-text="rotator.position != null ? rotator.position.toFixed(1) + '\u00b0' : '--'">--</span>
+                                <span class="focus-readout-warn" x-show="rotator.moving">MOVING</span>
+                            </summary>
+                            <div class="control-row preview-focus-btn-row">
+                            <button class="btn btn-sm" style="touch-action:none; flex:1 1 0"
+                                    @pointerdown.prevent="startRotatorNudgeRepeat(-rotatorStepFast)"
+                                    @pointerup="stopRotatorNudgeRepeat()" @pointerleave="stopRotatorNudgeRepeat()"
+                                    @pointercancel="stopRotatorNudgeRepeat()"
+                                    :title="'-' + rotatorStepFast + ' degrees (fast, hold to repeat)'">&laquo;</button>
+                            <button class="btn btn-sm" style="touch-action:none; flex:1 1 0"
+                                    @pointerdown.prevent="startRotatorNudgeRepeat(-rotatorStepSlow)"
+                                    @pointerup="stopRotatorNudgeRepeat()" @pointerleave="stopRotatorNudgeRepeat()"
+                                    @pointercancel="stopRotatorNudgeRepeat()"
+                                    :title="'-' + rotatorStepSlow + ' degrees (slow, hold to repeat)'">&lt;</button>
+                            <button class="btn btn-sm" style="touch-action:none; flex:1 1 0"
+                                    @pointerdown.prevent="startRotatorNudgeRepeat(rotatorStepSlow)"
+                                    @pointerup="stopRotatorNudgeRepeat()" @pointerleave="stopRotatorNudgeRepeat()"
+                                    @pointercancel="stopRotatorNudgeRepeat()"
+                                    :title="'+' + rotatorStepSlow + ' degrees (slow, hold to repeat)'">&gt;</button>
+                            <button class="btn btn-sm" style="touch-action:none; flex:1 1 0"
+                                    @pointerdown.prevent="startRotatorNudgeRepeat(rotatorStepFast)"
+                                    @pointerup="stopRotatorNudgeRepeat()" @pointerleave="stopRotatorNudgeRepeat()"
+                                    @pointercancel="stopRotatorNudgeRepeat()"
+                                    :title="'+' + rotatorStepFast + ' degrees (fast, hold to repeat)'">&raquo;</button>
+                            <button class="btn btn-sm btn-danger focus-stop" style="flex:0 0 auto"
+                                    :disabled="!rotator.connected"
+                                    @click="rotatorAbort()" title="Stop the rotator now. Cancels a hold-to-repeat nudge as well as a move already running.">&#9632;</button>
                             </div>
                         </details>
 
