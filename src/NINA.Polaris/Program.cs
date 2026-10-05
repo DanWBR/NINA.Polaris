@@ -434,6 +434,10 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<Phd2VncSessionServ
 // dual-registration shape as Phd2GuiSession so endpoint handlers
 // resolve the singleton AND the background loop (auto-start +
 // health probe) runs.
+// Brands for the INDI driver list, read from the driver XML on disk: indi-web
+// serves the product label and not the manufacturer, so a Wanderer or a
+// PrimaLuceLab device could not be found by brand.
+builder.Services.AddSingleton<IndiDriverManifest>();
 builder.Services.AddSingleton<IndiWebManagerService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<IndiWebManagerService>());
 // INDI profile assistant: stateless sysfs reader behind /api/indi/detect.

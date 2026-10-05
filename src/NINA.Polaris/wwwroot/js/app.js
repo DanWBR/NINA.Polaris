@@ -2205,7 +2205,7 @@ function ninaApp() {
         // opened by itself remembers a "not now" against the hardware that was
         // plugged in at the time; one the operator opened on purpose does not.
         indiDetect: { busy: false, applying: false, modalOpen: false, error: '',
-                      devices: [], serialPorts: [], installedDrivers: [],
+                      devices: [], serialPorts: [], installedDrivers: [], installedDriverCount: 0,
                       existingProfiles: [], showUnknown: false,
                       choice: {}, profileName: 'Polaris',
                       autoOffered: false, offeredFingerprint: '' },
@@ -46203,6 +46203,11 @@ function ninaApp() {
                 this.indiDetect.devices = r?.devices || [];
                 this.indiDetect.serialPorts = r?.serialPorts || [];
                 this.indiDetect.installedDrivers = r?.installedDrivers || [];
+                // How many drivers this host actually has. A distribution
+                // INDI has about 143 and is missing the recent ones; the
+                // PPA has about 330. From inside this dialog, a missing
+                // driver and an old INDI look the same.
+                this.indiDetect.installedDriverCount = r?.installedDriverCount || 0;
                 this.indiDetect.existingProfiles = r?.existingProfiles || [];
                 // Pre-tick only the single-candidate matches. An ambiguous row
                 // (the rebadged-camera case) is left blank on purpose: picking
@@ -46270,6 +46275,26 @@ function ninaApp() {
                 groups.get(family).push(d);
             }
             return [...groups.entries()].map(([family, drivers]) => ({ family, drivers }));
+        },
+
+        // Driver option text: the product label, plus the brand when the label
+        // does not already carry it.
+        //
+        // INDI labels a device by its product and keeps the brand in an
+        // attribute of its driver XML: "Sesto Senso 2" is the label and
+        // "Primaluce Lab" is only in `manufacturer`. A field report had an
+        // operator conclude the Wanderer and PrimaLuceLab drivers were missing
+        // from Polaris; they were installed the whole time, under the names of
+        // the products. "ZWO CCD" already says ZWO, so adding it again would
+        // just be noise.
+        driverOptionText(drv) {
+            if (!drv) return '';
+            const label = drv.label || '';
+            const brand = (drv.manufacturer || '').trim();
+            const bits = [];
+            if (brand && !label.toLowerCase().includes(brand.toLowerCase())) bits.push(brand);
+            if (drv.family) bits.push(drv.family);
+            return bits.length ? label + ' (' + bits.join(' \u00b7 ') + ')' : label;
         },
 
         // A method rather than a stored flag so it re-evaluates as the operator

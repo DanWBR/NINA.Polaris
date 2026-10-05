@@ -53,7 +53,12 @@ namespace NINA.Polaris.Services;
 /// </summary>
 /// <summary>An INDI driver installed on the host, as indi-web reports it.
 /// <paramref name="Label"/> is the identifier every indi-web call takes.</summary>
-public sealed record IndiInstalledDriver(string Label, string? Binary, string? Family);
+/// <param name="Manufacturer">The brand, which INDI keeps in an attribute of
+/// its driver XML and indi-web does not serve. Null when the XML does not say.
+/// Without it, searching the picker for "Wanderer" or "PrimaLuceLab" finds
+/// nothing, because those devices are labelled by product.</param>
+public sealed record IndiInstalledDriver(string Label, string? Binary, string? Family,
+                                         string? Manufacturer = null);
 
 public class IndiWebManagerService : BackgroundService {
     /// <summary>The unit the .deb ships in /lib/systemd/system. Starting
@@ -63,6 +68,10 @@ public class IndiWebManagerService : BackgroundService {
 
     private readonly IConfiguration _config;
     private readonly ILogger<IndiWebManagerService> _logger;
+    // Brands for the driver list. Optional: on a host with no INDI XML on
+    // disk (Windows, or a remote INDI) every lookup is null and the picker is
+    // exactly what it was.
+    private readonly IndiDriverManifest? _manifest;
     private Process? _process;
 
     /// <summary>True when systemd is the init system AND the packaged
@@ -126,9 +135,11 @@ public class IndiWebManagerService : BackgroundService {
     }
 
     public IndiWebManagerService(IConfiguration config,
-                                  ILogger<IndiWebManagerService> logger) {
+                                  ILogger<IndiWebManagerService> logger,
+                                  IndiDriverManifest? manifest = null) {
         _config = config;
         _logger = logger;
+        _manifest = manifest;
         BindPort = _config.GetValue("IndiWeb:Port", 8624);
         // Always loopback by default, indi-web has no auth, and the
         // user reaches it via Polaris's reverse-proxy (which IS
@@ -447,8 +458,12 @@ public class IndiWebManagerService : BackgroundService {
         if (!IsSupportedOs) return [];
         try {
             var drivers = await Http.GetFromJsonAsync<List<IndiWebDriver>>("/api/drivers", ct);
+            // The brand comes from the driver XML on disk, because indi-web
+            // serves the label, the binary and the family and nothing else. If
+            // a future indi-web does serve it, that wins.
             return drivers?.Where(d => !string.IsNullOrWhiteSpace(d.Label))
-                          .Select(d => new IndiInstalledDriver(d.Label!, d.Binary, d.Family))
+                          .Select(d => new IndiInstalledDriver(d.Label!, d.Binary, d.Family,
+                              d.Manufacturer ?? _manifest?.ManufacturerFor(d.Binary, d.Label)))
                           .ToList() ?? [];
         } catch (Exception ex) {
             _logger.LogDebug(ex, "indi-web GET /api/drivers failed");
@@ -733,6 +748,9 @@ public class IndiWebManagerService : BackgroundService {
         public string? Version { get; set; }
         public string? Binary { get; set; }
         public string? Family { get; set; }
+        /// <summary>Not served by indi-web today. Read anyway, so the day it
+        /// is, it wins over our own reading of the XML.</summary>
+        public string? Manufacturer { get; set; }
     }
 
     private sealed class IndiWebProfile {

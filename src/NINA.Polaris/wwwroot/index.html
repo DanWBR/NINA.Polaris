@@ -23324,7 +23324,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                                         <template x-for="drv in g.drivers" :key="drv.label">
                                             <option :value="drv.label"
                                                     :selected="indiDetect.choice[d.path] === drv.label"
-                                                    x-text="drv.label"></option>
+                                                    x-text="driverOptionText(drv)"></option>
                                         </template>
                                     </optgroup>
                                 </template>
@@ -23370,7 +23370,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                                     <template x-for="drv in g.drivers" :key="drv.label">
                                         <option :value="drv.label"
                                                 :selected="indiDetect.choice['serial:' + p.device] === drv.label"
-                                                x-text="drv.label"></option>
+                                                x-text="driverOptionText(drv)"></option>
                                     </template>
                                 </optgroup>
                             </template>
@@ -23378,6 +23378,19 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     </div>
                 </div>
             </template>
+
+            <!-- How complete this host's INDI is. Said here because, from
+                 inside this dialog, "my driver is not in the list" and "my INDI
+                 is three years old" look identical. The number is its own text
+                 node so the English sentence stays a translatable key. -->
+            <p x-show="indiDetect.installedDriverCount > 0"
+               style="font-size:11px;color:var(--text-muted);margin-top:10px;">
+                <span x-text="indiDetect.installedDriverCount"></span>
+                <span>INDI drivers installed on this host.</span>
+                <span x-show="indiDetect.installedDriverCount < 200">
+                    A distribution INDI has about 143 and is missing the recent ones; the INDI PPA has about 330.
+                </span>
+            </p>
 
             <div style="margin-top:12px;display:flex;align-items:center;gap:8px;">
                 <span style="font-size:11px;color:var(--text-muted);min-width:80px;">Profile name</span>
@@ -23543,7 +23556,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                                         <template x-for="drv in wizardSerialDriverOptions()" :key="drv.label">
                                             <option :value="drv.label"
                                                     :selected="wizard.serialChoice[p.device] === drv.label"
-                                                    x-text="drv.label + (drv.family ? ' (' + drv.family + ')' : '')"></option>
+                                                    x-text="driverOptionText(drv)"></option>
                                         </template>
                                     </select>
                                 </div>
