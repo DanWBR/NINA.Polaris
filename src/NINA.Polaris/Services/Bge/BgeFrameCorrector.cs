@@ -63,6 +63,12 @@ public sealed class BgeFrameCorrector {
     private InFlightContext? _inFlightFor;
     private bool _warnedCannotRun;
 
+    /// <summary>Why the last completed request was not adopted, or null when
+    /// the last one was. There are four ways to drop a model and three of them
+    /// used to be silent, which is no way to answer "my background never
+    /// updates". Also what a flaky test needs to say which half broke.</summary>
+    internal string? LastAdoptionSkip { get; private set; }
+
     private sealed record InFlightContext(
         int Tile, int Width, int Height, int Channels, string? Filter,
         long StartedOnFrame, long StartedTicks);
@@ -171,26 +177,45 @@ public sealed class BgeFrameCorrector {
         }
 
         float[]? output = null;
-        if (task.IsCompletedSuccessfully) output = task.Result;
-        else if (task.IsFaulted)
-            _logger?.LogWarning(task.Exception?.GetBaseException(),
+        Exception? fault = null;
+        if (task.IsCompletedSuccessfully) {
+            output = task.Result;
+        } else if (task.IsFaulted) {
+            fault = task.Exception?.GetBaseException();
+            _logger?.LogWarning(fault,
                 "Background extraction request failed on the {Where} path", _producer.Name);
+        }
 
-        if (output == null || ctx == null) return;
+        if (ctx == null) { LastAdoptionSkip = "no context for the request"; return; }
+        if (output == null) {
+            // Not an error: the producer says "I could not", which for the
+            // client path is an expired job and for the host path is a lane
+            // that declined. The frame is stacked uncorrected and counted.
+            LastAdoptionSkip = fault != null
+                ? $"the {_producer.Name} path threw {fault.GetType().Name}: {fault.Message}"
+                : $"the {_producer.Name} path returned no model (status {task.Status})";
+            return;
+        }
 
         if (ctx.Width != width || ctx.Height != height || ctx.Channels != channels
                 || !string.Equals(ctx.Filter ?? "", filter ?? "", StringComparison.OrdinalIgnoreCase)) {
+            LastAdoptionSkip = $"computed for {ctx.Width}x{ctx.Height}c{ctx.Channels} "
+                + $"filter '{ctx.Filter}', frames are now {width}x{height}c{channels} "
+                + $"filter '{filter}'";
             _logger?.LogInformation(
                 "Discarding a background model: it was computed for {W}x{H}c{C} and the frames are now {W2}x{H2}c{C2}",
                 ctx.Width, ctx.Height, ctx.Channels, width, height, channels);
             return;
         }
         if (output.Length != ctx.Tile * ctx.Tile * 3) {
+            LastAdoptionSkip = $"model has {output.Length} values, expected "
+                + $"{ctx.Tile * ctx.Tile * 3} for tile {ctx.Tile}";
             _logger?.LogWarning("Background model has {N} values, expected {M}; discarding",
                 output.Length, ctx.Tile * ctx.Tile * 3);
             return;
         }
 
+        LastAdoptionSkip = null;
         var elapsed = (Stopwatch.GetTimestamp() - ctx.StartedTicks) * 1000.0 / Stopwatch.Frequency;
         lock (_lock) {
             _current = new BgeBackground(output, ctx.Tile, ctx.Width, ctx.Height, ctx.Channels,

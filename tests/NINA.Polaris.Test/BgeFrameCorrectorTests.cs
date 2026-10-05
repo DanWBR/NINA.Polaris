@@ -58,11 +58,18 @@ public class BgeFrameCorrectorTests {
 
         public Task<float[]?> RunAsync(float[] nhwcTensor, int tile, CancellationToken ct) {
             LastTile = tile;
-            _pending = new TaskCompletionSource<float[]?>(
+            // The local matters. _asked.Set() releases the test thread, which
+            // completes this request and sets _pending back to null; reading
+            // the field again after that point raced with it and threw, on the
+            // thread pool, where the only trace was a faulted task the
+            // corrector dropped in silence. Twice in a loaded suite before the
+            // corrector was made to name the exception.
+            var tcs = new TaskCompletionSource<float[]?>(
                 TaskCreationOptions.RunContinuationsAsynchronously);
+            _pending = tcs;
             Requests++;
             _asked.Set();
-            return _pending.Task;
+            return tcs.Task;
         }
 
         /// <summary>Block until the request count reaches <paramref name="n"/>.
@@ -167,7 +174,8 @@ public class BgeFrameCorrectorTests {
         var r = c.Apply(frame, W, H, 1, 1, null);
 
         Assert.Multiple(() => {
-            Assert.That(r.Corrected, Is.True);
+            Assert.That(r.Corrected, Is.True,
+                c.LastAdoptionSkip ?? "the request had not finished when the frame arrived");
             Assert.That(r.Producer, Is.EqualTo("fake"));
             Assert.That(r.Pixels, Is.Not.SameAs(frame), "a corrected frame is a new array");
             Assert.That(c.FramesUncorrected, Is.EqualTo(1), "only the first frame missed");
@@ -189,7 +197,8 @@ public class BgeFrameCorrectorTests {
         // causes, a model that never arrived and a correction that did not run.
         c.Apply(frame, W, H, 1, 1, null);   // adoption happens on the next frame
         Assert.That(c.Current, Is.Not.Null,
-            $"no model was adopted (producer asked {p.Requests} time(s), tile {p.LastTile})");
+            $"no model was adopted: {c.LastAdoptionSkip ?? "the request had not finished"} "
+            + $"(producer asked {p.Requests} time(s), tile {p.LastTile})");
 
         int corrected = 1;   // the frame just applied above counts
         for (long i = 2; i <= 4; i++)
