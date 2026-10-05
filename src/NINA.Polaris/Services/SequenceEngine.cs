@@ -77,6 +77,10 @@ public class SequenceEngine {
     public int CurrentFrameInItem { get; private set; }
     public int TotalFramesCompleted { get; private set; }
     public string? LastError { get; private set; }
+
+    /// <summary>What the run is waiting on while it is not exposing, for the
+    /// status feed. Set around a deliberate hold and cleared after it.</summary>
+    public string? WaitingFor { get; private set; }
     public DateTime? StartedAt { get; private set; }
 
     /// <summary>Dither configuration. Default: disabled.</summary>
@@ -335,6 +339,7 @@ public class SequenceEngine {
             ElapsedSeconds = elapsed.TotalSeconds,
             EstimatedRemainingSeconds = estimatedRemainingSeconds,
             LastError = LastError,
+            WaitingFor = WaitingFor,
             DithersIssued = DithersIssued,
             FramesSinceDither = _framesSinceDither,
             Dither = Dither,
@@ -503,14 +508,30 @@ public class SequenceEngine {
                     await _pauseGate.WaitAsync(ct);
                     _pauseGate.Release();
 
-                    // Meridian flip check, meaningful only for LIGHT frames
-                    // pointed at a real target.
+                    // Meridian flip, meaningful only for LIGHT frames pointed
+                    // at a real target. Two questions, in this order: would THIS
+                    // exposure run past the flip point, and is a flip due now.
+                    //
+                    // The first one used to be missing, so a sub that started
+                    // before the point and ended after it tracked straight
+                    // through (issue #30). Holding for the remainder costs at
+                    // most one exposure, once per flip.
                     if (!isCalibration
                         && item.Ra.HasValue && item.Dec.HasValue
-                        && _meridianFlip.Settings.Enabled
-                        && _meridianFlip.ShouldFlipNow(item.Ra.Value)) {
-                        _logger.LogInformation("Meridian flip due for target {Name}, executing", item.Name);
-                        await _meridianFlip.ExecuteFlipAsync(item.Ra.Value, item.Dec.Value, ct);
+                        && _meridianFlip.Settings.Enabled) {
+                        var hold = _meridianFlip.WaitBeforeExposure(item.Ra.Value, item.Exposure);
+                        if (hold > TimeSpan.Zero) {
+                            _logger.LogInformation(
+                                "Holding {Sec:F0}s before frame {Frame} of '{Name}': a {Exp:F0}s "
+                                + "exposure started now would run past the meridian flip point",
+                                hold.TotalSeconds, f + 1, item.Name, item.Exposure);
+                            WaitingFor = "Waiting for the meridian flip point";
+                            try { await Task.Delay(hold, ct); } finally { WaitingFor = null; }
+                        }
+                        if (_meridianFlip.ShouldFlipNow(item.Ra.Value)) {
+                            _logger.LogInformation("Meridian flip due for target {Name}, executing", item.Name);
+                            await _meridianFlip.ExecuteFlipAsync(item.Ra.Value, item.Dec.Value, ct);
+                        }
                     }
 
                     CurrentFrameInItem = f;

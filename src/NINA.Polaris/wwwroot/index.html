@@ -11834,7 +11834,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                   x-text="mfSettings.enabled ? 'Enabled' : 'Disabled'"></span>
                         </label>
                         <span class="text-muted" style="font-size: 11px;" x-show="mfTimeToMeridianMinutes !== null">
-                            <span x-show="mfTimeToMeridianMinutes > 0 && mfTimeToMeridianMinutes < 6*60">
+                            <!-- Count to the point the run actually acts on. It
+                                 used to count to the meridian while the flip
+                                 happens N minutes later, which read as a
+                                 deadline that was not one (issue #30). -->
+                            <span x-show="mfSettings.enabled && mfTimeToFlipMinutes > 0 && mfTimeToFlipMinutes < 6*60">
+                                Flip in <strong x-text="formatMinutes(mfTimeToFlipMinutes)"></strong>
+                            </span>
+                            <span x-show="!mfSettings.enabled && mfTimeToMeridianMinutes > 0 && mfTimeToMeridianMinutes < 6*60">
                                 Meridian in <strong x-text="formatMinutes(mfTimeToMeridianMinutes)"></strong>
                             </span>
                             <span x-show="mfState !== 'idle'" class="text-warn"
@@ -12131,6 +12138,12 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 ETA <strong x-text="formatTime(seqStatus?.estimatedRemainingSeconds)"></strong>
                             </div>
                         </div>
+                        <!-- A deliberate hold between frames. Without this the
+                             run looks stopped for up to one exposure while it
+                             waits out the meridian flip point. -->
+                        <div style="font-size:11px; line-height:1.4"
+                             class="text-warn" x-show="seqStatus?.waitingFor"
+                             x-text="$t(seqStatus?.waitingFor || '')"></div>
                         <div class="seq-error" x-show="seqStatus?.lastError">
                             <span class="seq-error-text" x-text="seqStatus?.lastError"></span>
                             <button type="button" class="seq-error-dismiss" @click="dismissSeqError()"

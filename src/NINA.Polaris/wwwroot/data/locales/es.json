@@ -1475,7 +1475,7 @@
   "Flip due (auto)…": "Flip previsto (auto)…",
   "Flip due now": "Flip previsto ahora",
   "Flip failed:": "Error al dar la vuelta:",
-  "Flip in": "Flip en",
+  "Flip in": "Volteo en",
   "Flip rows": "Invertir filas",
   "Flip the mount now and keep stacking. Reads the mount's current position; the mount flips when the re-slew crosses its meridian limit, then recenters.": "Ahora gira la montura y sigue apilando. Lee la posición actual de la montura; la montura gira cuando el nuevo movimiento de seguimiento cruza su límite meridiano y, a continuación, se vuelve a centrar.",
   "Flip when past meridian by (min)": "Invertir cuando se haya superado el meridiano en (min)",
@@ -5270,5 +5270,6 @@
   "Frames are coming from the camera 8-bit preview JPEG, not its RAW. Focus and stacking are working on 256 levels per channel.": "Los fotogramas vienen del JPEG de vista previa de 8 bits de la cámara, no de su RAW. El enfoque y el apilado están trabajando con 256 niveles por canal.",
   "Frames are decoded from the camera RAW, at full depth.": "Los fotogramas se decodifican del RAW de la cámara, a profundidad completa.",
   "INDI drivers installed on this host.": "controladores INDI instalados en este host.",
-  "A distribution INDI has about 143 and is missing the recent ones; the INDI PPA has about 330.": "Un INDI de la distribución tiene unos 143 y le faltan los recientes; el PPA de INDI tiene unos 330."
+  "A distribution INDI has about 143 and is missing the recent ones; the INDI PPA has about 330.": "Un INDI de la distribución tiene unos 143 y le faltan los recientes; el PPA de INDI tiene unos 330.",
+  "Waiting for the meridian flip point": "Esperando el punto de volteo del meridiano"
 }
