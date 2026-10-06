@@ -13,6 +13,7 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using NINA.Polaris.Services;
+using NINA.Polaris.Services.Sequencer.Instructions;
 
 namespace NINA.Polaris.Endpoints;
 
@@ -20,8 +21,12 @@ namespace NINA.Polaris.Endpoints;
 /// REST surface for the power box / switch hub (<c>ISwitchDevice</c>).
 /// Multi-driver like the filter wheel: <c>/select</c> takes an optional
 /// <c>driver</c>, <c>/discover</c> + <c>/drivers</c> feed the RIGS picker.
-/// The power-box actions (<c>/set-bool</c>, <c>/set-value</c>) address a
-/// channel by its stable id.
+/// The power-box actions (<c>/set-bool</c>, <c>/set-value</c>,
+/// <c>/set-selected</c>) address a channel by its stable <c>key</c> when the
+/// caller sends one, falling back to the positional <c>id</c>. The id is a
+/// position in the device's current channel map, so a map rebuilt between the
+/// status tick the caller read and the write it sends would address a
+/// different outlet; the key cannot drift that way.
 /// </summary>
 public static class SwitchEndpoints {
     public static void MapSwitchEndpoints(this WebApplication app) {
@@ -161,9 +166,11 @@ public static class SwitchEndpoints {
         group.MapPost("/set-bool", async (EquipmentManager equip, SetSwitchBoolRequest request) => {
             if (equip.Switch == null)
                 return Results.BadRequest(new { error = "No power box connected" });
+            if (Target(equip.Switch, request.Key, request.Id) is not int id)
+                return GoneChannel(equip.Switch, request.Key);
             try {
-                await equip.Switch.SetBoolAsync(request.Id, request.On);
-                return Results.Ok(new { id = request.Id, on = request.On });
+                await equip.Switch.SetBoolAsync(id, request.On);
+                return Results.Ok(new { id, on = request.On });
             } catch (ArgumentOutOfRangeException ex) {
                 return Results.BadRequest(new { error = ex.Message });
             } catch (InvalidOperationException ex) {
@@ -174,9 +181,11 @@ public static class SwitchEndpoints {
         group.MapPost("/set-value", async (EquipmentManager equip, SetSwitchValueRequest request) => {
             if (equip.Switch == null)
                 return Results.BadRequest(new { error = "No power box connected" });
+            if (Target(equip.Switch, request.Key, request.Id) is not int id)
+                return GoneChannel(equip.Switch, request.Key);
             try {
-                await equip.Switch.SetValueAsync(request.Id, request.Value);
-                return Results.Ok(new { id = request.Id, value = request.Value });
+                await equip.Switch.SetValueAsync(id, request.Value);
+                return Results.Ok(new { id, value = request.Value });
             } catch (ArgumentOutOfRangeException ex) {
                 return Results.BadRequest(new { error = ex.Message });
             } catch (InvalidOperationException ex) {
@@ -188,9 +197,11 @@ public static class SwitchEndpoints {
         group.MapPost("/set-selected", async (EquipmentManager equip, SetSwitchSelectedRequest request) => {
             if (equip.Switch == null)
                 return Results.BadRequest(new { error = "No power box connected" });
+            if (Target(equip.Switch, request.Key, request.Id) is not int id)
+                return GoneChannel(equip.Switch, request.Key);
             try {
-                await equip.Switch.SetSelectedAsync(request.Id, request.Index);
-                return Results.Ok(new { id = request.Id, selected = request.Index });
+                await equip.Switch.SetSelectedAsync(id, request.Index);
+                return Results.Ok(new { id, selected = request.Index });
             } catch (ArgumentOutOfRangeException ex) {
                 return Results.BadRequest(new { error = ex.Message });
             } catch (NotSupportedException ex) {
@@ -201,9 +212,26 @@ public static class SwitchEndpoints {
         });
     }
 
-    public record SetSwitchBoolRequest(int Id, bool On);
-    public record SetSwitchValueRequest(int Id, double Value);
-    public record SetSwitchSelectedRequest(int Id, int Index);
+    /// <summary>Key first, positional id only as a fallback. Shared with the
+    /// sequencer's power-box instructions so one routine decides which outlet a
+    /// key names.</summary>
+    private static int? Target(NINA.Image.Interfaces.ISwitchDevice pb, string? key, int id)
+        => PowerBoxTarget.TryResolve(pb, key, id);
+
+    /// <summary>409, not 500: nothing failed on the device. The channel the
+    /// caller is holding is not in the current map, and switching whatever now
+    /// sits at that position is the mistake worth refusing.</summary>
+    private static IResult GoneChannel(NINA.Image.Interfaces.ISwitchDevice pb, string? key)
+        => Results.Json(new {
+            error = $"Channel '{key}' is not on '{pb.DeviceName}' any more. "
+                    + "Refresh the power box and try again."
+        }, statusCode: 409);
+
+    /// <param name="Key">Stable channel key from the status block. When sent it
+    /// decides the target and <paramref name="Id"/> is ignored.</param>
+    public record SetSwitchBoolRequest(int Id, bool On, string? Key = null);
+    public record SetSwitchValueRequest(int Id, double Value, string? Key = null);
+    public record SetSwitchSelectedRequest(int Id, int Index, string? Key = null);
 
     /// <param name="Names">Channel Key to operator-assigned name. Replaces the
     /// stored map wholesale, so the caller sends the full set.</param>

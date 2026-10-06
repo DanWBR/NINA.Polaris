@@ -23588,8 +23588,14 @@ function ninaApp() {
                 if (w.source === 'switch') {
                     const c = this._ctrlSwitchChannel(w);
                     if (!c) return;
-                    if (w.kind === 'toggle') await this.apiPost('/api/switch/set-bool', { id: c.id, on: !c.value });
-                    else await this.apiPost('/api/switch/set-value', { id: c.id, value: Number(value) });
+                    // Key-addressed, like the RIGS panel: a saved control
+                    // panel outlives the channel map it was built from.
+                    if (w.kind === 'toggle')
+                        await this.apiPost('/api/switch/set-bool',
+                            { id: c.id, key: c.key || '', on: !c.value });
+                    else
+                        await this.apiPost('/api/switch/set-value',
+                            { id: c.id, key: c.key || '', value: Number(value) });
                 } else if (w.source === 'camControl') {
                     const list = this.ctrlCamCache[w.which || 'main'] || [];
                     const c = list.find(x => x.id === w.controlId);
@@ -42837,18 +42843,26 @@ function ninaApp() {
                 this.toastFail('Power box disconnect failed', e);
             }
         },
+        // Every write carries the channel's stable key. The id is a position
+        // in the host's current channel map, so a map rebuilt between the
+        // status tick this row was rendered from and the click would send the
+        // command to a different outlet. On a power box that is someone's mount
+        // losing power, so the key decides and the id is only a fallback for a
+        // channel that has none.
         async powerBoxToggle(ch) {
             try {
-                await this.apiPost('/api/switch/set-bool', { id: ch.id, on: !ch.value });
+                await this.apiPost('/api/switch/set-bool',
+                    { id: ch.id, key: ch.key || '', on: !ch.value });
             } catch (e) {
                 this.toastFail('Power box toggle failed', e);
             }
         },
         async powerBoxSetValue(ch) {
-            const v = Number(this.powerBoxInputs[ch.id]);
+            const v = Number(this.powerBoxInputs[ch.key || ch.id]);
             if (!isFinite(v)) { this.toast('Enter a value first', 'warn'); return; }
             try {
-                await this.apiPost('/api/switch/set-value', { id: ch.id, value: v });
+                await this.apiPost('/api/switch/set-value',
+                    { id: ch.id, key: ch.key || '', value: v });
                 this.toast(`${ch.name} = ${v}`, 'ok');
             } catch (e) {
                 this.toastFail('Power box set failed', e);
@@ -42859,7 +42873,8 @@ function ninaApp() {
             const i = Number(index);
             if (!Number.isInteger(i) || i < 0) return;
             try {
-                await this.apiPost('/api/switch/set-selected', { id: ch.id, index: i });
+                await this.apiPost('/api/switch/set-selected',
+                    { id: ch.id, key: ch.key || '', index: i });
                 const label = (ch.options && ch.options[i]) || i;
                 this.toast(`${ch.displayName || ch.name} = ${label}`, 'ok');
             } catch (e) {
@@ -42892,7 +42907,17 @@ function ninaApp() {
                 byGroup[g].push(c);
             }
             order.sort((a, b) => a - b);
-            const out = order.map(g => ({ key: 'pg' + g, label: 'Port ' + (g + 1), channels: byGroup[g] }));
+            // The heading has to carry the number the operator reads off the
+            // hardware. ASI Power numbers its vectors from zero (DEV0 is "Port
+            // 1"), while a box whose outlets are named DC1..DC6 numbers from
+            // one, and adding 1 there put DC1 under a heading that said "Port
+            // 2". So shift only when the driver started at zero.
+            const zeroBased = order.length > 0 && order[0] === 0;
+            const out = order.map(g => ({
+                key: 'pg' + g,
+                label: 'Port ' + (zeroBased ? g + 1 : g),
+                channels: byGroup[g]
+            }));
             if (ungrouped.length) out.push({ key: 'pg-other', label: '', channels: ungrouped });
             return out;
         },
@@ -49327,8 +49352,9 @@ function ninaApp() {
                 // Seed the pending-value inputs for analog channels once,
                 // so the field shows the current level instead of blank.
                 for (const ch of this.powerBox.channels) {
-                    if (!ch.boolean && ch.writable && this.powerBoxInputs[ch.id] === undefined)
-                        this.powerBoxInputs[ch.id] = ch.value;
+                    const slot = ch.key || ch.id;
+                    if (!ch.boolean && ch.writable && this.powerBoxInputs[slot] === undefined)
+                        this.powerBoxInputs[slot] = ch.value;
                 }
             }
             if (eq.flatDevice) {
