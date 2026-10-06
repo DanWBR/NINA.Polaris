@@ -327,6 +327,49 @@ public class IndiSwitch : ISwitchDevice {
     /// the element we addressed. The client already logs the newSwitchVector,
     /// but by then the row's name is gone and the two halves of the question
     /// sit in different places.</para></summary>
+    /// <summary>
+    /// The payload for a switch write: EVERY element of the vector, not only
+    /// the one being changed.
+    ///
+    /// <para>INDI's <c>PowerInterface</c>, which the SVBONY SV241 Pro, Pegasus
+    /// and every other power box on current INDI core are built on, walks its
+    /// vector by element index while indexing the array of states the CLIENT
+    /// sent (libs/indibase/indipowerinterface.cpp):</para>
+    ///
+    /// <code>
+    /// for (i = 0; i &lt; PowerChannelsSP.size(); i++)
+    ///     if (PowerChannelsSP[i].getState() != states[i])
+    ///         SetPowerPort(i, states[i] == ISS_ON);
+    /// </code>
+    ///
+    /// <para>That is only correct when the client sends the whole vector. Send
+    /// one element and <c>states[0]</c> is applied to channel 0 whichever
+    /// channel was actually named, while the rest of the loop reads past the
+    /// end of the array. Field report on an SV241 Pro: switching DC 1 on
+    /// brought DC 2 with it, and switching DC 2 off switched DC 1 off instead.
+    /// Ekos submits every element of a switch vector, which is why this never
+    /// showed upstream.</para>
+    ///
+    /// <para>Only for AnyOfMany. A OneOfMany vector has to come back with
+    /// exactly one member on, which the collapsed Off/On pair and the selector
+    /// already arrange; a full-vector write there could hand the driver
+    /// two.</para>
+    /// </summary>
+    internal static Dictionary<string, bool> SwitchPayload(
+        IReadOnlyDictionary<string, bool>? current, IndiSwitchRule rule,
+        string element, string? offElement, bool on) {
+        var payload = new Dictionary<string, bool>();
+        if (rule == IndiSwitchRule.AnyOfMany && current != null)
+            foreach (var kv in current) payload[kv.Key] = kv.Value;
+        payload[element] = on;
+        if (offElement is { } off) payload[off] = !on;
+        return payload;
+    }
+
+    private T? ReadProp<T>(string name) where T : IndiProperty
+        => _client.Devices.TryGetValue(DeviceName, out var props)
+           && props.TryGetValue(name, out var p) ? p as T : null;
+
     private void LogTarget(int id, ChannelMap m, string what) {
         var target = m.Selector is { Count: > 0 }
             ? m.Property
@@ -344,12 +387,9 @@ public class IndiSwitch : ISwitchDevice {
     }
 
     private async Task WriteSwitchAsync(ChannelMap m, bool on, CancellationToken ct) {
-        // AnyOfMany outlets: writing the single target element toggles just it.
-        // A collapsed OneOfMany pair also needs its sibling driven to the
-        // opposite state, or the vector would end up with no member on and the
-        // driver would reject (or silently keep) the write.
-        var payload = new Dictionary<string, bool> { [m.Element] = on };
-        if (m.OffElement is { } off) payload[off] = !on;
+        var prop = ReadProp<IndiSwitchProperty>(m.Property);
+        var payload = SwitchPayload(prop?.Values, prop?.Rule ?? IndiSwitchRule.OneOfMany,
+                                    m.Element, m.OffElement, on);
         // Ack-based so a driver rejection surfaces as an error.
         var ack = await _client.SetSwitchAsyncAck(DeviceName, m.Property, payload, ct: ct);
         if (ack.Rejected)
@@ -359,8 +399,17 @@ public class IndiSwitch : ISwitchDevice {
     }
 
     private async Task WriteNumberAsync(ChannelMap m, double value, CancellationToken ct) {
-        var ack = await _client.SetNumberAsyncAck(DeviceName, m.Property,
-            new Dictionary<string, double> { [m.Element] = value }, ct: ct);
+        // Whole vector, for the reason spelled out on SwitchPayload: the dew
+        // duty-cycle and variable-voltage handlers of INDI's PowerInterface
+        // index the client's values[] array by element position as well, so a
+        // single-element write lands on element 0 and then walks off the end.
+        var payload = new Dictionary<string, double>();
+        var prop = ReadProp<IndiNumberProperty>(m.Property);
+        if (prop != null)
+            foreach (var kv in prop.Values)
+                payload[kv.Key] = _client.GetNumber(DeviceName, m.Property, kv.Key);
+        payload[m.Element] = value;
+        var ack = await _client.SetNumberAsyncAck(DeviceName, m.Property, payload, ct: ct);
         if (ack.Rejected)
             throw new InvalidOperationException(
                 $"Power box '{DeviceName}' rejected {m.Name} = {value:0.##}: "
