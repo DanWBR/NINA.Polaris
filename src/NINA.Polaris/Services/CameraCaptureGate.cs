@@ -58,6 +58,11 @@ public static class CameraCaptureGate {
     /// <summary>What holds the camera exclusively, or null.</summary>
     public static string? ExclusiveOwner { get { lock (_ownerLock) return _owner; } }
 
+    /// <summary>True while a main-camera exposure holds the gate. Anything that
+    /// moves the mount has to know: a dither during an open shutter trails the
+    /// stars across the frame that is being written.</summary>
+    public static bool CaptureInFlight => _gate.CurrentCount == 0;
+
     /// <summary>
     /// Claim the camera for something that bypasses CaptureAsync. Returns null
     /// when it cannot be claimed, with <paramref name="refusal"/> explaining

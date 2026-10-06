@@ -125,9 +125,9 @@ public static class SkyEndpoints {
             });
         });
 
-        group.MapPost("/slew-and-center/{jobId}/cancel", (string jobId,
+        group.MapPost("/slew-and-center/{jobId}/cancel", async (string jobId,
             SlewCenterService slewCenter) => {
-            slewCenter.CancelJob(jobId);
+            await slewCenter.CancelJobAsync(jobId);
             return Results.Ok(new { jobId, state = "cancelled" });
         });
 
@@ -171,9 +171,9 @@ public static class SkyEndpoints {
             });
         });
 
-        group.MapPost("/center-body/{jobId}/cancel", (string jobId,
+        group.MapPost("/center-body/{jobId}/cancel", async (string jobId,
             SolarSystemCenterService svc) => {
-            svc.CancelJob(jobId);
+            await svc.CancelJobAsync(jobId);
             return Results.Ok(new { jobId, state = "cancelled" });
         });
 
