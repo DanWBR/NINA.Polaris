@@ -100,12 +100,45 @@ public class IndiCamera : ICamera, IDisposable {
     public int BinX => (int)_client.GetNumber(DeviceName, "CCD_BINNING", "HOR_BIN");
     public int BinY => (int)_client.GetNumber(DeviceName, "CCD_BINNING", "VER_BIN");
     public bool CoolerOn => _client.GetSwitch(DeviceName, "CCD_COOLER", "COOLER_ON");
-    public double CoolerPower => _client.GetNumber(DeviceName, "CCD_COOLER_POWER", "CCD_COOLER_VALUE");
+    public double CoolerPower => PickCoolerPower(
+        _client.GetProperty(DeviceName, "CCD_COOLER_POWER") as IndiNumberProperty);
     public int MaxX => (int)_client.GetNumber(DeviceName, "CCD_INFO", "CCD_MAX_X");
     public int MaxY => (int)_client.GetNumber(DeviceName, "CCD_INFO", "CCD_MAX_Y");
     public double PixelSizeX => _client.GetNumber(DeviceName, "CCD_INFO", "CCD_PIXEL_SIZE_X");
     public double PixelSizeY => _client.GetNumber(DeviceName, "CCD_INFO", "CCD_PIXEL_SIZE_Y");
     public int BitDepth => (int)_client.GetNumber(DeviceName, "CCD_INFO", "CCD_BITSPERPIXEL");
+
+    /// <summary>
+    /// Cooler power, as a percentage.
+    ///
+    /// <para>The element name is not standardised. INDI's CCD base class does
+    /// not define this vector at all, so each driver rolls its own:
+    /// indi_asi_ccd and indi_qhy_ccd publish <c>CCD_COOLER_VALUE</c>, while
+    /// indi_toupbase, which drives ToupTek and the Altair / Omegon /
+    /// RisingCam / Bresser cameras built on the same SDK, publishes
+    /// <c>COOLER_POWER</c>. Asking for one fixed name returned zero on all the
+    /// others, and zero is a plausible reading rather than an obvious failure:
+    /// reported on an ATR533C whose temperature graph drew a flat line at 0
+    /// while the INDI control panel showed 41 percent.</para>
+    ///
+    /// <para>Every driver that publishes the vector gives it exactly one
+    /// element, so the single element is the answer whatever it is called. The
+    /// known names are tried first only so that a driver which someday
+    /// publishes more than one still yields the power rather than whichever
+    /// element happens to be first.</para>
+    /// </summary>
+    internal static double PickCoolerPower(IndiNumberProperty? prop) {
+        if (prop == null || prop.Values.Count == 0) return 0;
+        foreach (var known in CoolerPowerElements)
+            if (prop.Values.TryGetValue(known, out var hit)) return hit.Value;
+        foreach (var only in prop.Values.Values) return only.Value;
+        return 0;
+    }
+
+    private static readonly string[] CoolerPowerElements = {
+        "CCD_COOLER_VALUE",  // indi_asi_ccd, indi_qhy_ccd, most of the field
+        "COOLER_POWER",      // indi_toupbase: ToupTek, Altair, Omegon, RisingCam
+    };
 
     /// <summary>Smallest exposure the driver advertises for
     /// <c>CCD_EXPOSURE_VALUE</c> (the number element's <c>min</c>).
