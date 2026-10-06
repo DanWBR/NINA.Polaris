@@ -43946,14 +43946,20 @@ function ninaApp() {
         },
         async guiderDither() {
             try {
-                await this.apiPost('/api/guider/dither', {
+                const r = await this.apiPost('/api/guider/dither', {
                     pixels: this.guiderDitherPx,
                     raOnly: this.guiderDitherRaOnly,
                     settlePixels: this.guiderSettlePixels,
                     settleTime: this.guiderSettleTime,
                     settleTimeout: this.guiderSettleTimeout
                 });
-                this.toast(`Dither ${this.guiderDitherPx}px requested`, 'ok');
+                // 202: an exposure was running, so the host holds the dither
+                // until the shutter closes rather than trailing that sub.
+                if (r && r.status === 202) {
+                    this.toast('Dither queued until the exposure finishes', 'info');
+                } else {
+                    this.toast(`Dither ${this.guiderDitherPx}px requested`, 'ok');
+                }
             } catch (e) { this.toastFail('Dither failed', e); }
         },
         async guiderFindStar() {

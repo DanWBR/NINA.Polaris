@@ -81,7 +81,10 @@ public class SlewCenterService {
             TargetRotation = targetRotation,
             RotationToleranceDeg = rotationToleranceDeg > 0 ? rotationToleranceDeg : 0.5,
             State = SlewCenterState.Pending,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            // Recorded before anything moves, so a cancel can put the mount
+            // back the way this job found it.
+            TrackingWasOn = MountAbort.WasTracking(_equip.Telescope)
         };
 
         _jobs[job.Id] = job;
@@ -99,23 +102,20 @@ public class SlewCenterService {
         return _jobs.TryGetValue(jobId, out var job) ? job : null;
     }
 
-    public void CancelJob(string jobId) {
-        if (_jobs.TryGetValue(jobId, out var job)) {
-            job.Cts?.Cancel();
-            job.State = SlewCenterState.Cancelled;
-            // Also yank the mount itself. Just cancelling the CTS
-            // unwinds the C# pipeline but leaves a SlewAsync that's
-            // already in flight on the wire running to completion,
-            // the user clicking Cancel almost always means STOP THE
-            // SCOPE NOW, not "finish what you started, then stop
-            // bothering with the plate solve". Best-effort: log and
-            // swallow if the abort itself fails, the CTS path still
-            // brings the orchestrator to rest.
-            try { _equip.Telescope?.AbortSlewAsync(); }
-            catch (Exception ex) {
-                _logger.LogWarning(ex, "AbortSlew during CancelJob failed");
-            }
-        }
+    public async Task CancelJobAsync(string jobId) {
+        if (!_jobs.TryGetValue(jobId, out var job)) return;
+        job.Cts?.Cancel();
+        job.State = SlewCenterState.Cancelled;
+        // Also yank the mount itself. Just cancelling the CTS unwinds the C#
+        // pipeline but leaves a SlewAsync that is already in flight on the wire
+        // running to completion, and the user clicking Cancel almost always
+        // means STOP THE SCOPE NOW, not "finish what you started, then stop
+        // bothering with the plate solve".
+        //
+        // The abort is also what takes tracking down on most drivers, so the
+        // mount has to be handed back tracking if that is how it was found.
+        await MountAbort.AbortAndRestoreTrackingAsync(
+            _equip.Telescope, job.TrackingWasOn, _logger);
     }
 
     private async Task RunJobAsync(SlewCenterJob job, CancellationToken ct) {
@@ -849,6 +849,10 @@ public class SlewCenterJob {
     /// <summary>Operator confirmed a flagged slew (large / near-meridian / below
     /// the altitude floor) or overrode the post-safety-stop home requirement.</summary>
     public bool Force { get; set; }
+    /// <summary>Whether the mount was tracking when this job started. A cancel
+    /// aborts the mount, which stops tracking on most drivers, so the state has
+    /// to be remembered before the job touches anything.</summary>
+    public bool TrackingWasOn { get; set; }
     public SlewCenterState State { get; set; }
     public int Iteration { get; set; }
     public double? ActualRa { get; set; }

@@ -5270,5 +5270,6 @@
   "INDI drivers installed on this host.": "controladores INDI instalados en este host.",
   "A distribution INDI has about 143 and is missing the recent ones; the INDI PPA has about 330.": "Un INDI de la distribución tiene unos 143 y le faltan los recientes; el PPA de INDI tiene unos 330.",
   "Waiting for the meridian flip point": "Esperando el punto de volteo del meridiano",
-  "The host has not answered yet. It may still be working on the command; this is not necessarily a network fault.": "El host todavía no ha respondido. Puede seguir trabajando en el comando; esto no es necesariamente un fallo de red."
+  "The host has not answered yet. It may still be working on the command; this is not necessarily a network fault.": "El host todavía no ha respondido. Puede seguir trabajando en el comando; esto no es necesariamente un fallo de red.",
+  "Dither queued until the exposure finishes": "Dither en cola hasta que termine la exposición"
 }
