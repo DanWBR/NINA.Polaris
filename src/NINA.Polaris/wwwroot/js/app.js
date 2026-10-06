@@ -49042,7 +49042,12 @@ function ninaApp() {
                     this.tempHistory.push({
                         t: now,
                         temp: eq.camera.temperature,
-                        power: eq.camera.coolerOn ? (eq.camera.coolerPower || 0) : 0
+                        // A reported power above zero is drawn even when the
+                        // cooler flag says off: indi_toupbase publishes
+                        // CCD_COOLER write-only, so the flag can stay false on
+                        // a camera that is plainly cooling.
+                        power: (eq.camera.coolerOn || (eq.camera.coolerPower || 0) > 0)
+                            ? (eq.camera.coolerPower || 0) : 0
                     });
                     if (this.tempHistory.length > 120) this.tempHistory.shift(); // ~10 min @ 5s
                     this._tempLastSample = now;
