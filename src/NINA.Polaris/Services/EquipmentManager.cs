@@ -1362,6 +1362,14 @@ public class EquipmentManager : IDisposable {
         }
 
         if (Switch != null) {
+            // Same channel shape as GET /api/switch/status, deliberately: the
+            // RIGS panel reads its channels from THIS block, not from the REST
+            // one, and every field the panel needs has to be here. Key and
+            // displayName were missing, so the panel bound every rename box to
+            // channels[undefined] (one shared slot: typing in one row filled
+            // them all) and could never show an operator-assigned name.
+            var switchNames = _profiles?.ActiveEquipmentProfile?.SwitchChannelNames
+                              ?? new Dictionary<string, string>();
             status["powerBox"] = new {
                 name = Switch.DeviceName,
                 connected = Switch.IsConnected,
@@ -1369,6 +1377,13 @@ public class EquipmentManager : IDisposable {
                 channels = Switch.Channels.Select(c => new {
                     id = c.Id,
                     name = c.Name,
+                    // Stable identity (PROPERTY.ELEMENT over INDI): what names
+                    // are stored against, and what a write addresses.
+                    key = c.Key,
+                    displayName = (!string.IsNullOrEmpty(c.Key)
+                                   && switchNames.TryGetValue(c.Key, out var friendly)
+                                   && !string.IsNullOrWhiteSpace(friendly))
+                                  ? friendly : c.Name,
                     boolean = c.Boolean,
                     value = Safe(c.Value),
                     min = Safe(c.Min),
@@ -1381,7 +1396,10 @@ public class EquipmentManager : IDisposable {
                     selected = c.Selected,
                     // Physical-port group (-1 = ungrouped), so the UI can gather
                     // a port's role/outlet/dew channels under one heading.
-                    group = c.Group
+                    group = c.Group,
+                    // Read-only channel == a measurement (input voltage, current
+                    // draw, temperature, dew point), not an outlet to flip.
+                    sensor = !c.Writable
                 }).ToList()
             };
         }

@@ -12,6 +12,7 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using Microsoft.Extensions.Logging;
 using NINA.Image.Interfaces;
 using NINA.INDI.Client;
 using NINA.INDI.Protocol;
@@ -275,6 +276,7 @@ public class IndiSwitch : ISwitchDevice {
 
     public async Task SetBoolAsync(int id, bool on, CancellationToken ct = default) {
         var m = Get(id);
+        LogTarget(id, m, on ? "On" : "Off");
         // A selector is not a toggle; on == pick the first option (best effort).
         if (m.Selector is { Count: > 0 }) { await SetSelectedAsync(id, on ? 0 : -1, ct); return; }
         if (m.IsSwitch) {
@@ -287,6 +289,7 @@ public class IndiSwitch : ISwitchDevice {
 
     public async Task SetValueAsync(int id, double value, CancellationToken ct = default) {
         var m = Get(id);
+        LogTarget(id, m, value.ToString("0.##"));
         // For a selector, the value IS the option index.
         if (m.Selector is { Count: > 0 }) { await SetSelectedAsync(id, (int)Math.Round(value), ct); return; }
         if (m.IsSwitch) {
@@ -299,6 +302,7 @@ public class IndiSwitch : ISwitchDevice {
 
     public async Task SetSelectedAsync(int id, int index, CancellationToken ct = default) {
         var m = Get(id);
+        LogTarget(id, m, $"option {index}");
         if (m.Selector is not { Count: > 0 } sel)
             throw new NotSupportedException($"Power box '{DeviceName}' channel {id} is not a selector.");
         if (index < 0 || index >= sel.Count)
@@ -313,6 +317,23 @@ public class IndiSwitch : ISwitchDevice {
             throw new InvalidOperationException(
                 $"Power box '{DeviceName}' rejected {m.Name} = {sel[index].Label}: "
                 + (string.IsNullOrEmpty(ack.AlertMessage) ? "(no message from driver)" : ack.AlertMessage));
+    }
+
+    /// <summary>Name the row and the INDI element it resolved to, in one line,
+    /// before the write goes out.
+    ///
+    /// <para>A power box report is always "I pressed DC 1 and DC 2 came on", and
+    /// answering it needs the pairing between the row the operator pressed and
+    /// the element we addressed. The client already logs the newSwitchVector,
+    /// but by then the row's name is gone and the two halves of the question
+    /// sit in different places.</para></summary>
+    private void LogTarget(int id, ChannelMap m, string what) {
+        var target = m.Selector is { Count: > 0 }
+            ? m.Property
+            : m.Element.Length > 0 ? $"{m.Property}.{m.Element}" : m.Property;
+        _client.DiagLogger.LogInformation(
+            "POWERBOX {Device}: row '{Row}' (channel {Id}) -> {Target} = {What}",
+            DeviceName, m.Name, id, target, what);
     }
 
     private ChannelMap Get(int id) {
