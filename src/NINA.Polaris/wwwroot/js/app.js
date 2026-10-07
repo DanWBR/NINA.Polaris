@@ -36680,15 +36680,6 @@ function ninaApp() {
                 || this.cameraCaps.iso === true;
         },
 
-        async setCameraIso(iso) {
-            // The capture endpoint takes per-shot ISO via the request
-            // body; this setter is for the manual control on the
-            // Equipment tab. Not yet implemented on the backend as a
-            // standalone POST, exposed here as a stub so the dropdown
-            // is interactive even before that endpoint exists.
-            this.cameraIso = +iso;
-        },
-
         async equipDisconnectCamera() {
             try {
                 await this.apiPost('/api/camera/disconnect');
@@ -45008,7 +44999,10 @@ function ninaApp() {
                 // FLAT auto-exposure toggle (engine reads it when
                 // imageType === 'FLAT'). Defaults off so LIGHT/DARK/
                 // BIAS items don't accidentally pick up the flag.
-                autoExposure: false
+                autoExposure: false,
+                // DSLR ISO. Null means leave the camera where it is; the
+                // card only offers it when the camera publishes a list.
+                iso: null
             });
         },
 

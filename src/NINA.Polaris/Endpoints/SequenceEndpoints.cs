@@ -21,11 +21,20 @@ public static class SequenceEndpoints {
     public static void MapSequenceEndpoints(this WebApplication app) {
         var group = app.MapGroup("/api/sequence");
 
+        // EVERY field of the item, because the browser REPLACES its card list
+        // with this response on boot and on reconnect, and posts that list back
+        // when the run starts. A field missing here is a setting the operator
+        // made and the run then ignores. Reported from the field: Auto was
+        // ticked on a FLAT item, the page reloaded, and the flats were shot at
+        // the 60 s left in the exposure box because `autoExposure` was not in
+        // this projection. `enabled` was missing the same way and had been
+        // papered over in the browser with a default.
         group.MapGet("/", (SequenceEngine engine) => {
             return Results.Ok(new {
                 items = engine.Items.Select(i => new {
-                    i.Name, i.Exposure, i.Gain, i.Binning, i.Count,
-                    i.Filter, i.Ra, i.Dec, i.ImageType
+                    i.Name, i.Exposure, i.Gain, i.Iso, i.Binning, i.Count,
+                    i.Filter, i.Ra, i.Dec, i.ImageType,
+                    i.Enabled, i.AutoExposure
                 }),
                 state = engine.State.ToString().ToLowerInvariant()
             });

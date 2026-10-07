@@ -23,6 +23,19 @@ public class SequenceItem {
     public string Name { get; set; } = "";
     public double Exposure { get; set; } = 1.0;
     public int Gain { get; set; } = 100;
+
+    /// <summary>
+    /// ISO for a camera that has one, which over INDI means a DSLR on
+    /// indi_gphoto publishing CCD_ISO. Null on every astronomy camera, and
+    /// null means "leave the camera where it is".
+    ///
+    /// <para>Separate from <see cref="Gain"/> on purpose. A DSLR has no
+    /// analogue-gain property for the gain write to land on, so it went
+    /// nowhere: an operator who read the card's "G" field as ISO and typed 400
+    /// got a silent no-op and a run at whatever ISO the camera happened to
+    /// hold.</para>
+    /// </summary>
+    public int? Iso { get; set; }
     public int Binning { get; set; } = 1;
     public int Count { get; set; } = 1;
     public string? Filter { get; set; }
