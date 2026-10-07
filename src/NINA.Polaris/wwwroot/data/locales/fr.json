@@ -5271,5 +5271,6 @@
   "A distribution INDI has about 143 and is missing the recent ones; the INDI PPA has about 330.": "Un INDI de la distribution en a environ 143 et il lui manque les récents ; le PPA INDI en a environ 330.",
   "Waiting for the meridian flip point": "En attente du point de retournement au méridien",
   "The host has not answered yet. It may still be working on the command; this is not necessarily a network fault.": "L'hôte n'a pas encore répondu. Il travaille peut-être encore sur la commande ; ce n'est pas forcément une panne réseau.",
-  "Dither queued until the exposure finishes": "Dither en attente jusqu'à la fin de la pose"
+  "Dither queued until the exposure finishes": "Dither en attente jusqu'à la fin de la pose",
+  "Recent searches": "Recherches récentes"
 }

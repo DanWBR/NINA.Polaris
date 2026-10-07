@@ -812,6 +812,56 @@ body.link-offline .preview-pane::after {
     background: var(--bg-secondary);
 }
 
+/* Recent searches under the SKY search box. Same block position and
+   background as .sky-results so the two read as one surface; they are never
+   on screen together. */
+.sky-recent {
+    max-height: 240px;
+    overflow-y: auto;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-secondary);
+    padding: 6px 0;
+}
+
+.sky-recent-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 14px 6px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+}
+
+.sky-recent-clear {
+    background: none;
+    border: none;
+    padding: 2px 4px;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.sky-recent-clear:hover { color: var(--text-primary); }
+
+.sky-recent-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.sky-recent-item:hover { background: var(--bg-hover, rgba(255, 255, 255, 0.06)); }
+
+.sky-recent-icon { color: var(--text-muted); }
+
 .sky-result-item {
     display: flex;
     align-items: center;
