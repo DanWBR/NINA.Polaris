@@ -4656,5 +4656,8 @@
   "Waiting for the meridian flip point": "",
   "The host has not answered yet. It may still be working on the command; this is not necessarily a network fault.": "",
   "Dither queued until the exposure finishes": "",
-  "Recent searches": ""
+  "Recent searches": "",
+  "Host clock": "",
+  "of this device": "",
+  "Astronomical calculations use this clock.": ""
 }

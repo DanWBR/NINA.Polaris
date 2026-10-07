@@ -841,6 +841,13 @@ body.asst-dock-dragging {
     color: var(--text-secondary);
     opacity: 0.85;
 }
+/* A host clock that disagrees with this device is the one thing in the bar
+   worth looking at, so it drops the dimming and takes the warning colour.
+   Two classes, to beat .status-clock's own colour regardless of load order. */
+.status-clock.host-amber,
+.status-clock.host-red { opacity: 1; }
+.status-clock.host-amber { color: #fcd34d; }
+.status-clock.host-red   { color: #fca5a5; font-weight: 600; }
 .status-battery {
     gap: 5px;
     font-variant-numeric: tabular-nums;

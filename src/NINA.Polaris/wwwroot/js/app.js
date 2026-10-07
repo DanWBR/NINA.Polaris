@@ -7782,6 +7782,17 @@ function ninaApp() {
         // negative = server is BEHIND. Pluralizes + scales seconds /
         // minutes / hours, returns null when |skew| <= 30s so the
         // chip stays hidden in the normal case.
+        // The header clock's tooltip. It names whose clock it is, because
+        // that is the whole point of the chip, and spells out the difference
+        // when there is one worth acting on.
+        clockChipTitle() {
+            const label = this.clockSkewLabel();
+            const base = this.$t('Host clock');
+            if (!label) return base;
+            return base + ', ' + label + ' ' + this.$t('of this device') + '. '
+                 + this.$t('Astronomical calculations use this clock.');
+        },
+
         clockSkewLabel() {
             const s = this.clockSync.skewSeconds | 0;
             const abs = Math.abs(s);
@@ -13007,7 +13018,23 @@ function ninaApp() {
         },
 
         updateClock() {
-            this.currentTime = new Date().toLocaleTimeString('en-GB');
+            // The HOST's clock, not this device's.
+            //
+            // Every astronomical decision Polaris makes runs on the host
+            // clock: meridian, flip point, altitude, twilight. A header
+            // showing the tablet's time therefore reassures the operator that
+            // time is fine while the mount is working from a different one.
+            // Reported from the field (issue #33): the displayed time matched
+            // the tablet, the Pi was hours out, the meridian was wrong, and
+            // nothing on screen connected the two.
+            //
+            // Applied as an offset rather than by re-parsing serverUtc so the
+            // seconds keep ticking smoothly between status frames, and so a
+            // missed frame shows a second late rather than a second repeated.
+            // Skew is 0 until the first frame arrives, which makes this the
+            // old behaviour exactly while the socket is still connecting.
+            this.currentTime = new Date(Date.now() + (this.clockSync.skewSeconds | 0) * 1000)
+                .toLocaleTimeString('en-GB');
             // Always keep the Home tab's UTC clock alive too, the Sky-tab
             // ticker only fires when that tab is open, but the Home hero
             // wants the time even on first paint.
