@@ -81,4 +81,33 @@ public class Raw16FormatPickTests {
         Assert.That(IndiCamera.PickRaw16Element(new[] { "MONO8", "MONO16" }),
             Is.EqualTo("MONO16"));
     }
+
+    /// <summary>INDI's own CCD_CAPTURE_FORMAT names, which indi_toupbase and
+    /// other drivers on the standard property use. No bit depth anywhere: it
+    /// lives in CCD_INFO.CCD_BITSPERPIXEL. Requiring a "16" meant nothing was
+    /// ever picked on a ToupTek, so the camera kept whatever format the driver
+    /// or its saved config had, and on a colour AE676C that was RGB: three
+    /// planes, 75 MB a frame, debayered by the driver.</summary>
+    [Test]
+    public void TheIndiStandardRawName_IsPicked() {
+        Assert.That(IndiCamera.PickRaw16Element(new[] { "INDI_RGB", "INDI_RAW" }),
+            Is.EqualTo("INDI_RAW"));
+    }
+
+    /// <summary>A digit in the name is a claim about depth, so an 8-bit raw is
+    /// still refused. This is the case that stops the new tier swallowing
+    /// everything.</summary>
+    [Test]
+    public void ABareRawRuleDoesNotPickAnEightBitRaw() {
+        Assert.That(IndiCamera.PickRaw16Element(new[] { "ASI_IMG_RAW8", "ASI_IMG_Y8" }),
+            Is.Null);
+    }
+
+    /// <summary>And an explicit 16 still wins over a name that claims
+    /// nothing.</summary>
+    [Test]
+    public void AnExplicitSixteen_WinsOverABareRaw() {
+        Assert.That(IndiCamera.PickRaw16Element(new[] { "INDI_RAW", "CAM_RAW16" }),
+            Is.EqualTo("CAM_RAW16"));
+    }
 }

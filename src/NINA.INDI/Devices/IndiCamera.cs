@@ -544,14 +544,31 @@ public class IndiCamera : ICamera, IDisposable {
     /// the rig still had FORMAT_16 selected. The caller skips DSLRs outright
     /// now; this also refuses an opaque FORMAT_n on its own.</summary>
     internal static string? PickRaw16Element(IEnumerable<string> elementNames) {
-        string? loose = null;
+        string? loose = null;     // says 16, does not say raw ("MONO16")
+        string? bareRaw = null;   // says raw, claims no bit depth ("INDI_RAW")
         foreach (var k in elementNames) {
             var u = k.ToUpperInvariant();
             if (u.Contains("RGB")) continue;
             // An enumerated placeholder carries no meaning in its name; the
             // number is an index, not a bit depth.
             if (System.Text.RegularExpressions.Regex.IsMatch(u, @"^FORMAT[_ ]?\d+$")) continue;
-            if (!u.Contains("16")) continue;
+            if (!u.Contains("16")) {
+                // INDI's own CCD_CAPTURE_FORMAT names carry no bit depth at
+                // all: indi_toupbase publishes INDI_RAW and INDI_RGB, and the
+                // depth lives in CCD_INFO.CCD_BITSPERPIXEL instead. Requiring
+                // a "16" in the name meant no raw element was ever found on a
+                // ToupTek, nothing was written, and the camera stayed on
+                // whatever the driver or its saved config had chosen. On a
+                // colour AE676C that was RGB: three planes, 75 MB a frame,
+                // debayered by the driver and impossible to calibrate.
+                //
+                // A digit in the name is a claim about depth, so RAW8 is still
+                // refused; only a name that claims nothing qualifies here.
+                if (u.Contains("RAW")
+                        && !System.Text.RegularExpressions.Regex.IsMatch(u, @"\d"))
+                    bareRaw ??= k;
+                continue;
+            }
             // Unambiguous: the name says raw, or says bits.
             if (u.Contains("RAW") || u.Contains("16BIT") || u.Contains("16-BIT")
                     || u.Contains("16 BIT")) {
@@ -559,7 +576,7 @@ public class IndiCamera : ICamera, IDisposable {
             }
             loose ??= k;   // e.g. "MONO16"; still better than nothing
         }
-        return loose;
+        return loose ?? bareRaw;
     }
 
     private async Task EnsureRaw16FormatAsync(CancellationToken ct) {
