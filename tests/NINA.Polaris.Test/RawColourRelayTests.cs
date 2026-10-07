@@ -136,14 +136,44 @@ public class RawColourRelayTests {
         Assert.That(sent.Height, Is.EqualTo(48));
     }
 
-    /// <summary>The trap this whole change exists to close: before the guard, a
-    /// 3-plane buffer went through the mono path without complaint and the
-    /// browser rendered the red plane as a greyscale picture. No error, wrong
-    /// picture.</summary>
+    /// <summary>The trap this whole change exists to close: a 3-plane buffer
+    /// once went through the mono path without complaint and the browser
+    /// rendered the red plane as a greyscale picture. No error, wrong picture.
+    ///
+    /// <para>Refusing it outright was the first answer and it was too blunt.
+    /// indi_toupbase on a colour camera can deliver NAXIS3=3, and then every
+    /// AUTORUN frame threw and was skipped: a run that produced nothing but a
+    /// stack trace per frame (field report, ToupTek AE676C). A frame with three
+    /// planes now goes down the path that carries three planes, which is both
+    /// not a crash and not a greyscale red channel.</para></summary>
     [Test]
-    public void TheMonoPathRefusesAColourBuffer() {
+    public async Task TheMonoPathSendsAColourBufferDownTheColourPath() {
         var relay = MakeRelay();
-        Assert.That(() => relay.RelayImageAsync(MakeRgb(8, 6), FrameKind.LiveStack),
+
+        await relay.RelayImageAsync(MakeRgb(64, 48), FrameKind.Autorun);
+
+        var sent = relay.GetLatestImage();
+        Assert.That(sent, Is.Not.Null);
+        Assert.Multiple(() => {
+            Assert.That(sent!.Channels, Is.EqualTo(3), "three planes, not the red one alone");
+            Assert.That(sent.PixelData.Length, Is.EqualTo(sent.Width * sent.Height * 3));
+            int n = sent.Width * sent.Height;
+            var px = sent.PixelData.Span;
+            Assert.That(px[0], Is.EqualTo(50000), "R");
+            Assert.That(px[n], Is.EqualTo(20000), "G");
+            Assert.That(px[2 * n], Is.EqualTo(3000), "B");
+        });
+    }
+
+    /// <summary>Three planes with a buffer too short to hold them is a frame
+    /// nobody can render, and that still says so rather than guessing.</summary>
+    [Test]
+    public void AColourFrameWithATruncatedBufferIsStillRefused() {
+        var relay = MakeRelay();
+        var broken = new BaseImageData(new ushort[8 * 6],   // one plane's worth
+            new ImageProperties { Width = 8, Height = 6, BitDepth = 16, Channels = 3 });
+
+        Assert.That(() => relay.RelayImageAsync(broken, FrameKind.Autorun),
             Throws.ArgumentException.With.Message.Contains("RelayRgbRawAsync"));
     }
 

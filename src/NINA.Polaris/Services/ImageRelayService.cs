@@ -260,8 +260,21 @@ public class ImageRelayService : IDisposable {
         // A 3-plane buffer used to go through here without complaint: the header
         // carried Width*Height, the client allocated three planes' worth of
         // ushorts and uploaded only the first one, and the frame rendered as a
-        // GREYSCALE picture of the red channel. No error, wrong picture. Colour
-        // goes to RelayRgbRawAsync, which says so on the wire.
+        // GREYSCALE picture of the red channel. No error, wrong picture.
+        //
+        // Throwing instead was not much better. indi_toupbase on a colour
+        // camera can deliver NAXIS3=3 (CCD_CAPTURE_FORMAT on RGB), and then
+        // every AUTORUN frame threw, was retried once, and was skipped: a whole
+        // run producing nothing but 75 MB files on disk and a stack trace per
+        // frame. Field report on a ToupTek AE676C. A frame that carries three
+        // planes is simply sent down the path that can carry three planes.
+        if (imageData?.Properties is { Channels: >= 3 } p3
+            && imageData.Data != null
+            && imageData.Data.Length >= (long)p3.Width * p3.Height * 3) {
+            return RelayRgbRawAsync(imageData, kind: kind, ct: ct);
+        }
+        // Two planes, or three planes with a buffer too short to hold them, is
+        // a frame nobody can render. That still says so rather than guessing.
         if (imageData?.Properties != null && imageData.Properties.Channels > 1)
             throw new ArgumentException(
                 $"RelayImageAsync is the single-plane path; this frame has " +

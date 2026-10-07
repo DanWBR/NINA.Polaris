@@ -693,10 +693,37 @@ public class NetworkManagerService : BackgroundService {
             return SwitchResult.Fail(LastError);
         }
 
+        // Take the AP down FIRST. One radio cannot beacon its own network and
+        // associate with another at the same time, so while polaris-hotspot
+        // owns the interface the station activation simply sits there until the
+        // timeout below, and that timeout was then reported as a bad password.
+        // Field report on an OPi 4 Pro: Medeiros_Plus at 100 percent signal,
+        // the right password, every attempt ending in "likely bad password / AP
+        // out of range"; with the AP down the same profile associated and had a
+        // lease in under two seconds.
+        //
+        // ScanAsync already knew this (it pauses the AP to see anything at all)
+        // and the join path did not. Dropping the AP does disconnect whoever is
+        // on it, which includes the operator driving this from the hotspot, but
+        // that is what switching to station mode means and the card says so.
+        if (hotspotWasUp) {
+            _logger.LogInformation(
+                "NetworkManagerService: taking the hotspot down so the radio can join '{Ssid}'", ssid);
+            await RunCommandAsync("nmcli", "connection down polaris-hotspot", ct, timeoutMs: 10000);
+            try { await Task.Delay(TimeSpan.FromSeconds(2), ct); } catch (OperationCanceledException) { }
+        }
+
         var up = await RunCommandAsync("nmcli",
             "connection up polaris-station", ct, timeoutMs: 35000);
         if (up.exitCode != 0) {
-            LastError = $"nmcli up failed (likely bad password / AP out of range): {up.stderr.Trim()}";
+            var err = up.stderr.Trim();
+            // A timeout and a refusal are different failures and the operator
+            // acts on them differently: one is "the radio never got anywhere",
+            // the other is "the access point said no".
+            LastError = err.Contains("timed out", StringComparison.OrdinalIgnoreCase)
+                ? $"'{ssid}' did not finish associating within 35s. The network may be out "
+                  + "of range, on a band this adapter cannot use, or the password may be wrong."
+                : $"nmcli up failed (likely bad password / AP out of range): {err}";
             await RevertToHotspotAsync(hotspotWasUp, ct);
             return SwitchResult.Fail(LastError);
         }

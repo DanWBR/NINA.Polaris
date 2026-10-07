@@ -783,6 +783,36 @@ public class SequenceEngine {
             try { _aux.NotifySessionActive(false); } catch { }
             try { _barrier.Deregister("main"); } catch { }
             ReportGuidingForSession();
+            CompactAfterRun();
+        }
+    }
+
+    /// <summary>
+    /// Give the large-object heap back at the end of a run.
+    ///
+    /// <para>A run is the heaviest large-object churn in the application and
+    /// the only heavy path that never compacted. Live stacking, the native
+    /// guider and the GraXpert hook all do this after their own heavy phase;
+    /// AUTORUN did not, even though a frame from a 26 MP one-shot-colour camera
+    /// is 52 MB on its own and the preview path debayers it to three planes
+    /// before downsampling. Measured on an OPi 4 Pro with an ASI2600MC Pro: ten
+    /// flats took the process to a 2.4 GB peak on a 3.8 GB board, and it came
+    /// back down to about 540 MB only minutes later, when the collector got
+    /// round to it by itself.</para>
+    ///
+    /// <para>Nothing was leaking; the high water mark was the problem, because
+    /// that is what decides whether the next run meets an out-of-memory kill.
+    /// A run ending is a user-paced moment, so one blocking full collection
+    /// here costs nothing anyone can perceive. NEVER per frame.</para>
+    /// </summary>
+    private void CompactAfterRun() {
+        try {
+            System.Runtime.GCSettings.LargeObjectHeapCompactionMode =
+                System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+        } catch (Exception ex) {
+            // Housekeeping is never the thing that breaks the end of a run.
+            _logger.LogDebug(ex, "Post-run heap compaction raised");
         }
     }
 
