@@ -12635,11 +12635,27 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         <label>x<input type="number" class="seq-input seq-input-num"
                                             x-model.number="item.count" step="1" min="1"
                                             :disabled="seqState === 'running'"></label>
-                                        <label>G<input type="number" class="seq-input seq-input-num"
+                                        <!-- A DSLR over indi_gphoto publishes an ISO list and no
+                                             gain property, so the numeric G field had nothing to
+                                             write to and an operator reading it as ISO typed a
+                                             value that went nowhere. Same :value + per-option
+                                             :selected pattern as the filter select above: the ISO
+                                             list arrives over the camera fetch, often after the
+                                             cards have rendered. -->
+                                        <label x-show="!cameraUsesIso()">G<input type="number" class="seq-input seq-input-num"
                                             x-model.number="item.gain" step="10" min="0"
                                             :disabled="seqState === 'running'"></label>
+                                        <label x-show="cameraUsesIso()">ISO<select class="seq-input"
+                                            :value="item.iso || ''"
+                                            @change="item.iso = Number($event.target.value) || null"
+                                            :disabled="seqState === 'running'">
+                                            <option value="" :selected="!item.iso">(current)</option>
+                                            <template x-for="v in cameraIso.options" :key="'seqiso-'+v">
+                                                <option :value="v" x-text="v" :selected="v === item.iso"></option>
+                                            </template>
+                                        </select></label>
                                         <span class="zwo-gain-presets"
-                                              x-show="zwoPresetsForActiveCamera() && seqState !== 'running'">
+                                              x-show="!cameraUsesIso() && zwoPresetsForActiveCamera() && seqState !== 'running'">
                                             <button type="button" class="zwo-gain-preset"
                                                     :data-active="item.gain === zwoPresetsForActiveCamera()?.L"
                                                     @click="item.gain = zwoPresetsForActiveCamera().L">L</button>
@@ -12669,7 +12685,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                                  item.filter kept the value and frames captured on the
                                                  right filter (#642). :selected re-evaluates as each
                                                  option renders, so the match is restored. -->
-                                            Filter<select class="seq-input" :value="item.filter || ''"
+                                            Filter<select class="seq-input seq-input-filter" :value="item.filter || ''"
                                                 @change="item.filter = $event.target.value"
                                                 :disabled="seqState === 'running'">
                                                 <option value="" :selected="!item.filter">(current)</option>

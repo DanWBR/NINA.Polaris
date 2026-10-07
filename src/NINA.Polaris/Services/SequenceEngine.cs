@@ -606,6 +606,9 @@ public class SequenceEngine {
                     var capOpts = new NINA.Image.Interfaces.CaptureOptions(
                         Gain: item.Gain > 0 ? item.Gain : (int?)null,
                         Offset: autorunOffset,
+                        // DSLR only: the camera publishes an ISO list instead of
+                        // a gain property, and the card offers the list.
+                        Iso: item.Iso is > 0 ? item.Iso : null,
                         BinX: item.Binning > 0 ? item.Binning : (int?)null,
                         BinY: item.Binning > 0 ? item.Binning : (int?)null,
                         ImageType: imageType,

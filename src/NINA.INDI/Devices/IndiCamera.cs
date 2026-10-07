@@ -874,6 +874,15 @@ public class IndiCamera : ICamera, IDisposable {
         } catch { /* driver rejected the switch, silent */ }
     }
 
+    /// <summary>Apply a per-exposure ISO, skipping the write when the camera
+    /// already sits there. A DSLR takes a second or more to acknowledge a
+    /// CCD_ISO change, and rewriting it before every frame of a run is the
+    /// per-frame reconfiguration that wedges INDI drivers.</summary>
+    private async Task TrySetIsoAsync(int iso, CancellationToken ct, bool force = false) {
+        if (!force && SelectedIso == iso) return;
+        await SetIsoAsync(iso, ct);
+    }
+
     /// <summary>Select an ISO on a DSLR (indi_gphoto CCD_ISO switch). No-op
     /// for astronomy cameras that don't publish CCD_ISO.</summary>
     public async Task SetIsoAsync(int iso, CancellationToken ct = default) {
@@ -960,6 +969,12 @@ public class IndiCamera : ICamera, IDisposable {
         }
         if (opts?.Gain is int g) {
             await TrySetGainAsync(g, ct, force);
+        }
+        // A DSLR has no gain property for the write above to land on; ISO is
+        // where its amplification lives, and it was declared on CaptureOptions
+        // but never read here, so a caller asking for one got nothing.
+        if (opts?.Iso is int isoWanted && isoWanted > 0) {
+            await TrySetIsoAsync(isoWanted, ct, force);
         }
         if (opts?.Offset is int off) {
             await TrySetOffsetAsync(off, ct, force);
