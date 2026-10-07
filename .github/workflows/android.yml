@@ -16,7 +16,10 @@ on:
         description: "Also produce a signed release APK (needs keystore secrets)"
         type: boolean
         default: false
+  # branches only: a tag push ignores the paths filter, so without this every release tag
+  # ran a mobile build
   push:
+    branches: ['**']
     paths:
       - 'mobile/**'
       - '.github/workflows/android.yml'

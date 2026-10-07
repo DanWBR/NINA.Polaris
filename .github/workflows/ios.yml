@@ -23,7 +23,10 @@ on:
         type: choice
         default: development
         options: [development, ad-hoc, app-store]
+  # branches only: a tag push ignores the paths filter, so without this every release tag
+  # ran a mobile build
   push:
+    branches: ['**']
     paths:
       - 'mobile/**'
       - '.github/workflows/ios.yml'
