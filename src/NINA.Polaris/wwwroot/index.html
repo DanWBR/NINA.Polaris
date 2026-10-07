@@ -717,8 +717,13 @@
             <!-- App clock. Moved here from the LIVE stats bar (where a
                  wall-clock time next to the stacking stats was confusing).
                  Hidden on very narrow viewports to keep the badge row tidy. -->
+            <!-- The HOST's clock (issue #33): the astronomy runs on it, so
+                 this is the one worth showing. Tinted when it disagrees with
+                 this device, which is the case the operator cannot otherwise
+                 see. -->
             <span class="status-chip status-clock" x-text="currentTime"
-                  title="Current time" data-no-i18n></span>
+                  :class="clockSkewClass()" :title="clockChipTitle()"
+                  data-no-i18n></span>
             <!-- DBGLOG-6: log inspector badge. Always visible (helps
                  trust + discoverability), colours by unread severity:
                  red when there are unread errors, amber for unread

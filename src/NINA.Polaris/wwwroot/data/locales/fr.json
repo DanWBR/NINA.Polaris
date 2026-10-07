@@ -5272,5 +5272,8 @@
   "Waiting for the meridian flip point": "En attente du point de retournement au méridien",
   "The host has not answered yet. It may still be working on the command; this is not necessarily a network fault.": "L'hôte n'a pas encore répondu. Il travaille peut-être encore sur la commande ; ce n'est pas forcément une panne réseau.",
   "Dither queued until the exposure finishes": "Dither en attente jusqu'à la fin de la pose",
-  "Recent searches": "Recherches récentes"
+  "Recent searches": "Recherches récentes",
+  "Host clock": "Horloge de l'hôte",
+  "of this device": "par rapport à cet appareil",
+  "Astronomical calculations use this clock.": "Les calculs astronomiques utilisent cette horloge."
 }
