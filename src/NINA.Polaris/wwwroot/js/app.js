@@ -818,6 +818,11 @@ function ninaApp() {
 
         // Sky
         skySearch: '',
+        // The last searches that found something, newest first. Per browser,
+        // like the other small conveniences: it is a typing shortcut, not rig
+        // configuration, and it is no loss if a different device has its own.
+        skyRecent: [],
+        skyRecentOpen: false,
         // SKY toolbar: the search box is hidden behind the Search button so the
         // toolbar fits on one row; clicking Search reveals + focuses the input.
         skySearchOpen: false,
@@ -5559,6 +5564,9 @@ function ninaApp() {
             // Load the custom horizon once so the Sky-map overlay + editor have
             // it regardless of whether Settings is ever opened.
             try { this.horizonLoad(); } catch (_) { /* best effort */ }
+
+            // The SKY search box offers what was searched before.
+            try { this._skyRecentLoad(); } catch (_) { /* best effort */ }
 
             // 1 Hz tick driving the scheduled-shutdown countdown badge/card.
             setInterval(() => { this._nowTick = Date.now(); }, 1000);
@@ -43805,9 +43813,58 @@ function ninaApp() {
             }
         },
 
+        // ---- recent searches -------------------------------------------
+        // Typing "NGC 7000" again because the map moved is the kind of small
+        // friction that adds up at 3am. Only searches that FOUND something are
+        // kept: a list of your own typos is worse than no list.
+        _skyRecentLoad() {
+            try {
+                const raw = localStorage.getItem('polaris.sky.recent');
+                const list = raw ? JSON.parse(raw) : [];
+                this.skyRecent = Array.isArray(list)
+                    ? list.filter(s => typeof s === 'string' && s.trim()).slice(0, 8)
+                    : [];
+            } catch (e) { this.skyRecent = []; }
+        },
+        _skyRecentRemember(q) {
+            const v = (q || '').trim();
+            if (!v) return;
+            // Case-insensitive de-duplication, and the repeat moves to the top
+            // rather than piling up.
+            const rest = this.skyRecent.filter(s => s.toLowerCase() !== v.toLowerCase());
+            this.skyRecent = [v, ...rest].slice(0, 8);
+            try { localStorage.setItem('polaris.sky.recent', JSON.stringify(this.skyRecent)); }
+            catch (e) { /* private mode: the list just does not survive the tab */ }
+        },
+        // What to show under the box: everything on an empty field, narrowed as
+        // the operator types, and nothing once it matches only itself.
+        skyRecentShown() {
+            const q = (this.skySearch || '').trim().toLowerCase();
+            const list = q
+                ? this.skyRecent.filter(s => s.toLowerCase().includes(q) && s.toLowerCase() !== q)
+                : this.skyRecent;
+            return list.slice(0, 8);
+        },
+        skyRecentPick(q) {
+            this.skySearch = q;
+            this.skyRecentOpen = false;
+            this.searchSky();
+        },
+        // A click on a row blurs the input first, so closing on blur has to
+        // wait long enough for the click to land.
+        skyRecentBlur() {
+            setTimeout(() => { this.skyRecentOpen = false; }, 180);
+        },
+        skyRecentClear() {
+            this.skyRecent = [];
+            this.skyRecentOpen = false;
+            try { localStorage.removeItem('polaris.sky.recent'); } catch (e) { }
+        },
+
         async searchSky() {
             const q = this.skySearch.trim();
             if (!q) return;
+            this.skyRecentOpen = false;
             // A coordinate pair typed into the search box is a target too:
             // "05:35:17 -05:23:28", "83.82 -5.39". The map goes there and the
             // Slew / Slew & Center buttons work on it like on any object.
@@ -43818,6 +43875,7 @@ function ninaApp() {
                     ra: coords.raHours, dec: coords.decDeg,
                     type: 'Coordinates', commonName: null, aliases: [], magnitude: null
                 });
+                this._skyRecentRemember(q);
                 this.skyShowResults = false;
                 return;
             }
@@ -43878,8 +43936,9 @@ function ninaApp() {
                     this.skyTarget = null;
                     this.skyShowResults = false;
                     this.toast('No objects found for "' + q + '"', 'warn');
-                    return;
+                    return;   // nothing found, so nothing worth remembering
                 }
+                this._skyRecentRemember(q);
                 if (merged.length === 1) {
                     this.selectSkyTarget(merged[0]);
                     this.skyShowResults = false;

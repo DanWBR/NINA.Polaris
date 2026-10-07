@@ -9772,8 +9772,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                            x-show="skySearchOpen" x-cloak
                            placeholder="Search object (M31, NGC 7000, Orion...) or RA Dec"
                            x-model="skySearch" @keyup.enter="searchSky()"
-                           @keyup.escape="skySearchOpen = false"
-                           @input="skyShowResults = false">
+                           @keyup.escape="skyRecentOpen = false; skySearchOpen = false"
+                           @focus="skyRecentOpen = true"
+                           @blur="skyRecentBlur()"
+                           @input="skyShowResults = false; skyRecentOpen = true">
                     <button class="btn btn-sm" @click="gotoCoordsOpen()"
                             title="Type RA and Dec and send the mount there, or show the position on the map">🎯 RA/Dec</button>
                     <!-- Framing rotation: turn the red target box with a
@@ -9908,6 +9910,28 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 </div>
 
                 <!-- Search results dropdown -->
+                <!-- Recent searches. Shown while the box has focus, narrowed by
+                     whatever is typed, and never at the same time as results.
+                     It lives here rather than floating under the input because
+                     .sky-toolbar scrolls horizontally and would clip it. -->
+                <div class="sky-recent"
+                     x-show="skySearchOpen && skyRecentOpen && !skyShowResults && skyRecentShown().length"
+                     x-cloak>
+                    <div class="sky-recent-head">
+                        <span x-text="$t('Recent searches')"></span>
+                        <button type="button" class="sky-recent-clear"
+                                @mousedown.prevent @click="skyRecentClear()"
+                                x-text="$t('Clear')"></button>
+                    </div>
+                    <template x-for="q in skyRecentShown()" :key="'skyrec-'+q">
+                        <div class="sky-recent-item"
+                             @mousedown.prevent @click="skyRecentPick(q)">
+                            <span class="sky-recent-icon">&#8617;</span>
+                            <span x-text="q"></span>
+                        </div>
+                    </template>
+                </div>
+
                 <div class="sky-results" x-show="skyShowResults && skyResults.length > 1">
                     <template x-for="obj in skyResults" :key="obj.name">
                         <div class="sky-result-item" @click="selectSkyTarget(obj)">
