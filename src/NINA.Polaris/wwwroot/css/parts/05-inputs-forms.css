@@ -678,6 +678,14 @@ body.link-offline .preview-pane::after {
     width: 80px;
 }
 
+.seq-input-filter {
+    /* A select sizes itself to its widest option, and with short filter names
+       that is "(current)", leaving barely a character of room beside the
+       caret. A floor, not a width: a long name like "Luminance" still grows
+       the box. */
+    min-width: 112px;
+}
+
 .seq-item-params {
     display: flex;
     gap: 8px;

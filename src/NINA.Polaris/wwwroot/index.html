@@ -12387,7 +12387,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                                  item.filter kept the value and frames captured on the
                                                  right filter (#642). :selected re-evaluates as each
                                                  option renders, so the match is restored. -->
-                                            Filter<select class="seq-input" :value="item.filter || ''"
+                                            Filter<select class="seq-input seq-input-filter" :value="item.filter || ''"
                                                 @change="item.filter = $event.target.value"
                                                 :disabled="seqState === 'running'">
                                                 <option value="" :selected="!item.filter">(current)</option>
