@@ -23,7 +23,7 @@ public static class MeridianFlipEndpoints {
         group.MapGet("/settings", (MeridianFlipService mf) => Results.Ok(mf.Settings));
 
         group.MapPut("/settings", (MeridianFlipSettings settings, MeridianFlipService mf) => {
-            mf.UpdateSettings(settings);
+            mf.SaveSettings(settings);
             return Results.Ok(mf.Settings);
         });
 

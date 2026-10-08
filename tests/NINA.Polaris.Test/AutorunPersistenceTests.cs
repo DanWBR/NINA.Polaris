@@ -84,6 +84,72 @@ public class AutorunPersistenceTests {
             barrier, NullLogger<SequenceEngine>.Instance);
     }
 
+    private static MeridianFlipService MakeFlip(ProfileService profile) {
+        var cfg = new ConfigurationBuilder().Build();
+        var indi = new IndiClient("localhost", 7624);
+        var equip = new EquipmentManager(indi, NullLogger<EquipmentManager>.Instance,
+            new NINA.Polaris.Services.Alpaca.AlpacaDiscoveryCache(),
+            new NINA.Polaris.Services.Simulator.Gear.SimGearService());
+        var relay = new ImageRelayService(NullLogger<ImageRelayService>.Instance);
+        var phd2 = new PHD2Client(NullLogger<PHD2Client>.Instance);
+        var plateSolve = new PlateSolveService(cfg, NullLogger<PlateSolveService>.Instance);
+        var stream = new CameraStreamService(equip, relay, NullLogger<CameraStreamService>.Instance,
+            new CaptureProgressService());
+        var slewCenter = new SlewCenterService(equip, plateSolve, profile, stream, NullLogger<SlewCenterService>.Instance);
+        var native = new NativeGuider(equip, profile, NullLogger<NativeGuider>.Instance);
+        var guiders = new ActiveGuiderProvider(profile, phd2, native);
+        var autoFocus = new AutoFocusService(equip, relay, guiders, profile, NullLogger<AutoFocusService>.Instance);
+        return new MeridianFlipService(equip, guiders, slewCenter, autoFocus, profile,
+            new CaptureProgressService(), NullLogger<MeridianFlipService>.Instance);
+    }
+
+    /// <summary>Issue #30, after the look-ahead fix shipped: the flip settings
+    /// lived only in memory, so updating Polaris (a restart) switched the
+    /// AUTORUN flip back off and the next run tracked past the meridian.</summary>
+    [Test]
+    public void MeridianFlipSettings_SurviveHostRestart() {
+        var flip1 = MakeFlip(NewProfile());
+        flip1.SaveSettings(new MeridianFlipSettings {
+            Enabled = true, MinutesAfterMeridian = 7, MaxMinutesPastMeridian = 25, MinAltitudeLimitDeg = 0,
+        });
+
+        var flip2 = MakeFlip(NewProfile());
+        Assert.Multiple(() => {
+            Assert.That(flip2.Settings.Enabled, Is.True, "the flip must still be on after a restart");
+            Assert.That(flip2.Settings.MinutesAfterMeridian, Is.EqualTo(7));
+            Assert.That(flip2.Settings.MaxMinutesPastMeridian, Is.EqualTo(25));
+            Assert.That(flip2.Settings.MinAltitudeLimitDeg, Is.EqualTo(0));
+        });
+    }
+
+    /// <summary>A run's own override (PLAN) is for that run only.</summary>
+    [Test]
+    public void ATemporaryOverride_IsNotPersisted() {
+        var flip1 = MakeFlip(NewProfile());
+        flip1.SaveSettings(new MeridianFlipSettings { Enabled = false, MinutesAfterMeridian = 5 });
+        flip1.UpdateSettings(new MeridianFlipSettings { Enabled = true, MinutesAfterMeridian = 10 });
+
+        var flip2 = MakeFlip(NewProfile());
+        Assert.That(flip2.Settings.Enabled, Is.False);
+        Assert.That(flip2.Settings.MinutesAfterMeridian, Is.EqualTo(5));
+    }
+
+    [Test]
+    public void MeridianFlipSettings_FollowTheActiveRig() {
+        var profile = NewProfile();
+        var flip = MakeFlip(profile);
+        var first = profile.ActiveEquipmentProfile.Id;
+        flip.SaveSettings(new MeridianFlipSettings { Enabled = true, MinutesAfterMeridian = 8 });
+
+        var other = profile.CreateEquipmentProfile("Second rig");
+        profile.ActivateEquipmentProfile(other.Id);
+        Assert.That(flip.Settings.Enabled, Is.False, "a rig with nothing saved gets the defaults");
+
+        profile.ActivateEquipmentProfile(first);
+        Assert.That(flip.Settings.Enabled, Is.True);
+        Assert.That(flip.Settings.MinutesAfterMeridian, Is.EqualTo(8));
+    }
+
     [Test]
     public void Schedule_SurvivesHostRestart() {
         var p1 = NewProfile();

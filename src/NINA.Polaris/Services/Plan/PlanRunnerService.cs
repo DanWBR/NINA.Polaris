@@ -107,17 +107,7 @@ public class PlanRunnerService : IHostedService {
             // settings (pause-before, tolerance, settle, live-stack flag) and
             // only override the three knobs exposed in the PLAN panel.
             if (plan.AutoMeridianFlip) {
-                var s = _flip.Settings;
-                _flip.UpdateSettings(new MeridianFlipSettings {
-                    Enabled = true,
-                    MinutesAfterMeridian = plan.MeridianFlipMinutesAfter,
-                    RecenterAfterFlip = plan.MeridianFlipRecenter,
-                    AutoFocusAfterFlip = plan.MeridianFlipAutoFocus,
-                    PauseBeforeMeridianMinutes = s.PauseBeforeMeridianMinutes,
-                    RecenterToleranceArcsec = s.RecenterToleranceArcsec,
-                    SettleSecondsAfterFlip = s.SettleSecondsAfterFlip,
-                    AutoFlipDuringLiveStack = s.AutoFlipDuringLiveStack
-                });
+                ApplyPlanFlipSettings(plan);
             }
 
             var doc = _compiler.Compile(plan);
@@ -163,17 +153,7 @@ public class PlanRunnerService : IHostedService {
 
             var plan = _resumePlan;
             if (plan.AutoMeridianFlip) {
-                var s = _flip.Settings;
-                _flip.UpdateSettings(new MeridianFlipSettings {
-                    Enabled = true,
-                    MinutesAfterMeridian = plan.MeridianFlipMinutesAfter,
-                    RecenterAfterFlip = plan.MeridianFlipRecenter,
-                    AutoFocusAfterFlip = plan.MeridianFlipAutoFocus,
-                    PauseBeforeMeridianMinutes = s.PauseBeforeMeridianMinutes,
-                    RecenterToleranceArcsec = s.RecenterToleranceArcsec,
-                    SettleSecondsAfterFlip = s.SettleSecondsAfterFlip,
-                    AutoFlipDuringLiveStack = s.AutoFlipDuringLiveStack
-                });
+                ApplyPlanFlipSettings(plan);
             }
 
             _engine.LoadForResume(_resumeDoc);
@@ -281,6 +261,19 @@ public class PlanRunnerService : IHostedService {
                 list.Add(dso.Name);
         }
         return list;
+    }
+
+    /// <summary>Apply the plan's flip knobs for this run only, on a copy of the
+    /// current settings. Rebuilding the settings from scratch here reset every
+    /// field not named, the mount-safety guard's limits among them, back to
+    /// its default for as long as the host kept running.</summary>
+    private void ApplyPlanFlipSettings(ImagingPlan plan) {
+        var s = _flip.Settings.Clone();
+        s.Enabled = true;
+        s.MinutesAfterMeridian = plan.MeridianFlipMinutesAfter;
+        s.RecenterAfterFlip = plan.MeridianFlipRecenter;
+        s.AutoFocusAfterFlip = plan.MeridianFlipAutoFocus;
+        _flip.UpdateSettings(s);
     }
 
     /// <summary>Recursively sum the frame counts of every TakeExposure

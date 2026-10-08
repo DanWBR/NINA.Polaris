@@ -1405,6 +1405,11 @@ public class EquipmentProfile {
     [System.Text.Json.Serialization.JsonIgnore]
     public DitherSettings EffectiveDither =>
         DitherProfile ?? AutorunDither ?? new DitherSettings();
+
+    /// <summary>Meridian flip and mount-safety settings for this rig's mount.
+    /// Null = never saved; the defaults apply. Not copied by the rig PUT
+    /// handler, so a rig save never clobbers it.</summary>
+    public MeridianFlipSettings? MeridianFlip { get; set; }
 }
 
 /// <summary>One starred target. J2000, hours and degrees like everything
