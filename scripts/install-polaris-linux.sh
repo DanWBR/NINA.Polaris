@@ -116,7 +116,65 @@ fetch() {
     return 1
 }
 
-apt_try() { apt-get install -y "$@" || { note_fail "apt install $*"; apt_recover; }; }
+# Ubuntu's country mirrors (id.archive.ubuntu.com, de.ports.ubuntu.com, ...)
+# are run by third parties and can lag a sync or refuse a single file. One
+# such file failed both phd2 and polaris.deb on an Indonesian install
+# (Discord, 2026-10-08):
+#
+#   E: Failed to fetch http://id.archive.ubuntu.com/ubuntu/pool/main/g/gpgmepp/libgpgmepp7_2.0.0-2_amd64.deb  403  Forbidden
+#
+# Retrying the same mirror cannot help. So on that failure the country mirrors
+# are pointed at the main archive for the rest of this run, and the user's
+# original sources are put back when the script exits.
+: "${APT_SOURCES_LIST:=/etc/apt/sources.list}"
+MIRROR_BACKUP=""
+COUNTRY_MIRROR_RE='://[a-z]{2,3}\.(archive|ports)\.ubuntu\.com'
+
+# Does this apt output show a fetch refused by an Ubuntu country mirror?
+country_mirror_failed() { grep -qE "Failed to fetch https?${COUNTRY_MIRROR_RE}/" "$1"; }
+
+use_main_archive() {
+    [ -z "$MIRROR_BACKUP" ] || return 1     # already switched once this run
+    MIRROR_BACKUP="$(mktemp -d)"
+    local f hit=0
+    for f in "$APT_SOURCES_LIST" "$APT_SOURCES_DIR"/*.list "$APT_SOURCES_DIR"/*.sources; do
+        [ -f "$f" ] && grep -qE "$COUNTRY_MIRROR_RE" "$f" || continue
+        cp -p --parents "$f" "$MIRROR_BACKUP/"
+        sed -i -E -e 's#://[a-z]{2,3}\.archive\.ubuntu\.com#://archive.ubuntu.com#g' \
+                  -e 's#://[a-z]{2,3}\.ports\.ubuntu\.com#://ports.ubuntu.com#g' "$f"
+        hit=1
+    done
+    [ "$hit" = 1 ] || return 1
+    echo "  the Ubuntu country mirror refused a file; switching to the main archive for this run"
+    apt-get update
+}
+
+# Put back the sources use_main_archive rewrote.
+mirror_restore() {
+    [ -n "$MIRROR_BACKUP" ] && [ -d "$MIRROR_BACKUP" ] || return 0
+    local p
+    while IFS= read -r p; do
+        cp -p "$MIRROR_BACKUP/$p" "/$p"
+    done < <(cd "$MIRROR_BACKUP" && find . -type f | sed 's#^\./##')
+    rm -rf "$MIRROR_BACKUP"; MIRROR_BACKUP=""
+    echo "  apt sources restored. The country mirror is back in use; if a later"
+    echo "  apt upgrade fails the same way, select the main Ubuntu server instead."
+}
+
+# apt-get install -y, retried once against the main Ubuntu archive when a
+# country mirror refused a file.
+apt_install() {
+    local log rc
+    log="$(mktemp)"
+    apt-get install -y "$@" 2>&1 | tee "$log"; rc=${PIPESTATUS[0]}
+    if [ "$rc" -ne 0 ] && country_mirror_failed "$log" && use_main_archive; then
+        apt-get install -y "$@"; rc=$?
+    fi
+    rm -f "$log"
+    return "$rc"
+}
+
+apt_try() { apt_install "$@" || { note_fail "apt install $*"; apt_recover; }; }
 
 # Same, but one name that has no installation candidate must not take the rest
 # of the line down with it. apt aborts the WHOLE command in that case: a
@@ -126,12 +184,12 @@ apt_try() { apt-get install -y "$@" || { note_fail "apt install $*"; apt_recover
 # install one at a time so the damage is limited to the package that is really
 # missing, and so the summary names it.
 apt_try_each() {
-    if apt-get install -y "$@" >/dev/null 2>&1; then return 0; fi
+    if apt_install "$@" >/dev/null 2>&1; then return 0; fi
     apt_recover
     echo "  combined install failed, retrying one package at a time"
     local p rc=0
     for p in "$@"; do
-        if apt-get install -y "$p"; then
+        if apt_install "$p"; then
             echo "  ok: $p"
         else
             note_fail "apt install $p"; apt_recover; rc=1
@@ -172,6 +230,31 @@ ubuntu_codename() {
     fi
     [ -z "$c" ] && c="$(system_codename)"
     echo "$c"
+}
+
+# The Ubuntu series apt's own archive entries serve, as apt itself parsed
+# them (one-line .list and deb822 .sources alike). PPAs are not o=Ubuntu.
+apt_ubuntu_series() {
+    apt-cache policy 2>/dev/null \
+        | sed -nE 's/.*o=Ubuntu,a=[^,]*,n=([a-z]+),l=Ubuntu,.*/\1/p' | sort -u
+}
+
+# Sources for another Ubuntu release make every install fail with dependency
+# errors that never name the cause. A 26.04 system whose archive entries had
+# been replaced with 24.04 ones (Discord, 2026-10-08) got "python3-venv ...
+# Depends python3 (= 3.12.3-0ubuntu2.1)" for polaris.deb and missing OpenCV
+# 4.10 for phd2. Say it plainly and stop instead.
+check_archive_series() {
+    local want have
+    want="$(ubuntu_codename)"
+    have="$(apt_ubuntu_series | tr '\n' ' ')"; have="${have% }"
+    [ -n "$want" ] && [ -n "$have" ] || return 0
+    case " $have " in *" $want "*) return 0;; esac
+    echo -e "\e[31m[ERROR]\e[0m This system is Ubuntu '$want', but apt's Ubuntu sources are for '$have'."
+    echo "  Packages built for another release cannot install here. Point the Ubuntu entries"
+    echo "  in /etc/apt/sources.list.d/ubuntu.sources (or /etc/apt/sources.list) back to"
+    echo "  '$want', run 'sudo apt update', then rerun this script."
+    return 1
 }
 
 # Point a just-added PPA at that Ubuntu series. add-apt-repository imports the
@@ -282,15 +365,18 @@ install_deb() {
         f="/tmp/$name"
         fetch "$url" "$f" || { note_fail "download $desc"; return 1; }
     fi
-    apt-get install -y "$f" || { note_fail "install $desc"; apt_recover; return 1; }
+    apt_install "$f" || { note_fail "install $desc"; apt_recover; return 1; }
     return 0
 }
 
 # ---------------------------------------------------------------------------
 # 0. Base tools
 # ---------------------------------------------------------------------------
+trap mirror_restore EXIT
+
 banner "Base tools"
 apt-get update || note_fail "apt update (base)"
+check_archive_series || exit 1
 apt_try software-properties-common wget ca-certificates curl gnupg unzip \
         cloud-guest-utils gdisk
 
@@ -520,7 +606,7 @@ if d80_installed; then
     echo "  d80 star database already present, skipping the download"
 elif D80_LOCAL="$(d80_on_disk)"; then
     echo "  using the copy already on disk: $D80_LOCAL"
-    apt-get install -y "$D80_LOCAL" || { note_fail "install astap d80 db"; apt_recover; }
+    apt_install "$D80_LOCAL" || { note_fail "install astap d80 db"; apt_recover; }
 else
     install_deb "d80_star_database.deb" "$ASTAP_D80_URL" "astap d80 db" || true
 fi
@@ -531,6 +617,7 @@ rm -rf /tmp/astap*.deb /tmp/astap_cli.zip /tmp/astapcli /tmp/d80*.deb /tmp/polar
 # ---------------------------------------------------------------------------
 # Cleanup + summary
 # ---------------------------------------------------------------------------
+mirror_restore
 apt-get clean
 rm -rf /var/lib/apt/lists/*
 
