@@ -161,4 +161,40 @@ public class MeridianFlipLookAheadTests {
             Assert.That(Hold(h, exposureSeconds: 300).TotalMinutes, Is.EqualTo(2).Within(0.2));
         });
     }
+
+    // ---- Once per crossing --------------------------------------------------
+    // ShouldFlipNow does not read the pier side, so before this a target still
+    // past the flip point after its flip looked due again, and the full flip
+    // routine (re-slew, settle, plate solve) ran before every following frame.
+
+    [Test]
+    public void NoFlipYet_IsNotFlipped() {
+        Assert.That(MeridianFlipService.FlippedSinceFlipPoint(
+            haHours: 10 / 60.0, minutesAfterMeridian: 5, lastFlipAtUtc: null, nowUtc: DateTime.UtcNow), Is.False);
+    }
+
+    [Test]
+    public void AFlipAfterThePoint_CountsForThisCrossing() {
+        var now = DateTime.UtcNow;
+        // Point reached 5 minutes ago (HA 10 min, point at 5); flipped 3 minutes ago.
+        Assert.That(MeridianFlipService.FlippedSinceFlipPoint(
+            10 / 60.0, 5, now.AddMinutes(-3), now), Is.True,
+            "one flip after the point is enough; the next frame must not flip again");
+    }
+
+    [Test]
+    public void AFlipBeforeThePoint_DoesNotCount() {
+        var now = DateTime.UtcNow;
+        // Point reached 5 minutes ago; the last flip was 20 minutes ago, on an
+        // earlier target or before this one got there.
+        Assert.That(MeridianFlipService.FlippedSinceFlipPoint(
+            10 / 60.0, 5, now.AddMinutes(-20), now), Is.False);
+    }
+
+    [Test]
+    public void LastNightsFlip_DoesNotCount() {
+        var now = DateTime.UtcNow;
+        Assert.That(MeridianFlipService.FlippedSinceFlipPoint(
+            6 / 60.0, 5, now.AddHours(-23.9), now), Is.False);
+    }
 }

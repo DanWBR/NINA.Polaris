@@ -61,6 +61,41 @@ public class MeridianFlipService {
         _profile = profile;
         _captureProgress = captureProgress;
         _logger = logger;
+        LoadSettingsForActiveRig();
+        _profile.EquipmentProfileActivated += _ => {
+            // Never swap the settings out from under a flip in progress.
+            if (State == MeridianFlipState.Idle) LoadSettingsForActiveRig();
+        };
+    }
+
+    /// <summary>
+    /// The settings saved on the active rig, or the defaults when it has none.
+    ///
+    /// <para>They used to live only in memory, so every restart of the host,
+    /// an update included, quietly turned the AUTORUN flip back off. The
+    /// operator saw "Meridian in" instead of "Flip in" and a run that tracked
+    /// on past the meridian with no flip (issue #30, after the update).</para>
+    /// </summary>
+    private void LoadSettingsForActiveRig() {
+        try {
+            var saved = _profile.ActiveEquipmentProfile.MeridianFlip;
+            UpdateSettings(saved?.Clone() ?? new MeridianFlipSettings());
+        } catch (Exception ex) {
+            _logger.LogWarning(ex, "Could not load the meridian flip settings for the active rig");
+        }
+    }
+
+    /// <summary>Apply settings the operator chose and keep them on the active
+    /// rig. <see cref="UpdateSettings"/> alone is for a run's own temporary
+    /// override (PLAN), which must not outlive the run.</summary>
+    public void SaveSettings(MeridianFlipSettings settings) {
+        UpdateSettings(settings);
+        try {
+            var copy = Settings.Clone();
+            _profile.UpdateEquipmentProfile(_profile.ActiveEquipmentProfile.Id, r => r.MeridianFlip = copy);
+        } catch (Exception ex) {
+            _logger.LogWarning(ex, "Could not persist the meridian flip settings");
+        }
     }
 
     /// <summary>
@@ -200,12 +235,10 @@ public class MeridianFlipService {
 
     /// <summary>
     /// Does the current target require a flip *now*? True when the target has
-    /// crossed the meridian by at least Settings.MinutesAfterMeridian, and
-    /// the mount currently reports the wrong pier side for the new HA.
+    /// crossed the meridian by at least Settings.MinutesAfterMeridian, and no
+    /// flip has completed since it did (see <see cref="FlippedSinceFlipPoint"/>).
     ///
     /// Returns false if no telescope, no settings, no target RA, or flip disabled.
-    /// Callers must additionally check that they actually have a target tracked
-    /// (sequence item with coordinates) before invoking the flip workflow.
     /// </summary>
     public bool ShouldFlipNow(double targetRaHours) {
         if (!Settings.Enabled) return false;
@@ -218,9 +251,30 @@ public class MeridianFlipService {
         while (ha < -12) ha += 24;
 
         // Need HA past 0 by >= MinutesAfterMeridian / 60 hours
-        return ha >= Settings.MinutesAfterMeridian / 60.0
-            && ha < 6.0; // sanity: don't flip if target is way past meridian
+        if (ha < Settings.MinutesAfterMeridian / 60.0 || ha >= 6.0) return false; // sanity: not way past meridian
+
+        return !FlippedSinceFlipPoint(ha, Settings.MinutesAfterMeridian, LastFlipAt, DateTime.UtcNow);
     }
+
+    /// <summary>
+    /// Has a flip already completed since the target reached the flip point?
+    ///
+    /// <para>Nothing here reads the pier side, so a target still past the flip
+    /// point after its flip looked due again on the next frame, and the whole
+    /// routine (re-slew, settle, plate solve, autofocus when enabled) ran
+    /// before every frame for the rest of the night. A slew to a new target
+    /// picks the right pier side by itself, so one flip after the point is
+    /// enough whatever the target.</para>
+    /// </summary>
+    public static bool FlippedSinceFlipPoint(double haHours, double minutesAfterMeridian,
+            DateTime? lastFlipAtUtc, DateTime nowUtc) {
+        if (lastFlipAtUtc == null) return false;
+        double siderealHoursPast = haHours - minutesAfterMeridian / 60.0;
+        var reachedAt = nowUtc - TimeSpan.FromHours(siderealHoursPast * SolarPerSidereal);
+        return lastFlipAtUtc.Value >= reachedAt;
+    }
+
+    private const double SolarPerSidereal = 0.9972695663;
 
     /// <summary>
     /// Execute the flip workflow for the given target. Caller is responsible
@@ -391,6 +445,9 @@ public class MeridianFlipService {
 public class MeridianFlipSettings {
     /// <summary>Enable automatic flip during sequence execution.</summary>
     public bool Enabled { get; set; }
+
+    /// <summary>Every field is a value, so a member-wise copy is a full one.</summary>
+    public MeridianFlipSettings Clone() => (MeridianFlipSettings)MemberwiseClone();
     /// <summary>How many minutes past the meridian to wait before triggering the flip.</summary>
     public double MinutesAfterMeridian { get; set; } = 5;
     /// <summary>Minutes before the meridian at which to pause new exposures (0 = disabled).</summary>

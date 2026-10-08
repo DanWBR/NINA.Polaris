@@ -203,6 +203,22 @@ public class SequenceEngine {
         }
     }
 
+    /// <summary>
+    /// Where the meridian flip has to look for this item: its own coordinates,
+    /// or else wherever the mount points. An item with no coordinates is shot
+    /// at the mount's position, typically after a manual slew; skipping the
+    /// flip for it let such a run track on past the meridian with no flip at
+    /// all (issue #30, reported again after the look-ahead fix).
+    /// </summary>
+    private (double? Ra, double? Dec) FlipTarget(SequenceItem item) {
+        if (item.Ra.HasValue && item.Dec.HasValue) return (item.Ra, item.Dec);
+        var scope = _equip.Telescope;
+        if (scope == null || !scope.IsConnected) return (null, null);
+        double ra = scope.RightAscension, dec = scope.Declination;
+        if (double.IsNaN(ra) || double.IsNaN(dec)) return (null, null);
+        return (ra, dec);
+    }
+
     public void LoadSequence(List<SequenceItem> items) {
         if (State == SequenceState.Running)
             throw new InvalidOperationException("Cannot load sequence while running");
@@ -270,6 +286,10 @@ public class SequenceEngine {
         _runTask = Task.Run(() => RunAsync(_cts.Token));
         _logger.LogInformation("Sequence started (dither: {Enabled}, every {N} frames, {Px}px)",
             Dither.Enabled, Dither.EveryNFrames, Dither.Pixels);
+        _logger.LogInformation("Meridian flip for this run: {State}",
+            _meridianFlip.Settings.Enabled
+                ? $"on, {_meridianFlip.Settings.MinutesAfterMeridian:F0} min after the meridian"
+                : "off");
     }
 
     public void Pause() {
@@ -516,10 +536,10 @@ public class SequenceEngine {
                     // before the point and ended after it tracked straight
                     // through (issue #30). Holding for the remainder costs at
                     // most one exposure, once per flip.
-                    if (!isCalibration
-                        && item.Ra.HasValue && item.Dec.HasValue
-                        && _meridianFlip.Settings.Enabled) {
-                        var hold = _meridianFlip.WaitBeforeExposure(item.Ra.Value, item.Exposure);
+                    var (flipRa, flipDec) = !isCalibration && _meridianFlip.Settings.Enabled
+                        ? FlipTarget(item) : (null, null);
+                    if (flipRa.HasValue && flipDec.HasValue) {
+                        var hold = _meridianFlip.WaitBeforeExposure(flipRa.Value, item.Exposure);
                         if (hold > TimeSpan.Zero) {
                             _logger.LogInformation(
                                 "Holding {Sec:F0}s before frame {Frame} of '{Name}': a {Exp:F0}s "
@@ -528,9 +548,9 @@ public class SequenceEngine {
                             WaitingFor = "Waiting for the meridian flip point";
                             try { await Task.Delay(hold, ct); } finally { WaitingFor = null; }
                         }
-                        if (_meridianFlip.ShouldFlipNow(item.Ra.Value)) {
+                        if (_meridianFlip.ShouldFlipNow(flipRa.Value)) {
                             _logger.LogInformation("Meridian flip due for target {Name}, executing", item.Name);
-                            await _meridianFlip.ExecuteFlipAsync(item.Ra.Value, item.Dec.Value, ct);
+                            await _meridianFlip.ExecuteFlipAsync(flipRa.Value, flipDec.Value, ct);
                         }
                     }
 
