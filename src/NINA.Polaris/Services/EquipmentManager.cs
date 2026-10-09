@@ -734,7 +734,7 @@ public class EquipmentManager : IDisposable {
                     ? $"ASCOM-over-HTTP mounts. {_alpacaCache.ByType("Telescope").Count} discovered."
                     : "Run Alpaca Discover in RIGS first to populate this list."),
             new("synscan-wifi", "Sky-Watcher SynScan (Wi-Fi UDP)", Available: true,
-                Description: "Direct UDP to AZ-GTi / EQ6-R Pro / EQ8-R Pro / AllView / GoTo Dob (port 11880). Likely also drives ZWO AM5N / AM7 in SynScan-compat mode. Device id format: host[:port], defaults to 192.168.4.1:11880 (factory AP)."),
+                Description: "Direct UDP to the mount's own Wi-Fi (AZ-GTi, or the SynScan Wi-Fi adapter on EQ6-R Pro / EQ8-R Pro / AZ-EQ6), Sky-Watcher motor protocol on port 11880. Equatorial mode only: an AZ-GTi must be in EQ mode on a wedge. Disconnect the SynScan App first. Device id format: host[:port], defaults to 192.168.4.1:11880 (factory AP)."),
             new("sim", "Simulator", Available: true,
                 Description: "Built-in simulated GEM mount with pulse-guide support. Pair with the Simulator camera to test the native guider offline."),
             new("nexstar-wifi", "Celestron NexStar (Wi-Fi TCP)", Available: false,
