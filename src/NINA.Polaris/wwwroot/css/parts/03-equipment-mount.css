@@ -510,9 +510,10 @@
     gap: 6px;
     padding: 0 12px 10px;
 }
+/* Never narrower than the label: a button that does not fit wraps to the
+   next row instead of letting its text spill past the panel edge. */
 .mount-float-actions .btn {
-    flex: 1;
-    min-width: 0;
+    flex: 1 0 auto;
 }
 /* Compact variant of the dpad for the floating panel */
 .dpad-container-sm {
