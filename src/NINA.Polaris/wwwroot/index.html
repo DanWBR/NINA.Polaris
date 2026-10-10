@@ -11899,7 +11899,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         'ok': seqState === 'running',
                         'warn': seqState === 'paused',
                         'error': seqState === 'idle'
-                    }" x-text="seqState.toUpperCase()"></span>
+                    }" x-text="autorunPausing() ? 'PAUSING' : seqState.toUpperCase()"></span>
                 </div>
 
                 <!-- FW-2: AUTORUN sub-tabs. Sequence = the existing
@@ -12284,6 +12284,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 ETA <strong x-text="formatTime(seqStatus?.estimatedRemainingSeconds)"></strong>
                             </div>
                         </div>
+                        <!-- Pause waits for the open exposure to finish and be
+                             saved; say so, or the run looks frozen (issue #32). -->
+                        <div style="font-size:11px; line-height:1.4"
+                             class="text-warn" x-show="autorunPausing()">Pausing once this exposure is saved</div>
                         <!-- A deliberate hold between frames. Without this the
                              run looks stopped for up to one exposure while it
                              waits out the meridian flip point. -->
@@ -25177,7 +25181,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20260910-dslr"></script>
+    <script src="/js/app.js?v=20261010-pausing"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

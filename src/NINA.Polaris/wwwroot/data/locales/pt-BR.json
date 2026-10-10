@@ -5272,6 +5272,7 @@
   "INDI drivers installed on this host.": "drivers INDI instalados neste host.",
   "A distribution INDI has about 143 and is missing the recent ones; the INDI PPA has about 330.": "Um INDI da distribuição tem cerca de 143 e não tem os recentes; o PPA do INDI tem cerca de 330.",
   "Waiting for the meridian flip point": "Aguardando o ponto de flip do meridiano",
+  "Pausing once this exposure is saved": "Pausa assim que esta exposição for salva",
   "The host has not answered yet. It may still be working on the command; this is not necessarily a network fault.": "O host ainda não respondeu. Ele pode continuar trabalhando no comando; isso não é necessariamente falha de rede.",
   "Dither queued until the exposure finishes": "Dither na fila até a exposição terminar",
   "Recent searches": "Buscas recentes",

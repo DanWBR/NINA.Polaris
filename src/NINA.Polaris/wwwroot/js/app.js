@@ -27953,7 +27953,7 @@ function ninaApp() {
         autorunShutterCountdown() {
             if (this.armingLoop) return 'hold...';
             if (this.seqState === 'idle') return '';
-            if (this.seqState === 'paused') return 'paused';
+            if (this.seqState === 'paused' && !this.autorunPausing()) return 'paused';
             // PER-FRAME: seconds remaining on the CURRENT exposure (this is
             // what the inner ring tracks). The session done/total + ETA live
             // in the sidebar stats block, so the big shutter number is the
@@ -27980,7 +27980,7 @@ function ninaApp() {
         /// Called from the status-update handlers (NOT from a getter, to
         /// avoid Alpine reactivity write loops). Cleared when idle.
         _autorunSyncFrame(seq) {
-            if (!seq || seq.state !== 'running') {
+            if (!seq || (seq.state !== 'running' && !this.autorunPausing(seq.state))) {
                 if (this.autorunFrameKey !== '') {
                     this.autorunFrameKey = '';
                     this.autorunFrameStart = 0;
@@ -28013,6 +28013,18 @@ function ninaApp() {
             }
         },
 
+        /// Pause takes effect between frames: the exposure already open
+        /// runs to the end and is saved, and only the next one waits. The
+        /// server reports "paused" from the moment the button is pressed,
+        /// so until that exposure ends the run is pausing, not paused. The
+        /// panel used to drop the exposure progress on the press, which read
+        /// as the frame being thrown away and then resumed (issue #32).
+        autorunPausing(state = this.seqState) {
+            if (state !== 'paused') return false;
+            const sc = this.serverCapture;
+            return !!(sc && sc.active && (sc.source === 'autorun' || sc.source === 'sequencer'));
+        },
+
         /// Progress (0..1) of the CURRENT exposure: elapsed since the
         /// frame started / the active item's exposure seconds. Reads
         /// shutterTick (50ms while running) so the inner ring animates
@@ -28021,7 +28033,7 @@ function ninaApp() {
         autorunExposureProgress() {
             // eslint-disable-next-line no-unused-expressions
             this.shutterTick;   // reactivity dependency
-            if (this.seqState !== 'running' || !this.autorunFrameStart) return 0;
+            if ((this.seqState !== 'running' && !this.autorunPausing()) || !this.autorunFrameStart) return 0;
             const st = this.seqStatus;
             const item = (st && st.items) ? st.items[st.currentItemIndex] : null;
             const exp = item ? item.exposure : 0;
@@ -28041,7 +28053,7 @@ function ninaApp() {
         autorunFrameRemaining() {
             // eslint-disable-next-line no-unused-expressions
             this.shutterTick;   // reactivity dependency
-            if (this.seqState !== 'running' || !this.autorunFrameStart) return 0;
+            if ((this.seqState !== 'running' && !this.autorunPausing()) || !this.autorunFrameStart) return 0;
             const st = this.seqStatus;
             const item = (st && st.items) ? st.items[st.currentItemIndex] : null;
             const exp = item ? item.exposure : 0;
