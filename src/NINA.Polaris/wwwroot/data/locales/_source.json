@@ -4652,6 +4652,7 @@
   "INDI drivers installed on this host.": "",
   "A distribution INDI has about 143 and is missing the recent ones; the INDI PPA has about 330.": "",
   "Waiting for the meridian flip point": "",
+  "Pausing once this exposure is saved": "",
   "The host has not answered yet. It may still be working on the command; this is not necessarily a network fault.": "",
   "Dither queued until the exposure finishes": "",
   "Recent searches": "",
