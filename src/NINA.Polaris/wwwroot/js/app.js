@@ -1808,7 +1808,7 @@ function ninaApp() {
             dockHint: null,          // edge highlighted while dragging a panel to dock
         },
         ctrlCamCache: { main: [], guide: [] },   // /api/camera/controls, polled
-        ctrlIndiCache: {},                        // "device prop elem" -> {value,type}
+        ctrlIndiCache: {},                        // "device\0prop\0elem" -> {value,type}
         _ctrlTopZ: 1,
         video: {
             // Bahtinov mask on the live stream. The analysis runs server side
@@ -23597,7 +23597,7 @@ function ninaApp() {
                     return { value: c.value, writable: c.writable, min: c.min, max: c.max, step: 1, auto: c.auto };
                 }
                 if (w.source === 'indi') {
-                    const c = this.ctrlIndiCache[w.device + '' + w.property];
+                    const c = this.ctrlIndiCache[w.device + '\x01' + w.property];
                     if (!c) return { missing: true };
                     return { value: c.elements ? c.elements[w.element] : undefined, writable: c.writable, min: c.min, max: c.max, step: c.step };
                 }
@@ -23638,7 +23638,7 @@ function ninaApp() {
                     const r = await this.apiPostJson('/api/camera/controls/' + w.controlId, { value: on, auto: false, which: w.which || 'main' });
                     if (r && r.id != null && list.length) { const i = list.findIndex(x => x.id === r.id); if (i >= 0) list[i] = r; }
                 } else if (w.source === 'indi') {
-                    const c = this.ctrlIndiCache[w.device + '' + w.property] || {};
+                    const c = this.ctrlIndiCache[w.device + '\x01' + w.property] || {};
                     const type = c.type || (w.kind === 'toggle' ? 'switch' : 'number');
                     const body = { device: w.device, property: w.property, type };
                     if (type === 'switch') body.switches = { [w.element]: (w.kind === 'toggle') ? !(c.elements && c.elements[w.element]) : true };
@@ -23732,7 +23732,7 @@ function ninaApp() {
                             const writable = prop.permission !== 'ro';
                             const els = prop.number?.elements || prop.switch?.elements || prop.text?.elements || [];
                             const type = prop.type;
-                            this.ctrlIndiCache[dev.name + '' + prop.name] = {
+                            this.ctrlIndiCache[dev.name + '\x01' + prop.name] = {
                                 type, writable, elements: Object.fromEntries(els.map(e => [e.name, e.value]))
                             };
                             for (const e of els) out.push({
@@ -23769,7 +23769,7 @@ function ninaApp() {
                     for (const dev of (r && r.devices || [])) {
                         for (const prop of (dev.properties || [])) {
                             const els = prop.number?.elements || prop.switch?.elements || prop.text?.elements || [];
-                            this.ctrlIndiCache[dev.name + '' + prop.name] = {
+                            this.ctrlIndiCache[dev.name + '\x01' + prop.name] = {
                                 type: prop.type, writable: prop.permission !== 'ro',
                                 elements: Object.fromEntries(els.map(e => [e.name, e.value]))
                             };
