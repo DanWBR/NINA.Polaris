@@ -22640,9 +22640,16 @@ function ninaApp() {
             } catch (e) { this.toast('Failed to clear safety trip', 'error'); }
         },
 
+        // The status feed syncs enabled / autoFlipDuringLiveStack back from the
+        // server once a second. While a save is pending it must not: a tick
+        // landing inside the debounce put the server's old value back into
+        // mfSettings, the save then sent that old value, and the tick undid
+        // itself on screen and on the rig (issue #30).
         saveMfSettings() {
             if (this._mfSaveTimer) clearTimeout(this._mfSaveTimer);
+            this._mfSavePending = true;
             this._mfSaveTimer = setTimeout(async () => {
+                this._mfSaveTimer = null;
                 try {
                     await this.apiPost('/api/meridianflip/settings', null, {
                         method: 'PUT',
@@ -22651,6 +22658,9 @@ function ninaApp() {
                     });
                 } catch (e) {
                     this.toast('Failed to save meridian flip settings', 'error');
+                } finally {
+                    this._mfSavedAt = Date.now();
+                    if (!this._mfSaveTimer) this._mfSavePending = false;
                 }
             }, 400);
         },
@@ -49699,7 +49709,8 @@ function ninaApp() {
                     this.toast('⚠ Mount safety stop: ' + (this.mfSafetyReason || 'session halted'), 'error');
                 }
                 // Sync server-side settings back (in case another client edited)
-                if (mf.settings) {
+                // A tick built before the save landed can arrive just after it.
+                if (mf.settings && !this._mfSavePending && Date.now() - (this._mfSavedAt || 0) > 2000) {
                     this.mfSettings.enabled = !!mf.settings.enabled;
                     this.mfSettings.autoFlipDuringLiveStack = !!mf.settings.autoFlipDuringLiveStack;
                     // Don't overwrite other fields the user might be editing right now
