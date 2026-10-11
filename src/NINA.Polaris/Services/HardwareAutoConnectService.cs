@@ -91,7 +91,7 @@ public class HardwareAutoConnectService : IHostedService {
             await Task.Delay(TimeSpan.FromSeconds(3), ct);
 
             // -------- INDI --------
-            await TryConnectIndiAsync(ct);
+            bool indiOk = await TryConnectIndiAsync(ct);
 
             // -------- Alpaca (independent, runs even if INDI fails) --------
             await TryDiscoverAlpacaAsync(ct);
