@@ -570,6 +570,12 @@ public class EquipmentProfile {
     /// string = "None" (default).</summary>
     public string AttachedFilter { get; set; } = "";
     public string? Rotator { get; set; }
+    /// <summary>Rotator backend kind: <c>indi</c> (default) or <c>alpaca</c>.</summary>
+    public string RotatorDriver { get; set; } = "indi";
+    /// <summary>Maximum permitted absolute position for this rotator. The
+    /// common 90° and 180° travel-limit rotators are protected from an
+    /// accidental full-turn command; 360° remains the legacy default.</summary>
+    public double RotatorMaxAngle { get; set; } = 360;
     /// <summary>Manual rotator: turn the camera the other way round from what
     /// the solve's parity implies. A fact about this optical train (how many
     /// reflections it has, which side the operator stands on) rather than
