@@ -2284,6 +2284,28 @@
                           x-text="polarStatusLabel()"></span>
                 </div>
 
+                <!-- Which camera shoots the polar alignment: both workflows.
+                     A guide scope or finder sees a wider field, which solves
+                     sooner near the pole. Only connected cameras are offered. -->
+                <div class="quick-controls" style="margin-bottom: 8px">
+                    <div class="control-row">
+                        <label>Camera
+                            <select class="input-sm" x-model="polar.camera"
+                                    @change="savePolarRigSettings()"
+                                    :disabled="polar.isActive || rudimentary.busy">
+                                <option value="main">Main camera</option>
+                                <template x-for="c in extraImagers.filter(c => c.enabled)" :key="c.index">
+                                    <option :value="'imager:' + c.index" :disabled="!c.cameraConnected"
+                                            x-text="c.camera || ($t('Imaging Camera') + ' ' + c.index)"></option>
+                                </template>
+                                <option value="guide" :disabled="!polarCameraAvailable('guide')">Guide camera</option>
+                            </select>
+                        </label>
+                        <span class="text-warn" style="font-size:11px"
+                              x-show="polar.camera !== 'main' && !polarCameraAvailable(polar.camera)">Not connected</span>
+                    </div>
+                </div>
+
                 <!-- RDPA-4: workflow picker. TPPA = original 3-point
                      sweep (works when you can see the polar region +
                      slew freely in RA). Rudimentary = single-target
@@ -25512,7 +25534,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261011-guidecal"></script>
+    <script src="/js/app.js?v=20261011-polarcam"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

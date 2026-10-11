@@ -28,7 +28,9 @@ public record RudimentaryStartRequest(
     bool SlewToTarget = true,
     double ExposureSeconds = 3.0,
     int Gain = 100,
-    int SettleSeconds = 2);
+    int SettleSeconds = 2,
+    /// <summary>"main" (default), "guide" or "imager:N": which camera shoots.</summary>
+    string? Camera = null);
 
 /// <summary>Outcome of a single rudimentary iteration (Start or
 /// Re-solve). The job lives on in CurrentJob with TargetRaHours +
@@ -57,7 +59,11 @@ public record PolarAlignmentOptions(
     int SlewStepDegrees = 30,
     double ExposureSeconds = 3.0,
     int SettleSeconds = 2,
-    int Gain = 100);
+    int Gain = 100,
+    /// <summary>"main" (default), "guide" or "imager:N": which camera shoots. A
+    /// guide scope or finder sees a wider field, which solves sooner near the
+    /// pole and leaves the imaging camera and its train untouched.</summary>
+    string Camera = "main");
 
 /// <summary>One solved point in a TPPA run. The triple of these gets
 /// fed into PolarAlignmentMath.ComputeError to derive the mount's
@@ -82,6 +88,8 @@ public class PolarAlignmentJob {
     /// continuous loop, "rudimentary" for the single-target iterative
     /// workflow (RDPA). Drives UI labelling.</summary>
     public string Mode { get; set; } = "tppa";
+    /// <summary>The camera this job captures with: "main", "guide" or "imager:N".</summary>
+    public string CameraSource { get; set; } = "main";
     public DateTime StartedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
     internal CancellationTokenSource? Cts { get; set; }

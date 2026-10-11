@@ -4995,6 +4995,8 @@ function ninaApp() {
         // Form fields (slewDeg/exposureSec/settleSec/gain) hydrate
         // from the active rig's PolarAlign* settings on load.
         polar: {
+            // Camera that shoots: 'main', 'guide' or 'aux' (per rig).
+            camera: 'main',
             phase: 'Idle',
             isActive: false,
             completedOk: false,
@@ -34573,6 +34575,15 @@ function ninaApp() {
             }
         },
 
+        /// Is this camera connected, so polar alignment can use it? Same source
+        /// tokens as the FOCUS picker: main, guide, imager:N.
+        polarCameraAvailable(src) {
+            if (src === 'guide') return !!(this.guider && this.guider.guideCameraConnected);
+            const card = this._imagerBySource(src);
+            if (card) return !!card.cameraConnected;
+            return src === 'main';
+        },
+
         /// Start a TPPA job using the form values (which mirror the
         /// active rig's saved PolarAlign* settings).
         async polarStart() {
@@ -34582,7 +34593,8 @@ function ninaApp() {
                     slewStepDegrees: this.polar.slewDeg,
                     exposureSeconds: this.polar.exposureSec,
                     settleSeconds: this.polar.settleSec,
-                    gain: this.polar.gain
+                    gain: this.polar.gain,
+                    camera: this.polar.camera || 'main'
                 });
                 this.toast('Polar alignment started', 'info');
             } catch (e) {
@@ -34696,7 +34708,8 @@ function ninaApp() {
                     slewToTarget: this.rudimentary.aimMode === 'slew',
                     exposureSeconds: this.polar.exposureSec,
                     gain: this.polar.gain,
-                    settleSeconds: this.polar.settleSec
+                    settleSeconds: this.polar.settleSec,
+                    camera: this.polar.camera || 'main'
                 };
                 const r = await this.apiPostJson('/api/polar/rudimentary/start', body);
                 this._rudimentaryAbsorbResult(r);
@@ -34820,7 +34833,8 @@ function ninaApp() {
                         polarAlignSlewDegrees: parseInt(this.polar.slewDeg) || 30,
                         polarAlignExposureSec: parseFloat(this.polar.exposureSec) || 3.0,
                         polarAlignSettleSeconds: parseInt(this.polar.settleSec) || 2,
-                        polarAlignGain: parseInt(this.polar.gain) || 100
+                        polarAlignGain: parseInt(this.polar.gain) || 100,
+                        polarAlignCamera: this.polar.camera || 'main'
                     })
                 });
             } catch (e) {
@@ -34836,6 +34850,7 @@ function ninaApp() {
             if (rig.polarAlignExposureSec > 0) this.polar.exposureSec = rig.polarAlignExposureSec;
             if (rig.polarAlignSettleSeconds >= 0) this.polar.settleSec = rig.polarAlignSettleSeconds;
             if (rig.polarAlignGain > 0) this.polar.gain = rig.polarAlignGain;
+            if (rig.polarAlignCamera) this.polar.camera = rig.polarAlignCamera;
             // Slew & Center capture (used by SKY "Go to" / meridian
             // flip recenter / live-stack recenter). Same hydrate path
             // because they share the per-rig profile.

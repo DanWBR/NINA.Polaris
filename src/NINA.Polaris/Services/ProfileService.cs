@@ -468,6 +468,14 @@ public class ProfileService {
                 FilterMemoryMaxAgeHours = src.AutoFocus.FilterMemoryMaxAgeHours,
                 FilterOffsetReference = src.AutoFocus.FilterOffsetReference
             },
+            // Polar alignment (TPPA) + slew & center plate-solve tunables.
+            PolarAlignSlewDegrees = src.PolarAlignSlewDegrees,
+            PolarAlignExposureSec = src.PolarAlignExposureSec,
+            PolarAlignSettleSeconds = src.PolarAlignSettleSeconds,
+            PolarAlignGain = src.PolarAlignGain,
+            PolarAlignCamera = src.PolarAlignCamera,
+            SlewCenterExposureSec = src.SlewCenterExposureSec,
+            SlewCenterGain = src.SlewCenterGain,
             FocalLengthMm = src.FocalLengthMm,
             ApertureMm = src.ApertureMm,
             TelescopeBrand = src.TelescopeBrand,

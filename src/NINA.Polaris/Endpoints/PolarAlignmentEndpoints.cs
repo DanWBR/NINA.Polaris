@@ -50,7 +50,8 @@ public static class PolarAlignmentEndpoints {
                 SlewStepDegrees: request?.SlewStepDegrees ?? rig.PolarAlignSlewDegrees,
                 ExposureSeconds: request?.ExposureSeconds ?? rig.PolarAlignExposureSec,
                 SettleSeconds:   request?.SettleSeconds   ?? rig.PolarAlignSettleSeconds,
-                Gain:            request?.Gain            ?? rig.PolarAlignGain);
+                Gain:            request?.Gain            ?? rig.PolarAlignGain,
+                Camera:          request?.Camera          ?? rig.PolarAlignCamera);
             try {
                 var job = svc.StartJob(opts);
                 return Results.Ok(new {
@@ -170,6 +171,7 @@ public static class PolarAlignmentEndpoints {
                     ? request.Gain : rig.PolarAlignGain,
                 SettleSeconds = request.SettleSeconds > 0
                     ? request.SettleSeconds : rig.PolarAlignSettleSeconds,
+                Camera = string.IsNullOrWhiteSpace(request.Camera) ? rig.PolarAlignCamera : request.Camera,
             };
             try {
                 var result = await svc.StartRudimentaryAsync(req, ctx.RequestAborted);
@@ -210,4 +212,5 @@ public record StartPolarRequest(
     int? SlewStepDegrees = null,
     double? ExposureSeconds = null,
     int? SettleSeconds = null,
-    int? Gain = null);
+    int? Gain = null,
+    string? Camera = null);

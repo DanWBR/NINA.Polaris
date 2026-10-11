@@ -64,16 +64,92 @@ public class PolarAlignmentService {
     /// immediate WS frame instead of waiting for the next 1Hz tick.</summary>
     public event Action<PolarAlignmentJob>? JobUpdated;
 
+    private readonly ActiveGuiderProvider? _guiders;
+
     public PolarAlignmentService(EquipmentManager equip,
                                  PlateSolveService plateSolve,
                                  ProfileService profiles,
                                  NotificationService notify,
-                                 ILogger<PolarAlignmentService> logger) {
+                                 ILogger<PolarAlignmentService> logger,
+                                 ActiveGuiderProvider? guiders = null) {
         _equip = equip;
         _plateSolve = plateSolve;
         _profiles = profiles;
         _notify = notify;
         _logger = logger;
+        _guiders = guiders;
+    }
+
+    // ----- which camera shoots -----
+
+    /// <summary>"main", "guide", or "imager:N" for imaging camera slot N
+    /// (1 = the former aux slot, 2+ = extra imagers); "aux" is read as
+    /// "imager:1". Anything else is the main camera.</summary>
+    internal static string NormalizeCamera(string? source) {
+        var s = (source ?? "").Trim().ToLowerInvariant();
+        if (s == "guide") return "guide";
+        if (s == "aux") return "imager:1";
+        if (s.StartsWith("imager:", StringComparison.Ordinal)
+                && int.TryParse(s.AsSpan("imager:".Length), out var n) && n >= 1)
+            return $"imager:{n}";
+        return "main";
+    }
+
+    /// <summary>The imaging slot behind "imager:N", or -1.</summary>
+    internal static int ImagerIndex(string source)
+        => source.StartsWith("imager:", StringComparison.Ordinal)
+           && int.TryParse(source.AsSpan("imager:".Length), out var n) ? n : -1;
+
+    internal static string CameraLabel(string source) => source switch {
+        "guide" => "Guide camera",
+        "main" => "Camera",
+        _ => $"Imaging camera {ImagerIndex(source)}",
+    };
+
+    private ICamera? CameraFor(PolarAlignmentJob job) => job.CameraSource switch {
+        "guide" => _equip.GuideCamera,
+        "main" => _equip.Camera,
+        _ => _equip.GetImager(ImagerIndex(job.CameraSource)),
+    };
+
+    /// <summary>The focal length behind the chosen camera, which with its
+    /// pixel size gives the plate solver the scale. For an off-axis guider the
+    /// guide camera sees through the main OTA.</summary>
+    private double FocalLengthFor(PolarAlignmentJob job) {
+        var rig = _profiles.ActiveEquipmentProfile;
+        if (rig == null) return 0;
+        if (job.CameraSource == "guide") return rig.EffectiveGuiderFocalLengthMm;
+        var slot = ImagerIndex(job.CameraSource);
+        var imagers = rig.Imagers;
+        return slot >= 1 && slot < imagers.Count ? imagers[slot].FocalLengthMm : rig.FocalLengthMm;
+    }
+
+    /// <summary>The rig's offset belongs to the imaging camera; another camera
+    /// is left at its own.</summary>
+    private CaptureOptions PolarCaptureOptions(PolarAlignmentJob job) => new(
+        Gain: job.Options.Gain,
+        Offset: job.CameraSource == "main" ? RigCaptureDefaults.Offset(_profiles) : null,
+        ImageType: "POLAR");
+
+    /// <summary>Each camera under its own lock: the main camera's gate, slot 1's
+    /// aux gate, the extra imagers' per-slot gates; the guide camera has none,
+    /// and is refused while the guider uses it (see <see cref="CameraBusyReason"/>).</summary>
+    private Task<IImageData> CaptureFor(PolarAlignmentJob job, ICamera camera, double exp,
+            CaptureOptions opts, CancellationToken ct) {
+        if (job.CameraSource == "guide") return camera.CaptureAsync(exp, opts, ct);
+        if (job.CameraSource == "main") return GatedCapture(camera, exp, opts, ct);
+        var slot = ImagerIndex(job.CameraSource);
+        return slot == 1
+            ? AuxCameraCaptureGate.RunAsync(() => camera.CaptureAsync(exp, opts, ct), ct)
+            : ImagerCaptureGate.RunAsync(slot, () => camera.CaptureAsync(exp, opts, ct), ct);
+    }
+
+    /// <summary>Why the chosen camera cannot shoot now, or null.</summary>
+    private string? CameraBusyReason(PolarAlignmentJob job) {
+        if (job.CameraSource == "guide" && _guiders?.Active is NativeGuider ng
+                && (ng.IsLooping || ng.IsGuiding || ng.IsCalibrating))
+            return "The guide camera is in use by the guider. Stop looping or guiding first.";
+        return null;
     }
 
     public PolarAlignmentJob StartJob(PolarAlignmentOptions opts) {
@@ -90,6 +166,7 @@ public class PolarAlignmentService {
             Options = opts,
             Phase = PolarAlignmentPhase.Preflight,
             Mode = "tppa",
+            CameraSource = NormalizeCamera(opts.Camera),
             StartedAt = DateTime.UtcNow
         };
         _jobs[job.Id] = job;
@@ -196,10 +273,10 @@ public class PolarAlignmentService {
             job.CompletedAt = null;
             try { JobUpdated?.Invoke(job); } catch { }
 
-            var camera = _equip.Camera;
+            var camera = CameraFor(job);
             var telescope = _equip.Telescope;
             if (camera == null || telescope == null) {
-                job.LastError = "Refresh: camera or telescope disconnected.";
+                job.LastError = $"Refresh: {CameraLabel(job.CameraSource).ToLowerInvariant()} or telescope disconnected.";
                 return false;
             }
             return await RefineStepAsync(job, camera, telescope, _profiles.Active, ct);
@@ -216,10 +293,10 @@ public class PolarAlignmentService {
     private CancellationTokenSource? _refineCts;
 
     private async Task RunRefinementAsync(PolarAlignmentJob job, CancellationToken ct) {
-        var camera = _equip.Camera;
+        var camera = CameraFor(job);
         var telescope = _equip.Telescope;
         if (camera == null || telescope == null) {
-            _notify.Push("error", "Refine: camera or telescope disconnected.");
+            _notify.Push("error", $"Refine: {CameraLabel(job.CameraSource).ToLowerInvariant()} or telescope disconnected.");
             return;
         }
 
@@ -267,9 +344,8 @@ public class PolarAlignmentService {
         // 1. Capture at the CURRENT mount position (no slew).
         IImageData image;
         try {
-            image = await GatedCapture(camera,
-                job.Options.ExposureSeconds,
-                new CaptureOptions(Gain: job.Options.Gain, Offset: RigCaptureDefaults.Offset(_profiles), ImageType: "POLAR"),
+            image = await CaptureFor(job, camera, job.Options.ExposureSeconds,
+                PolarCaptureOptions(job),
                 ct);
         } catch (OperationCanceledException) { throw; }
         catch (Exception ex) {
@@ -285,7 +361,7 @@ public class PolarAlignmentService {
         // 2. Plate solve.
         PlateSolveResult solve;
         try {
-            solve = await SolveOnceAsync(image, telescope, ct);
+            solve = await SolveOnceAsync(job, image, telescope, ct);
         } catch (OperationCanceledException) { throw; }
         catch (Exception ex) {
             _logger.LogDebug(ex, "Refine: solve threw");
@@ -372,13 +448,17 @@ public class PolarAlignmentService {
             _notify.Push("info", "Polar alignment starting…", 2500);
 
             var telescope = _equip.Telescope;
-            var camera = _equip.Camera;
+            var camera = CameraFor(job);
             if (telescope == null || !telescope.IsConnected) {
                 Fail(job, "Telescope not connected.");
                 return;
             }
             if (camera == null || !camera.IsConnected) {
-                Fail(job, "Camera not connected.");
+                Fail(job, $"{CameraLabel(job.CameraSource)} not connected.");
+                return;
+            }
+            if (CameraBusyReason(job) is { } busy) {
+                Fail(job, busy);
                 return;
             }
             if (!telescope.IsTracking) {
@@ -449,28 +529,26 @@ public class PolarAlignmentService {
 
                 // Capture + plate-solve.
                 SetPhase(job, SolvingPhaseFor(i));
-                var image = await GatedCapture(camera, 
-                    job.Options.ExposureSeconds,
-                    new CaptureOptions(Gain: job.Options.Gain, Offset: RigCaptureDefaults.Offset(_profiles), ImageType: "POLAR"),
+                var image = await CaptureFor(job, camera, job.Options.ExposureSeconds,
+                    PolarCaptureOptions(job),
                     ct);
                 if (image == null || image.Properties.Width <= 0 || image.Properties.Height <= 0) {
                     Fail(job, $"Point {i + 1}: camera returned an empty frame.");
                     return;
                 }
 
-                var result = await SolveOnceAsync(image, telescope, ct);
+                var result = await SolveOnceAsync(job, image, telescope, ct);
                 if (!result.Success) {
                     // One retry with doubled exposure, common rescue
                     // for marginal star count on the first attempt.
                     _logger.LogInformation(
                         "Polar align point {Index} first solve failed ({Err}); retrying with 2x exposure",
                         i + 1, result.Error);
-                    var retryImage = await GatedCapture(camera, 
-                        job.Options.ExposureSeconds * 2.0,
-                        new CaptureOptions(Gain: job.Options.Gain, Offset: RigCaptureDefaults.Offset(_profiles), ImageType: "POLAR"),
+                    var retryImage = await CaptureFor(job, camera, job.Options.ExposureSeconds * 2.0,
+                        PolarCaptureOptions(job),
                         ct);
                     if (retryImage != null && retryImage.Properties.Width > 0) {
-                        result = await SolveOnceAsync(retryImage, telescope, ct);
+                        result = await SolveOnceAsync(job, retryImage, telescope, ct);
                     }
                 }
                 if (!result.Success) {
@@ -590,11 +668,10 @@ public class PolarAlignmentService {
             try {
                 await Task.Delay(
                     TimeSpan.FromSeconds(Math.Max(1, job.Options.SettleSeconds)), ct);
-                var anchorImage = await GatedCapture(camera,
-                    job.Options.ExposureSeconds,
-                    new CaptureOptions(Gain: job.Options.Gain, Offset: RigCaptureDefaults.Offset(_profiles), ImageType: "POLAR"),
+                var anchorImage = await CaptureFor(job, camera, job.Options.ExposureSeconds,
+                    PolarCaptureOptions(job),
                     ct);
-                var anchorSolve = await SolveOnceAsync(anchorImage, telescope, ct);
+                var anchorSolve = await SolveOnceAsync(job, anchorImage, telescope, ct);
                 if (anchorSolve.Success) {
                     var tAnchor = DateTime.UtcNow;
                     var (aRa, aDec) = PolarAlignmentMath.PrecessJ2000ToDate(
@@ -656,7 +733,7 @@ public class PolarAlignmentService {
     /// <summary>Write a temp FITS, call the plate solver, delete the
     /// FITS regardless of outcome. Caller decides what to do with
     /// failures (retry / fail the job).</summary>
-    private async Task<PlateSolveResult> SolveOnceAsync(
+    private async Task<PlateSolveResult> SolveOnceAsync(PolarAlignmentJob job,
         IImageData image, ITelescope? telescope, CancellationToken ct,
         double? hintRaHours = null, double? hintDecDeg = null) {
         // Geometry first, and into the frame as well as into the options.
@@ -669,14 +746,14 @@ public class PolarAlignmentService {
         // guess on a TPPA refresh, widened to 10 and 24 degrees, and ASTAP
         // stopped with "no star database found" on a host that had V50 and D20
         // installed and had just solved three points.
-        var rig = _profiles.ActiveEquipmentProfile;
-        var cam = _equip.Camera;
+        var cam = CameraFor(job);
+        var focal = FocalLengthFor(job);
         var geom = PlateSolveHints.From(
-            rig?.FocalLengthMm ?? 0,
+            focal,
             cam?.PixelSizeX ?? 0,
             image.Properties.Height,
             cam?.MaxY ?? 0);
-        PlateSolveHints.StampFocalLength(image, rig?.FocalLengthMm ?? 0);
+        PlateSolveHints.StampFocalLength(image, focal);
 
         var path = WriteTempFits(image);
         try {
@@ -812,8 +889,10 @@ public class PolarAlignmentService {
             Options = new PolarAlignmentOptions(
                 ExposureSeconds: req.ExposureSeconds,
                 Gain: req.Gain,
-                SettleSeconds: req.SettleSeconds),
+                SettleSeconds: req.SettleSeconds,
+                Camera: NormalizeCamera(req.Camera)),
             Mode = "rudimentary",
+            CameraSource = NormalizeCamera(req.Camera),
             Phase = PolarAlignmentPhase.Preflight,
             StartedAt = DateTime.UtcNow,
             TargetRaHours = req.TargetRaHours,
@@ -862,12 +941,15 @@ public class PolarAlignmentService {
         try {
             // Preflight: camera + (optional) telescope + site lat/lon.
             SetPhase(job, PolarAlignmentPhase.Preflight);
-            var camera = _equip.Camera;
+            var camera = CameraFor(job);
             var telescope = _equip.Telescope;
             var profile = _profiles.Active;
 
             if (camera == null || !camera.IsConnected) {
-                return FailRudimentary(job, "Camera not connected.");
+                return FailRudimentary(job, $"{CameraLabel(job.CameraSource)} not connected.");
+            }
+            if (CameraBusyReason(job) is { } busy) {
+                return FailRudimentary(job, busy);
             }
             if (profile.Latitude == 0 && profile.Longitude == 0) {
                 return FailRudimentary(job,
@@ -910,9 +992,8 @@ public class PolarAlignmentService {
 
             // Capture.
             SetPhase(job, PolarAlignmentPhase.RudimentaryCapturing);
-            var image = await GatedCapture(camera, 
-                job.Options.ExposureSeconds,
-                new CaptureOptions(Gain: job.Options.Gain, Offset: RigCaptureDefaults.Offset(_profiles), ImageType: "POLAR"),
+            var image = await CaptureFor(job, camera, job.Options.ExposureSeconds,
+                PolarCaptureOptions(job),
                 ct);
             if (image == null || image.Properties.Width <= 0 || image.Properties.Height <= 0) {
                 return FailRudimentary(job, "Camera returned an empty frame.");
@@ -924,18 +1005,17 @@ public class PolarAlignmentService {
             // Hint with the TARGET coords (valid even on a manual mount with
             // no telescope connected — passing telescope! here would NRE in
             // SolveOnceAsync when reading RightAscension).
-            var solve = await SolveOnceAsync(image, telescope, ct,
+            var solve = await SolveOnceAsync(job, image, telescope, ct,
                 hintRaHours: job.TargetRaHours, hintDecDeg: job.TargetDecDeg);
             if (!solve.Success) {
                 _logger.LogInformation(
                     "Rudimentary: first solve failed ({Err}), retrying with 2x exposure",
                     solve.Error);
-                var retry = await GatedCapture(camera, 
-                    job.Options.ExposureSeconds * 2.0,
-                    new CaptureOptions(Gain: job.Options.Gain, Offset: RigCaptureDefaults.Offset(_profiles), ImageType: "POLAR"),
+                var retry = await CaptureFor(job, camera, job.Options.ExposureSeconds * 2.0,
+                    PolarCaptureOptions(job),
                     ct);
                 if (retry != null && retry.Properties.Width > 0) {
-                    solve = await SolveOnceAsync(retry, telescope, ct,
+                    solve = await SolveOnceAsync(job, retry, telescope, ct,
                         hintRaHours: job.TargetRaHours, hintDecDeg: job.TargetDecDeg);
                 }
             }
