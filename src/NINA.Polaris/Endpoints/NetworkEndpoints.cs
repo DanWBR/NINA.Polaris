@@ -57,11 +57,29 @@ public static class NetworkEndpoints {
                     new { error = net.UnsupportedReason ?? "WiFi management not available" },
                     statusCode: 501);
             }
-            if (req == null || string.IsNullOrEmpty(req.Ssid) || string.IsNullOrEmpty(req.Password)) {
-                return Results.BadRequest(new { error = "ssid + password required" });
+            // No password = rejoin a saved network with the password it already has.
+            if (req == null || string.IsNullOrEmpty(req.Ssid)) {
+                return Results.BadRequest(new { error = "ssid required" });
             }
             var res = await net.SwitchToStationAsync(req.Ssid, req.Password);
             return Results.Ok(res);
+        });
+
+        // Saved networks: rejoin without the password, or forget one.
+        group.MapGet("/saved", async (NetworkManagerService net) => {
+            if (!net.IsSupportedOs || !net.NmcliInstalled || !net.HasWifiInterface) {
+                return Results.Json(
+                    new { error = net.UnsupportedReason ?? "WiFi management not available" },
+                    statusCode: 501);
+            }
+            return Results.Ok(await net.GetSavedNetworksAsync());
+        });
+
+        group.MapPost("/saved/forget", async (NetworkManagerService net, ForgetRequest req) => {
+            if (req == null || string.IsNullOrEmpty(req.Name)) {
+                return Results.BadRequest(new { error = "name required" });
+            }
+            return Results.Ok(await net.ForgetNetworkAsync(req.Name));
         });
 
         // List the wireless adapters NetworkManager sees, plus the one the
@@ -141,7 +159,8 @@ public static class NetworkEndpoints {
             });
     }
 
-    public record StationRequest(string Ssid, string Password);
+    public record StationRequest(string Ssid, string? Password);
+    public record ForgetRequest(string Name);
     public record HotspotCredentialsRequest(string Ssid, string Password);
     public record InterfaceRequest(string Interface);
     public record WiredPreferenceRequest(bool Enabled);

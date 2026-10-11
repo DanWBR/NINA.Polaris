@@ -95,6 +95,13 @@ public class ImageMetaData {
         public double Temperature { get; set; }
         public int Gain { get; set; }
         public int Offset { get; set; }
+
+        /// <summary>ISO the frame was taken at, for a camera that has one (a
+        /// DSLR or mirrorless body). 0 when the camera has no ISO, and then no
+        /// ISOSPEED card is written. Separate from <see cref="Gain"/>: a DSLR
+        /// has no analogue gain, and a GAIN card on its frames was the capture
+        /// panel's leftover gain value, not anything the sensor did.</summary>
+        public int Iso { get; set; }
         public short BinX { get; set; } = 1;
         public short BinY { get; set; } = 1;
         public double PixelSizeX { get; set; }

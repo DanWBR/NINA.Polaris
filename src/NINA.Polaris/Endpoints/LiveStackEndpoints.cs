@@ -29,7 +29,7 @@ public static class LiveStackEndpoints {
         // is pure compute offload.
         var capGroup = app.MapGroup("/api/livecapture");
         capGroup.MapPost("/start", (LiveCaptureService loop, LiveStartRequest req) => {
-            var ok = loop.Start(req?.Exposure ?? 1.0, req?.Gain ?? 0, req?.Binning ?? 1);
+            var ok = loop.Start(req?.Exposure ?? 1.0, req?.Gain ?? 0, req?.Binning ?? 1, req?.Iso);
             return ok
                 ? Results.Ok(new { status = "started", exposure = loop.ExposureSeconds })
                 : Results.BadRequest(new { error = loop.LastError ?? "Could not start (already running?)" });
@@ -561,7 +561,7 @@ public static class LiveStackEndpoints {
 
     /// <summary>Body of POST /api/livecapture/start: the LIVE shutter's
     /// exposure/gain/binning for the server-owned loop.</summary>
-    public record LiveStartRequest(double Exposure = 1.0, int Gain = 0, int Binning = 1);
+    public record LiveStartRequest(double Exposure = 1.0, int Gain = 0, int Binning = 1, int? Iso = null);
 
     /// <summary>Body for POST /api/livestack/source: imaging-camera slot to feed
     /// the live stack (0 = main, 2+ = an extra imager).</summary>

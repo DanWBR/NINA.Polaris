@@ -202,6 +202,8 @@ public static class CameraEndpoints {
                 // preview snap runs the sensor the way the rig is configured.
                 var mainOpts = new NINA.Image.Interfaces.CaptureOptions(
                     Gain: request.Gain > 0 ? request.Gain : null,
+                    // A DSLR is set by ISO, not gain; null leaves it where it is.
+                    Iso: request.Iso is > 0 ? request.Iso : null,
                     // This is the PREVIEW panel's snap (and the phone shell's),
                     // so it obeys the PREVIEW panel's offset field.
                     Offset: RigCaptureDefaults.Offset(profileSvc),
@@ -846,7 +848,9 @@ public static class CameraEndpoints {
         // path is used by FOCUS-manual to focus the auxiliary camera; it
         // captures through the separate aux gate and never feeds the stack
         // or saves to disk here.
-        string? CameraSource = null);
+        string? CameraSource = null,
+        // ISO for a camera that has one; null = leave the camera's setting.
+        int? Iso = null);
 
     /// <summary>Run the same star-detector + laplacian-variance pass the main
     /// <summary>Sensor geometry out of a POST /ccd-info/apply body, or zeros when

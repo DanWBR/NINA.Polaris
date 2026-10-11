@@ -327,6 +327,7 @@ public static class FITSReader {
         meta.Camera.Temperature = GetDoubleHeader(headers, "CCD-TEMP", 0);
         meta.Camera.Gain = GetIntHeader(headers, "GAIN", 0);
         meta.Camera.Offset = GetIntHeader(headers, "OFFSET", 0);
+        meta.Camera.Iso = GetIntHeader(headers, "ISOSPEED", 0);
         meta.Camera.BinX = (short)GetIntHeader(headers, "XBINNING", 1);
         meta.Camera.BinY = (short)GetIntHeader(headers, "YBINNING", 1);
         meta.Camera.PixelSizeX = GetDoubleHeader(headers, "XPIXSZ", 0);

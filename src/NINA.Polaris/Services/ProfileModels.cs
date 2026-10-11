@@ -49,6 +49,12 @@ public class UserProfile {
     /// touches the radio while this is on.</summary>
     public bool WifiOffWhenWired { get; set; }
 
+    /// <summary>The operator chose hotspot mode on purpose (the "Switch back to
+    /// Hotspot" button). Only then does a running hotspot stay put; any other
+    /// hotspot is a fallback, and the rig goes back to a saved WiFi network as
+    /// soon as one is in range. On the profile so a restart keeps the choice.</summary>
+    public bool WifiUserChoseHotspot { get; set; }
+
     /// <summary>Automatically pull the host clock onto this client's clock when
     /// they differ by more than an hour (an RTC-less SBC that booted with no
     /// network time). On by default; users can turn it off in Settings. Absent
@@ -246,6 +252,17 @@ public class UserProfile {
     public string StorageUsername { get; set; } = "";
     public string StoragePassword { get; set; } = "";
     public string? StorageLastTestResult { get; set; }    // last "Test connection" outcome
+
+    /// <summary>The server's own name, learned from the server when the host
+    /// was given as an IP. Lets the push find the server again after DHCP moves
+    /// it. Cleared when the operator points the host or share elsewhere.</summary>
+    public string StorageServerName { get; set; } = "";
+
+    /// <summary>Servers that worked, most recent first, capped by
+    /// <see cref="NINA.Polaris.Services.Storage.SmbServerMemory.MaxRecent"/>.
+    /// On the host rather than in the browser: browser storage is per address,
+    /// and the rig's address is exactly what keeps changing.</summary>
+    public List<StorageRecentServer> StorageRecent { get; set; } = new();
 
     // ---- Cloud storage (the "rclone" kind) ----
     //
@@ -1410,6 +1427,22 @@ public class EquipmentProfile {
     /// Null = never saved; the defaults apply. Not copied by the rig PUT
     /// handler, so a rig save never clobbers it.</summary>
     public MeridianFlipSettings? MeridianFlip { get; set; }
+}
+
+/// <summary>A storage target that worked, kept so it can be picked again
+/// without retyping it. The password stays on the host: the list the browser
+/// sees says only whether there is one.</summary>
+public class StorageRecentServer {
+    public string Kind { get; set; } = "smb";
+    public string Host { get; set; } = "";
+    public int Port { get; set; }
+    public string Share { get; set; } = "";
+    public string BasePath { get; set; } = "";
+    public string Domain { get; set; } = "";
+    public string Username { get; set; } = "";
+    public string Password { get; set; } = "";
+    public string ServerName { get; set; } = "";
+    public DateTime LastUsedUtc { get; set; }
 }
 
 /// <summary>One starred target. J2000, hours and degrees like everything

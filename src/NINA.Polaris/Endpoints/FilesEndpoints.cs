@@ -527,7 +527,7 @@ public static class FilesEndpoints {
                 };
                 var instrumentKeys = new[] {
                     "INSTRUME","TELESCOP","OTA","FOCALLEN","FOCRATIO","APERTURE",
-                    "XPIXSZ","YPIXSZ","XBINNING","YBINNING","GAIN","EGAIN",
+                    "XPIXSZ","YPIXSZ","XBINNING","YBINNING","GAIN","ISOSPEED","EGAIN",
                     "OFFSET","READOUTM","CCD-TEMP","SET-TEMP","FWHEEL",
                     "ROTATOR","ROTATANG","FOCNAME","FOCPOS","FOCTEMP","PIERSIDE"
                 };

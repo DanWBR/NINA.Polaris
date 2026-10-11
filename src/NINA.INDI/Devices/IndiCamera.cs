@@ -1365,6 +1365,9 @@ public class IndiCamera : ICamera, IDisposable {
                 imageData.MetaData.Camera.BinY = (short)BinY;
                 imageData.MetaData.Camera.PixelSizeX = PixelSizeX;
                 imageData.MetaData.Camera.PixelSizeY = PixelSizeY;
+                // The ISO the driver reports for this frame (CCD_ISO, indi_gphoto).
+                // 0 on every astro camera, which then gets no ISOSPEED card.
+                imageData.MetaData.Camera.Iso = SelectedIso;
                 // The OFFSET card describes THIS capture: the offset this
                 // capture applied, or, when it applied none because the
                 // panel's field is 0, what the driver is running at. Read here
@@ -1798,6 +1801,7 @@ public class IndiCamera : ICamera, IDisposable {
             img.MetaData.Camera.BinY = (short)BinY;
             img.MetaData.Camera.PixelSizeX = PixelSizeX;
             img.MetaData.Camera.PixelSizeY = PixelSizeY;
+            img.MetaData.Camera.Iso = SelectedIso;
             tcs.TrySetResult(img);
             try { File.Delete(path); } catch { /* best effort cleanup */ }
         } catch (Exception ex) {

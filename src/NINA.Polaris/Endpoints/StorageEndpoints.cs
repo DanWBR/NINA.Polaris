@@ -44,16 +44,48 @@ public static class StorageEndpoints {
                 lastTestResult = p.StorageLastTestResult,
                 remoteName     = p.StorageRemoteName,
                 bandwidthLimit = p.StorageBandwidthLimit,
-                pushOnSessionEnd = p.StoragePushOnSessionEnd
+                pushOnSessionEnd = p.StoragePushOnSessionEnd,
+                // The server's own name when it was given by IP: what the push
+                // uses to find it after DHCP moves it.
+                serverName     = p.StorageServerName,
+                recent         = (p.StorageRecent ?? new()).Select((r, i) => new {
+                    index = i, kind = r.Kind, host = r.Host, share = r.Share, basePath = r.BasePath,
+                    username = r.Username, serverName = r.ServerName, lastUsedUtc = r.LastUsedUtc,
+                    hasPassword = !string.IsNullOrEmpty(r.Password)
+                })
             });
+        });
+
+        // Pick a recent server: copied into the active settings on the host, so
+        // its password never travels to the browser.
+        group.MapPost("/recent/use", (RecentRequest req, ProfileService profiles) => {
+            if (req == null || !SmbServerMemory.Use(profiles.Active, req.Index))
+                return Results.BadRequest(new { error = "no such recent server" });
+            profiles.Save();
+            return Results.Ok(new { ok = true });
+        });
+
+        group.MapPost("/recent/forget", (RecentRequest req, ProfileService profiles) => {
+            if (req == null || !SmbServerMemory.Forget(profiles.Active, req.Index))
+                return Results.BadRequest(new { error = "no such recent server" });
+            profiles.Save();
+            return Results.Ok(new { ok = true });
         });
 
         group.MapPut("/config", (StorageConfigRequest req, ProfileService profiles) => {
             if (req == null) return Results.BadRequest(new { error = "missing body" });
             var p = profiles.Active;
+            // A remembered server name belongs to the server it was learned
+            // from. Pointing the push somewhere else must drop it, or a failed
+            // connect could "find" the old server again and switch back to it.
+            var newHost = (req.Host ?? "").Trim();
+            var newShare = (req.Share ?? "").Trim();
+            if (!string.Equals(newHost, p.StorageHost, StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(newShare, p.StorageShare, StringComparison.OrdinalIgnoreCase))
+                p.StorageServerName = "";
             p.StoragePushEnabled = req.Enabled;
             p.StorageKind     = NormalizeKind(req.Kind);
-            p.StorageHost     = (req.Host ?? "").Trim();
+            p.StorageHost     = newHost;
             p.StoragePort     = req.Port > 0 ? req.Port : 0;
             p.StorageShare    = (req.Share ?? "").Trim();
             p.StorageBasePath = (req.BasePath ?? "").Trim();
@@ -83,9 +115,23 @@ public static class StorageEndpoints {
         group.MapPost("/test", async (ProfileService profiles, StoragePushService push, CancellationToken ct) => {
             var cfg = StorageConfig.FromProfile(profiles.Active);
             var (ok, message) = await push.TestConnectionAsync(cfg, ct);
+            if (!ok) {
+                // Maybe it only moved: find it by its name and try there.
+                var moved = await push.RelocateSmbAsync(cfg, ct);
+                if (moved != null) {
+                    var (ok2, message2) = await push.TestConnectionAsync(moved, ct);
+                    if (ok2) {
+                        push.CommitRelocation(cfg, moved);
+                        ok = true;
+                        message = $"{message2} ({profiles.Active.StorageServerName} had moved from {cfg.Host})";
+                        cfg = moved;
+                    }
+                }
+            }
+            if (ok) await push.LearnAndRememberAsync(cfg, ct);
             profiles.Active.StorageLastTestResult = message;
             profiles.Save();
-            return Results.Ok(new { ok, message });
+            return Results.Ok(new { ok, message, serverName = profiles.Active.StorageServerName });
         });
 
         group.MapPost("/retry", (StoragePushService push) => {
@@ -315,6 +361,7 @@ public static class StorageEndpoints {
         bool PushOnSessionEnd = false);
 
     public record PushFolderRequest(string Path);
+    public record RecentRequest(int Index);
     public record RcloneRemoteRequest(string? Name, string? Type,
                                       Dictionary<string, string>? Values, string? Paste);
     public record OAuthStartRequest(string? Type);

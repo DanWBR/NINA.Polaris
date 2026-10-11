@@ -487,11 +487,23 @@ public class ImageWriterService {
         // metadata, so without reading the connected camera those frames
         // ended up with no GAIN header. (FITSWriter only emits GAIN when
         // it's non-zero, so a genuine 0-gain capture still omits it.)
+        //
+        // A camera that works in ISO is the exception: it has no analogue gain,
+        // so the caller's gain argument there is only the capture panel's
+        // gain field, which a DSLR never used, and it went into every frame as
+        // GAIN=100. Its frames get the camera's own reported gain (the vendor
+        // SDK drivers report ISO there) and an ISOSPEED card instead.
+        var isoCam = _equip.Camera is { IsConnected: true } icam && icam.Capabilities.SupportsIso
+            ? icam : null;
         if (m.Camera.Gain == 0) {
-            if (gain > 0) m.Camera.Gain = gain;
+            if (gain > 0 && isoCam == null) m.Camera.Gain = gain;
             else if (_equip.Camera is { IsConnected: true } gcam && gcam.Gain > 0)
                 m.Camera.Gain = gcam.Gain;
         }
+        // ISO: the capture stamps the value its driver reported; this fills a
+        // frame from a path that stamps nothing, from the connected camera.
+        if (m.Camera.Iso == 0 && isoCam != null && isoCam.SelectedIso > 0)
+            m.Camera.Iso = isoCam.SelectedIso;
         // Camera offset. The capture paths stamp this themselves, from the
         // settings they actually applied; this is only the gap-filler for a
         // backend that stamps nothing. FITSWriter emits OFFSET when non-zero,

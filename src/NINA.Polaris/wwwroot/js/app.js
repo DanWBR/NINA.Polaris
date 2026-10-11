@@ -2013,7 +2013,10 @@ function ninaApp() {
             // Three states, not two: "not asked yet" is not "not installed".
             // The card used to answer the question before anyone asked it,
             // and told operators with rclone on the host that they had none.
-            rcloneChecked: false, rclonePartialUploads: true
+            rcloneChecked: false, rclonePartialUploads: true,
+            // The server's own name, learned when it was given by IP, and the
+            // servers that worked before (kept on the host, passwords too).
+            serverName: '', recent: [], recentPick: -1
         },
         // Setting up a remote. Separate from the form above because it is a
         // one-off flow whose fields mean nothing once the remote exists.
@@ -2445,7 +2448,9 @@ function ninaApp() {
         networkAdapter: '',              // the selected/bound adapter
         networkStation: {
             open: false, ssid: '', hiddenSsid: '', password: '',
-            scanResults: [], scanning: false, lastError: ''
+            scanResults: [], scanning: false, lastError: '',
+            // Networks the host can rejoin with the password it kept.
+            savedNetworks: []
         },
         networkHotspot: {
             open: false, ssid: 'Polaris-Hotspot', password: '', lastError: ''
@@ -27375,6 +27380,7 @@ function ninaApp() {
                 const resp = await this.apiPost('/api/camera/capture', {
                     exposure: this.exposure,
                     gain: this.gain,
+                    iso: this.liveIso(),
                     binning: parseInt(this.binning),
                     filter: null
                 }, { timeout: (this.exposure + 30) * 1000, signal: this._liveCaptureAbort.signal });
@@ -27473,6 +27479,7 @@ function ninaApp() {
                 await this.apiPost('/api/livecapture/start', {
                     exposure: Number(this.exposure) || 1,
                     gain: this.gain,
+                    iso: this.liveIso(),
                     binning: parseInt(this.binning) || 1
                 });
             } catch (e) {
@@ -29406,6 +29413,12 @@ function ninaApp() {
         // ISO controls show/hide per-camera. Called on VIDEO tab open
         // and after a camera swap. Tolerates 400 responses (no camera
         // selected yet) by leaving the cached flags as-is.
+        /// The ISO a LIVE capture asks for: the panel's ISO on a camera that has
+        /// one, null otherwise (and null = leave the camera's own setting).
+        liveIso() {
+            return this.cameraUsesIso() && this.cameraIso.selected > 0 ? this.cameraIso.selected : null;
+        },
+
         async loadCameraCapabilities() {
             try {
                 const r = await this.apiGet('/api/camera/status');
@@ -32473,6 +32486,9 @@ function ninaApp() {
                 s.remoteName = d.remoteName || '';
                 s.bandwidthLimit = d.bandwidthLimit || '';
                 s.pushOnSessionEnd = !!d.pushOnSessionEnd;
+                s.serverName = d.serverName || '';
+                s.recent = Array.isArray(d.recent) ? d.recent : [];
+                s.recentPick = -1;
                 s.password = '';   // never round-tripped; blank = keep stored
                 if (s.kind === 'rclone') { try { await this.loadRcloneInfo(); } catch (e) { } }
                 if (d.lastTestResult) { s.testResult = d.lastTestResult; }
@@ -32747,6 +32763,9 @@ function ninaApp() {
                 const r = await (await this.apiPost('/api/storage/test', {})).json();
                 s.testOk = !!r.ok;
                 s.testResult = r.message || (r.ok ? 'OK' : 'Failed');
+                // A good test learns the server's name and adds it to the recents;
+                // a moved server comes back with its new address.
+                if (r.ok) await this.loadStorageConfig();
             } catch (e) {
                 s.testOk = false;
                 s.testResult = 'Test failed: ' + (e.message || e);
@@ -32754,6 +32773,38 @@ function ninaApp() {
                 s.testing = false;
             }
         },
+        storageRecentLabel(r) {
+            if (!r) return '';
+            const where = r.kind === 'smb'
+                ? '\\\\' + (r.serverName || r.host) + '\\' + r.share
+                : r.kind === 'local' ? r.basePath : (r.host + (r.basePath ? ':' + r.basePath : ''));
+            return where + (r.username ? '  (' + r.username + ')' : '')
+                + (r.serverName && r.host ? '  ' + r.host : '');
+        },
+
+        /// Switch the push to a recent server. The host copies it, password
+        /// included, so the password never comes to the browser.
+        async storageUseRecent(index) {
+            if (index == null || index < 0) return;
+            try {
+                await this.apiPost('/api/storage/recent/use', { index: Number(index) });
+                await this.loadStorageConfig();
+                this.toast('Storage switched to ' + this.storageRecentLabel(this.storagePush.recent[0] || null), 'ok');
+            } catch (e) {
+                this.toastFail('Could not use that server', e);
+            }
+        },
+
+        async storageForgetRecent(index) {
+            if (index == null || index < 0) return;
+            try {
+                await this.apiPost('/api/storage/recent/forget', { index: Number(index) });
+                await this.loadStorageConfig();
+            } catch (e) {
+                this.toastFail('Could not forget that server', e);
+            }
+        },
+
         async retryStoragePush() {
             try {
                 const r = await (await this.apiPost('/api/storage/retry', {})).json();
@@ -46417,11 +46468,61 @@ function ninaApp() {
 
         networkStationCanSubmit() {
             if (this.networkSwitching) return false;
-            const ssid = this.networkStation.ssid === '__hidden__'
+            const ssid = this.networkStationSsid();
+            const pwd = this.networkStation.password || '';
+            if (!(ssid.length > 0 && ssid.length <= 32)) return false;
+            // A saved network keeps its password: an empty field reuses it.
+            if (!pwd && this.networkIsSaved(ssid)) return true;
+            return pwd.length >= 8 && pwd.length <= 63;
+        },
+
+        networkStationSsid() {
+            return this.networkStation.ssid === '__hidden__'
                 ? (this.networkStation.hiddenSsid || '').trim()
                 : (this.networkStation.ssid || '').trim();
-            const pwd = this.networkStation.password || '';
-            return ssid.length > 0 && ssid.length <= 32 && pwd.length >= 8 && pwd.length <= 63;
+        },
+
+        networkIsSaved(ssid) {
+            return !!ssid && (this.networkStation.savedNetworks || []).some(n => n.ssid === ssid);
+        },
+
+        /// Is this saved network in the current scan, so worth a tap now?
+        networkSavedInRange(n) {
+            return (this.networkStation.scanResults || []).some(r => r.ssid === n.ssid);
+        },
+
+        async networkLoadSaved() {
+            try {
+                const list = await this.apiGet('/api/network/saved');
+                this.networkStation.savedNetworks = Array.isArray(list) ? list : [];
+            } catch (e) {
+                this.networkStation.savedNetworks = [];
+            }
+        },
+
+        /// Rejoin a saved network: the host still has its password.
+        async networkConnectSaved(n) {
+            if (!n || this.networkSwitching) return;
+            this.networkStation.ssid = n.ssid;
+            this.networkStation.password = '';
+            await this.networkSwitchToStation();
+        },
+
+        async networkForgetSaved(n) {
+            if (!n || this.networkSwitching) return;
+            const warn = n.active
+                ? `Forget "${n.ssid}"? The rig is connected to it now and will drop off it.`
+                : `Forget "${n.ssid}" and its saved password?`;
+            if (!window.confirm(warn)) return;
+            try {
+                const resp = await this.apiPost('/api/network/saved/forget', { name: n.name });
+                const r = await resp.json();
+                if (r && r.ok) this.toast(`Forgot ${n.ssid}`, 'ok');
+                else this.toast((r && r.error) || 'Could not forget the network', 'warn');
+            } catch (e) {
+                this.toastFail('Could not forget the network', e);
+            }
+            await this.networkLoadSaved();
         },
 
         async networkOpenSwitchDialog() {
@@ -46430,7 +46531,7 @@ function ninaApp() {
             this.networkStation.hiddenSsid = '';
             this.networkStation.password = '';
             this.networkStation.lastError = '';
-            await this.networkRescan();
+            await Promise.all([this.networkLoadSaved(), this.networkRescan()]);
         },
 
         networkOpenHotspotDialog() {
@@ -46491,10 +46592,9 @@ function ninaApp() {
 
         async networkSwitchToStation() {
             if (!this.networkStationCanSubmit()) return;
-            const ssid = this.networkStation.ssid === '__hidden__'
-                ? this.networkStation.hiddenSsid.trim()
-                : this.networkStation.ssid.trim();
-            const password = this.networkStation.password;
+            const ssid = this.networkStationSsid();
+            // Empty on a saved network: the host joins with the password it kept.
+            const password = this.networkStation.password || null;
             this.networkSwitching = true;
             this.networkStation.lastError = '';
             try {
@@ -49564,6 +49664,17 @@ function ninaApp() {
                     ? (!!eq.camera.supportsIso || /gphoto/i.test(eq.camera.name || ''))
                     : prevIso;
                 const coolNow = camConn ? !!eq.camera.supportsCooler : prevCool;
+                // The ISO list is what switches every capture panel from Gain to
+                // ISO, and only loadCameraCapabilities fills it. That ran on the
+                // PREVIEW and VIDEO buttons and once right after connect, which
+                // indi_gphoto answers before it has published CCD_ISO; LIVE and
+                // AUTORUN then showed a Gain field for a DSLR. Fetch it from here,
+                // every 10 s, until a camera that has ISO has delivered its list.
+                if (camConn && isoNow && !(this.cameraIso.options || []).length
+                        && Date.now() - (this._isoListFetchedAt || 0) > 10000) {
+                    this._isoListFetchedAt = Date.now();
+                    this.loadCameraCapabilities();
+                }
                 this.equipCameraInfo = {
                     coolerOn: coolerOn,
                     supportsCooler: coolNow,

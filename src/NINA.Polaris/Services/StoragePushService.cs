@@ -295,6 +295,45 @@ public sealed class StoragePushService : BackgroundService {
         return await target.TestAsync(cfg, ct);
     }
 
+    /// <summary>The configuration pointed at the SMB server's current address,
+    /// found by the name learned from it, or null when there is no name, it is
+    /// not found, or it is still where it was.</summary>
+    public async Task<StorageConfig?> RelocateSmbAsync(StorageConfig cfg, CancellationToken ct) {
+        if (cfg.Kind != "smb") return null;
+        var name = _profile.Active.StorageServerName;
+        if (string.IsNullOrWhiteSpace(name)) return null;
+        var ip = await SmbServerMemory.FindByNameAsync(name, ct);
+        if (ip == null || string.Equals(ip, cfg.Host, StringComparison.OrdinalIgnoreCase)) return null;
+        _logger.LogWarning("Storage: SMB server {Name} is no longer at {Old}; it answers at {New}",
+            name, cfg.Host, ip);
+        return cfg with { Host = ip };
+    }
+
+    /// <summary>Keep the address a relocated server was reached at.</summary>
+    public void CommitRelocation(StorageConfig from, StorageConfig moved) {
+        _profile.UpdateSettings(p => {
+            if (string.Equals(p.StorageHost, from.Host, StringComparison.OrdinalIgnoreCase))
+                p.StorageHost = moved.Host;
+        });
+        _notify?.Push("info",
+            $"The file server {_profile.Active.StorageServerName} moved to {moved.Host}; the address was updated.");
+    }
+
+    /// <summary>After a server worked: learn its name when it was given by IP,
+    /// and put it at the top of the recents.</summary>
+    public async Task LearnAndRememberAsync(StorageConfig cfg, CancellationToken ct) {
+        try {
+            string? name = cfg.Kind == "smb" ? await SmbServerMemory.LearnNameAsync(cfg.Host, ct) : null;
+            _profile.UpdateSettings(p => {
+                if (!string.Equals(p.StorageHost, cfg.Host, StringComparison.OrdinalIgnoreCase)) return;
+                if (!string.IsNullOrWhiteSpace(name)) p.StorageServerName = name!;
+                SmbServerMemory.Remember(p);
+            });
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "Storage: could not remember the server");
+        }
+    }
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken) {
         _writer.ImageSaved += Enqueue;
         // Planetary recordings never go through the image writer, so they need
@@ -503,11 +542,32 @@ public sealed class StoragePushService : BackgroundService {
             if (_target != null && Connected && cfg == _activeConfig) return;
             DropConnection();
             var target = _svc._factory.Create(cfg.Kind);
-            await target.ConnectAsync(cfg, ct);
+            try {
+                await target.ConnectAsync(cfg, ct);
+            } catch (Exception) when (cfg.Kind == "smb" && !ct.IsCancellationRequested) {
+                // The server may only have moved: look it up by the name it
+                // gave, and if it answers elsewhere, push there and keep the
+                // new address. Otherwise the original failure stands.
+                try { target.Dispose(); } catch { /* ignore */ }
+                var moved = await _svc.RelocateSmbAsync(cfg, ct);
+                if (moved == null) throw;
+                target = _svc._factory.Create(moved.Kind);
+                await target.ConnectAsync(moved, ct);
+                _svc.CommitRelocation(cfg, moved);
+                cfg = moved;
+            }
             _target = target;
             _activeConfig = cfg;
             Connected = true;
+            if (cfg != _remembered) {
+                _remembered = cfg;
+                _ = _svc.LearnAndRememberAsync(cfg, CancellationToken.None);
+            }
         }
+
+        // The last configuration remembered, so a reconnect to the same server
+        // does not ask its name and rewrite the recents every time.
+        private StorageConfig? _remembered;
 
         public void DropConnection() {
             try { _target?.Dispose(); } catch { /* ignore */ }

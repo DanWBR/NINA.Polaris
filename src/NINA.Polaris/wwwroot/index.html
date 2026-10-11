@@ -47,7 +47,7 @@
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20261009-floatbtn">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260731-videonudge">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260902-ctrlrows">
-    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20260807-hostnet">
+    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20261011-wifisaved">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260726-framefit">
     <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260818-dithersplit">
     <link rel="stylesheet" href="/css/parts/09-mobile.css?v=20260801-hscroll">
@@ -1396,7 +1396,7 @@
                         </table>
                         <!-- ZWO L/M/H gain presets, render only when the
                              active camera matches a known ZWO model. -->
-                        <span class="zwo-gain-presets" x-show="zwoPresetsForActiveCamera()"
+                        <span class="zwo-gain-presets" x-show="!cameraUsesIso() && zwoPresetsForActiveCamera()"
                               :title="'ZWO preset gains, L=' + zwoPresetsForActiveCamera()?.L + ', M=' + zwoPresetsForActiveCamera()?.M + ', H=' + zwoPresetsForActiveCamera()?.H">
                             <button type="button" class="zwo-gain-preset"
                                     :data-active="gain === zwoPresetsForActiveCamera()?.L"
@@ -1408,7 +1408,7 @@
                                     :data-active="gain === zwoPresetsForActiveCamera()?.H"
                                     @click="applyGainPreset('gain', zwoPresetsForActiveCamera().H)">H</button>
                         </span>
-                        <span class="hcg-badge" x-show="isHcgActive(gain)" x-cloak
+                        <span class="hcg-badge" x-show="!cameraUsesIso() && isHcgActive(gain)" x-cloak
                               :title="'High Conversion Gain active (gain >= ' + hcgThreshold() + ')'">HCG</span>
                         <!-- LIVE-stack source camera: which imaging camera feeds
                              the live stack. Only shown when an extra imager is
@@ -11071,13 +11071,29 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         joined, the hotspot comes back after 30 s and you can reach the
                         rig there.
                     </p>
+                    <!-- Saved networks: joined before, password kept on the
+                         host, so one tap rejoins them. -->
+                    <div class="wifi-saved" x-show="(networkStation.savedNetworks || []).length">
+                        <div class="wifi-saved-head">Saved networks</div>
+                        <template x-for="n in (networkStation.savedNetworks || [])" :key="n.name">
+                            <div class="wifi-saved-row">
+                                <span class="wifi-saved-ssid" x-text="n.ssid"></span>
+                                <span class="text-ok" x-show="n.active">connected</span>
+                                <span class="text-muted" x-show="!n.active && networkSavedInRange(n)">in range</span>
+                                <button class="btn btn-xs" @click="networkConnectSaved(n)"
+                                        :disabled="networkSwitching || n.active">Connect</button>
+                                <button class="btn btn-xs" @click="networkForgetSaved(n)"
+                                        :disabled="networkSwitching">Forget</button>
+                            </div>
+                        </template>
+                    </div>
                     <label class="editor-export-row">
                         <span>Network</span>
                         <select x-model="networkStation.ssid" :disabled="networkSwitching">
                             <option value="">- pick a WiFi network -</option>
                             <template x-for="n in (networkStation.scanResults || [])" :key="n.ssid">
                                 <option :value="n.ssid"
-                                        x-text="n.ssid + '  (' + n.signal + '% · ' + (n.security || 'open') + ')'"></option>
+                                        x-text="n.ssid + '  (' + n.signal + '% · ' + (n.security || 'open') + ')' + (networkIsSaved(n.ssid) ? ' · saved' : '')"></option>
                             </template>
                             <option value="__hidden__">Other (hidden SSID)…</option>
                         </select>
@@ -11112,7 +11128,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                x-model="networkStation.password"
                                :disabled="networkSwitching"
                                minlength="8" maxlength="63"
-                               placeholder="8-63 characters (WPA2)">
+                               :placeholder="networkIsSaved(networkStationSsid())
+                                   ? $t('Saved: leave empty to reuse it')
+                                   : $t('8-63 characters (WPA2)')">
                     </label>
                     <p class="hint text-warn" x-show="networkSwitching">
                         Switching… the Pi is dropping the hotspot and trying the new
@@ -15744,9 +15762,29 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <option value="rclone">Cloud (Drive, OneDrive, Dropbox, Nextcloud, S3)</option>
                             </select>
                         </label>
-                        <label x-show="storagePush.kind !== 'local' && storagePush.kind !== 'rclone'"><span class="lbl">Host</span>
-                            <input class="input input-sm" type="text" x-model="storagePush.host" placeholder="192.168.0.50">
+                        <!-- Servers that worked before; picking one copies it on
+                             the host, password included. -->
+                        <label x-show="(storagePush.recent || []).length"><span class="lbl">Recent</span>
+                            <span style="display:flex; gap:6px; align-items:center">
+                                <select class="input input-sm" x-model.number="storagePush.recentPick">
+                                    <option :value="-1">Pick a server used before</option>
+                                    <template x-for="r in (storagePush.recent || [])" :key="r.index">
+                                        <option :value="r.index" x-text="storageRecentLabel(r)"></option>
+                                    </template>
+                                </select>
+                                <button class="btn btn-sm" type="button" :disabled="storagePush.recentPick < 0"
+                                        @click="storageUseRecent(storagePush.recentPick)">Use</button>
+                                <button class="btn btn-sm" type="button" :disabled="storagePush.recentPick < 0"
+                                        @click="storageForgetRecent(storagePush.recentPick)">Forget</button>
+                            </span>
                         </label>
+                        <label x-show="storagePush.kind !== 'local' && storagePush.kind !== 'rclone'"><span class="lbl">Host</span>
+                            <input class="input input-sm" type="text" x-model="storagePush.host" placeholder="nas.local or 192.168.0.50">
+                        </label>
+                        <p class="hint" x-show="storagePush.kind === 'smb' && storagePush.serverName" style="margin:0 0 6px">
+                            <span>This server calls itself</span> <strong x-text="storagePush.serverName"></strong>.
+                            <span>If its address changes, Polaris finds it again by that name.</span>
+                        </p>
                         <label x-show="storagePush.kind === 'smb'"><span class="lbl">Share</span>
                             <input class="input input-sm" type="text" x-model="storagePush.share" placeholder="astro">
                         </label>
@@ -17480,7 +17518,10 @@ Windows  winget install Rclone.Rclone</code></pre>
                                 <template x-if="network?.autoHotspotFallback">
                                     <span> If you take the rig somewhere your saved WiFi is out of
                                     range, the hotspot comes back up on its own after about a minute
-                                    so you never need an ethernet cable to reach it.</span>
+                                    so you never need an ethernet cable to reach it. When a saved
+                                    network comes back (a router that lost power, say), the rig
+                                    returns to it by itself within a few minutes, unless you chose
+                                    the hotspot with the button above.</span>
                                 </template>
                             </p>
                         </div>
@@ -22699,8 +22740,16 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                                 <option value="local">Mounted folder</option>
                             </select>
                         </label>
+                        <label class="bs-cfield" x-show="(storagePush.recent || []).length"><span class="bs-cflbl">Recent</span>
+                            <select class="bs-cinput" x-model.number="storagePush.recentPick"
+                                    @change="storageUseRecent(storagePush.recentPick)">
+                                <option :value="-1">Pick a server used before</option>
+                                <template x-for="r in (storagePush.recent || [])" :key="r.index">
+                                    <option :value="r.index" x-text="storageRecentLabel(r)"></option>
+                                </template>
+                            </select></label>
                         <label class="bs-cfield" x-show="storagePush.kind!=='local'"><span class="bs-cflbl">Host</span>
-                            <input class="bs-cinput" type="text" x-model="storagePush.host" placeholder="192.168.0.50"></label>
+                            <input class="bs-cinput" type="text" x-model="storagePush.host" placeholder="nas.local or 192.168.0.50"></label>
                         <label class="bs-cfield" x-show="storagePush.kind==='smb'"><span class="bs-cflbl">Share</span>
                             <input class="bs-cinput" type="text" x-model="storagePush.share" placeholder="astro"></label>
                         <label class="bs-cfield" x-show="storagePush.kind!=='smb'"><span class="bs-cflbl" x-text="storagePush.kind==='local' ? 'Destination path' : 'Remote path'"></span>
@@ -25463,7 +25512,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261010-pausing"></script>
+    <script src="/js/app.js?v=20261011-iso-wifi-smb"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
