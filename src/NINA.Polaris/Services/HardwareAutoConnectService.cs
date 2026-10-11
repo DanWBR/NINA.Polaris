@@ -319,7 +319,7 @@ public class HardwareAutoConnectService : IHostedService {
             }),
             ("Focuser",      rig.Focuser,     async name => { var f = _equip.SelectFocuser(rig.FocuserDriver ?? "indi", name);   await f.ConnectAsync(ct); }),
             ("Filter wheel", rig.FilterWheel, async name => { var w = _equip.SelectFilterWheel(rig.FilterWheelDriver ?? "indi", name); await w.ConnectAsync(ct); }),
-            ("Rotator",      rig.Rotator,     async name => { var r = _equip.SelectRotator(name);                                await r.ConnectAsync(ct); }),
+            ("Rotator",      rig.Rotator,     async name => { var r = _equip.SelectRotator(rig.RotatorDriver ?? "indi", name); await r.ConnectAsync(ct); }),
             ("Flat panel",   rig.FlatDevice,  async name => { var p = _equip.SelectFlatDevice(name);                             await p.ConnectAsync(ct); }),
             ("Dome",         rig.Dome,        async name => { var d = _equip.SelectDome(name);                                   await d.ConnectAsync(ct); }),
             ("Weather",      rig.Weather,     async name => { var w = _equip.SelectWeather(name);                                await w.ConnectAsync(ct); }),
@@ -341,6 +341,7 @@ public class HardwareAutoConnectService : IHostedService {
                 "Focuser" => rig.FocuserDriver,
                 "Filter wheel" => rig.FilterWheelDriver,
                 "Power box" => rig.SwitchDriver,
+                "Rotator" => rig.RotatorDriver,
                 _        => "indi",
             });
             if (isIndi && !indiOk) {

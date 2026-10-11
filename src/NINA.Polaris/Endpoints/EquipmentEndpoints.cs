@@ -175,6 +175,9 @@ public static class EquipmentEndpoints {
                 // unlike the primary devices, deselecting these is a
                 // legitimate operation.
                 r.Rotator = update.Rotator;
+                if (!string.IsNullOrWhiteSpace(update.RotatorDriver))
+                    r.RotatorDriver = update.RotatorDriver;
+                r.RotatorMaxAngle = RotatorRange.NormalizeMaximum(update.RotatorMaxAngle);
                 // Manual rotator turn direction. Nullable, so an absent
                 // property leaves the stored choice alone (RIGPUT-1) while an
                 // explicit true or false lands.
