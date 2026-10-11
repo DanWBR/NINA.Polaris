@@ -101,10 +101,12 @@ public class CelestialImageService {
                 if (!result.Available) result = await TryWikipediaAsync(name, ct);
             }
         } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
-            // The sky endpoint passes its request token here. Browsers cancel
-            // the lookup when the user changes target or leaves the view; this
-            // is normal control flow, not a failed image provider.
-            result = CelestialImage.NotAvailable("Lookup canceled");
+            // The sky endpoint passes its request token here. A browser that changed
+            // target or left the view is normal control flow, not a failed provider,
+            // and the request is already being abandoned. Rethrow, so nothing reaches
+            // _mem or the cache file: a stored "Lookup canceled" would keep serving
+            // the placeholder for that object until the entry expires.
+            throw;
         } catch (TaskCanceledException ex) {
             // HttpClient surfaces its 8-second timeout as TaskCanceledException
             // even when the caller did not cancel. Keep it visible without a
