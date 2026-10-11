@@ -1549,18 +1549,21 @@ public class IndiCamera : ICamera, IDisposable {
         if (!LooksLikeJpeg(data)) {
             try {
                 if (NINA.Image.FileFormat.Raw.LibRawDecoder.TryDecodeToRggb(
-                        data, out int rw, out int rh, out var mosaic) && mosaic != null) {
+                        data, out int rw, out int rh, out var mosaic, out var librawError) && mosaic != null) {
                     var rprops = new ImageProperties {
                         Width = rw, Height = rh, BitDepth = 16,
                         IsBayered = true, BayerPattern = BayerPatternEnum.RGGB
                     };
                     var rmeta = new ImageMetaData { CreationTime = DateTime.UtcNow };
-                    ReportDslrFrame("raw", ext, "Decoded with libraw.", 16);
+                    ReportDslrFrame("raw", ext,
+                        $"Decoded with libraw {NINA.Image.FileFormat.Raw.LibRawDecoder.Version}.", 16);
                     return new BaseImageData(mosaic, rprops, rmeta) {
                         RawFileBytes = data,
                         RawFileExtension = ext.StartsWith('.') ? ext : "." + ext
                     };
                 }
+                // Say what libraw actually reported, not a guess about the body.
+                if (librawError != null) why = librawError + ".";
             } catch (Exception ex) {
                 // Fall back to the embedded JPEG, but say what libraw hit: an
                 // unsupported body and a corrupt download look identical from
