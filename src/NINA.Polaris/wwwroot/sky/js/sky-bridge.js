@@ -966,7 +966,7 @@
         try {
             skyRemoveObj('mount');
             __skyFovObjs.mount = stel.createObj('geojson', {
-                data: skyFovGeoJson(__lastMountFov, '#1e40af', false)
+                data: skyFovGeoJson(__lastMountFov, '#60a5fa', false)
             });
             __skyFovLayer.add(__skyFovObjs.mount);
         } catch (e) {
@@ -1220,7 +1220,7 @@
         try {
             if (mount && mount.widthDeg > 0) {
                 __skyFovObjs.mount = stel.createObj('geojson', {
-                    data: skyFovGeoJson(mount, '#1e40af', false)  // dark blue
+                    data: skyFovGeoJson(mount, '#60a5fa', false)  // light blue
                 });
                 __skyFovLayer.add(__skyFovObjs.mount);
                 console.log('[Sky] mount FOV rect created at RA=' + mount.raDeg.toFixed(2)
@@ -1956,7 +1956,7 @@
                 // Side benefit of atmosphere off: it was the painter
                 // that multiplied feature colour by brightness, which
                 // was washing the FOV rectangles out. With it off the
-                // #1e40af mount blue and #ef4444 target red render at
+                // #60a5fa mount blue and #ef4444 target red render at
                 // full saturation.
                 try {
                     if (stel.core.atmosphere) stel.core.atmosphere.visible = false;
