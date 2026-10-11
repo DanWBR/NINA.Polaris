@@ -143,7 +143,7 @@ public static class CanopusEndpoints {
             return Results.Ok(new { ok = true });
         });
 
-        // The reduced tool catalog for the "On this device" tier — the in-browser
+        // The reduced tool catalog for the "On this device" tier, the in-browser
         // agent (canopus/client/agent.js) fetches it to know which tools to offer.
         g.MapGet("/catalog", () => {
             var path = System.IO.Path.Combine(AppContext.BaseDirectory,
@@ -153,7 +153,7 @@ public static class CanopusEndpoints {
                 : Results.NotFound(new { error = "catalog not found" });
         });
 
-        // Curated Ollama model catalog for the "On this device" tier — the host's
+        // Curated Ollama model catalog for the "On this device" tier, the host's
         // model manager offers these for one-click download and recommends the
         // largest that fits the user's VRAM. Static JSON (see ollama-models.json).
         g.MapGet("/device-models", () => {

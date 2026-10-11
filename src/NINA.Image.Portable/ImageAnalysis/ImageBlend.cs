@@ -23,8 +23,8 @@ namespace NINA.Image.ImageAnalysis;
 /// PixInsight's ImageBlend script): independently MTF-stretch a base image and
 /// a blend image, then combine them per-pixel with a blend mode + opacity.
 ///
-/// The canonical use is the starless workflow — base = stretched starless,
-/// blend = stretched stars-only — recombined with a Screen blend so the stars
+/// The canonical use is the starless workflow, base = stretched starless,
+/// blend = stretched stars-only, recombined with a Screen blend so the stars
 /// are added back on top of the processed nebulosity.
 ///
 /// Pure, allocation-only, no I/O, so it is unit-testable. Works identically for
@@ -120,7 +120,7 @@ public static class ImageBlend {
     /// channel gets its own black/mid/white so an OSC's R/G/B backgrounds line
     /// up (white balance), giving a colour-neutral base. The Image Blend tool
     /// runs this first, then applies the user's linked black/mid/white (the
-    /// per-image sliders) on top via <see cref="Combine"/> — so adjusting the
+    /// per-image sliders) on top via <see cref="Combine"/>, so adjusting the
     /// sliders brightens/clips uniformly without re-introducing the raw OSC
     /// colour cast. Mirrors the editor's two-stage stretch.
     /// </summary>

@@ -45,6 +45,20 @@ public interface ICamera {
     bool IsConnected { get; }
     CameraStates State { get; }
 
+    /// <summary>
+    /// Why this camera stopped being connected without anyone asking it to:
+    /// the cable came out, the hub lost power, the body was switched off.
+    /// Null while the link is healthy, and null after a deliberate
+    /// disconnect, which is not news.
+    ///
+    /// <para>A default of null means a backend that cannot tell simply says
+    /// nothing, and the interface does not grow a member every adapter has
+    /// to implement. The ones that can tell (the vendor SDKs, which report a
+    /// removal code or raise a disconnect event) set it at the moment they
+    /// drop <see cref="IsConnected"/>, so the two always agree.</para>
+    /// </summary>
+    string? DisconnectReason => null;
+
     double Temperature { get; }
     bool CoolerOn { get; }
     double CoolerPower { get; }
@@ -67,6 +81,13 @@ public interface ICamera {
     /// look the numbers up.</summary>
     int GainMin => 0;
     int GainMax => 0;
+
+    /// <summary>The offset (sensor bias pedestal) the camera is running at
+    /// right now, or null when this backend cannot report one. Distinct from
+    /// whatever a caller last asked for: with the rig's offset at 0 Polaris
+    /// sends nothing, and this is then the only truthful source for the FITS
+    /// OFFSET card (issue #26).</summary>
+    int? DriverOffset => null;
 
     /// <summary>Does this sensor have a colour filter array?
     ///

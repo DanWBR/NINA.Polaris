@@ -19,7 +19,7 @@ namespace NINA.Image.ImageAnalysis;
 /// <summary>
 /// Multiscale HDR: compress the large-scale luminance dynamic range so bright
 /// cores (galaxy/nebula centres, saturated star surroundings) come down toward
-/// the background WITHOUT flattening the fine detail — the fine à-trous scales
+/// the background WITHOUT flattening the fine detail, the fine à-trous scales
 /// are kept intact, only the coarse residual is tone-compressed and rescaled to
 /// hold the background level. This is the "recover blown cores" tool
 /// (PixInsight HDRMultiscaleTransform / SASpro WaveScale HDR family),

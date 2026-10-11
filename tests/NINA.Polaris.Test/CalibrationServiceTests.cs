@@ -100,10 +100,21 @@ public class CalibrationServiceTests {
         var darks = new List<object> {
             MakeFrameRow(id: 1, gain: 100, exposureSec: 60),
             MakeFrameRow(id: 2, gain: 100, exposureSec: 300),
+            MakeFrameRow(id: 3, gain: 100, exposureSec: 302)
+        };
+        Assert.That(InvokeFindNearestDark(darks, 300.5, 100), Is.EqualTo(2),
+            "300s is the closest inside the tolerance");
+    }
+
+    [Test]
+    public void FindNearestDark_NothingCloseEnoughIsNoMatch() {
+        // 300s and 600s are both a long way from 350s, and a dark is not
+        // scaled, so neither one cancels this light's dark current.
+        var darks = new List<object> {
+            MakeFrameRow(id: 2, gain: 100, exposureSec: 300),
             MakeFrameRow(id: 3, gain: 100, exposureSec: 600)
         };
-        Assert.That(InvokeFindNearestDark(darks, 350, 100), Is.EqualTo(2),
-            "300s is closer to 350 than 600 is");
+        Assert.That(InvokeFindNearestDark(darks, 350, 100), Is.Null);
     }
 
     // --- Flat matching --------------------------------------------
@@ -154,7 +165,8 @@ public class CalibrationServiceTests {
         return (norm, mean);
     }
 
-    private static int? InvokeFindNearestDark(List<object> darks, double exp, int gain) {
+    private static int? InvokeFindNearestDark(List<object> darks, double exp, int gain,
+                                              string camera = "") {
         // LSPP-1: CalibrationMath returns FrameRow? (full record) instead of
         // the int? Id the old CalibrationService helper returned. Pull the
         // Id off the row so the assertions in the tests stay readable.
@@ -162,30 +174,33 @@ public class CalibrationServiceTests {
         var listType = typeof(List<>).MakeGenericType(rowType);
         var list = (System.Collections.IList)Activator.CreateInstance(listType)!;
         foreach (var d in darks) list.Add(d);
-        var row = PrivateStatic("FindNearestDark").Invoke(null, new object[] { list, exp, gain });
+        var row = PrivateStatic("FindNearestDark").Invoke(null, new object[] { list, exp, gain, camera });
         if (row == null) return null;
         return (int)rowType.GetProperty("Id")!.GetValue(row)!;
     }
 
-    private static int? InvokeFindMatchingFlat(List<object> flats, string filter, int gain) {
+    private static int? InvokeFindMatchingFlat(List<object> flats, string filter, int gain,
+                                               string camera = "") {
         var rowType = Type.GetType("NINA.Polaris.Services.Studio.FrameRow, NINA.Polaris")!;
         var listType = typeof(List<>).MakeGenericType(rowType);
         var list = (System.Collections.IList)Activator.CreateInstance(listType)!;
         foreach (var f in flats) list.Add(f);
-        var row = PrivateStatic("FindMatchingFlat").Invoke(null, new object[] { list, filter, gain });
+        var row = PrivateStatic("FindMatchingFlat").Invoke(null, new object[] { list, filter, gain, camera });
         if (row == null) return null;
         return (int)rowType.GetProperty("Id")!.GetValue(row)!;
     }
 
     private static object MakeFrameRow(int id, int gain = 0, double exposureSec = 0,
-                                       string filter = "", string target = "") {
+                                       string filter = "", string target = "", string camera = "") {
         // FrameRow signature: (Id, Path, FileName, ImageType, Filter, Target,
         //                     ExposureSec, Gain, Offset, Width, Height, Bayer,
-        //                     DateObs, FileSize)
+        //                     DateObs, FileSize, Camera)
+        // Every argument is passed even though Camera has a default: reflection
+        // does not fill in optional parameters here, it just fails to bind.
         var rowType = Type.GetType("NINA.Polaris.Services.Studio.FrameRow, NINA.Polaris")!;
         return Activator.CreateInstance(rowType, new object[] {
             id, "", "", "MASTERDARK", filter, target,
-            exposureSec, gain, 0, 0, 0, "", "", 0L
+            exposureSec, gain, 0, 0, 0, "", "", 0L, camera
         })!;
     }
 }

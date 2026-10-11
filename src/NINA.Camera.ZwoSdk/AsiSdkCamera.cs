@@ -13,6 +13,7 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using System.Collections.Concurrent;
+using System.Text;
 using System.Runtime.InteropServices;
 using NINA.Camera.ZwoSdk.Native;
 using NINA.Core.Enum;
@@ -43,6 +44,7 @@ public sealed class AsiSdkCamera : ICamera {
     public int StreamReopens { get; private set; }
     private readonly int _cameraId;
     private bool _connected;
+    private string? _disconnectReason;
 
     private int _maxX, _maxY, _bitDepth = 16;
     private double _pixelSize;
@@ -56,8 +58,8 @@ public sealed class AsiSdkCamera : ICamera {
     private double _exposureSec = 0.03;
     private int _roiX, _roiY, _roiW, _roiH, _bin = 1;
     // Last geometry actually written to the SDK, for ApplyRoi's idempotency
-    // guard. Includes _imgType because ASISetROIFormat takes it too — unlike
-    // SVBony, where the output format is a separate call — so a RAW8<->RAW16
+    // guard. Includes _imgType because ASISetROIFormat takes it too, unlike
+    // SVBony, where the output format is a separate call, so a RAW8<->RAW16
     // switch must NOT be skipped. Reset on connect.
     private bool _roiApplied;
     private int _lastRoiX, _lastRoiY, _lastRoiW, _lastRoiH, _lastRoiBin;
@@ -86,6 +88,7 @@ public sealed class AsiSdkCamera : ICamera {
 
     public string DeviceName { get; private set; }
     public bool IsConnected => _connected;
+    public string? DisconnectReason => _disconnectReason;
     public CameraStates State { get; private set; } = CameraStates.NoState;
 
     // Cache the last valid reading so WrapFrame can stamp CCD-TEMP into the
@@ -193,6 +196,16 @@ public sealed class AsiSdkCamera : ICamera {
                 if (ASIGetControlCaps(_cameraId, i, ref caps) != ASI_ERROR_CODE.ASI_SUCCESS) continue;
                 _controls.Add(caps.ControlType);
                 switch ((ASI_CONTROL_TYPE)caps.ControlType) {
+                    case ASI_CONTROL_TYPE.ASI_BANDWIDTHOVERLOAD:
+                        // Kept so the conservative posture below can respect
+                        // what this model actually accepts. An ASI120MM Mini
+                        // reports min 40, max 100, default 50: writing the
+                        // flat 40 the ASI585 stream fix asked for lands it on
+                        // its floor.
+                        _bandwidthMin = (int)caps.MinValue.Value;
+                        _bandwidthMax = (int)caps.MaxValue.Value;
+                        _bandwidthDefault = (int)caps.DefaultValue.Value;
+                        break;
                     case ASI_CONTROL_TYPE.ASI_GAIN:
                         _gainMin = (int)caps.MinValue.Value;
                         _gainMax = (int)caps.MaxValue.Value;
@@ -221,24 +234,66 @@ public sealed class AsiSdkCamera : ICamera {
         _roiApplied = true;
         _gain = ReadControl(ASI_CONTROL_TYPE.ASI_GAIN);
         _offset = ReadControl(ASI_CONTROL_TYPE.ASI_OFFSET);
-        ApplyUsbConservative();
         _connected = true;
+        _disconnectReason = null;
         State = CameraStates.Idle;
     }, ct);
 
     private readonly HashSet<int> _controls = new();
+    private int _bandwidthMin, _bandwidthMax, _bandwidthDefault;
+    // What the operator asked of the cooler, so a reopen can put it back: the
+    // SDK loses it on ASICloseCamera, and a silently warm imaging camera is a
+    // ruined sequence.
+    private bool? _coolerOnWanted;
+    private double? _targetTempWanted;
+
+    /// <summary>Close/reopen recoveries performed on still captures.</summary>
+    public int StillReopens { get; private set; }
 
     /// <summary>STREAMSTALL: the same USB posture indi_asi_ccd uses and that
-    /// streamed all night on the same board: 40% bandwidth, no high-speed
+    /// streamed all night on the same board: low bandwidth, no high-speed
     /// (10-bit) mode. Left at the SDK default, a full-frame RAW16 stream on
     /// an ARM xhci runs near the bus limit and the capture wedges after a
-    /// live exposure change (ASI585MC, Orange Pi 5 Pro, 2026-09-03).</summary>
+    /// live exposure change (ASI585MC, Orange Pi 5 Pro, 2026-09-03).
+    ///
+    /// Applied when a STREAM starts, not at connect. It was written for a
+    /// streaming USB3 camera and then imposed on every ASI camera the moment
+    /// it connected, which is not the same claim: a USB2 stills camera such as
+    /// an ASI120MM Mini (bandwidth min 40, default 50) was being pinned to its
+    /// floor for a problem it does not have. Still captures now keep whatever
+    /// the camera itself defaults to.</summary>
     private void ApplyUsbConservative() {
         lock (_sdk) {
             if (_controls.Contains((int)ASI_CONTROL_TYPE.ASI_BANDWIDTHOVERLOAD))
-                ASISetControlValue(_cameraId, ASI_CONTROL_TYPE.ASI_BANDWIDTHOVERLOAD, new CLong(40), 0);
+                ASISetControlValue(_cameraId, ASI_CONTROL_TYPE.ASI_BANDWIDTHOVERLOAD,
+                    new CLong(ConservativeBandwidth()), 0);
             if (_controls.Contains((int)ASI_CONTROL_TYPE.ASI_HIGH_SPEED_MODE))
                 ASISetControlValue(_cameraId, ASI_CONTROL_TYPE.ASI_HIGH_SPEED_MODE, new CLong(0), 0);
+        }
+    }
+
+    /// <summary>The 40% the stream fix asked for, clamped into what this model
+    /// reports it accepts. Pure so it can be tested without a camera.</summary>
+    internal static int ClampBandwidth(int wanted, int min, int max) {
+        // Caps we cannot believe (no ceiling, or a floor above the ceiling):
+        // ask for what the stream fix asked for rather than invent a bound.
+        if (max <= 0 || (min > 0 && max < min)) return wanted;
+        int lo = min > 0 ? min : 0;
+        return Math.Clamp(wanted, lo, Math.Max(lo, max));
+    }
+
+    private int ConservativeBandwidth() => ClampBandwidth(40, _bandwidthMin, _bandwidthMax);
+
+    /// <summary>Puts the cooler back after a reopen. ASICloseCamera forgets it,
+    /// and the reopen path is invisible to the caller that set it.</summary>
+    private void RestoreCoolerState() {
+        if (!_supportsCooler) return;
+        lock (_sdk) {
+            if (_targetTempWanted is double t)
+                ASISetControlValue(_cameraId, ASI_CONTROL_TYPE.ASI_TARGET_TEMP,
+                    new CLong((nint)Math.Round(t)), 0);
+            if (_coolerOnWanted is bool on)
+                ASISetControlValue(_cameraId, ASI_CONTROL_TYPE.ASI_COOLER_ON, new CLong(on ? 1 : 0), 0);
         }
     }
 
@@ -246,7 +301,18 @@ public sealed class AsiSdkCamera : ICamera {
     /// "disconnect and reconnect" that was the only thing that revived a
     /// wedged ASI585 in the field. Called by the pull loop with the capture
     /// already stopped. Returns false if the SDK refused to reopen.</summary>
-    private bool ReopenCamera() {
+    private bool ReopenCamera() => ReopenHandle(forStream: true)
+        && (lock_StartVideo());
+
+    private bool lock_StartVideo() {
+        lock (_sdk) { return ASIStartVideoCapture(_cameraId) == ASI_ERROR_CODE.ASI_SUCCESS; }
+    }
+
+    /// <summary>The close/open half of the recovery, shared by the stream pull
+    /// loop and by a still capture whose exposure failed. Restores everything
+    /// the SDK forgets on close: the USB posture (streams only), exposure,
+    /// gain, offset, the ROI and format, and the cooler.</summary>
+    private bool ReopenHandle(bool forStream) {
         lock (_sdk) {
             try { ASIStopVideoCapture(_cameraId); } catch { }
             try { ASICloseCamera(_cameraId); } catch { }
@@ -255,18 +321,22 @@ public sealed class AsiSdkCamera : ICamera {
             if (ASIInitCamera(_cameraId) != ASI_ERROR_CODE.ASI_SUCCESS) return false;
             _roiApplied = false;               // force the ROI/format write below
         }
-        ApplyUsbConservative();
+        if (forStream) ApplyUsbConservative();
         ApplyExposureGain(_exposureSec, _gain, _offset);
         bool wasStreaming = _streaming;
         lock (_gate) { _streaming = false; }   // ApplyRoi skips writes while streaming
         try { ApplyRoi(); } finally { lock (_gate) { _streaming = wasStreaming; } }
-        lock (_sdk) { return ASIStartVideoCapture(_cameraId) == ASI_ERROR_CODE.ASI_SUCCESS; }
+        RestoreCoolerState();
+        return true;
     }
 
     public Task DisconnectAsync(CancellationToken ct = default) => Task.Run(() => {
         try { StopStreamCore(); } catch { }
         if (_connected) { try { ASICloseCamera(_cameraId); } catch { } }
         _connected = false;
+        // A disconnect the operator asked for is not news, so it clears the
+        // reason rather than leaving the last unplug on the record.
+        _disconnectReason = null;
         State = CameraStates.NoState;
     }, ct);
 
@@ -287,6 +357,7 @@ public sealed class AsiSdkCamera : ICamera {
     }
 
     public Task SetTemperatureAsync(double temperature, CancellationToken ct = default) {
+        _targetTempWanted = temperature;
         if (_supportsCooler)
             lock (_sdk)
                 ASISetControlValue(_cameraId, ASI_CONTROL_TYPE.ASI_TARGET_TEMP, new CLong((nint)Math.Round(temperature)), 0);
@@ -294,6 +365,7 @@ public sealed class AsiSdkCamera : ICamera {
     }
 
     public Task SetCoolerAsync(bool on, CancellationToken ct = default) {
+        _coolerOnWanted = on;
         if (_supportsCooler)
             lock (_sdk)
                 ASISetControlValue(_cameraId, ASI_CONTROL_TYPE.ASI_COOLER_ON, new CLong(on ? 1 : 0), 0);
@@ -306,16 +378,16 @@ public sealed class AsiSdkCamera : ICamera {
         // Must stop the EXPOSURE, not the video capture: CaptureAsync uses the
         // snap API (ASIStartExposure / ASIGetDataAfterExp), and those are
         // distinct SDK entry points from ASIStartVideoCapture / ASIGetVideoData.
-        // This called ASIStopVideoCapture — a leftover from the snap-mode
+        // This called ASIStopVideoCapture, a leftover from the snap-mode
         // migration documented in CaptureAsync itself ("The old path used video
         // capture..."): the capture path was migrated, this one wasn't. Aborting
         // a still therefore stopped an idle video engine and left the exposure
         // integrating, so POST /api/camera/abort silently did nothing (it does
-        // not cancel the capture token either — the poll loop just ran to its
+        // not cancel the capture token either, the poll loop just ran to its
         // deadline). The guider path masked this: it cancels the token first, so
         // CaptureAsync's finally cleaned up regardless of what Abort did.
         // Stills and streams are mutually exclusive (CaptureAsync throws while
-        // _streaming), so there is no case where a stream needs stopping here —
+        // _streaming), so there is no case where a stream needs stopping here,
         // the stream has StopVideoStreamAsync. Mirrors PlayerOne's POAStopExposure.
         lock (_sdk) { try { ASIStopExposure(_cameraId); } catch { } }
         State = CameraStates.Idle;
@@ -331,7 +403,7 @@ public sealed class AsiSdkCamera : ICamera {
 
     private void ApplyRoi() {
         if (!_connected) return;
-        // ASI forbids changing ROI/format DURING capture — doing so wedges the
+        // ASI forbids changing ROI/format DURING capture, doing so wedges the
         // driver. While a stream is running just stash the fields; they take
         // effect on the next StartVideoStreamAsync, which re-applies ROI while
         // stopped.
@@ -343,7 +415,7 @@ public sealed class AsiSdkCamera : ICamera {
         // matches. This matters MORE here than on the other natives: CaptureAsync
         // re-calls ApplyRoi() on EVERY still, and slew-and-centre / plate solve /
         // autofocus each call SetSubframeAsync(0,0,0,0) around every capture with
-        // the SAME full-frame geometry — so a burst of solve/AF captures fired two
+        // the SAME full-frame geometry, so a burst of solve/AF captures fired two
         // unconditional SDK writes per frame at a driver whose own comment (above)
         // says ROI must not change during capture. Also closes most of the
         // mid-still race: `_streaming` only covers the video stream, so a
@@ -386,26 +458,41 @@ public sealed class AsiSdkCamera : ICamera {
             ApplyExposureGain(exposureSeconds, opts?.Gain, opts?.Offset);
             GetRoi(out var w, out var h);
             var bytes = new byte[(long)w * h * BytesPerPixel()];
-            State = CameraStates.Exposing;
             // Snap (still) mode: ASIStartExposure integrates exactly the
             // configured exposure. The old path used video capture
             // (ASIStartVideoCapture + ASIGetVideoData), which hands back the
             // frame already in flight, so long subs (15s/60s) came back early
             // instead of integrating the requested time. bIsDark=0 (ASI has no
             // mechanical shutter; the flag is informational).
-            lock (_sdk) {
-                // Defensive stop before start, mirroring PlayerOne and SVBony: if a
-                // previous capture didn't stop cleanly the SDK still thinks it's
-                // exposing, and the next start can wedge the driver. Stills churn a
-                // full start/stop per frame, so bursts of slew+solve / autofocus
-                // captures hit it hardest — that's how the SVBony twin failed in
-                // the field. A stop on an idle camera is a harmless no-op. Rated
-                // lower risk here (the ASI SDK is more tolerant than SVBony's), but
-                // it costs nothing and keeps the natives consistent.
-                try { ASIStopExposure(_cameraId); } catch { }
-                Check(ASIStartExposure(_cameraId, 0), "ASIStartExposure");
-            }
-            try {
+            // Two attempts, with a close/reopen of the SDK handle between them.
+            // A still capture used to throw on the first ASI_EXP_FAILED and
+            // never try anything else, so a camera that had been left in a bad
+            // state by another process failed every frame for as long as the
+            // operator kept asking: 45 identical lines in 20 minutes, and the
+            // only cure anyone could find was reconnecting it by hand. That is
+            // what ReopenHandle does, so do it here rather than making the
+            // operator do it. When the reopen does not help either, the message
+            // says so, which is the part that points at the camera's power
+            // instead of at Polaris.
+            for (int attempt = 1; ; attempt++) {
+              try {
+                // Inside the loop: the finally below leaves the state Idle, so a
+                // retry that did not set it again would expose while reporting
+                // idle to the UI and the status feed.
+                State = CameraStates.Exposing;
+                lock (_sdk) {
+                    // Defensive stop before start, mirroring PlayerOne and SVBony: if a
+                    // previous capture didn't stop cleanly the SDK still thinks it's
+                    // exposing, and the next start can wedge the driver. Stills churn a
+                    // full start/stop per frame, so bursts of slew+solve / autofocus
+                    // captures hit it hardest, that's how the SVBony twin failed in
+                    // the field. A stop on an idle camera is a harmless no-op. Rated
+                    // lower risk here (the ASI SDK is more tolerant than SVBony's), but
+                    // it costs nothing and keeps the natives consistent.
+                    try { ASIStopExposure(_cameraId); } catch { }
+                    Check(ASIStartExposure(_cameraId, 0), "ASIStartExposure");
+                }
+                try {
                 long deadline = Environment.TickCount64 + (long)(exposureSeconds * 1000) + 8000;
                 while (true) {
                     ct.ThrowIfCancellationRequested();
@@ -413,20 +500,70 @@ public sealed class AsiSdkCamera : ICamera {
                     lock (_sdk) Check(ASIGetExpStatus(_cameraId, out st), "ASIGetExpStatus");
                     if (st == ASI_EXPOSURE_STATUS.ASI_EXP_SUCCESS) break;
                     if (st == ASI_EXPOSURE_STATUS.ASI_EXP_FAILED)
-                        throw new InvalidOperationException("ASI exposure failed.");
+                        throw new InvalidOperationException(ExposureFailureMessage(w, h, attempt));
                     if (Environment.TickCount64 > deadline)
                         throw new TimeoutException("ASI exposure timed out.");
                     // Poll coarse while integrating, fine once it should be done.
                     Thread.Sleep(st == ASI_EXPOSURE_STATUS.ASI_EXP_WORKING ? 50 : 5);
                 }
                 lock (_sdk) Check(ASIGetDataAfterExp(_cameraId, bytes, new CLong(bytes.Length)), "ASIGetDataAfterExp");
-            } finally {
-                lock (_sdk) { try { ASIStopExposure(_cameraId); } catch { } }
-                State = CameraStates.Idle;
+                } finally {
+                    lock (_sdk) { try { ASIStopExposure(_cameraId); } catch { } }
+                    State = CameraStates.Idle;
+                }
+                return WrapFrame(bytes, w, h);
+              } catch (Exception ex) when (attempt < StillAttempts && IsRecoverable(ex)) {
+                StillReopens++;
+                bool reopened = ReopenHandle(forStream: false);
+                if (!reopened) throw new InvalidOperationException(
+                    ExposureFailureMessage(w, h, attempt) + " The SDK also refused to reopen the "
+                    + "camera, so it is not answering at all: cut its USB power (unplug it for a "
+                    + "few seconds) and reconnect.", ex);
+                // Reopening resets the ROI/format, so re-assert them for the retry.
+                ApplyRoi();
+                ApplyExposureGain(exposureSeconds, opts?.Gain, opts?.Offset);
+                // And check it came back the same, because the buffer was sized
+                // for the old geometry. ASIGetDataAfterExp is given the length
+                // so it would refuse rather than overrun, but it would refuse
+                // with the SDK's own error instead of saying what happened.
+                GetRoi(out var w2, out var h2);
+                if (w2 != w || h2 != h) throw new InvalidOperationException(
+                    $"ASI reopen changed the frame geometry from {w}x{h} to {w2}x{h2}; "
+                    + "reconnect the camera.", ex);
+              }
             }
-            return WrapFrame(bytes, w, h);
         }
     }, ct);
+
+    /// <summary>How many times a still exposure is attempted, counting the
+    /// first: one reopen and one retry.</summary>
+    internal const int StillAttempts = 2;
+
+    /// <summary>Worth reopening the handle for. A cancellation is the caller's
+    /// decision and a wedged camera is not going to be fixed by retrying a
+    /// request that never reached it.</summary>
+    internal static bool IsRecoverable(Exception ex)
+        => ex is not OperationCanceledException
+           && (ex is InvalidOperationException || ex is TimeoutException);
+
+    /// <summary>Everything that decides whether an exposure can work, in one
+    /// line. The old message was the four words "ASI exposure failed.", which
+    /// sent a field session down the wrong path twice: it names neither the
+    /// geometry, nor the USB bandwidth in force, nor whether a reopen was
+    /// already tried.</summary>
+    private string ExposureFailureMessage(int w, int h, int attempt) {
+        int bandwidth = _controls.Contains((int)ASI_CONTROL_TYPE.ASI_BANDWIDTHOVERLOAD)
+            ? (int)ReadControl(ASI_CONTROL_TYPE.ASI_BANDWIDTHOVERLOAD) : -1;
+        var sb = new StringBuilder("ASI exposure failed");
+        if (attempt > 1) sb.Append(" again after reopening the camera");
+        sb.Append($" ({DeviceName}: {w}x{h} bin {_bin}, {_imgType}, {_exposureSec:0.###}s, gain {_gain}");
+        if (bandwidth >= 0) sb.Append($", USB bandwidth {bandwidth}");
+        sb.Append("). The camera answers but will not expose, which usually means another "
+            + "program has it open, or its firmware is stuck after one closed it uncleanly "
+            + "(PHD2, an INDI driver): unplug the camera for a few seconds and reconnect. "
+            + "A host reboot does not clear it, because the camera keeps its power.");
+        return sb.ToString();
+    }
 
     public bool IsStreaming => _streaming;
 
@@ -448,6 +585,10 @@ public sealed class AsiSdkCamera : ICamera {
                 // defers the SDK write during capture). _streaming is still false
                 // here, so ApplyRoi runs.
                 ApplyRoi();
+                // The bandwidth/high-speed posture belongs to streaming (see
+                // ApplyUsbConservative): a full-frame RAW16 stream on an ARM
+                // xhci wedges at the SDK default.
+                ApplyUsbConservative();
                 lock (_sdk) {
                     // Defensive: if a previous session didn't stop cleanly the SDK
                     // is still "capturing", and a second ASIStartVideoCapture then
@@ -477,7 +618,7 @@ public sealed class AsiSdkCamera : ICamera {
             t = _streamThread; _streamThread = null;
         }
         // Join the pull thread BEFORE touching the SDK so its in-flight
-        // ASIGetVideoData (holding _sdk) has finished — then ASIStopVideoCapture
+        // ASIGetVideoData (holding _sdk) has finished, then ASIStopVideoCapture
         // under _sdk can't run concurrently with it. Generous timeout so a
         // long-exposure GetVideoData can return first.
         try { t?.Join(5000); } catch { }
@@ -638,11 +779,40 @@ public sealed class AsiSdkCamera : ICamera {
         try {
             // Serialise against the streaming pull thread (see _sdk note).
             lock (_sdk) {
-                if (ASIGetControlValue(_cameraId, t, out var v, out _) == ASI_ERROR_CODE.ASI_SUCCESS)
-                    return (int)v.Value;
+                var rc = ASIGetControlValue(_cameraId, t, out var v, out _);
+                if (rc == ASI_ERROR_CODE.ASI_SUCCESS) return (int)v.Value;
+                NoteSdkResult(rc);
             }
         } catch { }
         return 0;
+    }
+
+    /// <summary>
+    /// Watch an SDK return code for "this camera is not there any more" and,
+    /// when it says so, drop the connection here rather than waiting for
+    /// someone to try a capture.
+    ///
+    /// <para>This is the whole disconnect detector, and it costs nothing:
+    /// the status loop already reads temperature and cooler power once a
+    /// second, so the SDK is already being asked a question whose answer
+    /// carries the removal code. It used to be thrown away, which is why an
+    /// unplugged camera went on reporting itself connected at 0 degrees
+    /// forever, and why every capture path that waits for a healthy camera
+    /// never waited.</para>
+    ///
+    /// <para>Only the two unambiguous codes count. A timeout or a buffer
+    /// error is a bad moment, not a missing camera, and marking those as
+    /// gone would turn a hiccup into a disconnection.</para>
+    /// </summary>
+    private void NoteSdkResult(ASI_ERROR_CODE rc) {
+        if (rc != ASI_ERROR_CODE.ASI_ERROR_CAMERA_REMOVED
+            && rc != ASI_ERROR_CODE.ASI_ERROR_INVALID_ID) return;
+        if (!_connected) return;
+        _connected = false;
+        _streaming = false;
+        _disconnectReason = rc == ASI_ERROR_CODE.ASI_ERROR_CAMERA_REMOVED
+            ? "the camera reported itself removed from the USB bus"
+            : "the SDK no longer knows this camera id, which is what a removed camera looks like";
     }
 
     // ----- Dynamic control panel (self-describing via ASIGetControlCaps) -----

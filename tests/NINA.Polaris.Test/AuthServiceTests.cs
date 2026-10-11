@@ -152,7 +152,7 @@ public class AuthServiceTests {
         }
         // Now even a CORRECT password is rejected because the IP is
         // locked. Restart of the service is the only way out (or wait
-        // the backoff window — too slow for a test).
+        // the backoff window, too slow for a test).
         var locked = auth.Login("hunter2!", ip);
         Assert.That(locked, Is.Null,
             "Locked-out IP should not be able to authenticate");

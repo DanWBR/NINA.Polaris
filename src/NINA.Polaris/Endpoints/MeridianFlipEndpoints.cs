@@ -23,12 +23,12 @@ public static class MeridianFlipEndpoints {
         group.MapGet("/settings", (MeridianFlipService mf) => Results.Ok(mf.Settings));
 
         group.MapPut("/settings", (MeridianFlipSettings settings, MeridianFlipService mf) => {
-            mf.UpdateSettings(settings);
+            mf.SaveSettings(settings);
             return Results.Ok(mf.Settings);
         });
 
         // Clear a standing safety-guard trip (UI "dismiss"). Does not restart
-        // anything — the operator decides whether to resume.
+        // anything, the operator decides whether to resume.
         group.MapPost("/safety/reset", (MountSafetyGuardService guard) => {
             guard.Reset();
             return Results.Ok(new { tripped = guard.Tripped });

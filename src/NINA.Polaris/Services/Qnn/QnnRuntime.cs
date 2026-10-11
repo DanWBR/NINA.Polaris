@@ -20,7 +20,7 @@ namespace NINA.Polaris.Services.Qnn;
 /// Cheap, side-effect-free probe for whether this machine can run GraXpert AI
 /// models on the Qualcomm Hexagon NPU (HTP) via the QAIRT (Qualcomm AI Runtime,
 /// formerly QNN) tools. The Hexagon is the NPU on the Radxa Dragon Q6A
-/// (QCS6490 / QCM6490, Hexagon V68) — the counterpart to <c>Services/Rknn</c>'s
+/// (QCS6490 / QCM6490, Hexagon V68), the counterpart to <c>Services/Rknn</c>'s
 /// Rockchip path. Like that path the gate is deliberately conservative: it must
 /// look like a Qualcomm SBC (Linux + arm64) with the cDSP FastRPC bridge up
 /// (<c>/dev/fastrpc-cdsp</c>) and the QAIRT runtime present (the
@@ -31,7 +31,7 @@ namespace NINA.Polaris.Services.Qnn;
 /// model; the inference service always falls back to the GraXpert CLI on any
 /// failure, so a false positive here is harmless.
 ///
-/// <para>The QAIRT runtime is located under <see cref="QairtRoot"/> — set
+/// <para>The QAIRT runtime is located under <see cref="QairtRoot"/>, set
 /// <c>POLARIS_QAIRT_ROOT</c> to override, else the bundled location the .deb
 /// installs (<c>/opt/polaris/qairt</c>). Within it we expect
 /// <c>bin/qnn-net-run</c>, <c>lib/libQnnHtp.so</c> + the matching Hexagon skel

@@ -45,8 +45,20 @@ public class AstapBinaryChoiceTests {
         var candidates = (platform == "windows"
             ? AstapSolver.WindowsCandidates()
             : AstapSolver.LinuxCandidates()).ToList();
-        static bool IsCli(string p) => Path.GetFileNameWithoutExtension(p) == "astap_cli";
-        static bool IsGui(string p) => Path.GetFileNameWithoutExtension(p) == "astap";
+        // Path.GetFileNameWithoutExtension answers for the host it runs on, not
+        // for the platform under test: on Linux a backslash is an ordinary
+        // character, so the whole Windows path comes back as the file name and
+        // no candidate matches anything. The windows case then failed for lack
+        // of candidates, on the one platform the comment above promises to
+        // cover. Split the leaf off by hand instead of asking the running OS
+        // what a separator is.
+        static string Leaf(string p) {
+            var name = p.Substring(p.LastIndexOfAny(['/', '\\']) + 1);
+            var dot = name.LastIndexOf('.');
+            return dot > 0 ? name[..dot] : name;
+        }
+        static bool IsCli(string p) => Leaf(p) == "astap_cli";
+        static bool IsGui(string p) => Leaf(p) == "astap";
 
         int lastCli = candidates.FindLastIndex(IsCli);
         int firstGui = candidates.FindIndex(IsGui);

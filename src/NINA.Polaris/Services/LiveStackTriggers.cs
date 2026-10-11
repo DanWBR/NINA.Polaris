@@ -78,7 +78,7 @@ public class LiveStackTriggers {
     // ----- Auto dither block (ASIAIR-style: dither every N frames) -----
 
     /// <summary>Master switch for dithering during live stacking. On by
-    /// default (ASIAIR parity) — dithering between subs is almost always
+    /// default (ASIAIR parity), dithering between subs is almost always
     /// wanted to break up walking noise; it's a no-op when not guiding.</summary>
     public bool DitherEnabled { get; set; } = true;
 
@@ -96,7 +96,7 @@ public class LiveStackTriggers {
     /// <summary>Settle tolerance (px) / min settled time (s) / hard timeout (s),
     /// passed to the guider's dither so the next frame waits for the star to
     /// settle, exactly like the AUTORUN sequencer.</summary>
-    public double DitherSettlePixels { get; set; } = 3.0;
+    public double DitherSettlePixels { get; set; } = 1.5;
     public int DitherSettleTime { get; set; } = 3;
     public int DitherSettleTimeout { get; set; } = 60;
 

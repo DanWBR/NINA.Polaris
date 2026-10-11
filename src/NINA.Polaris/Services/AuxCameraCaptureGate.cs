@@ -17,9 +17,9 @@ namespace NINA.Polaris.Services;
 /// <summary>
 /// Process-wide serialization for native <c>ICamera.CaptureAsync</c> calls on
 /// the AUXILIARY camera. Same rationale as <see cref="CameraCaptureGate"/> but
-/// for a SEPARATE device: the aux camera has two possible consumers — the aux
+/// for a SEPARATE device: the aux camera has two possible consumers, the aux
 /// capture+save loop (<see cref="AuxCaptureService"/>) and the FOCUS-tab manual
-/// focus loop when the user points it at the aux camera — and a concurrent
+/// focus loop when the user points it at the aux camera, and a concurrent
 /// capture on one handle crashes the vendor SDK / INDI BLOB path. This is a
 /// distinct semaphore from the main gate so aux captures never block (or are
 /// blocked by) the main imaging camera.

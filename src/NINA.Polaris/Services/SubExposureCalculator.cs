@@ -20,7 +20,7 @@ namespace NINA.Polaris.Services;
 /// (SharpCap smart-histogram; "The Ideal Exposure", 2018).
 ///
 /// <para>A single sub's noise variance is
-/// <c>σ² = readNoise² + skyRate·t</c> (dark current ignored — negligible
+/// <c>σ² = readNoise² + skyRate·t</c> (dark current ignored, negligible
 /// for cooled sensors on typical LIVE subs). The sky shot-noise term grows
 /// with exposure; once it dominates the fixed read-noise term, making subs
 /// longer stops improving the stacked SNR and only risks saturation, star
@@ -37,7 +37,7 @@ namespace NINA.Polaris.Services;
 /// and the sky-background rate in e-/px/s, itself derived from the measured
 /// background ADU and the conversion gain e-/ADU). Those come from a
 /// <see cref="SensorAnalysisService"/> PTC run; without it the caller must
-/// fall back to a flagged estimate. Pure functional helper — no state,
+/// fall back to a flagged estimate. Pure functional helper, no state,
 /// fully testable.</para>
 /// </summary>
 public static class SubExposureCalculator {
@@ -76,7 +76,7 @@ public static class SubExposureCalculator {
     /// <param name="peakRateEPerSec">Brightest measured pixel's rate, e-/px/s.
     /// Optional.</param>
     /// <returns>Null when the inputs are non-physical (non-positive read noise
-    /// or sky rate): the caller renders "—" / falls back to an estimate.</returns>
+    /// or sky rate): the caller renders ", " / falls back to an estimate.</returns>
     public static SubExposureResult? Recommend(
             double readNoiseE,
             double skyRateEPerSec,

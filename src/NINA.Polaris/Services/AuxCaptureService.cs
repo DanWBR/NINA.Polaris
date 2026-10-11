@@ -17,7 +17,7 @@ using NINA.Image.Interfaces;
 namespace NINA.Polaris.Services;
 
 /// <summary>
-/// Independent capture+save loop for the AUXILIARY camera — a second camera on
+/// Independent capture+save loop for the AUXILIARY camera, a second camera on
 /// the same mount with different optics. It runs on its own cadence (its own
 /// exposure/gain/binning) while a main imaging session (LIVE or AUTORUN) is
 /// active, and only saves each frame to a separate <c>aux/</c> subtree. It does
@@ -48,6 +48,21 @@ public sealed class AuxCaptureService {
 
     public bool IsRunning { get; private set; }
     public long FrameCount { get; private set; }
+
+    // The frame this loop last captured, kept so something else can look at it
+    // without asking the camera for one of its own. The broadcast's second
+    // picture reads this: an exposure of its own would go through the same
+    // AuxCameraCaptureGate as this loop and the operator's focus snaps, and
+    // three parties taking turns on one camera is how a session stalls.
+    private IImageData? _lastFrame;
+    private long _lastFrameSeq;
+
+    /// <summary>The last captured frame and a counter that changes with it, so
+    /// a reader can tell a new frame from the one it already drew. Null until
+    /// the loop has taken one.</summary>
+    public (IImageData? Image, long Seq) LastFrame() {
+        lock (_lock) return (_lastFrame, _lastFrameSeq);
+    }
     public string? LastError { get; private set; }
 
     /// <summary>True when aux capture is enabled but no image output folder is
@@ -126,7 +141,7 @@ public sealed class AuxCaptureService {
             try { await cam.SetBinningAsync(bin, bin, ct); } catch { /* best effort */ }
 
             while (!ct.IsCancellationRequested) {
-                // Pause while the mount is moving — same OTA on the same mount,
+                // Pause while the mount is moving, same OTA on the same mount,
                 // so a dither/settle/AF/flip/slew trails the aux frame too.
                 while (!ct.IsCancellationRequested && MountBusy()) {
                     try { await Task.Delay(250, ct); } catch { return; }
@@ -156,6 +171,7 @@ public sealed class AuxCaptureService {
                 }
 
                 if (image?.Data != null) {
+                    lock (_lock) { _lastFrame = image; _lastFrameSeq++; }
                     try {
                         var path = _writer.SaveImage(image, imageType: "AUX",
                             gain: gain ?? 0,

@@ -32,7 +32,7 @@ namespace NINA.Polaris.Services.Studio;
 ///   string, string, DateTimeOffset?, Microsoft.Net.Http.Headers.EntityTagHeaderValue,
 ///   bool)"/> makes ASP.NET set <c>Last-Modified</c> + <c>ETag</c> and
 ///   answer conditional GETs (<c>If-None-Match</c> / <c>If-Modified-Since</c>)
-///   with <c>304 Not Modified</c> automatically — so an unchanged file is
+///   with <c>304 Not Modified</c> automatically, so an unchanged file is
 ///   never re-transferred either.</item>
 /// </list>
 ///

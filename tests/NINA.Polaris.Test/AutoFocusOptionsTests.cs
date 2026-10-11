@@ -173,4 +173,22 @@ public class AutoFocusOptionsTests {
         Assert.That(AutoFocusRunOptions.Resolve(null, new AutoFocusSettings { Binning = 16 }).Binning,
             Is.EqualTo(4));
     }
+
+    /// <summary>Recording the run's optimum into the per-filter memory is the
+    /// default, and stays the default for every caller that does not mention it.
+    /// The per-filter sweep is the one caller that turns it off, because it
+    /// holds its results until the operator applies them.</summary>
+    [Test]
+    public void Resolve_RecordFilterMemory_DefaultsToTrue() {
+        Assert.That(AutoFocusRunOptions.Resolve(null, null).RecordFilterMemory, Is.True);
+        Assert.That(AutoFocusRunOptions.Resolve(new AutoFocusRequest(), null).RecordFilterMemory,
+            Is.True);
+    }
+
+    [Test]
+    public void Resolve_RecordFilterMemory_False_IsHonoured() {
+        var o = AutoFocusRunOptions.Resolve(
+            new AutoFocusRequest { RecordFilterMemory = false }, new AutoFocusSettings());
+        Assert.That(o.RecordFilterMemory, Is.False);
+    }
 }

@@ -38,7 +38,7 @@ public sealed class AfStarTracker {
 
     public AfStarTracker(int brightestN) => _n = brightestN;
 
-    /// <summary>Forget the anchors (call at the start of each attempt — the
+    /// <summary>Forget the anchors (call at the start of each attempt, the
     /// sweep returns to the start position, so the field is framed the same
     /// but the reference frame should be re-picked fresh).</summary>
     public void Reset() => _anchors = null;
@@ -57,7 +57,7 @@ public sealed class AfStarTracker {
         }
 
         // Nearest detected star per anchor (desktop MatchStarPositions has no
-        // radius cap either — a defocused donut drifts a little but stays the
+        // radius cap either, a defocused donut drifts a little but stays the
         // closest blob to its anchor). Distinct: two anchors falling on the
         // same nearest star (heavy defocus merging neighbours) count once.
         var picked = new List<DetectedStar>(_anchors.Count);

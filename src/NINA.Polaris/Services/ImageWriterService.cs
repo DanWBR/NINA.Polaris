@@ -46,7 +46,7 @@ namespace NINA.Polaris.Services;
 ///         aux/{session}/...                      ← second camera, same object
 ///         stacked/{session}/...                  ← user-requested integrations
 ///         planetary/...                          ← SER clips + their stacks
-///       calibration/                             ← rig-level, reusable across sessions
+///       calibration/{camera}/                    ← per sensor, reusable across sessions
 ///         dark/{exposure}s_g{gain}/dark_*.fits
 ///         bias/g{gain}/bias_*.fits
 ///         darkflat/{exposure}s_g{gain}/darkflat_*.fits
@@ -68,10 +68,22 @@ namespace NINA.Polaris.Services;
 ///     with a noon-to-noon rollover so the date in the folder name is
 ///     the date the night *started*, matching how astronomers describe
 ///     observation runs.
-///   - **Calibration stays per-rig (not per-session)** so masters can be
-///     reused across nights, typical PixInsight workflow. Raw cal
+///   - **Calibration is per-rig and per-camera, never per-session**, so
+///     masters can be reused across nights but never across sensors. Raw cal
 ///     frames accumulate in the same bucket regardless of which night
 ///     they were shot, then STUDIO ST-3 integrates them into masters.
+///
+/// The order of the first levels is a setting, <c>ImageFolderLayout</c>:
+///
+///   target-first        {rig}/{target}/lights/{yyyy-MM-dd}  (the shape above)
+///   night-first         {rig}/{yyyyMMdd}/{target}/lights     (a night at a time)
+///   night-first-dashed  {rig}/{yyyy-MM-dd}/{target}/lights
+///
+/// It moves lights, aux and stacked together, so a night stays one folder
+/// whichever way round it is. Calibration is not affected: it stays rig-level
+/// so masters outlive the night. Changing it does not move anything already
+/// written; both shapes are indexed, since the library reads FITS headers
+/// rather than path segments.
 ///
 /// The sub-path is derived from IMAGETYP. The filename pattern still
 /// controls just the leaf name. Pre-existing flat layouts keep being
@@ -90,7 +102,7 @@ public class ImageWriterService {
     public int SessionFrameCount => _sessionFrameNumber;
 
     /// <summary>Raised with the absolute path right after a frame is written to
-    /// disk. The single post-save choke point — every SaveImage call site
+    /// disk. The single post-save choke point, every SaveImage call site
     /// (sequence, live stack, flat wizard, ADV sequencer) funnels through here.
     /// Used by <see cref="StoragePushService"/> to auto-push to network storage.
     /// Handlers must be fast + non-throwing; the invocation is wrapped so a
@@ -118,7 +130,7 @@ public class ImageWriterService {
 
     /// <summary>True when an image output directory is configured. When false,
     /// <see cref="SaveImage"/> silently no-ops, so callers (e.g. the live stack)
-    /// can surface a "frames not being saved — set an output folder" warning
+    /// can surface a "frames not being saved, set an output folder" warning
     /// instead of dropping frames quietly.</summary>
     public bool HasOutputDir =>
         !string.IsNullOrWhiteSpace(_profile.Active.ImageOutputDir);
@@ -136,7 +148,7 @@ public class ImageWriterService {
         var profile = _profile.Active;
         var dir = profile.ImageOutputDir;
         if (string.IsNullOrWhiteSpace(dir)) {
-            _logger.LogWarning("ImageWriter: no output folder configured — frame NOT saved. " +
+            _logger.LogWarning("ImageWriter: no output folder configured, frame NOT saved. " +
                 "Set an image output folder in the FILES tab to keep individual frames.");
             return null;
         }
@@ -147,7 +159,7 @@ public class ImageWriterService {
             // When the caller didn't supply a meaningful target name (LIVE
             // "(unnamed)", a blank AUTORUN target, etc.), auto-resolve the
             // most important catalog object in the camera FOV at the current
-            // pointing — preferring the last successful plate solve — so the
+            // pointing, preferring the last successful plate solve, so the
             // saved-frame folder gets a real name instead of "Unknown".
             // Only for science frames (lights/snaps); calibration frames are
             // foldered by exposure/filter and have no sky target.
@@ -176,7 +188,7 @@ public class ImageWriterService {
                 : (format switch { "xisf" => ".xisf", _ => ".fits" });
 
             var pattern = string.IsNullOrWhiteSpace(profile.ImageNamePattern)
-                ? "{target}_{filter}_{exposure}s_g{gain}_{temp}C_{datetime}_{seq}"
+                ? "{target}_{camera}_{filter}_{exposure}s_g{gain}_{temp}C_{datetime}_{seq}"
                 : profile.ImageNamePattern;
             var fileName = SubstitutePattern(pattern, imageData, _sessionFrameNumber) + extension;
             // Sanitise illegal filename characters
@@ -197,7 +209,8 @@ public class ImageWriterService {
             // ({rig}/{target}/stacked/{session}) so the integrated master sits
             // beside that target's subs without being mixed in with them.
             var subDir = stacked
-                ? BuildStackedSubDir(imageData, rigName, sessionDate, stackedFolderName)
+                ? BuildStackedSubDir(imageData, rigName, sessionDate, stackedFolderName,
+                                     profile.ImageFolderLayout)
                 : BuildSubDir(imageType, imageData, profile, rigName, sessionDate);
             var targetDir = string.IsNullOrEmpty(subDir) ? dir : Path.Combine(dir, subDir);
             Directory.CreateDirectory(targetDir);
@@ -288,6 +301,19 @@ public class ImageWriterService {
     /// operator never filled in).</summary>
     internal static int LargerSensorSide(int a, int b) => Math.Max(a > 0 ? a : 0, b > 0 ? b : 0);
 
+    /// <summary>Last-resort FITS OFFSET for a backend that did not stamp the
+    /// frame itself: what the camera reports it is running at. 0 means "write
+    /// no card".
+    ///
+    /// Deliberately NOT the rig's configured offset. The rig records what a
+    /// panel asked for, which is a different thing from what the sensor ran
+    /// at: with the panel's field at 0 nothing was asked for at all, and on a
+    /// camera whose driver exposes no offset control the request never went
+    /// anywhere. Stamping the request is how a frame taken at 300 came to be
+    /// labelled 50 (issue #26).</summary>
+    internal static int ResolveHeaderOffset(int? driverOffset)
+        => driverOffset is > 0 ? driverOffset.Value : 0;
+
     /// <summary>True when the delivered frame is smaller than the sensor read.
     /// A zero or negative sensor size means the driver has not published its
     /// geometry, which is not evidence of a crop.</summary>
@@ -317,7 +343,7 @@ public class ImageWriterService {
     /// Resolve a meaningful target name for a science frame about to be saved.
     /// If the caller already supplied a real name it's kept; otherwise the most
     /// important catalog object inside the camera FOV at the current pointing is
-    /// used — preferring a recent successful plate solve over the mount's
+    /// used, preferring a recent successful plate solve over the mount's
     /// open-loop coordinates. Keeps capture folders named (e.g. "M_42") instead
     /// of "Unknown". Returns the original value when nothing can be resolved.
     /// </summary>
@@ -326,7 +352,7 @@ public class ImageWriterService {
 
         var trimmed = (targetName ?? "").Trim();
         if (!string.IsNullOrEmpty(trimmed) && !PlaceholderTargetNames.Contains(trimmed))
-            return trimmed;   // caller gave a real name — respect it
+            return trimmed;   // caller gave a real name, respect it
 
         // Only science frames carry a sky target; calibration frames are
         // foldered by exposure/filter and have no object.
@@ -404,7 +430,7 @@ public class ImageWriterService {
     /// <summary>Fill <see cref="ImageMetaData.Guiding"/> from the guide steps
     /// recorded inside this frame's exposure window. No-ops when the frame
     /// already carries stats, when no guider is attached, or when the exposure
-    /// time is unknown — the header then simply omits the guiding keys rather
+    /// time is unknown, the header then simply omits the guiding keys rather
     /// than claiming a zero RMS, which would read as perfect tracking.</summary>
     private void StampGuiding(ImageMetaData m) {
         if (m.Guiding.SampleCount > 0) return;
@@ -448,21 +474,30 @@ public class ImageWriterService {
         // metadata, so without reading the connected camera those frames
         // ended up with no GAIN header. (FITSWriter only emits GAIN when
         // it's non-zero, so a genuine 0-gain capture still omits it.)
+        //
+        // A camera that works in ISO is the exception: it has no analogue gain,
+        // so the caller's gain argument there is only the capture panel's
+        // gain field, which a DSLR never used, and it went into every frame as
+        // GAIN=100. Its frames get the camera's own reported gain (the vendor
+        // SDK drivers report ISO there) and an ISOSPEED card instead.
+        var isoCam = _equip.Camera is { IsConnected: true } icam && icam.Capabilities.SupportsIso
+            ? icam : null;
         if (m.Camera.Gain == 0) {
-            if (gain > 0) m.Camera.Gain = gain;
+            if (gain > 0 && isoCam == null) m.Camera.Gain = gain;
             else if (_equip.Camera is { IsConnected: true } gcam && gcam.Gain > 0)
                 m.Camera.Gain = gcam.Gain;
         }
-        // Camera offset, the same gap class as gain: not every driver stamps
-        // OFFSET into the per-frame metadata (and ICamera exposes no live
-        // Offset to read back the way Gain can be), so several save paths
-        // dropped it entirely and the FITS carried no OFFSET card. Fill from
-        // the rig's configured DefaultOffset, which is what actually got
-        // applied at capture. FITSWriter only emits OFFSET when non-zero,
+        // ISO: the capture stamps the value its driver reported; this fills a
+        // frame from a path that stamps nothing, from the connected camera.
+        if (m.Camera.Iso == 0 && isoCam != null && isoCam.SelectedIso > 0)
+            m.Camera.Iso = isoCam.SelectedIso;
+        // Camera offset. The capture paths stamp this themselves, from the
+        // settings they actually applied; this is only the gap-filler for a
+        // backend that stamps nothing. FITSWriter emits OFFSET when non-zero,
         // matching the GAIN behaviour.
         if (m.Camera.Offset == 0) {
-            var rigOffset = _profile.ActiveEquipmentProfile?.DefaultOffset ?? 0;
-            if (rigOffset > 0) m.Camera.Offset = rigOffset;
+            m.Camera.Offset = ResolveHeaderOffset(
+                _equip.Camera is { IsConnected: true } ocam ? ocam.DriverOffset : null);
         }
 
         // How the mount tracked DURING this exposure, so the night's subs can
@@ -479,14 +514,14 @@ public class ImageWriterService {
                 && _equip.Camera is { IsConnected: true } ncam)
             m.Camera.Name = ncam.DeviceName;
 
-        // Bayer pattern, same gap class — this is the fix for OSC frames
+        // Bayer pattern, same gap class, this is the fix for OSC frames
         // that occasionally save WITHOUT a BAYERPAT card and reopen as
         // "mono" (raw mosaic shown in the editor). Two distinct holes
         // funnel through this one chokepoint:
         //   (1) The ASI native SDK adapter only stamps
         //       Properties.BayerPattern, never MetaData.Camera.BayerPattern,
         //       yet both FITSWriter and XISFWriter emit BAYERPAT from the
-        //       MetaData side — so ASI OSC saves never carried the card.
+        //       MetaData side, so ASI OSC saves never carried the card.
         //   (2) INDI OSC drivers advertise the CFA via the CCD_CFA property
         //       (read live per frame); when that property is momentarily
         //       absent (right after a reconnect / driver re-publish) a frame
@@ -643,14 +678,27 @@ public class ImageWriterService {
         var gain     = m.Camera.Gain;
         var exposure = m.Exposure.ExposureTime;
 
+        var layout = ParseFolderLayout(profile?.ImageFolderLayout);
+        var target = SanitizeFolder(string.IsNullOrEmpty(m.Target.Name) ? "Unknown" : m.Target.Name);
+
+        // Calibration is grouped by CAMERA first: a dark is a property of the
+        // sensor that took it, and a rig can carry more than one (the imager,
+        // the aux camera, and several on a multi-imager rig). Without this
+        // level two cameras on one rig at the same exposure and gain drop
+        // their darks into the same folder, and the only thing telling them
+        // apart is a header. The camera is part of the MATCH now as well;
+        // this level is so a human can find the right masters in a library.
+        var camera = SanitizeFolder(string.IsNullOrWhiteSpace(m.Camera.Name) ? "Unknown" : m.Camera.Name);
+        var cal = Path.Combine("calibration", camera);
+
         var subPath = typeUpper switch {
-            "DARK"      => Path.Combine("calibration", "dark",
+            "DARK"      => Path.Combine(cal, "dark",
                             FormattableString.Invariant($"{exposure:0.##}s_g{gain}")),
-            "BIAS"      => Path.Combine("calibration", "bias",
+            "BIAS"      => Path.Combine(cal, "bias",
                             FormattableString.Invariant($"g{gain}")),
-            "DARKFLAT"  => Path.Combine("calibration", "darkflat",
+            "DARKFLAT"  => Path.Combine(cal, "darkflat",
                             FormattableString.Invariant($"{exposure:0.##}s_g{gain}")),
-            "FLAT"      => Path.Combine("calibration", "flat",
+            "FLAT"      => Path.Combine(cal, "flat",
                             FormattableString.Invariant($"{filter}_g{gain}")),
             // PREVIEW-tab snaps live in their own tree so they don't
             // mix with the science lights from a sequence. Folder is
@@ -663,16 +711,8 @@ public class ImageWriterService {
             // Auxiliary (second) camera frames sit beside the main camera's
             // lights under the same target, in their own aux/ folder so the
             // two never mix.
-            "AUX"       => Path.Combine(
-                            SanitizeFolder(string.IsNullOrEmpty(m.Target.Name) ? "Unknown" : m.Target.Name),
-                            "aux",
-                            sessionDate.ToString("yyyy-MM-dd",
-                                System.Globalization.CultureInfo.InvariantCulture)),
-            _           => Path.Combine(
-                            SanitizeFolder(string.IsNullOrEmpty(m.Target.Name) ? "Unknown" : m.Target.Name),
-                            "lights",
-                            sessionDate.ToString("yyyy-MM-dd",
-                                System.Globalization.CultureInfo.InvariantCulture))
+            "AUX"       => TargetKindPath(layout, target, "aux", sessionDate),
+            _           => TargetKindPath(layout, target, "lights", sessionDate)
         };
         return Path.Combine(rig, subPath);
     }
@@ -702,13 +742,55 @@ public class ImageWriterService {
     /// integrated result is where its subs are, without being mixed in with
     /// them. No filter level, for the same reason lights have none: the
     /// filename and the header both carry it.</summary>
-    public static string BuildStackedSubDir(IImageData img, string rigName, DateTime sessionDate, string folderName = "stacked") {
+    public static string BuildStackedSubDir(IImageData img, string rigName, DateTime sessionDate,
+                                            string folderName = "stacked", string? folderLayout = null) {
         var m = img.MetaData;
         var rig    = SanitizeFolder(string.IsNullOrEmpty(rigName) ? "Default" : rigName);
         var target = SanitizeFolder(string.IsNullOrEmpty(m.Target.Name) ? "Unknown" : m.Target.Name);
         var folder = SanitizeFolder(string.IsNullOrEmpty(folderName) ? "stacked" : folderName);
-        return Path.Combine(rig, target, folder,
-            sessionDate.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
+        return Path.Combine(rig, TargetKindPath(ParseFolderLayout(folderLayout), target, folder, sessionDate));
+    }
+
+    /// <summary>The three folder layouts the capture root can use.</summary>
+    public enum FolderLayout {
+        /// <summary>{target}/{kind}/{yyyy-MM-dd}: everything ever shot on one
+        /// object under one folder. The original, and still the default. Its
+        /// date format does not change, or an existing install would start
+        /// writing beside its own folders instead of into them.</summary>
+        TargetFirst,
+        /// <summary>{yyyyMMdd}/{target}/{kind}: a night at a time, the way an
+        /// ASIAIR card reads, with the compact date that sorts by itself in
+        /// any file manager.</summary>
+        NightFirst,
+        /// <summary>{yyyy-MM-dd}/{target}/{kind}: the same, with the dashes.</summary>
+        NightFirstDashed
+    }
+
+    public static FolderLayout ParseFolderLayout(string? value) => (value ?? "").Trim().ToLowerInvariant() switch {
+        "night-first"        => FolderLayout.NightFirst,
+        "night-first-dashed" => FolderLayout.NightFirstDashed,
+        // The dashed shape was called -iso while this was being built. Nothing
+        // shipped with it, but a profile written in between still reads.
+        "night-first-iso"    => FolderLayout.NightFirstDashed,
+        _                    => FolderLayout.TargetFirst
+    };
+
+    /// <summary>
+    /// The part of the path below the rig for frames that belong to a target
+    /// on a night: lights, aux and stacked. Calibration does not come through
+    /// here, it is rig-level by design so masters outlive the night.
+    ///
+    /// <para>The night folder is the astronomical night (noon rollover), not
+    /// the calendar day, so frames taken either side of midnight stay in one
+    /// folder. That is the whole point of putting the date in the path.</para>
+    /// </summary>
+    public static string TargetKindPath(FolderLayout layout, string target, string kind, DateTime sessionDate) {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        return layout switch {
+            FolderLayout.NightFirst       => Path.Combine(sessionDate.ToString("yyyyMMdd", inv), target, kind),
+            FolderLayout.NightFirstDashed => Path.Combine(sessionDate.ToString("yyyy-MM-dd", inv), target, kind),
+            _                             => Path.Combine(target, kind, sessionDate.ToString("yyyy-MM-dd", inv))
+        };
     }
 
     /// <summary>

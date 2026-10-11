@@ -119,7 +119,7 @@ public class FileBrowserService {
     /// Resolve the effective Studio root. Returns <paramref name="configured"/>
     /// (the profile's ImageOutputDir) when it points at an existing directory;
     /// otherwise falls back to the user's home directory, and as a last resort
-    /// the first available platform root. Never throws — callers use this so a
+    /// the first available platform root. Never throws, callers use this so a
     /// stale / deleted Studio root doesn't error the FILES + STUDIO tabs.
     /// </summary>
     public string ResolveStudioRoot(string? configured) {
@@ -344,7 +344,7 @@ public class FileBrowserService {
     /// counts FITS files only. Non-FITS files are skipped. Names are
     /// sanitised via <see cref="SanitiseSegment"/> (which also blocks path
     /// separators, so a template can never escape the file's folder); on a
-    /// collision — within this batch or against a file already on disk — a
+    /// collision, within this batch or against a file already on disk, a
     /// numeric <c>_1</c>, <c>_2</c>… suffix is appended.</summary>
     public async Task<BatchRenameResult> BatchRenameAsync(IReadOnlyList<string> paths,
             string template, bool dryRun, CancellationToken ct) {
@@ -525,13 +525,35 @@ public class FileBrowserService {
         if (string.IsNullOrWhiteSpace(userPath))
             throw new ArgumentException("Empty path", nameof(userPath));
         // Path.GetFullPath collapses .. segments and normalises
-        // separators. We work on the canonical form everywhere.
+        // separators. We validate the canonical target but keep the
+        // caller's requested path so relative roots continue to work.
         var full = Path.GetFullPath(userPath);
         if (mustExist && !File.Exists(full) && !Directory.Exists(full))
             throw new FileNotFoundException(full);
-        if (IsBlocked(full))
+        if (IsBlocked(ResolveExistingPath(full)))
             throw new UnauthorizedAccessException($"Path is blocked: {full}");
         return full;
+    }
+
+    private static string ResolveExistingPath(string fullPath) {
+        var current = Path.GetPathRoot(fullPath)
+                      ?? throw new ArgumentException("Path has no root", nameof(fullPath));
+        var components = fullPath[current.Length..]
+            .Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+                StringSplitOptions.RemoveEmptyEntries);
+
+        foreach (var component in components) {
+            var candidate = Path.Combine(current, component);
+            if (File.Exists(candidate) || Directory.Exists(candidate)) {
+                FileSystemInfo info = Directory.Exists(candidate)
+                    ? new DirectoryInfo(candidate)
+                    : new FileInfo(candidate);
+                current = info.ResolveLinkTarget(returnFinalTarget: true)?.FullName ?? candidate;
+            } else {
+                current = candidate;
+            }
+        }
+        return current;
     }
 
     private string ResolveSafeDestination(string userPath) {
@@ -540,7 +562,7 @@ public class FileBrowserService {
         if (string.IsNullOrWhiteSpace(userPath))
             throw new ArgumentException("Empty destination", nameof(userPath));
         var full = Path.GetFullPath(userPath);
-        if (IsBlocked(full))
+        if (IsBlocked(ResolveExistingPath(full)))
             throw new UnauthorizedAccessException($"Destination is blocked: {full}");
         return full;
     }

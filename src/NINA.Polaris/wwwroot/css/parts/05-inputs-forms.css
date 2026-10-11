@@ -300,7 +300,7 @@ body.link-offline .preview-pane::after {
        the empty state collapses to its natural height instead of
        stretching to fill the autorun list column. The chip bar
        sits above it; cramping vertical space here gives the user
-       a tight "no sequence yet — click + Add" line instead of a
+       a tight "no sequence yet, click + Add" line instead of a
        450 px void. */
     flex: 0 0 auto;
     display: block;
@@ -369,7 +369,7 @@ body.link-offline .preview-pane::after {
 }
 .autorun-option-chip .chip-dot-on { background: var(--success); }
 
-/* Header strip inside an expanded option-panel body — same row
+/* Header strip inside an expanded option-panel body, same row
    that used to live in the chip's pre-refactor accordion header
    (enable toggle + status counters). */
 .autorun-option-body-head {
@@ -678,6 +678,14 @@ body.link-offline .preview-pane::after {
     width: 80px;
 }
 
+.seq-input-filter {
+    /* A select sizes itself to its widest option, and with short filter names
+       that is "(current)", leaving barely a character of room beside the
+       caret. A floor, not a width: a long name like "Luminance" still grows
+       the box. */
+    min-width: 112px;
+}
+
 .seq-item-params {
     display: flex;
     gap: 8px;
@@ -803,6 +811,56 @@ body.link-offline .preview-pane::after {
     border-bottom: 1px solid var(--border);
     background: var(--bg-secondary);
 }
+
+/* Recent searches under the SKY search box. Same block position and
+   background as .sky-results so the two read as one surface; they are never
+   on screen together. */
+.sky-recent {
+    max-height: 240px;
+    overflow-y: auto;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-secondary);
+    padding: 6px 0;
+}
+
+.sky-recent-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 4px 14px 6px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+}
+
+.sky-recent-clear {
+    background: none;
+    border: none;
+    padding: 2px 4px;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.sky-recent-clear:hover { color: var(--text-primary); }
+
+.sky-recent-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.sky-recent-item:hover { background: var(--bg-hover, rgba(255, 255, 255, 0.06)); }
+
+.sky-recent-icon { color: var(--text-muted); }
 
 .sky-result-item {
     display: flex;
@@ -1248,7 +1306,7 @@ body.link-offline .preview-pane::after {
 }
 
 /* Mount safety-stop banner (anti cable-wrap / guide circuit breaker trip).
-   Red, prominent, with a Dismiss button — shown in the Meridian Flip panel. */
+   Red, prominent, with a Dismiss button, shown in the Meridian Flip panel. */
 .safety-banner {
     display: flex;
     align-items: center;
@@ -1378,8 +1436,8 @@ body.link-offline .preview-pane::after {
 }
 /* GUIDE side-panel groups (e.g. the Dithering section) pair a short
    uppercase caption with a value field on one line. Keep the caption
-   on a single line — "SETTLE PX" / "TIMEOUT S" were wrapping to two
-   rows (field report) — and let the input take the remaining width. */
+   on a single line, "SETTLE PX" / "TIMEOUT S" were wrapping to two
+   rows (field report), and let the input take the remaining width. */
 .guide-group .equip-driver-label {
     white-space: nowrap;
     flex: 0 0 auto;
@@ -1413,13 +1471,20 @@ body.link-offline .preview-pane::after {
     color: #ffd0a0;
     text-decoration: underline;
 }
+/* A camera that fell off the bus is not the same class of news as a missing
+   SDK: one is something to install, the other is a cable to go and check. */
+.equip-install-banner.cam-link-lost {
+    background: rgba(239, 68, 68, 0.12);
+    border-color: rgba(239, 68, 68, 0.45);
+    color: #ff9a9a;
+}
 
 .equip-select {
     flex: 1;
     min-width: 0;
     /* Match the .input-sm geometry used by the Main Telescope card
        (Brand / Model / Accessory dropdowns). Previously this was
-       5px / 12px-font / no min-height — produced visibly shorter
+       5px / 12px-font / no min-height, produced visibly shorter
        selects in Camera / Mount / Focuser / FilterWheel / Rotator /
        Flat Panel / Dome / Weather cards than in Telescope, which
        broke the uniform row rhythm. Now everything in RIGS uses
@@ -2024,7 +2089,7 @@ body.link-offline .preview-pane::after {
 }
 .editor-controls-header .btn {
     /* Content-sized; the row wraps when it runs out of room. The old
-       `flex: 1` made each button equal-width — fine for 2 buttons,
+       `flex: 1` made each button equal-width, fine for 2 buttons,
        broke entirely past 4. */
     flex: 0 0 auto;
 }
@@ -2379,3 +2444,45 @@ body.link-offline .preview-pane::after {
     flex: 1 1 260px;
     min-width: 0;
 }
+
+/* Filename-pattern token chips (Settings -> Image Output). A chip carries the
+   token and, under it, what that token looked like on a real frame, so the
+   list explains itself without a second paragraph to read. */
+.token-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-width: 720px;
+}
+.token-chip {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    padding: 4px 8px;
+    background: var(--bg-input, rgba(255, 255, 255, 0.04));
+    border: 1px solid var(--border, #2a3142);
+    border-radius: 6px;
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.12s, background 0.12s;
+}
+.token-chip:hover { border-color: var(--accent); background: rgba(255, 255, 255, 0.07); }
+.token-chip:active { transform: translateY(1px); }
+.token-chip code { font-size: 11.5px; color: var(--text); background: none; padding: 0; }
+.token-chip .token-sample {
+    font-size: 10px;
+    color: var(--text-muted, #8b94a8);
+    font-variant-numeric: tabular-nums;
+}
+
+/* The worked example under the filename pattern. Wraps on a narrow column and
+   breaks on the path separators rather than mid-token. */
+.path-example {
+    display: inline-block;
+    margin-top: 2px;
+    line-height: 1.5;
+    word-break: break-word;
+    color: var(--text);
+}
+

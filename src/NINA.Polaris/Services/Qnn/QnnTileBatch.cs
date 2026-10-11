@@ -22,18 +22,18 @@ namespace NINA.Polaris.Services.Qnn;
 /// Unlike the Rockchip path (a flat C ABI we P/Invoke per tile), the QAIRT/QNN
 /// API is an interface-provider table that's painful to marshal, so we drive
 /// the validated <c>qnn-net-run</c> tool over a batched <c>--input_list</c>
-/// (one process per IMAGE, not per tile) — exactly the path proven on the Q6A.
+/// (one process per IMAGE, not per tile), exactly the path proven on the Q6A.
 ///
 /// The whole GraXpert tiling/normalization/artifact-correction math is the
 /// canonical <see cref="RknnPipelines"/>, which is built around a per-tile
 /// <see cref="IRknnTileRunner"/>. To reuse it unchanged we don't rewrite it for
 /// batching; instead we run it TWICE with cheap CPU-only runners:
 /// <list type="number">
-/// <item><see cref="RecordingTileRunner"/> — pass 1 captures the ordered input
+/// <item><see cref="RecordingTileRunner"/>, pass 1 captures the ordered input
 /// tensors (returns zeros; that pass's output is discarded).</item>
-/// <item><see cref="IQnnTileBatch.RunBatch"/> — the captured tensors run on the
+/// <item><see cref="IQnnTileBatch.RunBatch"/>, the captured tensors run on the
 /// NPU in one go.</item>
-/// <item><see cref="ReplayingTileRunner"/> — pass 2 feeds the captured outputs
+/// <item><see cref="ReplayingTileRunner"/>, pass 2 feeds the captured outputs
 /// back in the same order, producing the real result.</item>
 /// </list>
 /// The pipeline is deterministic and a tile's input never depends on a prior
@@ -137,7 +137,7 @@ public sealed class QnnNetRunBatch : IQnnTileBatch {
             }
 
             // Backend-extensions config enabling unsigned PD on the V68 HTP
-            // (the cDSP rejects unsigned images otherwise — see QNN-0 notes).
+            // (the cDSP rejects unsigned images otherwise, see QNN-0 notes).
             var htpCfg = Path.Combine(work.FullName, "htp.json");
             File.WriteAllText(htpCfg, "{ \"devices\": [ { \"dsp_arch\": \"v68\", \"pd_session\": \"unsigned\" } ] }");
             var beCfg = Path.Combine(work.FullName, "backend_ext.json");
@@ -270,8 +270,8 @@ public sealed class DeconReplayingTileRunner : IRknnDeconTileRunner {
 }
 
 /// <summary>Real decon batch executor. Like <see cref="QnnNetRunBatch"/> but every
-/// <c>--input_list</c> line carries TWO inputs in graph order — the image tile then
-/// the shared params raw — matching the model's <c>[gen_input_image, params]</c>
+/// <c>--input_list</c> line carries TWO inputs in graph order, the image tile then
+/// the shared params raw, matching the model's <c>[gen_input_image, params]</c>
 /// input order. Device-validated on the Q6A only (Windows tests inject a fake).</summary>
 public sealed class QnnDeconNetRunBatch : IQnnDeconBatch {
     private readonly string _contextBin;

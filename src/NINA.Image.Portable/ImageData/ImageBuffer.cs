@@ -102,7 +102,7 @@ public class ImageBuffer : IImageBuffer {
     /// ArrayPool&lt;byte&gt;.Shared</b>.
     ///
     /// <para>MEMOPT: the scratch buffers were already pooled (PERF #365), but the
-    /// result was still a fresh exactly-sized array — ~20 MB on a full-frame OSC,
+    /// result was still a fresh exactly-sized array, ~20 MB on a full-frame OSC,
     /// allocated on the Large Object Heap and thrown away every single frame. That
     /// churn is what fragments the LOH on a small-RAM SBC (a heap dump showed
     /// 517 MB live against 1133 MB RSS). Now that the relay sends the header and
@@ -146,10 +146,10 @@ public class ImageBuffer : IImageBuffer {
     ///   off 12  int BayerPattern (enum int)
     ///   off 16  int Uncompressed pixel bytes
     ///   off 20  int FrameKind (0 = stackable LIVE frame, 1 = PREVIEW
-    ///                          / one-off snap — client must skip the
+    ///                          / one-off snap, client must skip the
     ///                          WASM stacker for these)
     ///   off 24  int Calibration (0 = light/unknown, 1 = calibration frame
-    ///                          BIAS/DARK/FLAT — client must NOT apply the
+    ///                          BIAS/DARK/FLAT, client must NOT apply the
     ///                          OSC per-channel sky-neutralising stretch, or
     ///                          a flat noise frame gets a false colour cast)
     ///   off 28  int Channels (1 = mono / Bayer mosaic, 3 = plane-sequential
@@ -161,7 +161,7 @@ public class ImageBuffer : IImageBuffer {
     ///                          3 planes to a client that asked for them.)
     /// The header length is sent as a uint32 BEFORE this blob (in the
     /// relay envelope), so the client can extend / shrink the layout
-    /// in future without breaking older builds — old clients that read
+    /// in future without breaking older builds, old clients that read
     /// fixed offsets 0..16 keep working as long as the prefix layout
     /// is preserved.
     /// </summary>
@@ -179,13 +179,13 @@ public class ImageBuffer : IImageBuffer {
         return ms.ToArray();
     }
 
-    /// <summary>Encode this buffer as a JPEG. ALWAYS GREYSCALE — an ImageBuffer
+    /// <summary>Encode this buffer as a JPEG. ALWAYS GREYSCALE, an ImageBuffer
     /// holds a single plane, so there is nothing here to make colour from.
     ///
     /// Read that literally before using this as a "give me a preview of the
     /// current frame" helper. If the source was a colour (3-plane) stack, this
     /// silently returns a B&W rendering of plane 0: no error, no warning, just the
-    /// wrong picture. That cost a long-lived field bug — the LIVE colour stack was
+    /// wrong picture. That cost a long-lived field bug, the LIVE colour stack was
     /// relayed correctly over the WS and then painted over by a greyscale
     /// /api/livestack/preview that landed here (see ImageRelayService
     /// .RelayRgbJpegAsync, which now caches its own RGB JPEG instead of forcing a

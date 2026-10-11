@@ -343,4 +343,76 @@ public class NetworkManagerServiceTests {
         Assert.That(NetworkManagerService.ValidateSsidPsk(
             NetworkManagerService.SuffixedSsid("Polaris-Hotspot", "dc:a6:32:1b:3f:2a"), "polaris1234"), Is.Null);
     }
+
+    // ----- wired preference: WiFi off while the cable is in -----
+
+    [Test]
+    public void ParseConnectedWiredInterface_PicksTheConnectedEthernetDevice() {
+        var stdout = "lo:loopback:connected (externally)\n"
+                   + "wlan0:wifi:connected\n"
+                   + "enP4p65s0:ethernet:connected\n";
+        Assert.That(NetworkManagerService.ParseConnectedWiredInterface(stdout),
+            Is.EqualTo("enP4p65s0"));
+    }
+
+    /// <summary>A cable that is plugged in but has not finished coming up is
+    /// not a path to anywhere yet, so it must not trigger the radio park.</summary>
+    [TestCase("eth0:ethernet:connecting (getting IP configuration)")]
+    [TestCase("eth0:ethernet:unavailable")]
+    [TestCase("eth0:ethernet:disconnected")]
+    [TestCase("wlan0:wifi:connected")]
+    [TestCase("")]
+    public void ParseConnectedWiredInterface_IgnoresAnythingNotAConnectedEthernet(string stdout) {
+        Assert.That(NetworkManagerService.ParseConnectedWiredInterface(stdout), Is.Null);
+    }
+
+    [TestCase("disabled\n", true)]
+    [TestCase("enabled\n", false)]
+    [TestCase("", false)]
+    [TestCase("Error: unknown\n", false)]
+    public void ParseRadioDisabled_OnlyAnExplicitDisabledCounts(string stdout, bool off) {
+        // A parse miss must read as "radio is on": reporting a live radio as
+        // off would have the watchdog switching on an already-on radio every
+        // tick, and worse, silence the hotspot fallback.
+        Assert.That(NetworkManagerService.ParseRadioDisabled(stdout), Is.EqualTo(off));
+    }
+
+    [Test]
+    public void ShouldParkWifiForWired_OnlyAfterTheCableHeldAnAddressForTheGrace() {
+        var now = new DateTime(2026, 9, 20, 22, 0, 0, DateTimeKind.Utc);
+        var grace = TimeSpan.FromSeconds(20);
+        var never = DateTime.MinValue;
+
+        Assert.That(NetworkManagerService.ShouldParkWifiForWired(
+            true, false, true, now - TimeSpan.FromSeconds(21), now, grace, never), Is.True,
+            "cable held an address past the grace window");
+        Assert.That(NetworkManagerService.ShouldParkWifiForWired(
+            true, false, true, now - TimeSpan.FromSeconds(5), now, grace, never), Is.False,
+            "still inside the grace window");
+        Assert.That(NetworkManagerService.ShouldParkWifiForWired(
+            false, false, true, now - TimeSpan.FromSeconds(60), now, grace, never), Is.False,
+            "policy off: never touch the radio");
+        Assert.That(NetworkManagerService.ShouldParkWifiForWired(
+            true, true, true, now - TimeSpan.FromSeconds(60), now, grace, never), Is.False,
+            "already parked");
+        Assert.That(NetworkManagerService.ShouldParkWifiForWired(
+            true, false, false, null, now, grace, never), Is.False,
+            "no wired address: parking would strand the host");
+        Assert.That(NetworkManagerService.ShouldParkWifiForWired(
+            true, false, true, now - TimeSpan.FromSeconds(60), now, grace,
+            now + TimeSpan.FromSeconds(10)), Is.False,
+            "a manual switch is in flight");
+    }
+
+    [Test]
+    public void ShouldUnparkWifi_BringsTheRadioBackTheMomentTheCableStopsCarrying() {
+        Assert.That(NetworkManagerService.ShouldUnparkWifi(true, true, false), Is.True);
+        Assert.That(NetworkManagerService.ShouldUnparkWifi(true, true, true), Is.False,
+            "cable still carries an address");
+        Assert.That(NetworkManagerService.ShouldUnparkWifi(true, false, false), Is.False,
+            "radio is already on");
+        Assert.That(NetworkManagerService.ShouldUnparkWifi(false, true, false), Is.False,
+            "policy off: a radio the operator switched off is theirs, not ours");
+    }
+
 }

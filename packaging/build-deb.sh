@@ -197,6 +197,7 @@ chmod 0644 "$BUILD_DIR/lib/systemd/system/polaris-sshkeys.service" 2>/dev/null |
 chmod 0644 "$BUILD_DIR/lib/systemd/system/polaris-diagnostics.service" 2>/dev/null || true
 chmod 0644 "$BUILD_DIR/lib/systemd/system/polaris-solverdb.service" 2>/dev/null || true
 chmod 0644 "$BUILD_DIR/lib/systemd/system/polaris-storage-prep.service" 2>/dev/null || true
+chmod 0644 "$BUILD_DIR/lib/systemd/system/polaris-indiweb.service" 2>/dev/null || true
 chmod 0644 "$BUILD_DIR/opt/polaris/appsettings.json"
 chmod 0644 "$BUILD_DIR/usr/share/doc/polaris/README" \
            "$BUILD_DIR/usr/share/doc/polaris/copyright" \
@@ -209,6 +210,9 @@ if [ -f "$BUILD_DIR/opt/polaris/bin/polaris-wifi-bootstrap.sh" ]; then
 fi
 # Self-update helper script must be executable (root runs it from the
 # polaris-self-update.service oneshot unit).
+if [ -f "$BUILD_DIR/opt/polaris/bin/polaris-sdk-symlinks.sh" ]; then
+    chmod 0755 "$BUILD_DIR/opt/polaris/bin/polaris-sdk-symlinks.sh"
+fi
 if [ -f "$BUILD_DIR/opt/polaris/bin/polaris-self-update.sh" ]; then
     chmod 0755 "$BUILD_DIR/opt/polaris/bin/polaris-self-update.sh"
 fi
@@ -219,6 +223,14 @@ fi
 # SSH host key generation (polaris-sshkeys.service runs it before sshd).
 if [ -f "$BUILD_DIR/opt/polaris/bin/polaris-solverdb-install.sh" ]; then
     chmod 0755 "$BUILD_DIR/opt/polaris/bin/polaris-solverdb-install.sh"
+fi
+# INDI driver install (polaris-indi-install@.service runs it as root).
+if [ -f "$BUILD_DIR/opt/polaris/bin/polaris-indi-install.sh" ]; then
+    chmod 0755 "$BUILD_DIR/opt/polaris/bin/polaris-indi-install.sh"
+fi
+# USB re-enumeration (polaris-usb-reset.service runs it as root).
+if [ -f "$BUILD_DIR/opt/polaris/bin/polaris-usb-reset.sh" ]; then
+    chmod 0755 "$BUILD_DIR/opt/polaris/bin/polaris-usb-reset.sh"
 fi
 # Capture-storage setup (polaris-storage-prep.service runs it as root).
 if [ -f "$BUILD_DIR/opt/polaris/bin/polaris-storage-prep.sh" ]; then
@@ -234,6 +246,13 @@ fi
 # USB auto-mount helper (udev runs it via systemd-run on a plugged-in drive).
 if [ -f "$BUILD_DIR/opt/polaris/bin/polaris-usb-mount.sh" ]; then
     chmod 0755 "$BUILD_DIR/opt/polaris/bin/polaris-usb-mount.sh"
+fi
+# ExecStart of polaris-indiweb.service. The blanket `chmod 0644` over
+# opt/polaris above has already stripped the exec bit off it, so this is not
+# optional: without it the unit fails with code=exited/status=203 and indi-web
+# quietly reverts to being a child of polaris.service.
+if [ -f "$BUILD_DIR/opt/polaris/bin/polaris-indiweb.sh" ]; then
+    chmod 0755 "$BUILD_DIR/opt/polaris/bin/polaris-indiweb.sh"
 fi
 find "$BUILD_DIR/opt/polaris/bin" -type d -exec chmod 0755 {} \; 2>/dev/null || true
 # All polkit files 0644: the JS .rules/ (honoured by polkit >= 0.106) and

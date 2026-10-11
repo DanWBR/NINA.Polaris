@@ -50,7 +50,8 @@ public static class PolarAlignmentEndpoints {
                 SlewStepDegrees: request?.SlewStepDegrees ?? rig.PolarAlignSlewDegrees,
                 ExposureSeconds: request?.ExposureSeconds ?? rig.PolarAlignExposureSec,
                 SettleSeconds:   request?.SettleSeconds   ?? rig.PolarAlignSettleSeconds,
-                Gain:            request?.Gain            ?? rig.PolarAlignGain);
+                Gain:            request?.Gain            ?? rig.PolarAlignGain,
+                Camera:          request?.Camera          ?? rig.PolarAlignCamera);
             try {
                 var job = svc.StartJob(opts);
                 return Results.Ok(new {
@@ -92,7 +93,7 @@ public static class PolarAlignmentEndpoints {
 
         // ASIAIR-style manual refresh: ONE capture+solve+error update,
         // then back to Ok. The operator turns a knob, taps Refresh,
-        // reads the new error — no continuous loop in between.
+        // reads the new error, no continuous loop in between.
         group.MapPost("/refine/once", async (PolarAlignmentService svc, CancellationToken ct) => {
             try {
                 var ok = await svc.RefineOnceAsync(ct);
@@ -170,6 +171,7 @@ public static class PolarAlignmentEndpoints {
                     ? request.Gain : rig.PolarAlignGain,
                 SettleSeconds = request.SettleSeconds > 0
                     ? request.SettleSeconds : rig.PolarAlignSettleSeconds,
+                Camera = string.IsNullOrWhiteSpace(request.Camera) ? rig.PolarAlignCamera : request.Camera,
             };
             try {
                 var result = await svc.StartRudimentaryAsync(req, ctx.RequestAborted);
@@ -189,7 +191,7 @@ public static class PolarAlignmentEndpoints {
                 var result = await svc.RudimentaryReSolveAsync(ctx.RequestAborted);
                 return Results.Ok(result);
             } catch (InvalidOperationException ex) {
-                // No active session — UI should disable the button.
+                // No active session, UI should disable the button.
                 return Results.Conflict(new { error = ex.Message });
             }
         });
@@ -210,4 +212,5 @@ public record StartPolarRequest(
     int? SlewStepDegrees = null,
     double? ExposureSeconds = null,
     int? SettleSeconds = null,
-    int? Gain = null);
+    int? Gain = null,
+    string? Camera = null);

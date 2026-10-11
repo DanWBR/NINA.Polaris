@@ -127,6 +127,20 @@ The panel shows a banner with the reason:
   `/etc/NetworkManager/system-connections/` per the host's normal
   config.
 
+- **"<iface> is a wireless adapter, but NetworkManager has been told
+  not to manage it"** - the radio is there and NetworkManager will
+  not touch it, so every hotspot attempt fails with "no suitable
+  device" and the host reports itself as wired. On a clean Debian
+  install this is almost always a static stanza for the adapter in
+  `/etc/network/interfaces`, which hands it to ifupdown; NetworkManager
+  then steps aside by design. Hand it over for the current boot with
+  `sudo nmcli device set <iface> managed yes`, and to make that stick,
+  remove the stanza from `/etc/network/interfaces` and
+  `sudo systemctl restart NetworkManager`. Polaris names the interface
+  and prints both commands in the panel, and does not edit that file
+  itself: it is the operator's, and it can hold the configuration that
+  keeps the machine reachable.
+
 ## Under the hood
 
 Polaris drives `nmcli` via the `polaris` system user. The `.deb`

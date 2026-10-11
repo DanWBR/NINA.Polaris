@@ -73,7 +73,7 @@ public static class AutoStretch {
     /// hot/cold single pixels, then a gamma map between them
     /// (<c>((v-min)/(max-min))^gamma</c>). gamma=1.0 reproduces PHD2's default
     /// (linear). Unlike <see cref="ApplyGuide"/> this keeps the real sky
-    /// background visible instead of crushing it to black, and — like PHD2 —
+    /// background visible instead of crushing it to black, and, like PHD2,
     /// applies the LUT to the raw pixels, so the median filter only robustifies
     /// the levels, not the displayed image.
     /// </summary>
@@ -85,7 +85,7 @@ public static class AutoStretch {
             return ApplyGuide(data, width, height, bitDepth);   // too small for a 3x3 median
 
         // FiltMin/FiltMax = min/max of the 3x3 median-filtered image (interior
-        // pixels). Computed without materialising the filtered frame — we only
+        // pixels). Computed without materialising the filtered frame, we only
         // need the extremes. Parallel per-row reduction.
         int filtMin = 65535, filtMax = 0;
         object lk = new object();
@@ -138,7 +138,7 @@ public static class AutoStretch {
     /// <summary>
     /// Compute the guide-preview stretch (see <see cref="ApplyGuide"/>).
     /// <paramref name="blackSigma"/> is how far above the background median (in
-    /// MADs) the black point sits — higher crushes more noise to black.
+    /// MADs) the black point sits, higher crushes more noise to black.
     /// <paramref name="midtone"/> &lt; 0.5 lifts the surviving star signal a
     /// little so dim guide stars stay visible. A single serial pass is fine
     /// here: guide frames are small and this runs roughly once per exposure.
@@ -381,7 +381,7 @@ public static class AutoStretch {
         // observedMax is below 99% means the brightest pixel is
         // legitimate signal that hasn't hit the sensor's full-well,
         // and excluding those pixels would narrow the sample, raise
-        // the shadow point, and crush mid-tones to black —
+        // the shadow point, and crush mid-tones to black,
         // visually shrinking the visible content. The first version
         // of this fix used 0.9 which was too loose: a bright daytime
         // preview with the object peaking around 60000 (91.5%)
@@ -461,7 +461,7 @@ public static class AutoStretch {
         }
 
         // MAD over the SAME restricted sample (matching the
-        // satThreshold above — using topVal here would re-include
+        // satThreshold above, using topVal here would re-include
         // saturated pixels and pull MAD toward zero).
         var devHistogram = new int[65536];
         double median0 = median;

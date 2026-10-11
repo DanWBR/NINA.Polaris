@@ -117,7 +117,7 @@ public class PHD2Client : IGuider, IDisposable {
     /// before the guide camera was selected, the connect-time
     /// get_pixel_scale returned nothing and PixelScale stayed 0. GuideStep
     /// then converted error to arcsec with a 1.0 fallback, i.e. it showed
-    /// raw PIXELS while PHD2's own window shows arcsec — the two never
+    /// raw PIXELS while PHD2's own window shows arcsec, the two never
     /// matched. Call this when a step arrives without a known scale.
     /// Fire-and-forget only: it issues a JSON-RPC whose reply is read by the
     /// same receive loop, so awaiting it from a message handler would

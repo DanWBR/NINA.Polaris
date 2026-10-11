@@ -27,18 +27,39 @@ public class IndiFlatDevice : IDisposable {
 
     public int Brightness => (int)_client.GetNumber(DeviceName, "FLAT_LIGHT_INTENSITY", "FLAT_LIGHT_INTENSITY_VALUE");
 
+    /// <summary>The motorised cover's switch vector.
+    ///
+    /// INDI names it <c>CAP_PARK</c>, in <c>INDI::DustCapInterface</c>, with
+    /// elements PARK and UNPARK. Polaris asked for <c>DUSTCAP_PARK</c>, which
+    /// no driver publishes: opening and closing did nothing and the state on
+    /// screen was whatever the default was, which is how a Gemini flat panel
+    /// was reported from the field. <c>DUSTCAP_PARK</c> is kept as a fallback
+    /// in case some out of tree driver really uses it; the standard name wins.
+    ///
+    /// Resolved per call rather than cached, because the property arrives
+    /// asynchronously after connect and a cached null would stick.</summary>
+    private string? CoverProp =>
+        _client.GetProperty(DeviceName, "CAP_PARK") != null ? "CAP_PARK"
+        : _client.GetProperty(DeviceName, "DUSTCAP_PARK") != null ? "DUSTCAP_PARK"
+        : null;
+
+    /// <summary>True when the driver has a cover at all. A plain light panel
+    /// (no cap) has none, and the UI should not offer Open and Close.</summary>
+    public bool HasCover => CoverProp != null;
+
     public bool IsCoverOpen {
         get {
-            var prop = _client.GetProperty(DeviceName, "DUSTCAP_PARK");
-            if (prop == null) return false;
-            return _client.GetSwitch(DeviceName, "DUSTCAP_PARK", "UNPARK");
+            var name = CoverProp;
+            if (name == null) return false;
+            return _client.GetSwitch(DeviceName, name, "UNPARK");
         }
     }
 
     public bool IsCoverMoving {
         get {
-            var prop = _client.GetProperty(DeviceName, "DUSTCAP_PARK");
-            return prop?.State == IndiPropertyState.Busy;
+            var name = CoverProp;
+            if (name == null) return false;
+            return _client.GetProperty(DeviceName, name)?.State == IndiPropertyState.Busy;
         }
     }
 
@@ -66,12 +87,20 @@ public class IndiFlatDevice : IDisposable {
     }
 
     public async Task OpenCoverAsync(CancellationToken ct = default) {
-        await _client.SetSwitchAsync(DeviceName, "DUSTCAP_PARK",
+        var name = CoverProp
+            ?? throw new NotSupportedException(
+                $"INDI device {DeviceName} publishes no dust cover (CAP_PARK). "
+                + "A light panel without a cap cannot be opened or closed.");
+        await _client.SetSwitchAsync(DeviceName, name,
             new Dictionary<string, bool> { ["PARK"] = false, ["UNPARK"] = true }, ct);
     }
 
     public async Task CloseCoverAsync(CancellationToken ct = default) {
-        await _client.SetSwitchAsync(DeviceName, "DUSTCAP_PARK",
+        var name = CoverProp
+            ?? throw new NotSupportedException(
+                $"INDI device {DeviceName} publishes no dust cover (CAP_PARK). "
+                + "A light panel without a cap cannot be opened or closed.");
+        await _client.SetSwitchAsync(DeviceName, name,
             new Dictionary<string, bool> { ["PARK"] = true, ["UNPARK"] = false }, ct);
     }
 

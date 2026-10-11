@@ -23,6 +23,19 @@ public class SequenceItem {
     public string Name { get; set; } = "";
     public double Exposure { get; set; } = 1.0;
     public int Gain { get; set; } = 100;
+
+    /// <summary>
+    /// ISO for a camera that has one, which over INDI means a DSLR on
+    /// indi_gphoto publishing CCD_ISO. Null on every astronomy camera, and
+    /// null means "leave the camera where it is".
+    ///
+    /// <para>Separate from <see cref="Gain"/> on purpose. A DSLR has no
+    /// analogue-gain property for the gain write to land on, so it went
+    /// nowhere: an operator who read the card's "G" field as ISO and typed 400
+    /// got a silent no-op and a run at whatever ISO the camera happened to
+    /// hold.</para>
+    /// </summary>
+    public int? Iso { get; set; }
     public int Binning { get; set; } = 1;
     public int Count { get; set; } = 1;
     public string? Filter { get; set; }
@@ -97,6 +110,15 @@ public class SequenceStatus {
     public double ElapsedSeconds { get; set; }
     public double EstimatedRemainingSeconds { get; set; }
     public string? LastError { get; set; }
+    /// <summary>What the run is deliberately waiting on, when it is waiting on
+    /// something that is not a frame. Null the rest of the time. A hold with no
+    /// explanation looks exactly like a hang, and the one that matters here can
+    /// last a whole exposure (the meridian flip point).
+    ///
+    /// A whole English sentence, which the client translates as one key, the
+    /// way lastError is handled. Composing it on the client cannot be
+    /// translated: French needs a contraction and German an article.</summary>
+    public string? WaitingFor { get; set; }
     public int DithersIssued { get; set; }
     public int FramesSinceDither { get; set; }
     public DitherSettings? Dither { get; set; }
@@ -126,7 +148,7 @@ public class DitherSettings {
     /// <summary>Only dither in RA (useful for mounts with sloppy Dec backlash).</summary>
     public bool RaOnly { get; set; }
     /// <summary>Settle distance tolerance in pixels.</summary>
-    public double SettlePixels { get; set; } = 3.0;
+    public double SettlePixels { get; set; } = 1.5;
     /// <summary>Minimum settled time in seconds.</summary>
     public int SettleTime { get; set; } = 3;
     /// <summary>Hard timeout for settling, in seconds.</summary>

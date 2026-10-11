@@ -25,15 +25,15 @@ public sealed class NcnnException : Exception {
 /// <summary>
 /// One loaded ncnn model running on the Vulkan GPU. Implements the
 /// backend-agnostic <see cref="IRknnTileRunner"/> so it slots straight into the
-/// existing <c>RknnPipelines</c> tiling/normalization math — the GraXpert models
+/// existing <c>RknnPipelines</c> tiling/normalization math, the GraXpert models
 /// all take a <c>[1, 256, 256, 3]</c> NHWC fp32 tile and return the same shape.
 ///
 /// Layout note: the pnnx-converted graph keeps the model's NHWC layout
 /// (leading/trailing Permute). The input ncnn Mat is created as
 /// <c>(w=channels, h=tile, c=tile)</c> over the row-major <c>[H][W][C]</c> tile
-/// buffer — that memory ordering is identical, which is why no axis juggling is
+/// buffer, that memory ordering is identical, which is why no axis juggling is
 /// needed (verified against ONNX Runtime in the polaris-ai/ncnn spike). Output
-/// comes back the same way. fp16 (packed/storage/arithmetic) is on — the
+/// comes back the same way. fp16 (packed/storage/arithmetic) is on, the
 /// production mode on Adreno, ~2x over fp32 and numerically safe for BGE/denoise.
 /// </summary>
 public sealed class NcnnSession : IRknnTileRunner {

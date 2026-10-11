@@ -12,6 +12,11 @@ Catalogs ingested (CAT-1):
   1. OpenNGC     -- 13226 NGC/IC objects (also covers Messier + Caldwell
                     cross-IDs in the same file). CC-BY-SA-4.0.
                     https://github.com/mattiaverga/OpenNGC
+  1b. OpenNGC addendum -- the 64 objects that have no NGC or IC number
+                    at all, which is where the famous ones hide: the
+                    Pleiades, the Hyades, the Double Cluster, the
+                    Coathanger, the Horsehead, the Coalsack and the
+                    Magellanic Clouds. Same file format, same licence.
   2. Sharpless 2 -- 313 HII regions. Vizier VII/20 (public domain).
   3. ARP         -- 338 peculiar galaxies. Vizier VII/192A (public domain).
   4. LDN         -- Lynds' dark nebulae. Vizier VII/7A (public domain).
@@ -57,6 +62,21 @@ Usage:
     python scripts/build-dso-catalog.py --skip-download
     python scripts/build-dso-catalog.py --output /tmp/dso.db
 
+THIS SCRIPT IS THE FIRST OF THREE, AND IT DELETES THE OUTPUT FILE.
+
+The shipped dso.db is built by three scripts in order, each adding rows
+to the same SQLite file:
+
+    python scripts/build-dso-catalog.py     # deep sky, deletes + recreates
+    python scripts/build-star-catalog.py    # HR / Star / WR, 9,368 rows
+    python scripts/build-named-objects.py   # Notable, 188 rows
+
+Run this one on its own and the database loses every star and every
+notable object, which is 9,556 rows, and nothing says so: the build
+prints a cheerful success and the file is a third smaller. Always run
+all three, and compare the row count per catalogue against the previous
+database before committing.
+
 Requirements: Python 3.8+, stdlib only (urllib + sqlite3 + csv).
 """
 
@@ -77,6 +97,15 @@ from pathlib import Path
 OPENNGC_CSV_URL = (
     "https://raw.githubusercontent.com/mattiaverga/OpenNGC/master/"
     "database_files/NGC.csv"
+)
+
+# The objects with no NGC or IC number. OpenNGC keeps them in a separate
+# file, and reading only NGC.csv is why M45 was missing from the shipped
+# catalogue: the Pleiades has no NGC number, so it lives here as Mel022
+# with its Messier number in the M column.
+OPENNGC_ADDENDUM_URL = (
+    "https://raw.githubusercontent.com/mattiaverga/OpenNGC/master/"
+    "database_files/addendum.csv"
 )
 
 # CDS VizieR ASU-TSV endpoint. Simpler than TAP/ADQL: hands back a
@@ -204,6 +233,9 @@ OPENNGC_TYPE_MAP = {
     "EmN":    "Emission Nebula",
     "Neb":    "Nebula",
     "RfN":    "Reflection Nebula",
+    # Dark nebulae only turn up in the addendum (the Horsehead, the
+    # Coalsack), which is why this was never needed before.
+    "DrkN":   "Dark Nebula",
     "SNR":    "Supernova Remnant",
     "Nova":   "Nova",
     "NonEx":  "Non-existent",
@@ -349,6 +381,53 @@ def parse_sexagesimal_dec(s: str):
 # Each is independent: a failure logs + continues with what loaded.
 # ---------------------------------------------------------------------
 
+# Names people search for that the upstream catalogues do not carry.
+#
+# Keyed by the name this script emits, and merged into common_name, which
+# the search matches as a comma separated list. Entries are appended to
+# whatever the source already supplies rather than replacing it.
+#
+# THIS TABLE EXISTS BECAUSE THE ALTERNATIVE FAILED. Thirteen of these were
+# once written straight into dso.db (commit ce39b089, "add common names for
+# famous DSOs"), with no change to this script. The database is generated,
+# so the next rebuild threw all thirteen away without a word, and a freshly
+# built catalogue simply stopped knowing what the Deer Lick Group was. Put
+# a name here, never in the .db.
+EXTRA_COMMON_NAMES = {
+    # Recovered from that commit.
+    "HCG 44": ["Hickson 44"],
+    "HCG 92": ["Stephan's Quintet"],
+    "NGC 891": ["Silver Sliver Galaxy"],
+    "NGC 2683": ["UFO Galaxy"],
+    "NGC 2903": ["Barred Spiral in Leo"],
+    "NGC 3521": ["Bubble Galaxy"],
+    "NGC 3628": ["Hamburger Galaxy"],
+    "NGC 4656": ["Hockey Stick Galaxy"],
+    "NGC 4990": ["Cocoon Galaxy"],
+    "NGC 5195": ["M51 Companion (NGC 5195)"],
+    "NGC 5907": ["Splinter Galaxy"],
+    "NGC 7331": ["Deer Lick Group"],
+    "NGC 7814": ["Little Sombrero"],
+    # Named in OpenNGC's addendum, which is not where the Hickson rows
+    # come from.
+    "HCG 79": ["Seyfert's Sextet"],
+    # The Pleiades carries only "Pleiades" upstream.
+    "Mel 22": ["Seven Sisters", "Subaru"],
+}
+
+
+def with_extra_names(display: str, common_name):
+    """Append any curated names for this object, keeping what it had."""
+    extra = EXTRA_COMMON_NAMES.get(display)
+    if not extra:
+        return common_name or None
+    have = [x.strip() for x in (common_name or "").split(",") if x.strip()]
+    for name in extra:
+        if name not in have:
+            have.append(name)
+    return ",".join(have) or None
+
+
 def ingest_openngc(csv_path: Path, rows: list) -> int:
     """Parse OpenNGC's NGC.csv. Returns # rows added."""
     if not csv_path.exists() or csv_path.stat().st_size == 0:
@@ -383,7 +462,8 @@ def ingest_openngc(csv_path: Path, rows: list) -> int:
             maj_ax = maybe_float(row.get("MajAx"))   # arcmin
             constellation = (row.get("Const") or "").strip() or None
             messier = (row.get("M") or "").strip()
-            common_name = (row.get("Common names") or "").strip() or None
+            common_name = with_extra_names(
+                f"{cat} {cat_id}", (row.get("Common names") or "").strip())
             # Aliases: Messier number if any, plus IC/NGC cross-refs.
             aliases = []
             if messier:
@@ -413,6 +493,108 @@ def ingest_openngc(csv_path: Path, rows: list) -> int:
                 ))
                 added += 1
     print(f"  ingest_openngc: +{added} rows")
+    return added
+
+
+# Catalogues in the addendum that another source already covers in full.
+ADDENDUM_SKIP_CATALOGS = {"HCG"}
+
+
+def ingest_openngc_addendum(csv_path: Path, rows: list) -> int:
+    r"""Parse OpenNGC's addendum.csv: the objects with no NGC or IC number.
+
+    Same columns as NGC.csv, but the Name is a designation from whatever
+    catalogue does cover the object: Mel022, Cl399, B033, C041, ESO056-115.
+    ingest_openngc only accepts names matching ^(NGC|IC)\d+$, so every one
+    of these was dropped, and with them the Pleiades, the Hyades, the
+    Double Cluster, the Coathanger, the Horsehead, the Coalsack and both
+    Magellanic Clouds.
+    """
+    if not csv_path.exists() or csv_path.stat().st_size == 0:
+        print("  ingest_openngc_addendum: source file empty, skipped")
+        return 0
+    added = 0
+    with csv_path.open("r", encoding="utf-8", errors="replace") as f:
+        reader = csv.DictReader(f, delimiter=";")
+        for row in reader:
+            name = (row.get("Name") or "").strip()
+            if not name:
+                continue
+            # "Mel022" -> ("Mel", "22"), "ESO056-115" -> ("ESO", "056-115").
+            # A compound id keeps its shape; a plain number loses its
+            # padding, so a search for "Mel 22" and one for "Mel022" land
+            # on the same row.
+            m = re.match(r"^([A-Za-z]+)([0-9][\w-]*)$", name)
+            if not m:
+                continue
+            cat = m.group(1)
+            cat_id = m.group(2)
+            cat_id = cat_id.lstrip("0") or "0" if cat_id.isdigit() else cat_id
+            # The Hickson groups come from Vizier, complete and with
+            # magnitudes. The addendum lists two of them again, and taking
+            # both would put two HCG 92 rows in the search results. Their
+            # names are in EXTRA_COMMON_NAMES instead.
+            if cat in ADDENDUM_SKIP_CATALOGS:
+                continue
+
+            type_code = (row.get("Type") or "").strip()
+            # Same rule as the main file. It is what keeps M102 out: OpenNGC
+            # records it as a duplicate of M101, and the usual alternative
+            # identification (NGC 5866) is disputed enough that inventing a
+            # row for it here would be taking a side.
+            if type_code in ("Dup", "NonEx"):
+                continue
+            ra_h = parse_sexagesimal_ra(row.get("RA"))
+            dec_d = parse_sexagesimal_dec(row.get("Dec"))
+            if ra_h is None or dec_d is None:
+                continue
+
+            type_str = OPENNGC_TYPE_MAP.get(type_code, type_code or "Other")
+            v_mag = maybe_float(row.get("V-Mag"))
+            b_mag = maybe_float(row.get("B-Mag"))
+            mag = v_mag if v_mag is not None else b_mag
+            maj_ax = maybe_float(row.get("MajAx"))
+            constellation = (row.get("Const") or "").strip() or None
+            messier = (row.get("M") or "").strip()
+            # Messier and Caldwell are written without a space, matching the
+            # rows the rest of this script emits; everything else takes one.
+            display = f"{cat}{cat_id}" if cat in ("M", "C") else f"{cat} {cat_id}"
+            common_name = with_extra_names(
+                display, (row.get("Common names") or "").strip())
+
+            aliases = []
+            if messier:
+                m_alias = f"M{messier.lstrip('0') or '0'}"
+                # M040 is its own Messier number, and a row listing itself as
+                # an alias makes the overlay try to merge it with itself.
+                if m_alias != display:
+                    aliases.append(m_alias)
+            ngc_xref = (row.get("NGC") or "").strip()
+            if ngc_xref:
+                aliases.append(f"NGC {ngc_xref.lstrip('0') or '0'}")
+            ic_xref = (row.get("IC") or "").strip()
+            if ic_xref:
+                aliases.append(f"IC {ic_xref.lstrip('0') or '0'}")
+
+            rows.append((
+                cat, cat_id, display, common_name, type_str,
+                ra_h, dec_d, mag, maj_ax, constellation,
+                "|".join(aliases) if aliases else None
+            ))
+            added += 1
+
+            # And the Messier row, which is the whole point for M45: a
+            # search for "M45" has to match directly, not only through the
+            # alias column of a row called "Mel 22".
+            if messier and cat != "M":
+                m_id = messier.lstrip("0") or "0"
+                rows.append((
+                    "M", m_id, f"M{m_id}", common_name, type_str,
+                    ra_h, dec_d, mag, maj_ax, constellation,
+                    display
+                ))
+                added += 1
+    print(f"  ingest_openngc_addendum: +{added} rows")
     return added
 
 
@@ -487,7 +669,7 @@ def ingest_vizier_tsv(tsv_path: Path, rows: list, *,
             name = (f"{name_prefix} {cat_id}"
                     if name_prefix is not None else f"{catalog} {cat_id}")
             rows.append((
-                catalog, cat_id, name, None, type_str,
+                catalog, cat_id, name, with_extra_names(name, None), type_str,
                 ra_h, dec_d, mag, size_arc, None, None
             ))
             added += 1
@@ -627,8 +809,14 @@ def add_caldwell_xrefs(rows: list) -> int:
         cat, cat_id, name = r[0], r[1], r[2]
         if cat in ("NGC", "IC"):
             index[name] = r
+    # Caldwell numbers the addendum already supplied, with real
+    # coordinates of their own. Emitting a second row for one of those
+    # would put two C41s in the search results.
+    have_c = {r[1] for r in rows if r[0] == "C"}
     added = 0
     for c_id, ref, common in CALDWELL:
+        if c_id in have_c:
+            continue
         m = re.match(r"^(NGC|IC) (\d+)$", ref)
         if not m:
             # Hyades / Coalsack / Sh2-155 don't have NGC/IC; skip.
@@ -736,6 +924,18 @@ def main() -> int:
             print("OpenNGC download failed; aborting build.", file=sys.stderr)
             return 2
     ingest_openngc(openngc_csv, rows)
+
+    # 1b. The objects with no NGC or IC number, which OpenNGC keeps in a
+    #     separate file. Not optional: the Pleiades is in here.
+    addendum_csv = cache / "OpenNGC-addendum.csv"
+    if args.skip_download and addendum_csv.exists():
+        print("OpenNGC addendum: reusing cached file.")
+    else:
+        print("OpenNGC addendum: downloading...")
+        if not http_get(OPENNGC_ADDENDUM_URL, addendum_csv):
+            print("OpenNGC addendum download failed; aborting build.", file=sys.stderr)
+            return 2
+    ingest_openngc_addendum(addendum_csv, rows)
 
     # 2. Caldwell cross-refs (purely synthesized from OpenNGC rows).
     add_caldwell_xrefs(rows)

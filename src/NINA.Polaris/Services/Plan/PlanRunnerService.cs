@@ -62,7 +62,7 @@ public class PlanRunnerService : IHostedService {
     // Resume stash: the main document (with its runtime statuses + per-
     // instruction frame counters) of a plan whose main phase ended EARLY
     // (user stop or end-time), kept so ResumePlan can pick up where it
-    // stopped — completed targets skip, the interrupted one re-runs its
+    // stopped, completed targets skip, the interrupted one re-runs its
     // setup and fast-forwards past frames already captured. In-memory only;
     // cleared by a natural full completion or by starting another plan.
     private ImagingPlan? _resumePlan;
@@ -107,17 +107,7 @@ public class PlanRunnerService : IHostedService {
             // settings (pause-before, tolerance, settle, live-stack flag) and
             // only override the three knobs exposed in the PLAN panel.
             if (plan.AutoMeridianFlip) {
-                var s = _flip.Settings;
-                _flip.UpdateSettings(new MeridianFlipSettings {
-                    Enabled = true,
-                    MinutesAfterMeridian = plan.MeridianFlipMinutesAfter,
-                    RecenterAfterFlip = plan.MeridianFlipRecenter,
-                    AutoFocusAfterFlip = plan.MeridianFlipAutoFocus,
-                    PauseBeforeMeridianMinutes = s.PauseBeforeMeridianMinutes,
-                    RecenterToleranceArcsec = s.RecenterToleranceArcsec,
-                    SettleSecondsAfterFlip = s.SettleSecondsAfterFlip,
-                    AutoFlipDuringLiveStack = s.AutoFlipDuringLiveStack
-                });
+                ApplyPlanFlipSettings(plan);
             }
 
             var doc = _compiler.Compile(plan);
@@ -148,7 +138,7 @@ public class PlanRunnerService : IHostedService {
     /// <summary>
     /// Resume the last prematurely-ended plan from its retained progress.
     /// Completed targets are skipped; the interrupted target re-runs its
-    /// setup (slew / center / guide — the end actions may have parked the
+    /// setup (slew / center / guide, the end actions may have parked the
     /// mount) and its exposure sets continue at the next frame. The end
     /// condition is re-resolved (Dawn = the coming dawn).
     /// </summary>
@@ -163,17 +153,7 @@ public class PlanRunnerService : IHostedService {
 
             var plan = _resumePlan;
             if (plan.AutoMeridianFlip) {
-                var s = _flip.Settings;
-                _flip.UpdateSettings(new MeridianFlipSettings {
-                    Enabled = true,
-                    MinutesAfterMeridian = plan.MeridianFlipMinutesAfter,
-                    RecenterAfterFlip = plan.MeridianFlipRecenter,
-                    AutoFocusAfterFlip = plan.MeridianFlipAutoFocus,
-                    PauseBeforeMeridianMinutes = s.PauseBeforeMeridianMinutes,
-                    RecenterToleranceArcsec = s.RecenterToleranceArcsec,
-                    SettleSecondsAfterFlip = s.SettleSecondsAfterFlip,
-                    AutoFlipDuringLiveStack = s.AutoFlipDuringLiveStack
-                });
+                ApplyPlanFlipSettings(plan);
             }
 
             _engine.LoadForResume(_resumeDoc);
@@ -283,6 +263,19 @@ public class PlanRunnerService : IHostedService {
         return list;
     }
 
+    /// <summary>Apply the plan's flip knobs for this run only, on a copy of the
+    /// current settings. Rebuilding the settings from scratch here reset every
+    /// field not named, the mount-safety guard's limits among them, back to
+    /// its default for as long as the host kept running.</summary>
+    private void ApplyPlanFlipSettings(ImagingPlan plan) {
+        var s = _flip.Settings.Clone();
+        s.Enabled = true;
+        s.MinutesAfterMeridian = plan.MeridianFlipMinutesAfter;
+        s.RecenterAfterFlip = plan.MeridianFlipRecenter;
+        s.AutoFocusAfterFlip = plan.MeridianFlipAutoFocus;
+        _flip.UpdateSettings(s);
+    }
+
     /// <summary>Recursively sum the frame counts of every TakeExposure
     /// instruction under an entity (used for PLAN progress totals).</summary>
     private static int CountFrames(ISequenceEntity entity) {
@@ -340,7 +333,7 @@ public class PlanRunnerService : IHostedService {
             if (_phase == Phase.Main) {
                 // Capture the main run's outcome NOW, before the end-actions
                 // document replaces it on the engine. State is Idle for a normal
-                // finish, a user stop AND a failure — LastRunFailed is the only
+                // finish, a user stop AND a failure, LastRunFailed is the only
                 // thing that separates a crash from the other two, and it's about
                 // to become unreadable once end actions load. A transient BLOB
                 // timeout during a driver restart reaches here as a failure; without
@@ -414,14 +407,14 @@ public class PlanRunnerService : IHostedService {
                 catch (Exception ex) { _logger.LogError(ex, "Host shutdown failed"); }
             } else {
                 _logger.LogWarning(
-                    "Plan '{Name}' requested host shutdown, but the run {How} — NOT powering off " +
+                    "Plan '{Name}' requested host shutdown, but the run {How}, NOT powering off " +
                     "so the session can be recovered", plan.Name, how);
             }
         }
     }
 
     /// <summary>FIELD7-3: whether a plan's "shut down the host at the end" action
-    /// may fire. Only a run that COMPLETED NORMALLY qualifies — a user stop and a
+    /// may fire. Only a run that COMPLETED NORMALLY qualifies, a user stop and a
     /// run FAILURE are both "did not finish as planned".
     ///
     /// The bug this pins: the old code gated only on <paramref name="userAborted"/>,

@@ -65,7 +65,7 @@ public class AutoSelectStarInstruction : SequenceInstruction {
 /// connected); the native guide loop reads it on the very next exposure, so the
 /// change takes effect live without restarting guiding.
 ///
-/// Only the native guider honours this — when guiding through PHD2 the guide
+/// Only the native guider honours this, when guiding through PHD2 the guide
 /// camera is owned by PHD2, so this only affects the native guider (logged).
 /// </summary>
 public class SetGuiderGainInstruction : SequenceInstruction {
@@ -93,7 +93,7 @@ public class SetGuiderGainInstruction : SequenceInstruction {
 
         if (ctx.PHD2.IsConnected)
             ctx.Logger.LogWarning(
-                "PHD2 is connected — the guide camera gain is owned by PHD2; this change only "
+                "PHD2 is connected, the guide camera gain is owned by PHD2; this change only "
                 + "affects the native guider.");
         return Task.CompletedTask;
     }

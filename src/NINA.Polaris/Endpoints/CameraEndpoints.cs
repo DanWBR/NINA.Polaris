@@ -154,7 +154,7 @@ public static class CameraEndpoints {
                 // crashes the driver and takes the server down.
                 //
                 // captureProgress.Begin() drives the shutter countdown, so it
-                // MUST start only AFTER we hold the gate — otherwise, while
+                // MUST start only AFTER we hold the gate, otherwise, while
                 // queued behind another capture, the shutter would tick down to
                 // 0 and sit there (the bug: "preview shutter stuck at 0"). The
                 // acquire timeout (running exposure + 60s slack) frees the UI if
@@ -163,6 +163,10 @@ public static class CameraEndpoints {
                 // preview snap runs the sensor the way the rig is configured.
                 var mainOpts = new NINA.Image.Interfaces.CaptureOptions(
                     Gain: request.Gain > 0 ? request.Gain : null,
+                    // A DSLR is set by ISO, not gain; null leaves it where it is.
+                    Iso: request.Iso is > 0 ? request.Iso : null,
+                    // This is the PREVIEW panel's snap (and the phone shell's),
+                    // so it obeys the PREVIEW panel's offset field.
                     Offset: RigCaptureDefaults.Offset(profileSvc),
                     ImageType: "LIGHT");
                 imageData = await CameraCaptureGate.RunAsync(async () => {
@@ -183,7 +187,7 @@ public static class CameraEndpoints {
                 }
 
                 // FeedLiveStack=false from the caller forces relay-only
-                // even if the live stack is currently running — that's
+                // even if the live stack is currently running, that's
                 // how PREVIEW / FOCUS-Manual / Flat Wizard say "this
                 // is a one-off test shot, don't pollute the stack +
                 // don't trigger the auto-recenter reference solve".
@@ -304,6 +308,12 @@ public static class CameraEndpoints {
                 });
             } catch (OperationCanceledException) {
                 return Results.Ok(new { status = "cancelled" });
+            } catch (CameraBusyException ex) {
+                // Something else holds the camera (the video stream). 409 with
+                // the sentence, not a 500 problem document the UI shows as
+                // "An error occurred".
+                return Results.Json(new { error = ex.Message },
+                    statusCode: StatusCodes.Status409Conflict);
             } catch (Exception ex) {
                 return Results.Problem(ex.Message);
             }
@@ -478,7 +488,7 @@ public static class CameraEndpoints {
 
             // COOLRAMP: both directions ramp, and both go through the one service.
             // ON used to write the setpoint raw (TEC straight to 100%, ~3.7°C/min
-            // measured in the field), and OFF just cut the cooler dead — leaving a
+            // measured in the field), and OFF just cut the cooler dead, leaving a
             // 0°C sensor to race back to ambient, which is the textbook way to
             // condense water on the window. OFF now walks the setpoint up first and
             // powers the TEC down only on arrival.
@@ -486,7 +496,7 @@ public static class CameraEndpoints {
             // The old "don't write the target while disabling" hazard still holds:
             // on SVBony, writing SVB_TARGET_TEMPERATURE flips SVB_COOLER_ENABLE back
             // on, so a naive disable would bounce the cooler straight back. The ramp
-            // respects that by construction — during a warm-up the cooler is MEANT to
+            // respects that by construction, during a warm-up the cooler is MEANT to
             // stay on (it's what paces the rise), and SetCoolerAsync(false) runs once
             // at the end, after the final setpoint write. Never before.
             //
@@ -561,8 +571,8 @@ public static class CameraEndpoints {
             }
             // Per-rig pixel-size fallback. indi_gphoto (DSLR) leaves CCD_INFO
             // pixel size at 0; push the rig's configured value into the driver
-            // so PixelSizeX/Y — and therefore FOV, the plate-solve scale hint,
-            // and the post-solve focal-length auto-update — get a real number.
+            // so PixelSizeX/Y, and therefore FOV, the plate-solve scale hint,
+            // and the post-solve focal-length auto-update, get a real number.
             // Only when the rig has a value AND the camera actually reports 0
             // (don't override a camera that knows its own pixel pitch).
             try {
@@ -574,7 +584,7 @@ public static class CameraEndpoints {
                         rig.CameraPixelSizeUm, rig.CameraBitDepth);
                     loggerFactory.CreateLogger("Polaris.Camera")
                         .LogInformation("Pushed rig CCD_INFO into {Dev}: {X}x{Y} px, {P}µm, {B}-bit " +
-                            "(camera reported 0 — DSLR bootstrap)", equip.Camera.DeviceName,
+                            "(camera reported 0, DSLR bootstrap)", equip.Camera.DeviceName,
                             rig.CameraMaxX, rig.CameraMaxY, rig.CameraPixelSizeUm, rig.CameraBitDepth);
                 }
             } catch (Exception ex) {
@@ -585,7 +595,7 @@ public static class CameraEndpoints {
             // SCOPE_INFO. The simulator sizes its GSC star field from SCOPE_INFO,
             // and Polaris doesn't wire up telescope snooping (ACTIVE_DEVICES), so
             // without this it runs `gsc … -r nan` and renders a starless frame.
-            // Scoped to the Simulator by name — real cameras have no writable
+            // Scoped to the Simulator by name, real cameras have no writable
             // SCOPE_INFO and would just no-op anyway.
             try {
                 var rig = profileSvc.ActiveEquipmentProfile;
@@ -602,7 +612,7 @@ public static class CameraEndpoints {
                     .LogDebug(ex, "SCOPE_INFO push on connect skipped (non-fatal)");
             }
             // The camera's ROI (CCD_FRAME for INDI) is retained by the driver
-            // across browser sessions and even reconnects — the INDI server on
+            // across browser sessions and even reconnects, the INDI server on
             // the SBC keeps running. So a planetary ROI set in a prior VIDEO
             // session would otherwise leak into PREVIEW / LIVE / sequence
             // forever. Assert the full sensor on connect; VIDEO re-applies its
@@ -708,6 +718,11 @@ public static class CameraEndpoints {
                     mode = stream.Mode,
                     supportsNative = equip.Camera.Capabilities.SupportsVideoStream
                 });
+            } catch (CameraBusyException ex) {
+                // A capture is in flight: starting the stream on top of it is
+                // the same collision the other way round.
+                return Results.Json(new { error = ex.Message },
+                    statusCode: StatusCodes.Status409Conflict);
             } catch (Exception ex) { return Results.BadRequest(new { error = ex.Message }); }
         });
 
@@ -794,7 +809,9 @@ public static class CameraEndpoints {
         // path is used by FOCUS-manual to focus the auxiliary camera; it
         // captures through the separate aux gate and never feeds the stack
         // or saves to disk here.
-        string? CameraSource = null);
+        string? CameraSource = null,
+        // ISO for a camera that has one; null = leave the camera's setting.
+        int? Iso = null);
 
     /// <summary>Run the same star-detector + laplacian-variance pass the main
     /// <summary>Sensor geometry out of a POST /ccd-info/apply body, or zeros when

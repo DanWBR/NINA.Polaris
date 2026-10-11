@@ -76,7 +76,7 @@ public class LiveStackingServiceTests {
         // The recurring field bug: an OSC colour session whose FIRST
         // frame transiently reports BayerPattern=None (CFA dropout) used
         // to commit the WHOLE session to mono. Now that None-on-frame-0
-        // is DEFERRED — the frame is dropped, nothing initialises — and
+        // is DEFERRED, the frame is dropped, nothing initialises, and
         // the next frame that actually carries the pattern starts the
         // colour session correctly.
         var svc = MakeService();
@@ -217,7 +217,7 @@ public class LiveStackingServiceTests {
     /// what the sensor is (IsColorSensor = null, the normal INDI state before
     /// the first frame) must stack immediately in mono. Treating unknown as
     /// colour armed the Bayer-dropout deferral and produced nothing for dozens
-    /// of frames — caught by seven existing tests when this fix was first
+    /// of frames, caught by seven existing tests when this fix was first
     /// written the loose way.
     /// </summary>
     [Test]

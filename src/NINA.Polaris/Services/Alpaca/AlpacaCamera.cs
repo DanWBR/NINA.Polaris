@@ -215,12 +215,12 @@ public sealed class AlpacaCamera : ICamera, IDisposable {
         // Reset ROI to the full sensor. The ASCOM Remote Server (or
         // Alpaca Omni Simulator) hosts the same ICameraV3 driver as
         // the COM-direct path, but its StartX/StartY/NumX/NumY state
-        // is sticky across connections — if a previous Alpaca client
+        // is sticky across connections, if a previous Alpaca client
         // ever subframed the sensor (or the server started with a
         // non-full-frame default), every subsequent capture comes
         // back smaller than MaxX × MaxY. The user noticed this as
         // "the preview is smaller via Alpaca than via ASCOM direct,
-        // even though it's the same camera" — COM-direct doesn't
+        // even though it's the same camera", COM-direct doesn't
         // hit it because the ZWO driver appears to reset the ROI on
         // a fresh Activator.CreateInstance, while the long-lived
         // Alpaca server keeps the driver instance pinned. Explicit

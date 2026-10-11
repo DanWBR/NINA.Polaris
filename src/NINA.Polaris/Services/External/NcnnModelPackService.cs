@@ -23,12 +23,12 @@ namespace NINA.Polaris.Services.External;
 /// which were excluded from the package (THUMBPACK-3) to keep the .deb slim.
 ///
 /// The trick that keeps this simple: <see cref="NcnnInferenceService"/> resolves a
-/// model RELATIVE TO ITS ONNX SIBLING — it accepts a "parallel" layout
+/// model RELATIVE TO ITS ONNX SIBLING, it accepts a "parallel" layout
 /// <c>{modelsRoot}/ncnn/{family}-ai-models/{version}/model.ncnn.param</c>. And the
 /// onnx models are themselves downloaded (by <see cref="ModelDownloadService"/>)
 /// into the writable models root that <see cref="OnnxModelRegistry.ResolveDownloadTargetDir"/>
 /// returns. So we extract the ncnn pack into <c>{that root}/ncnn/…</c> and the
-/// EXISTING resolver finds it — no resolver change, no static middleware, no path
+/// EXISTING resolver finds it, no resolver change, no static middleware, no path
 /// plumbing. Mirror of <see cref="DsoThumbPackService"/> otherwise (status /
 /// start / cancel, one zip asset from the fixed data-pack release).
 ///
@@ -130,7 +130,7 @@ public sealed class NcnnModelPackService {
 
             // Extract PRESERVING the tree: the zip holds
             // {family}-ai-models/{version}/model.ncnn.{param,bin}, so extracting
-            // into NcnnRoot yields {root}/ncnn/{family}/{version}/… — exactly the
+            // into NcnnRoot yields {root}/ncnn/{family}/{version}/…, exactly the
             // parallel layout NcnnInferenceService.SiblingNcnn looks for.
             SetPhase("extracting");
             ct.ThrowIfCancellationRequested();

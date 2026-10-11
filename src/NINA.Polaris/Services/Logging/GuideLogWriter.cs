@@ -79,7 +79,7 @@ public sealed class GuideLogWriter : IDisposable {
 
     /// <summary>One guide-frame row. Polaris doesn't separate camera-frame from
     /// mount-frame offsets, so the raw/guide distances reuse the RA/Dec pixel
-    /// offsets — enough for PHD2 Log Viewer to compute RMS and draw the graph.</summary>
+    /// offsets, enough for PHD2 Log Viewer to compute RMS and draw the graph.</summary>
     public static string FormatFrameRow(int frame, double timeSec, double raPx, double decPx,
             int raDurationMs, string? raDir, int decDurationMs, string? decDir,
             double starMass, double snr) {

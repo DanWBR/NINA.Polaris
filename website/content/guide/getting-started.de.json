@@ -1,78 +1,98 @@
 {
   "title": "Erste Schritte",
-  "lede": "Ihre erste Nacht - vom Teleskop auf dem Stativ bis zum fertigen Bild, das Sie teilen können. So geht’s im Schnelldurchlauf: Schließen Sie die Ausrüstung an, führen Sie das Teleskop aus und stellen Sie die Schärfe ein, nehmen Sie das Bild per Live-Stacking oder im unbeaufsichtigten Autorun auf und führen Sie anschließend das Stacking und die Bearbeitung in STUDIO durch.",
+  "lede": "Ihre erste Nacht, vom Board noch in der Verpackung bis zum fertigen Bild zum Teilen. Polaris läuft auf dem Gerät am Teleskop und Sie bedienen es vom Handy, vom Tablet oder aus jedem Browser. Das ist der kurze Weg: hineinkommen, das Equipment finden lassen, fokussieren, ausrichten, guiden, aufnehmen und das Bild fertigstellen, ohne die Dateien irgendwohin zu verschieben.",
   "access": {
-    "title": "Öffnen Sie zunächst die Polaris-Benutzeroberfläche",
-    "sub": "Polaris läuft auf dem Rig und lässt sich von jedem Gerät im selben Netzwerk aus steuern. Es gibt zwei Möglichkeiten, darauf zuzugreifen.",
+    "title": "Zuerst: hineinkommen",
+    "sub": "Polaris läuft auf dem Gerät am Teleskop und antwortet im Netzwerk. Drei Wege hinein, je nachdem wo Sie stehen.",
     "options": [
+      {
+        "icon": "📱",
+        "title": "App für Handy oder Tablet",
+        "body": "Installieren Sie die App für Android oder iOS von der Download-Seite. Sie findet die Boards im Netzwerk von selbst und verbindet sich mit einem Tippen, ganz ohne Adresse. Auf dem Handy wird die Oberfläche zum Feldmodus, einer Touch-Oberfläche für das Stehen neben dem Teleskop im Dunkeln.",
+        "code": ""
+      },
       {
         "icon": "🌐",
         "title": "Jeder Browser",
-        "body": "Rufen Sie mit einem beliebigen Smartphone, Tablet oder Laptop die Adresse des Servers unter Port 5000 auf. Geben Sie dazu den Hostnamen oder die IP-Adresse ein und akzeptieren Sie das selbstsignierte Zertifikat einmalig.",
+        "body": "Rufen Sie mit Handy, Tablet oder Notebook die Adresse des Geräts auf Port 5000 auf, über Hostnamen oder IP, und akzeptieren Sie das selbst signierte Zertifikat einmal.",
         "code": "https://<ip-or-hostname>:5000"
       },
       {
-        "icon": "📱",
-        "title": "Android-App",
-        "body": "Installieren Sie die Android-App von der Download-Seite und öffnen Sie sie. Die App scannt das Netzwerk und listet alle gefundenen Polaris-Instanzen auf, zu denen Sie mit einem Fingertipp eine Verbindung herstellen können - ohne IP-Adresse eingeben zu müssen.",
+        "icon": "📡",
+        "title": "Erster Start, noch ohne Netzwerk",
+        "body": "Eine frisch geschriebene Karte startet als eigener WLAN-Hotspot mit dem Namen Polaris-Hotspot plus vier Zeichen aus der MAC des Adapters, Passwort polaris1234. Verbinden Sie sich damit, öffnen Sie die Adresse oben, wählen Sie Ihr Passwort und sagen Sie Polaris, wo Sie sind und welches WLAN es nutzen soll. Danach läuft alles in Ihrem eigenen Netz.",
         "code": ""
       }
     ]
   },
   "steps": [
     {
+      "icon": "🧭",
+      "title": "Den Assistenten das Equipment finden lassen",
+      "body": "Beim ersten Öffnen bietet Polaris an, das Equipment für Sie einzurichten. Es prüft, was angeschlossen ist, unter Linux über INDI und unter Windows über ASCOM oder Alpaca, zeigt das Gefundene, verbindet es und fragt nur nach dem, was kein Treiber wissen kann, etwa die Brennweite. Sie können ihn überspringen und alles in RIGS von Hand machen, und ihn über die Schaltfläche des Assistenten jederzeit wieder holen, wenn sich am Aufbau etwas ändert.",
+      "tip": "Fehlt der INDI-Treiber für Ihre Kamera oder den Fokussierer? Installieren Sie ihn direkt aus Polaris heraus, in der INDI-Karte unter RIGS. Angeboten werden nur Pakete, die zum bereits installierten INDI passen, und jede Installation, die etwas Benutztes entfernen würde, wird abgelehnt.",
+      "image": "/assets/screenshots/devices.jpg"
+    },
+    {
       "icon": "🛠️",
-      "title": "Richte deine Ausrüstung ein",
-      "body": "Öffnen Sie „RIGS“ in der Seitenleiste. Wählen Sie ein gespeichertes Rig aus dem Dropdown-Menü aus oder erstellen Sie ein neues, indem Sie die Karten für Ihr Hauptteleskop (Marke, Modell, Reduzierstück oder Flattener, damit Brennweite und Öffnung automatisch ausgefüllt werden), Ihre Hauptkamera, die Montierung, den Fokussierer und das Filterrad hinzufügen. Klicken Sie auf „Auswahl speichern“, damit das Rig sich alles für das nächste Mal merkt.",
-      "tip": "Ein Rig speichert die Brennweite, die Standardwerte für die Verstärkung sowie die PHD2-Profilzuordnung, die die Grundlage für die Bildausschnittwahl und das Plate Solving bildet.",
+      "title": "Das Rig prüfen",
+      "body": "Ein Rig ist der ganze Aufbau unter einem Namen: Teleskop, Kamera, Montierung, Fokussierer, Filterrad, Leitrohr und Zubehör. Wählen Sie das Teleskop nach Marke und Modell, dann füllen sich Brennweite und Öffnung von selbst, ergänzen Sie Reducer oder Flattener, falls Sie einen nutzen, und speichern Sie die Auswahl. Bildfeld, Plate Solving und der Maßstab beim Guiden kommen alle aus diesen Zahlen.",
+      "tip": "Führen Sie ein Rig je physischem Aufbau. Ein Rig-Wechsel schaltet alle Vorgaben mit um, ein zweites Teleskop liegt also ein Auswahlfeld entfernt statt einen Abend voller Tipparbeit.",
       "image": "/assets/screenshots/gs-rigs.jpg"
     },
     {
       "icon": "🔌",
-      "title": "Schließen Sie Ihre Geräte an",
-      "body": "Wählen Sie auf jeder Karte das Gerät unter dem Verbindungsbalken aus: „INDI“ unter Linux, „ASCOM“ oder „Alpaca“ unter Windows oder ein natives Kamera-SDK. Legen Sie das Ziel für den Kamerakühler fest und klicken Sie anschließend bei jedem Gerät auf „Verbinden“. Vergewissern Sie sich, dass die Montierung nachführt und die Filterliste mit Ihrem Rad übereinstimmt.",
-      "tip": "Die automatische Erkennung listet alle Geräte auf, die sie im LAN findet, sodass die meisten Geräte angezeigt werden, ohne dass eine Adresse eingegeben werden muss.",
+      "title": "Verbinden, und retten wenn etwas verschwindet",
+      "body": "Wählen Sie auf jeder Karte den Treiber unter der Verbindungsleiste: INDI unter Linux, ASCOM oder Alpaca unter Windows, oder ein natives SDK für Kameras von ZWO, SVBony, Player One, ToupTek und Altair. Setzen Sie die Kühlzieltemperatur, verbinden Sie jedes Gerät und prüfen Sie, dass die Montierung nachführt und die Filternamen zum Rad passen.",
+      "tip": "Fällt ein Gerät mitten in der Sitzung vom Bus, liest Reset USB in der INDI-Karte den Bus neu ein und startet die Treiber neu, also die Software-Fassung davon, draußen alle Kabel neu zu stecken. Die Platte, von der das Board bootet, bleibt dabei unangetastet.",
       "image": "/assets/screenshots/gs-connect.jpg"
     },
     {
-      "icon": "📡",
-      "title": "Führung einrichten",
-      "body": "Wechseln Sie zu „GUIDE“. Klicken Sie auf „PHD2 starten“ (oder auf „Verbinden“, falls das Programm bereits läuft) und wählen Sie das Profil aus, das zu Ihrer Guiding-Kamera und Ihrer Montierung passt. Klicken Sie auf „Geräte verbinden“, dann auf „Loop“, „Stern suchen“ und „Smart Calibrate“. Beobachten Sie, wie sich die RA/Dec-Kurve stabilisiert; das Guiding läuft dann die ganze Nacht über im Hintergrund.",
-      "tip": "Bevorzugen Sie die ursprüngliche PHD2-Benutzeroberfläche? Öffnen Sie die Registerkarte „PHD2 GUI“, um die eigentliche App über xpra oder VNC zu steuern.",
-      "image": "/assets/screenshots/gs-guiding.jpg"
-    },
-    {
       "icon": "🔬",
-      "title": "Scharfe Bilder erzielen",
-      "body": "Öffnen Sie FOCUS und führen Sie den V-Kurven-Autofokus durch: Stellen Sie die Schrittweite und die Anzahl der Messpunkte für Ihren Fokussierer ein und klicken Sie auf „Start AF“. Polaris misst mehrere Positionen, passt die HFR-Kurve an und positioniert den Fokussierer an der Stelle mit der höchsten Schärfe. Sie können auch manuell mit den Schritt-Tasten fokussieren, während Sie beobachten, wie der HFR-Wert sinkt.",
-      "tip": "Ein niedrigerer HFR-Wert bedeutet eine präzisere Ausrichtung auf die Sterne. Der Sequenzer kann die Fokussierung automatisch neu einstellen, wenn es im Laufe der Nacht zu Temperaturschwankungen oder Abweichungen beim HFR-Wert kommt.",
-      "image": "/assets/screenshots/gs-focus.jpg"
+      "title": "Scharf fokussieren",
+      "body": "Öffnen Sie FOCUS und fahren Sie die V-Kurve: Schrittweite und Anzahl der Messpunkte wählen, AF starten, und Polaris misst beide Seiten des Fokus, passt die Kurve an und fährt den Fokussierer ins Minimum. Mit Filterrad merkt es sich den Versatz je Filter, damit der nächste Filterwechsel keinen weiteren Durchlauf kostet.",
+      "tip": "Lieber eine Maske? Setzen Sie eine Bahtinov-Maske auf die Öffnung, starten Sie den Videostream und schalten Sie das Bahtinov-Panel ein: es liest den Versatz etwa viermal pro Sekunde und sagt, in welche Richtung zu drehen ist, ganz ohne eigene Belichtung.",
+      "image": "/assets/screenshots/autofocus.jpg"
     },
     {
       "icon": "🌌",
-      "title": "Rahmen Sie Ihr Ziel ein",
-      "body": "Öffnen Sie SKY und suchen Sie nach Ihrem Ziel (M31, NGC 7000 usw.) oder wählen Sie einen Vorschlag aus der Registerkarte „TONIGHT“ aus, der nach Höhe sortiert ist. Klicken Sie auf das Ziel und dann auf „Slew & Center“: Polaris schwenkt, führt ein Plate Solving durch und schwenkt erneut, bis das Ziel mittig in der Sichtfeld-Einblendung liegt.",
-      "tip": "Slew & Center nutzt den Himmels-Explorer „Stellarium Web Engine“ mit vollständiger Montierungsintegration, sodass kein Handregler erforderlich ist.",
+      "title": "Das Objekt einrahmen",
+      "body": "Öffnen Sie SKY und suchen Sie das Objekt, oder nehmen Sie einen Vorschlag aus TONIGHT, das ordnet, was von Ihrem Standort an diesem Datum wirklich am Himmel steht. Slew and Center fährt an, löst das Feld astrometrisch und korrigiert, bis das Objekt dort sitzt, wo Sie es im Bildfeldrahmen haben wollen. Der Rotationsregler stellt den Winkel, und mit motorisiertem Rotator dreht Polaris ihn für Sie.",
+      "tip": "Sternkarte und Kataloge liegen auf dem Gerät selbst, Einrahmen und Plate Solving funktionieren also ganz ohne Internet, was unter dunklem Himmel der Normalfall ist.",
       "image": "/assets/screenshots/gs-sky.jpg"
     },
     {
+      "icon": "📡",
+      "title": "Mit dem Guiding beginnen",
+      "body": "GUIDE nutzt das eigene Guiding von Polaris: Guiding-Kamera verbinden, Loop starten, einmal nahe Meridian und Himmelsäquator kalibrieren, dann guiden. Diagramm, Sternprofil, Multi-Stern, Dither und Settle sind alle vorhanden, und die Rechnung hinter den Korrekturen folgt den Algorithmen von PHD2, es muss also nichts zusätzlich installiert werden.",
+      "tip": "Sie haben bereits ein PHD2, dem Sie vertrauen? Verbinden Sie Polaris damit und öffnen Sie das eingebettete PHD2-Fenster, wenn Sie die Originaloberfläche möchten.",
+      "image": "/assets/screenshots/guide-native.jpg"
+    },
+    {
       "icon": "📸",
-      "title": "Aufnahme: Live-Stacking oder Autorun",
-      "body": "Es gibt zwei Aufnahmemodi, die Sie beliebig kombinieren können. Für sofortige Ergebnisse im EAA-Stil öffnen Sie LIVE und tippen Sie auf den Auslöser: Dadurch wird die Schleife gestartet und jedes Einzelbild wird sofort nach der Aufnahme in das Live-Bild eingeblendet (tippen Sie erneut, um den Vorgang zu beenden - die Bildreihe bleibt erhalten). Für einen vollständigen Bildaufnahmedurchlauf öffnen Sie AUTORUN, fügen Sie eine Zielzeile hinzu (Filter, Belichtung, Anzahl), aktivieren Sie bei Bedarf Dithering und Meridian-Spiegelung, legen Sie Ihre Endaktionen fest und klicken Sie auf „Sequenz starten“. Die Einzelbilder werden zur späteren Stapelung auf der Festplatte gespeichert, und Sie können weiterhin in LIVE beobachten, wie sie eintreffen.",
-      "tip": "Du kannst den Browser schließen und weggehen. Der Server fährt mit dem Herunterladen fort, sodass du morgen früh einen Ordner voller Untertitel vorfindest.",
+      "title": "Aufnehmen: Live Stacking oder ein Autorun",
+      "body": "Für ein Ergebnis, während Sie noch am Teleskop stehen, stapelt LIVE jedes Bild sofort beim Eintreffen, kalibriert und ausgerichtet, und das Objekt schält sich vor Ihren Augen aus dem Rauschen. Für eine ganze Nacht nimmt AUTORUN eine Liste von Sätzen, je mit Filter, Belichtung und Anzahl, mit Dither, Meridianwende und Abschlussaktionen. Beide schreiben die Einzelbilder auf die Platte, und Sie dürfen den Browser schließen: der Lauf gehört dem Server, nicht Ihrem Tab.",
+      "tip": "Die Abschlussaktionen können die Montierung parken, die Kamera aufwärmen, die Hintergrundextraktion über das Aufgenommene laufen lassen und die Nacht hochladen, damit der Morgen nur noch ein fertig sortierter Ordner ist.",
       "image": "/assets/screenshots/gs-live.jpg"
     },
     {
+      "icon": "🗓️",
+      "title": "Oder die Nacht an PLAN übergeben",
+      "body": "PLAN ist für die Nacht mit mehr als einem Ziel. Sagen Sie, was Sie wollen und wie viel von jedem; es rechnet aus, wann jedes Objekt hoch genug steht, ordnet die Nacht um Meridianwenden und Ihren Horizont herum und führt sie aus. Verliert das Guiding den Stern, wartet es und nimmt das Ziel wieder auf, sobald der Stern zurück ist, statt das Ziel zu verwerfen.",
+      "tip": "Eigene Horizonte werden unterstützt, damit eine Baumreihe oder das Dach des Nachbarn Teil des Plans ist und keine Überraschung um zwei Uhr nachts.",
+      "image": "/assets/screenshots/plan.jpg"
+    },
+    {
       "icon": "🎨",
-      "title": "In STUDIO zusammenstellen und bearbeiten, anschließend exportieren",
-      "body": "Öffnen Sie STUDIO, um Ihre Einzelbilder zu einem fertigen Bild zusammenzufügen: Erstellen Sie Master-Kalibrierungsbilder, kalibrieren Sie die Beleuchtung und integrieren Sie diese in ein Masterbild. Bereinigen Sie das Bild mit GraXpert AI im Browser (Hintergrundentfernung, anschließend Rauschunterdrückung, dann Dekonvolution - beschleunigt auf der Client-GPU oder der NPU des SBC). Optimieren Sie Tonwert und Farbe im EDITOR und exportieren Sie das Bild anschließend als JPEG, PNG oder 16-Bit-TIFF.",
-      "tip": "Aktivieren Sie „Auto-GraXpert BGE“ in den Endaktionen für den automatischen Start, und die im Hintergrund extrahierten Bilder stehen bereits bereit, noch bevor Sie STUDIO überhaupt öffnen.",
+      "title": "Das Bild fertigstellen und vom Board holen",
+      "body": "STUDIO macht aus den Einzelbildern ein Bild: Master aus Ihren Kalibrierframes, dann Kalibrierung und Integration der Lights, Hintergrundextraktion, Entrauschen und Dekonvolution mit den KI-Werkzeugen, Farbkalibrierung gegen einen Sternkatalog sowie Sternentfernung und Wiedereinfügen, wenn Sie das möchten. Der EDITOR übernimmt Tonwert und Farbe und exportiert nach JPEG, PNG oder 16-Bit-TIFF.",
+      "tip": "Eine Nacht lebt auf einer einzigen Karte, bis Sie sie irgendwohin kopieren. Der Storage-Push schickt den fertigen Lauf an ein NAS oder an Drive, OneDrive, Dropbox, Nextcloud, SFTP oder S3, und die lokale Kopie bleibt immer liegen, wo sie ist.",
       "image": "/assets/screenshots/gs-studio.jpg"
     }
   ],
   "closing": {
-    "title": "Das ist die gesamte Schleife.",
-    "sub": "Dies ist die Schnellübersicht. Hinter jedem Reiter verbirgt sich eine ausführlichere Anleitung, und die Installationsanleitung behandelt alle optionalen Tools, die Sie hinzufügen können.",
-    "docUrl": "https://github.com/DanWBR/NINA.Polaris/blob/master/docs/user-guide/end-to-end-workflow.md"
+    "title": "Das ist die ganze Schleife",
+    "sub": "Diese Seite ist der Schnelldurchlauf. Das Handbuch geht jeden Tab in die Tiefe durch, und die Installationsanleitung deckt die optionalen Teile ab: Plate Solver, Sternkataloge, die KI-Modelle und PHD2.",
+    "docUrl": "/handbook/"
   }
 }

@@ -18,7 +18,7 @@ using System.Threading.Tasks;
 namespace NINA.Image.ImageAnalysis;
 
 /// <summary>
-/// À-trous ("with holes") stationary wavelet transform — the multiscale
+/// À-trous ("with holes") stationary wavelet transform, the multiscale
 /// foundation for wavelet sharpening and multiscale HDR. Decomposes a single
 /// float plane into N detail planes + a coarse residual using the B3 spline
 /// scaling function, so <c>residual + Σ details == original</c> exactly (up to

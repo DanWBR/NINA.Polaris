@@ -95,7 +95,7 @@ public static class OnnxEndpoints {
         g.MapPost("/download", async (ModelDownloadService dl, HttpContext ctx) => {
             if (!dl.IsConfigured) return Results.BadRequest(new { error = "No model bucket URL configured." });
             // Read the body defensively: a POST with no/invalid JSON body must not
-            // throw a BadHttpRequestException from implicit [FromBody] binding —
+            // throw a BadHttpRequestException from implicit [FromBody] binding,
             // return a clean 400 instead.
             ModelDownloadRequest? req = null;
             try { req = await ctx.Request.ReadFromJsonAsync<ModelDownloadRequest>(); } catch { /* no/invalid body */ }
@@ -332,14 +332,14 @@ public static class OnnxEndpoints {
         }).DisableAntiforgery();
     }
 
-    /// <summary>Body for POST /api/onnx/npu-run — run a Polaris AI Tool
+    /// <summary>Body for POST /api/onnx/npu-run, run a Polaris AI Tool
     /// (halo / upscale / decon) on the Hexagon NPU against a FITS on disk.
     /// <c>Target</c> + <c>PsfPixels</c> only apply to decon.</summary>
     public record NpuRunRequest(string Op, string Path, double Strength = 0.5,
                                 string? Version = null, string? Target = null,
                                 double PsfPixels = 4.0);
 
-    /// <summary>Body for POST /api/onnx/download — the on-disk family dir
+    /// <summary>Body for POST /api/onnx/download, the on-disk family dir
     /// (e.g. "nox-color-ai-models") + version to pull from the bucket.</summary>
     public record ModelDownloadRequest(string Dir, string Version);
 }

@@ -142,6 +142,14 @@ Filter Wheel card exposes filter swap controls; the filter labels come
 from the rig's `FilterOffsets` table, edited in the **Manage rigs**
 modal.
 
+The wheel comes back on the filter it was last set to. INDI drivers keep
+`FILTER_SLOT` in their own config file, and Polaris loads that config
+when a device connects, so the slot has to be saved for the choice to
+survive: every filter change writes it a few seconds later. The first
+connect after an update still honours whatever was in the file, so if
+the wheel lands on the wrong filter once, set the one you want and it
+sticks from then on.
+
 ### Guiding system
 
 One card covers the whole guide setup, split into three labelled
@@ -282,6 +290,41 @@ Beyond the obvious device names, each rig persists:
 - the filter offsets table;
 - live-stack triggers (the refocus and recenter policy, see
   @sec-live-stacking).
+
+### Who owns gain and offset {#sec-rig-gain-offset}
+
+Worth spelling out, because it surprises people arriving from a
+driver-centric workflow: **Polaris owns gain and offset**, the way
+N.I.N.A. and ASIAIR do. They are sent to the camera before every capture,
+and whatever the driver's own control panel (INDI, ASCOM) was set to is
+overwritten each time an exposure starts.
+
+That push exists for a reason: a freshly created INDI driver
+configuration sits at offset 1, which clips the shadow end of an IMX571
+sensor's histogram to black, and the field reports it produced were of
+lights that looked like darks.
+
+**Offset is per panel.** LIVE, PREVIEW, AUTORUN and ADV each have their
+own Offset field, and a capture obeys the field of the panel it came from:
+a framing snap and a live stack are different jobs and do not have to
+agree about the pedestal. All four save to the active rig, so they survive
+a reload and follow the rig rather than the browser. In ADV an exposure
+instruction may pin its own offset, which outranks the panel's field;
+captures with no panel of their own, the plate solve, autofocus, polar
+alignment and the video stream, use the LIVE value.
+
+**An offset of 0 means "read the driver".** That panel's captures send
+nothing, the camera keeps whatever you set in its own control panel, and
+the frame's FITS OFFSET card records what the driver reports it is
+running at. The card always describes the capture that took the frame:
+the value that capture applied, or the driver's value when it applied
+none. A camera whose driver advertises no offset control at all gets no
+OFFSET card, because there would be nothing true to write in it.
+
+So there are two coherent ways to work, and the rig's field picks
+between them per panel: type the pedestal you want into the panel and let
+Polaris own it, or set that panel to 0 and manage the offset in the
+driver.
 
 ## The telescope and accessory catalogs
 
@@ -424,6 +467,43 @@ and the INDI Drivers section shows the running iframe immediately on
 first open. Without it (the default), indi-web only runs when you
 click **Start**.
 
+### Installing a driver package
+
+The driver you need is not always installed. A new camera, a focuser
+from a different maker, a GPS dongle: each lives in its own Debian
+package, and until that package is on the host, indi-web has nothing
+to offer in its driver list.
+
+Open **Install drivers**, the collapsible block just under the
+indi-web control row. It lists the driver packages Polaris can install
+on this host, each with a short note on what it covers, whether it is
+already installed and at which version, and an **Install** button when
+it is available and missing. Clicking it downloads and installs the
+package, then restarts indi-web so the new drivers appear in the
+embedded UI. Nothing else is touched, and no device moves.
+
+Two rules shape what the list contains, and both exist because of the
+same trap. INDI on Debian and Ubuntu comes from one of two places:
+the astronomy PPA, which ships the whole third-party driver set as a
+single `indi-3rdparty-drivers` package, or the distribution archive,
+which ships one package per family (`indi-asi`, `indi-toupbase`,
+`indi-svbony` and so on). The two builds cannot be installed side by
+side. Ask `apt` for a driver from the wrong one and it happily makes
+room by removing the INDI you are actually using, and PHD2 along with
+it, in the middle of a session.
+
+So Polaris first works out which of the two builds is installed, and
+offers only packages built against it. Then, before installing
+anything, it asks `apt` what it would do and reads the answer. If the
+plan removes so much as one package, the install is refused and the
+card tells you exactly what would have gone. An install from here can
+add software; it can never take any away.
+
+If the list is empty, or the driver you want is missing from it, the
+package is not in the repositories this host has configured. That is
+the case to solve at the terminal, with `apt` and the PPA
+instructions on the INDI site, rather than from this card.
+
 ### Restarting a wedged driver
 
 Sometimes a single INDI driver stops responding mid-session, most
@@ -551,16 +631,90 @@ the configured host and port. Check that they match what indi-web's
 "Server" page reports.
 
 **You want to manage indi-web with your own systemd unit instead.**
-Do not. `IndiWebManagerService` is designed to be the sole owner of
-the indi-web process. With a parallel unit, Polaris probes
-`127.0.0.1:8624` on boot, sees a listener, and flips the status to
-running, but its **Stop** button then fails silently because Polaris
-did not spawn that process; and if `IndiWeb:AutoStart` is true while
-the unit also starts on boot, both try to bind 8624 and one loses
-with an `EADDRINUSE` ("address already in use") error. For 24/7
-observatory rigs where the Polaris server is
-itself a systemd unit, set `IndiWeb:AutoStart = true` and let Polaris
-handle the lifecycle.
+On a host installed from the `.deb` there already is one, and Polaris
+uses it: `polaris-indiweb.service`. Polaris starts, stops and restarts
+that unit instead of forking indi-web itself, which is what keeps
+`indiserver` and every driver under it alive when `polaris.service`
+restarts. An update, a crash or a `sudo systemctl restart polaris`
+leaves the mount tracking and the camera on its setpoint; only the web
+UI blinks. The **INDI** card's status row names the owner, `systemd`
+or `child-process`, so you can tell which mode a host is in.
+
+Do not add a second unit of your own beside it. Both would try to bind
+8624 and one loses with an `EADDRINUSE` ("address already in use")
+error. To point the packaged unit at an indi-web you installed
+yourself, create `/etc/default/polaris-indiweb`:
+
+```bash
+INDIWEB_BIN=/usr/local/bin/indi-web
+INDIWEB_PORT=8624
+INDIWEB_HOST=127.0.0.1
+```
+
+Keep the port and host equal to `IndiWeb:Port` and
+`IndiWeb:BindAddress` in `appsettings.json`, or Polaris probes a port
+nobody is listening on and reports indi-web as down.
+
+Running Polaris from a source checkout, or on macOS, there is no such
+unit and Polaris falls back to spawning indi-web as a child process.
+That is fine when nothing is going to restart a unit underneath it.
+
+## When the camera itself disappears
+
+A native camera, one driven through its vendor SDK rather than through
+INDI, used to keep reporting itself connected after the cable came out.
+The temperature read as zero, the cooler read as off, and the first
+sign of trouble was an exposure failing, or a sequence quietly burning
+through frames that never arrived. The SDK knew: it was returning "this
+camera has been removed" to every call. Nothing looked at the answer.
+
+Polaris now does. The status loop already asks the camera for its
+temperature once a second, so the removal code arrives without any
+extra polling, on Windows and on Linux alike. ZWO, SVBony and
+Player One report it as a return code; ToupTek and Altair raise a
+disconnect event, which Polaris was registered for and used to ignore.
+On any of them the reaction is the same:
+
+- the camera is marked disconnected, immediately, so everything that
+  waits for a healthy camera actually waits. An autorun, an advanced
+  sequence or a plan stops instead of failing frame after frame
+- a notification says which camera it was and what to check
+- the camera card keeps the reason on screen after the toast has gone
+
+A disconnect you asked for stays silent, because that is not news. The
+message only appears for a link nobody asked to drop.
+
+Two limits worth knowing. A camera driven through INDI is a different
+path: the driver stays loaded and usually keeps the device defined, so
+what you see depends on the driver rather than on Polaris, and the
+driver watchdog handles that case (@sec-rigs). And a DSLR over gphoto
+or the Canon SDK is not covered yet.
+
+## When a device vanishes: Reset USB {#sec-reset-usb}
+
+A camera that stops appearing, a focuser whose serial port is suddenly
+gone, a driver answering every command with an input/output error: on a
+small board this happens, and the usual cure is a walk to the telescope
+to unplug and replug a cable.
+
+**Reset USB**, in the INDI card, does that walk for you. It asks the
+kernel to enumerate the bus again, which recovers a device it had lost
+track of and a serial adapter that renumbered, and then restarts the
+INDI drivers so none of them is left holding a port that no longer
+exists. The chain carrying the root filesystem is deliberately left
+alone, so a board booting from a USB SSD cannot re-enumerate its own
+disk out from under itself.
+
+Read what it reports. If a device appears that was not there before,
+the reset recovered it. If nothing changes, the device is not
+electrically present, and no amount of re-enumeration will change that:
+a USB-C cable with no data pairs, for instance, comes back as a
+`USB Billboard Device` every single time. That is the moment to go and
+check the cable, the connector and the power, instead of restarting
+software.
+
+Every device disconnects and comes back when you press it, so do not
+press it in the middle of a capture.
 
 ## The INDI control panel
 

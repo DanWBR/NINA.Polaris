@@ -68,6 +68,36 @@ hit a bug, capture the Polaris log (`journalctl -u polaris.service -f` on the
 Pi) around connect/capture and file it - the fragile spots below are the
 first places to look.
 
+## Disconnect detection (unplugged camera)
+
+Native cameras report the removal and Polaris acts on it. Two mechanisms,
+both cross-platform, no bus watcher and no extra polling:
+
+- **Return codes**, read by the 1 Hz status loop that already fetches
+  temperature and cooler power: `ASI_ERROR_CAMERA_REMOVED` /
+  `ASI_ERROR_INVALID_ID`, `SVB_ERROR_CAMERA_REMOVED` / `SVB_ERROR_INVALID_ID`,
+  `POA_ERROR_DEVICE_NOT_FOUND` / `POA_ERROR_INVALID_ID`. Only these count: a
+  timeout or a buffer error is a bad moment, not a missing camera.
+- **Events** for ToupTek and Altair: `EVENT_DISCONNECTED` and `EVENT_ERROR`
+  on the pull callback that was already registered (it used to drop
+  everything that was not `EVENT_IMAGE`).
+
+What happens then: the adapter sets `IsConnected=false` and records
+`ICamera.DisconnectReason`, which rides the `equipment.camera.disconnectReason`
+status field. `CameraLinkWatch` turns the transition into exactly one
+notification (`NotificationService.Push("error", ...)`) and the camera card
+keeps the reason on screen. A deliberate disconnect clears the reason and says
+nothing.
+
+The knock-on effect matters more than the message: `CameraReadyGate.IsReady`
+reads `IsConnected`, so AUTORUN, ADV, PLAN and LIVE now wait for the camera to
+come back instead of failing frame after frame against a device that is not
+there.
+
+Not covered: INDI-driven cameras (the driver stays loaded; that is the
+`IndiDriverWatchdogService` path) and the DSLR backends (Canon EDSDK's
+`kEdsStateEvent_Shutdown` is still ignored, Nikon and Sony are stubs).
+
 ## Known fragile spots (first-test checklist)
 
 These are the parts most likely to need a fix once a real camera is plugged

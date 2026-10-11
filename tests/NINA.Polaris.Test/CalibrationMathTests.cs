@@ -145,15 +145,13 @@ public class CalibrationMathTests {
     [Test]
     public void FindNearestDark_PicksClosestExposureAtMatchingGain() {
         var darks = new List<FrameRow> {
-            MakeRow(id: 1, gain: 100, exp: 30.0),
-            MakeRow(id: 2, gain: 100, exp: 60.0),
-            MakeRow(id: 3, gain: 200, exp: 120.0),  // gain mismatch, skip
-            MakeRow(id: 4, gain: 100, exp: 120.0),
+            MakeRow(id: 1, gain: 100, exp: 299.0),
+            MakeRow(id: 2, gain: 100, exp: 300.2),
+            MakeRow(id: 3, gain: 200, exp: 300.0),  // gain mismatch, skip
+            MakeRow(id: 4, gain: 100, exp: 301.5),
         };
-        var pick = CalibrationMath.FindNearestDark(darks, exposure: 90.0, gain: 100);
-        Assert.That(pick?.Id, Is.EqualTo(2).Or.EqualTo(4),
-            "tied 30s gap to 60s and 120s -- first-seen wins, which is row 2");
-        Assert.That(pick?.Id, Is.EqualTo(2));   // pin tie-break order
+        var pick = CalibrationMath.FindNearestDark(darks, exposure: 300.0, gain: 100);
+        Assert.That(pick?.Id, Is.EqualTo(2), "closest exposure inside the tolerance");
     }
 
     [Test]
@@ -163,6 +161,86 @@ public class CalibrationMathTests {
         };
         var pick = CalibrationMath.FindNearestDark(darks, exposure: 60.0, gain: 100);
         Assert.That(pick, Is.Null);
+    }
+
+    // ---------- the exposure tolerance ----------
+
+    [Test]
+    public void FindNearestDark_RefusesADarkTakenAtAnotherExposure() {
+        // The hole this closes: "nearest" with no ceiling meant the only dark
+        // of the right gain always won, so a 10 s dark was subtracted from a
+        // 300 s light and reported as a match. A light with its dark current
+        // intact is visible and fixable; a light minus the wrong dark is
+        // quietly wrong.
+        var darks = new List<FrameRow> { MakeRow(id: 1, gain: 100, exp: 10.0) };
+        Assert.That(CalibrationMath.FindNearestDark(darks, exposure: 300.0, gain: 100), Is.Null);
+    }
+
+    [Test]
+    public void DarkExposureTolerance_IsOnePercentWithAHalfSecondFloor() {
+        Assert.That(CalibrationMath.DarkExposureTolerance(300.0), Is.EqualTo(3.0).Within(1e-9));
+        Assert.That(CalibrationMath.DarkExposureTolerance(10.0), Is.EqualTo(0.5).Within(1e-9),
+            "1% of 10s is 0.1s, which would reject a driver rounding 10.0 to 10.02");
+        Assert.That(CalibrationMath.DarkExposureTolerance(0.5), Is.EqualTo(0.5).Within(1e-9));
+    }
+
+    [Test]
+    public void FindNearestDark_AcceptsASmallExposureDifference() {
+        // Drivers round. 300.0 asked for, 300.04 recorded, still the same dark.
+        var darks = new List<FrameRow> { MakeRow(id: 7, gain: 100, exp: 300.04) };
+        Assert.That(CalibrationMath.FindNearestDark(darks, exposure: 300.0, gain: 100)?.Id,
+            Is.EqualTo(7));
+    }
+
+    // ---------- the camera ----------
+
+    [Test]
+    public void FindNearestDark_WillNotCrossCameras() {
+        // Two bodies on one rig, same gain, same exposure. Before this the
+        // pick was whichever row came back first, and a same-size sensor
+        // sailed past the pixel-count check that fires afterwards.
+        var darks = new List<FrameRow> {
+            MakeRow(id: 1, gain: 100, exp: 300.0, camera: "ZWO ASI2600MM Pro"),
+            MakeRow(id: 2, gain: 100, exp: 300.0, camera: "ZWO ASI2600MC Pro"),
+        };
+        Assert.That(CalibrationMath.FindNearestDark(darks, 300.0, 100, "ZWO ASI2600MC Pro")?.Id,
+            Is.EqualTo(2));
+        Assert.That(CalibrationMath.FindNearestDark(darks, 300.0, 100, "SVBony SV605CC"), Is.Null,
+            "no dark from that camera, and another camera's is not a substitute");
+    }
+
+    [Test]
+    public void AnUnknownCameraOnEitherSideStillMatches() {
+        // INSTRUME is only as good as the driver that wrote it, and a library
+        // indexed before the camera was recorded must not stop matching
+        // overnight: that would silently calibrate nothing.
+        Assert.That(CalibrationMath.SameCamera("", "ZWO ASI533MC"), Is.True);
+        Assert.That(CalibrationMath.SameCamera("ZWO ASI533MC", null), Is.True);
+        Assert.That(CalibrationMath.SameCamera("  ", "  "), Is.True);
+        Assert.That(CalibrationMath.SameCamera("zwo asi533mc", "ZWO ASI533MC"), Is.True,
+            "case and padding are not a different camera");
+        Assert.That(CalibrationMath.SameCamera("ZWO ASI533MC", "ZWO ASI2600MC"), Is.False);
+
+        var darks = new List<FrameRow> { MakeRow(id: 1, gain: 100, exp: 300.0, camera: "") };
+        Assert.That(CalibrationMath.FindNearestDark(darks, 300.0, 100, "ZWO ASI2600MC")?.Id,
+            Is.EqualTo(1), "an old master with no camera recorded is still usable");
+    }
+
+    [Test]
+    public void FlatAndBiasAlsoStayOnTheirCamera() {
+        var flats = new List<FrameRow> {
+            MakeRow(id: 1, gain: 100, filter: "L", camera: "A"),
+            MakeRow(id: 2, gain: 100, filter: "L", camera: "B"),
+        };
+        Assert.That(CalibrationMath.FindMatchingFlat(flats, "L", 100, "B")?.Id, Is.EqualTo(2));
+        Assert.That(CalibrationMath.FindMatchingFlat(flats, "L", 100, "C"), Is.Null);
+
+        var biases = new List<FrameRow> {
+            MakeRow(id: 3, gain: 100, camera: "A"),
+            MakeRow(id: 4, gain: 100, camera: "B"),
+        };
+        Assert.That(CalibrationMath.FindMatchingBias(biases, 100, "B")?.Id, Is.EqualTo(4));
+        Assert.That(CalibrationMath.FindMatchingBias(biases, 100, "C"), Is.Null);
     }
 
     [Test]
@@ -203,11 +281,12 @@ public class CalibrationMathTests {
         return new BaseImageData(pixels, props, new ImageMetaData());
     }
 
-    static FrameRow MakeRow(int id, int gain, double exp = 0, string? filter = null)
+    static FrameRow MakeRow(int id, int gain, double exp = 0, string? filter = null,
+                            string camera = "")
         => new FrameRow(
             Id: id, Path: $"/tmp/{id}.fits", FileName: $"{id}.fits",
             ImageType: "MASTERDARK", Filter: filter ?? "", Target: "",
             ExposureSec: exp, Gain: gain, Offset: 0,
             Width: 100, Height: 100, Bayer: "",
-            DateObs: "2026-05-31T22:00:00", FileSize: 1234);
+            DateObs: "2026-05-31T22:00:00", FileSize: 1234, Camera: camera);
 }

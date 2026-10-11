@@ -12,6 +12,7 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using NINA.Image.Interfaces;
 using NINA.Polaris.Services;
 using NINA.Polaris.Services.Planetary;
 
@@ -79,10 +80,19 @@ public static class TelescopeEndpoints {
 
             try {
                 // Push the correct UTC + location first so a stale mount clock/site
-                // can't send the OTA the wrong way into the tripod. Best-effort
-                // (the confirm-gated path is /api/sky/slew-and-center); on by default.
-                if (profiles.ActiveEquipmentProfile?.AutoSyncMountBeforeSlew != false)
-                    await MountTimeSync.SyncAsync(equip.Telescope, profiles.Active);
+                // cannot send the OTA to a physically wrong place. A confirmed
+                // Force request is the explicit operator override, matching the
+                // SKY and zenith slew paths.
+                if (!request.Force && profiles.ActiveEquipmentProfile?.AutoSyncMountBeforeSlew != false) {
+                    var sync = await MountTimeSync.SyncAsync(equip.Telescope, profiles.Active);
+                    if (!sync.Ok) {
+                        return Results.Json(new {
+                            needsConfirm = true,
+                            kind = "mount-sync",
+                            reason = sync.Reason,
+                        }, statusCode: StatusCodes.Status409Conflict);
+                    }
+                }
                 await equip.Telescope.SlewAsync(request.Ra, request.Dec);
                 return Results.Ok(new {
                     status = "slewing",
@@ -166,6 +176,21 @@ public static class TelescopeEndpoints {
             }
 
             try {
+                // Keep this alternate slew path consistent with ordinary GoTo:
+                // its equatorial zenith target uses the profile location, while
+                // the mount needs the same location and UTC before it resolves
+                // that target. A confirmed request is the explicit operator
+                // override, matching /api/sky/slew-and-center.
+                if (!force && profiles.ActiveEquipmentProfile?.AutoSyncMountBeforeSlew != false) {
+                    var sync = await MountTimeSync.SyncAsync(scope, profiles.Active);
+                    if (!sync.Ok) {
+                        return Results.Json(new {
+                            needsConfirm = true,
+                            kind = "mount-sync",
+                            reason = sync.Reason,
+                        }, statusCode: StatusCodes.Status409Conflict);
+                    }
+                }
                 await scope.SlewAsync(ra, dec);
                 // Freeze the tube vertical. With tracking on it would drift west
                 // of the zenith over the flat session. Best-effort: a mount that
@@ -352,7 +377,7 @@ public static class TelescopeEndpoints {
             if (equip.Telescope == null)
                 return Results.BadRequest(new { error = "No telescope selected" });
             // Date.UtcNow forbidden in workflow scripts, fine here in a
-            // normal endpoint handler — request handlers ARE the place
+            // normal endpoint handler, request handlers ARE the place
             // where ambient time is read.
             var utc = body?.Utc ?? DateTime.UtcNow;
             var offset = body?.OffsetHoursFromUtc
@@ -375,7 +400,7 @@ public static class TelescopeEndpoints {
         // "sidereal" (default for star tracking) / "solar" (Sun) /
         // "lunar" (Moon's mean motion). Case-insensitive. Some INDI
         // drivers REQUIRE a track mode set before TRACK_ON actually
-        // engages — without it the mount silently ignores enable, so
+        // engages, without it the mount silently ignores enable, so
         // this endpoint is also called by the connect-wizard once on
         // first attach to force a known good baseline.
         group.MapPost("/tracking-mode", async (EquipmentManager equip,
@@ -444,6 +469,28 @@ public static class TelescopeEndpoints {
             }
         });
 
+        // Release of one d-pad arrow: halt that arrow's axis and nothing
+        // else. /abort is a different thing (an emergency stop that also
+        // cancels a GoTo and, on the ZWO AM3 / AM5 driver, tracking), so
+        // it stays behind the panel's explicit Stop button.
+        group.MapPost("/move/{direction}/stop", async (EquipmentManager equip, string direction) => {
+            if (equip.Telescope == null)
+                return Results.BadRequest(new { error = "No telescope selected" });
+            var dir = ParseJogDirection(direction);
+            if (dir == null)
+                return Results.BadRequest(new { error = $"Unknown direction: {direction}" });
+            try {
+                await equip.Telescope.StopMotionAsync(dir.Value);
+                return Results.Ok(new { status = "stopped", direction = dir.Value.ToString().ToLowerInvariant() });
+            } catch (NotSupportedException ex) {
+                return Results.Json(new { error = ex.Message }, statusCode: 501);
+            } catch (Exception ex) {
+                return Results.Json(new {
+                    error = $"Stop {direction} failed: {ex.Message}"
+                }, statusCode: 500);
+            }
+        });
+
         // SLEWRATE-1: list the driver's TELESCOPE_SLEW_RATE steps for
         // the slider UI. Returns rates ordered the way the driver
         // advertised them (slow-to-fast for indilib mounts) so a
@@ -457,7 +504,7 @@ public static class TelescopeEndpoints {
         });
 
         // SLEWRATE-2: pick one of the advertised rates. ElementName is
-        // case-sensitive per INDI spec (SLEW_FIND, not slew_find) — UI
+        // case-sensitive per INDI spec (SLEW_FIND, not slew_find), UI
         // sends back the exact Name string it got from /slew-rates.
         group.MapPut("/slew-rate", async (EquipmentManager equip, SlewRateRequest req) => {
             if (equip.Telescope == null)
@@ -535,7 +582,7 @@ public static class TelescopeEndpoints {
         // Per-driver telescope discovery. INDI uses device names from
         // the active connection; ASCOM uses registered ProgIDs from
         // the local Windows registry. SynScan-WiFi is host:port-based
-        // (no enumeration possible), so it returns empty here — the
+        // (no enumeration possible), so it returns empty here, the
         // user types the address directly.
         group.MapGet("/discover", (EquipmentManager equip, string? driver) => {
             var d = (driver ?? "indi").Trim().ToLowerInvariant();
@@ -568,7 +615,7 @@ public static class TelescopeEndpoints {
             // projection puts the target "below horizon". The INDI
             // TIME_UTC default is the Unix epoch (2000-01-01), so on a
             // mount that just power-cycled the equator+meridian sit
-            // wherever the year-2000 LST says they sit — random failures
+            // wherever the year-2000 LST says they sit, random failures
             // on every slew until the operator manually opens INDI Web
             // and types the date.
             //
@@ -602,7 +649,7 @@ public static class TelescopeEndpoints {
                 } else {
                     locationStatus = "skipped: observatory location not configured in Settings";
                     logger.LogWarning(
-                        "Telescope auto-sync skipped — observatory location is (0,0). " +
+                        "Telescope auto-sync skipped, observatory location is (0,0). " +
                         "Set latitude/longitude in Settings or the mount won't compute LST correctly.");
                 }
             } catch (NotSupportedException) {
@@ -631,14 +678,14 @@ public static class TelescopeEndpoints {
         });
     }
 
-    public record SlewRequest(double Ra, double Dec);
+    public record SlewRequest(double Ra, double Dec, bool Force = false);
     public record TrackingRequest(bool Enabled);
     /// <summary>Optional body for POST /slew-zenith. Force=true overrides the
     /// pre-slew safety confirmation (a null or empty body means Force=false).</summary>
     public record ZenithSlewRequest(bool Force = false);
     /// <summary>PUT /api/telescope/slew-rate body. ElementName matches
     /// one of the Name strings returned by GET /api/telescope/slew-rates
-    /// — typically <c>SLEW_GUIDE</c> / <c>SLEW_CENTERING</c> /
+    ///, typically <c>SLEW_GUIDE</c> / <c>SLEW_CENTERING</c> /
     /// <c>SLEW_FIND</c> / <c>SLEW_MAX</c> for LX200-class mounts.</summary>
     public record SlewRateRequest(string ElementName);
     /// <summary>Optional override for POST /sync-location. All three
@@ -653,6 +700,19 @@ public static class TelescopeEndpoints {
     /// <summary>Body for POST /tracking-mode. Mode = "sidereal" |
     /// "solar" | "lunar" (case-insensitive). Required field.</summary>
     public record TrackingModeRequest(string Mode);
+
+    /// <summary>Route segment to jog axis. Accepts the long names the
+    /// d-pad sends and the single letters the keyboard shortcuts use.
+    /// Null for anything else, so the endpoint answers 400 instead of
+    /// silently halting an axis the caller did not name.</summary>
+    internal static MountJogDirection? ParseJogDirection(string? direction)
+        => (direction ?? "").Trim().ToLowerInvariant() switch {
+            "north" or "n" => MountJogDirection.North,
+            "south" or "s" => MountJogDirection.South,
+            "east"  or "e" => MountJogDirection.East,
+            "west"  or "w" => MountJogDirection.West,
+            _              => null,
+        };
 
     /// <summary>Poll a predicate at 250 ms cadence until it goes
     /// true or the timeout elapses. Used by /find-home-reset to

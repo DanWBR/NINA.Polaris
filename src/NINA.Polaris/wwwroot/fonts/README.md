@@ -11,6 +11,15 @@ inside Polaris (MPL 2.0 product) with attribution preserved.
 | IBM Plex Sans | `plex-sans/` | https://github.com/IBM/plex | [OFL-1.1](https://github.com/IBM/plex/blob/master/packages/plex-sans/LICENSE.txt) |
 | JetBrains Mono | `jetbrains-mono/` | https://github.com/JetBrains/JetBrainsMono | [OFL-1.1](https://github.com/JetBrains/JetBrainsMono/blob/master/OFL.txt) |
 
+IBM Plex Sans is also vendored as **TrueType** (`IBMPlexSans-Regular.ttf`,
+`IBMPlexSans-Bold.ttf`), which the browser does not use. Those are for the
+host: the live broadcast draws its object card and banner with SkiaSharp, and
+neither Skia nor freetype can open woff2. Without them the overlay would depend
+on the operating system having fonts installed, and a minimal Debian image for
+a headless board often has none, so the card would come out blank on exactly
+the installs the feature is for. Same family, same OFL-1.1 licence, same
+upstream.
+
 Only Regular + Bold weights are vendored to keep the bundle under
 ~600 KB. If you need italic / extra weights, drop the additional
 `.woff2` files here and extend `@font-face` declarations in

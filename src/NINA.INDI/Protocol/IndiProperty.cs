@@ -42,7 +42,7 @@ public abstract class IndiProperty {
     public IndiPropertyPermission Permission { get; set; } = IndiPropertyPermission.ReadOnly;
     public double Timeout { get; set; }
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
-    /// <summary>Optional per-update explanation from the driver — INDI
+    /// <summary>Optional per-update explanation from the driver, INDI
     /// servers can attach <c>message="..."</c> on any set*Vector, and
     /// typically do so when reporting state=Alert (e.g. "Mount is parked",
     /// "Below horizon", "Slew limit exceeded"). Captured here so the

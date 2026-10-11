@@ -22,7 +22,7 @@ namespace NINA.Polaris.Services;
 /// against whether the board throttled.
 ///
 /// Both a weak power supply and poor cooling depress a fixed-workload score the
-/// same way — by pulling the CPU clock below its rated ceiling — so the raw
+/// same way, by pulling the CPU clock below its rated ceiling, so the raw
 /// number alone can't tell them apart. This trace captures the two signals that
 /// do: the hottest thermal zone (heat soak → cooling) and the sustained clock
 /// vs the advertised max (a clock held down while the SoC stays cool is the
@@ -42,7 +42,7 @@ internal sealed class ThermalSampler {
     private const int SampleIntervalMs = 250;
 
     // A sustained clock this far below the advertised ceiling means the governor
-    // pulled it down under load — i.e. the board throttled.
+    // pulled it down under load, i.e. the board throttled.
     private const double ThrottleRatio = 0.90;
     // Above this the SoC is hot enough that the throttle is heat-driven; a
     // throttle while comfortably below it points at power/undervoltage instead.

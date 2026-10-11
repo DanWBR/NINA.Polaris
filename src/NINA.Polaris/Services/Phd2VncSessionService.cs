@@ -31,7 +31,7 @@ namespace NINA.Polaris.Services;
 /// tab.
 ///
 /// Lifecycle: TightVNC installs as a Windows Service that the host
-/// OS manages. Polaris doesn't spawn a process — it only verifies
+/// OS manages. Polaris doesn't spawn a process, it only verifies
 /// the service exists, is running, and is listening on the loopback
 /// port. Start/Stop buttons call <see cref="ServiceController"/>;
 /// those calls require Polaris to be running elevated (admin), so
@@ -79,7 +79,7 @@ public class Phd2VncSessionService : BackgroundService {
 
     /// <summary>Public-facing service name expected on the host. The
     /// TightVNC installer registers <c>tvnserver</c>. We don't try
-    /// to match alternate VNC servers (UltraVNC, RealVNC) here —
+    /// to match alternate VNC servers (UltraVNC, RealVNC) here,
     /// users running those just stop the TightVNC card from appearing
     /// and connect to their server directly; the bridge still works
     /// against whatever listens on the configured port.</summary>
@@ -152,8 +152,8 @@ public class Phd2VncSessionService : BackgroundService {
         // detection.
         //
         // Order of attack:
-        //   1. HKLM\SOFTWARE\TightVNC\Server — canonical 64-bit
-        //   2. HKLM\SOFTWARE\Wow6432Node\TightVNC\Server — 32-bit
+        //   1. HKLM\SOFTWARE\TightVNC\Server, canonical 64-bit
+        //   2. HKLM\SOFTWARE\Wow6432Node\TightVNC\Server, 32-bit
         //      installer on 64-bit Windows
         //   3. HKLM 32-bit + 64-bit explicit RegistryView (catches
         //      WOW redirection quirks when the process's bitness
@@ -164,7 +164,7 @@ public class Phd2VncSessionService : BackgroundService {
         //   6. PATH scan for tvnserver.exe (last-resort)
         //
         // The Polaris user not having SOFTWARE\* read is what
-        // motivated splitting this out — we just keep walking the
+        // motivated splitting this out, we just keep walking the
         // list until we find the exe.
         string? exePath =
             ReadInstallPathFromHkey(RegistryHive.LocalMachine, @"SOFTWARE\TightVNC\Server")
@@ -200,7 +200,7 @@ public class Phd2VncSessionService : BackgroundService {
     /// <summary>Read an InstallPath / Path value from a registry hive
     /// and return the resolved <c>tvnserver.exe</c> on disk, or null
     /// if any step fails. ALL exceptions are swallowed because this
-    /// is a probe — a locked-down machine just falls through to the
+    /// is a probe, a locked-down machine just falls through to the
     /// next probe in the chain instead of failing the whole detect.</summary>
     [SupportedOSPlatform("windows")]
     [System.Diagnostics.DebuggerNonUserCode]
@@ -224,7 +224,7 @@ public class Phd2VncSessionService : BackgroundService {
 
     /// <summary>Walk the canonical ProgramFiles / ProgramFiles(x86)
     /// install locations looking for tvnserver.exe. Reached when
-    /// every registry probe came back empty — covers the case where
+    /// every registry probe came back empty, covers the case where
     /// TightVNC was installed normally but the polaris user can't
     /// read SOFTWARE\*.</summary>
     [SupportedOSPlatform("windows")]
@@ -265,7 +265,7 @@ public class Phd2VncSessionService : BackgroundService {
     /// <summary>Legacy thin wrapper retained for the few external
     /// call sites (tests) that still reach for it. Internally
     /// equivalent to <see cref="ReadInstallPathFromHkey"/> minus the
-    /// post-open value extraction — returns the raw key handle so
+    /// post-open value extraction, returns the raw key handle so
     /// callers can probe arbitrary values themselves.</summary>
     [SupportedOSPlatform("windows")]
     [System.Diagnostics.DebuggerNonUserCode]
@@ -282,7 +282,7 @@ public class Phd2VncSessionService : BackgroundService {
         try {
             using var sc = new ServiceController(ServiceName);
             // Accessing Status throws InvalidOperationException when the
-            // service doesn't exist — catch it as "not installed".
+            // service doesn't exist, catch it as "not installed".
             var status = sc.Status;
             ServiceInstalled = true;
             ServiceRunning = status == ServiceControllerStatus.Running;
@@ -293,7 +293,7 @@ public class Phd2VncSessionService : BackgroundService {
     }
 
     /// <summary>TCP probe against the local TightVNC server. 500 ms
-    /// timeout is plenty for loopback — anything slower means the
+    /// timeout is plenty for loopback, anything slower means the
     /// service is listening but the port handler is wedged, which the
     /// user needs to see as "not listening" so they restart the
     /// service.</summary>
@@ -346,7 +346,7 @@ public class Phd2VncSessionService : BackgroundService {
             LastError = null;
             return sc.Status == target;
         } catch (System.ComponentModel.Win32Exception ex) when ((uint)ex.NativeErrorCode == 0x80004005 || ex.NativeErrorCode == 5) {
-            // ERROR_ACCESS_DENIED (5) — Polaris not elevated.
+            // ERROR_ACCESS_DENIED (5), Polaris not elevated.
             LastError = "Access denied. Run Polaris as administrator, " +
                         "or start/stop the TightVNC service via services.msc.";
             return false;

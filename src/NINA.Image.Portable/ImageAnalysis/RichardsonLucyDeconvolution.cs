@@ -17,7 +17,7 @@ namespace NINA.Image.ImageAnalysis;
 /// Richardson-Lucy deconvolution (Richardson 1972; Lucy 1974) on linear,
 /// non-negative image data, driven by a <see cref="PsfModel"/> measured from
 /// the frame's own stars. Because the PSF is the real instrument+seeing
-/// response — not a single guessed FWHM — the inverse problem is well posed.
+/// response, not a single guessed FWHM, the inverse problem is well posed.
 ///
 /// Differentiators baked in:
 ///   • Total-variation regularization (Dey et al. 2006) damps the noise
@@ -46,7 +46,7 @@ public class RichardsonLucyDeconvolution {
 
     /// <summary>
     /// Use FFT-based convolution instead of the spatial path. Cost becomes
-    /// O(N log N) independent of the PSF stamp size — essential for full-res
+    /// O(N log N) independent of the PSF stamp size, essential for full-res
     /// frames with large measured PSFs on a low-power SBC. Numerically
     /// equivalent to the spatial path in the interior (zero-padded linear
     /// convolution with edge replication).
@@ -57,7 +57,7 @@ public class RichardsonLucyDeconvolution {
     /// Damping threshold T (in units of the measured noise σ) for damped
     /// Richardson-Lucy (White 1994). When &gt; 0 AND a per-pixel σ map is
     /// supplied, the RL correction is suppressed wherever the re-blurred model
-    /// already matches the data to within ~T·σ — this is what kills the
+    /// already matches the data to within ~T·σ, this is what kills the
     /// noise amplification and the dark over/under-shoot rings around stars
     /// that plague vanilla RL. 0 disables damping (classic RL).
     /// </summary>
@@ -82,7 +82,7 @@ public class RichardsonLucyDeconvolution {
     /// <summary>
     /// Deconvolve a single-channel linear image. Returns a new buffer; the
     /// input is left untouched. <paramref name="supportMask"/> (0..1, same
-    /// size) is optional — where 0 the original is kept, where 1 the full
+    /// size) is optional, where 0 the original is kept, where 1 the full
     /// deconvolution is used.
     /// </summary>
     public float[] Deconvolve(float[] image, int width, int height, PsfModel psf,
@@ -115,7 +115,7 @@ public class RichardsonLucyDeconvolution {
         var corr = new float[n];
         float[]? tv = TvLambda > 0 ? new float[n] : null;
 
-        // FFT engine (built once from the PSF) when enabled — convolution cost
+        // FFT engine (built once from the PSF) when enabled, convolution cost
         // then no longer scales with the kernel size.
         var fft = UseFft ? new FftConvolver(h, ks, width, height) : null;
 
@@ -229,7 +229,7 @@ public class RichardsonLucyDeconvolution {
     /// <summary>
     /// Zero the support <paramref name="mask"/> within <paramref name="dilate"/>
     /// pixels of any saturated pixel (≥ <paramref name="satLevel"/>). The cores
-    /// of saturated stars are clipped — the PSF can't reconcile a flat-topped
+    /// of saturated stars are clipped, the PSF can't reconcile a flat-topped
     /// peak, so RL drives the surrounding wing pixels down and rings them with a
     /// dark halo. Keeping the original over those stars (and a halo the size of
     /// the PSF) removes that artifact; they can't be honestly deconvolved
@@ -267,7 +267,7 @@ public class RichardsonLucyDeconvolution {
         });
 
         // Feather the protect edge (separable box blur) so the mask ramps
-        // smoothly 1→0 instead of stepping — a hard edge leaves a dark crescent
+        // smoothly 1→0 instead of stepping, a hard edge leaves a dark crescent
         // where the kept-original region meets the deconvolved region.
         if (feather > 0) {
             BoxBlur(protect, width, height, feather);
@@ -282,7 +282,7 @@ public class RichardsonLucyDeconvolution {
     /// Zero the support <paramref name="mask"/> over detected stars (feathered),
     /// so the deconvolution only ever touches the diffuse signal (nebula /
     /// galaxy) and every star is kept as the original. This is the robust way to
-    /// avoid the dark rings / colour halos RL produces around stars — especially
+    /// avoid the dark rings / colour halos RL produces around stars, especially
     /// saturated ones, whose clipped cores can't be reconciled with the PSF.
     /// <paramref name="starX"/>/<paramref name="starY"/> are centroids and
     /// <paramref name="starR"/> the protect radius per star (px).

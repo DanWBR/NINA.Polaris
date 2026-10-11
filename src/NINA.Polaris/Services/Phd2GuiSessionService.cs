@@ -310,7 +310,7 @@ public class Phd2GuiSessionService : BackgroundService {
         // xpra forks into the background. Gate readiness on PHD2 actually
         // RUNNING, not just on the TCP port answering.
         //
-        // The bind-tcp port comes up the instant xpra's server starts —
+        // The bind-tcp port comes up the instant xpra's server starts,
         // well before the `--start=phd2` child has launched and mapped its
         // window. Returning on the port alone is why the GUI tab sometimes
         // shows the bare xpra desktop (just the wallpaper), and the HTML
@@ -320,7 +320,7 @@ public class Phd2GuiSessionService : BackgroundService {
         //
         // So: poll for port + PHD2 process. If the port has been up for a
         // few seconds but PHD2 never appeared, recover once by issuing a
-        // start-child — the same thing the UI's "Relaunch PHD2" button does.
+        // start-child, the same thing the UI's "Relaunch PHD2" button does.
         bool portUp = false;
         bool recovered = false;
         for (int i = 0; i < 40; i++) {   // ~20s budget (PHD2 cold-start on a Pi is slow)

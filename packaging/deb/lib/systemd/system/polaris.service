@@ -9,6 +9,12 @@ Type=simple
 User=polaris
 Group=polaris
 WorkingDirectory=/opt/polaris
+# Put the vendor SDK sonames back on the newest library present, as root
+# (the + prefix), before the server starts. An archive package installed over
+# the source-built SDK repoints them at older builds: the focuser then dies
+# on a missing symbol and the camera quietly loses two years of SDK with no
+# symptom at all. The script is a no-op on a healthy host and never fails.
+ExecStartPre=-+/opt/polaris/bin/polaris-sdk-symlinks.sh
 ExecStart=/opt/polaris/NINA.Polaris
 
 # Polaris listens here. Change to 0.0.0.0:5000 for LAN access (default),

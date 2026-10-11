@@ -122,7 +122,7 @@ public static class FITSWriter {
         var local = meta.CreationTime.ToLocalTime();
         // DATE-OBS is the FITS-standard UTC start-of-observation keyword,
         // and the one PixInsight / astropy / Siril / ASTAP read for the
-        // observation time (SPCC refuses a frame without it — field
+        // observation time (SPCC refuses a frame without it, field
         // report). DATE-UTC/DATE-LOC are NINA conveniences kept alongside.
         AddStr(cards, "DATE-OBS", utc.ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture));
         AddStr(cards, "DATE-LOC", local.ToString("yyyy-MM-ddTHH:mm:ss.fff", CultureInfo.InvariantCulture));
@@ -161,6 +161,10 @@ public static class FITSWriter {
             Add(cards, "GAIN", meta.Camera.Gain.ToString(CultureInfo.InvariantCulture));
         if (meta.Camera.Offset != 0)
             Add(cards, "OFFSET", meta.Camera.Offset.ToString(CultureInfo.InvariantCulture));
+        // ISOSPEED is the keyword DSLR-aware tools read (N.I.N.A., Siril,
+        // PixInsight, DeepSkyStacker): what matching a light to its dark keys on.
+        if (meta.Camera.Iso > 0)
+            Add(cards, "ISOSPEED", meta.Camera.Iso.ToString(CultureInfo.InvariantCulture), "ISO");
         if (meta.Camera.PixelSizeX > 0)
             Add(cards, "XPIXSZ", Fmt(meta.Camera.PixelSizeX), "Pixel size X (um)");
         if (meta.Camera.PixelSizeY > 0)
@@ -171,6 +175,13 @@ public static class FITSWriter {
             Add(cards, "READOUTM", meta.Camera.ReadoutMode.ToString(CultureInfo.InvariantCulture));
         if (meta.Camera.BayerPattern != BayerPatternEnum.None)
             AddStr(cards, "BAYERPAT", meta.Camera.BayerPattern.ToString().ToUpperInvariant());
+        // Vendor readout modes (low noise, conversion gain, high full well...).
+        // Written as strings: they are modes, not measurements, and a reader
+        // matching lights to darks compares them as text.
+        foreach (var c in meta.Camera.VendorCards) {
+            if (!string.IsNullOrWhiteSpace(c.Keyword) && !string.IsNullOrWhiteSpace(c.Value))
+                AddStr(cards, c.Keyword, c.Value, c.Comment);
+        }
 
         // ---- Telescope ----
         // TELESCOP carries the mount device name (existing behaviour); OTA
@@ -324,12 +335,14 @@ public static class FITSWriter {
         cards.Add(card.Length > 80 ? card.Substring(0, 80) : card.PadRight(80));
     }
 
-    private static void AddStr(List<string> cards, string key, string? value) {
+    private static void AddStr(List<string> cards, string key, string? value,
+                               string? comment = null) {
         if (string.IsNullOrWhiteSpace(value)) return;
         var escaped = value.Replace("'", "''");
         if (escaped.Length > 68) escaped = escaped.Substring(0, 68);
         var quoted = $"'{escaped}'";
         var card = $"{key,-8}= {quoted,-20}";
+        if (!string.IsNullOrEmpty(comment)) card += " / " + comment;
         cards.Add(card.Length > 80 ? card.Substring(0, 80) : card.PadRight(80));
     }
 
@@ -343,7 +356,7 @@ public static class FITSWriter {
     /// The metadata contract is RA in HOURS (0–24), so the normal case is
     /// hours × 15. Defensive guard: if a mount adapter ever hands us a value
     /// already in degrees (> 24, which is impossible as hours), pass it through
-    /// instead of multiplying again — otherwise we'd write a garbage RA like
+    /// instead of multiplying again, otherwise we'd write a garbage RA like
     /// 1263° (84.2° × 15) that breaks plate solving. A no-op for valid hours.
     /// </summary>
     private static double RaToDeg(double ra) => ra > 24.0 ? ra : ra * 15.0;

@@ -18,7 +18,7 @@ using NINA.Polaris.Services.Plan;
 namespace NINA.Polaris.Services;
 
 /// <summary>
-/// Fires a rig teardown at a scheduled wall-clock time — the "fell asleep, forgot
+/// Fires a rig teardown at a scheduled wall-clock time, the "fell asleep, forgot
 /// the rig is running" safety net. When the time arrives it stops capture, stops
 /// guiding, parks the mount, gently warms the camera and turns cooling off, and
 /// optionally powers the host down.
@@ -95,7 +95,7 @@ public sealed class ScheduledShutdownService : BackgroundService {
         // Clear the persisted schedule up front so a crash mid-teardown doesn't
         // re-fire it on the next boot.
         _profiles.UpdateSettings(p => { p.ScheduledShutdownUtc = null; });
-        _notify.Push("info", "Scheduled shutdown reached — tearing the rig down.", 8000);
+        _notify.Push("info", "Scheduled shutdown reached, tearing the rig down.", 8000);
         _logger.LogInformation("Scheduled shutdown firing (host={Host})", host);
 
         // Each step is best-effort and isolated: one failure must not stop the
@@ -153,12 +153,12 @@ public sealed class ScheduledShutdownService : BackgroundService {
         var cam = equip?.Camera;
         if (cam is not { IsConnected: true }) return;
         // Gentle warm-up (ramp the setpoint up, then cooler off) rather than an
-        // abrupt cut — protects the sensor from thermal shock/condensation.
+        // abrupt cut, protects the sensor from thermal shock/condensation.
         if (ramp != null) {
             var rate = _profiles.ActiveEquipmentProfile.CoolerRampDegPerMinute ?? 2.0;
             ramp.Start(cam, targetC: 15.0, ratePerMinute: rate <= 0 ? 2.0 : rate,
                        coolerOnFirst: false, coolerOffWhenDone: true, source: "scheduled-shutdown");
-            // Only wait for the ramp when we're about to cut host power — otherwise
+            // Only wait for the ramp when we're about to cut host power, otherwise
             // let it finish in the background so the teardown returns promptly.
             if (waitForWarm) {
                 var deadline = DateTime.UtcNow.AddMinutes(20);

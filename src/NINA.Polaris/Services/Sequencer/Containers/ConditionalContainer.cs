@@ -22,7 +22,7 @@ namespace NINA.Polaris.Services.Sequencer.Containers;
 ///
 /// This is the run-once counterpart to a looping <c>Sequential</c> container
 /// (NINA desktop calls it a Conditional/Instruction-Set container). Unlike a
-/// loop, the predicate is NOT re-checked between items — it's a gate, not a
+/// loop, the predicate is NOT re-checked between items, it's a gate, not a
 /// loop exit. For per-item re-checking use a Sequential container with IsLoop.
 /// </summary>
 public class ConditionalContainer : SequenceContainer {

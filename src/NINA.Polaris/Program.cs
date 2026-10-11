@@ -69,7 +69,7 @@ Thread.CurrentThread.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
 // Sub-process entry: when the parent server spawns us with
 // `--ascom-setup <ProgID>` we run the ASCOM SetupDialog and exit,
 // skipping all of the HTTP/Kestrel boot. See AscomSetupRunner +
-// AscomEndpoints for the rationale (driver AVE isolation — keeps a
+// AscomEndpoints for the rationale (driver AVE isolation, keeps a
 // crashing ZWO ASCOM driver from killing the main API server).
 if (args.Length >= 2
     && args[0] == "--ascom-setup"
@@ -253,7 +253,7 @@ builder.Services.AddHostedService<FilterNameRestoreService>();
 builder.Services.AddSingleton<DiskInstallService>();
 builder.Services.AddSingleton<ImageRelayService>();
 builder.Services.AddSingleton<CameraStreamService>();
-// Server-owned LIVE capture loop — now the only LIVE loop (the LIVE shutter
+// Server-owned LIVE capture loop, now the only LIVE loop (the LIVE shutter
 // always starts/stops this; the browser never drives repeated captures).
 builder.Services.AddSingleton<LiveCaptureService>();
 // Auxiliary (second) camera capture+save loop, runs alongside LIVE/AUTORUN.
@@ -264,6 +264,18 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Planetary.PlanetaryStackerSe
 // SER) into an animated GIF (self-contained) and/or an MP4 (ffmpeg when present).
 builder.Services.AddSingleton<NINA.Polaris.Services.External.FfmpegService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Timelapse.MediaEncodeService>();
+// Live broadcast: destination, quality and the stream key. Its own file under
+// the data dir, never the profile, which is served verbatim to every client.
+builder.Services.AddSingleton<NINA.Polaris.Services.Broadcast.BroadcastConfigService>();
+// The object card on the broadcast: catalogue facts, a bundled cutout, and a
+// description that prefers our own text over a cached online one.
+builder.Services.AddSingleton<NINA.Polaris.Services.Broadcast.ObjectCardService>();
+// The broadcast itself: composes frames and keeps an ffmpeg fed with them.
+// Nothing here starts on its own; it waits for the button.
+// The corner picture on a broadcast: the guide frame, the auxiliary camera,
+// or a snapshot URL such as an all sky camera.
+builder.Services.AddSingleton<NINA.Polaris.Services.Broadcast.BroadcastPipService>();
+builder.Services.AddSingleton<NINA.Polaris.Services.Broadcast.BroadcastService>();
 // Star trails: fixed-camera (tracking off) capture + per-pixel MAX composite,
 // previewed live and saved as a FITS master + JPEG; can feed the time-lapse builder.
 builder.Services.AddSingleton<NINA.Polaris.Services.StarTrail.StarTrailService>();
@@ -283,7 +295,7 @@ builder.Services.AddSingleton<LiveStackCheckpointService>();
 builder.Services.AddSingleton<LiveStackWatchdogService>();
 // REFSUG-1: trend-based refocus suggestion. Listens to the same
 // FrameIntegrated event as LSTR-3 but only when RefocusEnabled is
-// OFF — covers manual-focuser users who cannot be auto-fired.
+// OFF, covers manual-focuser users who cannot be auto-fired.
 // Eager-resolved below alongside LSTR so the subscription is wired
 // before the first /api/livestack/start hit.
 builder.Services.AddSingleton<RefocusSuggestionService>();
@@ -341,7 +353,7 @@ builder.Services.AddSingleton<CoolingRampService>();
 // Server-side progress + ETA for the tiled classical RL deconvolution.
 builder.Services.AddSingleton<DeconProgressService>();
 builder.Services.AddSingleton<SlewCenterService>();
-// "Center on Sun/Moon/planet" — solve-near-and-offset (Mode A) for
+// "Center on Sun/Moon/planet", solve-near-and-offset (Mode A) for
 // solar-system objects plate solving can't handle directly.
 builder.Services.AddSingleton<SolarSystemCenterService>();
 builder.Services.AddSingleton<ProfileService>();
@@ -368,6 +380,9 @@ builder.Services.AddSingleton<ImageWriterService>();
 // factory hands out a fresh connection-owning adapter per connect cycle.
 builder.Services.AddSingleton<NINA.Polaris.Services.Storage.IStorageTargetFactory,
     NINA.Polaris.Services.Storage.StorageTargetFactory>();
+// rclone: the cloud destinations of the storage push. Singleton because it
+// owns the config path and the binary lookup cache, not a connection.
+builder.Services.AddSingleton<NINA.Polaris.Services.External.RcloneService>();
 builder.Services.AddSingleton<StoragePushService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<StoragePushService>());
 builder.Services.AddSingleton<UsbDriveWatcherService>();
@@ -419,11 +434,21 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<Phd2VncSessionServ
 // dual-registration shape as Phd2GuiSession so endpoint handlers
 // resolve the singleton AND the background loop (auto-start +
 // health probe) runs.
+// Brands for the INDI driver list, read from the driver XML on disk: indi-web
+// serves the product label and not the manufacturer, so a Wanderer or a
+// PrimaLuceLab device could not be found by brand.
+builder.Services.AddSingleton<IndiDriverManifest>();
 builder.Services.AddSingleton<IndiWebManagerService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<IndiWebManagerService>());
 // INDI profile assistant: stateless sysfs reader behind /api/indi/detect.
 // Singleton only because it has no per-request state; it holds no handles.
 builder.Services.AddSingleton<UsbScanService>();
+// The equipment block of /ws/status, refreshed on its own thread. Dual
+// registration: the contributor reads Latest, the hosted loop fills it. Every
+// property in that block is a blocking device read, and doing them on a socket
+// or request thread froze the host (field report 2026-09-22).
+builder.Services.AddSingleton<EquipmentSnapshotService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<EquipmentSnapshotService>());
 // Wedged-INDI-driver watchdog: on repeated BLOB timeouts, restart just that
 // driver through indi-web (a device reconnect can't fix a stuck driver). Dual
 // registration so the hosted StartAsync subscribes to IndiClient.BlobTimeout.
@@ -459,6 +484,10 @@ builder.Services.AddSingleton<AutoFocusService>();
 // Per-filter focus memory: learns the optimal focuser position per filter from
 // autofocus runs and reuses a still-valid point on a manual filter change.
 builder.Services.AddSingleton<NINA.Polaris.Services.Focus.FilterFocusMemoryService>();
+// Per-filter focus run (FOCUS tab). Singleton because it HOLDS the measured
+// points until the operator applies them: a scoped instance would throw away a
+// sweep between two requests.
+builder.Services.AddSingleton<NINA.Polaris.Services.Focus.FilterFocusSweepService>();
 // UPDGATE: one place that knows whether the host is mid-session, so an
 // action that restarts the process can refuse instead of finding out.
 builder.Services.AddSingleton<HostActivityService>();
@@ -524,6 +553,8 @@ builder.Services.AddSingleton<NINA.Polaris.WebSocket.Status.IStatusContributor,
     NINA.Polaris.WebSocket.Status.ProcessingStatusContributor>();
 builder.Services.AddSingleton<NINA.Polaris.WebSocket.Status.IStatusContributor,
     NINA.Polaris.WebSocket.Status.HostStatusContributor>();
+builder.Services.AddSingleton<NINA.Polaris.WebSocket.Status.IStatusContributor,
+    NINA.Polaris.WebSocket.Status.BroadcastStatusContributor>();
 builder.Services.AddSingleton<NINA.Polaris.WebSocket.StatusPayloadBuilder>();
 builder.Services.AddSingleton<MeridianFlipService>();
 // Auto meridian flip during LIVE stacking (polls HA, flips when due).
@@ -629,8 +660,20 @@ builder.Services.AddSingleton<NINA.Image.Gpu.IGpuCompute>(sp => {
     return new NINA.Image.Gpu.CpuGpuCompute();
 });
 builder.Services.AddSingleton<FileBrowserService>();
+builder.Services.AddSingleton<DownloadTicketService>();
+builder.Services.AddSingleton<UsbResetService>();
+builder.Services.AddSingleton<IndiPackageService>();
+builder.Services.AddSingleton<NINA.Polaris.Services.Storage.RcloneOAuthService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.External.SirilService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.External.GraXpertService>();
+// Per-frame background extraction during LIVE stacking. The host producer
+// runs the 256x256 model on whatever accelerator the board has; the client
+// producer parks one job for the operator's browser, which is the only path
+// that works on a board with no NPU and no Vulkan GPU. The router picks
+// between them per the rig's setting.
+builder.Services.AddSingleton<NINA.Polaris.Services.Bge.HostBgeModelProducer>();
+builder.Services.AddSingleton<NINA.Polaris.Services.Bge.ClientBgeModelProducer>();
+builder.Services.AddSingleton<NINA.Polaris.Services.Bge.BgeProducerRouter>();
 // Self-update (SBC .deb installs): checks GitHub releases + installs the new
 // .deb on request. AddHttpClient gives it an IHttpClientFactory.
 builder.Services.AddHttpClient();
@@ -651,13 +694,27 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Studio.FrameAnalysisService>
 // can sanity-check token+domain without burning a Let's Encrypt
 // rate-limit budget.
 builder.Services.AddSingleton<NINA.Polaris.Services.Tls.DuckDnsClient>();
-// Host CPU + memory sampler. AddResourceMonitoring wires the
-// platform-specific provider (Job Objects on Windows, cgroups on
-// Linux). HostMetricsService loops in the background, exposes the
-// latest snapshot via the Latest property which StatusStreamHandler
+// Host CPU + memory sampler. HostMetricsService loops in the background
+// and exposes the latest snapshot via Latest, which StatusStreamHandler
 // folds into the per-second WS broadcast.
+//
+// AddResourceMonitoring is used on Windows only, where its Job Objects
+// provider is fine. On Linux it is NOT: its cgroup v2 parser computes
+// memory as `memory.current - inactive_file` and throws when that is
+// negative, which an idle desktop does routinely. The throw happens in
+// ResourceMonitorService's constructor while the host starts, so the
+// process exits before it ever listens, systemd restarts it five seconds
+// later, and the browser reconnects and drops for ever. A user on a fresh
+// Lubuntu 26.04 reported it as a network problem, which is exactly what it
+// looks like from the outside. /proc gives us the same two numbers with no
+// cgroup arithmetic, for the whole host, which is what the activity bar is
+// showing anyway.
 #pragma warning disable EXTOBS0001
-if (!OperatingSystem.IsMacOS())
+if (OperatingSystem.IsLinux())
+{
+    builder.Services.AddSingleton<IResourceMonitor, ProcResourceMonitor>();
+}
+else if (!OperatingSystem.IsMacOS())
 {
     builder.Services.AddResourceMonitoring();
 }
@@ -718,7 +775,7 @@ var app = builder.Build();
 
 // Export the writable native-SDK pack dir so the per-vendor camera resolvers
 // (SvbonyRegistry etc., in decoupled SDK assemblies) probe it for the on-demand
-// camera-SDK pack — the .deb app dir (/opt/polaris) isn't writable, so the pack
+// camera-SDK pack, the .deb app dir (/opt/polaris) isn't writable, so the pack
 // lands under the profile data dir instead. Set before any camera probe runs.
 try {
     var _sdkDir = NINA.Polaris.Services.External.CameraSdkPackService.PackDir(
@@ -733,7 +790,7 @@ try {
 // 500 GB SSD attached. Path.GetTempPath() honours $TMPDIR on Unix and reads it
 // fresh each call, so pointing it at the (SSD-backed) data dir fixes every temp
 // writer at once, and child processes (ASTAP, astrometry.net, GraXpert) inherit
-// it too. Linux/macOS only — Windows temp already lives on disk.
+// it too. Linux/macOS only, Windows temp already lives on disk.
 if (!OperatingSystem.IsWindows()) {
     try {
         var _dataDir = app.Services.GetRequiredService<NINA.Polaris.Services.ProfileService>().DataDir;
@@ -821,7 +878,7 @@ app.Services.GetRequiredService<RefocusSuggestionService>();
 // INDIROB-3: sync the active rig's PreConnectDelayMsByDevice dict
 // into IndiClient.PreConnectDelaysMs so ConnectDeviceAsync honours
 // per-device sleep windows before sending CONNECTION. Runs on
-// startup and on every rig switch — operators with multiple
+// startup and on every rig switch, operators with multiple
 // rigs (mini-PC + Pi, different mounts) can have different
 // settling needs per setup.
 {
@@ -924,7 +981,7 @@ contentTypes.Mappings[".eph"] = "application/octet-stream";
 // present there falls through (next()) to the bundled baseline (orders 0-3)
 // in the wwwroot passes below.
 //
-// Served by a hand-rolled middleware doing a plain stream copy — NOT
+// Served by a hand-rolled middleware doing a plain stream copy, NOT
 // UseStaticFiles. On the Pi the static-file handler reset the connection
 // ("Empty reply from server", no logged exception) when serving this
 // PhysicalFileProvider rooted under /home, most likely a sendfile / OnStarting
@@ -965,7 +1022,7 @@ contentTypes.Mappings[".eph"] = "application/octet-stream";
                 FileShare.Read, 65536, useAsync: true);
             await fs.CopyToAsync(ctx.Response.Body, ctx.RequestAborted);
         } catch (OperationCanceledException) {
-            /* client went away mid-tile — normal during fast panning */
+            /* client went away mid-tile, normal during fast panning */
         } catch (Exception ex) {
             app.Logger.LogWarning(ex, "Failed to serve downloaded DSS tile {Path}", full);
             if (!ctx.Response.HasStarted) ctx.Response.StatusCode = 500;
@@ -997,10 +1054,10 @@ contentTypes.Mappings[".eph"] = "application/octet-stream";
 // THUMBPACK: serve /sky/data/skydata/dso-thumbs/{slug}.jpg from the DOWNLOADED
 // pack (data dir) first, then the bundled CORE subset (wwwroot/dso-thumbs-core).
 // The full dso-thumbs/ dir is excluded from publish, so on a packaged install
-// this middleware is the only thing that answers these URLs — a hit on a
+// this middleware is the only thing that answers these URLs, a hit on a
 // downloaded or curated thumb, a fall-through (404) otherwise. In a source-tree
 // dev run the full dir still exists in wwwroot, so a miss here falls through to
-// UseStaticFiles and serves it — dev sees every thumb without downloading.
+// UseStaticFiles and serves it, dev sees every thumb without downloading.
 {
     var pack = app.Services.GetRequiredService<NINA.Polaris.Services.External.DsoThumbPackService>();
     var packRoot = Path.GetFullPath(pack.PackDir);
@@ -1036,7 +1093,7 @@ contentTypes.Mappings[".eph"] = "application/octet-stream";
                 FileShare.Read, 65536, useAsync: true);
             await fs.CopyToAsync(ctx.Response.Body, ctx.RequestAborted);
         } catch (OperationCanceledException) {
-            /* client navigated away — normal */
+            /* client navigated away, normal */
         } catch (Exception ex) {
             app.Logger.LogWarning(ex, "Failed to serve DSO thumb {Path}", resolved);
             if (!ctx.Response.HasStarted) ctx.Response.StatusCode = 500;
@@ -1102,7 +1159,9 @@ app.UseStaticFiles(new StaticFileOptions {
 app.UseStaticFiles(new StaticFileOptions {
     RequestPath = "/sky/data",
     FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(
-        Path.Combine(builder.Environment.WebRootPath, "sky", "data")),
+        Path.Combine(builder.Environment.WebRootPath
+            ?? Path.Combine(builder.Environment.ContentRootPath, "wwwroot"),
+            "sky", "data")),
     ServeUnknownFileTypes = true,
     DefaultContentType = "application/octet-stream"
 });
@@ -1156,17 +1215,11 @@ app.UseWebSockets();
 // stripped from the iframe URL) AND the WebSocket upgrade that streams
 // PHD2's pixel updates.
 var phd2GuiForwarder = app.Services.GetRequiredService<IHttpForwarder>();
-var phd2GuiHttpClient = new HttpMessageInvoker(new SocketsHttpHandler {
-    UseProxy = false,
-    AllowAutoRedirect = false,
-    AutomaticDecompression = System.Net.DecompressionMethods.None,
-    UseCookies = false,
-    EnableMultipleHttp2Connections = true,
-    ActivityHeadersPropagator = new Yarp.ReverseProxy.Forwarder.ReverseProxyPropagator(
-        System.Diagnostics.DistributedContextPropagator.Current),
-    ConnectTimeout = TimeSpan.FromSeconds(5),
-});
-var phd2GuiTransform = HttpTransformer.Default;
+// Gated: xpra's HTTP server is single-threaded behind a listen(5) and the
+// HTML5 client asks for forty files at once. See LoopbackProxy for the
+// measurements and for what the unbounded fan-out looked like.
+var phd2GuiHttpClient = NINA.Polaris.Services.LoopbackProxy.NewInvoker();
+var phd2GuiGate = NINA.Polaris.Services.LoopbackProxy.NewGate();
 app.Map("/phd2-gui/{**rest}", async (HttpContext ctx, Phd2GuiSessionService gui) => {
     if (!gui.IsSupportedOs || !gui.XpraInstalled) {
         ctx.Response.StatusCode = 501;
@@ -1204,15 +1257,8 @@ app.Map("/phd2-gui/{**rest}", async (HttpContext ctx, Phd2GuiSessionService gui)
     if (string.IsNullOrEmpty(rest)) rest = "/";
     ctx.Request.Path = rest;
     var target = $"http://127.0.0.1:{gui.BindPort}";
-    var err = await phd2GuiForwarder.SendAsync(ctx, target, phd2GuiHttpClient,
-        ForwarderRequestConfig.Empty, phd2GuiTransform);
-    // Only write a 502 if nothing was sent yet: a mid-stream forwarder error
-    // (client aborted, upstream dropped) means the response already started, and
-    // setting StatusCode then throws "response has already started".
-    if (err != ForwarderError.None && !ctx.Response.HasStarted) {
-        ctx.Response.StatusCode = 502;
-        await ctx.Response.WriteAsync($"xpra proxy error: {err}");
-    }
+    await NINA.Polaris.Services.LoopbackProxy.ForwardAsync(
+        phd2GuiForwarder, ctx, target, phd2GuiHttpClient, "xpra", phd2GuiGate);
 });
 
 // ----- PH2VNC-2: /phd2-vnc-ws WebSocket → TightVNC TCP bridge -----
@@ -1248,7 +1294,7 @@ app.Map("/phd2-vnc-ws", async (HttpContext ctx, Phd2VncSessionService vnc,
     }
 
     // Negotiate subprotocol. Modern noVNC (1.0+) doesn't request any
-    // subprotocol — empty WebSocketRequestedProtocols, SubProtocol
+    // subprotocol, empty WebSocketRequestedProtocols, SubProtocol
     // stays null, and the connection is binary by default which is
     // what RFB needs. Older noVNC + websockify-compat clients ask
     // for "binary" explicitly; honour that so the wire stays
@@ -1305,7 +1351,7 @@ app.Map("/phd2-vnc-ws", async (HttpContext ctx, Phd2VncSessionService vnc,
             }
         } catch (OperationCanceledException) { /* normal teardown */ }
         catch (Exception ex) {
-            // Was silent before — meant "TightVNC dropped us" looked
+            // Was silent before, meant "TightVNC dropped us" looked
             // identical to "browser closed tab". Logged at Debug so
             // it doesn't spam Warning on every normal disconnect but
             // a tail -f when troubleshooting catches it.
@@ -1345,26 +1391,19 @@ app.Map("/phd2-vnc-ws", async (HttpContext ctx, Phd2VncSessionService vnc,
 // Same shape as /phd2-gui/* above: same-origin proxy so the iframe
 // gets indi-web's HTML / JS / XHR / WebSocket without CORS dance,
 // and Polaris's outer auth layer (Relay tokens / LAN-only) covers
-// driver management. indi-web binds to 127.0.0.1 only — never
+// driver management. indi-web binds to 127.0.0.1 only, never
 // directly exposed to the network even when Polaris listens on
 // 0.0.0.0.
 var indiWebForwarder = app.Services.GetRequiredService<IHttpForwarder>();
-var indiWebHttpClient = new HttpMessageInvoker(new SocketsHttpHandler {
-    UseProxy = false,
-    AllowAutoRedirect = false,
-    AutomaticDecompression = System.Net.DecompressionMethods.None,
-    UseCookies = false,
-    EnableMultipleHttp2Connections = true,
-    ActivityHeadersPropagator = new Yarp.ReverseProxy.Forwarder.ReverseProxyPropagator(
-        System.Diagnostics.DistributedContextPropagator.Current),
-    ConnectTimeout = TimeSpan.FromSeconds(5),
-});
-// Default transformer leaves headers / body untouched. We strip
-// the /indi-web prefix from the request path manually below
-// (HttpContext.Request.Path) before calling SendAsync — indi-web
-// returns asset URLs like /static/app.css that need to resolve
-// to the upstream root, not /indi-web/static/app.css.
-var indiWebTransform = HttpTransformer.Default;
+// Gated like the phd2-gui proxy above: indi-web is a bottle/wsgiref server,
+// single-threaded with the same modest accept queue.
+var indiWebHttpClient = NINA.Polaris.Services.LoopbackProxy.NewInvoker();
+var indiWebGate = NINA.Polaris.Services.LoopbackProxy.NewGate();
+// The forward uses the default transformer, which leaves headers and body
+// untouched. We strip the /indi-web prefix from the request path manually
+// below (HttpContext.Request.Path) instead: indi-web returns asset URLs like
+// /static/app.css that need to resolve to the upstream root, not
+// /indi-web/static/app.css.
 app.Map("/indi-web/{**rest}", async (HttpContext ctx, IndiWebManagerService svc) => {
     if (!svc.IsSupportedOs) {
         ctx.Response.StatusCode = 501;
@@ -1397,12 +1436,8 @@ app.Map("/indi-web/{**rest}", async (HttpContext ctx, IndiWebManagerService svc)
     }
     ctx.Request.Path = rest;
     var target = $"http://{svc.BindAddress}:{svc.BindPort}";
-    var err = await indiWebForwarder.SendAsync(ctx, target, indiWebHttpClient,
-        ForwarderRequestConfig.Empty, indiWebTransform);
-    if (err != ForwarderError.None && !ctx.Response.HasStarted) {
-        ctx.Response.StatusCode = 502;
-        await ctx.Response.WriteAsync($"indi-web proxy error: {err}");
-    }
+    await NINA.Polaris.Services.LoopbackProxy.ForwardAsync(
+        indiWebForwarder, ctx, target, indiWebHttpClient, "indi-web", indiWebGate);
 });
 
 // ----- CANOPUS: /canopus/* reverse-proxy → local assistant agent -----
@@ -1411,17 +1446,11 @@ app.Map("/indi-web/{**rest}", async (HttpContext ctx, IndiWebManagerService svc)
 // /indi-web proxy: strip the /canopus prefix so the agent sees its own root
 // paths, and the forwarder carries the WebSocket upgrade for /canopus/api/agent.
 var canopusForwarder = app.Services.GetRequiredService<IHttpForwarder>();
-var canopusHttpClient = new HttpMessageInvoker(new SocketsHttpHandler {
-    UseProxy = false,
-    AllowAutoRedirect = false,
-    AutomaticDecompression = System.Net.DecompressionMethods.None,
-    UseCookies = false,
-    EnableMultipleHttp2Connections = true,
-    ActivityHeadersPropagator = new Yarp.ReverseProxy.Forwarder.ReverseProxyPropagator(
-        System.Diagnostics.DistributedContextPropagator.Current),
-    ConnectTimeout = TimeSpan.FromSeconds(5),
-});
-var canopusTransform = HttpTransformer.Default;
+// Ungated and uncapped: the agent runs on uvicorn, which accepts connections
+// properly (backlog 2048), so the phd2-gui/indi-web gate would only add
+// queueing. The retry on a dropped connection still applies.
+var canopusHttpClient = NINA.Polaris.Services.LoopbackProxy.NewInvoker(
+    maxConnections: int.MaxValue);
 app.Map("/canopus/{**rest}", async (HttpContext ctx,
         NINA.Polaris.Services.External.CanopusServerService svc) => {
     if (!svc.Running) {
@@ -1447,18 +1476,15 @@ app.Map("/canopus/{**rest}", async (HttpContext ctx,
     if (string.IsNullOrEmpty(rest)) rest = "/";
     ctx.Request.Path = rest;
     var target = $"http://127.0.0.1:{svc.AgentPort}";
-    var err = await canopusForwarder.SendAsync(ctx, target, canopusHttpClient,
-        ForwarderRequestConfig.Empty, canopusTransform);
-    if (err != ForwarderError.None && !ctx.Response.HasStarted) {
-        ctx.Response.StatusCode = 502;
-        await ctx.Response.WriteAsync($"canopus proxy error: {err}");
-    }
+    await NINA.Polaris.Services.LoopbackProxy.ForwardAsync(
+        canopusForwarder, ctx, target, canopusHttpClient, "canopus");
 });
 
 // Equipment endpoints
 app.MapEquipmentEndpoints();
 app.MapCameraEndpoints();
 app.MapVideoEndpoints();
+app.MapBroadcastEndpoints();
 app.MapStarTrailEndpoints();
 app.MapTelescopeEndpoints();
 app.MapFocuserEndpoints();
@@ -1489,6 +1515,7 @@ app.MapUiStateEndpoints();
 // /api/focus group as future manual-assist sub-features (donut
 // metric, gaussian FWHM fit, ...).
 app.MapFocusEndpoints();
+app.MapFocusSweepEndpoints();
 app.MapMeridianFlipEndpoints();
 // FIELD4-4: PREVIEW-tab one-shot plate solve.
 app.MapPlateSolveEndpoints();
@@ -1636,7 +1663,7 @@ try {
 
 // Reached when the host shuts down cleanly (Ctrl-C, SIGTERM,
 // IHostApplicationLifetime.StopApplication). Returning 0 here is
-// what gives top-level Main its `int` return type — required
+// what gives top-level Main its `int` return type, required
 // because the --ascom-setup helper path above returns 1/2 on
 // driver-side failures, and the C# compiler insists every code
 // path of an `int`-returning Main produces an int.

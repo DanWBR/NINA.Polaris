@@ -16,7 +16,7 @@ namespace NINA.Image.ImageAnalysis;
 /// FFT-based linear convolution of a fixed PSF kernel against arbitrary images
 /// of a known size. The PSF spectrum is computed once; each
 /// <see cref="Convolve"/> / <see cref="Correlate"/> is two FFTs + a spectral
-/// multiply, so the cost is O(N log N) — independent of the PSF stamp size,
+/// multiply, so the cost is O(N log N), independent of the PSF stamp size,
 /// unlike the O(N·k²) spatial path. This is what keeps measured-PSF
 /// Richardson-Lucy practical at full resolution on a low-power SBC.
 ///
@@ -52,7 +52,7 @@ public sealed class FftConvolver {
     /// <summary>Convolve with the PSF (H·x).</summary>
     public float[] Convolve(float[] src) => Apply(src, adjoint: false);
 
-    /// <summary>Correlate with the PSF (Hᵀ·x — the RL back-projection).</summary>
+    /// <summary>Correlate with the PSF (Hᵀ·x, the RL back-projection).</summary>
     public float[] Correlate(float[] src) => Apply(src, adjoint: true);
 
     private float[] Apply(float[] src, bool adjoint) {

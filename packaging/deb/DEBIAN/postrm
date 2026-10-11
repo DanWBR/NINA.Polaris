@@ -17,6 +17,7 @@ case "$1" in
             systemctl disable polaris-growroot.service >/dev/null 2>&1 || true
             systemctl disable polaris-sshkeys.service >/dev/null 2>&1 || true
             systemctl disable polaris-diagnostics.service >/dev/null 2>&1 || true
+            systemctl disable polaris-indiweb.service >/dev/null 2>&1 || true
             systemctl daemon-reload >/dev/null 2>&1 || true
         fi
 
@@ -35,6 +36,10 @@ case "$1" in
         if command -v nmcli >/dev/null 2>&1; then
             nmcli connection delete polaris-hotspot >/dev/null 2>&1 || true
             nmcli connection delete polaris-station >/dev/null 2>&1 || true
+            # One profile per network the UI joined (polaris-wifi-<ssid>).
+            nmcli -t -f NAME connection show 2>/dev/null | grep '^polaris-wifi-' | while IFS= read -r c; do
+                nmcli connection delete "$c" >/dev/null 2>&1 || true
+            done
         fi
 
         # User data is intentionally left in place:

@@ -41,7 +41,7 @@ public sealed class PlateSolveProgressService {
     /// <summary>
     /// Token for the in-flight solve. Trips when either the request that
     /// started the run aborts OR <see cref="Cancel"/> is called. Callers pass
-    /// this to <c>SolveAsync</c> instead of the raw request token — the HTTP
+    /// this to <c>SolveAsync</c> instead of the raw request token, the HTTP
     /// request stays open while the solver runs, so the request token alone
     /// gave no way to stop a solve short of killing the process by hand
     /// (field report: "astrometry.net solve isn't cancellable").
@@ -123,7 +123,7 @@ public sealed class PlateSolveProgressService {
 
 /// <summary>Point-in-time view of <see cref="PlateSolveProgressService"/>.</summary>
 /// <param name="Cancellable">True while a solve is running that
-/// <c>POST /api/platesolve/cancel</c> can actually stop — drives the UI's
+/// <c>POST /api/platesolve/cancel</c> can actually stop, drives the UI's
 /// Cancel button.</param>
 public sealed record PlateSolveProgressSnapshot(
     long RunId, bool Active, string? Source, long Seq, bool Truncated, string[] Lines,

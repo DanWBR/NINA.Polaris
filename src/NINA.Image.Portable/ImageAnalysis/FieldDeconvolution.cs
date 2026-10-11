@@ -18,7 +18,7 @@ namespace NINA.Image.ImageAnalysis;
 /// cells are stitched with a cosine feather (overlapping weighted accumulation)
 /// so there is no seam where the kernel changes. This corrects corners (coma,
 /// field curvature, tilt) with their local shape instead of a single global
-/// FWHM — the headline differentiator over single-PSF tools.
+/// FWHM, the headline differentiator over single-PSF tools.
 ///
 /// A global flux-conservation rescale and an optional support mask are applied
 /// once at the end (the per-tile RL runs without them so the feather can't

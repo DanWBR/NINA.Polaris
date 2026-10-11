@@ -33,7 +33,7 @@ namespace NINA.Polaris.Test;
 /// </summary>
 [TestFixture]
 public class CoolingRampTests {
-    /// <summary>Records the ORDER of cooler operations, not just the final state —
+    /// <summary>Records the ORDER of cooler operations, not just the final state,
     /// "cooler off after the last setpoint write" is a sequencing rule, and a
     /// snapshot of end state can't tell a correct order from a wrong one.</summary>
     private sealed class FakeCamera : ICamera {
@@ -87,7 +87,7 @@ public class CoolingRampTests {
     }
 
     /// <summary>A rate so low the per-step delta would round toward zero must be
-    /// floored, not allowed to become 0 — a 0°C step writes the same setpoint
+    /// floored, not allowed to become 0, a 0°C step writes the same setpoint
     /// forever and the ramp never arrives (a hang, in a loop with device I/O).</summary>
     [Test]
     public void StepSizeFor_AbsurdlyLowRate_IsFlooredNotZero() {
@@ -103,7 +103,7 @@ public class CoolingRampTests {
     }
 
     /// <summary>Warming: the SAME function walks up. One service for both
-    /// directions is the whole point — the ramp used to exist only on the
+    /// directions is the whole point, the ramp used to exist only on the
     /// warm-up side.</summary>
     [Test]
     public void NextSetpoint_Warming_StepsUp() {
@@ -128,7 +128,7 @@ public class CoolingRampTests {
 
     /// <summary>End-to-end on the maths: walking 27→0°C at 2°C/min must converge,
     /// land exactly on target, never pass it, and take the time the rate implies
-    /// (~13.5 min). This is the field scenario — the log showed the real camera
+    /// (~13.5 min). This is the field scenario, the log showed the real camera
     /// doing this drop at ~3.7°C/min with the TEC pinned.</summary>
     [Test]
     public void Walk_AmbientToZero_ConvergesAtTheConfiguredRate() {
@@ -156,7 +156,7 @@ public class CoolingRampTests {
     }
 
     /// <summary>Slots are independent: starting an AUX ramp must not cancel the
-    /// MAIN camera's ramp. Caught while wiring this up — the service began life
+    /// MAIN camera's ramp. Caught while wiring this up, the service began life
     /// with a single CTS, so an aux cooldown would have silently stranded the main
     /// camera's setpoint mid-descent and left it cooling to nowhere.
     ///
@@ -202,7 +202,7 @@ public class CoolingRampTests {
 
     /// <summary>Warm-up powers the TEC down only AFTER the setpoint arrives, never
     /// before. Cutting it first is exactly the uncontrolled return to ambient this
-    /// whole thing exists to prevent — and on SVBony, writing the target after a
+    /// whole thing exists to prevent, and on SVBony, writing the target after a
     /// disable re-asserts SVB_COOLER_ENABLE and bounces the cooler back on.</summary>
     [Test]
     public async Task WarmUp_PowersCoolerOffOnlyAfterTheLastSetpointWrite() {
@@ -219,7 +219,7 @@ public class CoolingRampTests {
 
     /// <summary>Warm-up converges too, and rises monotonically. The UI's cooler-OFF
     /// button used to cut the TEC dead at this point, letting a 0°C sensor race back
-    /// to ambient — the textbook way to condense water on the window.</summary>
+    /// to ambient, the textbook way to condense water on the window.</summary>
     [Test]
     public void Walk_ZeroToAmbient_ConvergesUpward() {
         const double start = 0.0, target = 20.0;

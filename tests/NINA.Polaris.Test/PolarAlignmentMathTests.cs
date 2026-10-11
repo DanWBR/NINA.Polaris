@@ -138,7 +138,7 @@ public class PolarAlignmentMathTests {
     // ---- Field-report 2026-07-11 verification (Florânia RN) ----------
     //
     // The operator ran TPPA from lat −6.2 pointing at alpha Serpentis
-    // (Dec +6.4°) — i.e. the sweep cone sits ~97° from the SCP axis,
+    // (Dec +6.4°), i.e. the sweep cone sits ~97° from the SCP axis,
     // CROSSING the celestial equator, with 15° RA steps. None of the
     // original tests covered a cross-equator cone or 15° steps, and the
     // field session reported a suspiciously large initial azimuth
@@ -189,7 +189,7 @@ public class PolarAlignmentMathTests {
 
     [Test]
     public void ComputeError_LargeKnownError_AlphaSerFromFlorania_Recovers() {
-        // The field session reported ~644' — verify the fit is still
+        // The field session reported ~644', verify the fit is still
         // faithful at DEGREE scale, not just arcminutes (the small-
         // offset synth rotations stay valid: they're exact rotations).
         const double lat = -6.2, lon = -36.8;
@@ -208,7 +208,7 @@ public class PolarAlignmentMathTests {
 
         // Degree-scale offsets: the synth applies alt-then-az rotations
         // whose composition differs from the "axis at (az0+Δaz,
-        // alt0+Δalt)" parametrisation by a cross-term ~Δaz·Δalt·sin —
+        // alt0+Δalt)" parametrisation by a cross-term ~Δaz·Δalt·sin,
         // allow 1% of the offset.
         Assert.That(azErr, Is.EqualTo(expectedAzErrSec).Within(400.0),
             $"Large error: expected az {expectedAzErrSec}\", got {azErr:F0}\"");
@@ -222,7 +222,7 @@ public class PolarAlignmentMathTests {
         // ZWO AM3 + SV605CC, astrometry.net local solves). The mount's
         // own Dec readout was pinned at −10.680° across all three
         // points (pure RA rotation confirmed), yet the solved sky
-        // positions drifted RA +1.8°/Dec −0.43° over the 30° sweep —
+        // positions drifted RA +1.8°/Dec −0.43° over the 30° sweep,
         // a genuinely tilted cone. The app reported az +78.16',
         // alt +109.07', total 134.19'. Pin that verdict to the raw
         // solved data so any future regression in the fit (or in the
@@ -241,7 +241,7 @@ public class PolarAlignmentMathTests {
 
         // The exact profile lat/lng of the session differ slightly from
         // the rounded values here, and the split rotates a little with
-        // LST — assert signs + magnitudes with a generous margin.
+        // LST, assert signs + magnitudes with a generous margin.
         Assert.That(azErr, Is.EqualTo(78.16 * 60).Within(600),
             $"az: got {azErr / 60:F1}' (field app reported +78.16')");
         Assert.That(altErr, Is.EqualTo(109.07 * 60).Within(600),

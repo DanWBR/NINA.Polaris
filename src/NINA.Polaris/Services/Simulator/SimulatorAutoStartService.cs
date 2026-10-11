@@ -72,11 +72,11 @@ public class SimulatorAutoStartService : IHostedService, IDisposable {
                     // Only probe when we believe the simulator IS up. The probe's
                     // sole effect is flipping IsRunning true->false
                     // (SimulatorService.ProbeRunningAsync), so with IsRunning
-                    // already false it is a no-op that can change nothing — while
+                    // already false it is a no-op that can change nothing, while
                     // still costing a TCP connect to the simulator port every 30s,
                     // forever, on rigs that never touch the simulator.
                     //
-                    // That port defaults to 7624 — the SAME port a real indiserver
+                    // That port defaults to 7624, the SAME port a real indiserver
                     // listens on. So on every real-hardware rig this loop was
                     // knocking on the real indiserver's door ~2880 times a day,
                     // each one landing in ITS log as
@@ -84,7 +84,7 @@ public class SimulatorAutoStartService : IHostedService, IDisposable {
                     // (field report: 107 of these in one session's indiserver.log,
                     // drowning the driver diagnostics we were trying to read).
                     // Launch/stop set IsRunning, so a simulator the user starts by
-                    // hand still gets watched from that moment on — the stated
+                    // hand still gets watched from that moment on, the stated
                     // purpose is preserved, the pointless case is dropped.
                     if (_sim.IsRunning) await _sim.ProbeRunningAsync(ct);
                 } catch (Exception ex) {

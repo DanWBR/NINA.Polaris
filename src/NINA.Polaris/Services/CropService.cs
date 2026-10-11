@@ -24,7 +24,7 @@ namespace NINA.Polaris.Services;
 /// `{stem}_crop.fits`. Mono (NAXIS=2) and RGB plane-sequential (NAXIS=3)
 /// are both honoured.
 ///
-/// Pure I/O — no dependency on SkiaSharp, ONNX, or any external binary.
+/// Pure I/O, no dependency on SkiaSharp, ONNX, or any external binary.
 /// Synchronous on the wire (caller awaits the response): even a 24 Mpx
 /// RGB master takes &lt; 300 ms on a Pi 5 because the only real work is
 /// `Buffer.BlockCopy` per row × channels.

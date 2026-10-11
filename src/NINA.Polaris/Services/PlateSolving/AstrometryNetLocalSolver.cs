@@ -195,7 +195,7 @@ public class AstrometryNetLocalSolver : IPlateSolver {
                         "solve-field did not produce a solution (no .wcs written)");
                 }
             } else {
-                // Stdout parsed fine — but the scraped summary carries only a
+                // Stdout parsed fine, but the scraped summary carries only a
                 // SCALAR rotation, which cannot express parity (mirror). The
                 // SKY FOV rectangles and annotation projector need the CD
                 // matrix for a correct footprint (the SV605CC field report:
@@ -236,7 +236,7 @@ public class AstrometryNetLocalSolver : IPlateSolver {
             try {
                 var p = baseNoExt + suffix;
                 if (File.Exists(p)) File.Delete(p);
-            } catch { /* IO race / perms — best effort, mirrors AstapSolver */ }
+            } catch { /* IO race / perms, best effort, mirrors AstapSolver */ }
         }
     }
 

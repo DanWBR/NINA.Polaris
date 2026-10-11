@@ -36,9 +36,11 @@ namespace NINA.Polaris.Services;
 ///                           polaris-wifi-bootstrap.sh), so the Pi
 ///                           comes up as an AP on first boot even
 ///                           without Polaris running.
-/// - <c>polaris-station</c>  created (or recreated) on demand each
-///                           time the user picks a station network
-///                           from the UI scan.
+/// - <c>polaris-wifi-&lt;ssid&gt;</c>  one per network the user joins from
+///                           the UI, kept with its password so it can be
+///                           rejoined without it. Older installs have a
+///                           single <c>polaris-station</c>; it is treated
+///                           like any other saved network.
 ///
 /// PolicyKit: the daemon runs as user <c>polaris</c>; the .deb ships
 /// <c>/etc/polkit-1/rules.d/50-polaris-nm.rules</c> granting that user
@@ -54,6 +56,12 @@ public class NetworkManagerService : BackgroundService {
     public string? NmcliVersion { get; private set; }
     public bool HasWifiInterface { get; private set; }
     public string? WifiInterface { get; private set; }
+
+    /// <summary>A wireless adapter that exists but that NetworkManager has
+    /// been told not to touch. Null when there is none, which is the normal
+    /// case. Named rather than counted, because the operator needs the
+    /// interface name to put it right.</summary>
+    public string? UnmanagedWifiInterface { get; private set; }
 
     public WifiMode CurrentMode { get; private set; } = WifiMode.Unknown;
     public string? CurrentSsid { get; private set; }
@@ -77,6 +85,34 @@ public class NetworkManagerService : BackgroundService {
     /// hotspot mode without the user having asked for it.</summary>
     public bool HotspotFallbackEngaged { get; private set; }
 
+    // ----- wired preference (WiFi off while the cable is in) -----
+
+    /// <summary>User setting: park the WiFi radio while the wired link
+    /// carries an address. Lives on the profile, so it is host-wide and
+    /// survives a restart rather than being per browser.</summary>
+    public bool WifiOffWhenWired => _profiles.Active.WifiOffWhenWired;
+
+    /// <summary>The radio state nmcli reports, not our intent. Read every
+    /// tick so a radio that was already off (we parked it before a
+    /// restart, or the operator switched it off) is handled the same
+    /// way.</summary>
+    public bool WifiRadioOff { get; private set; }
+
+    /// <summary>A wired interface NetworkManager calls connected.</summary>
+    public bool WiredConnected { get; private set; }
+    public string? WiredInterface { get; private set; }
+    public string? WiredIp { get; private set; }
+
+    /// <summary>First tick of the current "wired link has an IPv4"
+    /// episode. The radio is only parked once the cable has held that
+    /// address for the grace window, so plugging in does not knock the
+    /// rig off the air mid-DHCP. Null while there is no wired IP.</summary>
+    private DateTime? _wiredUpSince;
+    private readonly TimeSpan _wiredGrace;
+    // The "AP still has clients" hold is logged once per episode, not on
+    // every 5 s tick.
+    private bool _wiredHoldLogged;
+
     // ----- auto hotspot fallback watchdog state -----
     private readonly TimeSpan _fallbackGrace;
     private readonly string _hotspotPsk;
@@ -95,16 +131,49 @@ public class NetworkManagerService : BackgroundService {
     private readonly bool _stationAutoReconnect;
     private readonly TimeSpan _stationRetryGrace;
     private DateTime _lastStationRetryAt = DateTime.MinValue;
-    // Consecutive retries whose scan came back completely empty — the
-    // signature of a single-radio adapter that refuses to scan while it is
-    // running the AP. After a few we fall back to a blind reactivate.
-    private int _emptyScanStreak;
+    // Consecutive retries that found none of the saved networks in the scan.
+    // A single-radio adapter often refuses to scan while it runs the AP and
+    // hands back an empty or stale list, so after a few of these the saved
+    // network used last is tried blind.
+    private int _noMatchStreak;
+    // Retries made while somebody was on the hotspot. Those read the cached
+    // scan only, and force a real one every few rounds.
+    private int _clientHoldRounds;
+
+    private bool UserChoseHotspot => _profiles.Active.WifiUserChoseHotspot;
+
+    private void SetUserChoseHotspot(bool chose) {
+        if (_profiles.Active.WifiUserChoseHotspot != chose)
+            _profiles.UpdateSettings(p => p.WifiUserChoseHotspot = chose);
+    }
 
     /// <summary>One-line, human-readable reason WiFi management is
     /// unavailable on this host. Null when everything is in order. The
     /// UI surfaces this directly in the Settings → Network banner so
     /// the user does not see a generic "click Switch" button on a
     /// platform that physically cannot drive nmcli.</summary>
+    /// <summary>
+    /// Why WiFi cannot be used although the hardware is there, with the
+    /// commands that fix it. Null when nothing is wrong.
+    ///
+    /// <para>Polaris does not edit /etc/network/interfaces by itself. That
+    /// file is the operator's, it can carry the configuration keeping the
+    /// machine reachable, and a controller rewriting it unasked is how a
+    /// remote host stops answering.</para>
+    /// </summary>
+    public string? WifiUnmanagedReason {
+        get {
+            var iface = UnmanagedWifiInterface;
+            if (iface == null || HasWifiInterface) return null;
+            return $"{iface} is a wireless adapter, but NetworkManager has been told not to manage it, "
+                 + "so the hotspot and the network switcher cannot use it. On a Debian install this is "
+                 + $"usually a static stanza for {iface} in /etc/network/interfaces. "
+                 + $"To hand it over for now: sudo nmcli device set {iface} managed yes. "
+                 + $"To make that survive a reboot, remove the {iface} stanza from "
+                 + "/etc/network/interfaces and run: sudo systemctl restart NetworkManager";
+        }
+    }
+
     public string? UnsupportedReason {
         get {
             if (!IsSupportedOs)
@@ -135,6 +204,11 @@ public class NetworkManagerService : BackgroundService {
         _stationAutoReconnect = _config.GetValue("Network:StationAutoReconnect", true);
         var retrySec = Math.Max(30, _config.GetValue("Network:StationRetrySeconds", 60));
         _stationRetryGrace = TimeSpan.FromSeconds(retrySec);
+        // Wired grace floored at 10 s: long enough for the cable's DHCP to
+        // settle, short enough that the operator sees the radio go down
+        // while still looking at the Settings card.
+        var wiredSec = Math.Max(10, _config.GetValue("Network:WifiOffWhenWiredSeconds", 20));
+        _wiredGrace = TimeSpan.FromSeconds(wiredSec);
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken) {
@@ -163,6 +237,11 @@ public class NetworkManagerService : BackgroundService {
         while (!stoppingToken.IsCancellationRequested) {
             try { await RefreshSnapshotAsync(stoppingToken); }
             catch (Exception ex) { _logger.LogDebug(ex, "Network snapshot refresh failed"); }
+            // Before the two AP watchdogs: while the radio is parked for
+            // the cable, neither of them should be trying to put it back
+            // on the air.
+            try { await EvaluateWiredPreferenceAsync(stoppingToken); }
+            catch (Exception ex) { _logger.LogDebug(ex, "Wired preference evaluation failed"); }
             try { await EvaluateHotspotFallbackAsync(stoppingToken); }
             catch (Exception ex) { _logger.LogDebug(ex, "Hotspot fallback evaluation failed"); }
             try { await EvaluateStationReconnectAsync(stoppingToken); }
@@ -195,8 +274,23 @@ public class NetworkManagerService : BackgroundService {
 
     private async Task DetectWifiInterfaceAsync(CancellationToken ct) {
         try {
-            var wifis = await ListWifiInterfacesAsync(ct);
-            if (wifis.Count == 0) { HasWifiInterface = false; return; }
+            var devices = await ListWifiDevicesAsync(ct);
+            var wifis = new List<string>();
+            string? unmanaged = null;
+            foreach (var d in devices) {
+                if (d.IsUnmanaged) unmanaged ??= d.Name;
+                else wifis.Add(d.Name);
+            }
+            UnmanagedWifiInterface = unmanaged;
+            if (unmanaged != null && wifis.Count == 0) {
+                // Worth a log line at warning level: every hotspot attempt
+                // from here on fails, and the reason is nowhere near the
+                // error nmcli prints.
+                _logger.LogWarning(
+                    "NetworkManagerService: {Iface} is wireless but unmanaged, so NetworkManager "
+                    + "cannot use it. Usually a static stanza in /etc/network/interfaces.", unmanaged);
+            }
+            if (wifis.Count == 0) { HasWifiInterface = false; WifiInterface = null; return; }
             // Honour the user's chosen adapter (e.g. an external USB antenna)
             // when it is present; otherwise fall back to the first wifi device.
             var preferred = _profiles.Active.HotspotWifiInterface;
@@ -283,21 +377,65 @@ public class NetworkManagerService : BackgroundService {
 
     /// <summary>All wireless devices NetworkManager sees (DEVICE names, in the
     /// order nmcli reports them). Empty on a non-Linux / no-nmcli host.</summary>
+    /// <summary>
+    /// The wireless adapters Polaris can actually drive.
+    ///
+    /// <para>An unmanaged device is left out. It is present, it is wireless,
+    /// and NetworkManager will refuse every command aimed at it, so counting
+    /// it as available produces a rig that believes it has WiFi, fails every
+    /// hotspot attempt with "no suitable device", and reports itself as wired.
+    /// That is a field report from a clean Debian install, where a static
+    /// stanza in /etc/network/interfaces hands the adapter to ifupdown and
+    /// NetworkManager steps aside.</para>
+    /// </summary>
     public async Task<List<string>> ListWifiInterfacesAsync(CancellationToken ct = default) {
+        var devices = await ListWifiDevicesAsync(ct);
         var list = new List<string>();
-        if (!IsSupportedOs || !NmcliInstalled) return list;
-        try {
-            var res = await RunCommandAsync("nmcli", "-t -f DEVICE,TYPE device status", ct);
-            foreach (var line in res.stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries)) {
-                var parts = SplitNmcliTerse(line);
-                if (parts.Length >= 2 && parts[1].Equals("wifi", StringComparison.OrdinalIgnoreCase)
-                        && !string.IsNullOrWhiteSpace(parts[0]) && !list.Contains(parts[0]))
-                    list.Add(parts[0]);
-            }
-        } catch (Exception ex) {
-            _logger.LogDebug(ex, "wifi interface enumeration failed");
+        foreach (var d in devices) if (!d.IsUnmanaged) list.Add(d.Name);
+        return list;
+    }
+
+    /// <summary>One wireless device as <c>nmcli device status</c> reports it.</summary>
+    public readonly record struct WifiDevice(string Name, string State) {
+        /// <summary>NetworkManager has been told to keep its hands off this
+        /// device, so every nmcli command aimed at it will be refused.</summary>
+        public bool IsUnmanaged =>
+            State.StartsWith("unmanaged", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Parse <c>nmcli -t -f DEVICE,TYPE,STATE device status</c>.
+    ///
+    /// <para>Pure so the shapes nmcli actually emits are pinned by tests: the
+    /// terse format escapes colons inside a field, and the state can carry a
+    /// reason in parentheses ("unmanaged (explicitly unmanaged)").</para>
+    /// </summary>
+    public static List<WifiDevice> ParseWifiDevices(string? nmcliOutput) {
+        var list = new List<WifiDevice>();
+        if (string.IsNullOrWhiteSpace(nmcliOutput)) return list;
+        foreach (var line in nmcliOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries)) {
+            var parts = SplitNmcliTerse(line);
+            if (parts.Length < 2) continue;
+            if (!parts[1].Equals("wifi", StringComparison.OrdinalIgnoreCase)) continue;
+            var name = parts[0].Trim();
+            if (name.Length == 0) continue;
+            var state = parts.Length >= 3 ? parts[2].Trim() : "";
+            if (list.Exists(d => string.Equals(d.Name, name, StringComparison.OrdinalIgnoreCase))) continue;
+            list.Add(new WifiDevice(name, state));
         }
         return list;
+    }
+
+    /// <summary>Every wireless device and the state nmcli reports for it.</summary>
+    public async Task<List<WifiDevice>> ListWifiDevicesAsync(CancellationToken ct = default) {
+        if (!IsSupportedOs || !NmcliInstalled) return new List<WifiDevice>();
+        try {
+            var res = await RunCommandAsync("nmcli", "-t -f DEVICE,TYPE,STATE device status", ct);
+            return ParseWifiDevices(res.stdout);
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "wifi device enumeration failed");
+            return new List<WifiDevice>();
+        }
     }
 
     /// <summary>Bind the hotspot/station to a specific wireless adapter (e.g. an
@@ -318,13 +456,18 @@ public class NetworkManagerService : BackgroundService {
         WifiInterface = wifis.First(w => string.Equals(w, iface, StringComparison.OrdinalIgnoreCase));
         HasWifiInterface = true;
 
-        // The polaris-hotspot / polaris-station connections are pinned to an
-        // ifname at creation, so drop them; EnsureHotspotConnectionAsync
-        // recreates the AP on the new interface. Keep the watchdog out while
-        // the radio cycles.
+        // The connections are pinned to an ifname at creation. The AP is
+        // dropped and recreated on the new interface by
+        // EnsureHotspotConnectionAsync; the saved networks are moved over
+        // rather than deleted, so their passwords come along. Keep the
+        // watchdog out while the radio cycles.
         _suppressFallbackUntil = DateTime.UtcNow + TimeSpan.FromSeconds(30);
         await RunCommandAsync("nmcli", "connection delete polaris-hotspot", ct, timeoutMs: 5000);
-        await RunCommandAsync("nmcli", "connection delete polaris-station", ct, timeoutMs: 5000);
+        foreach (var s in await SavedStationConnectionsAsync(ct)) {
+            await RunCommandAsync("nmcli",
+                $"connection modify {Shell(s.Name)} connection.interface-name {Shell(WifiInterface!)}",
+                ct, timeoutMs: 5000);
+        }
         await EnsureHotspotConnectionAsync(ct);
         var up = await RunCommandAsync("nmcli", "connection up polaris-hotspot", ct, timeoutMs: 15000);
         if (up.exitCode != 0) {
@@ -339,7 +482,12 @@ public class NetworkManagerService : BackgroundService {
     // ----- snapshot -----
 
     public async Task<NetworkSnapshot> GetSnapshotAsync(CancellationToken ct = default) {
-        if (HasWifiInterface) await RefreshSnapshotAsync(ct);
+        if (HasWifiInterface) {
+            await RefreshSnapshotAsync(ct);
+            // The card shows the wired link whether or not the policy is on,
+            // so the operator can see what ticking the box would do.
+            await RefreshWiredStateAsync(ct);
+        }
         return new NetworkSnapshot(
             SupportedOs: IsSupportedOs,
             NmcliInstalled: NmcliInstalled,
@@ -353,7 +501,13 @@ public class NetworkManagerService : BackgroundService {
             LastError: LastError,
             UnsupportedReason: UnsupportedReason,
             AutoHotspotFallback: AutoHotspotFallback,
-            HotspotFallbackEngaged: HotspotFallbackEngaged);
+            HotspotFallbackEngaged: HotspotFallbackEngaged,
+            WifiOffWhenWired: WifiOffWhenWired,
+            WifiRadioOff: WifiRadioOff,
+            WifiParkedForWired: WifiParkedForWired,
+            Wired: WiredConnected,
+            WiredInterface: WiredInterface,
+            WiredIp: WiredIp);
     }
 
     private async Task RefreshSnapshotAsync(CancellationToken ct) {
@@ -465,7 +619,11 @@ public class NetworkManagerService : BackgroundService {
     /// NetworkManager's cache, so reopening the picker shows it even if this
     /// response never made it back.
     /// </summary>
-    public async Task<List<WifiNetwork>> ScanAsync(bool pauseHotspot, CancellationToken ct = default) {
+    /// <param name="cachedOnly">Read what NetworkManager already knows and do
+    /// not scan: a scan takes the radio off-channel, which a client on the
+    /// hotspot feels.</param>
+    public async Task<List<WifiNetwork>> ScanAsync(bool pauseHotspot, CancellationToken ct = default,
+            bool cachedOnly = false) {
         if (!NmcliInstalled || !HasWifiInterface) return new();
         string ListArgs(string rescan) =>
             $"-t -f SSID,SIGNAL,SECURITY,IN-USE device wifi list ifname {Shell(WifiInterface!)} --rescan {rescan}";
@@ -486,6 +644,8 @@ public class NetworkManagerService : BackgroundService {
                 catch (Exception ex) { _logger.LogWarning(ex, "hotspot did not come back after the scan"); }
                 try { await RefreshSnapshotAsync(CancellationToken.None); } catch { }
             }
+        } else if (cachedOnly) {
+            res = await RunCommandAsync("nmcli", ListArgs("no"), ct, timeoutMs: 15000);
         } else {
             res = await RunCommandAsync("nmcli", ListArgs("yes"), ct, timeoutMs: 25000);
             if (res.exitCode != 0) {
@@ -500,7 +660,7 @@ public class NetworkManagerService : BackgroundService {
             var parts = SplitNmcliTerse(line);
             if (parts.Length < 4) continue;
             var ssid = parts[0];
-            if (string.IsNullOrEmpty(ssid)) continue; // hidden networks (--) — skip
+            if (string.IsNullOrEmpty(ssid)) continue; // hidden networks (--), skip
             if (CurrentMode == WifiMode.Hotspot
                 && ssid.Equals(HotspotSsid, StringComparison.OrdinalIgnoreCase)) {
                 continue;   // our own AP, beaconing at us
@@ -522,12 +682,26 @@ public class NetworkManagerService : BackgroundService {
     /// 30 s the previous mode (hotspot if we were one, otherwise no-op)
     /// is restored so the user does not lose access to the Pi when the
     /// password is wrong or the AP is out of range.</summary>
-    public async Task<SwitchResult> SwitchToStationAsync(string ssid, string password, CancellationToken ct = default) {
+    ///
+    /// <para>Every network joined keeps its own NetworkManager profile, with the
+    /// password, so it can be joined again without typing it: an empty
+    /// <paramref name="password"/> reuses the saved one. A new password replaces
+    /// that network's profile and leaves the others alone.</para>
+    public async Task<SwitchResult> SwitchToStationAsync(string ssid, string? password, CancellationToken ct = default) {
         if (!IsSupportedOs)      return SwitchResult.Fail("OS not supported");
         if (!NmcliInstalled)     return SwitchResult.Fail("nmcli not installed");
         if (!HasWifiInterface)   return SwitchResult.Fail("No WiFi interface");
-        var v = ValidateSsidPsk(ssid, password);
-        if (v != null) return SwitchResult.Fail(v);
+        if (string.IsNullOrEmpty(ssid)) return SwitchResult.Fail("SSID is required");
+
+        var saved = await SavedStationConnectionsAsync(ct);
+        var known = saved.FirstOrDefault(c => string.Equals(c.Ssid, ssid, StringComparison.Ordinal));
+        var reuseSaved = string.IsNullOrEmpty(password);
+        if (reuseSaved && string.IsNullOrEmpty(known.Name))
+            return SwitchResult.Fail($"'{ssid}' is not a saved network; enter its password.");
+        if (!reuseSaved) {
+            var v = ValidateSsidPsk(ssid, password!);
+            if (v != null) return SwitchResult.Fail(v);
+        }
 
         // Keep the fallback watchdog out of the way: this call can block
         // ~65s (up to 35s connect + 30s lease wait) during which the link
@@ -536,39 +710,73 @@ public class NetworkManagerService : BackgroundService {
         _suppressFallbackUntil = DateTime.UtcNow + TimeSpan.FromSeconds(80);
         _disconnectedSince = null;
         HotspotFallbackEngaged = false;
+        SetUserChoseHotspot(false);
 
         var hotspotWasUp = (CurrentMode == WifiMode.Hotspot);
 
-        // Drop any prior polaris-station so we start from a clean slate.
-        // Ignore the exit code, the connection legitimately does not
-        // exist on the first switch.
-        await RunCommandAsync("nmcli", "connection delete polaris-station", ct, timeoutMs: 5000);
+        string conName;
+        if (reuseSaved) {
+            conName = known.Name;
+        } else {
+            // One profile per network: replace this network's old one (the
+            // password may have changed), keep every other saved network.
+            foreach (var c in saved.Where(c => string.Equals(c.Ssid, ssid, StringComparison.Ordinal)))
+                await RunCommandAsync("nmcli", $"connection delete {Shell(c.Name)}", ct, timeoutMs: 5000);
+            conName = StationProfileName(ssid);
 
-        // autoconnect-priority 10 (vs the hotspot's -10) makes NM prefer
-        // this station network whenever it is in range, leaving the AP as
-        // the natural fallback when it is not.
-        var add = await RunCommandAsync("nmcli",
-            $"connection add type wifi ifname {Shell(WifiInterface!)} con-name polaris-station " +
-            $"connection.autoconnect-priority 10 " +
-            $"ssid {Shell(ssid)} wifi-sec.key-mgmt wpa-psk wifi-sec.psk {Shell(password)}",
-            ct, timeoutMs: 8000);
-        if (add.exitCode != 0) {
-            LastError = $"nmcli add failed: {add.stderr.Trim()}";
-            return SwitchResult.Fail(LastError);
+            // autoconnect-priority 10 (vs the hotspot's -10) makes NM prefer
+            // this station network whenever it is in range, leaving the AP as
+            // the natural fallback when it is not.
+            var add = await RunCommandAsync("nmcli",
+                $"connection add type wifi ifname {Shell(WifiInterface!)} con-name {Shell(conName)} " +
+                $"connection.autoconnect-priority 10 " +
+                $"ssid {Shell(ssid)} wifi-sec.key-mgmt wpa-psk wifi-sec.psk {Shell(password!)}",
+                ct, timeoutMs: 8000);
+            if (add.exitCode != 0) {
+                LastError = $"nmcli add failed: {add.stderr.Trim()}";
+                return SwitchResult.Fail(LastError);
+            }
+        }
+
+        // Take the AP down FIRST. One radio cannot beacon its own network and
+        // associate with another at the same time, so while polaris-hotspot
+        // owns the interface the station activation simply sits there until the
+        // timeout below, and that timeout was then reported as a bad password.
+        // Field report on an OPi 4 Pro: Medeiros_Plus at 100 percent signal,
+        // the right password, every attempt ending in "likely bad password / AP
+        // out of range"; with the AP down the same profile associated and had a
+        // lease in under two seconds.
+        //
+        // ScanAsync already knew this (it pauses the AP to see anything at all)
+        // and the join path did not. Dropping the AP does disconnect whoever is
+        // on it, which includes the operator driving this from the hotspot, but
+        // that is what switching to station mode means and the card says so.
+        if (hotspotWasUp) {
+            _logger.LogInformation(
+                "NetworkManagerService: taking the hotspot down so the radio can join '{Ssid}'", ssid);
+            await RunCommandAsync("nmcli", "connection down polaris-hotspot", ct, timeoutMs: 10000);
+            try { await Task.Delay(TimeSpan.FromSeconds(2), ct); } catch (OperationCanceledException) { }
         }
 
         var up = await RunCommandAsync("nmcli",
-            "connection up polaris-station", ct, timeoutMs: 35000);
+            $"connection up {Shell(conName)}", ct, timeoutMs: 35000);
         if (up.exitCode != 0) {
-            LastError = $"nmcli up failed (likely bad password / AP out of range): {up.stderr.Trim()}";
-            await RevertToHotspotAsync(hotspotWasUp, ct);
+            var err = up.stderr.Trim();
+            // A timeout and a refusal are different failures and the operator
+            // acts on them differently: one is "the radio never got anywhere",
+            // the other is "the access point said no".
+            LastError = err.Contains("timed out", StringComparison.OrdinalIgnoreCase)
+                ? $"'{ssid}' did not finish associating within 35s. The network may be out "
+                  + "of range, on a band this adapter cannot use, or the password may be wrong."
+                : $"nmcli up failed (likely bad password / AP out of range): {err}";
+            await RevertToHotspotAsync(hotspotWasUp, conName, ct);
             return SwitchResult.Fail(LastError);
         }
 
         var leaseOk = await WaitForLeaseAsync(WifiInterface!, TimeSpan.FromSeconds(30), ct);
         if (!leaseOk) {
             LastError = "No DHCP lease within 30s, reverting to hotspot";
-            await RevertToHotspotAsync(hotspotWasUp, ct);
+            await RevertToHotspotAsync(hotspotWasUp, conName, ct);
             return SwitchResult.Fail(LastError);
         }
 
@@ -586,10 +794,12 @@ public class NetworkManagerService : BackgroundService {
         if (!NmcliInstalled)   return SwitchResult.Fail("nmcli not installed");
         if (!HasWifiInterface) return SwitchResult.Fail("No WiFi interface");
 
-        // User asked for the AP explicitly; this is not a fallback.
+        // User asked for the AP explicitly; this is not a fallback, and the
+        // rig stays on it until they pick a network again.
         _suppressFallbackUntil = DateTime.UtcNow + TimeSpan.FromSeconds(30);
         _disconnectedSince = null;
         HotspotFallbackEngaged = false;
+        SetUserChoseHotspot(true);
 
         await EnsureHotspotConnectionAsync(ct);
         var up = await RunCommandAsync("nmcli",
@@ -642,6 +852,174 @@ public class NetworkManagerService : BackgroundService {
         return SwitchResult.Success(CurrentIp);
     }
 
+    // ----- wired preference: WiFi off while the cable is in -----
+
+    /// <summary>True when the radio is down and it is this policy holding
+    /// it down, which is what silences the two AP watchdogs and what the
+    /// Settings card explains to the operator.</summary>
+    public bool WifiParkedForWired => WifiRadioOff && WifiOffWhenWired && WiredConnected;
+
+    /// <summary>Turn the policy on or off. Acts at once instead of waiting
+    /// for the next tick, and turning it off always puts the radio back on
+    /// air: the operator ticking the box off wants their WiFi back, and
+    /// after that the watchdog stops touching the radio at all.</summary>
+    public async Task<SwitchResult> SetWifiOffWhenWiredAsync(bool enabled, CancellationToken ct = default) {
+        if (!IsSupportedOs)  return SwitchResult.Fail("OS not supported");
+        if (!NmcliInstalled) return SwitchResult.Fail("nmcli not installed");
+        _profiles.UpdateSettings(p => p.WifiOffWhenWired = enabled);
+        _wiredUpSince = null;
+        _wiredHoldLogged = false;
+        if (!enabled) {
+            await RefreshWiredStateAsync(ct);
+            if (WifiRadioOff) {
+                var res = await SetWifiRadioAsync(true, ct);
+                if (!res) return SwitchResult.Fail(LastError ?? "could not turn the WiFi radio back on");
+            }
+            await RefreshSnapshotAsync(ct);
+            return SwitchResult.Success(CurrentIp);
+        }
+        await EvaluateWiredPreferenceAsync(ct);
+        return SwitchResult.Success(WifiParkedForWired ? WiredIp : CurrentIp);
+    }
+
+    /// <summary>Once per snapshot tick: park the radio when the cable has
+    /// carried an address for the grace window, and bring it back the
+    /// moment the cable stops carrying one. Only ever runs the radio while
+    /// the policy is on, so a radio the operator switched off themselves is
+    /// left alone.</summary>
+    private async Task EvaluateWiredPreferenceAsync(CancellationToken ct) {
+        if (!NmcliInstalled || !HasWifiInterface) return;
+        if (!WifiOffWhenWired && !WifiRadioOff) {
+            // Nothing to watch and nothing parked: skip the two nmcli
+            // calls on the overwhelmingly common path.
+            _wiredUpSince = null;
+            return;
+        }
+        await RefreshWiredStateAsync(ct);
+        var now = DateTime.UtcNow;
+        var wiredWithIp = WiredConnected && !string.IsNullOrWhiteSpace(WiredIp);
+        if (wiredWithIp) _wiredUpSince ??= now;
+        else { _wiredUpSince = null; _wiredHoldLogged = false; }
+
+        if (ShouldUnparkWifi(WifiOffWhenWired, WifiRadioOff, wiredWithIp)) {
+            // No grace on the way back: with the cable gone the radio is
+            // the only way anyone reaches this host.
+            _logger.LogInformation(
+                "NetworkManagerService: wired link is gone, turning the WiFi radio back on.");
+            if (await SetWifiRadioAsync(true, ct)) await RefreshSnapshotAsync(ct);
+            return;
+        }
+
+        if (!ShouldParkWifiForWired(WifiOffWhenWired, WifiRadioOff, wiredWithIp,
+                _wiredUpSince, now, _wiredGrace, _suppressFallbackUntil))
+            return;
+
+        // Never cut the people who are on the AP right now. The cable is a
+        // path for the host, not for the tablet associated with our hotspot.
+        if (CurrentMode == WifiMode.Hotspot && await ApHasAssociatedClientsAsync(ct)) {
+            if (!_wiredHoldLogged) {
+                _logger.LogInformation(
+                    "NetworkManagerService: wired link is up but the hotspot still has clients, " +
+                    "keeping the radio on.");
+                _wiredHoldLogged = true;
+            }
+            return;
+        }
+
+        _logger.LogInformation(
+            "NetworkManagerService: wired link {Iface} has carried {Ip} for {Sec:n0}s, " +
+            "turning the WiFi radio off (WifiOffWhenWired).",
+            WiredInterface, WiredIp, (now - _wiredUpSince!.Value).TotalSeconds);
+        if (await SetWifiRadioAsync(false, ct)) {
+            HotspotFallbackEngaged = false;
+            _disconnectedSince = null;
+            await RefreshSnapshotAsync(ct);
+        }
+    }
+
+    /// <summary>nmcli radio on/off, with the result folded into
+    /// <see cref="WifiRadioOff"/> so the next decision reads the state we
+    /// actually achieved rather than the one we asked for.</summary>
+    private async Task<bool> SetWifiRadioAsync(bool on, CancellationToken ct) {
+        var res = await RunCommandAsync("nmcli", on ? "radio wifi on" : "radio wifi off",
+            ct, timeoutMs: 10000);
+        if (res.exitCode != 0) {
+            LastError = $"nmcli radio wifi {(on ? "on" : "off")} failed: {res.stderr.Trim()}";
+            _logger.LogWarning("NetworkManagerService: {Err}", LastError);
+            return false;
+        }
+        WifiRadioOff = !on;
+        if (on) LastError = null;
+        return true;
+    }
+
+    /// <summary>Read the radio switch and the wired link. Two cheap nmcli
+    /// calls plus one for the address, run only when the policy is on or
+    /// something is parked.</summary>
+    private async Task RefreshWiredStateAsync(CancellationToken ct) {
+        try {
+            var radio = await RunCommandAsync("nmcli", "radio wifi", ct, timeoutMs: 5000);
+            WifiRadioOff = ParseRadioDisabled(radio.stdout);
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "wifi radio state read failed");
+        }
+        try {
+            var dev = await RunCommandAsync("nmcli", "-t -f DEVICE,TYPE,STATE device status", ct);
+            WiredInterface = ParseConnectedWiredInterface(dev.stdout);
+            WiredConnected = WiredInterface != null;
+            if (!WiredConnected) { WiredIp = null; return; }
+            var ip = await RunCommandAsync("nmcli",
+                $"-t -f IP4.ADDRESS device show {Shell(WiredInterface!)}", ct);
+            WiredIp = ParseFirstIp4(ip.stdout);
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "wired link state read failed");
+        }
+    }
+
+    /// <summary>"enabled" / "disabled" from <c>nmcli radio wifi</c>. Anything
+    /// unrecognised counts as enabled: never report a radio as off on a
+    /// parse miss, or the watchdog would keep switching a live radio on.</summary>
+    internal static bool ParseRadioDisabled(string nmcliStdout)
+        => nmcliStdout.Trim().StartsWith("disabled", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>First wired device NetworkManager calls connected, from
+    /// <c>nmcli -t -f DEVICE,TYPE,STATE device status</c>. Types beyond plain
+    /// ethernet ("gsm", "wifi", "loopback", bridges) are ignored; a cable
+    /// that is merely plugged in but never got past "connecting" does not
+    /// count, because it is not a path to anywhere yet.</summary>
+    internal static string? ParseConnectedWiredInterface(string nmcliStdout) {
+        foreach (var line in nmcliStdout.Split('\n', StringSplitOptions.RemoveEmptyEntries)) {
+            var parts = SplitNmcliTerse(line);
+            if (parts.Length < 3) continue;
+            if (!parts[1].Equals("ethernet", StringComparison.OrdinalIgnoreCase)) continue;
+            if (!parts[2].Equals("connected", StringComparison.OrdinalIgnoreCase)) continue;
+            if (string.IsNullOrWhiteSpace(parts[0])) continue;
+            return parts[0];
+        }
+        return null;
+    }
+
+    /// <summary>Pure gate for parking the radio, so the timing rule is
+    /// testable without nmcli. Park only when the policy is on, the radio is
+    /// still up, the cable holds an address, no manual switch is in flight,
+    /// and that address has held for the grace window.</summary>
+    internal static bool ShouldParkWifiForWired(
+            bool enabled, bool radioOff, bool wiredWithIp,
+            DateTime? wiredUpSince, DateTime now, TimeSpan grace, DateTime suppressUntil) {
+        if (!enabled) return false;
+        if (radioOff) return false;
+        if (!wiredWithIp) return false;
+        if (now < suppressUntil) return false;
+        if (wiredUpSince == null) return false;
+        return now - wiredUpSince.Value >= grace;
+    }
+
+    /// <summary>Pure gate for the way back. Only unpark a radio while the
+    /// policy owns it: a radio the operator switched off with the policy
+    /// disabled is theirs, not ours.</summary>
+    internal static bool ShouldUnparkWifi(bool enabled, bool radioOff, bool wiredWithIp)
+        => enabled && radioOff && !wiredWithIp;
+
     // ----- auto hotspot fallback watchdog -----
 
     /// <summary>Called once per snapshot tick. When WiFi has been
@@ -654,6 +1032,9 @@ public class NetworkManagerService : BackgroundService {
     /// the AP up on its own.</summary>
     private async Task EvaluateHotspotFallbackAsync(CancellationToken ct) {
         if (!AutoHotspotFallback || !NmcliInstalled || !HasWifiInterface) return;
+        // The radio is off on purpose while the cable is in. "No WiFi" is
+        // the intended state then, not an outage to rescue.
+        if (WifiParkedForWired) { _disconnectedSince = null; return; }
         var now = DateTime.UtcNow;
 
         // Connected (station link or AP serving clients) => healthy.
@@ -755,9 +1136,9 @@ public class NetworkManagerService : BackgroundService {
         }
     }
 
-    private async Task RevertToHotspotAsync(bool hotspotWasUp, CancellationToken ct) {
+    private async Task RevertToHotspotAsync(bool hotspotWasUp, string stationConn, CancellationToken ct) {
         try {
-            await RunCommandAsync("nmcli", "connection down polaris-station", ct, timeoutMs: 5000);
+            await RunCommandAsync("nmcli", $"connection down {Shell(stationConn)}", ct, timeoutMs: 5000);
         } catch { }
         if (hotspotWasUp) {
             try {
@@ -808,6 +1189,20 @@ public class NetworkManagerService : BackgroundService {
         return now - lastRetryAt >= retryGrace;
     }
 
+    /// <summary>Is the running hotspot a fallback, to be left as soon as a saved
+    /// network returns? Yes unless the operator chose it. The watchdog's own
+    /// flag is not enough: NetworkManager brings the AP up by itself (the
+    /// bootstrap profile autoconnects at a lower priority than any saved
+    /// network), usually seconds after the router goes away and long before
+    /// the watchdog would, and a rig whose router lost power stayed on its
+    /// hotspot for good once the router was back (field, 2026-10-10).</summary>
+    internal static bool HotspotIsFallback(bool fallbackEngaged, bool userChoseHotspot)
+        => fallbackEngaged || !userChoseHotspot;
+
+    /// <summary>The NetworkManager profile name for a joined network: one per
+    /// SSID, so joining another network keeps this one's password.</summary>
+    internal static string StationProfileName(string ssid) => "polaris-wifi-" + ssid;
+
     // ----- auto station reconnect watchdog (hotspot -> station) -----
 
     /// <summary>Symmetric partner to <see cref="EvaluateHotspotFallbackAsync"/>.
@@ -822,62 +1217,70 @@ public class NetworkManagerService : BackgroundService {
     /// via the same try-and-revert as the manual switch.</summary>
     private async Task EvaluateStationReconnectAsync(CancellationToken ct) {
         if (!NmcliInstalled || !HasWifiInterface) return;
+        if (WifiParkedForWired) return;   // radio is off for the cable
         var now = DateTime.UtcNow;
-        if (!ShouldAttemptStationReconnect(_stationAutoReconnect, HotspotFallbackEngaged,
+        if (!ShouldAttemptStationReconnect(_stationAutoReconnect,
+                HotspotIsFallback(HotspotFallbackEngaged, UserChoseHotspot),
                 CurrentMode, now, _lastStationRetryAt, _stationRetryGrace, _suppressFallbackUntil))
             return;
-
-        // Never yank the radio away from people actually using the hotspot.
-        // The forced scan below (and the station blind-probe) both take the
-        // AP off-channel or down, which kicks every associated client; that
-        // is fine on an idle AP and hostile on one somebody is browsing on.
-        // When iw is missing or errors we cannot tell, and keep the old
-        // behaviour so the auto-return still works on such hosts.
-        if (await ApHasAssociatedClientsAsync(ct)) {
-            _lastStationRetryAt = now;   // re-check a full retry window later
-            return;
-        }
         _lastStationRetryAt = now;
 
         // Networks we could return to: any saved wifi connection that is not
-        // our own AP. Covers both the polaris-station the UI creates and a
-        // home network NetworkManager saved on its own.
+        // our own AP, most recently used first. Covers the networks the UI
+        // joined and a home network NetworkManager saved on its own.
         var candidates = await SavedStationConnectionsAsync(ct);
-        if (candidates.Count == 0) return;
+        if (candidates.Count == 0) return;   // a hotspot-only rig: nothing to go back to
 
-        // A scan while the AP is up is often refused by the driver; ScanAsync
-        // already falls back to the cached list. If the saved SSID is visible,
-        // the brief blip to join it is worth it.
-        var visible = await ScanAsync(ct);
-        if (visible.Count == 0) {
-            // Scan came back empty — likely the adapter won't scan while it is
-            // running the AP. After a few of these, try a blind reactivate of
-            // the best saved network rather than staying stuck in hotspot.
-            if (++_emptyScanStreak >= 3) {
-                _emptyScanStreak = 0;
-                var blind = candidates.FirstOrDefault(c =>
-                    string.Equals(c.Name, "polaris-station", StringComparison.OrdinalIgnoreCase));
-                var target = string.IsNullOrEmpty(blind.Name) ? candidates[0] : blind;
-                _logger.LogInformation(
-                    "NetworkManagerService: can't scan while hosting the AP; blind-probing saved station '{Ssid}'.",
-                    target.Ssid);
-                await TryReactivateStationAsync(target.Name, ct);
-            }
+        // A hotspot nobody chose, with a network to go back to, is a fallback
+        // whoever started it; say so on the card.
+        if (!HotspotFallbackEngaged) {
+            HotspotFallbackEngaged = true;
+            _logger.LogInformation(
+                "NetworkManagerService: on the hotspot without having chosen it; watching for a saved network to return.");
+        }
+
+        // Somebody on the hotspot (often the operator's own tablet, which joins
+        // it as soon as the router goes) must not be knocked off just so the
+        // rig can look around: read the cached scan, and force a real one only
+        // every fifth round. When a saved network IS back, leaving is right
+        // even with clients: they go back to the router too. This used to skip
+        // the whole check while a client was attached, so a tablet on the
+        // hotspot kept the rig there indefinitely.
+        var clients = await ApHasAssociatedClientsAsync(ct);
+        List<WifiNetwork> visible;
+        if (clients) {
+            visible = ++_clientHoldRounds % 5 == 0
+                ? await ScanAsync(ct)
+                : await ScanAsync(false, ct, cachedOnly: true);
+        } else {
+            _clientHoldRounds = 0;
+            visible = await ScanAsync(ct);
+        }
+
+        var visibleSsids = new HashSet<string>(visible.Select(n => n.Ssid), StringComparer.Ordinal);
+        var match = candidates.FirstOrDefault(c => visibleSsids.Contains(c.Ssid));
+        if (!string.IsNullOrEmpty(match.Name)) {
+            _noMatchStreak = 0;
+            _logger.LogInformation(
+                "NetworkManagerService: saved station '{Ssid}' back in range, handing the rig back from hotspot.",
+                match.Ssid);
+            await TryReactivateStationAsync(match.Name, ct);
             return;
         }
-        _emptyScanStreak = 0;
 
-        var visibleSsids = new HashSet<string>(
-            visible.Select(n => n.Ssid), StringComparer.OrdinalIgnoreCase);
-        (string Name, string Ssid)? match = null;
-        foreach (var c in candidates)
-            if (visibleSsids.Contains(c.Ssid)) { match = c; break; }
-        if (match == null) return;   // nothing to go back to yet; keep the AP steady
-
-        _logger.LogInformation(
-            "NetworkManagerService: saved station '{Ssid}' back in range — handing the rig back from hotspot.",
-            match.Value.Ssid);
-        await TryReactivateStationAsync(match.Value.Name, ct);
+        // No saved network in sight. It may really be gone, or the adapter
+        // would not scan while hosting the AP and gave back an empty or stale
+        // list (a stale list used to block the blind try for good). Every few
+        // rounds, try the network used last anyway; never under a client.
+        if (clients) return;
+        if (++_noMatchStreak >= (visible.Count == 0 ? 3 : 5)) {
+            _noMatchStreak = 0;
+            var target = candidates[0];
+            _logger.LogInformation(
+                "NetworkManagerService: saved station '{Ssid}' not in the scan; trying it blind in case the scan was stale.",
+                target.Ssid);
+            await TryReactivateStationAsync(target.Name, ct);
+        }
     }
 
     /// <summary>Bring a saved station connection up with the same try-and-
@@ -888,16 +1291,23 @@ public class NetworkManagerService : BackgroundService {
     private async Task TryReactivateStationAsync(string connName, CancellationToken ct) {
         // Keep the hotspot fallback watchdog out while we blip the radio.
         _suppressFallbackUntil = DateTime.UtcNow + TimeSpan.FromSeconds(80);
+        // The AP goes down FIRST, as in the manual switch: one radio cannot
+        // beacon its own network and associate with another, so with the AP
+        // still up the activation just sat there until it timed out.
+        if (CurrentMode == WifiMode.Hotspot) {
+            await RunCommandAsync("nmcli", "connection down polaris-hotspot", ct, timeoutMs: 10000);
+            try { await Task.Delay(TimeSpan.FromSeconds(2), ct); } catch (OperationCanceledException) { }
+        }
         var up = await RunCommandAsync("nmcli",
             $"connection up {Shell(connName)}", ct, timeoutMs: 35000);
         if (up.exitCode != 0) {
             _logger.LogDebug("station reactivate up failed ({Err}); restoring hotspot", up.stderr.Trim());
-            await RevertToHotspotAsync(true, ct);
+            await RevertToHotspotAsync(true, connName, ct);
             return;
         }
         if (!await WaitForLeaseAsync(WifiInterface!, TimeSpan.FromSeconds(30), ct)) {
             _logger.LogDebug("station reactivate got no lease in 30s; restoring hotspot");
-            await RevertToHotspotAsync(true, ct);
+            await RevertToHotspotAsync(true, connName, ct);
             return;
         }
         // Success: we're on the station now. The next snapshot sets
@@ -914,15 +1324,19 @@ public class NetworkManagerService : BackgroundService {
     /// excluding our own AP (mode=ap) and any without an SSID. Each entry is
     /// the con-name plus the SSID it joins, so the reconnect watchdog can
     /// match a saved connection against what is currently in range.</summary>
-    private async Task<List<(string Name, string Ssid)>> SavedStationConnectionsAsync(CancellationToken ct) {
-        var result = new List<(string, string)>();
+    internal readonly record struct SavedStation(string Name, string Ssid, long LastUsed);
+
+    private async Task<List<SavedStation>> SavedStationConnectionsAsync(CancellationToken ct) {
+        var result = new List<SavedStation>();
         try {
-            var show = await RunCommandAsync("nmcli", "-t -f NAME,TYPE connection show", ct, timeoutMs: 5000);
+            var show = await RunCommandAsync("nmcli", "-t -f NAME,TYPE,TIMESTAMP connection show", ct, timeoutMs: 5000);
             foreach (var line in show.stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries)) {
                 var parts = SplitNmcliTerse(line);
                 if (parts.Length < 2) continue;
                 var name = parts[0];
                 var type = parts[1];
+                long.TryParse(parts.Length > 2 ? parts[2] : "0", NumberStyles.Integer,
+                    CultureInfo.InvariantCulture, out var lastUsed);
                 if (!type.Contains("wireless", StringComparison.OrdinalIgnoreCase)
                     && !type.Equals("wifi", StringComparison.OrdinalIgnoreCase)) continue;
                 if (string.Equals(name, "polaris-hotspot", StringComparison.OrdinalIgnoreCase)) continue;
@@ -939,12 +1353,39 @@ public class NetworkManagerService : BackgroundService {
                     else if (kv[0].EndsWith("mode", StringComparison.OrdinalIgnoreCase)
                              && val.Equals("ap", StringComparison.OrdinalIgnoreCase)) isAp = true;
                 }
-                if (!isAp && !string.IsNullOrEmpty(ssid)) result.Add((name, ssid));
+                if (!isAp && !string.IsNullOrEmpty(ssid)) result.Add(new SavedStation(name, ssid, lastUsed));
             }
         } catch (Exception ex) {
             _logger.LogDebug(ex, "SavedStationConnectionsAsync failed");
         }
-        return result;
+        return result.OrderByDescending(s => s.LastUsed).ToList();
+    }
+
+    /// <summary>A saved network, as the card lists it.</summary>
+    public record SavedWifiNetwork(string Name, string Ssid, DateTime? LastUsedUtc, bool Active);
+
+    /// <summary>The WiFi networks this host can rejoin without a password,
+    /// most recently used first.</summary>
+    public async Task<List<SavedWifiNetwork>> GetSavedNetworksAsync(CancellationToken ct = default) {
+        if (!NmcliInstalled || !HasWifiInterface) return new();
+        return (await SavedStationConnectionsAsync(ct)).Select(s => new SavedWifiNetwork(
+            s.Name, s.Ssid,
+            s.LastUsed > 0 ? DateTimeOffset.FromUnixTimeSeconds(s.LastUsed).UtcDateTime : null,
+            CurrentMode == WifiMode.Station && string.Equals(CurrentSsid, s.Ssid, StringComparison.Ordinal)))
+            .ToList();
+    }
+
+    /// <summary>Forget a saved network (its profile and password). Only saved
+    /// station networks qualify, never the hotspot.</summary>
+    public async Task<SwitchResult> ForgetNetworkAsync(string name, CancellationToken ct = default) {
+        if (!NmcliInstalled || !HasWifiInterface) return SwitchResult.Fail("WiFi management not available");
+        var saved = await SavedStationConnectionsAsync(ct);
+        if (!saved.Any(s => string.Equals(s.Name, name, StringComparison.Ordinal)))
+            return SwitchResult.Fail("Not a saved WiFi network");
+        var del = await RunCommandAsync("nmcli", $"connection delete {Shell(name)}", ct, timeoutMs: 8000);
+        if (del.exitCode != 0) return SwitchResult.Fail($"nmcli delete failed: {del.stderr.Trim()}");
+        await RefreshSnapshotAsync(ct);
+        return SwitchResult.Success(CurrentIp);
     }
 
     /// <summary>Polls nmcli for an IPv4 address on the iface, plus a
@@ -1087,4 +1528,10 @@ public record NetworkSnapshot(
     string? LastError,
     string? UnsupportedReason,
     bool AutoHotspotFallback = true,
-    bool HotspotFallbackEngaged = false);
+    bool HotspotFallbackEngaged = false,
+    bool WifiOffWhenWired = false,
+    bool WifiRadioOff = false,
+    bool WifiParkedForWired = false,
+    bool Wired = false,
+    string? WiredInterface = null,
+    string? WiredIp = null);

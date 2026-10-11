@@ -711,14 +711,14 @@ public class SirilJob {
     public bool CancelRequested { get; set; }
 
     /// <summary>Rolling buffer of stdout + stderr lines from the Siril
-    /// subprocess. Capped at <see cref="MaxLogLines"/> entries — once
+    /// subprocess. Capped at <see cref="MaxLogLines"/> entries, once
     /// full, the oldest line is dropped each time a new one arrives,
     /// so the console-modal in the UI never has to deal with a
     /// runaway log. Thread-safe: <see cref="AppendLog"/> takes the
     /// list lock, the JSON serializer takes the same lock via
     /// <see cref="SnapshotLog"/> when the endpoint serializes the
     /// job. Don't read <see cref="LogLines"/> directly from outside
-    /// the service — call <see cref="SnapshotLog"/>.</summary>
+    /// the service, call <see cref="SnapshotLog"/>.</summary>
     public const int MaxLogLines = 500;
     public List<string> LogLines { get; } = new();
 

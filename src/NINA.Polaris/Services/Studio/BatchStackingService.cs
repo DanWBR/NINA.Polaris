@@ -31,7 +31,7 @@ namespace NINA.Polaris.Services.Studio;
 ///   1. <b>Detect</b>: read each input once, detect its stars, then drop
 ///      the pixels. Only the star lists (small) are retained, so this
 ///      phase holds ~one frame in RAM at a time.
-///   2. Pick the reference frame (most detected stars — the most robust
+///   2. Pick the reference frame (most detected stars, the most robust
 ///      target for affine fitting).
 ///   3. <b>Align + spill</b>: re-read each frame, match it to the
 ///      reference, resample onto the reference grid, and write the
@@ -45,12 +45,12 @@ namespace NINA.Polaris.Services.Studio;
 ///   6. Trigger a library rescan so the master shows up in the browser.
 ///
 /// Memory model: the old implementation kept every aligned frame in RAM
-/// for the per-pixel integration — O(N · W · H), tripled for OSC (debayer
+/// for the per-pixel integration, O(N · W · H), tripled for OSC (debayer
 /// to 3 planes), which pushed a 4 GB Pi past its limit on a 20-30 × 24 MP
 /// OSC stack (~4 GB). Now the aligned frames are spilled to disk and the
 /// integration streams them one strip at a time, so peak RAM is ~one
 /// frame during alignment plus one tile (≈ N · tileRows · W) during
-/// integration — flat regardless of frame count or sensor size. The cost
+/// integration, flat regardless of frame count or sensor size. The cost
 /// is N× a frame of temp disk and a second read of each input.
 /// </summary>
 public class BatchStackingService {
@@ -58,7 +58,7 @@ public class BatchStackingService {
     private readonly ProfileService _profile;
     private readonly ILogger<BatchStackingService> _logger;
     // Optional: drives the pre-flight RAM guard. Null in unit tests that
-    // construct the service directly — the guard then fails open.
+    // construct the service directly, the guard then fails open.
     private readonly HostMetricsService? _metrics;
     private readonly ConcurrentDictionary<string, IntegrationProgress> _jobs = new();
 
@@ -395,7 +395,7 @@ public class BatchStackingService {
             // this default path share it.)
 
             // Spill one frame's aligned plane(s) to temp raw files (host-order
-            // ushort, no header — same process reads them back). Returns the
+            // ushort, no header, same process reads them back). Returns the
             // per-plane paths.
             void Spill(int keptIndex, ushort[][] planes) {
                 var paths = new string[planes.Length];
@@ -505,7 +505,7 @@ public class BatchStackingService {
                             for (int x = 0; x < W; x++) {
                                 int sidx = localOff + x;
                                 int valid = 0;
-                                // Skip pixels whose value is 0 — ImageResampler
+                                // Skip pixels whose value is 0, ImageResampler
                                 // marks off-canvas regions as 0 after the affine
                                 // shift, and averaging them in drags the edges.
                                 for (int k = 0; k < N; k++) {
@@ -694,7 +694,7 @@ public record IntegrationProgress {
     // entire job so the UI's "done / total" reads sensibly all the
     // way through (loading 5/20, aligning 14/20, integrating 20/20,
     // done 20/20). Don't shove image-height or any other denominator
-    // into Total — fold sub-phase progress into IntegrationPercent
+    // into Total, fold sub-phase progress into IntegrationPercent
     // instead.
     public int Done { get; init; }
     public int Total { get; init; }

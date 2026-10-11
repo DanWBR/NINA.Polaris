@@ -38,7 +38,7 @@ public static class ImageResampler {
     /// reuse session scratch instead of allocating W*H ushort[] per warped
     /// plane per frame. Out-of-canvas pixels are explicitly zeroed (a
     /// reused buffer carries the previous frame). Returns the destination
-    /// — or the SOURCE unchanged when the transform is degenerate, so
+    ///, or the SOURCE unchanged when the transform is degenerate, so
     /// callers must use the return value, not assume dest was filled.
     /// dest must be at least W*H long and must not alias the source.</summary>
     public static ushort[] ApplyTransform(ushort[] source, int width, int height,

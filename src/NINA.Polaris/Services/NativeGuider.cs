@@ -46,13 +46,13 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     // Star search half-window (px) around the lock position each frame.
     private const int SearchRegion = 15;
     // GUIDEREC: how far the per-frame search may widen while the star is lost.
-    // Capped because GuideStar.Find takes the BRIGHTEST peak in the window — search
+    // Capped because GuideStar.Find takes the BRIGHTEST peak in the window, search
     // too wide and it locks a neighbour, and the jump lands as a correction that
     // walks the target out of frame. Past this, re-acquisition takes over (it picks
     // by proximity, so it can look further safely).
     private const int MaxRecoverySearchRegion = 60;
     // Lost frames before the one-shot full-frame re-acquisition fires. ~10 frames
-    // is a few seconds of thin cloud at typical guide exposures — long enough not to
+    // is a few seconds of thin cloud at typical guide exposures, long enough not to
     // fire on a satellite streak or a gust, short enough that a real cloud-out
     // recovers on its own instead of waiting for the operator.
     private const int ReacquireAfterLostFrames = 10;
@@ -85,7 +85,7 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     // Running pier-side reference for the guide loop's meridian-flip watch.
     // Seeded from the mount at guiding start (and lazily on the first frame that
     // reports a side). The loop mirrors the calibration only when the pier side
-    // CHANGES relative to this baseline while guiding — it must never mirror a
+    // CHANGES relative to this baseline while guiding, it must never mirror a
     // freshly measured calibration, which is already ground truth for the
     // current side, just because the side stamped at calibration time is stale.
     /// <summary>Set when a restore was refused because the stored calibrations
@@ -129,7 +129,7 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     // verdict plus its numbers. Lets the calibration retry say WHY it retries
     // instead of blaming every miss on a dropped frame.
     private GuideStarStatus? _lastFindStatus;
-    private double _lastFindSnr, _lastFindHfd;
+    private double _lastFindSnr, _lastFindHfd, _lastFindMass;
     private int _lastFrameOriginX, _lastFrameOriginY;
     private volatile ViewFrame? _view;
     private long _viewSeq;
@@ -155,11 +155,22 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     private IGuideAlgorithm _raAlgo = new HysteresisAlgorithm();
     private IGuideAlgorithm _decAlgo = new ResistSwitchAlgorithm();
     private BacklashComp _backlashComp = new(0);
+    // PHD2's two frame-rejection gates plus the running error they consult.
+    private readonly MassChecker _massChecker = new();
+    private readonly DistanceChecker _distanceChecker = new();
+    private readonly CurrentErrorTracker _errorTracker = new();
     // Timestamp of the previous guide frame, for the predictor's frame interval.
     private long _lastGuideMs;
 
     // Dither bookkeeping.
     private volatile bool _paused;
+    // Raised for the whole of a stop, which is not instant: the wait for the
+    // loop task to observe its cancellation can take seconds, and AppState
+    // still reads "Guiding" until the teardown finishes. A dither request
+    // arriving in that window passed its IsGuiding check and installed itself
+    // after the cleanup had already run, leaving IsDithering raised with no
+    // loop to lower it.
+    private volatile bool _stopping;
     // Guards every write to the settle state (_settler, IsSettling, IsDithering,
     // _settleActive and the progress snapshot). The guide loop advances the
     // settler on its own thread while DitherAsync arrives from the caller's
@@ -304,7 +315,7 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     /// <summary>The gain the guide loop actually captures with: the rig's
     /// stored value clamped to the connected camera's advertised range.
     /// ToupTek's INDI driver publishes Gain min=100, and the rig default is
-    /// 40 — the driver then rejected the write, and worse, the dark library
+    /// 40, the driver then rejected the write, and worse, the dark library
     /// was keyed by the STORED gain while the frames came off the sensor at
     /// the driver's minimum, so the darks no longer matched the lights.
     /// One resolver, used by the capture path, the dark library and the log.
@@ -369,7 +380,8 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
         if (!_calibration.IsValid && TryRestoreCalibration()) {
             // Information, not a fault: it reads as an error in the GUIDE tab
             // otherwise, which is what the operator sees first on connect.
-            RaiseAlert("Restored last calibration for this rig. Recalibrate if the setup changed.", "info");
+            RaiseAlert(LastRestoreNote
+                ?? "Restored last calibration for this rig. Recalibrate if the setup changed.", "info");
         } else if (LastRestoreMismatch != null) {
             RaiseAlert(LastRestoreMismatch, "info");
         }
@@ -379,14 +391,14 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     }
 
     public async Task DisconnectAsync(CancellationToken ct = default) {
-        await StopLoopAsync();
+        _stopping = true;
+        try { await StopLoopAsync(); } finally { _stopping = false; }
         IsConnected = false;
-        IsSettling = false;
-        _haveLock = false;
-        _multiStar.Clear();
+        // StopLoopAsync's session reset already dropped the lock, the settle
+        // and the frame markers. A disconnect goes further and drops the
+        // picture too: there is no camera behind it any more.
         _view = null;
         _lastFrame = null;
-        SetAppState("Stopped");
         _logger.LogInformation("Native guider disconnected");
     }
 
@@ -416,7 +428,10 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
         // pending exposure: calibration read "no frame from the guide camera"
         // and failed at its first step. Stop the loop first; it is restarted in
         // Guide mode at the end either way. The dark-library build does the same.
-        await StopLoopAsync();
+        // No session reset: the star the operator just tapped during the Loop is
+        // the one this run must guide on, and the pick below only runs when
+        // there is no lock.
+        await StopLoopAsync(resetSession: false);
         // A fresh calibration is ground truth for the CURRENT pier side; a reused
         // (restored) one may be for the other side if a flip happened while we
         // weren't guiding. Remember which case this is before calibrating.
@@ -439,7 +454,7 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
         // is now on the other side from where the saved calibration was measured
         // (a meridian flip happened between sessions), mirror it up front so
         // guiding starts with the right directions. A fresh calibration is exempt
-        // — mirroring it would guide the wrong way, which is exactly the post-flip
+        //, mirroring it would guide the wrong way, which is exactly the post-flip
         // recalibration failure. Only when the driver reports a definite side both
         // then and now, and only in the default "mirror" mode.
         var startSide = startMount.SideOfPier;
@@ -478,14 +493,29 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
         await StartLoopAsync(LoopMode.Guide);
     }
 
-    public Task StopAsync(CancellationToken ct = default) {
+    public async Task StopAsync(CancellationToken ct = default) {
         // Cancel an in-progress calibration too (it runs outside the loop CTS).
         try { _calCts?.Cancel(); } catch { }
-        return StopLoopAsync();
+        _stopping = true;
+        try { await StopLoopAsync(); } finally { _stopping = false; }
     }
 
     public Task LoopAsync(CancellationToken ct = default) {
         EnsureConnected();
+        // Loop always reads the rig's saved calibration (the file and the
+        // profile), so whatever happened since connecting, a profile that lost
+        // its list or gear that came back on another address, guiding starts
+        // from the calibration on disk.
+        bool had = _calibration.IsValid;
+        LastRestoreMismatch = null;
+        if (_calibrationCleared) {
+            // Cleared on purpose: the next calibration starts from nothing.
+        } else if (TryRestoreCalibration()) {
+            if (!had || LastRestoreNote != null)
+                RaiseAlert(LastRestoreNote ?? "Loaded the saved calibration for this rig.", "info");
+        } else if (!had && LastRestoreMismatch != null) {
+            RaiseAlert(LastRestoreMismatch, "info");
+        }
         return StartLoopAsync(LoopMode.Loop);
     }
 
@@ -518,7 +548,12 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
 
     public Task DitherAsync(double pixels = 5.0, bool raOnly = false, double settlePixels = 1.5,
             int settleTime = 10, int settleTimeout = 40, CancellationToken ct = default) {
-        if (!IsGuiding || !_haveLock) {
+        // Only the guide loop advances a settle to its end, so a dither without
+        // one behind it can never finish: it would sit on the frame as
+        // "Dithering: settling" and hold the LIVE loop with it. IsGuiding alone
+        // does not say the loop is there, because a stop keeps that state until
+        // its teardown completes.
+        if (!IsGuiding || !_haveLock || _stopping || _loopCts == null) {
             return Task.CompletedTask;
         }
         // Offset the lock position by a random vector of the requested
@@ -532,9 +567,10 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
         double offY = raOnly ? 0.0 : mag * Math.Sin(angle);
         _lockX += offX;
         _lockY += offY;
-        // Shift every tracked star's reference by the same vector so multi-star
-        // stays consistent with the new lock point.
-        _multiStar.OffsetReferences(offX, offY);
+        // PHD2 does not shift the secondary references by the dither vector: it
+        // re-reads each secondary where it actually is once the primary has
+        // settled at the new lock.
+        _multiStar.NoteLockPositionMoved();
         _raAlgo.Reset();
         _decAlgo.Reset();
         // Installed as one unit against the guide loop's settle update: a settle
@@ -578,29 +614,51 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
         SetActivity("Selecting");
         try {
             int w = img.Properties.Width, h = img.Properties.Height;
-            var stars = NewGuideStarDetector().Detect(img.Data, w, h);
+            var stars = GuideStarDetector().Detect(img.Data, w, h);
 
-            // Pick the brightest, non-saturated, interior star (away from
-            // edges so the search window stays in-frame).
-            int margin = SearchRegion + 5;
-            double satGuard = SaturationLevel(img.Properties.BitDepth, img.Properties.SignificantBitDepth, img.Data);
-            NINA.Image.ImageAnalysis.DetectedStar? best = null;
-            double bestFlux = -1;
-            int saturated = 0;
+            // Brightest interior star, preferring an unsaturated one but
+            // taking a saturated one rather than refusing to guide: a flat top
+            // costs centroid precision, no star costs the session.
+            int margin = StarEdgeMargin();
+            double satGuard = SaturationLevelFor(img);
+            // Classic refuses a saturated star outright, as it did before
+            // 2026-09-14. With the classic level nothing reaches that test in
+            // practice, which is exactly the behaviour being restored.
+            bool classic = IsClassicDetection(Rig);
+            bool allowSat = !classic && AllowSaturatedStars();
+            NINA.Image.ImageAnalysis.DetectedStar? best = null, bestSat = null;
+            double bestFlux = -1, bestSatFlux = -1;
+            int interior = 0, saturated = 0;
             foreach (var s in stars) {
                 if (s.X < margin || s.Y < margin || s.X > w - margin || s.Y > h - margin) continue;
-                if (IsSaturated(s, satGuard)) { saturated++; continue; }
+                interior++;
+                if (!allowSat && IsSaturated(s, satGuard)) {
+                    saturated++;
+                    if (s.Flux > bestSatFlux) { bestSatFlux = s.Flux; bestSat = s; }
+                    continue;
+                }
                 if (s.Flux > bestFlux) { bestFlux = s.Flux; best = s; }
             }
+            if (best == null && bestSat != null && !classic) {
+                best = bestSat;
+                RaiseAlert($"Every star found is saturated; guiding on the brightest anyway "
+                    + $"(peak {bestSat.Peak:F0} of {satGuard:F0}). Lower the guide gain or exposure for better precision.");
+            }
             if (best == null) {
-                RaiseAlert(saturated > 0
-                    ? $"Auto-select failed: the {saturated} star(s) found are saturated; lower the guide gain or exposure."
-                    : "Auto-select failed: no suitable guide star.");
+                RaiseAlert(stars.Count == 0
+                    ? "Auto-select failed: the detector found no stars in this frame. "
+                      + "Lower the detection sigma or the minimum star size in GUIDE > Star selection."
+                    : $"Auto-select failed: {stars.Count} star(s) found, none of them far enough "
+                      + $"from the frame edge (margin {margin} px). Lower the edge margin in "
+                      + "GUIDE > Star selection, or re-centre the field.");
                 return;
             }
             _logger.LogInformation(
-                "Native auto-select: {N} stars, {Sat} saturated (level {Lvl}); best peak {Peak:F0} flux {Flux:F0}",
-                stars.Count, saturated, satGuard, best.Peak, best.Flux);
+                "Native auto-select: {N} stars ({Interior} interior, {Sat} saturated, level {Lvl}); "
+                + "best peak {Peak:F0} flux {Flux:F0}",
+                stars.Count, interior, saturated, satGuard, best.Peak, best.Flux);
+            LastStarSelection = $"{stars.Count} found, {interior} usable"
+                + (saturated > 0 ? $", {saturated} saturated" : "");
             _lockX = best.X;
             _lockY = best.Y;
             _haveLock = true;
@@ -612,8 +670,9 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     }
 
     /// <summary>Lock the detected star nearest to a clicked full-sensor point.
-    /// Captures a fresh frame, detects stars and picks the closest interior,
-    /// non-saturated one to (targetX, targetY). Rebuilds the view so the
+    /// Captures a fresh frame, detects stars and picks the closest interior one
+    /// to (targetX, targetY). A saturated star is locked with a warning rather
+    /// than refused: the operator pointed at it. Rebuilds the view so the
     /// overlay updates immediately.</summary>
     public async Task SelectStarNearAsync(double targetX, double targetY, CancellationToken ct = default) {
         EnsureConnected();
@@ -624,10 +683,12 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
 
         int w = img.Properties.Width, h = img.Properties.Height;
         _lastFrame = img; _lastFrameOriginX = 0; _lastFrameOriginY = 0;
-        var stars = NewGuideStarDetector().Detect(img.Data, w, h);
+        var stars = GuideStarDetector().Detect(img.Data, w, h);
 
-        double satGuard = SaturationLevel(img.Properties.BitDepth, img.Properties.SignificantBitDepth, img.Data);
-        var pick = PickStarNear(stars, targetX, targetY, w, h, SearchRegion + 5, satGuard, TapRadiusPx);
+        double satGuard = SaturationLevelFor(img);
+        var pick = PickStarNear(stars, targetX, targetY, w, h, StarEdgeMargin(), satGuard,
+                                StarTapRadius(), IsClassicDetection(Rig));
+        LastStarSelection = $"{stars.Count} found";
         if (pick.Star == null) {
             RaiseAlert(pick.Reason ?? "No star near the tap.");
             _logger.LogInformation("Native select-star near ({Tx:F0},{Ty:F0}): {Reason} ({N} stars detected)",
@@ -635,6 +696,9 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
             return;
         }
         var best = pick.Star;
+        // A reason alongside a star is a warning, not a refusal (saturation):
+        // the lock happens and the operator is told what it costs.
+        if (pick.Reason != null) RaiseAlert(pick.Reason);
 
         _lockX = best.X;
         _lockY = best.Y;
@@ -646,35 +710,150 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
             targetX, targetY, _lockX, _lockY);
     }
 
+    /// <summary>What the last selection actually saw, for the GUIDE panel:
+    /// "14 found, 11 usable, 3 saturated". Tuning the selection knobs is
+    /// guesswork without it.</summary>
+    public string? LastStarSelection { get; private set; }
+
     /// <summary>How far from a tap a star may sit and still count as the one
     /// tapped: finger accuracy on a phone showing a downscaled frame is tens of
-    /// sensor pixels, not the 15 px search window.</summary>
+    /// sensor pixels, not the 15 px search window. Overridable per rig
+    /// (NativeStarTapRadiusPx).</summary>
     private const double TapRadiusPx = 60;
 
     /// <summary>The detector as the guider needs it: a bright guide star with
     /// its skirt above a 5-sigma threshold covers far more than the 200 pixels
     /// the default allows, and those were the stars silently dropped, leaving
-    /// the faint ones as the only candidates.</summary>
-    internal static NINA.Image.ImageAnalysis.StarDetector NewGuideStarDetector() =>
-        new() { MaxStarSize = 6000 };
+    /// the faint ones as the only candidates.
+    ///
+    /// Every value here is overridable per rig, because a guide camera is not
+    /// an imaging camera: small chip, often binned, sometimes a bright sky, and
+    /// stars only a few pixels across. When the defaults do not suit one, the
+    /// symptom is "no suitable guide star" over a frame the operator can see
+    /// stars in, and a constant cannot be argued with.</summary>
+    /// <summary>Which star-selection method this rig uses.
+    ///
+    /// The tuned one is the default and the one that gets worked on. Classic is
+    /// the behaviour from before 2026-09-14, kept because that change was a
+    /// regression for at least one rig and an operator in the field needs a way
+    /// back that does not involve downgrading the whole application:
+    ///
+    ///   - the stock detector (5 px of area, 5 sigma, blobs up to 200 px)
+    ///     rather than the guide-sized one
+    ///   - full scale straight from the container depth, so in practice
+    ///     nothing is ever called saturated
+    ///   - a tap locks the nearest star anywhere in the frame, with no radius
+    ///     and no speck guard
+    ///
+    /// The per-rig numeric knobs still override whichever baseline is
+    /// selected; a blank field means that method's own default.</summary>
+    internal const string DetectionModeClassic = "classic";
 
-    /// <summary>Full-scale sample value for this frame. The driver's BitDepth is
-    /// 16 for every 16-bit container, while the samples inside may be raw
-    /// 12-bit counts (indi_asi_ccd) or left-aligned ones (the native SDKs), so
-    /// the level is read from the data: the smallest standard depth that holds
-    /// the frame's brightest pixel, capped by what the driver reports.</summary>
-    internal static double SaturationLevel(int bitDepth, int significantBits, ushort[] data) {
-        double cap = (1L << Math.Clamp(bitDepth <= 0 ? 16 : bitDepth, 1, 16)) - 1;
-        if (significantBits is >= 8 and <= 16) return Math.Min(cap, (1L << significantBits) - 1);
-        ushort max = 0;
-        foreach (var v in data) if (v > max) max = v;
-        foreach (int bits in new[] { 8, 10, 12, 14, 16 }) {
-            double lvl = (1L << bits) - 1;
-            if (max <= lvl) return Math.Min(cap, lvl);
-        }
-        return cap;
+    internal static bool IsClassicDetection(EquipmentProfile? rig)
+        => string.Equals(rig?.NativeStarDetectionMode, DetectionModeClassic,
+            StringComparison.OrdinalIgnoreCase);
+
+    internal static NINA.Image.ImageAnalysis.StarDetector NewGuideStarDetector(
+            EquipmentProfile? rig = null) {
+        var d = IsClassicDetection(rig)
+            // Stock, exactly as `new StarDetector()` was called before
+            // 2026-09-14: MinStarSize 5, MaxStarSize 200, SigmaThreshold 5.
+            ? new NINA.Image.ImageAnalysis.StarDetector()
+            : new NINA.Image.ImageAnalysis.StarDetector {
+            MaxStarSize = 6000,
+            // The stock 5 is a pixel COUNT, and it is sized for an imaging
+            // frame. On a binned guide frame a real star covers 2x2 pixels, so
+            // 4, and it was thrown away before anything else got to look at
+            // it. That is the whole of "the frame plainly has stars in it and
+            // Polaris says it found none": measured on an ASI678MC at bin 2,
+            // f/4 240 mm, a field with half a dozen visible stars detected
+            // ZERO. Two still excludes a single hot pixel (one pixel), and
+            // MinHfr keeps rejecting the tight ones.
+            MinStarSize = 2,
+            // Likewise the threshold: median + n x MAD at n = 5 is tuned for
+            // long imaging subs. A 1 s guide exposure of a sparse field puts
+            // its stars a few sigma over the noise, not five.
+            SigmaThreshold = 3.5,
+        };
+        if (rig?.NativeStarSigma is double sig) d.SigmaThreshold = Math.Clamp(sig, 1, 20);
+        if (rig?.NativeStarMinSize is int min) d.MinStarSize = Math.Clamp(min, 1, 200);
+        if (rig?.NativeStarMaxSize is int max) d.MaxStarSize = Math.Clamp(max, 50, 20000);
+        if (rig?.NativeStarMaxHfd is double hfd) d.MaxHfr = Math.Clamp(hfd, 1, 100);
+        return d;
     }
 
+    /// <summary>The detector configured for THIS rig.</summary>
+    private NINA.Image.ImageAnalysis.StarDetector GuideStarDetector() => NewGuideStarDetector(Rig);
+
+    /// <summary>Edge margin for star selection: enough room for the tracking
+    /// window by default, or the operator's value when it is larger. Never
+    /// smaller than the search region, or the window would run off frame.</summary>
+    private int StarEdgeMargin() =>
+        Math.Max(SearchRegion + 5, Math.Clamp(Rig?.NativeStarEdgeMarginPx ?? 0, 0, 200));
+
+    /// <summary>Tap radius for "the star I meant", per rig.</summary>
+    private double StarTapRadius() =>
+        Math.Clamp(Rig?.NativeStarTapRadiusPx ?? TapRadiusPx, 5, 300);
+
+    /// <summary>Whether saturated stars are fair game for this rig.</summary>
+    private bool AllowSaturatedStars() => Rig?.NativeStarAllowSaturated == true;
+
+    /// <summary>Full-scale sample value for this frame, or 0 when it cannot be
+    /// known. The driver's BitDepth is 16 for every 16-bit container, while the
+    /// samples inside may be raw 12-bit counts (indi_asi_ccd) or left-aligned
+    /// ones (the native SDKs), so the significant depth is what decides it.
+    ///
+    /// It used to be INFERRED from the data when the driver reported no
+    /// significant depth: the smallest standard depth holding the frame's
+    /// brightest pixel. That is circular, and it produced the complaint that
+    /// closed this loop. A frame whose brightest star peaks at 4000 was read as
+    /// a 12-bit frame, full scale 4095, and the saturation test (peak within 5%
+    /// of full scale) then flagged THAT star, the brightest one, as saturated.
+    /// The operator taps the obvious star and is told it is saturated, every
+    /// time, on a frame that is nowhere near clipping.
+    ///
+    /// So: no guessing. Without a reported significant depth the level is
+    /// unknown, callers get 0, and <see cref="IsSaturated"/> answers false.
+    /// Better to guide on a genuinely clipped star than to refuse a good
+    /// one.</summary>
+    /// <summary>Full scale the way the classic method read it: straight from
+    /// the container depth. A 16-bit frame gives 65535, so the 95% test needs a
+    /// peak of 62258 and effectively never fires. That is the point: before
+    /// 2026-09-14 saturation was not a reason to reject a star, and a rig on
+    /// the classic method gets that back.</summary>
+    internal static double ClassicSaturationLevel(int bitDepth)
+        => (1L << Math.Clamp(bitDepth <= 0 ? 16 : bitDepth, 1, 16)) - 1;
+
+    /// <summary>The saturation level for this rig's method.</summary>
+    private double SaturationLevelFor(IImageData img)
+        => IsClassicDetection(Rig)
+            ? ClassicSaturationLevel(img.Properties.BitDepth)
+            : SaturationLevel(img.Properties.BitDepth, img.Properties.SignificantBitDepth, img.Data);
+
+    internal static double SaturationLevel(int bitDepth, int significantBits, ushort[] data) {
+        double cap = (1L << Math.Clamp(bitDepth <= 0 ? 16 : bitDepth, 1, 16)) - 1;
+        ushort max = 0;
+        foreach (var v in data) if (v > max) max = v;
+
+        if (significantBits is >= 8 and <= 16) {
+            double reported = Math.Min(cap, (1L << significantBits) - 1);
+            // Only if the data actually fits inside it. The ZWO SDK path on an
+            // ASI678MC reports 12 significant bits and then hands over samples
+            // of 13314, so "full scale 4095" called a star at a fifth of the
+            // range saturated and auto-select refused the only star in the
+            // frame. A depth the data walks straight past is not a depth: fall
+            // back to the container, which the samples do fit.
+            if (max <= reported) return reported;
+            return max >= cap ? cap : 0;
+        }
+        // A frame that really does contain the container's maximum sample is
+        // clipped whatever the driver says about depth.
+        return max >= cap ? cap : 0;
+    }
+
+    /// <summary>A star whose core has run out of range. Only meaningful with a
+    /// known full scale (see <see cref="SaturationLevel"/>); unknown reads as
+    /// not saturated, never as a reason to reject.</summary>
     internal static bool IsSaturated(NINA.Image.ImageAnalysis.DetectedStar s, double satLevel) =>
         satLevel > 1 && s.Peak >= satLevel * 0.95;
 
@@ -683,20 +862,54 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     /// saturated, on the edge, or simply not there.</summary>
     internal static (NINA.Image.ImageAnalysis.DetectedStar? Star, string? Reason) PickStarNear(
             IReadOnlyList<NINA.Image.ImageAnalysis.DetectedStar> stars, double targetX, double targetY,
-            int width, int height, int margin, double satLevel, double radius) {
+            int width, int height, int margin, double satLevel, double radius,
+            bool classic = false) {
+        // The classic method: nearest interior star that is not saturated,
+        // anywhere in the frame. No radius, so a tap on empty sky still locks
+        // something, and a saturated star is refused rather than warned about.
+        if (classic) {
+            NINA.Image.ImageAnalysis.DetectedStar? old = null;
+            double oldD = double.MaxValue;
+            foreach (var s in stars) {
+                if (s.X < margin || s.Y < margin || s.X > width - margin || s.Y > height - margin) continue;
+                if (IsSaturated(s, satLevel)) continue;
+                double dx = s.X - targetX, dy = s.Y - targetY;
+                double d = dx * dx + dy * dy;
+                if (d < oldD) { oldD = d; old = s; }
+            }
+            return old == null ? (null, "No suitable star near the click.") : (old, null);
+        }
+        // The nearest candidate, but not a speck. At the guider's detection
+        // threshold a couple of adjacent noise pixels can qualify as a star,
+        // and a speck like that sitting a few pixels from the star the
+        // operator actually tapped would win on distance alone and then be
+        // gone on the next frame. So a candidate has to carry a real fraction
+        // of the flux of the best star near the tap to be considered.
+        const double specksFraction = 0.1;
+        double brightestNear = 0;
+        foreach (var s in stars) {
+            double dx = s.X - targetX, dy = s.Y - targetY;
+            if (dx * dx + dy * dy <= radius * radius && s.Flux > brightestNear) brightestNear = s.Flux;
+        }
+
         NINA.Image.ImageAnalysis.DetectedStar? nearest = null;
         double nearestD = double.MaxValue;
         foreach (var s in stars) {
+            if (s.Flux < brightestNear * specksFraction) continue;
             double dx = s.X - targetX, dy = s.Y - targetY;
             double d = Math.Sqrt(dx * dx + dy * dy);
             if (d < nearestD) { nearestD = d; nearest = s; }
         }
         if (nearest == null || nearestD > radius)
             return (null, "No star near the tap.");
-        if (IsSaturated(nearest, satLevel))
-            return (null, $"That star is saturated (peak {nearest.Peak:F0} of {satLevel:F0}); pick a fainter one or lower the gain.");
         if (nearest.X < margin || nearest.Y < margin || nearest.X > width - margin || nearest.Y > height - margin)
             return (null, "That star is too close to the edge of the frame.");
+        // Saturation is a warning, never a refusal. The operator pointed at
+        // this star; a flat-topped core costs some centroid precision, and
+        // that is their call to make, not a reason to hand back nothing.
+        if (IsSaturated(nearest, satLevel))
+            return (nearest, $"Locked on a saturated star (peak {nearest.Peak:F0} of {satLevel:F0}); "
+                + "lower the guide gain or exposure for better precision.");
         return (nearest, null);
     }
 
@@ -714,6 +927,8 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
                 r.NativeCalibration = null;
             });
         } catch (Exception ex) { _logger.LogWarning(ex, "Failed to clear persisted calibration"); }
+        FileRemove(key);
+        _calibrationCleared = true;
         _logger.LogInformation("Native calibration cleared for {Key}", key);
         return Task.CompletedTask;
     }
@@ -732,7 +947,7 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     /// toggled so a later auto-detect stays consistent.</summary>
     public Task FlipCalibrationAsync(CancellationToken ct = default) {
         if (!_calibration.IsValid) {
-            RaiseAlert("No calibration to flip — calibrate first.");
+            RaiseAlert("No calibration to flip, calibrate first.");
             return Task.CompletedTask;
         }
         // Toggle the recorded pier side (East<->West); leave Unknown as Unknown
@@ -765,8 +980,8 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     /// <summary>Write the current (just-flipped) calibration angles + pier side
     /// back to the persisted record for the active rig so the mirror survives a
     /// restart. Updates the keyed entry matching the current equipment (or the
-    /// legacy slot on a pre-migration rig) — the same record
-    /// <see cref="TryRestoreCalibration"/> would pick — leaving the rates,
+    /// legacy slot on a pre-migration rig), the same record
+    /// <see cref="TryRestoreCalibration"/> would pick, leaving the rates,
     /// declination, backlash and scatter untouched.</summary>
     private void PersistFlippedCalibration() {
         var cal = _calibration;
@@ -775,7 +990,7 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
         // Review-Calibration scatter reflects the mirror (the field report:
         // "flip doesn't change the graph"). A 180° axis rotation negates both
         // coordinates. RA always flips (+180°); Dec only when the rig reverses
-        // Dec after a flip — the same rule FlipForPierChange applies to the
+        // Dec after a flip, the same rule FlipForPierChange applies to the
         // angles. Applying the mirror twice restores the original (involutive),
         // consistent with flipping the angles twice.
         bool reverseDec = Rig.NativeReverseDecAfterFlip;
@@ -807,6 +1022,8 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
                 }
             });
         } catch (Exception ex) { _logger.LogWarning(ex, "Failed to persist flipped calibration"); }
+        FileUpsert(Rig.NativeCalibrations?.LastOrDefault(c =>
+            string.Equals(c.Key, key, StringComparison.OrdinalIgnoreCase)));
     }
 
     /// <summary>Equipment signature for the active rig: identifies the gear whose

@@ -22,7 +22,7 @@ namespace NINA.Polaris.Services.External;
 
 /// <summary>
 /// Self-update for SBC (.deb) installs. Checks the project's GitHub releases
-/// for a newer version, and — on the user's request, with their sudo password —
+/// for a newer version, and, on the user's request, with their sudo password,
 /// downloads the architecture-matched .deb and installs it.
 ///
 /// <para>The install is the tricky part: the package's postinst restarts
@@ -108,7 +108,7 @@ public class UpdateService {
     };
 
     /// <summary>Query GitHub releases (cached 30 min) and report whether a newer
-    /// version exists for this host's architecture. Never throws — network /
+    /// version exists for this host's architecture. Never throws, network /
     /// rate-limit errors return a result with <c>Error</c> set.</summary>
     public async Task<UpdateCheckResult> CheckAsync(bool force, CancellationToken ct) {
         if (!IsSupported)
@@ -406,7 +406,7 @@ public class UpdateService {
             var message = c.TryGetProperty("commit", out var cm)
                 && cm.TryGetProperty("message", out var msg) ? (msg.GetString() ?? "") : "";
             if (string.IsNullOrWhiteSpace(message)) continue;
-            // Skip the automated "Bump version to x" commits — noise to the user.
+            // Skip the automated "Bump version to x" commits, noise to the user.
             if (message.StartsWith("Bump version to", StringComparison.OrdinalIgnoreCase)) continue;
 
             var lines = message.Replace("\r\n", "\n").Split('\n');
@@ -470,7 +470,7 @@ public class UpdateService {
     }
 
     /// <summary>
-    /// Install a SPECIFIC release by tag — the rollback (or forward-reinstall)
+    /// Install a SPECIFIC release by tag, the rollback (or forward-reinstall)
     /// path. The asset URL is resolved server-side from the releases list (never
     /// taken from the caller), then downloaded + installed via the same machinery
     /// as <see cref="InstallAsync"/>. There is intentionally NO "must be newer"
@@ -499,7 +499,7 @@ public class UpdateService {
 
     /// <summary>Download a release asset to the fixed staging path the updater
     /// unit reads. Shared by the latest-update, version-targeted (rollback), and
-    /// — indirectly — offline paths.
+    ///, indirectly, offline paths.
     /// <para>The download is deliberately NOT tied to the request abort token: a
     /// multi-tens-of-MB .deb over a slow SBC/mobile link easily outlasts the
     /// browser's fetch timeout, and if the client aborts we do not want to kill
@@ -551,7 +551,7 @@ public class UpdateService {
             bool allowDowngrade = false) {
         if (!IsSupported) return (false, "Self-update is only available on a Linux .deb install.");
         if (string.IsNullOrWhiteSpace(expectedSha256Hex))
-            return (false, "Missing the expected SHA-256 digest — cannot verify the package.");
+            return (false, "Missing the expected SHA-256 digest, cannot verify the package.");
 
         var wantHex = expectedSha256Hex.Trim();
         if (wantHex.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase))
@@ -596,7 +596,7 @@ public class UpdateService {
         if (!string.Equals(gotHex, wantHex, StringComparison.Ordinal)) {
             try { File.Delete(DebStagePath); } catch { }
             _logger.LogWarning("Update upload SHA-256 mismatch (got {Got}, want {Want})", gotHex, wantHex);
-            return (false, "Checksum mismatch — the uploaded package is corrupt or not the genuine release. Aborted.");
+            return (false, "Checksum mismatch, the uploaded package is corrupt or not the genuine release. Aborted.");
         }
 
         // 3. dpkg sanity: must be the 'polaris' package; version newer than ours
@@ -689,7 +689,7 @@ public class UpdateService {
                 var msg = (stderr ?? "").Contains("authentication", StringComparison.OrdinalIgnoreCase)
                     || (stderr ?? "").Contains("not authorized", StringComparison.OrdinalIgnoreCase)
                     ? "Not authorized to install the update. The PolicyKit rule "
-                        + "(50-polaris-update.rules) may be missing — reinstall the .deb."
+                        + "(50-polaris-update.rules) may be missing, reinstall the .deb."
                     : $"Install launch failed (exit {proc.ExitCode}). {stderr}".Trim();
                 _logger.LogWarning("Update install launch failed: {Err}", msg);
                 return (false, msg);

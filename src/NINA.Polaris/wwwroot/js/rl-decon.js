@@ -1,7 +1,7 @@
-// rl-decon.js — browser-side Richardson-Lucy deconvolution (White 1994 damped).
+// rl-decon.js, browser-side Richardson-Lucy deconvolution (White 1994 damped).
 //
 // The server measures the PSF, fits the noise model, and detects stars
-// (POST /api/decon/rl-prepare). The heavy part — the RL iteration loop —
+// (POST /api/decon/rl-prepare). The heavy part, the RL iteration loop,
 // runs here in the browser via a pure-JS FFT so the SBC server CPU stays
 // free. Pixels arrive as Uint16Array (via /api/onnx/source-pixels) and
 // results are saved via /api/onnx/save, reusing the existing ONNX pipeline
@@ -70,7 +70,7 @@
 
     // ── PSF spectrum precomputation ────────────────────────────────────
     // kernelData: Float32Array[kw*kh], center at (kh>>1, kw>>1).
-    // Returns { psfRe, psfIm } — the TILE×TILE complex spectrum, reused
+    // Returns { psfRe, psfIm }, the TILE×TILE complex spectrum, reused
     // across all iterations and all tiles of the same frame.
     function preparePsf(kernelData, kw, kh) {
         const N = TILE * TILE;

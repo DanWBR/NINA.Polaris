@@ -1,6 +1,6 @@
 /* ============================================================
    Basic (phone-only) field mode -- an ASIAIR-style curated shell.
-   Everything here is scoped under .basic-shell / .basic-return and
+   Everything here is scoped under .basic-shell / .nav-field and
    only renders when the app is in basic mode (phones only), so the
    desktop and tablet layouts are untouched.
    ============================================================ */
@@ -161,6 +161,12 @@
     color:var(--text); font-size:15px; font-weight:700}
 .basic-shell .bs-nudge button:active{background:var(--bs-accent); color:#fff}
 .basic-shell .bs-nudge button:disabled{opacity:.4}
+/* Stop, in the phone shell's focus pad: same square as the arrows, red so it
+   reads as the interruption it is. */
+.basic-shell .bs-nudge .bs-nudgestop{
+    background:rgba(255,93,93,.18); border-color:var(--bs-danger); color:var(--bs-danger);
+    font-size:12px;
+}
 .basic-shell .bs-nudgehide{min-width:26px !important; height:26px !important; background:transparent !important;
     color:var(--bs-muted) !important; font-size:15px !important; align-self:flex-start}
 .basic-shell .bs-focusreopen{position:absolute; right:104px; bottom:56px; z-index:23; height:32px; padding:0 14px;
@@ -394,6 +400,8 @@ body.basic-active .hostdlg-card{height:auto; max-height:100%}
 .basic-shell :focus-visible{outline:2px solid var(--bs-accent2); outline-offset:2px}
 
 /* return-to-field pill, shown on a phone that escaped to the full UI */
-.basic-return{position:fixed; left:12px; bottom:10px; z-index:790;
-    height:32px; padding:0 16px; border-radius:16px; background:rgba(76,141,255,.92); color:#fff;
-    border:0; font-weight:700; font-size:13px; font-family:inherit; box-shadow:0 6px 20px rgba(0,0,0,.4)}
+/* Return to field mode. Was a fixed pill at bottom-left, which on a phone
+   overlapped the first buttons of the nav strip (Home, Rigs) and took their
+   taps; it is the strip's first button now. Accent tint because it is an
+   action, not a tab, and nothing ever marks it active. */
+.nav-btn.nav-field, .nav-btn.nav-field:hover{color:var(--accent)}

@@ -329,7 +329,7 @@ public class ColorCalibrationService {
 
         // ── 4. Catalog cone search ────────────────────────────────────
         // Field-of-view radius: half the diagonal in degrees. The
-        // pixel scale isn't |CD22| / |CD11| alone — those are only
+        // pixel scale isn't |CD22| / |CD11| alone, those are only
         // the diagonal entries of the rotation+scale matrix, and at
         // rotations near 90° both go to zero while the off-diagonal
         // (CD12/CD21) carries the actual scale. Use the column

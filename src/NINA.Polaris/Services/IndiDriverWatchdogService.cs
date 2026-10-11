@@ -19,9 +19,9 @@ using NINA.INDI.Protocol;
 namespace NINA.Polaris.Services;
 
 /// <summary>
-/// Detects a wedged INDI driver — one that stopped delivering BLOBs, the
+/// Detects a wedged INDI driver, one that stopped delivering BLOBs, the
 /// classic "capture hangs then times out" symptom (e.g. indi_asi_ccd dropping
-/// the CCD1 BLOB after a mid-exposure USB/reconfig event) — and restarts JUST
+/// the CCD1 BLOB after a mid-exposure USB/reconfig event), and restarts JUST
 /// that driver through indi-web, instead of the futile device reconnect that
 /// doesn't touch the stuck driver process.
 ///
@@ -33,12 +33,12 @@ namespace NINA.Polaris.Services;
 /// <c>/api/drivers/restart/&lt;label&gt;</c>. Restarts are rate-limited
 /// (<see cref="MinRestartInterval"/> between attempts for a driver, capped at
 /// <see cref="MaxRestartsPerWindow"/> per <see cref="RestartWindow"/>) so a
-/// genuinely broken driver isn't bounced forever — after the cap it backs off
+/// genuinely broken driver isn't bounced forever, after the cap it backs off
 /// and tells the user to intervene.
 ///
 /// It only ever restarts a driver (never moves hardware) and is a no-op when
 /// indi-web isn't running (e.g. the user connected to an external indiserver we
-/// don't manage — there we can't restart a driver, so we just surface it).
+/// don't manage, there we can't restart a driver, so we just surface it).
 /// </summary>
 public class IndiDriverWatchdogService : IHostedService {
     private readonly IndiClient _indi;
@@ -63,7 +63,7 @@ public class IndiDriverWatchdogService : IHostedService {
         public DateTime LastRestartAt = DateTime.MinValue;
         public bool RestartInFlight;
         // FIELD6-11: spurious-disconnect reconnects, tracked separately from
-        // driver restarts — they're a different remedy for a different fault and
+        // driver restarts, they're a different remedy for a different fault and
         // must not consume each other's budget.
         public readonly List<DateTime> Reconnects = new();
         public DateTime LastReconnectAt = DateTime.MinValue;
@@ -75,7 +75,7 @@ public class IndiDriverWatchdogService : IHostedService {
     /// put back after the reconnect. Keyed by INDI device name.
     ///
     /// Needed because a restarted driver comes up at ITS defaults, and on the
-    /// SV405CC the Cooler control's default is 0 (off) — so a camera that was
+    /// SV405CC the Cooler control's default is 0 (off), so a camera that was
     /// holding 0°C came back with the TEC dead and quietly warmed up for the rest
     /// of the night. We reconnected the device and stopped there (dc645402), which
     /// fixed capture but not cooling. Field report: "faltou reativar o cooling da
@@ -136,7 +136,7 @@ public class IndiDriverWatchdogService : IHostedService {
     /// FIELD6-11: a device we connected dropped its CONNECTION on its own. This
     /// is NOT the wedge case the rest of this service handles: the driver process
     /// is alive and answering, it just let go of the hardware, so restarting the
-    /// driver is the wrong (and much more disruptive) hammer — the fix is simply
+    /// driver is the wrong (and much more disruptive) hammer, the fix is simply
     /// to connect it again, exactly what the operator was doing by hand in RIGS.
     /// Field report: the SV405CC's INDI driver does this mid-session for no
     /// visible reason; capture then silently stops for the rest of the night
@@ -165,18 +165,18 @@ public class IndiDriverWatchdogService : IHostedService {
             if (st.ReconnectInFlight) return;
             if (now - st.LastReconnectAt < MinRestartInterval) {
                 _logger.LogWarning(
-                    "INDI '{Device}' dropped again within {Sec}s of the last reconnect — backing off",
+                    "INDI '{Device}' dropped again within {Sec}s of the last reconnect, backing off",
                     device, MinRestartInterval.TotalSeconds);
                 return;
             }
             st.Reconnects.RemoveAll(t => now - t > RestartWindow);
             if (st.Reconnects.Count >= MaxRestartsPerWindow) {
                 _logger.LogError(
-                    "INDI '{Device}' has dropped {N} times in {Win}min — giving up auto-reconnect. "
+                    "INDI '{Device}' has dropped {N} times in {Win}min, giving up auto-reconnect. "
                     + "Reconnect it in RIGS; the driver or the USB link is unhealthy.",
                     device, st.Reconnects.Count, RestartWindow.TotalMinutes);
                 _notify.Push("error",
-                    $"{device} keeps disconnecting on its own — auto-reconnect gave up. " +
+                    $"{device} keeps disconnecting on its own, auto-reconnect gave up. " +
                     $"Reconnect it in RIGS; the driver or the USB link is unhealthy.", 15000);
                 Record(device, null, "reconnect-gave-up");
                 return;
@@ -188,9 +188,9 @@ public class IndiDriverWatchdogService : IHostedService {
 
         _ = Task.Run(async () => {
             try {
-                _logger.LogWarning("INDI '{Device}': spurious disconnect — reconnecting", device);
+                _logger.LogWarning("INDI '{Device}': spurious disconnect, reconnecting", device);
                 _notify.Push("warn",
-                    $"{device} disconnected on its own — reconnecting…", 8000);
+                    $"{device} disconnected on its own, reconnecting…", 8000);
                 // Let the driver settle before asking again; an immediate CONNECT
                 // on a driver that just dropped tends to be ignored.
                 await Task.Delay(TimeSpan.FromSeconds(2));
@@ -262,11 +262,11 @@ public class IndiDriverWatchdogService : IHostedService {
                 if (st.Restarts.Count >= MaxRestartsPerWindow) {
                     Record(device, null, "capped");
                     _notify.Push("error",
-                        $"INDI driver for {device} keeps wedging — restarted " +
+                        $"INDI driver for {device} keeps wedging, restarted " +
                         $"{st.Restarts.Count}× in {(int)RestartWindow.TotalMinutes} min. " +
                         $"Manual intervention needed (check cabling / power / USB).", 12000);
                     _logger.LogWarning(
-                        "INDI watchdog: {Device} hit restart cap ({N}/{RW}min) — backing off",
+                        "INDI watchdog: {Device} hit restart cap ({N}/{RW}min), backing off",
                         device, st.Restarts.Count, (int)RestartWindow.TotalMinutes);
                     return;
                 }
@@ -288,13 +288,13 @@ public class IndiDriverWatchdogService : IHostedService {
     private async Task AttemptRestartAsync(string device, DeviceState st) {
         // We can only restart a driver when indi-web owns the indiserver. If the
         // user connected to an external server we don't manage, surface it and
-        // stop — a device reconnect wouldn't fix a stuck driver anyway.
+        // stop, a device reconnect wouldn't fix a stuck driver anyway.
         if (!_indiWeb.Running) {
             Record(device, null, "indi-web-not-running");
             _notify.Push("warn",
                 $"INDI camera {device} stopped delivering frames (driver wedged). " +
                 $"Polaris can auto-restart the driver only when the embedded INDI Web " +
-                $"Manager runs it — restart the driver manually on your INDI host.", 12000);
+                $"Manager runs it, restart the driver manually on your INDI host.", 12000);
             _logger.LogWarning("INDI watchdog: {Device} wedged but indi-web not running", device);
             return;
         }
@@ -310,11 +310,11 @@ public class IndiDriverWatchdogService : IHostedService {
         }
 
         _notify.Push("info",
-            $"INDI driver '{label}' ({device}) stopped delivering frames — restarting it…", 8000);
+            $"INDI driver '{label}' ({device}) stopped delivering frames, restarting it…", 8000);
         _logger.LogWarning(
             "INDI watchdog: restarting wedged driver '{Label}' for device {Device}", label, device);
 
-        // Snapshot cooler state BEFORE the driver dies — once it's gone the device
+        // Snapshot cooler state BEFORE the driver dies, once it's gone the device
         // reports its defaults and we'd have no way to tell "was cooling" from
         // "user turned it off".
         CaptureCoolerState(device);
@@ -338,15 +338,15 @@ public class IndiDriverWatchdogService : IHostedService {
         // device VANISHES; the fresh process re-announces it CONNECTION=Off.
         // Restarting and stopping there left the camera disconnected for the
         // rest of the night, which is exactly the field report "the camera
-        // disconnects for no reason and I just reconnect it in RIGS" — the
+        // disconnects for no reason and I just reconnect it in RIGS", the
         // reconnect the operator was doing by hand is the missing half.
         // (The class comment above chose restart "instead of the futile device
         // reconnect". Correct that a reconnect alone can't fix a wedged driver;
-        // wrong that it's either/or — it's restart THEN reconnect.)
+        // wrong that it's either/or, it's restart THEN reconnect.)
         var reconnected = await TryReconnectAfterRestartAsync(device, label);
         // FIELD7-2: reconnecting is still only two thirds of it. The fresh driver
         // is at its defaults, and on the SV405CC the Cooler control defaults to OFF
-        // — so a camera that had been holding 0°C came back with a dead TEC and
+        //, so a camera that had been holding 0°C came back with a dead TEC and
         // warmed up unnoticed for the rest of the session.
         if (reconnected) {
             // The client auto-dispatches CONFIG_LOAD about 1.5 s after a connect,
@@ -360,7 +360,7 @@ public class IndiDriverWatchdogService : IHostedService {
         Record(device, label, reconnected ? "restarted+reconnected" : "restarted-reconnect-failed");
         if (reconnected) {
             _notify.Push("info",
-                $"INDI driver '{label}' restarted and {device} reconnected — capture should resume.", 8000);
+                $"INDI driver '{label}' restarted and {device} reconnected, capture should resume.", 8000);
         } else {
             _notify.Push("warn",
                 $"INDI driver '{label}' restarted, but {device} did not come back. " +
@@ -371,12 +371,12 @@ public class IndiDriverWatchdogService : IHostedService {
     /// <summary>
     /// Wait for a just-restarted driver to re-announce the device, then connect
     /// it. The device is gone from our snapshot at this point (delProperty), so
-    /// poll until its CONNECTION property exists again before writing — a CONNECT
+    /// poll until its CONNECTION property exists again before writing, a CONNECT
     /// aimed at a device indiserver hasn't re-announced is silently dropped.
     /// </summary>
     /// <summary>Resolve the main or aux camera when it's the INDI device named
     /// <paramref name="device"/>. Null when the device isn't a camera we own (the
-    /// watchdog also covers mounts, focusers, wheels — none of which have a cooler).</summary>
+    /// watchdog also covers mounts, focusers, wheels, none of which have a cooler).</summary>
     private (NINA.Image.Interfaces.ICamera Camera, string Slot)? ResolveCamera(string device) {
         var equip = _services.GetService<EquipmentManager>();
         if (equip == null) return null;
@@ -404,7 +404,7 @@ public class IndiDriverWatchdogService : IHostedService {
     /// <summary>Put the cooler back after a restart+reconnect, if it was on.
     ///
     /// Goes through CoolingRampService rather than writing the setpoint raw, so the
-    /// same °C/min rule applies here as everywhere else — and it matters more here
+    /// same °C/min rule applies here as everywhere else, and it matters more here
     /// than anywhere: the sensor may have drifted up while the driver was down, and
     /// slamming it back to 0°C is exactly the fast plunge that condenses dew.
     /// Ramping from wherever it actually is, is free, because the ramp reads the
@@ -453,7 +453,7 @@ public class IndiDriverWatchdogService : IHostedService {
                     "INDI watchdog: '{Device}' never re-appeared after restarting '{Label}'", device, label);
                 return false;
             }
-            // 2) Honour the per-device pre-connect delay (INDIROB-3) — a driver
+            // 2) Honour the per-device pre-connect delay (INDIROB-3), a driver
             //    that just started is exactly the case that delay exists for.
             await Task.Delay(1000);
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));

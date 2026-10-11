@@ -19,7 +19,7 @@ using NINA.Image.Interfaces;
 
 namespace NINA.Polaris.Services;
 
-// Part of the NativeGuider class — guide-camera dark library + bad-pixel map
+// Part of the NativeGuider class, guide-camera dark library + bad-pixel map
 // (the in-process equivalent of PHD2's dark library / defect map). A single
 // "build" capture produces both a master dark (for the current
 // exposure/gain/bin) and a hot/dead-pixel map; the per-rig

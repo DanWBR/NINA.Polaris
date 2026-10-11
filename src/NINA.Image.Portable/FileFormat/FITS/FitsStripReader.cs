@@ -34,7 +34,7 @@ namespace NINA.Image.FileFormat.FITS;
 /// scan over the whole image, which a per-strip reader can't reproduce
 /// without a full pass. Callers must check <see cref="IsStripable"/> (or
 /// <see cref="IsFloat"/>) and fall back to <see cref="FITSReader.Read(Stream)"/>
-/// for those — rare for raw calibration frames, which are camera 16-bit.
+/// for those, rare for raw calibration frames, which are camera 16-bit.
 /// </para>
 /// </summary>
 public sealed class FitsStripReader : IDisposable {
@@ -64,7 +64,7 @@ public sealed class FitsStripReader : IDisposable {
     /// <summary>
     /// True when this file can be read strip-by-strip: an integer
     /// BITPIX (8/16/32) with a single 2-D plane. False for float files
-    /// and RGB cubes — the caller should fall back to the full-frame
+    /// and RGB cubes, the caller should fall back to the full-frame
     /// <see cref="FITSReader.Read(Stream)"/> in those cases.
     /// </summary>
     public bool IsStripable => !IsFloat && Planes == 1;

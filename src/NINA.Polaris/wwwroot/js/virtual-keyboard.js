@@ -496,7 +496,7 @@
     }
 
     // iOS opens the native keyboard the instant an editable field gains focus
-    // — that happens on the tap BEFORE our focusin handler runs, so setting
+    //, that happens on the tap BEFORE our focusin handler runs, so setting
     // readOnly in show() is too late and the native keyboard pops up (and
     // covers our on-screen panel). Pre-arm readOnly on the pointerdown/
     // touchstart that precedes the focus so iOS never decides to show it. Only

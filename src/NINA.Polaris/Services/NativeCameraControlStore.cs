@@ -27,8 +27,8 @@ namespace NINA.Polaris.Services;
 /// live SDK forgets everything on close, so without this the config panel
 /// would reset every session.
 ///
-/// Values are keyed by the camera's <see cref="ICamera.DeviceName"/> — i.e.
-/// per physical camera, NOT per rig — so a camera that appears in more than
+/// Values are keyed by the camera's <see cref="ICamera.DeviceName"/>, i.e.
+/// per physical camera, NOT per rig, so a camera that appears in more than
 /// one rig keeps its tuning. Written to
 /// <c>{LocalAppData}/NINA.Polaris/native-camera-controls.json</c>.
 /// </summary>
@@ -98,7 +98,7 @@ public sealed class NativeCameraControlStore {
             try {
                 if (cam.SetControl(id, sc.Value, sc.Auto)) applied++;
             } catch {
-                // Non-fatal — a single bad control shouldn't block the rest.
+                // Non-fatal, a single bad control shouldn't block the rest.
             }
         }
         return applied;

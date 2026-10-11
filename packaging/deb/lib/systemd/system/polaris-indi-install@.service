@@ -1,0 +1,19 @@
+[Unit]
+# Installs ONE INDI driver package as root, for the driver list in the RIGS
+# INDI card. Templated: the instance name IS the package, e.g.
+#   systemctl start polaris-indi-install@indi-asi.service
+# The polaris user may start instances of this unit without a password through
+# 50-polaris-indi-install.rules.
+#
+# The script validates the name again and refuses any plan that removes a
+# package, which is what stops a driver from the wrong INDI build taking out
+# indi-bin, libindi1 and phd2.
+Description=N.I.N.A. Polaris INDI driver install (%i)
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/polaris/bin/polaris-indi-install.sh %i
+RemainAfterExit=no
+# Some driver packages pull a large SDK; apt on an SD card is not quick.
+TimeoutStartSec=900

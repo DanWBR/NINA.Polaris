@@ -20,13 +20,13 @@ namespace NINA.Polaris.Services.Ncnn;
 /// Cheap, side-effect-free probe for whether this machine can run ncnn models on
 /// a Vulkan GPU. The gate: <c>libncnn.so</c> must be loadable AND a Vulkan
 /// loader (<c>libvulkan.so.1</c>) must be present (ncnn's Vulkan backend needs
-/// it). This is the open, vendor-neutral GPU lane — it runs on the Adreno 643 of
+/// it). This is the open, vendor-neutral GPU lane, it runs on the Adreno 643 of
 /// the Radxa Dragon Q6A via Turnip, on Mali, Intel, etc.
 ///
 /// This is only a fast pre-check; the real authority is whether
 /// <see cref="NcnnSession"/> loads a model and produces finite output (the
 /// inference service falls back to the GraXpert CLI on any failure, so a false
-/// positive here is harmless — one failed run, then fallback).
+/// positive here is harmless, one failed run, then fallback).
 ///
 /// Set <c>POLARIS_DISABLE_NCNN=1</c> (or the shared <c>POLARIS_DISABLE_NPU=1</c>)
 /// to force this path off for A/B timing against the CPU path.
@@ -63,14 +63,14 @@ public static class NcnnRuntime {
 
     private static bool CanLoad(params string[] candidates) {
         foreach (var c in candidates) {
-            // 1. default OS search (LD_LIBRARY_PATH, /etc/ld.so.cache, /usr/lib …) —
+            // 1. default OS search (LD_LIBRARY_PATH, /etc/ld.so.cache, /usr/lib …),
             //    finds system libs like libvulkan.so.1.
             if (NativeLibrary.TryLoad(c, out var h)) {
                 try { NativeLibrary.Free(h); } catch { }
                 return true;
             }
             // 2. the app's own directory. The .deb installs libncnn.so next to the
-            //    app (/opt/polaris), which is NOT on the default dlopen path — the
+            //    app (/opt/polaris), which is NOT on the default dlopen path, the
             //    real [DllImport("ncnn")] resolves it via the .NET native search
             //    dirs, but a bare TryLoad doesn't, so probe the absolute path too.
             try {

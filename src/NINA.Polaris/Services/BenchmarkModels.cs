@@ -50,7 +50,7 @@ public record CpuResult(
 
 // OCL: GPU (OpenCL) vs CPU on the same image kernels. MpxPerSec is megapixels
 // processed per second; Speedup = gpu / cpu. OverallSpeedup is the geometric
-// mean of the per-op speedups (not arithmetic — see GpuOverallSpeedup), so a
+// mean of the per-op speedups (not arithmetic, see GpuOverallSpeedup), so a
 // single large win doesn't mask ops that are slower on the GPU. Ran=false when
 // no usable GPU.
 public record GpuResult(
@@ -61,10 +61,10 @@ public record GpuResult(
     double OverallSpeedup);
 
 // QNN-5: NPU (AI inference) column. Times a real GraXpert Denoise on the board's
-// NPU — Qualcomm Hexagon (QAIRT) or Rockchip RKNPU2 — over a fixed synthetic
+// NPU, Qualcomm Hexagon (QAIRT) or Rockchip RKNPU2, over a fixed synthetic
 // frame and reports per-tile cost. Precision is the model's dtype (int16/int8 on
 // the QCS6490 HTP, which is integer-only; fp16 on RKNN). Ran=false off an NPU
-// host or when no denoise model is bundled (Error carries the reason) — same
+// host or when no denoise model is bundled (Error carries the reason), same
 // convention as the GPU row.
 public record NpuResult(
     bool Ran, string Backend, string Model, string Precision,

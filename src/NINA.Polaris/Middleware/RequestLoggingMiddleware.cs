@@ -133,7 +133,7 @@ public class RequestLoggingMiddleware {
         if (ex != null) return "error";
         // HTTP/2 clients negotiate WebSockets via an extended CONNECT
         // (RFC 8441). Kestrel answers 501 to plain CONNECT requests, which
-        // is the correct, expected response — not an application fault. Don't
+        // is the correct, expected response, not an application fault. Don't
         // surface it as a red error (it floods the log on startup when the
         // noVNC/embedded clients probe). Treat any CONNECT as informational.
         if (string.Equals(method, "CONNECT", StringComparison.OrdinalIgnoreCase))

@@ -195,6 +195,11 @@ public class CalibrationService {
         // library lookup entirely.
         string target = light.MetaData.Target.Name ?? "";
         if (string.IsNullOrEmpty(target)) target = "Unknown";
+        // The sensor a master was built from has to be the sensor the light
+        // came off: the dark current pattern and the flat's dust are
+        // properties of that chip, not of the rig. An empty name on either
+        // side still matches, so an old library keeps working.
+        string camera = light.MetaData.Camera.Name ?? "";
 
         // ---- Pick which masters to apply --------------------------
         // FrameLibrary helpers return FrameRow (with .Path); we
@@ -202,13 +207,13 @@ public class CalibrationService {
         // pipeline stays path-only.
         // LSPP-1: auto-match helpers moved to CalibrationMath; behavior
         // unchanged. Per-frame consumers reuse the same picker logic.
-        string? darkPath = req.MasterDarkPath ?? CalibrationMath.FindNearestDark(masters.Darks, exposure, gain)?.Path;
-        string? flatPath = req.MasterFlatPath ?? CalibrationMath.FindMatchingFlat(masters.Flats, filter, gain)?.Path;
+        string? darkPath = req.MasterDarkPath ?? CalibrationMath.FindNearestDark(masters.Darks, exposure, gain, camera)?.Path;
+        string? flatPath = req.MasterFlatPath ?? CalibrationMath.FindMatchingFlat(masters.Flats, filter, gain, camera)?.Path;
         // Bias only matters if we don't have a dark, darks already
         // include the bias signal. If user explicitly passes a bias
         // path we honour it as a flat-calibrator override.
         string? biasPath = req.MasterBiasPath
-            ?? (darkPath == null ? CalibrationMath.FindMatchingBias(masters.Biases, gain)?.Path : null);
+            ?? (darkPath == null ? CalibrationMath.FindMatchingBias(masters.Biases, gain, camera)?.Path : null);
         // Flat needs a calibration frame to subtract before normalising:
         // prefer master_dark_flat (matched on flat's exposure+gain),
         // fall back to master_bias.
@@ -216,14 +221,17 @@ public class CalibrationService {
         if (flatPath != null) {
             var flatMeta = loadMaster(flatPath).MetaData;
             string? darkFlatPath = CalibrationMath.FindNearestDark(masters.DarkFlats,
-                flatMeta.Exposure.ExposureTime, flatMeta.Camera.Gain)?.Path;
+                flatMeta.Exposure.ExposureTime, flatMeta.Camera.Gain,
+                flatMeta.Camera.Name ?? camera)?.Path;
             flatCalibrator = darkFlatPath ?? biasPath ?? req.MasterBiasPath;
         }
 
         if (darkPath == null && flatPath == null && biasPath == null) {
             throw new InvalidOperationException(
-                $"No matching masters found for this light (gain={gain}, " +
-                $"exposure={exposure}s, filter='{filter}').");
+                $"No matching masters found for this light (camera='{camera}', gain={gain}, " +
+                $"exposure={exposure}s, filter='{filter}'). A dark has to be within " +
+                $"{CalibrationMath.DarkExposureTolerance(exposure):0.##}s of the light and from " +
+                $"the same camera.");
         }
 
         // ---- Pixel math ------------------------------------------
@@ -281,18 +289,23 @@ public class CalibrationService {
         // MASTER{X} via the ImageWriterService or the ST-3 master writer
         // qualifies. Frames captured before STUDIO indexed them as
         // IMAGETYP=LIGHT, those won't show up here, which is correct.
-        var all = _library.Query(new FrameQuery(null, null, null, null, null, 500, 0));
+        // One query per type. A single sweep with a row cap (which the
+        // library clamps to 500 whatever you ask for) is fine on a fresh
+        // install and useless on a real one: the rows come back newest first
+        // across EVERY type, so a few hundred lights push the masters off the
+        // end and auto-match reports "no masters" with a library full of them.
         var index = new MasterIndex();
-        foreach (var f in all) {
-            switch (f.ImageType?.ToUpperInvariant()) {
-                case "MASTERBIAS":     index.Biases.Add(f); break;
-                case "MASTERDARK":     index.Darks.Add(f); break;
-                case "MASTERFLAT":     index.Flats.Add(f); break;
-                case "MASTERDARKFLAT": index.DarkFlats.Add(f); break;
-            }
-        }
+        index.Biases.AddRange(MastersOfType("MASTERBIAS"));
+        index.Darks.AddRange(MastersOfType("MASTERDARK"));
+        index.Flats.AddRange(MastersOfType("MASTERFLAT"));
+        index.DarkFlats.AddRange(MastersOfType("MASTERDARKFLAT"));
         return index;
     }
+
+    private List<FrameRow> MastersOfType(string imageType) =>
+        _library.Query(new FrameQuery(imageType, null, null, null, null, 500, 0))
+                .Where(f => string.Equals(f.ImageType, imageType, StringComparison.OrdinalIgnoreCase))
+                .ToList();
 
     // LSPP-1: FindNearestDark / FindMatchingFlat / FindMatchingBias /
     // NormalizeFlat moved to CalibrationMath (pure static helpers).

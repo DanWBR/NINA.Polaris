@@ -147,6 +147,52 @@ public class EffectiveFilterWheelTests {
         Assert.That(rw.Capabilities.SupportsEditNames, Is.True);
     }
 
+    /// <summary>A wheel that reports fewer slots than the operator has filters
+    /// configured. The extra names are dropped, which is correct (there is no
+    /// slot to send the wheel to), but it used to happen in silence.
+    ///
+    /// Field report 2026-10-02: an 8-position ZWO EFW told the SDK it was a
+    /// 4-position wheel, the driver published four slots, and Polaris showed
+    /// four with nothing to distinguish that from a correctly reported small
+    /// wheel. The driver's own count and the names that did not fit are now
+    /// readable, so the status feed can say it.</summary>
+    [Test]
+    public void NamesBeyondSlots_NamesWhatTheWheelHasNoRoomFor() {
+        var inner = new FakeWheel { Names = new[] { "Red", "Green", "Blue", "H_Alpha" } };
+        SetSavedNames(new[] { "H", "O", "S", "I1", "I2" });
+        var w = new EffectiveFilterWheel(inner, _profiles);
+
+        Assert.Multiple(() => {
+            Assert.That(w.SlotCount, Is.EqualTo(4), "the driver's count, not the profile's");
+            Assert.That(w.NamesBeyondSlots, Is.EqualTo(new[] { "I2" }));
+            Assert.That(w.FilterNames, Is.EqualTo(new[] { "H", "O", "S", "I1" }),
+                "the usable list still matches the wheel");
+        });
+    }
+
+    /// <summary>The ordinary case says nothing, so the warning never cries wolf:
+    /// equal counts, and a profile shorter than the wheel, are both silent.</summary>
+    [Test]
+    public void NamesBeyondSlots_IsEmptyWhenEverythingFits() {
+        var inner = new FakeWheel { Names = new[] { "a", "b", "c" } };
+
+        SetSavedNames(new[] { "L", "R", "G" });
+        Assert.That(new EffectiveFilterWheel(inner, _profiles).NamesBeyondSlots, Is.Empty);
+
+        SetSavedNames(new[] { "L" });
+        Assert.That(new EffectiveFilterWheel(inner, _profiles).NamesBeyondSlots, Is.Empty);
+    }
+
+    /// <summary>A blank trailing slot is not a filter the operator lost.</summary>
+    [Test]
+    public void NamesBeyondSlots_IgnoresBlankExtras() {
+        var inner = new FakeWheel { Names = new[] { "a", "b" } };
+        SetSavedNames(new[] { "L", "R", "", "   ", "Ha" });
+
+        Assert.That(new EffectiveFilterWheel(inner, _profiles).NamesBeyondSlots,
+            Is.EqualTo(new[] { "Ha" }));
+    }
+
     // ── fake backend ─────────────────────────────────────────────────
     private sealed class FakeWheel : IFilterWheel {
         public string[] Names { get; set; } = System.Array.Empty<string>();

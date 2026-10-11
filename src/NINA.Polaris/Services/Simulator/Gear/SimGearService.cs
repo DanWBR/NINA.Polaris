@@ -23,7 +23,7 @@ namespace NINA.Polaris.Services.Simulator.Gear;
 /// Singleton that owns the shared simulator state. <c>EquipmentManager</c>
 /// resolves it to construct <see cref="SimGuideCamera"/> and
 /// <see cref="SimMount"/>, which both read/write the same
-/// <see cref="SimGearState"/> — that coupling is what makes a pulse guide on
+/// <see cref="SimGearState"/>, that coupling is what makes a pulse guide on
 /// the mount visibly shift the star field the camera captures.
 /// </summary>
 public sealed class SimGearService {

@@ -43,8 +43,8 @@ namespace NINA.Polaris.Middleware;
 ///                      gates /ws. No special handshake protocol
 ///                      needed. ?token= in the URL is the fallback
 ///                      for non-cookie scenarios.)
-///   /phd2-gui/*       (reverse-proxied embedded GUI — Linux/xpra)
-///   /phd2-vnc/*       (noVNC static client — Windows/TightVNC)
+///   /phd2-gui/*       (reverse-proxied embedded GUI, Linux/xpra)
+///   /phd2-vnc/*       (noVNC static client, Windows/TightVNC)
 ///   /phd2-vnc-ws      (WebSocket bridge to local TightVNC TCP)
 ///   /indi-web/*       (reverse-proxied INDI Web Manager)
 ///   /canopus/*        (reverse-proxied local Canopus assistant)

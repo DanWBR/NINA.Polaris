@@ -154,9 +154,10 @@ Polaris analyses Bahtinov masks automatically:
 
 After each capture, Polaris:
 
-1. Finds the brightest star in the frame (or accepts a manual
-   `starX` / `starY` if you POST one to `/api/focus/bahtinov`).
-2. Crops a 200 px ROI around it.
+1. Finds the brightest star in the frame (or uses the pinned
+   `starX` / `starY` the client sends).
+2. Crops an ROI around it, 200 px across by default and
+   adjustable through `roiHalf` (32 to 400 px half-width).
 3. Sweeps through every angle 0-180° in 0.5° steps, integrating
    intensity along each line through the ROI centre.
 4. Picks the 3 strongest peaks (with a 30° minimum separation
@@ -187,6 +188,55 @@ The sidebar shows the offset with a direction cue:
 
 Colour coding: green when in focus, amber when fine-tuning,
 red when far off.
+
+### Bahtinov on the live video stream (VIDEO tab)
+
+The same analysis runs on the live stream, at ~4 readings per
+second, which is the practical way to use a mask: you turn the
+knob and watch the number move instead of waiting for a capture.
+
+Where: VIDEO tab -> Capture, sidebar, **Bahtinov mask** panel
+right below the focus sharpness bar. Start the stream, tick
+**On**.
+
+Why it works without a capture: the stream caches every frame it
+relays at FULL resolution (`ImageRelayService.RelayVideoJpegAsync`
+sets `LatestImage`; only the JPEG on the wire is downscaled), and
+`POST /api/focus/bahtinov` reads that cache. Asking for a capture
+instead would be refused: a running stream holds
+`CameraCaptureGate` exclusively and every other main-camera
+capture gets a 409.
+
+Panel controls, and the failure each one exists for:
+
+- **Click the frame to pin the star** (`starX` / `starY`, in frame
+  pixels). At video SNR on a rich field the brightest star changes
+  between frames and the offset jitters. **Unpin star** returns to
+  automatic.
+- **Analysis box** (`roiHalf`, frame px). The sweep only sees
+  inside the box. Long focal length, small pixels or a large
+  defocus push the spikes outside the default 200 px and the
+  reading degrades silently. A dashed square on the overlay shows
+  the boundary.
+
+Colour sensors: the frame is a mosaic, so a line integrated across
+it alternates colour filters every pixel, a 2 px ripple that
+confuses peak finding. Each 2x2 quad is averaged into one sample
+first (`BahtinovInput.PseudoLuminance2x2`), then the result is
+scaled back to frame pixels (`ToFrameScale`), so offsets are
+always in frame pixels and the in-focus threshold scales with
+them. The panel states which grid was used, and the response
+carries `mosaic` and `scale`.
+
+Exposure guidance: 0.1 to 0.5 s on a star of magnitude 3 or
+brighter is comfortable. The analysis integrates along each spike,
+so it tolerates a frame that looks noisy on screen much better
+than the eye does. If the star is faint, raise the stream
+exposure; there is no cap.
+
+The overlay lives on `videoBahtinovCanvas` above
+`videoCaptureCanvas` and inherits the frame's pan/zoom transform
+(`_pzApply`), so it stays registered to the star when zoomed.
 
 ### Common Manual Assist pitfalls
 
@@ -307,6 +357,54 @@ you, so picking *Guide* sweeps the guide focuser using the guide camera.
 Automatic autofocus **during a session** (AUTORUN / LIVE triggers) always
 targets the **main** focuser - the aux/guide trains are manual-focus only
 for now.
+
+## Filter offsets subtab (FOCUS tab)
+
+Third subtab of FOCUS, next to Manual Assist and Auto V-curve. Enabled
+only when a focuser AND a filter wheel are connected. Measures the best
+focus position of every selected filter in one pass, before the night
+starts, so the sequencer can switch filters on offsets instead of
+refocusing.
+
+What it does per filter: switch the wheel, run the SAME auto-focus the
+rig is configured for (no separate focus settings), record where it
+landed. A failure is retried once, then recorded with its reason and the
+run continues to the next filter. The run ends on the reference filter,
+at the position measured for it.
+
+Nothing is written to the rig until the operator presses **Apply to
+rig**. Results are held on the host, so a browser reload does not lose
+them. Apply writes each accepted filter into the rig's per-filter focus
+memory and refreshes the derived `FilterOffsets` table, and it saves the
+chosen reference filter as the rig's reference so the stored offsets
+match the previewed ones.
+
+Controls: `Select all` / `Clear` over the filter checkboxes (all ticked
+by default), `Reference filter` (Automatic, or a specific filter),
+`Start run`, `Stop run`, `Re-run failed`, `Apply to rig`, `Discard
+results`, and a per-row `Go to` that moves the focuser to that filter's
+stored point.
+
+Table columns: Apply (per-row tick), Filter, Position, Offset, HFR, Fit
+quality (R squared), Temperature, Result. Row results are `OK`, `Low
+quality` (measured, but the fit is below the quality gate: left unticked
+for Apply) and `Failed`. Phases shown while running: `Switching filter`,
+`Focusing`, `Retrying`, `Parking on the reference filter`.
+
+Endpoints: `GET /api/focus-sweep/status`, `GET /api/focus-sweep/result`,
+`POST /api/focus-sweep/start` (body `{filters, merge}`),
+`POST /api/focus-sweep/abort`, `POST /api/focus-sweep/apply` (body
+`{filters, reference}`), `POST /api/focus-sweep/discard`. Live state also
+rides the `focusSweep` block of `/ws/status`.
+
+Refused with 409 while a sequence, live stacking, auto-focus or another
+run is going, and with 400 when the camera, focuser or wheel is missing
+or no filter is selected.
+
+Common question: **the offset column shows a warning triangle.** That
+filter was measured outside the rig's temperature tolerance relative to
+the reference filter, so Apply will not store its offset. Re-running
+that filter fixes it.
 
 ## Auto-focus triggers (advanced)
 

@@ -175,7 +175,7 @@ public class WcsHeadersTests {
     public void RaDecToPixel_MirroredFrame_LandsOnObjects() {
         // Regression for the "annotate objects are in the wrong place"
         // field bug: a real plate-solved SV605CC frame (IC 4605 region)
-        // whose CD matrix has a POSITIVE determinant — i.e. a mirrored
+        // whose CD matrix has a POSITIVE determinant, i.e. a mirrored
         // (flipped-parity) image. The old annotate path used only the
         // scalar rotation and assumed north-up/east-left, so it ignored
         // the flip and placed every label on the wrong side. Projecting
@@ -227,7 +227,7 @@ public class WcsHeadersTests {
             imageWidth: 3840, imageHeight: 2160);
 
         // CD preserved exactly (parity intact) and the frame is a proper
-        // rotation — determinant > 0.
+        // rotation, determinant > 0.
         Assert.That(wcs.CD11, Is.EqualTo(cd11).Within(1e-18));
         Assert.That(wcs.CD12, Is.EqualTo(cd12).Within(1e-18));
         Assert.That(wcs.CD21, Is.EqualTo(cd21).Within(1e-18));
@@ -236,7 +236,7 @@ public class WcsHeadersTests {
             Is.GreaterThan(0), "ASTAP solved this frame as a proper rotation.");
 
         // The scalar (scale, rotation) reconstruction produces the OPPOSITE
-        // parity for the very same solve — this is exactly what used to be
+        // parity for the very same solve, this is exactly what used to be
         // written to disk and broke catalog matching.
         double scaleArcsec = Math.Sqrt(cd11 * cd11 + cd21 * cd21) * 3600.0;
         double rotDeg = Math.Atan2(cd21, cd11) * 180.0 / Math.PI;
@@ -244,6 +244,6 @@ public class WcsHeadersTests {
             274.7280594730, -13.8695795083, scaleArcsec, rotDeg, 3840, 2160);
         Assert.That(recon.CD11 * recon.CD22 - recon.CD12 * recon.CD21,
             Is.LessThan(0),
-            "Scalar reconstruction mirrors parity — why FromCdMatrix is preferred.");
+            "Scalar reconstruction mirrors parity, why FromCdMatrix is preferred.");
     }
 }

@@ -67,6 +67,9 @@ public class ProfileService {
         Load();
     }
 
+    /// <summary>Where the profiles live; other per-host files sit beside them.</summary>
+    public string ProfileDirectory => _profileDir;
+
     public List<ProfileSummary> ListProfiles() {
         var files = Directory.GetFiles(_profileDir, "*.json")
             .Where(f => !f.EndsWith("active.json"))
@@ -95,7 +98,7 @@ public class ProfileService {
         // with a .bak of the previous good version, so a torn/truncated file
         // from a power cut mid-write (common on field SBCs) can be recovered.
         // The cardinal rule: NEVER silently reset to an empty profile and then
-        // let the next Save() overwrite a recoverable file — that's how rigs
+        // let the next Save() overwrite a recoverable file, that's how rigs
         // vanish. So on a parse failure we preserve the bad file, try the
         // backup, and only fall back to a fresh Default when nothing is usable.
         var bakPath = _activeProfilePath + ".bak";
@@ -154,6 +157,11 @@ public class ProfileService {
         // Rigs saved while the auto-focus default was "all stars" carry a 0
         // that shadows the new single-star default forever. Re-seed once.
         MigrateAutoFocusSingleStar();
+
+        // Four per-panel offsets became one per rig. Carry whatever the
+        // operator had already dialed in into the single field, rather than
+        // silently reverting their sensor to the driver's pedestal.
+        MigrateSingleOffset();
 
         // Deployment-time override for the capture root. Useful for
         // distribution images (Pi systemd unit, Docker, etc.) that
@@ -398,7 +406,7 @@ public class ProfileService {
 
         // RIGPUT-1: the per-rig value-type fields are nullable (so a partial PUT
         // can't reset them). A genuinely NEW rig gets the sensible defaults set
-        // HERE — otherwise null would resolve to each read site's fallback, which
+        // HERE, otherwise null would resolve to each read site's fallback, which
         // for offset is 0 (camera default) rather than the intended 50, and a
         // fresh rig would run at black-level-clipping offset 0.
         var rig = new EquipmentProfile {
@@ -468,6 +476,7 @@ public class ProfileService {
             PolarAlignExposureSec = src.PolarAlignExposureSec,
             PolarAlignSettleSeconds = src.PolarAlignSettleSeconds,
             PolarAlignGain = src.PolarAlignGain,
+            PolarAlignCamera = src.PolarAlignCamera,
             SlewCenterExposureSec = src.SlewCenterExposureSec,
             SlewCenterGain = src.SlewCenterGain,
             FocalLengthMm = src.FocalLengthMm,
@@ -576,7 +585,7 @@ public class ProfileService {
                 }).ToList()
             }).ToList(),
             // FILTERNAME: a cloned rig keeps the operator's filter labels too,
-            // not just the offsets — otherwise the copy comes up with the
+            // not just the offsets, otherwise the copy comes up with the
             // driver's raw names and the offsets (keyed by the saved names) miss.
             FilterNames = (string[])(src.FilterNames ?? System.Array.Empty<string>()).Clone(),
             // Per-rig power-box channel labels travel with the clone, same
@@ -636,9 +645,11 @@ public class ProfileService {
                 MasterBiasOverrideId  = src.LiveStackPreProcessing.MasterBiasOverrideId,
                 BgeEnabled            = src.LiveStackPreProcessing.BgeEnabled,
                 BgeSmoothing          = src.LiveStackPreProcessing.BgeSmoothing,
-                BgeCorrection         = src.LiveStackPreProcessing.BgeCorrection
+                BgeCorrection         = src.LiveStackPreProcessing.BgeCorrection,
+                BgeWhere              = src.LiveStackPreProcessing.BgeWhere,
+                BgeRecomputeEveryFrames = src.LiveStackPreProcessing.BgeRecomputeEveryFrames
             },
-            // INDIROB-3: pre-connect delays follow the rig — different
+            // INDIROB-3: pre-connect delays follow the rig, different
             // setups (mini-PC vs Pi, USB hub topology, ESP32 vs FTDI
             // bridges) have different settling needs.
             PreConnectDelayMsByDevice = new Dictionary<string, int>(src.PreConnectDelayMsByDevice),
@@ -780,6 +791,44 @@ public class ProfileService {
     /// client with an outdated rigs list kept reverting the exposure to an
     /// ancient 100 ms). Re-seed them to the 1 s default. Runs on every load;
     /// idempotent because valid values are never touched.</summary>
+    /// <summary>
+    /// Fold the retired per-panel offsets into the rig's single one.
+    ///
+    /// LIVE, PREVIEW, AUTORUN and ADV each used to carry their own, and an
+    /// upgrading install can have a pedestal in any of them. Taking the rig's
+    /// own field as it stands would quietly drop that and run the sensor at the
+    /// driver's value on the next session, which is exactly the class of
+    /// surprise the consolidation is meant to end.
+    ///
+    /// AUTORUN wins the tie: it is the one that governs real imaging runs.
+    /// Runs once, because it then clears the legacy fields.
+    /// </summary>
+    private void MigrateSingleOffset() {
+        if (_activeProfile.EquipmentProfiles == null) return;
+        var adopted = 0;
+        var cleared = 0;
+        foreach (var rig in _activeProfile.EquipmentProfiles) {
+            bool had = rig.PreviewOffset.HasValue || rig.AutorunOffset.HasValue
+                       || rig.AdvOffset.HasValue;
+            if (!had) continue;
+            if (rig.DefaultOffset is not > 0) {
+                var legacy = new[] { rig.AutorunOffset, rig.PreviewOffset, rig.AdvOffset }
+                    .FirstOrDefault(v => v is > 0);
+                if (legacy is > 0) { rig.DefaultOffset = legacy; adopted++; }
+            }
+            rig.PreviewOffset = null;
+            rig.AutorunOffset = null;
+            rig.AdvOffset = null;
+            cleared++;
+        }
+        if (cleared > 0) {
+            Save();
+            _logger.LogInformation(
+                "Offset migration: one offset per rig now; {Adopted} rig(s) took a value "
+                + "from a retired per-panel field, {Cleared} cleared", adopted, cleared);
+        }
+    }
+
     private void MigrateGuideExposureFloor() {
         if (_activeProfile.EquipmentProfiles == null) return;
         var fixedUp = 0;
@@ -823,7 +872,7 @@ public class ProfileService {
     /// builds where LogToDisk/SaveGuideLogs defaulted OFF (those builds wrote
     /// `false` into active.json, which then shadowed the new default-ON
     /// initializers forever). Guarded by <see cref="UserProfile.SettingsMigration"/>
-    /// so it runs once — a deliberate opt-out made after the migration is
+    /// so it runs once, a deliberate opt-out made after the migration is
     /// respected on every later load.</summary>
     private void MigrateLoggingDefaults() {
         const int LoggingDefaultsOnVersion = 1;

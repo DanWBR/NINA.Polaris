@@ -125,7 +125,7 @@ public static class EquipmentEndpoints {
         // every absent property its C# initialiser, and those initialisers are
         // real-looking values: a compute-mode-only PUT arrived carrying
         // Name = "Default", NativeRaAlgorithm = "hysteresis", NativeDecAlgorithm
-        // = "resistswitch", NativePierSideHandling = "mirror" — which is exactly
+        // = "resistswitch", NativePierSideHandling = "mirror", which is exactly
         // how a rig named "SV503" came back as "Default" with its guiding setup
         // reset. After the merge, absent ⇒ the stored value, so the guards and
         // clamps below run against real input only.
@@ -178,6 +178,11 @@ public static class EquipmentEndpoints {
                 if (!string.IsNullOrWhiteSpace(update.RotatorDriver))
                     r.RotatorDriver = update.RotatorDriver;
                 r.RotatorMaxAngle = RotatorRange.NormalizeMaximum(update.RotatorMaxAngle);
+                // Manual rotator turn direction. Nullable, so an absent
+                // property leaves the stored choice alone (RIGPUT-1) while an
+                // explicit true or false lands.
+                if (update.ManualRotatorReverse.HasValue)
+                    r.ManualRotatorReverse = update.ManualRotatorReverse.Value;
                 r.FlatDevice = update.FlatDevice;
                 r.Dome = update.Dome;
                 r.Weather = update.Weather;
@@ -188,7 +193,7 @@ public static class EquipmentEndpoints {
                 // guarded, so a PARTIAL PUT (the {liveStackComputeMode} and
                 // {slewConfirmDeg,slewFloorDeg} patches below omit everything else)
                 // no longer resets these to the model defaults. Before this, a
-                // compute-mode toggle silently zeroed gain/offset/binning/cooler —
+                // compute-mode toggle silently zeroed gain/offset/binning/cooler,
                 // the offset→0 case clipped the SV405CC to black. An explicit 0 /
                 // false still writes; only ABSENT (null) is left alone.
                 if (update.CoolerTargetTemperature.HasValue)
@@ -197,6 +202,16 @@ public static class EquipmentEndpoints {
                     r.CoolerRampDegPerMinute = Math.Max(0, update.CoolerRampDegPerMinute.Value);
                 if (update.DefaultGain.HasValue) r.DefaultGain = update.DefaultGain.Value;
                 if (update.DefaultOffset.HasValue) r.DefaultOffset = update.DefaultOffset.Value;
+                // Guide-star selection. Nullable throughout: absent leaves the
+                // stored choice alone, and null means "the tuned default".
+                if (update.NativeStarSigma.HasValue) r.NativeStarSigma = update.NativeStarSigma;
+                if (update.NativeStarMinSize.HasValue) r.NativeStarMinSize = update.NativeStarMinSize;
+                if (update.NativeStarMaxSize.HasValue) r.NativeStarMaxSize = update.NativeStarMaxSize;
+                if (update.NativeStarMaxHfd.HasValue) r.NativeStarMaxHfd = update.NativeStarMaxHfd;
+                if (update.NativeStarEdgeMarginPx.HasValue) r.NativeStarEdgeMarginPx = update.NativeStarEdgeMarginPx;
+                if (update.NativeStarTapRadiusPx.HasValue) r.NativeStarTapRadiusPx = update.NativeStarTapRadiusPx;
+                if (update.NativeStarAllowSaturated.HasValue) r.NativeStarAllowSaturated = update.NativeStarAllowSaturated;
+                if (update.NativeStarDetectionMode != null) r.NativeStarDetectionMode = update.NativeStarDetectionMode;
                 if (update.DefaultBinning.HasValue) r.DefaultBinning = update.DefaultBinning.Value;
                 // FIELD-2: per-rig Bayer mosaic override. Treat empty /
                 // whitespace as null ("Auto") so the UI <select> with
@@ -230,6 +245,8 @@ public static class EquipmentEndpoints {
                     r.PolarAlignSettleSeconds = update.PolarAlignSettleSeconds;
                 if (update.PolarAlignGain > 0)
                     r.PolarAlignGain = update.PolarAlignGain;
+                if (!string.IsNullOrWhiteSpace(update.PolarAlignCamera))
+                    r.PolarAlignCamera = PolarAlignmentService.NormalizeCamera(update.PolarAlignCamera);
                 // Slew & Center plate-solve tunables (per-rig).
                 if (update.SlewCenterExposureSec > 0)
                     r.SlewCenterExposureSec = update.SlewCenterExposureSec;
@@ -290,7 +307,7 @@ public static class EquipmentEndpoints {
                 r.RequiredBackspacingMm = update.RequiredBackspacingMm;
                 if (update.GuiderFocalLengthMm > 0) r.GuiderFocalLengthMm = update.GuiderFocalLengthMm;
                 // OAG mode: a plain bool is safe here because `update` is
-                // RigPatch.Merge(stored, patch) — an omitting client yields the
+                // RigPatch.Merge(stored, patch), an omitting client yields the
                 // stored value (no-op) and an explicit false is a real "OAG off".
                 r.GuiderIsOag = update.GuiderIsOag;
                 // OAG prism geometry (drives the guide FOV square). Both are
@@ -357,7 +374,7 @@ public static class EquipmentEndpoints {
                 // straight to the profile); accepting it on the full-rig PUT
                 // let any client holding a stale rigs list (the GUIDE dropdown
                 // doesn't refresh that list) silently revert the exposure on
-                // the next unrelated rig save — the "always back to 0.1 s" bug.
+                // the next unrelated rig save, the "always back to 0.1 s" bug.
                 if (update.NativeCalibrationStepMs > 0)
                     r.NativeCalibrationStepMs = update.NativeCalibrationStepMs;
                 if (update.NativeMinMoveRaPx >= 0)

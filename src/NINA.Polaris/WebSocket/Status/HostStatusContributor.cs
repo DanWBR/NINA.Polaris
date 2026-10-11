@@ -23,22 +23,26 @@ namespace NINA.Polaris.WebSocket.Status;
 /// </summary>
 public sealed class HostStatusContributor : IStatusContributor {
     private readonly ClockSyncService _clockSync;
+    private readonly HostActivityService _hostActivity;
     private readonly HostMetricsService _hostMetrics;
+    private readonly EquipmentSnapshotService _equipmentSnapshot;
     private readonly NINA.Polaris.Services.Logging.LogService _logService;
     private readonly NotificationService _notifications;
     private readonly StoragePushService _storagePush;
     private readonly ScheduledShutdownService _scheduledShutdown;
 
-    public HostStatusContributor(ClockSyncService clockSync, HostMetricsService hostMetrics, NINA.Polaris.Services.Logging.LogService logService, NotificationService notifications, StoragePushService storagePush, ScheduledShutdownService scheduledShutdown) {
+    public HostStatusContributor(ClockSyncService clockSync, HostActivityService hostActivity, HostMetricsService hostMetrics, EquipmentSnapshotService equipmentSnapshot, NINA.Polaris.Services.Logging.LogService logService, NotificationService notifications, StoragePushService storagePush, ScheduledShutdownService scheduledShutdown) {
         _clockSync = clockSync;
+        _hostActivity = hostActivity;
         _hostMetrics = hostMetrics;
+        _equipmentSnapshot = equipmentSnapshot;
         _logService = logService;
         _notifications = notifications;
         _storagePush = storagePush;
         _scheduledShutdown = scheduledShutdown;
     }
 
-    public IReadOnlyCollection<string> Keys { get; } = new[] { "host", "server", "notifications", "storagePush", "scheduledShutdown", "debugLog" };
+    public IReadOnlyCollection<string> Keys { get; } = new[] { "host", "hostActivity", "server", "notifications", "storagePush", "scheduledShutdown", "debugLog" };
 
     public void Contribute(StatusTick tick) {
         var clockSync = _clockSync;
@@ -49,6 +53,30 @@ public sealed class HostStatusContributor : IStatusContributor {
 
             var localDebugCursor = tick.DebugCursor;
             tick.Blocks["host"] = hostMetrics.Latest;
+
+            // What the host is doing, and whether the equipment snapshot behind
+            // this payload is still fresh.
+            //
+            // This exists because of one field report: the host was busy and
+            // the client showed the amber "slow network" warning, which sent
+            // the operator looking at WiFi. The frame-age measurement cannot
+            // tell a host that stopped emitting from a network that dropped
+            // frames, but the SOCKET can: it is still open. So the client needs
+            // the other half of the answer from the host itself, and this is
+            // it.
+            var activity = _hostActivity.Current();
+            var snapAge = _equipmentSnapshot.Age;
+            tick.Blocks["hostActivity"] = new {
+                busy = activity.Count > 0,
+                activity,
+                // Null rather than a huge number before the first snapshot,
+                // so the client can tell "not yet" from "very old".
+                equipmentAgeMs = snapAge == TimeSpan.MaxValue
+                    ? (double?)null : Math.Round(snapAge.TotalMilliseconds),
+                equipmentRefreshMs = Math.Round(_equipmentSnapshot.LastRefreshMs),
+                // A device is not answering and what you are reading is old.
+                equipmentStalled = _equipmentSnapshot.Stalled
+            };
 
             tick.Blocks["server"] = new {
                 utcNow = DateTime.UtcNow.ToString("o"),

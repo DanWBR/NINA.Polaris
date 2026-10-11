@@ -19,7 +19,7 @@ using NINA.Image.Interfaces;
 namespace NINA.Polaris.Services;
 
 /// <summary>
-/// "Center on Sun / Moon / planet" orchestrator — the <b>solve-near-and-offset</b>
+/// "Center on Sun / Moon / planet" orchestrator, the <b>solve-near-and-offset</b>
 /// strategy (Mode A) for solar-system objects that plate solving can't handle
 /// directly.
 ///
@@ -35,7 +35,7 @@ namespace NINA.Polaris.Services;
 ///     <c>CosineKitty</c> ephemeris (J2000 frame, to match the catalog/solver
 ///     epoch the rest of the slew-and-center pipeline already uses);</item>
 ///   <item>slews a few degrees off to a <b>nearby star field</b> and runs the
-///     normal <see cref="SlewCenterService"/> there — that solve + sync corrects
+///     normal <see cref="SlewCenterService"/> there, that solve + sync corrects
 ///     the mount's pointing model right next to the target;</item>
 ///   <item>recomputes the ephemeris (the Moon moves ~0.5°/h, so re-snap right
 ///     before the final hop) and does a precise relative GoTo onto the object.</item>
@@ -80,7 +80,8 @@ public class SolarSystemCenterService {
             OffsetDeg = offsetDeg <= 0 ? 4.0 : Math.Clamp(offsetDeg, 1.0, 15.0),
             ToleranceArcsec = toleranceArcsec,
             State = SolarSystemCenterState.Pending,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            TrackingWasOn = MountAbort.WasTracking(_equip.Telescope)
         };
         _jobs[job.Id] = job;
         JobRetention.TrimFinished(_jobs, j => j.CreatedAt,
@@ -94,18 +95,19 @@ public class SolarSystemCenterService {
     public SolarSystemCenterJob? GetJob(string jobId) =>
         _jobs.TryGetValue(jobId, out var job) ? job : null;
 
-    public void CancelJob(string jobId) {
+    public async Task CancelJobAsync(string jobId) {
         if (!_jobs.TryGetValue(jobId, out var job)) return;
         job.Cts?.Cancel();
         job.State = SolarSystemCenterState.Cancelled;
-        // Cancel the inner solve-and-center pass (which also aborts the slew),
-        // then best-effort abort any final-hop slew that's already in flight.
+        // Cancel the inner solve-and-center pass (which aborts the slew and
+        // restores tracking), then do the same for any final-hop slew of our
+        // own that is already in flight. Both paths go through MountAbort, so
+        // a cancel here cannot leave the mount dead on the sky either.
         if (!string.IsNullOrEmpty(job.InnerJobId)) {
-            try { _slewCenter.CancelJob(job.InnerJobId!); } catch { }
+            try { await _slewCenter.CancelJobAsync(job.InnerJobId!); } catch { }
         }
-        try { _equip.Telescope?.AbortSlewAsync(); } catch (Exception ex) {
-            _logger.LogWarning(ex, "AbortSlew during solar-system center cancel failed");
-        }
+        await MountAbort.AbortAndRestoreTrackingAsync(
+            _equip.Telescope, job.TrackingWasOn, _logger);
     }
 
     private async Task RunJobAsync(SolarSystemCenterJob job, CancellationToken ct) {
@@ -256,8 +258,12 @@ public class SolarSystemCenterJob {
     public string Body { get; set; } = "";
     public double OffsetDeg { get; set; }
     public double ToleranceArcsec { get; set; }
+    /// <summary>Whether the mount was tracking when this job started, so a
+    /// cancel can hand it back the way it was found. See <see
+    /// cref="MountAbort.AbortAndRestoreTrackingAsync"/>.</summary>
+    public bool TrackingWasOn { get; set; }
     public SolarSystemCenterState State { get; set; }
-    /// <summary>Object's apparent position (J2000) — updated to the fresh snapshot
+    /// <summary>Object's apparent position (J2000), updated to the fresh snapshot
     /// right before the final slew.</summary>
     public double TargetRa { get; set; }
     public double TargetDec { get; set; }

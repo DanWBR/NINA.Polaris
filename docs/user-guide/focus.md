@@ -283,8 +283,15 @@ focuser steps.
 
 - **Abort AF**, cancels the sweep; restores the starting focuser
   position
-- **Stop Focuser**, only enabled while the focuser is moving (not
-  during AF); emergency stop for a runaway manual command
+- **Stop Focuser**, the emergency stop for a runaway manual command.
+  Enabled whenever the focuser the source switch points at is connected,
+  including during an AF sweep and when the driver has stopped reporting
+  movement: a wedged move is exactly when the flag is stale and the
+  button is needed. The same stop sits beside the nudge arrows in FOCUS,
+  PREVIEW, VIDEO and the phone shell's focus pad, so it is always where
+  the controls that started the move are. It also cancels a
+  hold-to-repeat nudge that has not committed yet, which would otherwise
+  send the motor off again the moment it stopped.
 
 ## Focusing the aux / guide scope
 

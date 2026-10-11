@@ -52,7 +52,7 @@ public abstract class SequenceEntityBase : ISequenceEntity {
 
     /// <summary>
     /// Clear persistent capture progress (e.g. TakeExposure's completed-frame
-    /// counter). Called by the engine only on a FRESH start / document load —
+    /// counter). Called by the engine only on a FRESH start / document load,
     /// never between retries or loop passes, and never on a resumed start.
     /// </summary>
     public virtual void ResetProgress() { }
@@ -224,7 +224,7 @@ public abstract class SequenceContainer : SequenceEntityBase, IErrorHandlingEnti
             }
         }
 
-        // Out of attempts — apply the failure policy.
+        // Out of attempts, apply the failure policy.
         item.Status = SequenceEntityStatus.Failed;
         switch (behavior) {
             case InstructionErrorBehavior.ContinueOnError:
@@ -250,7 +250,7 @@ public abstract class SequenceContainer : SequenceEntityBase, IErrorHandlingEnti
                 + "it will repeat until the sequence is stopped.", Name);
         var gateConditions = IsLoop && Conditions.Count > 0;
         // Resume support: on the FIRST pass of a resumed run, children whose
-        // status is still Completed from the interrupted run are skipped —
+        // status is still Completed from the interrupted run are skipped,
         // they already did their work. Stale statuses can only exist here at
         // this container's first entry (RunChildAsync resets a child subtree
         // before executing it), and only pass 1 can see them, so pass 2+ of a
@@ -267,7 +267,7 @@ public abstract class SequenceContainer : SequenceEntityBase, IErrorHandlingEnti
 
                 // Loop conditions gate EVERY item (NINA parity), so a time /
                 // altitude / safety cut-off stops the block the moment it trips
-                // — including before the first item, instead of only after a
+                //, including before the first item, instead of only after a
                 // whole pass completes.
                 if (gateConditions && !await AllConditionsHoldAsync(ctx, ct))
                     return;
@@ -291,7 +291,7 @@ public abstract class SequenceContainer : SequenceEntityBase, IErrorHandlingEnti
             if (ctx.AbortRequested) return;
             ct.ThrowIfCancellationRequested();
             // Same resume skip as the sequential body (only relevant when
-            // this container is the resumed run's entry container — a parent
+            // this container is the resumed run's entry container, a parent
             // RunChildAsync resets the subtree in every other case).
             if (ctx.IsResume && Items[i].Status == SequenceEntityStatus.Completed)
                 continue;

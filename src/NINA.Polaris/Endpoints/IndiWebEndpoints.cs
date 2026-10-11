@@ -19,8 +19,8 @@ namespace NINA.Polaris.Endpoints;
 /// <summary>
 /// REST surface for the embedded indi-web manager (a.k.a.
 /// indiwebmanager). The same shape as
-/// <c>/api/guider/gui-session/*</c> for the xpra-hosted PHD2 GUI —
-/// status, start, stop, restart — so the frontend can poll a
+/// <c>/api/guider/gui-session/*</c> for the xpra-hosted PHD2 GUI,
+/// status, start, stop, restart, so the frontend can poll a
 /// single "is the embedded driver-management UI ready" indicator
 /// and dispatch lifecycle commands without reimplementing
 /// transport for each service.
@@ -46,6 +46,13 @@ public static class IndiWebEndpoints {
             lastHealthCheckAt = svc.LastHealthCheckAt,
             lastError = svc.LastError,
             unsupportedReason = svc.UnsupportedReason,
+            // "systemd" or "child-process". The difference is whether the INDI
+            // drivers survive a restart of polaris.service: a child process
+            // shares polaris.service's cgroup and is killed with it. Reported
+            // here so the panel and a bug report can tell the two apart without
+            // ssh-ing in to read the process tree.
+            managedBy = svc.ManagedBy,
+            systemdUnit = svc.SystemdUnitName,
             // Hint URL the UI iframes, points to the Polaris reverse
             // proxy so the iframe stays same-origin (Bottle session
             // cookies + any XHR indi-web makes to itself work).
@@ -104,6 +111,43 @@ public static class IndiWebEndpoints {
         });
 
         // ----- Wedged-driver watchdog (item 4) ---------------------------
+        // ----- Driver packages ----------------------------------------
+        //
+        // Installing a driver used to mean SSH and apt, and getting it wrong
+        // meant apt removing the INDI stack in use along with PHD2. The list
+        // only offers what matches the INDI build already installed, and
+        // every install is simulated first and refused if the plan removes
+        // anything. See IndiPackageService.
+        group.MapGet("/packages", async (IndiPackageService pkgs, CancellationToken ct) => Results.Ok(new {
+            supported = pkgs.IsSupported,
+            stack = (await pkgs.DetectStackAsync(ct)).ToString().ToLowerInvariant(),
+            packages = (await pkgs.ListAsync(ct)).Select(p => new {
+                name = p.Name, summary = p.Summary,
+                installed = p.Installed, version = p.Version, available = p.Available
+            })
+        }));
+
+        // What would happen, without doing it. The UI shows this before the
+        // operator commits to anything.
+        group.MapGet("/packages/{name}/plan", async (string name, IndiPackageService pkgs,
+                                                     CancellationToken ct) => {
+            var plan = await pkgs.PlanAsync(name, ct);
+            return Results.Ok(new { ok = plan.Ok, install = plan.Install, remove = plan.Remove, refusal = plan.Refusal });
+        });
+
+        group.MapPost("/packages/{name}/install", async (string name, IndiPackageService pkgs,
+                                                         IndiWebManagerService web,
+                                                         CancellationToken ct) => {
+            var (ok, message, plan) = await pkgs.InstallAsync(name, ct);
+            if (!ok) return Results.BadRequest(new { error = message, remove = plan.Remove });
+            // indi-web reads the driver catalogue once, at startup, so a
+            // driver installed now is invisible until it runs again. Restart
+            // it here rather than leaving the operator to wonder why the list
+            // still looks the same.
+            var restarted = await web.RestartAsync(ct);
+            return Results.Ok(new { ok = true, message, installed = plan.Install, indiWebRestarted = restarted });
+        });
+
         group.MapGet("/watchdog", (IndiDriverWatchdogService wd) => Results.Ok(wd.Status()));
         group.MapPost("/watchdog/enable", (bool value, IndiDriverWatchdogService wd) => {
             wd.SetEnabled(value);

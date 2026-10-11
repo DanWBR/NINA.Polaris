@@ -36,7 +36,10 @@ public static class FlatDeviceEndpoints {
                 lightOn = equip.FlatDevice.IsLightOn,
                 brightness = equip.FlatDevice.Brightness,
                 coverOpen = equip.FlatDevice.IsCoverOpen,
-                coverMoving = equip.FlatDevice.IsCoverMoving
+                coverMoving = equip.FlatDevice.IsCoverMoving,
+                // Whether this device has a motorised cover at all. A bare
+                // light panel has none, and Open/Close should not be offered.
+                hasCover = equip.FlatDevice.HasCover
             });
         });
 
@@ -60,6 +63,11 @@ public static class FlatDeviceEndpoints {
             if (equip.FlatDevice == null)
                 return Results.BadRequest(new { error = "No flat device selected" });
 
+            if (!equip.FlatDevice.HasCover)
+                return Results.BadRequest(new {
+                    error = $"{equip.FlatDevice.DeviceName} has no motorised cover "
+                          + "(the driver publishes no CAP_PARK)."
+                });
             await equip.FlatDevice.OpenCoverAsync();
             return Results.Ok(new { status = "opening" });
         });
@@ -68,6 +76,11 @@ public static class FlatDeviceEndpoints {
             if (equip.FlatDevice == null)
                 return Results.BadRequest(new { error = "No flat device selected" });
 
+            if (!equip.FlatDevice.HasCover)
+                return Results.BadRequest(new {
+                    error = $"{equip.FlatDevice.DeviceName} has no motorised cover "
+                          + "(the driver publishes no CAP_PARK)."
+                });
             await equip.FlatDevice.CloseCoverAsync();
             return Results.Ok(new { status = "closing" });
         });

@@ -104,6 +104,10 @@ Each tab in the sidebar has its own page. Read the ones you need:
   an independent MTF stretch on each + Screen/Add/Lighten + opacity, with
   a live preview. The finishing step of the starless workflow.
 - **[FILES](files.md)**, server-side file explorer.
+- **[Storage push](cloud-storage.md)**, copy saved frames off the host
+  by themselves: NAS over SMB, another machine over SFTP, a mounted
+  folder, or a cloud account (Drive, OneDrive, Dropbox,
+  Nextcloud/WebDAV, S3) through rclone. The local copy always stays.
 - **[HTTPS setup](https-setup.md)**, self-signed cert on port 5001,
   required for WebGPU + multi-thread WASM on LAN client devices
   (any device other than the host itself). One-time per-device cert
@@ -117,6 +121,10 @@ Each tab in the sidebar has its own page. Read the ones you need:
   from Settings → Network with a 30 s try-and-revert safety net.
 - **[Relay (remote access)](relay.md)**, TLS-tunneled access from
   outside your LAN.
+- **[Live broadcast](broadcast.md)**, stream the session to YouTube,
+  Twitch, Facebook or Instagram straight from the host, with no
+  computer at the scope. The host composes the frame (picture, object
+  card, session numbers) and can keep the same video as a file.
 - **[Remote terminal](remote-terminal.md)**, embedded SSH terminal
   (xterm.js + SSH.NET) in SETTINGS. Restart services on a headless Pi
   from the browser, without plugging in a screen.

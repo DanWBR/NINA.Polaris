@@ -28,11 +28,17 @@ ok()  { echo "  ok   $1"; }
 bad() { echo "  FAIL $1"; fails=$((fails + 1)); }
 
 # ---- the helpers, lifted out of the real script ----------------------------
-for fn in apt_recover apt_try_each has_candidate d80_installed d80_on_disk \n          system_codename ubuntu_codename ppa_retarget phd2_unsatisfiable           indi_ppa_covers indi_archive_drivers indi_fallback_hint; do
+for fn in apt_recover apt_install apt_try_each has_candidate d80_installed d80_on_disk \
+          system_codename ubuntu_codename ppa_retarget phd2_unsatisfiable \
+          indi_ppa_covers indi_archive_drivers indi_fallback_hint \
+          country_mirror_failed use_main_archive mirror_restore \
+          apt_ubuntu_series check_archive_series; do
     sed -n "/^${fn}()[ {]/,/^}/p" "$SRC" >> "$WORK/helpers.sh"
 done
 sed -n '/^apt_recover(){/p' "$SRC" >> "$WORK/helpers.sh"
 sed -n '/^INDI_PPA_SERIES=/p' "$SRC" >> "$WORK/helpers.sh"
+sed -n '/^COUNTRY_MIRROR_RE=/p' "$SRC" >> "$WORK/helpers.sh"
+MIRROR_BACKUP=""
 sed -n '/^INDI_ARCHIVE_DRIVERS=/,/"$/p' "$SRC" >> "$WORK/helpers.sh"
 note_fail() { NOTED+=("$*"); }
 # shellcheck disable=SC1090,SC1091
@@ -241,6 +247,131 @@ MISSING="phd2 libindi1"
 phd2_unsatisfiable && bad "reported unsatisfiable for an absent phd2" \
                    || ok  "an absent phd2 is left to the normal apt path"
 
+# ---------------------------------------------------------------------------
+# Ubuntu 26.04 server in Indonesia (Discord, 2026-10-08):
+#   E: Failed to fetch http://id.archive.ubuntu.com/ubuntu/pool/main/g/gpgmepp/libgpgmepp7_2.0.0-2_amd64.deb  403  Forbidden
+#   [FAIL] apt install phd2
+#   [FAIL] install polaris.deb
+# The country mirror refused one file that both depend on. The install must
+# retry against the main archive, and leave the user's sources as they were.
+# ---------------------------------------------------------------------------
+echo "== a country mirror refusing a file falls back to the main archive =="
+APT_SOURCES_DIR="$WORK/mirror/sources.list.d"; mkdir -p "$APT_SOURCES_DIR"
+APT_SOURCES_LIST="$WORK/mirror/sources.list"
+cat > "$APT_SOURCES_DIR/ubuntu.sources" <<'EOF'
+Types: deb
+URIs: http://id.archive.ubuntu.com/ubuntu/
+Suites: resolute resolute-updates
+Components: main universe
+
+Types: deb
+URIs: http://security.ubuntu.com/ubuntu/
+Suites: resolute-security
+Components: main universe
+EOF
+printf 'deb http://de.ports.ubuntu.com/ubuntu-ports resolute main\n' > "$APT_SOURCES_LIST"
+printf 'deb https://ppa.launchpadcontent.net/pch/phd2/ubuntu resolute main\n' > "$APT_SOURCES_DIR/phd2.list"
+orig_sources=$(cat "$APT_SOURCES_DIR/ubuntu.sources")
+orig_list=$(cat "$APT_SOURCES_LIST")
+cat > "$BIN/apt-get" <<'STUB'
+#!/usr/bin/env bash
+[ "$1" = install ] || exit 0
+shift
+if grep -q 'id\.archive\.ubuntu\.com' "$APT_SOURCES_DIR/ubuntu.sources"; then
+    echo "E: Failed to fetch http://id.archive.ubuntu.com/ubuntu/pool/main/g/gpgmepp/libgpgmepp7_2.0.0-2_amd64.deb  403  Forbidden [IP: 202.79.180.254 80]" >&2
+    echo "E: Unable to fetch some archives, maybe run apt update or try with --fix-missing?" >&2
+    exit 100
+fi
+for a in "$@"; do case "$a" in -*) ;; *) echo "$a" >> "$INSTALLED_LOG";; esac; done
+exit 0
+STUB
+chmod +x "$BIN/apt-get"
+export APT_SOURCES_DIR
+INSTALLED_LOG="$WORK/installed3.txt"; : > "$INSTALLED_LOG"
+NOTED=()
+apt_try_each phd2 openssh-server >/dev/null 2>&1
+grep -qx phd2 "$INSTALLED_LOG" && grep -qx openssh-server "$INSTALLED_LOG" \
+    && ok "installed through the main archive" || bad "installed: $(cat "$INSTALLED_LOG")"
+[ "${#NOTED[@]}" = 0 ] && ok "no failure noted" || bad "noted ${NOTED[*]-}"
+grep -q 'URIs: http://archive.ubuntu.com/ubuntu/' "$APT_SOURCES_DIR/ubuntu.sources" \
+    && ok "deb822 country mirror pointed at archive.ubuntu.com" \
+    || bad "sources: $(cat "$APT_SOURCES_DIR/ubuntu.sources")"
+grep -q 'http://ports.ubuntu.com/ubuntu-ports' "$APT_SOURCES_LIST" \
+    && ok "one-line ports mirror pointed at ports.ubuntu.com" || bad "list: $(cat "$APT_SOURCES_LIST")"
+grep -q 'http://security.ubuntu.com/ubuntu/' "$APT_SOURCES_DIR/ubuntu.sources" \
+    && ok "security.ubuntu.com left alone" || bad "security entry rewritten"
+grep -q 'ppa.launchpadcontent.net/pch/phd2' "$APT_SOURCES_DIR/phd2.list" \
+    && ok "PPA entry left alone" || bad "PPA entry rewritten"
+
+use_main_archive >/dev/null 2>&1 && bad "switched a second time" || ok "switches only once per run"
+
+mirror_restore >/dev/null
+[ "$(cat "$APT_SOURCES_DIR/ubuntu.sources")" = "$orig_sources" ] \
+    && [ "$(cat "$APT_SOURCES_LIST")" = "$orig_list" ] \
+    && ok "original sources restored" \
+    || bad "not restored: $(cat "$APT_SOURCES_DIR/ubuntu.sources" "$APT_SOURCES_LIST")"
+[ -z "$MIRROR_BACKUP" ] && ok "backup cleaned up" || bad "backup left at $MIRROR_BACKUP"
+
+echo "== a failure that is not a country mirror is not retried =="
+MIRROR_BACKUP=""
+printf 'Types: deb\nURIs: http://archive.ubuntu.com/ubuntu/\nSuites: resolute\nComponents: main\n' \
+    > "$APT_SOURCES_DIR/ubuntu.sources"
+cat > "$BIN/apt-get" <<'STUB'
+#!/usr/bin/env bash
+[ "$1" = install ] || exit 0
+echo "E: Package '$3' has no installation candidate" >&2
+exit 100
+STUB
+apt_install indi-full >/dev/null 2>&1 && bad "a missing package reported success" \
+                                     || ok  "a missing package still fails"
+[ -z "$MIRROR_BACKUP" ] && ok "sources untouched" || bad "switched mirrors for an unrelated failure"
+
+# ---------------------------------------------------------------------------
+# The same machine, an hour later (Discord, 2026-10-08): a 26.04 system whose
+# Ubuntu archive entries now said noble. Every install failed on dependencies
+# ("python3-venv ... Depends python3 (= 3.12.3-0ubuntu2.1)"), none of which
+# named the cause. The script must say so and stop before installing.
+# ---------------------------------------------------------------------------
+echo "== check_archive_series =="
+cat > "$BIN/apt-cache" <<'STUB'
+#!/usr/bin/env bash
+[ "$1" = policy ] || exit 0
+cat <<EOF
+Package files:
+ 100 /var/lib/dpkg/status
+     release a=now
+ 500 https://ppa.launchpadcontent.net/pch/phd2/ubuntu resolute/main amd64 Packages
+     release v=26.04,o=LP-PPA-pch-phd2,a=resolute,n=resolute,l=PHD2,c=main,b=amd64
+ 500 http://security.ubuntu.com/ubuntu ${ARCHIVE}-security/main amd64 Packages
+     release v=xx,o=Ubuntu,a=${ARCHIVE}-security,n=${ARCHIVE},l=Ubuntu,c=main,b=amd64
+ 500 http://archive.ubuntu.com/ubuntu ${ARCHIVE}/main amd64 Packages
+     release v=xx,o=Ubuntu,a=${ARCHIVE},n=${ARCHIVE},l=Ubuntu,c=main,b=amd64
+EOF
+STUB
+chmod +x "$BIN/apt-cache"
+export ARCHIVE SYS_CODENAME=resolute
+printf 'ID=ubuntu\nUBUNTU_CODENAME=resolute\n' > "$OS_RELEASE"
+rm -f "$UPSTREAM_RELEASE"
+
+ARCHIVE=noble
+[ "$(apt_ubuntu_series)" = noble ] && ok "reads the archive series, not the PPA's" \
+                                   || bad "series: '$(apt_ubuntu_series)'"
+msg="$(check_archive_series)" && bad "a resolute system on noble sources passed" \
+                              || ok  "a resolute system on noble sources stops"
+grep -q "Ubuntu 'resolute', but apt's Ubuntu sources are for 'noble'" <<<"$msg" \
+    && ok "the message names both releases" || bad "message: $msg"
+
+ARCHIVE=resolute
+check_archive_series >/dev/null && ok "matching sources pass" || bad "matching sources were rejected"
+
+# Linux Mint 22: its own codename is xia, the Ubuntu base and archive are noble.
+ARCHIVE=noble; SYS_CODENAME=xia
+printf 'ID=linuxmint\nUBUNTU_CODENAME=noble\n' > "$OS_RELEASE"
+check_archive_series >/dev/null && ok "Mint on its Ubuntu base passes" || bad "Mint was rejected"
+
+# Debian: no o=Ubuntu entries at all, nothing to compare.
+printf '#!/usr/bin/env bash\necho "Package files:"\n' > "$BIN/apt-cache"
+check_archive_series >/dev/null && ok "no Ubuntu archive: no verdict" || bad "Debian was rejected"
 
 echo
 [ "$fails" = 0 ] && echo "all checks passed" || echo "$fails check(s) failed"

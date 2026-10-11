@@ -114,14 +114,20 @@ public static class SkyEndpoints {
                 targetRotation = job.TargetRotation,
                 rotationError = job.RotationErrorDeg,
                 rotatorMoves = job.RotatorMoves,
+                // Set only when no rotator was connected: the framing angle
+                // was measured rather than driven, so these say how far the
+                // operator turns a manual rotator, and which way.
+                manualRotationTurnDeg = job.ManualRotationTurnDeg,
+                manualRotationDirection = job.ManualRotationDirection,
+                manualRotationMirrored = job.ManualRotationMirrored,
                 scale = job.Scale,
                 error = job.Error
             });
         });
 
-        group.MapPost("/slew-and-center/{jobId}/cancel", (string jobId,
+        group.MapPost("/slew-and-center/{jobId}/cancel", async (string jobId,
             SlewCenterService slewCenter) => {
-            slewCenter.CancelJob(jobId);
+            await slewCenter.CancelJobAsync(jobId);
             return Results.Ok(new { jobId, state = "cancelled" });
         });
 
@@ -165,9 +171,9 @@ public static class SkyEndpoints {
             });
         });
 
-        group.MapPost("/center-body/{jobId}/cancel", (string jobId,
+        group.MapPost("/center-body/{jobId}/cancel", async (string jobId,
             SolarSystemCenterService svc) => {
-            svc.CancelJob(jobId);
+            await svc.CancelJobAsync(jobId);
             return Results.Ok(new { jobId, state = "cancelled" });
         });
 
@@ -630,7 +636,7 @@ public static class SkyEndpoints {
             DateTime darkEnd = haveLoc ? window.AstronomicalDawnUtc : to;
 
             // Longest contiguous stretch the core is above `floor` AND the sky is
-            // dark — the window worth shooting.
+            // dark, the window worth shooting.
             DateTime? bStart = null, bEnd = null;
             double bMax = double.MinValue, bLen = 0;
             DateTime? curStart = null, curEnd = null;
@@ -837,7 +843,7 @@ public static class SkyEndpoints {
 
     /// <summary>
     /// Great-circle distance between two RA/Dec points in degrees.
-    /// Haversine formula in spherical coordinates — accurate at the
+    /// Haversine formula in spherical coordinates, accurate at the
     /// arcsec level which is way more than we need to pick "the closest
     /// planet". RA in hours, Dec in degrees, like the rest of the
     /// codebase. Reused by the nearest-planet probe + any future

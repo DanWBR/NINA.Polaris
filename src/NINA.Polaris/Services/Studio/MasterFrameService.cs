@@ -56,7 +56,7 @@ public class MasterFrameService {
     private readonly ProfileService _profile;
     private readonly ILogger<MasterFrameService> _logger;
     // Optional: drives the pre-flight RAM guard. Null in unit tests that
-    // construct the service directly — the guard then fails open.
+    // construct the service directly, the guard then fails open.
     private readonly HostMetricsService? _metrics;
     private readonly ConcurrentDictionary<string, MasterProgress> _jobs = new();
 
@@ -174,7 +174,15 @@ public class MasterFrameService {
                 var outRoot = _profile.Active.ImageOutputDir;
                 if (string.IsNullOrWhiteSpace(outRoot))
                     throw new InvalidOperationException("ImageOutputDir not set.");
-                dir = Path.Combine(outRoot, Sanitize(rigName), "calibration", "masters");
+                // Under the camera the frames came off, beside the raw
+                // calibration that produced it, because that is the thing a
+                // master belongs to. The camera comes from the FIRST INPUT
+                // rather than from whatever is connected now: masters are
+                // often built the morning after, with nothing plugged in or a
+                // different camera on the rig.
+                var camera = Sanitize(string.IsNullOrWhiteSpace(firstMeta.Camera.Name)
+                    ? "Unknown" : firstMeta.Camera.Name);
+                dir = Path.Combine(outRoot, Sanitize(rigName), "calibration", camera, "masters");
             }
             Directory.CreateDirectory(dir);
 

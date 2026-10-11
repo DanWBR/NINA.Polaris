@@ -716,7 +716,7 @@
     color: var(--text-muted);
 }
 
-/* Settings — card grid layout mirroring the RIGS tab. Each section
+/* Settings, card grid layout mirroring the RIGS tab. Each section
    below renders as its own card. Column count is viewport-driven
    instead of auto-fit/minmax math so narrow laptops always land on
    2 cols (not 1) and wide desktops cap at 3 (auto-fit would slide
@@ -736,8 +736,8 @@
     border: 1px solid var(--border);
     border-radius: var(--radius);
     /* Bottom padding lives on the section itself (not on > *:last-child):
-       several cards end with a hidden trailing node — an x-show modal
-       overlay (Authentication) or an x-show status line (Auto-push) — so
+       several cards end with a hidden trailing node, an x-show modal
+       overlay (Authentication) or an x-show status line (Auto-push), so
        `:last-child` would land the padding on the invisible element and the
        visible content sat flush against the card bottom. A section-level
        padding-bottom is independent of which child is last. (Header band /
@@ -824,7 +824,7 @@
    bare selects in Settings cards to the same input theme the
    text/number fields already use, plus a custom SVG chevron so we
    can drop the OS arrow without losing the affordance. .input-sm
-   already does this for narrow numeric dropdowns — this just
+   already does this for narrow numeric dropdowns, this just
    covers the wider full-row selects (e.g. the FONT-1 Font picker)
    that don't fit .input-sm's 90px lockwidth. */
 .settings-section select:not(.input-sm):not(.input-md) {
@@ -853,7 +853,7 @@
 .settings-section select:not(.input-sm):not(.input-md):focus {
     border-color: var(--accent);
 }
-/* The popup menu (option list) still uses the OS chrome — that's
+/* The popup menu (option list) still uses the OS chrome, that's
    browser-controlled and not reliably stylable. Best we can do is
    coach Chromium via color-scheme so the popup matches dark mode. */
 .settings-section select:not(.input-sm):not(.input-md) option {
@@ -1128,7 +1128,7 @@
 }
 /* Multi-column settings keyed to a fixed 550px card width. auto-fill packs
    as many 550px columns as the (zoom-adjusted) available width allows, so
-   the layout reflows by real width instead of a hard viewport breakpoint —
+   the layout reflows by real width instead of a hard viewport breakpoint,
    previously the 1200/1700px min-width media queries fell back to a single
    column whenever the UI-zoom slider shrank the effective viewport below
    1200px. Two columns appear as soon as ~1116px of room is free, three on
@@ -1196,6 +1196,58 @@
 }
 .storage-form label > .lbl { font-size: 12px; white-space: nowrap; }
 .storage-form label > .input { width: 100%; }
+
+/* Live broadcast card: same stacked shape as the storage form above, for the
+   same reason. A label beside its control puts every control at a different
+   x depending on how long the caption is, and "Broadcast title" next to
+   "Quality" made the inputs disagree by fifty pixels. Caption above, control
+   full width, and the spacing between rows comes from each cell's
+   padding-bottom rather than a flex gap, so a checkbox row and a select row
+   sit the same distance apart. */
+.broadcast-form {
+    display: grid;
+    grid-template-columns: 1fr;
+}
+.broadcast-form label {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    margin-bottom: 0;
+    padding-bottom: 10px;
+}
+.broadcast-form label > .lbl { font-size: 12px; }
+/* max-width has to go with it: .input carries a cap that otherwise leaves the
+   text fields at 220px while the selects run the full width of the card, so
+   the two halves of the same form disagree. */
+.broadcast-form label > .input { width: 100%; max-width: none; }
+
+/* The rclone remote setup panel, which sits below the storage form and
+   is not part of its grid. Same shape: label above the control, control
+   full width, so the two halves of the card do not disagree. */
+.rclone-setup {
+    margin: 12px 0;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+.rclone-setup label {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+.rclone-setup label > .lbl { font-size: 12px; }
+.rclone-setup .input,
+.rclone-setup textarea { width: 100%; }
+.rclone-setup code {
+    flex: 1;
+    padding: 6px 8px;
+    border-radius: 6px;
+    background: var(--bg-tertiary);
+    overflow-x: auto;
+}
 
 /* Paragraphs and helper lines in settings, same as labels.
    Without this rule a default <p> picks up the user-agent's larger
@@ -1380,7 +1432,7 @@
 }
 .home-eyebrow .brand-name {
     font-size: 22px;
-    /* Mirror the tightened header tracking — slightly looser than
+    /* Mirror the tightened header tracking, slightly looser than
        the header because the hero is bigger and benefits from a
        touch more breathing room, but still well below the old 3px
        that made the wordmark feel stretched. */
@@ -2002,6 +2054,26 @@
 }
 .sky-rot-head strong { font-variant-numeric: tabular-nums; }
 .sky-rot-head .btn { margin-left: auto; }
+/* Manual rotator block inside the framing-rotation panel: the measure /
+   flip buttons and the turn instruction. Padded as its own block so it reads
+   apart from the slider row above it. */
+.sky-rot-manual {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+}
+.sky-rot-advice {
+    margin-top: 6px;
+    padding: 6px 8px;
+    border-radius: var(--radius, 8px);
+    background: var(--bg-elevated, rgba(255,255,255,0.04));
+    border: 1px solid var(--border);
+    font-size: 12px;
+}
+.sky-rot-advice.is-ok { border-color: var(--ok, #37c871); }
+.sky-rot-advice strong { display: block; }
+.sky-rot-advice .text-muted { font-size: 11px; }
+
 .sky-rot-row {
     display: flex;
     align-items: center;

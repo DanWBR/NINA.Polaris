@@ -91,7 +91,11 @@ public static class IndiDetectEndpoints {
                 installedDrivers = installed
                     .OrderBy(d => d.Family ?? "", StringComparer.OrdinalIgnoreCase)
                     .ThenBy(d => d.Label, StringComparer.OrdinalIgnoreCase)
-                    .Select(d => new { label = d.Label, family = d.Family }),
+                    // The brand rides along because INDI labels a device by its
+                    // product: "Sesto Senso 2", not "PrimaLuceLab". Looking for
+                    // the brand and finding nothing reads as a missing driver.
+                    .Select(d => new { label = d.Label, family = d.Family,
+                                       manufacturer = d.Manufacturer }),
                 installedDriverCount = installed.Count,
                 driverListAvailable = canFilter,
                 indiWebRunning = web.Running,

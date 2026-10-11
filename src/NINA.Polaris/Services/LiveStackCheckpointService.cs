@@ -18,7 +18,7 @@ namespace NINA.Polaris.Services;
 /// Partial-stack checkpoints. Subscribes to the live-stack frame stream and,
 /// on a per-rig cadence (every N frames and/or every N minutes of integration),
 /// writes a MASTER FITS of the current running stack into a dedicated
-/// <c>checkpoints/</c> folder — a safety net against a crash mid-session, and a
+/// <c>checkpoints/</c> folder, a safety net against a crash mid-session, and a
 /// persisted "quality vs integration time" record: each checkpoint is logged in
 /// the in-memory manifest with the frame, elapsed time, cumulative SNR and HFR
 /// that produced it.
@@ -58,7 +58,7 @@ public sealed class LiveStackCheckpointService : IDisposable {
         _writer = writer;
         _logger = logger;
         _frameSub = _stack.SubscribeFrameIntegrated(OnFrameIntegratedAsync);
-        // Fresh slate per rig — a rig switch starts a new session.
+        // Fresh slate per rig, a rig switch starts a new session.
         _profiles.EquipmentProfileActivated += _ => ResetState();
     }
 

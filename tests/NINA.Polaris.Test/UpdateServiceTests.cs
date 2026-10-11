@@ -28,7 +28,7 @@ namespace NINA.Polaris.Test;
 
 /// <summary>
 /// UpdateService is the SBC .deb self-updater. These tests pin the
-/// platform/arch logic and the safe behaviour off a .deb install — the
+/// platform/arch logic and the safe behaviour off a .deb install, the
 /// network check + privileged install path are exercised manually on a
 /// real Pi, since they touch GitHub and systemd.
 /// </summary>

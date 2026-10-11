@@ -17,9 +17,9 @@ namespace NINA.Polaris.Services.Studio;
 /// <summary>
 /// Pre-flight RAM guard for the STUDIO integration jobs (master frames +
 /// light integration). The tiled/streaming integrators already keep peak
-/// memory flat, but the unavoidable parts — the full-resolution output
+/// memory flat, but the unavoidable parts, the full-resolution output
 /// buffer, plus a single frame's debayer/resample transient during light
-/// alignment — still scale with sensor size. On a small SBC a big enough
+/// alignment, still scale with sensor size. On a small SBC a big enough
 /// sensor can still exhaust RAM and trip the OOM killer, which kills the
 /// whole process instead of failing one job.
 ///
@@ -27,7 +27,7 @@ namespace NINA.Polaris.Services.Studio;
 /// the currently-available system memory (with a fixed reserve for the OS +
 /// the rest of the process), refuses the job up front with an actionable
 /// message instead of risking the OOM killer. When available memory is
-/// unknown (metrics not sampled yet) it allows the job — fail-open, since a
+/// unknown (metrics not sampled yet) it allows the job, fail-open, since a
 /// false refusal is worse than the pre-existing behaviour.
 /// </summary>
 public static class StackMemoryGuard {
@@ -53,7 +53,7 @@ public static class StackMemoryGuard {
     /// Estimate the peak additional working set of a <b>light</b> integration.
     /// Two phases bound it:
     ///   • align: one frame resident as raw + (for OSC) debayered + resampled
-    ///     planes — ~7× a plane for colour, ~2× for mono.
+    ///     planes, ~7× a plane for colour, ~2× for mono.
     ///   • integrate: the full output (W·H·planes) plus one strip tile.
     /// Peak is the larger of the two.
     /// </summary>

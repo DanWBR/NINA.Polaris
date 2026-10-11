@@ -111,7 +111,7 @@ public static class TlsEndpoints {
         // Returns the bundled self-signed cert in PEM format (the form
         // every OS and browser cert-import dialog accepts). DER is
         // also offered via ?format=der for older Windows tooling.
-        // Exempt from auth — the cert is by design public (it's what
+        // Exempt from auth, the cert is by design public (it's what
         // the user is about to install as a trust anchor). The
         // fingerprint stays in /status so the user can verify against
         // an out-of-band channel before trusting it.

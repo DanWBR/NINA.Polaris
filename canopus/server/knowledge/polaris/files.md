@@ -248,6 +248,9 @@ server (which has tokens, TLS, and per-tenant rate limits). See the
 
 ## See also
 
+- [Storage push](cloud-storage.md): copying the night off the host to
+  a NAS, an SSH box or a cloud account, and the **Send to cloud**
+  button in this toolbar
 - [Live stacking](live-stacking.md): real-time stacking during
   capture, separate from the offline Stack workflow here
 - [Editor reference](editor.md): deeper coverage of each Edit

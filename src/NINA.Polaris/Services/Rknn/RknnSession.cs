@@ -78,7 +78,7 @@ public sealed class RknnSession : IRknnTileRunner {
         try {
             // Use all three NPU cores for a single inference (the model was
             // compiled with multi-core-model-mode). Non-fatal if the runtime
-            // rejects it (single-core boards) — the model still runs.
+            // rejects it (single-core boards), the model still runs.
             int cm = rknn_set_core_mask(ctx, rknn_core_mask.RKNN_NPU_CORE_0_1_2);
             if (cm != 0) logger?.LogDebug("rknn_set_core_mask returned {Ret} (continuing single-core)", cm);
 

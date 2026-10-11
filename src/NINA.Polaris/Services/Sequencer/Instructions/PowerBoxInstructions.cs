@@ -36,15 +36,23 @@ internal static class PowerBoxTarget {
     /// silently act on an unrelated outlet, and on a power box that means
     /// yanking power from real equipment.</para>
     /// </summary>
-    public static int Resolve(ISwitchDevice pb, string? channelKey, int fallbackId) {
+    public static int Resolve(ISwitchDevice pb, string? channelKey, int fallbackId)
+        => TryResolve(pb, channelKey, fallbackId)
+           ?? throw new InvalidOperationException(
+               $"Power box channel '{channelKey}' is not present on '{pb.DeviceName}'. " +
+               "Re-select the channel in this instruction; acting on the stored " +
+               "position instead could switch the wrong outlet.");
+
+    /// <summary>The same lookup without the exception, for the live RIGS panel:
+    /// null means the key is gone and the caller gets to say so in its own
+    /// words. One matching routine, so the panel and a saved sequence can never
+    /// disagree about which outlet a key names.</summary>
+    public static int? TryResolve(ISwitchDevice pb, string? channelKey, int fallbackId) {
         if (string.IsNullOrWhiteSpace(channelKey)) return fallbackId;
         foreach (var c in pb.Channels) {
             if (string.Equals(c.Key, channelKey, StringComparison.Ordinal)) return c.Id;
         }
-        throw new InvalidOperationException(
-            $"Power box channel '{channelKey}' is not present on '{pb.DeviceName}'. " +
-            "Re-select the channel in this instruction; acting on the stored " +
-            "position instead could switch the wrong outlet.");
+        return null;
     }
 }
 

@@ -27,7 +27,7 @@ namespace NINA.Polaris.Test.E2E;
 /// pre-stacked master from <c>test_data/</c> through the real
 /// AstapSolver to confirm the binary + CLI wiring + .ini parse all
 /// work end-to-end. Useful as a faster localisation step when
-/// Step09 in the full E2E fixture fails — runs in seconds instead
+/// Step09 in the full E2E fixture fails, runs in seconds instead
 /// of minutes.
 ///
 /// Marked <c>[Explicit]</c> so it stays out of the default sweep.

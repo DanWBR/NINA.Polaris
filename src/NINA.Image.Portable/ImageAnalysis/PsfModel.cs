@@ -18,8 +18,8 @@ namespace NINA.Image.ImageAnalysis;
 /// <see cref="PsfExtractor"/> from the stars in an image and consumed by the
 /// (classical, measured-PSF) Richardson-Lucy deconvolution.
 ///
-/// Unlike the AI deconvolution — which only ever sees a single global FWHM
-/// guess — this kernel is the *actual* PSF of the optical train + seeing for
+/// Unlike the AI deconvolution, which only ever sees a single global FWHM
+/// guess, this kernel is the *actual* PSF of the optical train + seeing for
 /// that frame, which makes the deconvolution mathematically well-posed
 /// (Richardson 1972, Lucy 1974).
 /// </summary>
@@ -60,7 +60,7 @@ public class PsfModel {
         Kernel = kernel;
     }
 
-    /// <summary>Analytic round-Gaussian PSF — used as a fallback when too few
+    /// <summary>Analytic round-Gaussian PSF, used as a fallback when too few
     /// stars are available, and as ground truth in tests. σ in pixels.</summary>
     public static PsfModel Gaussian(int size, double sigma) {
         if (size <= 0 || (size & 1) == 0)

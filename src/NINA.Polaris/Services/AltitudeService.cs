@@ -153,7 +153,7 @@ public class AltitudeService {
         var latRad = latDeg * Math.PI / 180.0;
         var h0 = horizonDeg * Math.PI / 180.0;
         var denom = Math.Cos(latRad) * Math.Cos(decRad);
-        if (Math.Abs(denom) < 1e-9) return null; // pole / dec at zenith — degenerate
+        if (Math.Abs(denom) < 1e-9) return null; // pole / dec at zenith, degenerate
         var cosH = (Math.Sin(h0) - Math.Sin(latRad) * Math.Sin(decRad)) / denom;
         if (cosH < -1.0 || cosH > 1.0) return null; // circumpolar / never rises
         // Hour angle at setting (west, positive), in hours.

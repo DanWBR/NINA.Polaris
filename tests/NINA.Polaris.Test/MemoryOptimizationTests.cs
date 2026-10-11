@@ -29,7 +29,7 @@ namespace NINA.Polaris.Test;
 /// every frame. These tests pin two things:
 ///
 /// 1. The destination-buffer overloads are numerically IDENTICAL to
-///    the legacy allocating overloads — including when the destination
+///    the legacy allocating overloads, including when the destination
 ///    is dirty from a previous frame (the resampler must zero
 ///    off-canvas pixels explicitly).
 /// 2. The per-frame managed allocation of a colour stacking session
@@ -220,7 +220,7 @@ public class MemoryOptimizationTests {
         // RGB 6 MB + detector/statistics transients); with the session
         // scratch it drops to roughly the stacked-RGB output + JPEG
         // render + detector transients. The 14 MB bound sits between the
-        // two regimes with headroom for runtime noise — if scratch reuse
+        // two regimes with headroom for runtime noise, if scratch reuse
         // regresses this climbs right back past 20 MB and fails.
         const int Size = 1024;
         var stars = Stars.Select(s => (s.x * Size / (double)W, s.y * Size / (double)H)).ToArray();
@@ -237,7 +237,7 @@ public class MemoryOptimizationTests {
         long before = GC.GetTotalAllocatedBytes(precise: true);
         for (int i = 0; i < Measured; i++) {
             var drifted = stars.Select(s => (s.Item1 + 3 + i, s.Item2 - 2 + i)).ToArray();
-            // Frame built OUTSIDE the measurement? No — building it is 2 MB
+            // Frame built OUTSIDE the measurement? No, building it is 2 MB
             // and part of real per-frame cost; keep it inside for realism.
             await svc.AddFrameAsync(MakeOscFrame(drifted, Size, Size));
         }
@@ -249,7 +249,7 @@ public class MemoryOptimizationTests {
         double perFrameMb = (after - before) / (double)Measured / (1024.0 * 1024.0);
         TestContext.Out.WriteLine($"Per-frame managed allocation: {perFrameMb:F1} MB");
         Assert.That(perFrameMb, Is.LessThan(14.0),
-            $"Colour stacking allocated {perFrameMb:F1} MB/frame — scratch reuse regressed " +
+            $"Colour stacking allocated {perFrameMb:F1} MB/frame, scratch reuse regressed " +
             "(legacy per-frame churn at this size was ~20 MB).");
     }
 }

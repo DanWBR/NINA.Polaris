@@ -54,6 +54,16 @@ const Geolocation = Plugins.Geolocation
   || ((Cap && typeof Cap.registerPlugin === 'function')
         ? Cap.registerPlugin('Geolocation') : undefined);
 
+// @capacitor/share + @capacitor/filesystem, for the share bridge below.
+// Undefined in a plain browser, where the iframe uses the Web Share API
+// directly and never asks us.
+const SharePlugin = Plugins.Share
+  || ((Cap && typeof Cap.registerPlugin === 'function')
+        ? Cap.registerPlugin('Share') : undefined);
+const Filesystem = Plugins.Filesystem
+  || ((Cap && typeof Cap.registerPlugin === 'function')
+        ? Cap.registerPlugin('Filesystem') : undefined);
+
 // ---------- geolocation bridge (parent side) ----------
 // The Polaris UI runs in a cross-origin <iframe>, where navigator.geolocation
 // is unreliable inside the Android WebView. So the iframe asks US (the app
@@ -72,7 +82,7 @@ window.addEventListener('message', async (ev) => {
 
   // Shell-side fallback: the app WebView's own navigator.geolocation. The
   // shell page is the app origin (not the cross-origin iframe), so unlike
-  // the child it CAN use it — and it works whenever the OS location
+  // the child it CAN use it, and it works whenever the OS location
   // permission is granted, even if the @capacitor/geolocation plugin was
   // never added to the build. This is what makes "Use my location" work
   // without a hard dependency on the plugin.
@@ -166,6 +176,95 @@ window.addEventListener('message', async (ev) => {
   }
 });
 
+// ---------- download bridge ----------
+// The Polaris UI lives in a cross-origin iframe, and a WebView iframe cannot
+// start a download: navigating it just replaces the page, and the download
+// attribute on a blob is ignored outright. So the child posts the URL here and
+// the shell hands it to the OS, whose download manager can also cope with the
+// multi-gigabyte FITS selections this is mostly used for.
+//
+// The URL already carries the session token as a query parameter, because the
+// OS fetch has no way to send our Authorization header.
+window.addEventListener('message', (ev) => {
+  const d = ev.data;
+  if (!d || typeof d !== 'object' || d.__polarisDownloadReq !== true) return;
+  // Only from one of our own instance frames.
+  if (!instanceForSource(ev.source)) return;
+  let url;
+  try { url = new URL(String(d.url || '')); } catch { return; }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
+  try {
+    const w = window.open(url.href, '_blank');
+    if (!w) {
+      // Some WebView configurations return null for window.open; an anchor
+      // click is handled by the same navigation-delegate path.
+      const a = document.createElement('a');
+      a.href = url.href;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+  } catch { /* nothing else we can do from here */ }
+});
+
+// ---------- share bridge ----------
+// navigator.share does not exist in a WebView, and the iframe is cross-origin
+// anyway, so sharing an image has to happen out here where the Capacitor
+// plugins live: fetch the bytes, drop them in the cache directory, then hand
+// the file URI to the native share sheet.
+//
+// Size guard: the bytes travel through the bridge as base64, so this is for
+// images (the UI sends a rendered JPEG for a FITS), not for raw multi-GB data.
+// Anything larger falls back to the download bridge above.
+const SHARE_MAX_BYTES = 48 * 1024 * 1024;
+
+window.addEventListener('message', async (ev) => {
+  const d = ev.data;
+  if (!d || typeof d !== 'object' || d.__polarisShareReq !== true) return;
+  if (!instanceForSource(ev.source)) return;
+  const id = d.id;
+  const post = (msg) => { try { ev.source.postMessage(msg, '*'); } catch { /* ignore */ } };
+  // Ack so the child knows a native sharer is here and does not fall back.
+  post({ __polarisShareAck: true, id });
+  const reply = (m) => post(Object.assign({ __polarisShareRes: true, id }, m));
+
+  if (!SharePlugin || !Filesystem) { reply({ ok: false, error: 'No share plugin in this build' }); return; }
+
+  let url;
+  try { url = new URL(String(d.url || '')); } catch { reply({ ok: false, error: 'Bad URL' }); return; }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') { reply({ ok: false, error: 'Bad URL' }); return; }
+
+  const name = String(d.name || 'image.jpg').replace(/[\\/:*?"<>|]+/g, '_');
+  try {
+    const resp = await fetch(url.href, { credentials: 'omit' });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const buf = await resp.arrayBuffer();
+    if (buf.byteLength > SHARE_MAX_BYTES) {
+      reply({ ok: false, error: 'Too large to share; download it instead' });
+      return;
+    }
+    // Chunked base64: one String.fromCharCode over a 40 MB array blows the
+    // argument limit on both platforms.
+    const bytes = new Uint8Array(buf);
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    }
+    const b64 = btoa(bin);
+
+    await Filesystem.writeFile({ path: name, data: b64, directory: 'CACHE' });
+    const uri = await Filesystem.getUri({ path: name, directory: 'CACHE' });
+    await SharePlugin.share({ title: d.title || name, files: [uri.uri] });
+    reply({ ok: true });
+  } catch (e) {
+    // A cancelled share sheet also lands here on some platforms; the child
+    // treats a failure as "nothing happened", which is the same outcome.
+    reply({ ok: false, error: (e && e.message) ? e.message : String(e) });
+  }
+});
+
 // ---------- tab title bridge ----------
 // The Polaris UI (in the cross-origin iframe) posts its active-rig name so the
 // shell can label this instance's tab with it. We can't read the iframe's
@@ -175,7 +274,7 @@ window.addEventListener('message', async (ev) => {
 window.addEventListener('message', (ev) => {
   const d = ev.data;
   if (!d || typeof d !== 'object') return;
-  // Any message from one of our instance frames proves it loaded and ran JS —
+  // Any message from one of our instance frames proves it loaded and ran JS,
   // clear the load-failure watchdog for that tab.
   const srcInst = instanceForSource(ev.source);
   if (srcInst) markInstanceReached(srcInst);
@@ -209,7 +308,7 @@ function instanceForSource(source) {
 //
 // The token is scoped to the origin that issued it, we only ever answer a
 // window that is one of our own instance frames, and the reply is targeted at
-// that instance's origin — so no other page can ask us for it.
+// that instance's origin, so no other page can ask us for it.
 // The same storage the token is lost from holds the UI's per-device
 // preferences (interface scale, font, the nav-rail inset that exists
 // precisely for this phone), so they ride along on the same relay.
@@ -231,7 +330,7 @@ function handleAuthRelay(msg, source) {
     }
     return;
   }
-  // 'get' — always answer, even with nothing saved: the reply is how the UI
+  // 'get', always answer, even with nothing saved: the reply is how the UI
   // learns there is a shell to push to after the next login.
   Promise.all([prefGet(TOKEN_KEY(inst.origin)), prefGet(PREFS_KEY(inst.origin))])
     .then(([token, prefsRaw]) => {
@@ -297,7 +396,7 @@ let activeOrigin = null;
 // The Polaris UI keeps its auth token ("remember this device") and every UI
 // preference in the IFRAME's localStorage, which the browser scopes to the
 // ORIGIN. An SBC usually advertises several IPv4 addresses (wlan + eth +
-// hotspot) and their mDNS ordering varies between launches — so discovery
+// hotspot) and their mDNS ordering varies between launches, so discovery
 // could present the same Polaris from a "different" origin each time, wiping
 // saved settings and asking for the password again. Remember the origin first
 // used for each mDNS service and KEEP using it while that address is still
@@ -316,9 +415,9 @@ function rememberOrigin(svcKey, origin) {
 }
 
 // ---------- hotspot / direct-probe discovery fallback ----------
-// mDNS multicast frequently never reaches the phone on hotspot networks —
+// mDNS multicast frequently never reaches the phone on hotspot networks,
 // the Polaris SBC's own AP (where the SBC IS the gateway) or the phone's
-// tethering with the SBC as a client — so ZeroConf finds nothing even though
+// tethering with the SBC as a client, so ZeroConf finds nothing even though
 // the server is one hop away and a manually-typed address works fine.
 // Deterministic fallback that runs alongside every scan: directly probe
 //   1) every origin we've connected to before (knownOrigins + last open set),
@@ -327,9 +426,9 @@ function rememberOrigin(svcKey, origin) {
 // probe (the app shell runs on https://localhost, a different origin). The
 // self-signed cert is accepted natively for LAN hosts (LANCertTrust.swift /
 // MainActivity.java), so fetch() works. Servers older than /api/identify
-// simply fail the probe — manual entry still covers those.
+// simply fail the probe, manual entry still covers those.
 const HOTSPOT_GATEWAYS = [
-  '10.42.0.1',    // NetworkManager shared mode — the Polaris hotspot
+  '10.42.0.1',    // NetworkManager shared mode, the Polaris hotspot
   '192.168.4.1',  // hostapd/dnsmasq default
   '10.3.141.1',   // RaspAP default
 ];
@@ -344,7 +443,7 @@ async function probeOrigin(origin) {
     if (!r.ok) return;
     const info = await r.json();
     if (!info || info.app !== 'polaris') return;
-    if (discovered.has(origin)) return;   // mDNS beat us to it — keep its entry
+    if (discovered.has(origin)) return;   // mDNS beat us to it, keep its entry
     discovered.set(origin, {
       name: info.friendly || info.instance || hostLabel(origin),
       addr: hostLabel(origin)
@@ -354,7 +453,7 @@ async function probeOrigin(origin) {
     if (info.instance) rememberOrigin(info.instance, origin);
     els.scanHint.textContent = `${discovered.size} found.`;
     renderList();
-  } catch { /* unreachable, or a pre-/api/identify server — ignore */ }
+  } catch { /* unreachable, or a pre-/api/identify server, ignore */ }
   finally { clearTimeout(t); }
 }
 
@@ -418,10 +517,10 @@ async function scan() {
   // The guard comes FIRST. It used to sit below probeFallback(), so every
   // re-trigger (opening the picker, closing the last tab) fired another burst
   // of probes even while a scan was already running.
-  if (_scanning) return;            // already searching — don't stack watchers
+  if (_scanning) return;            // already searching, don't stack watchers
   discovered.clear();
   renderList();
-  // Direct-probe fallback runs on EVERY scan, in parallel with mDNS —
+  // Direct-probe fallback runs on EVERY scan, in parallel with mDNS,
   // it's what finds the server on hotspot networks where multicast
   // discovery comes up empty (see the block above). Fire-and-forget:
   // results stream into `discovered` as probes resolve.
@@ -452,7 +551,7 @@ async function scan() {
         // Sort the advertised addresses so the pick is deterministic, then
         // prefer the origin we used for this service before (see the
         // stable-per-service-origin block above) while its address is still
-        // advertised — keeping the iframe origin (and its localStorage:
+        // advertised, keeping the iframe origin (and its localStorage:
         // auth token + UI settings) identical across launches.
         const addrs = (s.ipv4Addresses || []).filter(Boolean).slice().sort();
         let addr = addrs[0] || s.hostname;
@@ -463,7 +562,7 @@ async function scan() {
           try {
             const rHost = new URL(remembered).hostname;
             if (addrs.includes(rHost) || rHost === s.hostname) addr = rHost;
-          } catch { /* malformed remembered origin — ignore */ }
+          } catch { /* malformed remembered origin, ignore */ }
         }
         if (!addr) return;
         const origin = toOrigin(addr, s.port || 5000);
@@ -492,7 +591,7 @@ async function scan() {
 // A cross-origin iframe that fails its TLS handshake (e.g. an untrusted
 // self-signed cert on a host LANCertTrust doesn't recognise) or can't reach
 // the host fires NO 'error' event and paints nothing, leaving the shell's
-// navy background showing — a silent, blank "blue" tab with no clue why.
+// navy background showing, a silent, blank "blue" tab with no clue why.
 // We can't read the remote document cross-origin, so we infer "the page came
 // up" from two positive signals: the iframe's own 'load' event (WebKit does
 // not fire it when the provisional navigation fails) and any postMessage from
@@ -694,13 +793,13 @@ function renderTabs() {
   bar.appendChild(add);
 }
 
-// Open one host as an iframe tab. Every instance — even a single one — is
+// Open one host as an iframe tab. Every instance, even a single one, is
 // hosted in a cross-origin <iframe> under the shell so the tab bar stays
 // alive: that's what gives each instance a Reload (⟳) button, a Close (×),
 // the Add (＋)/back-to-picker affordance, and the hardware-back-to-picker
 // gesture. (Earlier a single host was loaded TOP-LEVEL via window.location
 // as an ANR workaround for weak Android WebViews, but that tore down the
-// shell — leaving no tab, no reload, and no way back to the home screen,
+// shell, leaving no tab, no reload, and no way back to the home screen,
 // which is the whole point of the wrapper.) The Capacitor bridge +
 // polaris-onnx plugin stay alive on the remote origin via `allowNavigation`
 // in capacitor.config.
@@ -724,7 +823,7 @@ function openSelected() {
 function maybeWarnMemory() {
   if (instances.size >= 4) {
     els.scanHint.textContent =
-      `${instances.size} live instances — this can use a lot of memory; weak phones may reload background tabs.`;
+      `${instances.size} live instances, this can use a lot of memory; weak phones may reload background tabs.`;
   }
 }
 
@@ -821,7 +920,7 @@ function wire() {
 // declares is location (observatory site coordinates + the offline Aim
 // helper); INTERNET is a normal permission and the motion sensors need no
 // runtime grant. No-op in a plain browser (no Geolocation plugin) and a
-// no-op when already granted; failure never blocks startup — the user can
+// no-op when already granted; failure never blocks startup, the user can
 // still grant later from the system settings.
 async function requestStartupPermissions() {
   if (!Geolocation || typeof Geolocation.requestPermissions !== 'function') return;

@@ -28,8 +28,8 @@ namespace NINA.Polaris.Test;
 /// <summary>
 /// Pins the rejection paths of the /phd2-vnc-ws bridge endpoint
 /// (the parts that don't require an actual TightVNC TCP server on
-/// 127.0.0.1:5900). The full WebSocket↔TCP round-trip — pump
-/// pair shuffling bytes through a real noVNC client — is verified
+/// 127.0.0.1:5900). The full WebSocket↔TCP round-trip, pump
+/// pair shuffling bytes through a real noVNC client, is verified
 /// end-to-end in PH2VNC-6 against a Windows mini-PC.
 ///
 /// We re-implement the same precondition guards as the production
@@ -108,7 +108,7 @@ public class Phd2VncBridgeTests {
     [Test]
     public async Task Bridge_OnRunningButNotListening_Returns503() {
         // Race condition: service was up at probe time but the
-        // listener died before the WS upgrade. Still 503 — client
+        // listener died before the WS upgrade. Still 503, client
         // retries.
         using var host = BuildHostWithBridgeStub(_ =>
             (Supported: true, Installed: true, Running: true, Listening: false));

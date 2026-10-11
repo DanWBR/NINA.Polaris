@@ -17,11 +17,11 @@ using NINA.Image.Interfaces;
 namespace NINA.Polaris.Services;
 
 /// <summary>
-/// Server-owned LIVE capture loop — the only LIVE loop. The LIVE shutter always
+/// Server-owned LIVE capture loop, the only LIVE loop. The LIVE shutter always
 /// starts/stops this; the server is the orchestrator of the LIVE session: it
 /// drives every exposure and keeps going even if the browser disconnects or the
 /// tab is backgrounded. The client's WASM live-stacking is then pure compute
-/// offload — it consumes the relayed frames but no longer controls the cadence.
+/// offload, it consumes the relayed frames but no longer controls the cadence.
 /// Where stacking runs (server-full vs client-WASM) is the orthogonal
 ///
 /// Frame path is identical to the client-driven <c>POST /api/camera/capture</c>
@@ -58,6 +58,8 @@ public sealed class LiveCaptureService {
     public bool IsRunning { get; private set; }
     public double ExposureSeconds { get; private set; }
     public int Gain { get; private set; }
+    /// <summary>ISO for a camera that has one; null leaves the camera's own.</summary>
+    public int? Iso { get; private set; }
     public int BinX { get; private set; }
     public long FrameCount { get; private set; }
     public string? LastError { get; private set; }
@@ -86,7 +88,7 @@ public sealed class LiveCaptureService {
 
     /// <summary>Start the server-side LIVE loop. No-op (returns false) if a
     /// loop is already running or no camera is connected.</summary>
-    public bool Start(double exposureSeconds, int gain, int binning) {
+    public bool Start(double exposureSeconds, int gain, int binning, int? iso = null) {
         lock (_lock) {
             if (IsRunning) return false;
             if (_equip.Camera == null || !_equip.Camera.IsConnected) {
@@ -95,6 +97,7 @@ public sealed class LiveCaptureService {
             }
             ExposureSeconds = exposureSeconds > 0 ? exposureSeconds : 1.0;
             Gain = gain;
+            Iso = iso is > 0 ? iso : null;
             BinX = binning > 0 ? binning : 1;
             FrameCount = 0;
             LastError = null;
@@ -131,7 +134,7 @@ public sealed class LiveCaptureService {
     /// Exists because the LIVE loop must never ask a disconnected camera for a
     /// frame. It used to check IsConnected only at Start(), so a mid-session drop
     /// (or an INDI driver restart by the watchdog) left it firing CaptureAsync once
-    /// a second against a device whose CCD_EXPOSURE property no longer existed —
+    /// a second against a device whose CCD_EXPOSURE property no longer existed,
     /// each write failing, each failure retried, all night. Waiting is the correct
     /// response: the watchdog restarts the driver, reconnects the device and
     /// restores the cooler; this loop's only job is to stay out of the way and pick
@@ -184,7 +187,7 @@ public sealed class LiveCaptureService {
                 //   CCD_EXPOSURE [120] -- WARNING: property NOT in device snapshot
                 // Wait for the camera to come BACK instead. The watchdog reconnects
                 // it (and restores the cooler); we just have to not stampede while
-                // it does. Poll at 1s — a reconnect takes seconds, and the whole
+                // it does. Poll at 1s, a reconnect takes seconds, and the whole
                 // point is to stop hammering.
                 // Re-resolved every frame, never captured once outside the loop: a
                 // reconnect can hand back a DIFFERENT ICamera instance, and a stale
@@ -200,6 +203,7 @@ public sealed class LiveCaptureService {
                 try {
                     var opts = new CaptureOptions(
                         Gain: Gain > 0 ? Gain : (int?)null,
+                        Iso: Iso,
                         Offset: RigCaptureDefaults.Offset(_profile),
                         BinX: BinX, BinY: BinX,
                         ImageType: "LIGHT");
@@ -222,7 +226,7 @@ public sealed class LiveCaptureService {
                     } else {
                         // Not accumulating (live view only): relay for the
                         // preview AND still archive the raw frame when the user
-                        // asked to keep frames — AddFrameAsync's save path is
+                        // asked to keep frames, AddFrameAsync's save path is
                         // skipped on this branch, so do it explicitly here.
                         _liveStack.SaveFrameIfEnabled(image);
                         await _relay.RelayImageAsync(image, FrameKind.Live, ct);

@@ -45,12 +45,12 @@ public sealed unsafe class OpenClContext : IDisposable {
 
     /// <summary>
     /// CL_DEVICE_HOST_UNIFIED_MEMORY: true when host and device share physical
-    /// memory (the SBC GPUs we target — Mali/Adreno — where buffer copies are
+    /// memory (the SBC GPUs we target, Mali/Adreno, where buffer copies are
     /// effectively zero-cost), false for a discrete GPU behind PCIe where every
     /// host&lt;-&gt;device transfer has real cost. Used to decide whether to
     /// offload the light per-op kernels (worth it on unified memory, often a net
     /// loss on a discrete card). On query failure we assume unified (true) so the
-    /// SBC path — the primary target — is never penalised by a probe.
+    /// SBC path, the primary target, is never penalised by a probe.
     /// </summary>
     public bool HostUnifiedMemory { get; }
 

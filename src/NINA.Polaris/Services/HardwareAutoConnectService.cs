@@ -106,10 +106,11 @@ public class HardwareAutoConnectService : IHostedService {
             await TryConnectPhd2Async(ct);
 
             // -------- Active rig equipment --------
-            // The per-device pass below skips unavailable INDI selections,
-            // but must still run when INDI is down: Alpaca-only rigs (such
-            // as an OpenAstro AlpacaBridge Pi) have no INDI dependency.
-            await TryConnectActiveRigAsync(ct);
+            // INDI-backed selections need the server; Alpaca / ASCOM ones
+            // (a Windows mini PC without INDI) connect on their own, so the
+            // rig pass runs either way and skips the INDI devices when the
+            // server is down.
+            await TryConnectActiveRigAsync(indiOk, ct);
         } catch (OperationCanceledException) {
             // shutdown
         } catch (Exception ex) {
@@ -271,19 +272,19 @@ public class HardwareAutoConnectService : IHostedService {
         }
     }
 
-    private async Task TryConnectActiveRigAsync(CancellationToken ct) {
+    private async Task TryConnectActiveRigAsync(bool indiOk, CancellationToken ct) {
         var rig = _profiles.ActiveEquipmentProfile;
         if (rig == null) {
             _notify.Push("info", "No active rig, skipping equipment auto-connect.");
             return;
         }
 
-        var available = new HashSet<string>(_indiClient.GetDeviceNames(), StringComparer.OrdinalIgnoreCase);
 
         // Each entry: friendly name shown in the toast + saved device
-        // name from the rig + the bind+connect callback. Camera and
-        // Telescope honour driver override; the rest are INDI-only
-        // today so we don't pass a driver.
+        // name from the rig + the bind+connect callback. Camera,
+        // telescope, focuser, filter wheel and power box honour the
+        // rig's driver choice (indi / alpaca / ascom-com); the rest are
+        // INDI-only today so we don't pass a driver.
         // The ZWO SDK stops listing the other cameras once one is open, so a
         // rig that auto-connects a ZWO camera at boot would never learn what
         // else is on the bus. One scan before anything opens seeds the
@@ -316,8 +317,8 @@ public class HardwareAutoConnectService : IHostedService {
                 // as a manual click from the RIGS card.
                 await TrySyncMountTimeAndLocation(t, ct);
             }),
-            ("Focuser",      rig.Focuser,     async name => { var f = _equip.SelectFocuser(name);                                await f.ConnectAsync(ct); }),
-            ("Filter wheel", rig.FilterWheel, async name => { var w = _equip.SelectFilterWheel(name);                            await w.ConnectAsync(ct); }),
+            ("Focuser",      rig.Focuser,     async name => { var f = _equip.SelectFocuser(rig.FocuserDriver ?? "indi", name);   await f.ConnectAsync(ct); }),
+            ("Filter wheel", rig.FilterWheel, async name => { var w = _equip.SelectFilterWheel(rig.FilterWheelDriver ?? "indi", name); await w.ConnectAsync(ct); }),
             ("Rotator",      rig.Rotator,     async name => { var r = _equip.SelectRotator(rig.RotatorDriver ?? "indi", name); await r.ConnectAsync(ct); }),
             ("Flat panel",   rig.FlatDevice,  async name => { var p = _equip.SelectFlatDevice(name);                             await p.ConnectAsync(ct); }),
             ("Dome",         rig.Dome,        async name => { var d = _equip.SelectDome(name);                                   await d.ConnectAsync(ct); }),
@@ -333,15 +334,27 @@ public class HardwareAutoConnectService : IHostedService {
             // exists on the live server before attempting connect. For
             // non-INDI camera/mount drivers (e.g. canon-edsdk), trust
             // the binder, the available[] set is INDI-only.
-            bool isIndi = label switch {
-                "Camera" => (rig.CameraDriver ?? "indi") == "indi",
-                "Guide camera" => (rig.GuideCameraDriver ?? "indi") == "indi",
-                "Mount"  => (rig.TelescopeDriver ?? "indi") == "indi",
-                "Power box" => (rig.SwitchDriver ?? "indi") == "indi",
-                "Rotator" => (rig.RotatorDriver ?? "indi") == "indi",
-                _        => true,
-            };
-            if (isIndi && !available.Contains(name)) {
+            bool isIndi = IsIndiDriver(label switch {
+                "Camera" => rig.CameraDriver,
+                "Guide camera" => rig.GuideCameraDriver,
+                "Mount"  => rig.TelescopeDriver,
+                "Focuser" => rig.FocuserDriver,
+                "Filter wheel" => rig.FilterWheelDriver,
+                "Power box" => rig.SwitchDriver,
+                "Rotator" => rig.RotatorDriver,
+                _        => "indi",
+            });
+            if (isIndi && !indiOk) {
+                _logger.LogInformation("Auto-connect: {Label} '{Name}' skipped, INDI is not connected", label, name);
+                missing++;
+                continue;
+            }
+            // Drivers define their devices at their own pace after
+            // getProperties: a focuser that opens a serial port or scans
+            // USB through a vendor SDK shows up seconds after the mount. A
+            // snapshot taken when the first device appeared skipped every
+            // late one as "not present", so wait for each name instead.
+            if (isIndi && !await WaitForIndiDeviceAsync(name, IndiDefineTimeout, ct)) {
                 _notify.Push("warn", $"{label} '{name}' not present on INDI server.");
                 missing++;
                 continue;
@@ -352,8 +365,13 @@ public class HardwareAutoConnectService : IHostedService {
                 _notify.Push("ok", $"{label} connected: {name}");
                 connected++;
             } catch (Exception ex) {
-                _logger.LogInformation(ex, "Auto-connect of {Label} '{Name}' failed", label, name);
-                _notify.Push("warn", $"{label} '{name}' failed: {ex.Message}");
+                // A serial INDI driver that fails to connect is nearly always
+                // pointed at the wrong node (ttyUSBn renumbered, by-id path
+                // gone): say which port it tried so the report is actionable.
+                var port = isIndi ? SafeDevicePort(name) : null;
+                var where = port != null ? $" (port {port})" : "";
+                _logger.LogInformation(ex, "Auto-connect of {Label} '{Name}' failed{Where}", label, name, where);
+                _notify.Push("warn", $"{label} '{name}' failed{where}: {ex.Message}");
                 failed++;
             }
         }
@@ -364,6 +382,31 @@ public class HardwareAutoConnectService : IHostedService {
             _notify.Push("ok",
                 $"Rig '{rig.Name}': {connected} connected, {missing} missing, {failed} failed.");
         }
+    }
+
+    /// <summary>How long a rig device gets to be defined by its INDI driver
+    /// before the auto-connect gives up on it.</summary>
+    internal static readonly TimeSpan IndiDefineTimeout = TimeSpan.FromSeconds(20);
+
+    private async Task<bool> WaitForIndiDeviceAsync(string name, TimeSpan timeout, CancellationToken ct) {
+        var deadline = DateTime.UtcNow + timeout;
+        bool Present() => _indiClient.GetDeviceNames().Any(n => string.Equals(n, name, StringComparison.OrdinalIgnoreCase));
+        if (Present()) return true;
+        _logger.LogInformation("Auto-connect: waiting for INDI device '{Name}' to be defined", name);
+        while (DateTime.UtcNow < deadline) {
+            await Task.Delay(250, ct);
+            if (Present()) return true;
+        }
+        return false;
+    }
+
+    /// <summary>The rig's driver field for a device: null or empty means INDI.</summary>
+    internal static bool IsIndiDriver(string? driver)
+        => string.IsNullOrWhiteSpace(driver) || string.Equals(driver.Trim(), "indi", StringComparison.OrdinalIgnoreCase);
+
+    private string? SafeDevicePort(string device) {
+        try { return _indiClient.GetDevicePort(device); }
+        catch { return null; }
     }
 
     /// <summary>Push wall-clock UTC + observatory location into a freshly-
@@ -400,7 +443,7 @@ public class HardwareAutoConnectService : IHostedService {
                     p.Latitude, p.Longitude, p.Altitude);
             } else {
                 _notify.Push("warn",
-                    "Observatory location is (0,0) — set lat/lon in Settings or slews will be rejected.");
+                    "Observatory location is (0,0), set lat/lon in Settings or slews will be rejected.");
             }
         } catch (NotSupportedException) {
             // Driver doesn't expose GEOGRAPHIC_COORD

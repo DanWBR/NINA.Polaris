@@ -46,9 +46,23 @@ public readonly record struct GuideCalibration(
     public static readonly GuideCalibration Invalid =
         new(0, 0, 0, 0, double.NaN, false);
 
-    /// <summary>Orthogonality error in degrees (ideal axes are 90 deg apart).</summary>
-    public double OrthogonalityErrorDeg =>
-        Math.Abs(MountCoordTransform.NormAngleDeg((XAngle - YAngle) * 180.0 / Math.PI) - 90.0);
+    /// <summary>How far the two measured axes are from perpendicular, in
+    /// degrees. RA and Dec are orthogonal on the sky, so a sound calibration
+    /// comes out near 0 here.
+    ///
+    /// The separation has to be taken unsigned before comparing it with 90.
+    /// Subtracting 90 from the SIGNED difference, as this did, reported 180 for
+    /// a perfectly perpendicular pair whenever the difference landed on -90
+    /// instead of +90, which is half of all calibrations: the number shown in
+    /// Calibration details was meaningless in those cases, and it only looked
+    /// right on the skewed calibration that led to reading it at all.</summary>
+    public double OrthogonalityErrorDeg {
+        get {
+            double sep = Math.Abs(MountCoordTransform.NormAngleDeg(
+                (XAngle - YAngle) * 180.0 / Math.PI));
+            return Math.Abs(sep - 90.0);
+        }
+    }
 }
 
 /// <summary>Pure camera<->mount transforms + pulse-duration math.</summary>
@@ -114,10 +128,16 @@ public static class MountCoordTransform {
     /// <summary>Convert a correction distance (px) to a pulse duration (ms),
     /// clamped to [minMoveMs, maxDurationMs]. Returns 0 below minMoveMs.</summary>
     public static int ComputeMoveDurationMs(double distancePx, double ratePxPerMs,
-                                            int minMoveMs, int maxDurationMs) {
+                                            int maxDurationMs) {
         if (ratePxPerMs <= 0) return 0;
+        // PHD2: requestedAmount = ROUND(fabs(distance / rate)), then MoveAxis
+        // clamps to the axis Max Duration and guides whenever it is > 0. There
+        // is deliberately NO minimum duration here: min-move belongs to the
+        // algorithm, which applies it to the INPUT error. Applying it again to
+        // the output threw away every correction the algorithm had shrunk
+        // below min-move (aggression and hysteresis both shrink it), which is
+        // chronic under-correction that never shows up as an error.
         int ms = (int)Math.Round(Math.Abs(distancePx) / ratePxPerMs);
-        if (ms < minMoveMs) return 0;
         if (ms > maxDurationMs) ms = maxDurationMs;
         return ms;
     }

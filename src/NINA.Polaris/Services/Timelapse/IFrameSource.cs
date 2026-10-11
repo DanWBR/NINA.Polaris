@@ -21,7 +21,7 @@ using SkiaSharp;
 namespace NINA.Polaris.Services.Timelapse;
 
 /// <summary>Ordered supply of movie frames for <see cref="MediaEncodeService"/>.
-/// A frame is delivered as a stretched, downscaled JPEG — the common currency
+/// A frame is delivered as a stretched, downscaled JPEG, the common currency
 /// that both the ffmpeg MP4 path (frames written to disk verbatim) and the GIF
 /// path (decoded back to an <c>SKBitmap</c>) consume, so decoding/stretching
 /// happens exactly once per frame regardless of the target format.</summary>
@@ -102,7 +102,7 @@ public sealed class FolderFrameSource : IFrameSource {
 }
 
 /// <summary>A recorded planetary SER clip. Mono frames render grayscale, Bayer
-/// frames are debayered to RGB — the same decode the planetary stacker uses.</summary>
+/// frames are debayered to RGB, the same decode the planetary stacker uses.</summary>
 public sealed class SerFrameSource : IFrameSource {
     private readonly SerFileReader _reader;
     private readonly BayerPatternEnum _bayer;

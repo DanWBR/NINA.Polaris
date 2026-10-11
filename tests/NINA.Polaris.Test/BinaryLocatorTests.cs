@@ -146,6 +146,37 @@ public class BinaryLocatorTests {
     }
 
     [Test]
+    public void Find_FallsBackToPath_OnEveryPlatform() {
+        // PATH used to be skipped on Windows, which made a winget or choco
+        // install invisible: the shim sits on PATH and nowhere near
+        // Program Files, so the card said "not installed" while the same
+        // binary answered in the terminal.
+        var name = "polaris-locator-probe";
+        var exe  = OperatingSystem.IsWindows() ? name + ".exe" : name;
+        var dir  = Path.Combine(_tmpDir, "onpath");
+        Directory.CreateDirectory(dir);
+        var full = Path.Combine(dir, exe);
+        File.WriteAllText(full, "binary");
+
+        var oldPath = Environment.GetEnvironmentVariable("PATH");
+        try {
+            Environment.SetEnvironmentVariable("PATH", dir + Path.PathSeparator + oldPath);
+            var miss = new[] { Path.Combine(_tmpDir, "absent") };
+
+            var found = BinaryLocator.Find(null, miss, miss, miss, name);
+            Assert.That(found, Is.EqualTo(full));
+
+            // And the diagnostic table names it, without listing every
+            // PATH entry that did not have it.
+            var list = BinaryLocator.Enumerate(null, miss, miss, miss, name);
+            Assert.That(list.Any(c => c.Description == "$PATH" && c.Path == full && c.Exists), Is.True);
+            Assert.That(list.Count(c => c.Description == "$PATH"), Is.EqualTo(1));
+        } finally {
+            Environment.SetEnvironmentVariable("PATH", oldPath);
+        }
+    }
+
+    [Test]
     public void Enumerate_NoConfigured_OmitsConfiguredEntry() {
         // The "Configured" entry shouldn't appear when no override was
         // supplied, keeps the diagnostic clean for users who never

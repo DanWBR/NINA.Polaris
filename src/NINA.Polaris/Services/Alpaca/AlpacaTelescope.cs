@@ -259,7 +259,7 @@ public sealed class AlpacaTelescope : ITelescope, IDisposable {
 
     /// <summary>Push UTC date to the mount via Alpaca's <c>utcdate</c>
     /// PUT. Alpaca expects ISO-8601 with a trailing Z. Offset is NOT
-    /// part of ASCOM's mount surface — the mount itself stores UTC
+    /// part of ASCOM's mount surface, the mount itself stores UTC
     /// and derives local time from <see cref="SetSiteLocationAsync"/>
     /// plus host timezone if relevant. So <paramref name="offsetHoursFromUtc"/>
     /// is accepted for interface parity with the INDI side but ignored.</summary>
@@ -324,6 +324,13 @@ public sealed class AlpacaTelescope : ITelescope, IDisposable {
     public Task MoveWestAsync(CancellationToken ct = default)  => PulseGuideAsync(3, JogPulseMs, ct);
 
     public Task StopMotionAsync(CancellationToken ct = default) => AbortSlewInternalAsync(ct);
+
+    /// <summary>Nothing to send: the jog is a 500 ms pulse guide that
+    /// has already expired, or is about to, by the time the arrow is
+    /// released. Aborting here would cancel a GoTo the operator
+    /// started before touching the d-pad.</summary>
+    public Task StopMotionAsync(MountJogDirection direction, CancellationToken ct = default)
+        => Task.CompletedTask;
 
     private Task PulseGuideAsync(int direction, int durationMs, CancellationToken ct) {
         if (!_canPulseGuide) return Task.CompletedTask;

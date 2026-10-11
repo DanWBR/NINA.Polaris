@@ -64,7 +64,7 @@ public class GraXpertService {
     }
 
     /// <summary>
-    /// True when an NPU is available to accelerate BGE/Denoise on the host —
+    /// True when an NPU is available to accelerate BGE/Denoise on the host,
     /// either a Rockchip NPU (RK3588, <see cref="Rknn.RknnInferenceService"/>) or
     /// a Qualcomm Hexagon (QCS6490, <see cref="Qnn.QnnInferenceService"/>). The
     /// two are mutually exclusive by hardware. Surfaced in the GraXpert status so
@@ -159,6 +159,60 @@ public class GraXpertService {
     public IReadOnlyList<BinaryLocator.Candidate> EnumerateBinaryCandidates() =>
         BinaryLocator.Enumerate(_profile.Active.GraXpertPath,
             WindowsCandidates(), LinuxCandidates(), MacCandidates(), "graxpert");
+
+    // --- Background extraction, forward pass only -------------------
+
+    /// <summary>The result of one in-process background-extraction tile.</summary>
+    public readonly record struct BgeTileResult(float[] Output, string Lane, string Version, double ElapsedMs);
+
+    /// <summary>True when some accelerator in this process can run a
+    /// background-extraction forward pass: the lane is available AND a model
+    /// resolves for it. Both halves matter, and the second one is why this is
+    /// not just a probe: for most of this project's life every lane was
+    /// available and none resolved the BGE model, so the work silently went to
+    /// the GraXpert CLI (see OnnxModelRegistry.VersionDirCandidates).
+    ///
+    /// The CLI is deliberately NOT counted here. It costs seconds per frame,
+    /// which is fine for a file in Studio and ruinous inside a capture loop;
+    /// when nothing else can run, the live path would rather stack a sub with
+    /// its gradient and say so.</summary>
+    public bool CanRunBgeTile() {
+        if (_rknn != null && _rknn.IsAvailable && _rknn.ResolveModel("bge", null) != null) return true;
+        if (_qnn != null && _qnn.IsAvailable && _qnn.ResolveModel("bge", null) != null) return true;
+        if (_ncnn != null && _ncnn.IsAvailable && _ncnn.ResolveModel("bge", null) != null) return true;
+        return false;
+    }
+
+    /// <summary>Run one background-extraction tile through the best available
+    /// accelerator, in the same order as <see cref="ProcessFrameAsync"/>.
+    /// Returns null when none of them could. Nothing is written to disk: this
+    /// is the half of background extraction that needs a model, and the caller
+    /// owns the frame-sized half.
+    ///
+    /// Synchronous and blocking on purpose; the caller runs it off the frame's
+    /// thread, because an NPU forward pass is a blocking P/Invoke.</summary>
+    public BgeTileResult? RunBgeTile(float[] nhwcTensor, int tile = 256, string? aiVersion = null) {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        try {
+            if (_rknn != null && _rknn.IsAvailable) {
+                var o = _rknn.RunBgeTile(nhwcTensor, tile, aiVersion, out var v);
+                if (o != null) return new BgeTileResult(o, "npu-rknn", v, sw.Elapsed.TotalMilliseconds);
+            }
+            if (_qnn != null && _qnn.IsAvailable) {
+                var o = _qnn.RunBgeTile(nhwcTensor, tile, aiVersion, out var v);
+                if (o != null) return new BgeTileResult(o, "npu-qnn", v, sw.Elapsed.TotalMilliseconds);
+            }
+            if (_ncnn != null && _ncnn.IsAvailable) {
+                var o = _ncnn.RunBgeTile(nhwcTensor, tile, aiVersion, out var v);
+                if (o != null) return new BgeTileResult(o, "gpu-ncnn", v, sw.Elapsed.TotalMilliseconds);
+            }
+        } catch (Exception ex) {
+            // A lane that throws is a lane that is not there. The caller stacks
+            // the sub uncorrected and counts it; it must not lose the frame.
+            _logger.LogWarning(ex, "In-process background extraction failed");
+        }
+        return null;
+    }
 
     // --- Single-frame processing ------------------------------------
 
@@ -395,7 +449,7 @@ public class GraXpertService {
     }
 
     /// <summary>
-    /// Run BGE/Denoise-v2 on a Vulkan GPU via ncnn — the open counterpart of
+    /// Run BGE/Denoise-v2 on a Vulkan GPU via ncnn, the open counterpart of
     /// <see cref="TryRunRknn"/> for boards without a supported NPU (e.g. the Q6A's
     /// Adreno 643). Reads the FITS input, runs the converted ncnn model on the
     /// GPU, writes a FITS output, and falls back to the CLI on any failure.
@@ -445,7 +499,7 @@ public class GraXpertService {
 
     /// <summary>
     /// Run BGE/Denoise on the Qualcomm Hexagon NPU (QCS6490) instead of the
-    /// GraXpert CLI — the Hexagon counterpart of <see cref="TryRunRknn"/>. Reads
+    /// GraXpert CLI, the Hexagon counterpart of <see cref="TryRunRknn"/>. Reads
     /// the FITS input, runs the pre-built HTP context binary, and writes a FITS
     /// output with the same naming the CLI path uses. Returns null (with a logged
     /// warning) on any failure so the caller transparently falls back to the CLI.

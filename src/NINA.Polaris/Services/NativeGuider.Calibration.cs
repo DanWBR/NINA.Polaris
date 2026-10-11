@@ -19,7 +19,7 @@ using PortableGuideStep = NINA.Guider.Portable.GuideStep;
 
 namespace NINA.Polaris.Services;
 
-// Part of the NativeGuider class — split from NativeGuider.cs for
+// Part of the NativeGuider class, split from NativeGuider.cs for
 // readability. See NativeGuider.cs for the type overview + fields.
 public sealed partial class NativeGuider {
     // ----- Calibration -----
@@ -101,7 +101,7 @@ public sealed partial class NativeGuider {
                 }
                 (curX, curY, found) = await FindStarWithRetryAsync(cam, ct, calRegion);
                 if (!found) {
-                    RaiseAlert("Calibration failed: star lost mid-sequence (no frame after retries — check guide camera USB/power, especially at slew/reversal).");
+                    RaiseAlert("Calibration failed: star lost mid-sequence (no frame after retries, check guide camera USB/power, especially at slew/reversal).");
                     SetAppState("Stopped");
                     return;
                 }
@@ -131,8 +131,15 @@ public sealed partial class NativeGuider {
                 _calDetails = BuildCalibrationDetails(process, raPts, decPts, mount);
                 PersistCalibration(process, raPts, decPts);
                 _logger.LogInformation(
-                    "Native calibration complete: xAngle={Xa:F3} xRate={Xr:F5} yAngle={Ya:F3} yRate={Yr:F5}",
-                    _calibration.XAngle, _calibration.XRate, _calibration.YAngle, _calibration.YRate);
+                    "Native calibration complete: xAngle={Xa:F3} xRate={Xr:F5} yAngle={Ya:F3} yRate={Yr:F5}, "
+                    + "RA axis {XaDeg:F1} deg, Dec axis {YaDeg:F1} deg, {Axes:F1} deg apart "
+                    + "(orthogonality error {Ortho:F1} deg), backlash {Backlash} ms",
+                    _calibration.XAngle, _calibration.XRate, _calibration.YAngle, _calibration.YRate,
+                    _calibration.XAngle * 180.0 / Math.PI, _calibration.YAngle * 180.0 / Math.PI,
+                    Math.Abs(NINA.Guider.Portable.MountCoordTransform.NormAngleDeg(
+                        (_calibration.XAngle - _calibration.YAngle) * 180.0 / Math.PI)),
+                    _calibration.OrthogonalityErrorDeg, _calibration.BacklashMs);
+                WarnIfSkewed(_calibration);
             } else {
                 RaiseAlert("Calibration did not complete.");
             }
@@ -152,6 +159,32 @@ public sealed partial class NativeGuider {
     /// <summary>Assemble the "Review Calibration" snapshot (rates in px/sec +
     /// arcsec/sec, angles, steps, geometry, and the measured RA/Dec plot
     /// points) shown in the GUIDE calibration panel.</summary>
+    /// <summary>RA and Dec are orthogonal on the sky, so the two axes a
+    /// calibration measures have to come out about 90 degrees apart on the
+    /// sensor. When they do not, the transform decomposes every error into the
+    /// wrong pair of pulses and the guider fights itself: corrections leak from
+    /// one axis into the other, and the graph looks like bad seeing on a night
+    /// that is fine.
+    ///
+    /// The number was already computed and shown in Calibration details, and
+    /// nothing said a word about it. A calibration measured 26 degrees off
+    /// orthogonal was accepted in silence and guided at 4 arcsec RMS with 15
+    /// arcsec peaks. PHD2 draws the line at 10 degrees, and so do we: the
+    /// calibration is kept, because refusing it would leave the operator with
+    /// nothing, but it says what is wrong and what usually causes it.</summary>
+    internal const double MaxOrthogonalityErrorDeg = 10.0;
+
+    private void WarnIfSkewed(GuideCalibration cal) {
+        double err = cal.OrthogonalityErrorDeg;
+        if (err <= MaxOrthogonalityErrorDeg) return;
+        RaiseAlert($"Calibration is {err:F0} deg from orthogonal (the RA and Dec axes came out "
+            + $"{90.0 - err:F0} deg apart instead of 90). Guiding with it will cross-talk between "
+            + "the axes and the graph will look like bad seeing. Usually the Dec axis: backlash "
+            + $"(measured {cal.BacklashMs:F0} ms here), a cable snag, or the mount still "
+            + "settling when the Dec phase started. Recalibrate on a star nearer the meridian, "
+            + "and if it stays skewed try Dec guide mode North only or South only.");
+    }
+
     private object BuildCalibrationDetails(CalibrationProcess process,
             List<double[]> raPts, List<double[]> decPts, ITelescope mount) {
         var cal = _calibration;
@@ -219,7 +252,32 @@ public sealed partial class NativeGuider {
                     r.NativeCalibrations.RemoveRange(0, r.NativeCalibrations.Count - cap);
             });
         } catch (Exception ex) { _logger.LogWarning(ex, "Failed to persist native calibration"); }
+        FileUpsert(data);
+        _calibrationCleared = false;
     }
+
+    // Set by Clear calibration, so Loop does not bring a calibration straight
+    // back through the near match; a new or imported calibration ends it.
+    private bool _calibrationCleared;
+
+    // ----- the rig's calibration file (see GuideCalibrationFile) -----
+
+    private string CalibrationFilePath => GuideCalibrationFile.PathFor(_profiles.ProfileDirectory, Rig.Id);
+
+    private void FileUpsert(NativeCalibrationData? d) {
+        if (d == null) return;
+        try { GuideCalibrationFile.Upsert(CalibrationFilePath, d); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Failed to write the guide calibration file"); }
+    }
+
+    private void FileRemove(string key) {
+        try { GuideCalibrationFile.Remove(CalibrationFilePath, key); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Failed to update the guide calibration file"); }
+    }
+
+    /// <summary>Note for the operator after a restore that was not an exact
+    /// match (same guide camera, mount recorded differently). Null otherwise.</summary>
+    public string? LastRestoreNote { get; private set; }
 
     /// <summary>Restore the last saved calibration for this rig (if any) into the
     /// in-memory state, so guiding can start without recalibrating after a
@@ -229,17 +287,21 @@ public sealed partial class NativeGuider {
         // currently fitted. This is what lets a rig hold several calibrations
         // and restore the right one after swapping equipment back and forth.
         var key = CalibrationKey();
-        var list = Rig.NativeCalibrations;
+        LastRestoreNote = null;
+        // The profile's list and the rig's calibration file together: either
+        // can hold what the other lost.
+        var list = GuideCalibrationFile.Merge(Rig.NativeCalibrations,
+            GuideCalibrationFile.Load(CalibrationFilePath));
         NativeCalibrationData? d = null;
         if (list is { Count: > 0 }) {
-            d = list.LastOrDefault(c =>
-                string.Equals(c.Key, key, StringComparison.OrdinalIgnoreCase));
-            // Keyed entries exist but none match the current equipment -> the
-            // gear changed; do NOT restore a stale calibration. Say so instead of
-            // leaving the operator to discover an empty calibration on their own:
-            // the saved one is still there, it just does not belong to this gear
-            // (field report 2026-09-05, "I lost the calibration").
-            if (d == null) {
+            var (found, exact) = GuideCalibrationFile.Find(list, key);
+            // Keyed entries exist but none is for this guide camera at this
+            // binning and focal length -> the gear changed; do NOT restore a
+            // stale calibration. Say so instead of leaving the operator to
+            // discover an empty calibration on their own: the saved one is still
+            // there, it just does not belong to this gear (field report
+            // 2026-09-05, "I lost the calibration").
+            if (found == null) {
                 LastRestoreMismatch =
                     $"{list.Count} saved calibration(s) for this rig, none for the gear fitted now. "
                     + "Recalibrate, or load one from a file in Calibration details.";
@@ -248,6 +310,36 @@ public sealed partial class NativeGuider {
                     key, string.Join(" | ", list.Select(c => c.Key)));
                 return false;
             }
+            d = found;
+            // Make what was found this gear's calibration: under the current key
+            // in the profile and the file, so the flip and clear paths, which
+            // look up the exact key, find it, and a copy that was only in one of
+            // the two is back in both.
+            bool inProfile = Rig.NativeCalibrations?.Any(c =>
+                string.Equals(c.Key, key, StringComparison.OrdinalIgnoreCase)) == true;
+            if (!exact || !string.Equals(d.Key, key, StringComparison.OrdinalIgnoreCase) || !inProfile) {
+                if (!exact) {
+                    LastRestoreNote =
+                        $"Restored the calibration saved for this guide camera; it was measured with mount "
+                        + $"'{GuideCalibrationFile.Part(d.Key, "mount")}', the rig now has "
+                        + $"'{GuideCalibrationFile.Part(key, "mount")}'. Recalibrate if the mount really changed.";
+                    _logger.LogInformation("Native guide: {Note}", LastRestoreNote);
+                }
+                d = d.Clone();
+                d.Key = key;
+                var adopted = d;
+                try {
+                    _profiles.UpdateEquipmentProfile(Rig.Id, r => {
+                        r.NativeCalibrations ??= new();
+                        r.NativeCalibrations.RemoveAll(c =>
+                            string.Equals(c.Key, key, StringComparison.OrdinalIgnoreCase));
+                        r.NativeCalibrations.Add(adopted);
+                        if (r.NativeCalibrations.Count > GuideCalibrationFile.Cap)
+                            r.NativeCalibrations.RemoveRange(0, r.NativeCalibrations.Count - GuideCalibrationFile.Cap);
+                    });
+                } catch (Exception ex) { _logger.LogWarning(ex, "Failed to persist the restored calibration"); }
+            }
+            FileUpsert(d);
         } else {
             // No keyed entries (pre-migration rig): fall back to the legacy slot.
             d = Rig.NativeCalibration;
@@ -288,8 +380,13 @@ public sealed partial class NativeGuider {
     /// Returns null when there is nothing to save.</summary>
     public NativeCalibrationData? ExportCalibrationData() {
         var key = CalibrationKey();
-        var persisted = Rig.NativeCalibrations?
-            .LastOrDefault(c => string.Equals(c.Key, key, StringComparison.OrdinalIgnoreCase))
+        // Same rules as the restore (profile and file, addresses aside), so the
+        // saved file carries the steps and the scatter for the Review plot. The
+        // exact-key lookup missed whenever the key had drifted, and the file
+        // then held a bare synthesised record with no plot points at all.
+        var persisted = GuideCalibrationFile.Find(
+                GuideCalibrationFile.Merge(Rig.NativeCalibrations, GuideCalibrationFile.Load(CalibrationFilePath)),
+                key).Match
             ?? Rig.NativeCalibration;
         if (persisted != null) return persisted;
         if (!_calibration.IsValid) return null;
@@ -308,8 +405,8 @@ public sealed partial class NativeGuider {
 
     /// <summary>Load a calibration from a saved file into the running guider and
     /// persist it. Re-keys the record to the equipment currently fitted so it
-    /// becomes the one restored for this gear from now on — the point of loading a
-    /// known-good file is to make it stick — while keeping every measured value.
+    /// becomes the one restored for this gear from now on, the point of loading a
+    /// known-good file is to make it stick, while keeping every measured value.
     /// Returns false when the file carries no usable rates.</summary>
     public bool ImportCalibrationData(NativeCalibrationData d) {
         if (d == null) return false;
@@ -338,6 +435,8 @@ public sealed partial class NativeGuider {
                     r.NativeCalibrations.RemoveRange(0, r.NativeCalibrations.Count - cap);
             });
         } catch (Exception ex) { _logger.LogWarning(ex, "Failed to persist imported calibration"); }
+        FileUpsert(d);
+        _calibrationCleared = false;
         // Rebuild the Review-panel snapshot from the freshly persisted record.
         TryRestoreCalibration();
         RaiseInfo("Guide calibration loaded from file.");

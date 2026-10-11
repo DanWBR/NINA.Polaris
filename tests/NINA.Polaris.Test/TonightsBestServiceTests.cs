@@ -60,7 +60,7 @@ public class TonightsBestServiceTests {
         var result = sut.Compute(limit: 30);
 
         Assert.That(result.Items, Is.Not.Empty, "Should find at least some visible objects");
-        // NOTE: no upper-bound assert on Count — `limit` caps the score-ranked
+        // NOTE: no upper-bound assert on Count, `limit` caps the score-ranked
         // core list, but the per-DSO-type top-ups (galaxies/nebulae/clusters
         // guarantees) intentionally exceed it so no category tab comes up
         // near-empty.
@@ -72,7 +72,7 @@ public class TonightsBestServiceTests {
         }
 
         // The Moon is only a candidate when it peaks above 10° INSIDE
-        // tonight's night window — near new moon it tracks the Sun and
+        // tonight's night window, near new moon it tracks the Sun and
         // sits below the horizon all night, so "always present" is
         // astronomically wrong on some dates (this assert used to be
         // unconditional and flaked whenever the test ran near new
@@ -203,7 +203,7 @@ public class TonightsBestServiceTests {
             var key = ((long)System.Math.Round(item.RaHours * 1800.0),
                        (long)System.Math.Round(item.DecDeg * 1800.0));
             Assert.That(seen.Add(key), Is.True,
-                $"Duplicate DSO position for {item.Name} — cross-catalogue de-dup failed");
+                $"Duplicate DSO position for {item.Name}, cross-catalogue de-dup failed");
         }
     }
 }

@@ -19,20 +19,21 @@ using System.Text;
 namespace NINA.Mount.SynScanWifi;
 
 /// <summary>
-/// Minimal request/response UDP transport for SynScan Wi-Fi mounts.
+/// Request/response UDP transport for SynScan Wi-Fi mounts.
 ///
 /// <para>
-/// Wire format: each datagram is a single LX200 ASCII command (e.g.
-/// <c>:GR#</c>) sent to the mount on <c>UDP/11880</c>. The mount
-/// replies with one datagram per command for the read commands;
-/// motion commands (start/stop jog, abort) are fire-and-forget, no
-/// reply expected.
+/// Wire format: each datagram is one Sky-Watcher motor-controller command
+/// (see <see cref="SkyWatcherMotorCodec"/>) sent to <c>UDP/11880</c>, and
+/// the mount answers every command, motion commands included, with one
+/// datagram.
 /// </para>
 ///
 /// <para>
 /// Thread-safety: an internal <see cref="SemaphoreSlim"/> serialises
-/// requests so two concurrent callers don't interleave. The mount's
-/// receive buffer can only correlate one in-flight request anyway.
+/// requests so two concurrent callers don't interleave. Replies carry no
+/// request id, so anything already waiting in the socket is discarded
+/// before a send: a reply that arrived after its query timed out must not
+/// be read as the answer to the next one.
 /// </para>
 ///
 /// <para>
@@ -59,7 +60,7 @@ public sealed class SynScanUdpClient : IDisposable {
                             TimeSpan? timeout = null) {
         Host = host;
         Port = port;
-        _timeout = timeout ?? TimeSpan.FromSeconds(2);
+        _timeout = timeout ?? TimeSpan.FromSeconds(1);
 
         if (!IPAddress.TryParse(host, out var ip)) {
             // Allow user to point at "synscan.local" or similar; resolve
@@ -79,29 +80,25 @@ public sealed class SynScanUdpClient : IDisposable {
         _udp.Client.ReceiveTimeout = (int)_timeout.TotalMilliseconds;
     }
 
-    /// <summary>Send a command that doesn't expect a response (motion
-    /// start, motion stop, abort).</summary>
-    public async Task SendOneWayAsync(string command, CancellationToken ct = default) {
-        await _gate.WaitAsync(ct);
-        try {
-            await _udp.SendAsync(Encoding.ASCII.GetBytes(command), _endpoint, ct);
-        } finally {
-            _gate.Release();
-        }
-    }
-
-    /// <summary>Send a command and read back the reply. Returns the
-    /// ASCII payload (terminating <c>#</c> kept so the codec can
-    /// distinguish empty replies from missing ones). Throws on
-    /// timeout, caller decides whether that's fatal.</summary>
+    /// <summary>Send a command and read back the reply, as ASCII with the
+    /// trailing carriage return kept. Throws <see cref="TimeoutException"/>
+    /// when nothing comes back in time.</summary>
     public async Task<string> SendQueryAsync(string command, CancellationToken ct = default) {
         await _gate.WaitAsync(ct);
         try {
+            while (_udp.Available > 0) {
+                IPEndPoint? any = null;
+                _udp.Receive(ref any);
+            }
             await _udp.SendAsync(Encoding.ASCII.GetBytes(command), _endpoint, ct);
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(_timeout);
-            var result = await _udp.ReceiveAsync(cts.Token);
-            return Encoding.ASCII.GetString(result.Buffer);
+            try {
+                var result = await _udp.ReceiveAsync(cts.Token);
+                return Encoding.ASCII.GetString(result.Buffer);
+            } catch (OperationCanceledException) when (!ct.IsCancellationRequested) {
+                throw new TimeoutException($"No reply from {Host}:{Port} to {command.TrimEnd('\r')}");
+            }
         } finally {
             _gate.Release();
         }

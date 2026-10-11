@@ -64,7 +64,7 @@ public class AstapSolver : IPlateSolver {
         if (result.Success) return result;
 
         // Built-in blind retry. A hinted solve that detects plenty of stars but
-        // finds "no solution" is almost always a bad position/scale hint — most
+        // finds "no solution" is almost always a bad position/scale hint, most
         // often a wrong focal length in the rig (so ASTAP searches at the wrong
         // image scale) or garbage RA/Dec metadata. A classic field like M42
         // solves trivially without hints, so drop the position + FOV constraints
@@ -86,15 +86,15 @@ public class AstapSolver : IPlateSolver {
         if (blindResult.Success) return blindResult;
         if (ct.IsCancellationRequested) return result;
 
-        // FIELD6-14: last resort — retry HINTED with a coarser downsample. Measured
+        // FIELD6-14: last resort, retry HINTED with a coarser downsample. Measured
         // on real M8 L-Ultimate subs: a marginal frame (soft focus / bright
         // nebulosity / noise) that fails at the default -z 2 solves at -z 4. Coarser
         // binning averages down the noise, flattens the nebula's high-frequency
-        // structure, and makes stars more compact — recovering exactly the
+        // structure, and makes stars more compact, recovering exactly the
         // intermittent "detected ~7 stars, no solution" failures. z=4 solved every
         // frame in the sample and doesn't hurt easy ones (they solve at any z≥2);
         // only escalate when we're already at a finer factor, and skip it if a
-        // successful blind pass would have returned above. Keeps the good hint —
+        // successful blind pass would have returned above. Keeps the good hint,
         // the marginal frames need coarser detection, not a wider search.
         // Escalate from the factor actually in force, not from the per-call
         // default: with a profile setting of 1 the old code compared 4 against
@@ -264,7 +264,7 @@ public class AstapSolver : IPlateSolver {
     ///
     /// ASTAP ships two binaries: the headless <c>astap_cli</c> and the GTK
     /// <c>astap</c>. On a headless host the GTK one prints "cannot open
-    /// display" and exits — with status 0, having solved nothing. So the exit
+    /// display" and exits, with status 0, having solved nothing. So the exit
     /// code says success, no .ini appears, and the operator is told a result
     /// file is missing, which points nowhere.
     ///
@@ -648,7 +648,7 @@ public class AstapSolver : IPlateSolver {
             channels = ch;
             return true;
         } catch {
-            // Header read failed — let the normal solve path produce
+            // Header read failed, let the normal solve path produce
             // the canonical error message.
             return false;
         }
@@ -680,17 +680,17 @@ public class AstapSolver : IPlateSolver {
         }
 
         // Project the GREEN plane (index 1). Empirically the best single channel to
-        // solve — and NOT for the SNR reason the old comment gave (green is not
+        // solve, and NOT for the SNR reason the old comment gave (green is not
         // "the highest-SNR band" on a debayered full-res frame; it's just 1 of 3).
         //
         // FIELD6-14, measured on real M8 L-Ultimate subs with ASTAP: green solves
         // where luminance, R+G+B, G+B and red-only all FAIL. The reason is the
-        // TARGET, not the photon count — M8 is a bright Ha emission nebula, so the
+        // TARGET, not the photon count, M8 is a bright Ha emission nebula, so the
         // RED (Ha) channel is full of bright, structured nebulosity that raises the
         // local background and buries the stars ASTAP needs. The GREEN (OIII)
         // channel carries far less of that nebula, so the star field stands out
         // clean. Averaging channels (the tempting "more photons" fix) INJECTS the
-        // Ha nebula back in and makes detection worse — proven, do not "improve"
+        // Ha nebula back in and makes detection worse, proven, do not "improve"
         // this to luminance. The real cure for the intermittent failures is the
         // downsample escalation in SolveAsync, not the plane choice.
         int greenIdx = Math.Min(1, channels - 1);
@@ -811,8 +811,8 @@ public class AstapSolver : IPlateSolver {
                     // CALLER's token means the operator cancelled. Rethrow so the
                     // endpoint answers 499 rather than reporting a bogus timeout.
                     // (FIELD5-1 claimed "ASTAP x2" but only patched SolveOnceAsync;
-                    // this proxy path — taken for every NAXIS3>1 frame, i.e. RGB
-                    // masters and OSC — kept lying "timed out" on cancel.)
+                    // this proxy path, taken for every NAXIS3>1 frame, i.e. RGB
+                    // masters and OSC, kept lying "timed out" on cancel.)
                     ct.ThrowIfCancellationRequested();
                     return PlateSolveResult.Failed("ASTAP timed out");
                 }
@@ -852,7 +852,7 @@ public class AstapSolver : IPlateSolver {
                 // SlewCenter re-solve) see the solved file directly.
                 // We lift the CD matrix straight out of the proxy
                 // (which ASTAP just updated in place) rather than
-                // re-synthesising — see StampWcsIntoOriginal.
+                // re-synthesising, see StampWcsIntoOriginal.
                 StampWcsIntoOriginal(originalPath, full, result, w, h, bin > 1 ? null : proxyPath);
                 return result;
             } catch (Exception ex) when (ex is not OperationCanceledException) {
@@ -885,7 +885,7 @@ public class AstapSolver : IPlateSolver {
     /// in place with the <c>-update</c> flag, so the proxy already
     /// carries the canonical CD matrix; reading those headers back
     /// is more reliable than re-synthesising the CD matrix from
-    /// (scale, rotation) — the latter assumes a specific
+    /// (scale, rotation), the latter assumes a specific
     /// orientation convention and can flip x/y under high rotations
     /// (e.g. rot ~ 90° leaves CD11 and CD22 near zero with the bulk
     /// of the scale in CD12/CD21).
@@ -952,7 +952,7 @@ public class AstapSolver : IPlateSolver {
         // already captured in the solve result. It carries the true parity
         // (mirror/flip); the proxy FITS itself is only WCS-updated in place
         // when ASTAP runs with -update, so reading it back is unreliable and
-        // re-synthesising from (scale, rotation) drops parity — either way the
+        // re-synthesising from (scale, rotation) drops parity, either way the
         // RA axis can end up mirrored, misprojecting every catalog star (PCC/
         // SPCC "few matches"). The solve result is the reliable source.
         if (solve.HasCdMatrix) {
@@ -975,7 +975,7 @@ public class AstapSolver : IPlateSolver {
             }
         }
         // Last-resort fallback: synthesise from (scale, rotation) if we have
-        // no CD matrix at all. Better a slightly-wrong WCS than none — the
+        // no CD matrix at all. Better a slightly-wrong WCS than none, the
         // caller gets the same numerical RA/Dec either way.
         wcs ??= WcsHeaders.FromSolveResult(
             solve.RaDeg, solve.DecDeg,

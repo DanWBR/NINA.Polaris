@@ -156,7 +156,7 @@ public class DsoCatalog {
                    -- contains-match. It used to take the prefix pattern, which made
                    -- only the FIRST name in the list searchable: 'Orion Nebula'
                    -- found nothing because that row starts with 'Great'. Two CSV
-                   -- columns side by side, one matched right — the other silently
+                   -- columns side by side, one matched right, the other silently
                    -- hid every secondary common name in the catalogue.
                    OR common_name LIKE $aliasLike COLLATE NOCASE
                    OR aliases LIKE $aliasLike COLLATE NOCASE
@@ -397,7 +397,7 @@ public class DsoCatalog {
     /// <param name="minSizeNoMag">When set (arcmin), ALSO include objects with
     /// NO magnitude but an apparent size ≥ this. Surfaces big emission/bright
     /// nebulae (Sh2, LBN) that carry no stellar magnitude and would otherwise
-    /// be dropped by the magnitude filter — used by the Tonight's Best pool.</param>
+    /// be dropped by the magnitude filter, used by the Tonight's Best pool.</param>
     private IReadOnlyList<DsoObject> LoadAllSync(double? magCap, double? minSizeNoMag = null) {
         if (!IsAvailable) return Array.Empty<DsoObject>();
         try {

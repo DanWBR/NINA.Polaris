@@ -44,7 +44,7 @@ public class AutoFocusSweepPlannerTests {
     public void LopsidedStart_RightFlankOnly_GrowsLeftUntilBothArmsExist() {
         const int offsetSteps = 3, stepSize = 50;
         // Initial out-then-in pass starting at 1300 (300 past focus):
-        // samples at 1450, 1400, 1350, 1300 — all on the right arm.
+        // samples at 1450, 1400, 1350, 1300, all on the right arm.
         var points = Pts((1450, TrueHfr(1450)), (1400, TrueHfr(1400)),
                          (1350, TrueHfr(1350)), (1300, TrueHfr(1300)));
 
@@ -64,7 +64,7 @@ public class AutoFocusSweepPlannerTests {
         // Both arms must have reached the quota.
         var trend = new TrendlineFitting().Calculate(points);
         Assert.That(trend.LeftTrend.DataPoints.Count, Is.GreaterThanOrEqualTo(offsetSteps),
-            "left arm was never built — the lopsided-curve bug");
+            "left arm was never built, the lopsided-curve bug");
         Assert.That(trend.RightTrend.DataPoints.Count, Is.GreaterThanOrEqualTo(offsetSteps));
         Assert.That(leftSamples, Is.GreaterThan(0));
         // And the sweep must have crossed to the left of true focus.

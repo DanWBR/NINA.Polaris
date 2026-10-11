@@ -51,6 +51,7 @@ public class SequenceEngine {
     private readonly ImageWriterService _imageWriter;
     private readonly ProfileService _profile;
     private readonly ILogger<SequenceEngine> _logger;
+    private readonly StoragePushService? _storagePush;
 
     private CancellationTokenSource? _cts;
     private readonly SemaphoreSlim _pauseGate = new(1, 1);
@@ -76,6 +77,10 @@ public class SequenceEngine {
     public int CurrentFrameInItem { get; private set; }
     public int TotalFramesCompleted { get; private set; }
     public string? LastError { get; private set; }
+
+    /// <summary>What the run is waiting on while it is not exposing, for the
+    /// status feed. Set around a deliberate hold and cleared after it.</summary>
+    public string? WaitingFor { get; private set; }
     public DateTime? StartedAt { get; private set; }
 
     /// <summary>Dither configuration. Default: disabled.</summary>
@@ -106,6 +111,7 @@ public class SequenceEngine {
         CameraReadyGate cameraReady,
         DitherBarrier barrier,
         ILogger<SequenceEngine> logger,
+        StoragePushService? storagePush = null,
         GuideRunawayGuard? guideGuard = null,
         NotificationService? notify = null) {
         _guideGuard = guideGuard;
@@ -125,6 +131,7 @@ public class SequenceEngine {
         _cameraReady = cameraReady;
         _barrier = barrier;
         _logger = logger;
+        _storagePush = storagePush;
 
         // Restore the ACTIVE rig's schedule so it survives a host restart, and
         // reload whenever the active rig changes so each rig keeps its own
@@ -196,6 +203,22 @@ public class SequenceEngine {
         }
     }
 
+    /// <summary>
+    /// Where the meridian flip has to look for this item: its own coordinates,
+    /// or else wherever the mount points. An item with no coordinates is shot
+    /// at the mount's position, typically after a manual slew; skipping the
+    /// flip for it let such a run track on past the meridian with no flip at
+    /// all (issue #30, reported again after the look-ahead fix).
+    /// </summary>
+    private (double? Ra, double? Dec) FlipTarget(SequenceItem item) {
+        if (item.Ra.HasValue && item.Dec.HasValue) return (item.Ra, item.Dec);
+        var scope = _equip.Telescope;
+        if (scope == null || !scope.IsConnected) return (null, null);
+        double ra = scope.RightAscension, dec = scope.Declination;
+        if (double.IsNaN(ra) || double.IsNaN(dec)) return (null, null);
+        return (ra, dec);
+    }
+
     public void LoadSequence(List<SequenceItem> items) {
         if (State == SequenceState.Running)
             throw new InvalidOperationException("Cannot load sequence while running");
@@ -263,6 +286,10 @@ public class SequenceEngine {
         _runTask = Task.Run(() => RunAsync(_cts.Token));
         _logger.LogInformation("Sequence started (dither: {Enabled}, every {N} frames, {Px}px)",
             Dither.Enabled, Dither.EveryNFrames, Dither.Pixels);
+        _logger.LogInformation("Meridian flip for this run: {State}",
+            _meridianFlip.Settings.Enabled
+                ? $"on, {_meridianFlip.Settings.MinutesAfterMeridian:F0} min after the meridian"
+                : "off");
     }
 
     public void Pause() {
@@ -332,6 +359,7 @@ public class SequenceEngine {
             ElapsedSeconds = elapsed.TotalSeconds,
             EstimatedRemainingSeconds = estimatedRemainingSeconds,
             LastError = LastError,
+            WaitingFor = WaitingFor,
             DithersIssued = DithersIssued,
             FramesSinceDither = _framesSinceDither,
             Dither = Dither,
@@ -365,7 +393,7 @@ public class SequenceEngine {
 
             // Resume point captured ONCE up front. CurrentItemIndex is rewritten
             // on every iteration below, so the per-item start-frame check must
-            // compare against this snapshot — otherwise every item looked like
+            // compare against this snapshot, otherwise every item looked like
             // "the resumed item" and inherited the previous item's finished
             // frame counter, skipping all its frames (the 2nd-card-skipped bug).
             int resumeItem = Math.Max(0, CurrentItemIndex);
@@ -450,7 +478,7 @@ public class SequenceEngine {
                     // while a stale one (panel brightness changed, different
                     // gain, another session) is corrected instead of poisoning
                     // the whole flat set. The probes run with THIS item's gain
-                    // + the rig offset — the exact conditions the capture loop
+                    // + the rig offset, the exact conditions the capture loop
                     // uses below; probing at whatever gain the previous item
                     // left on the camera was how "auto" produced flats at a
                     // completely wrong ADU.
@@ -489,7 +517,7 @@ public class SequenceEngine {
                 // rewritten to `i` at the top of every iteration, so
                 // comparing against it is always true and every item after
                 // the first inherited the previous item's finished frame
-                // counter — its for-loop started past Count and the whole
+                // counter, its for-loop started past Count and the whole
                 // item was skipped (field report: the run "ended" right
                 // after the first card).
                 int startFrame = (i == resumeItem) ? resumeFrame : 0;
@@ -500,14 +528,30 @@ public class SequenceEngine {
                     await _pauseGate.WaitAsync(ct);
                     _pauseGate.Release();
 
-                    // Meridian flip check, meaningful only for LIGHT frames
-                    // pointed at a real target.
-                    if (!isCalibration
-                        && item.Ra.HasValue && item.Dec.HasValue
-                        && _meridianFlip.Settings.Enabled
-                        && _meridianFlip.ShouldFlipNow(item.Ra.Value)) {
-                        _logger.LogInformation("Meridian flip due for target {Name}, executing", item.Name);
-                        await _meridianFlip.ExecuteFlipAsync(item.Ra.Value, item.Dec.Value, ct);
+                    // Meridian flip, meaningful only for LIGHT frames pointed
+                    // at a real target. Two questions, in this order: would THIS
+                    // exposure run past the flip point, and is a flip due now.
+                    //
+                    // The first one used to be missing, so a sub that started
+                    // before the point and ended after it tracked straight
+                    // through (issue #30). Holding for the remainder costs at
+                    // most one exposure, once per flip.
+                    var (flipRa, flipDec) = !isCalibration && _meridianFlip.Settings.Enabled
+                        ? FlipTarget(item) : (null, null);
+                    if (flipRa.HasValue && flipDec.HasValue) {
+                        var hold = _meridianFlip.WaitBeforeExposure(flipRa.Value, item.Exposure);
+                        if (hold > TimeSpan.Zero) {
+                            _logger.LogInformation(
+                                "Holding {Sec:F0}s before frame {Frame} of '{Name}': a {Exp:F0}s "
+                                + "exposure started now would run past the meridian flip point",
+                                hold.TotalSeconds, f + 1, item.Name, item.Exposure);
+                            WaitingFor = "Waiting for the meridian flip point";
+                            try { await Task.Delay(hold, ct); } finally { WaitingFor = null; }
+                        }
+                        if (_meridianFlip.ShouldFlipNow(flipRa.Value)) {
+                            _logger.LogInformation("Meridian flip due for target {Name}, executing", item.Name);
+                            await _meridianFlip.ExecuteFlipAsync(flipRa.Value, flipDec.Value, ct);
+                        }
                     }
 
                     CurrentFrameInItem = f;
@@ -516,7 +560,7 @@ public class SequenceEngine {
                     // was a bare `if (_equip.Camera == null) abort`, which let a
                     // present-but-DISCONNECTED camera (mid driver-restart) sail
                     // straight into CaptureAsync. The capture failed in ~2 s, the
-                    // catch skipped the frame, and the `for (f...)` loop advanced —
+                    // catch skipped the frame, and the `for (f...)` loop advanced,
                     // so a 30 s driver recovery burned ~15 frames of a 60 s item,
                     // the item "completed" with nothing on disk, and the night
                     // fast-forwarded while reporting success. Waiting holds f in
@@ -529,7 +573,7 @@ public class SequenceEngine {
                     // AUTORUN-BLOB-STUCK (#635): null means either a user stop OR the
                     // camera did not come back within the recovery budget. On a stop,
                     // throw OCE so the one cancellation handler runs. Otherwise the
-                    // driver is wedged past a normal restart+reconnect — SKIP this
+                    // driver is wedged past a normal restart+reconnect, SKIP this
                     // frame and keep the run alive (the field report was the whole
                     // night frozen on one BLOB-timed-out frame), so a later recovery
                     // resumes it instead of the run hanging forever.
@@ -550,14 +594,16 @@ public class SequenceEngine {
                     // (often a low/8-bit default), so 60 s lights came back
                     // near-black even though item.Gain was only being stamped
                     // into the FITS header at save time.
-                    // Offset is a per-rig setting (DefaultOffset), not per-item:
-                    // a sensible bias pedestal keeps the background off the
-                    // left wall of the histogram. Sent on every frame alongside
-                    // gain so the camera isn't left on a stale/zero offset.
-                    var rigOffset = _profile.ActiveEquipmentProfile?.DefaultOffset ?? 0;
+                    // Offset is a per-rig setting, not per-item: a sensible
+                    // bias pedestal keeps the background off the left wall of
+                    // the histogram. Sent on every frame alongside gain so the
+                    // camera isn't left on a stale or zero offset. One value for
+                    // the rig, so a run uses the same pedestal as the framing
+                    // snap that set it up.
+                    var autorunOffset = RigCaptureDefaults.Offset(_profile);
                     // AUTORUN-TARGET-NAME: a LIGHT frame never takes a per-item
                     // name. The target does not change across a run, so every
-                    // light is named after the most relevant object in the FOV —
+                    // light is named after the most relevant object in the FOV,
                     // resolved once by ImageWriterService.ResolveTargetName from
                     // the mount/solve pointing, exactly as LIVE names its output.
                     // A blank name here is what lets that resolver run. item.Name
@@ -567,7 +613,10 @@ public class SequenceEngine {
                         : null;
                     var capOpts = new NINA.Image.Interfaces.CaptureOptions(
                         Gain: item.Gain > 0 ? item.Gain : (int?)null,
-                        Offset: rigOffset > 0 ? rigOffset : (int?)null,
+                        Offset: autorunOffset,
+                        // DSLR only: the camera publishes an ISO list instead of
+                        // a gain property, and the card offers the list.
+                        Iso: item.Iso is > 0 ? item.Iso : null,
                         BinX: item.Binning > 0 ? item.Binning : (int?)null,
                         BinY: item.Binning > 0 ? item.Binning : (int?)null,
                         ImageType: imageType,
@@ -721,6 +770,11 @@ public class SequenceEngine {
             // Natural completion always fires the end-actions.
             await RunEndActionsAsync(triggeredByStop: false);
 
+            // ...and, when the operator asked for it, sends the night's output
+            // to the storage target. Fire and forget inside the service.
+            try { _storagePush?.OffloadSessionAsync(StartedAt ?? DateTime.UtcNow); }
+            catch (Exception ex) { _logger.LogWarning(ex, "Session offload could not start"); }
+
         } catch (OperationCanceledException) {
             _logger.LogInformation("Sequence cancelled");
             // Stop is a user action, only run housekeeping if the user opted in.
@@ -737,6 +791,36 @@ public class SequenceEngine {
             try { _aux.NotifySessionActive(false); } catch { }
             try { _barrier.Deregister("main"); } catch { }
             ReportGuidingForSession();
+            CompactAfterRun();
+        }
+    }
+
+    /// <summary>
+    /// Give the large-object heap back at the end of a run.
+    ///
+    /// <para>A run is the heaviest large-object churn in the application and
+    /// the only heavy path that never compacted. Live stacking, the native
+    /// guider and the GraXpert hook all do this after their own heavy phase;
+    /// AUTORUN did not, even though a frame from a 26 MP one-shot-colour camera
+    /// is 52 MB on its own and the preview path debayers it to three planes
+    /// before downsampling. Measured on an OPi 4 Pro with an ASI2600MC Pro: ten
+    /// flats took the process to a 2.4 GB peak on a 3.8 GB board, and it came
+    /// back down to about 540 MB only minutes later, when the collector got
+    /// round to it by itself.</para>
+    ///
+    /// <para>Nothing was leaking; the high water mark was the problem, because
+    /// that is what decides whether the next run meets an out-of-memory kill.
+    /// A run ending is a user-paced moment, so one blocking full collection
+    /// here costs nothing anyone can perceive. NEVER per frame.</para>
+    /// </summary>
+    private void CompactAfterRun() {
+        try {
+            System.Runtime.GCSettings.LargeObjectHeapCompactionMode =
+                System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+        } catch (Exception ex) {
+            // Housekeeping is never the thing that breaks the end of a run.
+            _logger.LogDebug(ex, "Post-run heap compaction raised");
         }
     }
 

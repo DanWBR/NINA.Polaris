@@ -67,7 +67,7 @@ public class StarDetectorTests {
     /// border (live-stack accumulator regions that never got
     /// written, subframe black bars) yields median = 0, MAD = 0,
     /// threshold = 0, and the flood-fill consumes the entire image
-    /// into one over-sized blob — returning 0 stars even though
+    /// into one over-sized blob, returning 0 stars even though
     /// the picture is full of obvious ones.
     /// </summary>
     [Test]
@@ -99,7 +99,7 @@ public class StarDetectorTests {
 
     /// <summary>
     /// A perfectly flat frame (uniform background, no stars) must
-    /// not crash and must return an empty list — not invent stars
+    /// not crash and must return an empty list, not invent stars
     /// from random noise interpreted as signal.
     /// </summary>
     [Test]
@@ -126,7 +126,7 @@ public class StarDetectorTests {
     }
 
     // Paint a defocused-star DONUT: a bright annulus (ring) of given radius and
-    // thickness on a flat background, with a dim/empty centre — exactly the
+    // thickness on a flat background, with a dim/empty centre, exactly the
     // shape the HFR measurement used to misread as ~1.
     private static void PaintDonut(ushort[] data, int width, int cx, int cy,
                                    double radius, double thickness, ushort peak, ushort background) {

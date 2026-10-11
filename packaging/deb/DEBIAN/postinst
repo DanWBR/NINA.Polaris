@@ -130,7 +130,12 @@ case "$1" in
         chmod 0755 /opt/polaris/bin/polaris-growroot.sh 2>/dev/null || true
         chmod 0755 /opt/polaris/bin/polaris-sshkeys.sh 2>/dev/null || true
         chmod 0755 /opt/polaris/bin/polaris-diagnostics-dump.sh 2>/dev/null || true
+        chmod 0755 /opt/polaris/bin/polaris-sdk-symlinks.sh 2>/dev/null || true
         chmod 0755 /opt/polaris/bin/polaris-solverdb-install.sh 2>/dev/null || true
+        # ExecStart of polaris-indiweb.service, the unit that keeps indi-web
+        # (and therefore indiserver and every driver) out of polaris.service's
+        # cgroup, so restarting Polaris no longer stops the mount tracking.
+        chmod 0755 /opt/polaris/bin/polaris-indiweb.sh 2>/dev/null || true
         chmod 0755 /opt/polaris/bin/polaris-storage-prep.sh 2>/dev/null || true
         # polaris-install-to-disk clones a running USB system onto an internal
         # disk. Ship it in the .deb and symlink it onto PATH so an image flashed
@@ -254,6 +259,42 @@ BRLTTY
             pkill -x brltty >/dev/null 2>&1 || true
         fi
 
+        # ---- 5c-2. get the desktop's gphoto handler off DSLR bodies ----
+        # The same class of problem as brltty, one bus over. The desktop's
+        # gphoto volume monitor claims a camera's PTP interface the moment
+        # udev tags it, and indi_gphoto_ccd is then locked out:
+        #
+        #   Camera open error (-53): Could not claim the USB device
+        #   Can not open camera: Power OK? If camera is auto-mounted as
+        #   external disk storage, please unmount it and disable auto-mount.
+        #
+        # Reported 2026-09-20 with a Canon EOS 1500D on the Raspberry Pi 4
+        # image: the body shows up in lsusb and in the driver list, and every
+        # connect fails. /lib/udev/rules.d/99-polaris-gphoto.rules (shipped in
+        # this package) clears the tag the monitor watches for; the mask stops
+        # a session starting it again, and the pkill releases a camera being
+        # held right now.
+        #
+        # It is a user unit, so --global: the mask has to cover whatever
+        # session the desktop brings up, not root's.
+        #
+        # To restore normal desktop camera handling:
+        #   sudo rm /lib/udev/rules.d/99-polaris-gphoto.rules \
+        #           /etc/systemd/user/gvfs-gphoto2-volume-monitor.service
+        if command -v systemctl >/dev/null 2>&1; then
+            systemctl --global mask gvfs-gphoto2-volume-monitor.service >/dev/null 2>&1 || true
+        fi
+        # Belt and braces for a chroot where systemctl cannot reach a bus:
+        # the symlink IS the mask.
+        if [ ! -e /etc/systemd/user/gvfs-gphoto2-volume-monitor.service ]; then
+            mkdir -p /etc/systemd/user
+            ln -sf /dev/null /etc/systemd/user/gvfs-gphoto2-volume-monitor.service 2>/dev/null || true
+        fi
+        if [ -d /run/systemd/system ]; then
+            pkill -f gvfsd-gphoto2 >/dev/null 2>&1 || true
+            pkill -f gvfs-gphoto2-volume-monitor >/dev/null 2>&1 || true
+        fi
+
         if command -v udevadm >/dev/null 2>&1; then
             udevadm control --reload-rules >/dev/null 2>&1 || true
             udevadm trigger >/dev/null 2>&1 || true
@@ -320,6 +361,18 @@ BRLTTY
             # the report is the only way into a board that comes up wrong.
             systemctl enable polaris-diagnostics.service >/dev/null 2>&1 || true
 
+            # polaris-indiweb.service is deliberately NOT enabled. Whether
+            # indi-web comes up is the IndiWeb:AutoStart setting's call, and
+            # Polaris makes it with `systemctl start polaris-indiweb.service`
+            # once it is up. Enabling the unit here would start indi-web at boot
+            # regardless of that setting and make the toggle a lie.
+            #
+            # An upgrade is about to restart polaris.service below, and before
+            # this release that restart killed the indi-web child along with
+            # indiserver and every driver. It still does on this one upgrade --
+            # the running indi-web is the old child, in the old cgroup. From the
+            # next restart on it is a unit of its own and stays up.
+
             # Start (or restart if already running on upgrade)
             if systemctl is-active --quiet polaris.service; then
                 systemctl restart polaris.service
@@ -380,5 +433,12 @@ BRLTTY
         exit 1
         ;;
 esac
+
+# Vendor SDK sonames, repaired now rather than at the next start. A host that
+# already had the archive's libasi put over its source-built SDK is running a
+# downgraded camera library this minute and nothing on screen says so.
+if [ -x /opt/polaris/bin/polaris-sdk-symlinks.sh ]; then
+    /opt/polaris/bin/polaris-sdk-symlinks.sh || true
+fi
 
 exit 0

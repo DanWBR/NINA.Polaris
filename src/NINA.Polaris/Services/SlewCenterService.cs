@@ -81,7 +81,10 @@ public class SlewCenterService {
             TargetRotation = targetRotation,
             RotationToleranceDeg = rotationToleranceDeg > 0 ? rotationToleranceDeg : 0.5,
             State = SlewCenterState.Pending,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            // Recorded before anything moves, so a cancel can put the mount
+            // back the way this job found it.
+            TrackingWasOn = MountAbort.WasTracking(_equip.Telescope)
         };
 
         _jobs[job.Id] = job;
@@ -99,29 +102,30 @@ public class SlewCenterService {
         return _jobs.TryGetValue(jobId, out var job) ? job : null;
     }
 
-    public void CancelJob(string jobId) {
-        if (_jobs.TryGetValue(jobId, out var job)) {
-            job.Cts?.Cancel();
-            job.State = SlewCenterState.Cancelled;
-            // Also yank the mount itself. Just cancelling the CTS
-            // unwinds the C# pipeline but leaves a SlewAsync that's
-            // already in flight on the wire running to completion,
-            // the user clicking Cancel almost always means STOP THE
-            // SCOPE NOW, not "finish what you started, then stop
-            // bothering with the plate solve". Best-effort: log and
-            // swallow if the abort itself fails, the CTS path still
-            // brings the orchestrator to rest.
-            try { _equip.Telescope?.AbortSlewAsync(); }
-            catch (Exception ex) {
-                _logger.LogWarning(ex, "AbortSlew during CancelJob failed");
-            }
-        }
+    public async Task CancelJobAsync(string jobId) {
+        if (!_jobs.TryGetValue(jobId, out var job)) return;
+        job.Cts?.Cancel();
+        job.State = SlewCenterState.Cancelled;
+        // Also yank the mount itself. Just cancelling the CTS unwinds the C#
+        // pipeline but leaves a SlewAsync that is already in flight on the wire
+        // running to completion, and the user clicking Cancel almost always
+        // means STOP THE SCOPE NOW, not "finish what you started, then stop
+        // bothering with the plate solve".
+        //
+        // The abort is also what takes tracking down on most drivers, so the
+        // mount has to be handed back tracking if that is how it was found.
+        await MountAbort.AbortAndRestoreTrackingAsync(
+            _equip.Telescope, job.TrackingWasOn, _logger);
     }
 
     private async Task RunJobAsync(SlewCenterJob job, CancellationToken ct) {
         // A rotator adds its own convergence steps (and possibly one to learn
-        // its direction), so the budget grows when a sky angle was requested.
-        int maxIterations = job.TargetRotation != null ? 7 : 5;
+        // its direction), so the budget grows when a sky angle was requested
+        // AND something can turn the camera. A hand-turned rotator gets the
+        // plain budget: the extra iterations would solve the same framing
+        // over and over while the operator has not touched anything yet.
+        int maxIterations = job.TargetRotation != null
+            && _equip.Rotator is { IsConnected: true } ? 7 : 5;
         // Per-rig knobs so long-FL setups don't saturate Sirius on a
         // hardcoded 5s frame and short-FL setups don't time out
         // waiting for stars at gain 0. Defaults match the previous
@@ -135,7 +139,7 @@ public class SlewCenterService {
         // PREVIEW solves use (one solve at a time). Link the run to this job's
         // token: without it the snapshot advertised Cancellable=true and
         // POST /api/platesolve/cancel tripped a CTS nobody observed, so the API
-        // answered {cancelled:true} while the solve ran on — the exact dishonesty
+        // answered {cancelled:true} while the solve ran on, the exact dishonesty
         // PlateSolveProgressService.Cancel's own doc-comment warns against. All
         // five endpoint sites already pass their token here; this caller didn't.
         _progress?.Begin("SKY (slew & center)", ct);
@@ -156,7 +160,7 @@ public class SlewCenterService {
             // possibly-confused pointing model until the mount is re-homed.
             // A confirmed override (Force) still gets through.
             if (!job.Force && Guard is { RequireHomeAfterTrip: true }) {
-                job.Error = "Mount safety stop is active — Find Home before slewing "
+                job.Error = "Mount safety stop is active, Find Home before slewing "
                     + "(or re-run with confirmation to override).";
                 job.State = SlewCenterState.Failed;
                 _logger.LogWarning("Slew-and-center blocked: {Reason}", job.Error);
@@ -164,7 +168,7 @@ public class SlewCenterService {
             }
 
             // Safety #1: if the mount is already sitting on the target, DON'T
-            // re-command a full GoTo — go straight to center-only. A fresh GoTo
+            // re-command a full GoTo, go straight to center-only. A fresh GoTo
             // to a target you're already on is what let the AM3 pick the
             // un-flipped side and swing the long way toward the tripod. Only when
             // the driver reports a usable position and we weren't already told to
@@ -178,7 +182,7 @@ public class SlewCenterService {
                     if (sepDeg <= MountSlewSafety.AlreadyOnTargetDeg) {
                         job.SkipInitialSlew = true;
                         _logger.LogInformation(
-                            "Already on target ({Sep:F2}° away) — center-only, not re-slewing "
+                            "Already on target ({Sep:F2}° away), center-only, not re-slewing "
                             + "(avoids an un-flip / wrong-way GoTo).", sepDeg);
                     }
                 }
@@ -398,7 +402,7 @@ public class SlewCenterService {
                 // FOV hint: ASTAP without a scale hint has to search its whole
                 // range, which is the main cause of slow/failed solves. ASTAP's
                 // -fov is the field *height* (vertical), so derive it from the
-                // image HEIGHT + Y pixel size — using the width here over-states
+                // image HEIGHT + Y pixel size, using the width here over-states
                 // the FOV on any non-square sensor and makes the hinted solve
                 // fail at the wrong image scale (N.I.N.A. desktop passes FoVH too).
                 double fovDeg = 0;
@@ -520,30 +524,57 @@ public class SlewCenterService {
                     TryUpdateFocalLengthFromSolve(solveResult.ScaleArcsecPerPixel, job);
                 }
 
-                // Rotation: only when the caller asked for a sky angle and a
-                // rotator is connected. The error is taken modulo 180 because
-                // a rectangular sensor frames the same field either way up.
+                // Rotation. The error is taken modulo 180 because a
+                // rectangular sensor frames the same field either way up.
+                //
+                // Measured whenever a framing angle was asked for, whether or
+                // not a rotator can act on it: with a manual rotator the
+                // operator is the loop, so the number and the direction to
+                // turn are the only useful output we can give them.
                 double? rotErr = null;
                 var rotator = _equip.Rotator;
-                if (job.TargetRotation is double wantPa && rotator is { IsConnected: true }) {
+                bool hasRotator = rotator is { IsConnected: true };
+                if (job.TargetRotation is double wantPa) {
                     rotErr = RotationErrorDeg(wantPa, solveResult.RotationDeg);
                     job.RotationErrorDeg = rotErr;
-                    if (rotatorMovedLastIter && lastRotErr is double prev
-                            && Math.Abs(rotErr.Value) > Math.Abs(prev) * 0.9) {
-                        _rotatorSkySign = -_rotatorSkySign;
+                    if (hasRotator) {
+                        if (rotatorMovedLastIter && lastRotErr is double prev
+                                && Math.Abs(rotErr.Value) > Math.Abs(prev) * 0.9) {
+                            _rotatorSkySign = -_rotatorSkySign;
+                            _logger.LogInformation(
+                                "Rotator move did not reduce the sky-angle error ({Prev:F1} -> {Now:F1}); "
+                                + "reversing the direction for this camera", prev, rotErr.Value);
+                        }
+                        lastRotErr = rotErr;
+                        rotatorMovedLastIter = false;
+                    } else {
+                        // Hand-turn instruction, carried on the job so the
+                        // status the UI polls can say which way to turn
+                        // without a second solve.
+                        var advice = ManualRotatorAdvice.Compute(
+                            wantPa, solveResult.RotationDeg,
+                            solveResult.CD11, solveResult.CD12,
+                            solveResult.CD21, solveResult.CD22,
+                            reverse: ManualRotatorReverseForActiveRig(),
+                            toleranceDeg: job.RotationToleranceDeg);
+                        job.ManualRotationTurnDeg = advice.TurnDeg;
+                        job.ManualRotationDirection = advice.Direction;
+                        job.ManualRotationMirrored = advice.Mirrored;
                         _logger.LogInformation(
-                            "Rotator move did not reduce the sky-angle error ({Prev:F1} -> {Now:F1}); "
-                            + "reversing the direction for this camera", prev, rotErr.Value);
+                            "No rotator connected: framing is {Err:F1}° off, turn the camera {Turn:F1}° {Dir}",
+                            rotErr.Value, advice.TurnDeg, advice.Direction);
                     }
-                    lastRotErr = rotErr;
-                    rotatorMovedLastIter = false;
                     _logger.LogInformation("Sky angle {Pa:F1}°, wanted {Want:F1}°, error {Err:F1}° (tolerance {Tol:F1}°)",
                         solveResult.RotationDeg, wantPa, rotErr.Value, job.RotationToleranceDeg);
                 }
 
-                // Step 5: Check convergence
+                // Step 5: Check convergence. Rotation only gates the loop when
+                // something here can act on it: a hand-turned rotator would
+                // otherwise fail every job whose framing angle the operator
+                // has not caught up with yet.
                 bool posOk = errorArcsec <= job.ToleranceArcsec;
-                bool rotOk = rotErr == null || Math.Abs(rotErr.Value) <= job.RotationToleranceDeg;
+                bool rotOk = !hasRotator || rotErr == null
+                    || Math.Abs(rotErr.Value) <= job.RotationToleranceDeg;
                 if (posOk && rotOk) {
                     job.State = SlewCenterState.Centered;
                     _logger.LogInformation("Centered! Error {Err:F1}\" within tolerance {Tol:F0}\"",
@@ -551,7 +582,7 @@ public class SlewCenterService {
                     return;
                 }
 
-                if (!rotOk && rotator != null) {
+                if (!rotOk && hasRotator) {
                     job.State = SlewCenterState.Rotating;
                     await MoveRotatorBySkyDeltaAsync(rotator, rotErr!.Value, job, ct);
                     rotatorMovedLastIter = true;
@@ -587,7 +618,10 @@ public class SlewCenterService {
             // mount that lands at e.g. 18" against an 11" goal but a 30"
             // request is centred for the user's purposes. Only fail when
             // we're outside even the requested tolerance.
-            bool rotWithin = job.RotationErrorDeg == null
+            // As in the loop: a framing angle nobody here can act on is a
+            // measurement to report, not a reason to call the job failed.
+            bool rotWithin = _equip.Rotator is not { IsConnected: true }
+                || job.RotationErrorDeg == null
                 || Math.Abs(job.RotationErrorDeg.Value) <= job.RotationToleranceDeg;
             if (job.ErrorArcsec > 0 && job.ErrorArcsec <= requestedTol && rotWithin) {
                 job.State = SlewCenterState.Centered;
@@ -736,6 +770,15 @@ public class SlewCenterService {
     private static int _rotatorSkySign = 1;
     internal static int RotatorSkySign { get => _rotatorSkySign; set => _rotatorSkySign = value; }
 
+    /// <summary>The active rig's "my manual rotator turns the other way"
+    /// override. Per rig because it is a fact about the optical train (how
+    /// many reflections, which way the operator faces the camera), not about
+    /// the browser asking.</summary>
+    private bool ManualRotatorReverseForActiveRig() {
+        try { return _profiles.ActiveEquipmentProfile?.ManualRotatorReverse == true; }
+        catch { return false; }
+    }
+
     /// <summary>
     /// Signed sky-angle error, target minus solved, folded into (-90, 90]:
     /// a rectangular sensor rotated by 180 degrees frames the same field,
@@ -806,17 +849,29 @@ public class SlewCenterJob {
     /// <summary>Operator confirmed a flagged slew (large / near-meridian / below
     /// the altitude floor) or overrode the post-safety-stop home requirement.</summary>
     public bool Force { get; set; }
+    /// <summary>Whether the mount was tracking when this job started. A cancel
+    /// aborts the mount, which stops tracking on most drivers, so the state has
+    /// to be remembered before the job touches anything.</summary>
+    public bool TrackingWasOn { get; set; }
     public SlewCenterState State { get; set; }
     public int Iteration { get; set; }
     public double? ActualRa { get; set; }
     public double? ActualDec { get; set; }
     public double? ErrorArcsec { get; set; }
     public double? Rotation { get; set; }
-    /// <summary>Sky position angle the camera should end up at, when a rotator is to be driven.</summary>
+    /// <summary>Sky position angle the camera should end up at. Drives a
+    /// connected rotator; with none, it is measured and reported so the
+    /// operator can turn a manual one by hand.</summary>
     public double? TargetRotation { get; set; }
     public double RotationToleranceDeg { get; set; } = 0.5;
     /// <summary>Signed sky-angle error after the last solve, folded into (-90, 90].</summary>
     public double? RotationErrorDeg { get; set; }
+    /// <summary>Hand-turn instruction, set only when no rotator is connected:
+    /// how far to turn the camera, which way (<c>cw</c> / <c>ccw</c> /
+    /// <c>none</c>), and whether the field came back mirrored.</summary>
+    public double? ManualRotationTurnDeg { get; set; }
+    public string? ManualRotationDirection { get; set; }
+    public bool ManualRotationMirrored { get; set; }
     public int RotatorMoves { get; set; }
     public double? Scale { get; set; }
     /// <summary>Focal length (mm) derived from the first successful solve in this job, if any.</summary>

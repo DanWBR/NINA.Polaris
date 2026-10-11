@@ -34,6 +34,12 @@ namespace NINA.Image.FileFormat.Raw;
 /// - Entirely optional: <see cref="IsAvailable"/> is false when libraw isn't
 ///   installed, and every call is wrapped so the caller falls back to the
 ///   embedded-JPEG path.
+/// - Every entry point imported here has to exist in libraw's C API
+///   (libraw.h, 0.20 to 0.22). One that did not, libraw_set_user_flip, threw
+///   EntryPointNotFoundException on every frame; the catch turned that into a
+///   plain "could not decode", and no DSLR RAW was ever decoded, whatever the
+///   body or the libraw version (a Canon R8 in the field, 2026-10-11).
+///   A test now checks the imports against the header.
 /// </summary>
 public static class LibRawDecoder {
     // libraw is distributed as libraw.so.<soname> (e.g. .23/.20); the dev
@@ -53,7 +59,7 @@ public static class LibRawDecoder {
                     if (NativeLibrary.TryLoad(c, out var h)) return h;
                 return IntPtr.Zero;
             });
-        } catch { /* resolver already set / not supported — DllImport still tries */ }
+        } catch { /* resolver already set / not supported, DllImport still tries */ }
     }
 
     [DllImport(Lib, EntryPoint = "libraw_init")] private static extern IntPtr libraw_init(uint flags);
@@ -63,12 +69,13 @@ public static class LibRawDecoder {
     [DllImport(Lib, EntryPoint = "libraw_dcraw_process")] private static extern int libraw_dcraw_process(IntPtr p);
     [DllImport(Lib, EntryPoint = "libraw_dcraw_make_mem_image")] private static extern IntPtr libraw_dcraw_make_mem_image(IntPtr p, out int errc);
     [DllImport(Lib, EntryPoint = "libraw_dcraw_clear_mem")] private static extern void libraw_dcraw_clear_mem(IntPtr img);
-    // Stable setter helpers (libraw C API ≥0.18) — avoid struct marshaling.
+    // Stable setter helpers (libraw C API ≥0.18), avoid struct marshaling.
     [DllImport(Lib, EntryPoint = "libraw_set_output_bps")] private static extern void libraw_set_output_bps(IntPtr p, int value);
     [DllImport(Lib, EntryPoint = "libraw_set_output_color")] private static extern void libraw_set_output_color(IntPtr p, int value);
     [DllImport(Lib, EntryPoint = "libraw_set_no_auto_bright")] private static extern void libraw_set_no_auto_bright(IntPtr p, int value);
     [DllImport(Lib, EntryPoint = "libraw_set_gamma")] private static extern void libraw_set_gamma(IntPtr p, int index, float value);
-    [DllImport(Lib, EntryPoint = "libraw_set_user_flip")] private static extern void libraw_set_user_flip(IntPtr p, int value);
+    [DllImport(Lib, EntryPoint = "libraw_strerror")] private static extern IntPtr libraw_strerror(int errorcode);
+    [DllImport(Lib, EntryPoint = "libraw_version")] private static extern IntPtr libraw_version();
 
     // libraw_processed_image_t header: int type; ushort height,width,colors,bits;
     // uint data_size; (then the pixel bytes). 16-byte header on LP64/ILP32.
@@ -97,23 +104,44 @@ public static class LibRawDecoder {
         }
     }
 
+    /// <summary>The installed libraw's version string, e.g. "0.21.2-Release",
+    /// or null when it cannot be read.</summary>
+    public static string? Version {
+        get {
+            try { return IsAvailable ? Marshal.PtrToStringAnsi(libraw_version()) : null; }
+            catch { return null; }
+        }
+    }
+
+    public static bool TryDecodeToRggb(byte[] rawBytes, out int width, out int height, out ushort[]? mosaic)
+        => TryDecodeToRggb(rawBytes, out width, out height, out mosaic, out _);
+
     /// <summary>
     /// Decode a RAW file to a 16-bit linear RGGB Bayer mosaic so it flows through
     /// the mono+Bayer pipeline (the client debayers it back to colour). Returns
-    /// false (and null outputs) if libraw is unavailable or the decode fails —
-    /// the caller should fall back to the embedded JPEG.
+    /// false (and null outputs) if libraw is unavailable or the decode fails,
+    /// the caller should fall back to the embedded JPEG. <paramref name="error"/>
+    /// then says which step failed and what libraw itself reported, so an
+    /// unsupported body, a damaged file and a broken install can be told apart.
     /// </summary>
-    public static bool TryDecodeToRggb(byte[] rawBytes, out int width, out int height, out ushort[]? mosaic) {
-        width = 0; height = 0; mosaic = null;
-        if (!IsAvailable || rawBytes == null || rawBytes.Length == 0) return false;
+    public static bool TryDecodeToRggb(byte[] rawBytes, out int width, out int height, out ushort[]? mosaic,
+            out string? error) {
+        width = 0; height = 0; mosaic = null; error = null;
+        if (rawBytes == null || rawBytes.Length == 0) { error = "the camera sent an empty file"; return false; }
+        if (!IsAvailable) { error = "libraw is not available on this host"; return false; }
+        string step = "init";
 
         IntPtr lr = IntPtr.Zero, img = IntPtr.Zero;
         try {
             lr = libraw_init(0);
-            if (lr == IntPtr.Zero) return false;
+            if (lr == IntPtr.Zero) { error = Fail(step, null); return false; }
 
-            if (libraw_open_buffer(lr, rawBytes, (UIntPtr)rawBytes.Length) != 0) return false;
-            if (libraw_unpack(lr) != 0) return false;
+            step = "open";
+            int rc = libraw_open_buffer(lr, rawBytes, (UIntPtr)rawBytes.Length);
+            if (rc != 0) { error = Fail(step, rc); return false; }
+            step = "unpack";
+            rc = libraw_unpack(lr);
+            if (rc != 0) { error = Fail(step, rc); return false; }
 
             // Astro-friendly output: 16-bit, linear (gamma 1.0), no auto-bright,
             // sRGB primaries + camera white balance (defaults give a natural
@@ -123,17 +151,27 @@ public static class LibRawDecoder {
             libraw_set_no_auto_bright(lr, 1);
             libraw_set_gamma(lr, 0, 1.0f);
             libraw_set_gamma(lr, 1, 1.0f);
-            libraw_set_user_flip(lr, 0);
+            // No orientation override: libraw's C API has no setter for it, and
+            // a camera on a telescope records none anyway.
 
-            if (libraw_dcraw_process(lr) != 0) return false;
-            img = libraw_dcraw_make_mem_image(lr, out _);
-            if (img == IntPtr.Zero) return false;
+            step = "process";
+            rc = libraw_dcraw_process(lr);
+            if (rc != 0) { error = Fail(step, rc); return false; }
+            step = "image";
+            img = libraw_dcraw_make_mem_image(lr, out int errc);
+            if (img == IntPtr.Zero) { error = Fail(step, errc); return false; }
 
             var hdr = Marshal.PtrToStructure<ProcessedImageHeader>(img);
             int w = hdr.Width, h = hdr.Height;
-            if (w <= 0 || h <= 0 || hdr.Colors != 3 || hdr.Bits != 16) return false;
+            if (w <= 0 || h <= 0 || hdr.Colors != 3 || hdr.Bits != 16) {
+                error = $"libraw {Version} produced an unexpected image ({w}x{h}, {hdr.Colors} colours, {hdr.Bits}-bit)";
+                return false;
+            }
             long expected = (long)w * h * 3 * 2;
-            if (hdr.DataSize < expected) return false;
+            if (hdr.DataSize < expected) {
+                error = $"libraw {Version} produced a short image ({hdr.DataSize} of {expected} bytes)";
+                return false;
+            }
 
             // Pixel data starts right after the 16-byte header.
             IntPtr data = IntPtr.Add(img, Marshal.SizeOf<ProcessedImageHeader>());
@@ -159,11 +197,22 @@ public static class LibRawDecoder {
             }
             width = w; height = h; mosaic = bayer;
             return true;
-        } catch {
+        } catch (Exception ex) {
+            error = $"libraw {Version} failed at {step}: {ex.GetType().Name}: {ex.Message}";
             return false;
         } finally {
             if (img != IntPtr.Zero) { try { libraw_dcraw_clear_mem(img); } catch { } }
             if (lr != IntPtr.Zero) { try { libraw_close(lr); } catch { } }
         }
+    }
+
+    private static string Fail(string step, int? code) {
+        string what = "no detail";
+        if (code.HasValue) {
+            try { what = Marshal.PtrToStringAnsi(libraw_strerror(code.Value)) ?? $"error {code}"; }
+            catch { what = $"error {code}"; }
+            what += $" ({code})";
+        }
+        return $"libraw {Version} refused this RAW at {step}: {what}";
     }
 }

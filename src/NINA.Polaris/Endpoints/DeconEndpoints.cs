@@ -18,7 +18,7 @@ using NINA.Polaris.Services.Studio;
 namespace NINA.Polaris.Endpoints;
 
 /// <summary>
-/// POST /api/decon/rl — classical, measured-PSF Richardson-Lucy deconvolution.
+/// POST /api/decon/rl, classical, measured-PSF Richardson-Lucy deconvolution.
 /// Server-side (the math is C#), unlike the in-browser AI decon. Writes a
 /// `{stem}_rl.fits` sibling per input and returns the measured PSF stats so the
 /// UI can show what shape was reversed. The frame library is rescanned so the
@@ -79,7 +79,7 @@ public static class DeconEndpoints {
             return Results.Ok(new { results, failures });
         });
 
-        // POST /api/decon/rl-prepare — measure PSF + noise model + star list for
+        // POST /api/decon/rl-prepare, measure PSF + noise model + star list for
         // a single frame so the browser can run the RL iteration loop locally
         // (keeping the SBC server CPU free during the heavy iteration phase).
         // Only global-PSF mode is supported (field mode stays server-side).
@@ -110,7 +110,7 @@ public static class DeconEndpoints {
             }
         });
 
-        // POST /api/decon/measure-fwhm — measure the median star FWHM (px) of a
+        // POST /api/decon/measure-fwhm, measure the median star FWHM (px) of a
         // frame so the decon / detail modal can auto-fill the "Image FWHM" field.
         g.MapPost("/measure-fwhm", async (DeconvolutionService svc, MeasureFwhmRequest req) => {
             if (string.IsNullOrWhiteSpace(req.Path))

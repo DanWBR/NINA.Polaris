@@ -116,7 +116,7 @@ public class PlanTarget {
     /// captures exactly the per-frame counts and moves on.
     /// <see cref="PlanScheduleMode.TimeWindow"/> waits until <see cref="StartAtUtc"/>
     /// (skipping the wait if already past), then keeps capturing the frame block
-    /// on a loop until <see cref="EndAtUtc"/> — the operator sets these by dragging
+    /// on a loop until <see cref="EndAtUtc"/>, the operator sets these by dragging
     /// the start/end handles on the target's elevation chart.
     /// </summary>
     public PlanScheduleMode ScheduleMode { get; set; } = PlanScheduleMode.Frames;
@@ -128,7 +128,7 @@ public class PlanTarget {
     public List<PlanFrame> Frames { get; set; } = new();
 }
 
-/// <summary>One row of a target's frame list — N exposures at a given exposure/gain/filter.</summary>
+/// <summary>One row of a target's frame list, N exposures at a given exposure/gain/filter.</summary>
 public class PlanFrame {
     public double ExposureSeconds { get; set; } = 60;
     public int Count { get; set; } = 10;
@@ -138,7 +138,7 @@ public class PlanFrame {
     public string ImageType { get; set; } = "LIGHT";
 }
 
-// Serialize as strings ("Now", "AllDone", …) — the SPA sends/reads these as
+// Serialize as strings ("Now", "AllDone", …), the SPA sends/reads these as
 // strings, and the API uses the default System.Text.Json options (which map
 // enums to integers without this attribute, breaking model binding).
 [JsonConverter(typeof(JsonStringEnumConverter))]

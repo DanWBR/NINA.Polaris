@@ -45,6 +45,7 @@ public class HostActivityService {
     private readonly LiveStackingService _liveStack;
     private readonly VideoRecordingService _video;
     private readonly AutoFocusService _autoFocus;
+    private readonly NINA.Polaris.Services.Focus.FilterFocusSweepService _focusSweep;
     private readonly CameraStreamService _stream;
 
     public HostActivityService(SequenceEngine sequence,
@@ -53,6 +54,7 @@ public class HostActivityService {
                                LiveStackingService liveStack,
                                VideoRecordingService video,
                                AutoFocusService autoFocus,
+                               NINA.Polaris.Services.Focus.FilterFocusSweepService focusSweep,
                                CameraStreamService stream) {
         _sequence = sequence;
         _adv = adv;
@@ -60,6 +62,7 @@ public class HostActivityService {
         _liveStack = liveStack;
         _video = video;
         _autoFocus = autoFocus;
+        _focusSweep = focusSweep;
         _stream = stream;
     }
 
@@ -75,6 +78,14 @@ public class HostActivityService {
             if (_liveCapture.IsRunning) busy.Add("the LIVE capture loop");
             if (_liveStack.IsRunning) busy.Add("live stacking");
             if (_autoFocus.State != AutoFocusState.Idle) busy.Add("auto-focus");
+            // A per-filter run counts while it is going AND while its results
+            // are still unapplied: those points cost real sky time and a
+            // restart would throw them away, which is exactly what this class
+            // is for. Between filters auto-focus above reads Idle, so this is
+            // not covered by it.
+            if (_focusSweep.State != NINA.Polaris.Services.Focus.FilterFocusSweepState.Idle
+                    || _focusSweep.HasPendingResults)
+                busy.Add("a per-filter focus run");
             // The stream is last and is the one soft entry: losing it costs a
             // click, not data. It is listed because a restart DOES kill it and
             // the operator should not be surprised.

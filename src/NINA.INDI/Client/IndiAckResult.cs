@@ -15,17 +15,17 @@
 namespace NINA.INDI.Client;
 
 /// <summary>Result of an ack-based property write (SetNumberAsyncAck /
-/// SetSwitchAsyncAck). INDI is a fire-and-forget XML protocol — the
+/// SetSwitchAsyncAck). INDI is a fire-and-forget XML protocol, the
 /// server never replies with a per-write status code. Instead, after
 /// the client sends a <c>newNumberVector</c> / <c>newSwitchVector</c>,
 /// the driver echoes back a <c>set*Vector</c> with the property's new
 /// <c>state</c>:
 ///
 /// <list type="bullet">
-///   <item><c>Busy</c> — driver accepted the command and is working on
+///   <item><c>Busy</c>, driver accepted the command and is working on
 ///     it (e.g. mount is slewing, focuser is moving).</item>
-///   <item><c>Ok</c> — driver acted instantly (e.g. tracking toggle).</item>
-///   <item><c>Alert</c> — driver rejected the command. The
+///   <item><c>Ok</c>, driver acted instantly (e.g. tracking toggle).</item>
+///   <item><c>Alert</c>, driver rejected the command. The
 ///     <c>message="..."</c> attribute usually explains why.</item>
 /// </list>
 ///
@@ -36,7 +36,7 @@ namespace NINA.INDI.Client;
 /// probably wedged".
 ///
 /// This was added based on the NINA PINS pattern (NINA.INDI/Devices/
-/// INDIDevice.cs:203-262 in that fork) — our previous
+/// INDIDevice.cs:203-262 in that fork), our previous
 /// fire-and-forget SetNumberAsync had a race where IsSlewing could
 /// read the property's previous Ok state before the driver flipped
 /// it to Busy, making slews appear to finish instantly.</summary>

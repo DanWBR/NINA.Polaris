@@ -19,7 +19,7 @@ namespace NINA.Image.ImageAnalysis.AutoFocus;
 /// mean star HFR) and its 1-sigma uncertainty (ErrorY). Every fit in this
 /// folder weights samples by 1/ErrorY², which is the mechanism that unifies
 /// outlier handling: a sample with no detected stars is stored as
-/// (X, 0, 1000) so its weight is ~1e-6 — effectively ignored by the fits
+/// (X, 0, 1000) so its weight is ~1e-6, effectively ignored by the fits
 /// while still participating in the sweep planner's termination logic.
 /// Callers floor ErrorY at 0.001 so the weight never divides by zero.
 ///

@@ -119,7 +119,7 @@ public class EquipmentManager : IDisposable {
         CameraDriver = driver;
         CameraDeviceId = deviceId;
         // Defensive: if this device was previously the guide camera its
-        // CCD_EXPOSURE writes were demoted to Debug — the imaging camera's
+        // CCD_EXPOSURE writes were demoted to Debug, the imaging camera's
         // frame requests should log normally again.
         if (driver == "indi") _indiClient.SetQuietGuideLogging(deviceId, false);
         _logger.LogInformation("Camera selected: driver={Driver}, id={DeviceId}",
@@ -383,10 +383,19 @@ public class EquipmentManager : IDisposable {
         // SVBony native USB SDK. Cross-platform (Linux arm64/x64 + Windows
         // x64); bypasses INDI for high-fps planetary video. Available when
         // the bundled native lib loads on this host/arch.
+        var svbAvailable = NINA.Camera.SvbonySdk.SvbonyRegistry.IsAvailable;
+        // When the SDK is held back deliberately, say so here rather than
+        // letting the driver disappear with no explanation. The one reason
+        // that exists is a missing libusb, and the SDK would take the whole
+        // server down rather than fail politely, so being absent is the
+        // correct outcome and the operator still deserves the sentence.
+        var svbWhy = NINA.Camera.SvbonySdk.SvbonyRegistry.UnavailableReason;
         list.Add(new("svbony-sdk", "SVBony (SDK, native)",
-            Available: NINA.Camera.SvbonySdk.SvbonyRegistry.IsAvailable,
-            Description: "SVBony cameras via the native USB SDK. Direct, " +
-                "low-overhead path for high-fps video (bypasses INDI)."));
+            Available: svbAvailable,
+            Description: svbWhy != null
+                ? "SVBony cameras via the native USB SDK. Unavailable: " + svbWhy
+                : "SVBony cameras via the native USB SDK. Direct, " +
+                  "low-overhead path for high-fps video (bypasses INDI)."));
         // ZWO ASI native USB SDK. Cross-platform; the high-fps path for ZWO
         // planetary cameras (ASI462/678 etc).
         list.Add(new("zwo-sdk", "ZWO ASI (SDK, native)",
@@ -738,7 +747,7 @@ public class EquipmentManager : IDisposable {
                     ? $"ASCOM-over-HTTP mounts. {_alpacaCache.ByType("Telescope").Count} discovered."
                     : "Run Alpaca Discover in RIGS first to populate this list."),
             new("synscan-wifi", "Sky-Watcher SynScan (Wi-Fi UDP)", Available: true,
-                Description: "Direct UDP to AZ-GTi / EQ6-R Pro / EQ8-R Pro / AllView / GoTo Dob (port 11880). Likely also drives ZWO AM5N / AM7 in SynScan-compat mode. Device id format: host[:port], defaults to 192.168.4.1:11880 (factory AP)."),
+                Description: "Direct UDP to the mount's own Wi-Fi (AZ-GTi, or the SynScan Wi-Fi adapter on EQ6-R Pro / EQ8-R Pro / AZ-EQ6), Sky-Watcher motor protocol on port 11880. Equatorial mode only: an AZ-GTi must be in EQ mode on a wedge. Disconnect the SynScan App first. Device id format: host[:port], defaults to 192.168.4.1:11880 (factory AP)."),
             new("sim", "Simulator", Available: true,
                 Description: "Built-in simulated GEM mount with pulse-guide support. Pair with the Simulator camera to test the native guider offline."),
             new("nexstar-wifi", "Celestron NexStar (Wi-Fi TCP)", Available: false,
@@ -877,7 +886,7 @@ public class EquipmentManager : IDisposable {
         // self-relaunched child (DriverAccess on an STA + message pump). An old
         // WinForms/.NET driver that fast-fails on connect inside the loaded
         // server process connects fine in the clean child, and if it crashes
-        // anyway only the child dies — the server surfaces a clean error and
+        // anyway only the child dies, the server surfaces a clean error and
         // stays up. Zero extra packaging (the child is this same exe).
         return new NINA.Ascom.Com.AscomComFilterWheelHosted(progId);
     }
@@ -971,6 +980,11 @@ public class EquipmentManager : IDisposable {
             status["camera"] = new {
                 name = Camera.DeviceName,
                 connected = Camera.IsConnected,
+                // Set when the adapter dropped the link on its own (the SDK
+                // reported the device removed, or raised a disconnect event).
+                // Null on a healthy camera and after a deliberate disconnect,
+                // so the client can tell "you unplugged it" from "it fell off".
+                disconnectReason = Camera.DisconnectReason,
                 state = Camera.State.ToString(),
                 temperature = Safe(Camera.Temperature),
                 coolerOn = Camera.CoolerOn,
@@ -1156,6 +1170,11 @@ public class EquipmentManager : IDisposable {
             // (EffectiveFilterWheel) and only pushing into the driver when it
             // accepts them. So the edit surface is offered whenever a wheel is
             // connected, not just for INDI's writable FILTER_NAME vector.
+            var fwBackend = (FilterWheel as EffectiveFilterWheel)?.Inner as NINA.INDI.Devices.IndiFilterWheel;
+            var fwRange = fwBackend?.SlotRange ?? (0, 0);
+            var fwNames = FilterWheel.FilterNames ?? Array.Empty<string>();
+            var fwVerdict = FilterWheelHealth.Judge(
+                FilterWheel.Position, fwRange.Min, fwRange.Max, fwNames.Length);
             status["filterWheel"] = new {
                 name = FilterWheel.DeviceName,
                 connected = FilterWheel.IsConnected,
@@ -1163,6 +1182,24 @@ public class EquipmentManager : IDisposable {
                 currentFilter = FilterWheel.CurrentFilterName,
                 filters = FilterWheel.FilterNames,
                 moving = FilterWheel.IsMoving,
+                // What the DRIVER says the wheel has, and the names the rig
+                // configured that there was no slot for. A wheel that
+                // misreports its own slot count (an 8-position EFW claiming 4)
+                // used to look exactly like a correctly reported small wheel.
+                slotCount = (FilterWheel as EffectiveFilterWheel)?.SlotCount
+                            ?? FilterWheel.FilterNames.Length,
+                namesBeyondSlots = (FilterWheel as EffectiveFilterWheel)?.NamesBeyondSlots
+                                   ?? Array.Empty<string>(),
+                // The driver's own slot range, and the two states where the
+                // number on screen would otherwise be a lie: a wheel that does
+                // not know where it is, and a slot count that disagrees with the
+                // names. Only INDI publishes a range; 0 means it did not say.
+                slotMin = fwRange.Min,
+                slotMax = fwRange.Max,
+                needsCalibration = fwVerdict.NeedsCalibration,
+                namesShortOfSlots = fwVerdict.NamesShortOfSlots,
+                healthMessage = fwVerdict.Message,
+                supportsCalibrate = fwBackend?.SupportsCalibration == true,
                 capabilities = new {
                     editNames = true
                 }
@@ -1181,6 +1218,14 @@ public class EquipmentManager : IDisposable {
         }
 
         if (Switch != null) {
+            // Same channel shape as GET /api/switch/status, deliberately: the
+            // RIGS panel reads its channels from THIS block, not from the REST
+            // one, and every field the panel needs has to be here. Key and
+            // displayName were missing, so the panel bound every rename box to
+            // channels[undefined] (one shared slot: typing in one row filled
+            // them all) and could never show an operator-assigned name.
+            var switchNames = _profiles?.ActiveEquipmentProfile?.SwitchChannelNames
+                              ?? new Dictionary<string, string>();
             status["powerBox"] = new {
                 name = Switch.DeviceName,
                 connected = Switch.IsConnected,
@@ -1188,6 +1233,13 @@ public class EquipmentManager : IDisposable {
                 channels = Switch.Channels.Select(c => new {
                     id = c.Id,
                     name = c.Name,
+                    // Stable identity (PROPERTY.ELEMENT over INDI): what names
+                    // are stored against, and what a write addresses.
+                    key = c.Key,
+                    displayName = (!string.IsNullOrEmpty(c.Key)
+                                   && switchNames.TryGetValue(c.Key, out var friendly)
+                                   && !string.IsNullOrWhiteSpace(friendly))
+                                  ? friendly : c.Name,
                     boolean = c.Boolean,
                     value = Safe(c.Value),
                     min = Safe(c.Min),
@@ -1200,7 +1252,10 @@ public class EquipmentManager : IDisposable {
                     selected = c.Selected,
                     // Physical-port group (-1 = ungrouped), so the UI can gather
                     // a port's role/outlet/dew channels under one heading.
-                    group = c.Group
+                    group = c.Group,
+                    // Read-only channel == a measurement (input voltage, current
+                    // draw, temperature, dew point), not an outlet to flip.
+                    sensor = !c.Writable
                 }).ToList()
             };
         }
@@ -1212,7 +1267,8 @@ public class EquipmentManager : IDisposable {
                 lightOn = FlatDevice.IsLightOn,
                 brightness = FlatDevice.Brightness,
                 coverOpen = FlatDevice.IsCoverOpen,
-                coverMoving = FlatDevice.IsCoverMoving
+                coverMoving = FlatDevice.IsCoverMoving,
+                hasCover = FlatDevice.HasCover
             };
         }
 

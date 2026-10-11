@@ -1,8 +1,8 @@
 /* ───────────────────────────────────────────────────────────────────────
-   14-uiscale-text.css — gentle (half-rate) text scaling under UI zoom.
+   14-uiscale-text.css, gentle (half-rate) text scaling under UI zoom.
 
-   The UI-scale slider applies `body { zoom: z }`, which scales EVERYTHING —
-   including prominent prose/titles — by z. When the operator shrinks the UI to
+   The UI-scale slider applies `body { zoom: z }`, which scales EVERYTHING,
+   including prominent prose/titles, by z. When the operator shrinks the UI to
    fit more on screen, those large texts can get smaller than we'd like.
 
    These blocks instead scale at HALF the rate: their net size = (1 + z) / 2
@@ -12,14 +12,14 @@
    from applyUiZoom()/resetUiZoom() in app.js; the fallback keeps this inert if
    it's ever missing.
 
-   Using `zoom` (not font-size) keeps this base-agnostic — many of these texts
-   inherit their size rather than declaring one — and nothing else sets `zoom`
+   Using `zoom` (not font-size) keeps this base-agnostic, many of these texts
+   inherit their size rather than declaring one, and nothing else sets `zoom`
    on them, so there are no cascade surprises. Loaded last. */
 :root {
     --text-rescale: calc((1 + var(--ui-zoom, 1)) / (2 * var(--ui-zoom, 1)));
 }
 
-/* Hints have no base size of their own — they inherit the panel's, which is
+/* Hints have no base size of their own, they inherit the panel's, which is
    too large for secondary help text (e.g. the "How TPPA works…" blurb). Give
    them a smaller default. Context-specific `.x .hint` rules (higher
    specificity) still win where they tune it. */

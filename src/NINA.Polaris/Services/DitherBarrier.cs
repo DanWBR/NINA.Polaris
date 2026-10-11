@@ -31,7 +31,7 @@ public sealed record DitherParams(
 /// <list type="number">
 /// <item>every imaging capture loop registers as a participant and reports its
 /// sub length;</item>
-/// <item>the <b>slowest</b> participant (longest sub) owns the dither cadence —
+/// <item>the <b>slowest</b> participant (longest sub) owns the dither cadence,
 /// it drives "every N frames", so the fast camera is never stalled waiting for a
 /// dither it did not ask for;</item>
 /// <item>when a dither is due the barrier waits (bounded) for every other
@@ -40,7 +40,7 @@ public sealed record DitherParams(
 /// </list>
 ///
 /// The barrier only takes over when it actually owns dithering
-/// (<see cref="OwnsDither"/> — sync enabled AND at least two imaging cameras
+/// (<see cref="OwnsDither"/>, sync enabled AND at least two imaging cameras
 /// active). With a single imaging camera it is inert and every loop keeps its
 /// existing per-loop dither exactly as before, so single-rig behavior does not
 /// change. The DITHERGATE invariant is preserved: a skipped dither (guider not
@@ -74,6 +74,31 @@ public sealed class DitherBarrier {
 
     // Live state for the status contributor.
     public bool RoundActive { get { lock (_lock) return _roundActive; } }
+    /// <summary>The settle tolerance actually used, which can never be as large
+    /// as the dither itself.
+    ///
+    /// A dither displaces the star by <paramref name="ditherPixels"/> and the
+    /// settle then waits for the error to fall back under the tolerance. Set
+    /// the tolerance to the dither distance and the wait is satisfied the
+    /// instant the dither lands: the guider resumes with the star still off
+    /// target, and with a deadband of its own it may never pull it back. Every
+    /// settle reports "done", nothing is ever reported lost, and the operator
+    /// watches a star that sits away from the crosshair and wanders.
+    ///
+    /// That shipped: the live-stack and sequencer configs defaulted the
+    /// tolerance to 3 px while this record's own default pairs 5 px of dither
+    /// with 1.5. A rig that lowered its dither to 3 px and left the tolerance
+    /// at 3 (FRA400 on a 120 mm guide scope, 6.4 arcsec/px, 2026-09-21) was
+    /// dithering 19 arcsec every third frame and calling it settled with the
+    /// star anywhere inside that circle.
+    ///
+    /// Half the dither, and at least half a pixel so a tiny dither still has a
+    /// usable target.</summary>
+    internal static double EffectiveSettlePixels(double ditherPixels, double settlePixels) {
+        double cap = Math.Max(0.5, Math.Abs(ditherPixels) / 2.0);
+        return settlePixels <= 0 ? cap : Math.Min(settlePixels, cap);
+    }
+
     public bool Dithering { get; private set; }
 
     public DitherBarrier(ActiveGuiderProvider guiders, ILogger<DitherBarrier> logger) {
@@ -152,7 +177,7 @@ public sealed class DitherBarrier {
 
     /// <summary>Call right after a sub completes. Updates this participant's sub
     /// length; if the barrier owns dithering and this participant is the cadence
-    /// owner (slowest), advances the round counter and — when a dither is due —
+    /// owner (slowest), advances the round counter and, when a dither is due,
     /// runs one synchronized dither for all cameras. Returns immediately for
     /// non-owners and single-camera rigs.</summary>
     public async Task AfterSubAsync(string id, double subSeconds, CancellationToken ct = default) {
@@ -233,7 +258,7 @@ public sealed class DitherBarrier {
     private async Task<bool> DoGuiderDitherAsync(DitherParams p, CancellationToken ct) {
         var g = _guiders.Active;
         if (g == null || !g.IsConnected || !g.IsGuiding) {
-            _logger.LogInformation("DitherBarrier: dither skipped — guider not guiding; retries on the next round.");
+            _logger.LogInformation("DitherBarrier: dither skipped, guider not guiding; retries on the next round.");
             return false;
         }
         Dithering = true;
@@ -243,7 +268,13 @@ public sealed class DitherBarrier {
         try {
             _logger.LogInformation("DitherBarrier: synchronized dither {Px}px (raOnly={Ra}, backend={Backend})",
                 p.Pixels, p.RaOnly, g.Backend);
-            await g.DitherAsync(p.Pixels, p.RaOnly, p.SettlePixels, p.SettleTime, p.SettleTimeout, ct)
+            double settlePx = EffectiveSettlePixels(p.Pixels, p.SettlePixels);
+            if (settlePx < p.SettlePixels) {
+                _logger.LogInformation(
+                    "DitherBarrier: settle tolerance {Asked}px is not usable for a {Px}px dither; "
+                    + "using {Used}px", p.SettlePixels, p.Pixels, settlePx);
+            }
+            await g.DitherAsync(p.Pixels, p.RaOnly, settlePx, p.SettleTime, p.SettleTimeout, ct)
                 .ConfigureAwait(false);
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(TimeSpan.FromSeconds(p.SettleTimeout + 5));

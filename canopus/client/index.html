@@ -142,7 +142,7 @@
   let price = 'US$4.99/mo';
   let trialDays = 0;
   let pollTimer = null;
-  let assistantTier = 'cloud';   // 'cloud' | 'sbc' | 'device' — for the gear-menu backend hint
+  let assistantTier = 'cloud';   // 'cloud' | 'sbc' | 'device', for the gear-menu backend hint
 
   // ---- i18n (English source string = key) ----
   const STRINGS = {
@@ -298,14 +298,14 @@
     booted = true;
     try {
       const m = await fetch(BASE + '/api/manifest').then(r => r.json());
-      // Local tier (SBC / on-device): free, no accounts, no billing — the server
+      // Local tier (SBC / on-device): free, no accounts, no billing, the server
       // has no /account surface, so skip the sign-in/subscribe gate entirely and
       // go straight to the chat.
       if (m && m.tier === 'local') { assistantTier = 'sbc'; return enterChat(); }
       if (m && m.subscription) { if (m.subscription.priceDisplay) price = m.subscription.priceDisplay; trialDays = m.subscription.trialDays || 0; }
     } catch (_) {}
 
-    // Magic-link return: #verify=<token>. Do NOT auto-verify on load — the
+    // Magic-link return: #verify=<token>. Do NOT auto-verify on load, the
     // token is single-use and email link-scanners (Gmail, corporate proxies)
     // pre-fetch the URL and run the page, which would burn the token before the
     // user ever clicks. Show a Complete-sign-in button; only a real click
@@ -324,7 +324,7 @@
         // Standalone tab (the magic-link opened from the email in a fresh
         // window): its only job was to complete sign-in. The real assistant
         // runs embedded inside Polaris, so don't render a half-working chat or
-        // checkout here — confirm success and send the user back to Polaris.
+        // checkout here, confirm success and send the user back to Polaris.
         if (!embedded) return showSignedIn(r.json.email);
         if (r.json.subscribed) return enterChat();
         return showSubscribe(r.json.email);
@@ -660,7 +660,7 @@
   // Route an outbound message to the in-browser agent or the WS server agent.
   function sendToAgent(m) { if (agent) agent.onMessage(m); else wsSend(m); }
 
-  // Render one message FROM the agent — same handling whether it arrived over the
+  // Render one message FROM the agent, same handling whether it arrived over the
   // WebSocket (cloud/SBC) or from the in-browser agent (device).
   function handleAgentMessage(m) {
     switch (m.type) {
@@ -669,7 +669,7 @@
       case 'plan': clearStatus(); renderPlan(m); break;
       case 'question': clearStatus(); renderQuestion(m); break;
       case 'tool-call':
-        // Hide the raw API call — show a playful "working" line instead.
+        // Hide the raw API call, show a playful "working" line instead.
         setStatus(m.responseType === 'image' ? '📷 ' + playful() : playful());
         postParent({ v: V, type: 'assistant:tool-call', id: m.id, method: m.method, path: m.path, query: m.query, body: m.body, responseType: m.responseType });
         break;
@@ -761,7 +761,7 @@
     beNote.textContent = T('To change the backend, open Polaris Settings → Assistant (under AI Tools).');
     gearMenu.appendChild(beNote);
 
-    // Local tiers (SBC / on-device) are free and account-less — the rest of the
+    // Local tiers (SBC / on-device) are free and account-less, the rest of the
     // menu (billing, account, legal) is cloud-only, so stop here for them.
     if (assistantTier !== 'cloud') return;
     gearMenu.appendChild(sep());
@@ -859,9 +859,9 @@
 
   sys('Loading…');
   // Embedded in the Polaris host iframe: announce readiness and wait for
-  // host:init (which calls boot with locale + host UI). Opened standalone —
+  // host:init (which calls boot with locale + host UI). Opened standalone,
   // e.g. the magic-link sign-in URL clicked from the email, which lands in a
-  // fresh tab with no parent — there is no host to init us, so boot directly;
+  // fresh tab with no parent, there is no host to init us, so boot directly;
   // otherwise the page just sat blank. A fallback also boots if an embedding
   // host never sends host:init, so the deep link can't dead-end either.
   embedded = !!(window.parent && window.parent !== window);

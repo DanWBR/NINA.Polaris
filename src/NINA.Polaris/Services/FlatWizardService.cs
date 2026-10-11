@@ -111,7 +111,7 @@ public class FlatWizardService {
     /// Falls back to the legacy gain-less key so caches written before
     /// gain became part of the key still seed the search.
     ///
-    /// NOTE: callers should treat this as a SEED, not a truth — panel
+    /// NOTE: callers should treat this as a SEED, not a truth, panel
     /// brightness changes between sessions, so a cached value must be
     /// validated with a probe frame (AutoFindExposureAsync does exactly
     /// that: it seeds from this cache and its first iteration confirms
@@ -125,7 +125,7 @@ public class FlatWizardService {
     }
 
     /// <summary>Cache key for a trained flat exposure. Gain is part of the
-    /// key when known — the same panel needs a very different exposure at
+    /// key when known, the same panel needs a very different exposure at
     /// gain 0 vs gain 300, so a gain-less hit poisons the whole flat set.</summary>
     private static string TrainedKey(string? filter, int binning, int? gain) {
         var key = $"{filter ?? ""}_bin{Math.Max(1, binning)}";
@@ -162,7 +162,7 @@ public class FlatWizardService {
 
         // Seed: a previously-trained value if we have one, otherwise a cheap
         // 0.5 s probe. Flats are in the camera's linear regime, so the median
-        // scales ~linearly with exposure — a proportional step (below) lands
+        // scales ~linearly with exposure, a proportional step (below) lands
         // on target in 2-3 frames, and starting short keeps each probe fast
         // (the old midpoint seed of ~15 s made every iteration crawl).
         var key = TrainedKey(filter, binning, gain);
@@ -207,7 +207,7 @@ public class FlatWizardService {
 
             var next = NextFlatExposure(exposure, median, targetAdu, maxVal, minExposure, maxExposure);
             // next == exposure means we're pinned at a clamp boundary and still
-            // off target — this panel/light level can't reach the target ADU
+            // off target, this panel/light level can't reach the target ADU
             // within [min, max], so give up rather than spin forever.
             if (Math.Abs(next - exposure) < 1e-4) {
                 _logger.LogWarning(
@@ -232,9 +232,9 @@ public class FlatWizardService {
                                            int maxVal, double min, double max) {
         double next;
         if (median < 1) {
-            next = exp * 4;                       // essentially dark — climb fast
+            next = exp * 4;                       // essentially dark, climb fast
         } else if (median >= 0.97 * maxVal) {
-            next = exp * 0.5;                     // saturated — back off hard
+            next = exp * 0.5;                     // saturated, back off hard
         } else {
             double ratio = Math.Clamp(target / median, 0.25, 4.0);
             next = exp * ratio;

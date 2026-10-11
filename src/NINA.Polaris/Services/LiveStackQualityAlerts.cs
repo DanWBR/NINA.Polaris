@@ -20,12 +20,12 @@ namespace NINA.Polaris.Services;
 /// describes:
 /// <list type="bullet">
 /// <item><b>Clouds / sky glow</b>: the per-frame SNR falls away while HFR stays
-/// put — light is being lost, not focus.</item>
+/// put, light is being lost, not focus.</item>
 /// <item><b>Focus drift</b>: HFR climbs across recent frames while the stack
-/// stops gaining SNR — the stars are bloating.</item>
+/// stops gaining SNR, the stars are bloating.</item>
 /// </list>
 /// A healthy stack has per-frame SNR roughly steady (cumulative rising ~√N) and
-/// HFR flat. Pure functional helper over the quality series — no state, fully
+/// HFR flat. Pure functional helper over the quality series, no state, fully
 /// testable; the caller throttles + surfaces the alert as a toast.
 /// </summary>
 public static class LiveStackQualityAlerts {

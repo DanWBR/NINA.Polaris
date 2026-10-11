@@ -58,7 +58,7 @@ public class AlpacaClient {
         return resp == null ? default : resp.Value;
     }
 
-    /// <summary>GET variant for device verbs that take query parameters —
+    /// <summary>GET variant for device verbs that take query parameters,
     /// e.g. the ISwitchV2 endpoints (<c>getswitchvalue?Id=n</c>). The plain
     /// <see cref="GetAsync{T}(string, CancellationToken)"/> owns the query
     /// string (it appends <c>?ClientID=…</c>), so extra params must be woven

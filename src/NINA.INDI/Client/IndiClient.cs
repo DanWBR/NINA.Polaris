@@ -35,7 +35,7 @@ public class IndiClient : IDisposable {
     /// <summary>Diagnostic logger for write tracing. Defaults to
     /// NullLogger so existing call sites that don't pass one keep
     /// working unchanged. When set (NINA.Polaris wires it through),
-    /// every Set*Async logs the exact XML being sent — DBGLOG-2
+    /// every Set*Async logs the exact XML being sent, DBGLOG-2
     /// mirrors that into the LOG panel, so the operator can see
     /// whether an INDI write actually went out and (by comparing with
     /// the device's PropertyChanged event right after) whether the
@@ -72,7 +72,7 @@ public class IndiClient : IDisposable {
     /// the driver delivering a BLOB (the classic "wedged driver" symptom:
     /// e.g. indi_asi_ccd dropping the CCD1 BLOB after a mid-exposure event).
     /// The argument is the INDI device name. A reconnect usually does NOT
-    /// clear this — the driver process itself needs restarting — so a
+    /// clear this, the driver process itself needs restarting, so a
     /// consumer (the driver watchdog) can decide to restart the driver.</summary>
     public event Action<string>? BlobTimeout;
 
@@ -94,8 +94,10 @@ public class IndiClient : IDisposable {
             // (e.g. gphoto "Error: ... PTP I/O Error", "Bulb capture failed").
             // Surface them in the debug log so a failed capture shows the
             // driver's own reason instead of just a client-side timeout.
-            if (!string.IsNullOrWhiteSpace(msg))
+            if (!string.IsNullOrWhiteSpace(msg)) {
                 DiagLogger.LogInformation("INDI MSG ← {Device}: {Message}", dev, msg);
+                RememberDriverMessage(dev, msg);
+            }
             MessageReceived?.Invoke(dev, msg);
         };
 
@@ -109,9 +111,46 @@ public class IndiClient : IDisposable {
 
     private readonly ConcurrentDictionary<string, bool> _lastConnectionState = new();
 
+    // ----- driver <message> retention -----
+    //
+    // A driver that refuses a CONNECT says why in a <message>, not in the
+    // CONNECTION vector: the ZWO AM5 names the serial port it could not
+    // open, indi_gphoto prints "Camera open error (-53): Could not claim
+    // the USB device". Those lines only ever reached the log, so a camera
+    // that would not connect looked like a silent no-op in the UI. Keeping
+    // the last few per device lets the connect path quote the driver.
+    private const int DriverMessageHistory = 4;
+    private readonly ConcurrentDictionary<string, List<(DateTime At, string Text)>> _driverMessages = new();
+
+    internal void RememberDriverMessage(string device, string message) {
+        if (string.IsNullOrWhiteSpace(device)) return;
+        var list = _driverMessages.GetOrAdd(device, _ => new List<(DateTime, string)>());
+        lock (list) {
+            list.Add((DateTime.UtcNow, message.Trim()));
+            if (list.Count > DriverMessageHistory) list.RemoveRange(0, list.Count - DriverMessageHistory);
+        }
+    }
+
+    /// <summary>The driver's own words about what it is doing wrong, when
+    /// they are fresh enough to be about the operation we just asked for.
+    /// An [ERROR] tagged line wins over plain chatter: indi_gphoto follows
+    /// its error with a friendlier hint, and the error carries the code
+    /// that identifies the fault.</summary>
+    public string? RecentDriverMessage(string device, TimeSpan maxAge) {
+        if (!_driverMessages.TryGetValue(device, out var list)) return null;
+        var cutoff = DateTime.UtcNow - maxAge;
+        lock (list) {
+            var fresh = list.Where(m => m.At >= cutoff).ToList();
+            if (fresh.Count == 0) return null;
+            var err = fresh.LastOrDefault(m =>
+                m.Text.Contains("error", StringComparison.OrdinalIgnoreCase));
+            return err.Text is { Length: > 0 } tagged ? tagged : fresh[^1].Text;
+        }
+    }
+
     /// <summary>Devices WE deliberately connected and have not deliberately
     /// disconnected. Lets us tell a spurious drop (driver died on its own) from
-    /// an operator/app disconnect, which otherwise look identical on the wire —
+    /// an operator/app disconnect, which otherwise look identical on the wire,
     /// both are just CONNECTION.CONNECT going false.</summary>
     private readonly ConcurrentDictionary<string, byte> _shouldBeConnected =
         new(StringComparer.OrdinalIgnoreCase);
@@ -119,7 +158,7 @@ public class IndiClient : IDisposable {
     /// <summary>Raised when a device we connected reports DISCONNECT without us
     /// asking. The SV405CC's INDI driver does this mid-session for no visible
     /// reason (field report): the driver PROCESS stays alive, so the driver
-    /// watchdog — which only restarts dead/wedged drivers — never noticed, and
+    /// watchdog, which only restarts dead/wedged drivers, never noticed, and
     /// capture silently stopped until the operator hit Connect in RIGS by hand.
     /// Subscribed by IndiDriverWatchdogService, which owns the reconnect policy
     /// (rate limits + notifications).</summary>
@@ -146,11 +185,11 @@ public class IndiClient : IDisposable {
         // The CONNECT transition has been handled here since day one; the
         // DISCONNECT one was never wired, so a driver that dropped its device
         // mid-session did so silently. Only report drops for devices we asked to
-        // be connected and never asked to disconnect — otherwise a deliberate
+        // be connected and never asked to disconnect, otherwise a deliberate
         // disconnect would look identical and we'd fight the operator.
         if (!nowConnected && wasConnected && _shouldBeConnected.ContainsKey(device)) {
             DiagLogger.LogWarning(
-                "INDI device '{Device}' reported DISCONNECT but we never asked — spurious drop. "
+                "INDI device '{Device}' reported DISCONNECT but we never asked, spurious drop. "
                 + "The driver process is likely still alive (so the driver watchdog won't fire); "
                 + "handing off to the connection watchdog to reconnect.", device);
             try { DeviceConnectionLost?.Invoke(device); } catch { /* subscriber must not break the read loop */ }
@@ -252,7 +291,7 @@ public class IndiClient : IDisposable {
     /// TCP connection. Clears the cached Devices snapshot + reissues
     /// <c>getProperties</c>. Use this when the user knows indiserver's
     /// driver set changed (e.g. unloaded a driver from indi-web) but
-    /// the TCP socket is still up — the socket alone doesn't tell us
+    /// the TCP socket is still up, the socket alone doesn't tell us
     /// the inventory changed, and well-behaved drivers don't always
     /// send the spec-mandated &lt;delProperty&gt; on shutdown.</summary>
     public async Task RefreshDevicesAsync(CancellationToken ct = default) {
@@ -375,7 +414,7 @@ public class IndiClient : IDisposable {
     // Ack-based property writes (INDIROB-1, ported from NINA PINS
     // pattern at NINA.INDI/Devices/INDIDevice.cs:203-262 in that fork).
     //
-    // INDI is fire-and-forget — the server never replies to a write
+    // INDI is fire-and-forget, the server never replies to a write
     // with a status code. Instead it echoes back a set*Vector whose
     // `state` attribute tells the client how the driver reacted:
     //
@@ -384,7 +423,7 @@ public class IndiClient : IDisposable {
     //   state=Alert  driver rejected (message="..." explains why)
     //
     // The plain SetNumberAsync / SetSwitchAsync wrappers above return
-    // as soon as the bytes are on the wire — fine for "stream to disk"
+    // as soon as the bytes are on the wire, fine for "stream to disk"
     // style writes but disastrous for slew / move / sync flows because
     // the caller has no way to know whether the driver even saw the
     // command. Worse: IsSlewing (which reads `prop.State == Busy`) can
@@ -394,7 +433,7 @@ public class IndiClient : IDisposable {
     // The *Ack variants below subscribe to PropertyChanged for one
     // shot before sending the write, then wait for the matching
     // device+property to come back with Busy/Ok (acknowledged) or
-    // Alert (rejected). Timeout defaults to 5s — INDI drivers typically
+    // Alert (rejected). Timeout defaults to 5s, INDI drivers typically
     // ack in <100ms, so 5s is comfortable headroom for slow USB-serial
     // links or congested networks without making the user wait forever
     // when the driver is wedged.
@@ -471,7 +510,7 @@ public class IndiClient : IDisposable {
         _shouldBeConnected[device] = 1;
         if (GetSwitch(device, "CONNECTION", "CONNECT")) {
             DiagLogger.LogInformation(
-                "INDI device '{Device}' CONNECTION.CONNECT already true — skipping redundant CONNECT (avoids 30s no-reply hang on shared drivers)",
+                "INDI device '{Device}' CONNECTION.CONNECT already true, skipping redundant CONNECT (avoids 30s no-reply hang on shared drivers)",
                 device);
             return;
         }
@@ -481,8 +520,86 @@ public class IndiClient : IDisposable {
                 device, delayMs);
             await Task.Delay(delayMs, ct);
         }
-        await SetSwitchAsync(device, "CONNECTION",
-            new Dictionary<string, bool> { ["CONNECT"] = true, ["DISCONNECT"] = false }, ct);
+        var outcome = await AwaitConnectOutcomeAsync(device, () => SetSwitchAsync(device, "CONNECTION",
+            new Dictionary<string, bool> { ["CONNECT"] = true, ["DISCONNECT"] = false }, ct),
+            ConnectOutcomeTimeout, ct);
+
+        if (outcome.Refused) {
+            // The driver said no. Quote it, because the reason is the whole
+            // story: a USB claim, a serial port that moved, a body in the
+            // wrong mode. Throwing here is what puts it in front of the
+            // operator instead of leaving a 200 OK and a device that never
+            // came up.
+            _shouldBeConnected.TryRemove(device, out _);
+            var reason = ConnectRefusalReason(device, outcome.AlertMessage);
+            DiagLogger.LogWarning("INDI device '{Device}' refused CONNECT: {Reason}", device, reason);
+            throw new InvalidOperationException(
+                IndiConnectDiagnostics.RefusalMessage(device, reason));
+        }
+        if (!outcome.Connected) {
+            // No terminal answer inside the window. Deliberately not an
+            // error: shared drivers (one process serving several devices)
+            // can stay quiet on a CONNECT that nonetheless works, and
+            // callers already poll IsConnected.
+            DiagLogger.LogWarning(
+                "INDI device '{Device}': no CONNECTION outcome within {Sec:n0}s, carrying on",
+                device, ConnectOutcomeTimeout.TotalSeconds);
+        }
+    }
+
+    /// <summary>How long a CONNECT gets to resolve to connected or refused
+    /// before we stop waiting. Only ever spent on a device that is failing:
+    /// a working connect answers in well under a second.</summary>
+    public TimeSpan ConnectOutcomeTimeout { get; set; } = TimeSpan.FromSeconds(15);
+
+    /// <summary>Alert text plus the driver's own message, which are two
+    /// different things: the CONNECTION vector's message attribute is
+    /// often empty while the detail arrives as a separate &lt;message&gt;.</summary>
+    private string? ConnectRefusalReason(string device, string? alertMessage) {
+        var parts = new List<string>();
+        if (!string.IsNullOrWhiteSpace(alertMessage)) parts.Add(alertMessage!.Trim());
+        var driver = RecentDriverMessage(device, TimeSpan.FromSeconds(30));
+        if (!string.IsNullOrWhiteSpace(driver)
+                && (parts.Count == 0
+                    || !parts[0].Contains(driver!, StringComparison.OrdinalIgnoreCase)))
+            parts.Add(driver!);
+        return parts.Count == 0 ? null : string.Join(". ", parts);
+    }
+
+    /// <summary>Wait for a CONNECT to actually land. Unlike
+    /// <see cref="SendAndAwaitAckAsync"/> this cannot settle on the first
+    /// ack: a driver that is about to fail answers Busy first and only
+    /// then Alert, so stopping at the ack would call every refusal a
+    /// success. Terminal states are CONNECT=true (connected) and Alert
+    /// (refused); Busy and a bare Ok are "still working on it".</summary>
+    internal async Task<(bool Connected, bool Refused, string? AlertMessage)>
+        AwaitConnectOutcomeAsync(string device, Func<Task> send, TimeSpan timeout, CancellationToken ct) {
+        var tcs = new TaskCompletionSource<(bool, bool, string?)>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        void OnPropChanged(string evDevice, IndiProperty evProp) {
+            if (!string.Equals(evDevice, device, StringComparison.Ordinal)) return;
+            if (!string.Equals(evProp.Name, "CONNECTION", StringComparison.Ordinal)) return;
+            if (evProp is IndiSwitchProperty sw
+                    && sw.Values.TryGetValue("CONNECT", out var on) && on) {
+                tcs.TrySetResult((true, false, null));
+                return;
+            }
+            if (evProp.State == IndiPropertyState.Alert)
+                tcs.TrySetResult((false, true, evProp.Message));
+        }
+
+        PropertyChanged += OnPropChanged;
+        try {
+            await send();
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeoutCts.CancelAfter(timeout);
+            using var _ = timeoutCts.Token.Register(
+                () => tcs.TrySetResult((false, false, null)));
+            return await tcs.Task.ConfigureAwait(false);
+        } finally {
+            PropertyChanged -= OnPropChanged;
+        }
     }
 
     /// <summary>Mirror of <see cref="ConnectDeviceAsync"/> for the
@@ -491,12 +608,12 @@ public class IndiClient : IDisposable {
     /// redundant DISCONNECT that will hang.</summary>
     public async Task DisconnectDeviceAsync(string device, CancellationToken ct = default) {
         // Clear intent FIRST: the CONNECTION=false this write provokes must not
-        // be mistaken for a spurious drop and auto-reconnected — that would make
+        // be mistaken for a spurious drop and auto-reconnected, that would make
         // the device impossible to disconnect.
         _shouldBeConnected.TryRemove(device, out _);
         if (GetSwitch(device, "CONNECTION", "DISCONNECT")) {
             DiagLogger.LogInformation(
-                "INDI device '{Device}' CONNECTION.DISCONNECT already true — skipping redundant DISCONNECT",
+                "INDI device '{Device}' CONNECTION.DISCONNECT already true, skipping redundant DISCONNECT",
                 device);
             return;
         }
@@ -529,13 +646,13 @@ public class IndiClient : IDisposable {
     ///   no matching update within timeout                       → TimedOut
     /// Multiple concurrent ack waits on the same property are allowed;
     /// each gets a private TaskCompletionSource. We DON'T enforce that
-    /// the property must already exist in the device snapshot — some
+    /// the property must already exist in the device snapshot, some
     /// def*Vector / set*Vector cycles arrive interleaved during a fresh
     /// driver load, and the property is only added to Devices once the
     /// first def*Vector is parsed.
     ///
     /// Internal (not private) so unit tests can drive it with a
-    /// no-op send and fire PropertyChanged manually — exercises the
+    /// no-op send and fire PropertyChanged manually, exercises the
     /// ack logic without needing a real INDI server. Production
     /// callers go through the typed Set*AsyncAck wrappers above.</summary>
     internal async Task<IndiAckResult> SendAndAwaitAckAsync(string device, string property,
@@ -576,12 +693,12 @@ public class IndiClient : IDisposable {
     }
 
     // ====================================================================
-    // CONFIG_PROCESS — INDI's standard "save / load / default" mechanism.
+    // CONFIG_PROCESS, INDI's standard "save / load / default" mechanism.
     // Every well-behaved INDI driver advertises a CONFIG_PROCESS switch
     // vector with elements CONFIG_LOAD, CONFIG_SAVE, CONFIG_DEFAULT (and
     // sometimes CONFIG_PURGE). Driving these lets Polaris persist
     // per-driver settings across reconnects WITHOUT having to track every
-    // individual property ourselves — saved state lives in
+    // individual property ourselves, saved state lives in
     // ~/.indi/{driver}_config.xml under the indiserver process owner.
     //
     // Used by:
@@ -601,7 +718,7 @@ public class IndiClient : IDisposable {
 
     /// <summary>Send CONFIG_PROCESS=CONFIG_LOAD to the device. Returns
     /// false (without throwing) when the device doesn't advertise the
-    /// property — some minimal drivers omit it, and we don't want a
+    /// property, some minimal drivers omit it, and we don't want a
     /// connect path to fail because of that.</summary>
     public async Task<bool> LoadDeviceConfigAsync(string device, CancellationToken ct = default) {
         return await SetConfigProcessAsync(device, "CONFIG_LOAD", ct);
@@ -614,7 +731,7 @@ public class IndiClient : IDisposable {
     }
 
     /// <summary>Send CONFIG_PROCESS=CONFIG_DEFAULT (revert to driver
-    /// defaults). Operator-initiated only — never called automatically.</summary>
+    /// defaults). Operator-initiated only, never called automatically.</summary>
     public async Task<bool> ResetDeviceConfigAsync(string device, CancellationToken ct = default) {
         return await SetConfigProcessAsync(device, "CONFIG_DEFAULT", ct);
     }
@@ -627,7 +744,7 @@ public class IndiClient : IDisposable {
                 device);
             return false;
         }
-        // OneOfMany switch — build payload with only the requested
+        // OneOfMany switch, build payload with only the requested
         // element ON, every other element explicitly OFF.
         var payload = prop.Values.Keys.ToDictionary(
             k => k,
@@ -644,8 +761,8 @@ public class IndiClient : IDisposable {
 
     /// <summary>Queue a debounced CONFIG_SAVE for the device. Resets the
     /// timer on every call so rapid edits collapse into one write. Safe
-    /// to call from any code path that mutates a property — including
-    /// from inside SetSwitchAsync/SetNumberAsync handlers — because the
+    /// to call from any code path that mutates a property, including
+    /// from inside SetSwitchAsync/SetNumberAsync handlers, because the
     /// actual save runs on a background thread with its own scope.</summary>
     public void ScheduleConfigSaveDebounced(string device) {
         if (string.IsNullOrEmpty(device)) return;
@@ -663,6 +780,16 @@ public class IndiClient : IDisposable {
         }
         _configSaveTimers[device] = newTimer;
     }
+
+    /// <summary>Has a debounced CONFIG_SAVE been scheduled for this device?
+    /// Exists so a test can assert that a property write persists the driver's
+    /// config without needing an INDI server on the other end of a socket.</summary>
+    internal bool HasPendingConfigSave(string device)
+        => !string.IsNullOrEmpty(device) && _configSaveTimers.ContainsKey(device);
+
+    /// <summary>How many devices have a debounced CONFIG_SAVE scheduled. Lets
+    /// a test show that a burst of writes coalesces into one save.</summary>
+    internal int PendingConfigSaveCount => _configSaveTimers.Count;
 
     /// <summary>Devices whose guide-loop property writes log at Debug
     /// instead of Information. A native-guider guide camera requests a
@@ -690,7 +817,7 @@ public class IndiClient : IDisposable {
     /// <summary>Properties that are guide chatter on ANY device, so they can't
     /// be keyed off the quiet-device set: pulse guiding targets the MOUNT, which
     /// is not a "quiet" device (its slews/parks must stay visible). The native
-    /// guider fires these every correction — several per minute, all night.
+    /// guider fires these every correction, several per minute, all night.
     /// They are NOT lost: pulse durations are recorded per frame in the
     /// PHD2-format session guide log (GuideLogWriter, /api/logs/guide), which is
     /// where you actually analyse guiding anyway.</summary>
@@ -708,7 +835,7 @@ public class IndiClient : IDisposable {
     /// <summary>Shared logging path so every INDI write surfaces in the
     /// LOG panel with a uniform shape. Emits the property + element
     /// values AND a warning when the target property doesn't exist on
-    /// the device's snapshot — the most common reason a write is
+    /// the device's snapshot, the most common reason a write is
     /// silently dropped is that the driver doesn't advertise the
     /// property name we picked (e.g. <c>GEOGRAPHIC_COORD</c> vs. some
     /// driver-specific alias). INDI itself never replies to writes,
@@ -734,7 +861,7 @@ public class IndiClient : IDisposable {
                 kind, device, property, elementsLog);
         } else {
             // Build a hint of which properties DO exist on this device so
-            // the user can find the right name. Truncate the list — chatty
+            // the user can find the right name. Truncate the list, chatty
             // devices have 50+ properties.
             var hint = props == null
                 ? "(device not announced)"
@@ -790,7 +917,7 @@ public class IndiClient : IDisposable {
             MergeProperty(existing, prop);
             existing.State = prop.State;
             existing.Timestamp = prop.Timestamp;
-            // Propagate the new update's message verbatim — including
+            // Propagate the new update's message verbatim, including
             // null, so a recovered-from-Alert update clears the previous
             // error string. SetNumberAsyncAck reads this when raising.
             existing.Message = prop.Message;
@@ -800,7 +927,7 @@ public class IndiClient : IDisposable {
 
         // Surface driver-reported errors in the debug log. INDI sends
         // state=Alert (often with message="...") when it rejects/aborts an
-        // operation — e.g. a gphoto exposure that doesn't fire, a parked mount,
+        // operation, e.g. a gphoto exposure that doesn't fire, a parked mount,
         // a below-horizon slew. Without this only the OUTGOING command was
         // logged, so a capture that silently failed looked like a Polaris
         // timeout instead of "driver said: <reason>".

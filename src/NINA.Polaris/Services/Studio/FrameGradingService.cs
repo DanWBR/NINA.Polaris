@@ -22,7 +22,7 @@ namespace NINA.Polaris.Services.Studio;
 /// <summary>
 /// Subframe grading: measure the quality of a set of light frames and
 /// rank/select the best for stacking. The offline "which subs are keepers"
-/// pass — reads each frame once, detects stars (on luminance for OSC),
+/// pass, reads each frame once, detects stars (on luminance for OSC),
 /// derives median HFR + star count + median eccentricity, and hands the
 /// metrics to <see cref="FrameGrading"/> for scoring and keep/reject
 /// selection.
@@ -120,7 +120,7 @@ public class FrameGradingService {
     }
 
     /// <summary>Resolve the frame path list: explicit paths win; otherwise
-    /// query the library index. Defaults the type filter to LIGHT — grading
+    /// query the library index. Defaults the type filter to LIGHT, grading
     /// darks/flats/bias makes no sense.</summary>
     private List<string> ResolvePaths(GradeRequest req) {
         if (req.FramePaths is { Count: > 0 })
@@ -188,7 +188,7 @@ public class FrameGradingService {
 
     /// <summary>Read one frame and return (starCount, medianHfr,
     /// medianEccentricity). Detects on luminance for OSC so the CFA mosaic
-    /// isn't mistaken for structure — same approach as the batch stacker's
+    /// isn't mistaken for structure, same approach as the batch stacker's
     /// drizzle advisor.</summary>
     private static (int Stars, double Hfr, double Ecc) Measure(StarDetector detector, string path) {
         BaseImageData img;
@@ -224,7 +224,7 @@ public record GradeProgress {
     /// <summary>Every graded frame, best score first.</summary>
     public List<GradedFrameDto> Results { get; init; } = new();
 
-    /// <summary>Paths of the keepers, ranked — feed straight to integration.</summary>
+    /// <summary>Paths of the keepers, ranked, feed straight to integration.</summary>
     public List<string> Selected { get; init; } = new();
     public int SelectedCount { get; init; }
 }

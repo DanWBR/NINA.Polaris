@@ -18,6 +18,15 @@
     <ProjectReference Include="..\NINA.Image.Portable\NINA.Image.Portable.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The still-capture recovery decisions (how many attempts, what is worth
+         reopening the handle for, clamping the streaming USB bandwidth into
+         what a model reports) are pure and belong under test. The SDK calls
+         around them cannot be, so those helpers stay internal and the test
+         assembly sees them. Same arrangement as NINA.INDI. -->
+    <InternalsVisibleTo Include="NINA.Polaris.Test" />
+  </ItemGroup>
+
   <PropertyGroup>
     <AsiSdk>$(MSBuildThisFileDirectory)..\..\camera_sdk\ZWO</AsiSdk>
     <AsiLinux>$(AsiSdk)\ASI_linux_mac_SDK_V1.41\lib</AsiLinux>

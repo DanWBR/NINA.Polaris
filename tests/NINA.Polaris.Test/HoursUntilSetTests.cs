@@ -19,7 +19,7 @@ using NINA.Polaris.Services;
 namespace NINA.Polaris.Test;
 
 /// <summary>
-/// AltitudeService.HoursUntilSet — the "time until the target sets below the
+/// AltitudeService.HoursUntilSet, the "time until the target sets below the
 /// horizon" countdown shown in the LIVE bar for targets already past the
 /// meridian. Uses the standard rise/set hour-angle formula.
 /// </summary>
@@ -40,7 +40,7 @@ public class HoursUntilSetTests {
     [Test]
     public void NeverRises_ReturnsNull() {
         // Observer at +50°, target at −80° dec is always below the horizon
-        // (dec < lat - 90 = -40) — no setting event.
+        // (dec < lat - 90 = -40), no setting event.
         var t = AltitudeService.HoursUntilSet(6.0, -80.0, Utc, 50.0, 0.0);
         Assert.That(t, Is.Null);
     }

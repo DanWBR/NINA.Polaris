@@ -80,6 +80,26 @@ docs/                        # user + dev docs
   *.md                       # per-feature install/setup docs
 ```
 
+## Reporting an equipment problem
+
+Use the **Equipment report** issue template. It asks for four things, and they
+settle most reports in one round: the Polaris version, the host, the output of
+`indi_getprop '<Device>.*'` with the device connected, and `lsusb`.
+
+The property dump is the one that matters. A device that misbehaves through
+INDI is almost always Polaris reading or writing the wrong property name, and
+that dump says which names the driver actually publishes. Two examples from the
+field: a flat panel whose cover never moved because Polaris wrote `DUSTCAP_PARK`
+where INDI publishes `CAP_PARK`, and a filter wheel reporting four slots because
+it was uncalibrated, which `FILTER_SLOT`'s min and max showed at a glance.
+
+If the complaint is "my driver is not in the list", include
+`ls /usr/bin/indi_* | wc -l`. A distribution INDI has about 143 drivers; the
+INDI PPA has about 330. Also check the product name rather than the brand: INDI
+labels devices by product, so a PrimaLuceLab focuser is listed as "Sesto Senso 2"
+and a Wanderer rotator as "Rotator Lite V2". Polaris shows the brand in brackets
+next to the label since v0.98.156.
+
 ## How to add a new INDI device
 
 Concrete walkthrough, add a hypothetical "weather safety monitor":
@@ -190,9 +210,18 @@ looking like one program instead of forty. Two rules protect it:
   existing design system instead of introducing a second one. If the
   pattern you need does not exist yet, say so in the proposal and we
   will design it once, in one place.
+- **The interface is designed by the maintainer.** Pull requests that
+  redesign, rearrange or restyle screens (`wwwroot/index.html`, the CSS
+  parts, the layout side of `app.js`) are not accepted, however good
+  they are. What is welcome is an issue describing the problem: a flow
+  that confuses you, a control you could not find, a screen that breaks
+  on your device. That input shapes the UI; the change itself is made
+  once, in one place. Backend, driver, algorithm and bug-fix PRs are
+  not affected by this rule, and neither is the JS behind a screen when
+  the PR fixes a defect without changing the layout.
 
-Neither rule is about trust. They exist so that nobody builds something
-good and then hears no.
+None of these rules is about trust. They exist so that nobody builds
+something good and then hears no.
 
 ### Interface rules
 
@@ -212,8 +241,11 @@ than to retrofit:
   survives every font on every board.
 - Do not put a `max-width` on dropdowns.
 - When you touch `wwwroot/js/app.js`, run
-  `node scripts/check-missing-methods.mjs`. A `this.something()` with no
-  definition is silent until a user clicks the button.
+  `node scripts/check-missing-methods.mjs`. It reports two things, both of
+  them silent otherwise: a `this.something()` with no definition, which only
+  fails when a user clicks the button, and the same member defined twice in
+  one object literal, where the later one wins and the earlier one is dead
+  code. Three of those had shipped before the check existed.
 
 ## Coding conventions
 

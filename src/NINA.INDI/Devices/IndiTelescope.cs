@@ -192,8 +192,8 @@ public class IndiTelescope : ITelescope {
                 throw new InvalidOperationException(
                     $"Mount '{DeviceName}' refused the GoTo (driver gave no reason). " +
                     "Most likely the target is below the horizon or past a slew/meridian " +
-                    "limit; also check the mount is unparked and — on a ZWO AM5/AM3 in EQ " +
-                    "mode — that it has been homed/initialised this session (try Find Home first).");
+                    "limit; also check the mount is unparked and, on a ZWO AM5/AM3 in EQ " +
+                    "mode, that it has been homed/initialised this session (try Find Home first).");
             }
             throw new InvalidOperationException(
                 $"Mount '{DeviceName}' rejected {operation} on {property}: {detail}");
@@ -204,18 +204,18 @@ public class IndiTelescope : ITelescope {
         // operator can tell the two apart.
         throw new InvalidOperationException(
             $"Mount '{DeviceName}' did not acknowledge {operation} on {property} within timeout. " +
-            "Driver may be wedged — check INDI server logs.");
+            "Driver may be wedged, check INDI server logs.");
     }
 
     /// <summary>Drive the mount to its mechanical home. The INDI
     /// standard <c>TELESCOPE_HOME</c> property has THREE OneOfMany
     /// switches: <c>FIND</c> (search for home using limit switches /
-    /// encoder reset), <c>SET</c> (mark current position AS home —
+    /// encoder reset), <c>SET</c> (mark current position AS home,
     /// destructive, never call from this flow), <c>GO</c> (drive to
     /// stored home position).
     ///
     /// Earlier impl sent FIND=true AND GO=true together, which is
-    /// invalid for a OneOfMany switch and confused drivers — some
+    /// invalid for a OneOfMany switch and confused drivers, some
     /// silently did nothing. Now we inspect the live property to see
     /// which elements the driver actually advertises and pick the
     /// best available action: FIND if present (true homing routine),
@@ -227,7 +227,7 @@ public class IndiTelescope : ITelescope {
         // and the toast tells the user the mount can't home.
         if (existing == null) {
             throw new NotSupportedException(
-                $"Mount '{DeviceName}' does not expose TELESCOPE_HOME — driver doesn't support Find Home.");
+                $"Mount '{DeviceName}' does not expose TELESCOPE_HOME, driver doesn't support Find Home.");
         }
         // OneOfMany payload: pre-fill ALL elements as false, then
         // light up exactly one. SET is intentionally never chosen
@@ -242,7 +242,7 @@ public class IndiTelescope : ITelescope {
         }
         if (chosen == null) {
             throw new NotSupportedException(
-                $"Mount '{DeviceName}' TELESCOPE_HOME exposes only [{string.Join(", ", payload.Keys)}] — no FIND or GO element available.");
+                $"Mount '{DeviceName}' TELESCOPE_HOME exposes only [{string.Join(", ", payload.Keys)}], no FIND or GO element available.");
         }
         payload[chosen] = true;
         await _client.SetSwitchAsync(DeviceName, "TELESCOPE_HOME", payload, ct);
@@ -416,8 +416,35 @@ public class IndiTelescope : ITelescope {
         await _client.SetSwitchAsync(DeviceName, "ON_COORD_SET", payload, ct);
     }
 
+    /// <summary>Clear both motion axes. The INDI way to end a jog is to
+    /// write the MOTION_* elements back to Off (the vectors are
+    /// AtMostOne, so all-Off is the idle state); TELESCOPE_ABORT_MOTION
+    /// is a different command that also cancels a GoTo and, on the
+    /// LX200-derived ZWO AM3 / AM5 driver, stops tracking.</summary>
     public async Task StopMotionAsync(CancellationToken ct = default) {
-        await AbortSlewAsync(ct);
+        var ns = await ClearMotionAxisAsync("TELESCOPE_MOTION_NS", "MOTION_NORTH", "MOTION_SOUTH", ct);
+        var we = await ClearMotionAxisAsync("TELESCOPE_MOTION_WE", "MOTION_WEST", "MOTION_EAST", ct);
+        // A driver with neither motion vector never jogged through the
+        // switches, so abort is the only halt it understands. Better a
+        // cancelled slew than an axis that keeps running.
+        if (!ns && !we) await AbortSlewAsync(ct);
+    }
+
+    public async Task StopMotionAsync(MountJogDirection direction, CancellationToken ct = default) {
+        var cleared = direction is MountJogDirection.North or MountJogDirection.South
+            ? await ClearMotionAxisAsync("TELESCOPE_MOTION_NS", "MOTION_NORTH", "MOTION_SOUTH", ct)
+            : await ClearMotionAxisAsync("TELESCOPE_MOTION_WE", "MOTION_WEST", "MOTION_EAST", ct);
+        if (!cleared) await StopMotionAsync(ct);
+    }
+
+    /// <summary>Write one TELESCOPE_MOTION_* vector back to all-Off.
+    /// Returns false when the driver does not expose that vector, so
+    /// the caller can fall back instead of writing into the void.</summary>
+    private async Task<bool> ClearMotionAxisAsync(string property, string a, string b, CancellationToken ct) {
+        if (_client.GetProperty(DeviceName, property) == null) return false;
+        await _client.SetSwitchAsync(DeviceName, property,
+            new Dictionary<string, bool> { [a] = false, [b] = false }, ct);
+        return true;
     }
 
     /// <summary>Pick a sensible <c>TELESCOPE_SLEW_RATE</c> element
@@ -435,7 +462,7 @@ public class IndiTelescope : ITelescope {
     /// changes on the wire.</summary>
     /// <summary>Live snapshot of the driver's TELESCOPE_SLEW_RATE
     /// switch. Returned in the same order the driver advertised the
-    /// elements — INDI drivers typically order them slow-to-fast
+    /// elements, INDI drivers typically order them slow-to-fast
     /// (SLEW_GUIDE < SLEW_CENTERING < SLEW_FIND < SLEW_MAX), which is
     /// what a left-to-right slider expects. Empty list when the
     /// driver doesn't expose the property (some hard-code a single
@@ -467,19 +494,19 @@ public class IndiTelescope : ITelescope {
     }
 
     /// <summary>Light up exactly one element of TELESCOPE_SLEW_RATE.
-    /// OneOfMany switch — write all elements explicitly (true for the
+    /// OneOfMany switch, write all elements explicitly (true for the
     /// chosen one, false for everyone else) so drivers that don't
     /// honour the OneOfMany rule strictly still see a consistent
     /// state. Throws if the requested element doesn't exist on the
     /// device snapshot so the UI surfaces a clear error instead of a
-    /// silent no-op (driver would drop the write — see LogIndiWrite
+    /// silent no-op (driver would drop the write, see LogIndiWrite
     /// warning path).</summary>
     public async Task SetSlewRateAsync(string elementName, CancellationToken ct = default) {
         var rate = _client.GetProperty(DeviceName, "TELESCOPE_SLEW_RATE")
             as Protocol.IndiSwitchProperty;
         if (rate == null || rate.Values.Count == 0) {
             throw new NotSupportedException(
-                $"Mount '{DeviceName}' does not expose TELESCOPE_SLEW_RATE — driver doesn't support rate selection.");
+                $"Mount '{DeviceName}' does not expose TELESCOPE_SLEW_RATE, driver doesn't support rate selection.");
         }
         if (!rate.Values.ContainsKey(elementName)) {
             throw new ArgumentException(
@@ -525,7 +552,7 @@ public class IndiTelescope : ITelescope {
     /// hours east of UTC).
     ///
     /// Mount uses (lat, lon, utc) together to compute local sidereal
-    /// time — without it the GoTo math goes off by ~15 arcseconds per
+    /// time, without it the GoTo math goes off by ~15 arcseconds per
     /// wall-clock second of error. Pair with SetSiteLocation after
     /// connect.</summary>
     public async Task SetSiteTimeAsync(DateTime utc, double offsetHoursFromUtc,
@@ -551,7 +578,7 @@ public class IndiTelescope : ITelescope {
     /// spec: <c>TRACK_SIDEREAL</c>, <c>TRACK_SOLAR</c>,
     /// <c>TRACK_LUNAR</c>, plus an optional <c>TRACK_CUSTOM</c> that
     /// requires a separate TELESCOPE_TRACK_RATE write. Drivers may
-    /// not implement every mode — we pre-fill ALL advertised elements
+    /// not implement every mode, we pre-fill ALL advertised elements
     /// as false, then light up the one matching the user's choice.
     /// If the chosen mode isn't on this driver, NotSupportedException
     /// surfaces as a 501 + actionable toast.</summary>
@@ -560,7 +587,7 @@ public class IndiTelescope : ITelescope {
         var existing = _client.GetProperty(DeviceName, "TELESCOPE_TRACK_MODE") as Protocol.IndiSwitchProperty;
         if (existing == null) {
             throw new NotSupportedException(
-                $"Mount '{DeviceName}' does not expose TELESCOPE_TRACK_MODE — driver doesn't support tracking-mode selection.");
+                $"Mount '{DeviceName}' does not expose TELESCOPE_TRACK_MODE, driver doesn't support tracking-mode selection.");
         }
         var wanted = mode switch {
             NINA.Image.Interfaces.TrackingMode.Solar  => "TRACK_SOLAR",
@@ -593,7 +620,7 @@ public class IndiTelescope : ITelescope {
         };
         if (_client.GetProperty(DeviceName, prop) == null) {
             throw new NotSupportedException(
-                $"Mount '{DeviceName}' does not expose {prop} — driver doesn't support pulse guiding.");
+                $"Mount '{DeviceName}' does not expose {prop}, driver doesn't support pulse guiding.");
         }
         await _client.SetNumberAsync(DeviceName, prop,
             new Dictionary<string, double> { [elem] = durationMs, [opp] = 0 }, ct);

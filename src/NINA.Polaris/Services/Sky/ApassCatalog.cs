@@ -60,7 +60,7 @@ public class ApassCatalog {
     /// writable, unlike the read-only install dir).</summary>
     public string WritableDbPath => _writablePath;
 
-    /// <summary>Absolute path to the catalog DB the queries read — the
+    /// <summary>Absolute path to the catalog DB the queries read, the
     /// downloaded copy when present, else the bundled one.</summary>
     public string DbPath => File.Exists(_writablePath) ? _writablePath : _bundledPath;
 

@@ -39,6 +39,15 @@ middle number is the current focuser position; click it to type a
 direct value. The **Step Size** slider sets the jump distance for
 the double arrows, from 1 to 500 steps, persisted per rig.
 
+A red **Stop** sits at the end of the row, and the same button appears
+beside the nudge arrows in the PREVIEW and VIDEO panels and in the phone
+shell's focus pad, so wherever you can start a move you can stop it.
+Unlike the arrows it stays enabled while the motor is running, which is
+the one moment it is worth having, and it also drops a hold-to-repeat
+nudge that has not committed yet: those buttons accumulate and send one
+absolute move on release, so stopping the motor without cancelling that
+would send it straight off again.
+
 An info panel below shows **Temperature**, the focuser-reported
 temperature in degrees Celsius when the hardware supports it (this
 reading drives the LIVE tab's auto-refocus temperature trigger, see
@@ -164,9 +173,9 @@ automatically:
 4. Tick **Bahtinov mask analysis** in the sidebar.
 
 After each capture, Polaris finds the brightest star in the frame (or
-accepts manual `starX` / `starY` coordinates POSTed to
-`/api/focus/bahtinov`), crops a 200-pixel region of interest (ROI)
-around it, and sweeps every angle from 0 to 180 degrees in
+uses the one you pinned with a click), crops a region of interest
+(ROI) around it, 200 pixels across by default and adjustable, and
+sweeps every angle from 0 to 180 degrees in
 0.5-degree steps,
 integrating intensity along each line through the ROI centre. It
 picks the three strongest peaks, enforcing a 30-degree minimum
@@ -194,6 +203,50 @@ once for your rig by watching the sign change as you turn the knob,
 then map "inward" to whichever way that was. Colour coding is green
 in focus, amber while fine-tuning, red when far off.
 
+### Bahtinov on the live video stream
+
+The same analysis runs on the VIDEO tab's live stream, which is the
+faster way to work: you turn the knob and watch the number move at
+four readings a second instead of once per capture.
+
+Start the stream, then tick **On** in the **Bahtinov mask** panel in
+the sidebar, below the focus sharpness bar. The panel shows the signed
+offset, the same direction cue as Manual Assist, and draws the spike
+lines, the V's intersection and a dashed square for the analysis box
+over the live frame. The overlay follows the pan and zoom of the
+frame, so you can zoom into the star and still see the geometry.
+
+Nothing is captured for this. A running stream owns the camera and
+every other capture is refused, which is exactly why the two features
+could not be used together before: the analysis reads the frame the
+stream has already delivered, at full resolution, so it costs no
+exposure and does not interrupt anything.
+
+Two controls exist because they are the two things that go wrong:
+
+- **Click the star to pin it.** At video signal levels on a rich
+  field, "the brightest star in the frame" changes from frame to
+  frame, and the reported offset jumps with it. A pinned star is
+  measured every time. **Unpin star** goes back to automatic.
+- **Analysis box.** The sweep only sees what is inside the box. At
+  long focal length, with small pixels, or when the focuser starts
+  far from focus, the spikes run outside the default 200 pixels and
+  the measurement degrades without saying so. The dashed square shows
+  where the boundary is; raise the box until the spikes fit.
+
+On a colour camera the frame is a mosaic, so every second pixel along
+a line belongs to a different colour filter. Polaris averages each
+2 by 2 group into one sample before the sweep, which removes that
+ripple at the cost of half the resolution. Offsets are still reported
+in frame pixels, and the panel says which grid the reading came from.
+
+Exposure is the same trade as always: long enough for the spikes to
+stand out of the noise, short enough to keep the stream responsive.
+Between 0.1 and 0.5 s on a star of magnitude 3 or brighter is a
+comfortable starting point. The analysis integrates along each spike,
+so it tolerates a frame that looks noisy on screen far better than
+your eye does.
+
 ### Manual Assist pitfalls
 
 **HFR does not move when I turn the knob.** The loop interval is
@@ -215,6 +268,28 @@ the intersection?) over the numeric value.
 **No camera capture, "Start loop" disabled.** Connect a camera in
 the RIGS tab first (@sec-rigs).
 
+## Which metric to focus on
+
+**Metric**, on the FOCUS panel and saved per rig, decides what each
+sweep point measures.
+
+- **Star HFR** is the default and the right answer on a dark sky: half
+  flux radius shrinks to a minimum at focus and the sweep fits the
+  V-curve everybody recognises. It needs stars, and enough of them to
+  pass the **Min Stars** gate.
+- **Contrast (Laplace)** and **Contrast (Sobel)** measure the edge detail
+  of the whole frame instead. There is nothing to detect and no star
+  gate: it works in daylight on a distant object, on the Moon or a
+  planet, and on a bright sky that drowns the stars, which is exactly
+  where HFR has nothing to work with. Laplace is the more sensitive close
+  to focus; Sobel is the steadier on a noisy frame. Both always fit a
+  parabola.
+
+Picking a contrast metric hides the star-count fields, since they no
+longer apply, and the readouts and the chart axis switch to contrast.
+Coarse focus on the Moon at dusk, then a star-HFR run when the sky is
+dark, is a sensible way to use both.
+
 ## Auto-focus: the V-curve
 
 Click **Start AF** to run a symmetric sweep around the current
@@ -226,8 +301,10 @@ position. Polaris:
    a geared focuser when it reverses direction; overshooting and
    coming back takes it up);
 3. at each position, moves the focuser, waits for it to settle,
-   captures an exposure, detects stars, and computes the median HFR
-   (frames with fewer than **Min Stars** stars are dropped);
+   captures an exposure and measures the frame with the chosen
+   **Metric** (below): the median HFR of the detected stars, dropping
+   frames with fewer than **Min Stars** of them, or the contrast of the
+   whole frame, which needs no stars at all;
 4. fits a parabola through the valid (position, HFR) samples;
 5. moves to the parabola's vertex, the best focus;
 6. reverts to the start position on cancel or failure.
@@ -352,13 +429,58 @@ auto-focus run instead of moving to a guess. The memory is held on the
 server per rig, so it survives reconnects and a browser refresh, and a
 partial rig save never wipes it.
 
-Two habits get the most out of it: run a real auto-focus on each filter
-once at the start of a session so the memory is seeded from that
-night's conditions, and keep the auto re-focus temperature trigger on
-(@sec-live-stacking) so a long drift still forces a genuine pass rather
-than riding an increasingly stale offset.
+Two habits get the most out of it: seed the memory from that night's
+conditions with a real auto-focus on each filter, which the **Filter
+offsets** sub-tab below does in one pass, and keep the auto re-focus
+temperature trigger on (@sec-live-stacking) so a long drift still
+forces a genuine pass rather than riding an increasingly stale offset.
+
+## Measuring every filter in one pass
+
+Seeding that memory by hand is a chore: switch the filter, run
+auto-focus, read the position, work out the delta against the reference
+filter, type it into the rig, repeat. The **Filter offsets** sub-tab of
+the FOCUS tab does the whole set instead, and it is the thing to run
+before the night starts.
+
+It lists the wheel's filters with every one ticked, so you can drop a
+dark slot or a filter you will not use tonight. Start the run and it
+walks them in wheel order: switch the filter, run the same auto-focus
+your rig is already configured for, record where it landed. A filter
+whose auto-focus fails is tried once more, then recorded as failed with
+the reason and the run carries on, so one bad filter does not cost you
+the other five. The button re-runs just those afterwards. The V-curve
+for the filter being measured is live on the Auto V-curve sub-tab the
+whole time.
+
+Nothing is written to the rig while it runs. The table fills in with
+each filter's position, HFR, fit quality and focuser temperature, plus
+the offset it derives against the reference filter, and **Apply to
+rig** is what stores it. That is deliberate: a marginal curve should
+not land in your offsets table because a cloud went past. A row whose
+fit is worse than the quality gate is marked and left unticked, so
+accepting it is a decision rather than an oversight.
+
+The reference filter matters more than it looks. Offsets are stored
+relative to it, and Apply saves your choice as the rig's reference so
+the stored table is the one you approved. Leave it on Automatic and it
+uses the rig's existing reference, a filter named L, or the first
+filter measured, in that order. The run also ends on that filter, at
+the position it measured for it, so the rig is ready to start imaging.
+
+One caveat worth knowing before a long set: offsets are only derived
+between points measured at a comparable temperature. Eight filters is
+around half an hour, and on a cooling night the last of them can end
+up outside the tolerance window, in which case the offset column shows
+the delta with a warning triangle and Apply will not store that one.
+Re-run those filters rather than forcing the number in.
 
 ## Common pitfalls
+
+**The offset column shows a warning triangle.** That filter was
+measured too far from the reference filter's temperature, so the offset
+will not be stored. Re-run that filter and it lands in the same
+thermal window as the rest.
 
 **HFR comes back as 0.** No stars were detected. Increase the
 exposure, and check that you are actually pointed at the sky rather

@@ -40,7 +40,7 @@ namespace NINA.Polaris.Services.Plan;
 ///
 /// The end-of-session actions (stop guiding, warm + cooler off, park, focuser →
 /// 0) are compiled into a SEPARATE document by <see cref="CompileEndActions"/>.
-/// <see cref="PlanRunnerService"/> runs them after the main run ends — including
+/// <see cref="PlanRunnerService"/> runs them after the main run ends, including
 /// when the plan was stopped at dawn / a set time, where a hard engine stop
 /// would otherwise skip an in-document epilogue. Host shutdown
 /// (<see cref="ImagingPlan.EndShutdownHost"/>) is performed by the runner after
@@ -173,7 +173,7 @@ public class PlanCompilerService {
     /// Build the end-of-session actions as a standalone document, run by the
     /// runner after the main run ends. Returns null when the plan selected no
     /// end actions (and isn't guiding), so the runner can skip straight to
-    /// shutdown / cleanup. Host shutdown is NOT included here — the runner does
+    /// shutdown / cleanup. Host shutdown is NOT included here, the runner does
     /// it after this document completes.
     /// </summary>
     public SequenceDocument? CompileEndActions(ImagingPlan plan) {

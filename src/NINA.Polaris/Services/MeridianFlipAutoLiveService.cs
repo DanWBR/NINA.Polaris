@@ -49,7 +49,7 @@ public class MeridianFlipAutoLiveService : BackgroundService {
     // cross the meridian (HA − → ≥0) WHILE this live stack was running. Without
     // this, acquiring a target that is ALREADY west of the flip point (e.g. a
     // fresh SKY GoTo to a NW target just after homing) made the service fire an
-    // immediate, unwanted flip — the mount would un-flip and swing the OTA back
+    // immediate, unwanted flip, the mount would un-flip and swing the OTA back
     // toward the tripod. A GEM slewed straight to a western target is already on
     // the correct pier side and needs no flip. Mirrors MountSafetyGuardService's
     // `_sawCrossing` gate. Reset when the live stack isn't running or HA is
@@ -81,7 +81,7 @@ public class MeridianFlipAutoLiveService : BackgroundService {
     /// <summary>
     /// Should the live-stacking auto-flip fire now? A flip is due only when we've
     /// actually WATCHED the target cross the meridian on this stack
-    /// (<paramref name="sawCrossing"/>) — never for a target acquired already west
+    /// (<paramref name="sawCrossing"/>), never for a target acquired already west
     /// (a fresh GoTo to a western target is on the correct pier side and needs no
     /// flip; flipping it would un-flip the mount toward the tripod). Given a
     /// crossing, it's due once HA is at/past the flip point but not absurdly far
@@ -156,7 +156,7 @@ public class MeridianFlipAutoLiveService : BackgroundService {
         if (_meridian.State != MeridianFlipState.Idle) return;
 
         // Only fire when we actually watched this target cross the meridian on
-        // this stack AND it's past the flip point — never auto-flip a target
+        // this stack AND it's past the flip point, never auto-flip a target
         // acquired already west (that would un-flip toward the tripod, the field
         // near-crash report).
         if (!AutoFlipDue(_sawCrossing, hoursUntilFlip)) return;

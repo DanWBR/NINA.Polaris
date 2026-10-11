@@ -21,16 +21,16 @@ namespace NINA.Polaris.Services;
 /// Fail-safe watchdog that protects the mount + cabling during unattended
 /// sessions. Born from a real ASIAIR incident: a mount tracked hours past the
 /// meridian WITHOUT a flip (plate-solve angle stayed constant all night) while
-/// a clouded-out run looped on guide-star recovery forever — the RA axis wound
+/// a clouded-out run looped on guide-star recovery forever, the RA axis wound
 /// the cabling into a corkscrew until a USB cable physically ripped.
 ///
 /// Two guards, both opt-out, both purely *halting* (never command a risky move):
 ///
-///  1. <b>Past-meridian cable-wrap limit</b> — if the target tracks more than
+///  1. <b>Past-meridian cable-wrap limit</b>, if the target tracks more than
 ///     <see cref="MeridianFlipSettings.MaxMinutesPastMeridian"/> past the
 ///     meridian and no flip happened (GEM pier side unchanged, or a flip-less
 ///     strain-wave mount), stop tracking + abort.
-///  2. <b>Guiding circuit breaker</b> — if the guider loses the star
+///  2. <b>Guiding circuit breaker</b>, if the guider loses the star
 ///     <see cref="MeridianFlipSettings.MaxConsecutiveGuideFailures"/> times in
 ///     a row with no recovery, stop tracking + abort instead of looping.
 ///
@@ -77,9 +77,9 @@ public class MountSafetyGuardService : BackgroundService {
     }
 
     /// <summary>Altitude to test against the safety floor. Prefers the driver's
-    /// own encoder-reported altitude — ground truth on AltAz-native mounts (e.g.
+    /// own encoder-reported altitude, ground truth on AltAz-native mounts (e.g.
     /// a Seestar S50 over Alpaca), where RA/Dec are derived rather than measured
-    /// and can carry drift the recompute would inherit — and only falls back to
+    /// and can carry drift the recompute would inherit, and only falls back to
     /// the RA/Dec→AltAz recompute when the driver reports NaN (equatorial
     /// drivers that don't expose horizontal coordinates).</summary>
     private double CurrentAltitude(double driverAlt, double ra, double dec) {
@@ -123,8 +123,18 @@ public class MountSafetyGuardService : BackgroundService {
     // Arm the abort only once the OTA has reached the floor during THIS slew;
     // then a genuine wrong-way descent (starts high, drops below) still trips
     // while climbing out of the stow does not.
+    // When the crossing was observed, so the trip needs that much wall time to
+    // have actually passed and not just an hour angle that says so.
+    private DateTime? _crossingAtUtc;
+    private DateTime? _prevHaAtUtc;
+
     private bool _altGuardSlewingPrev;
     private bool _altGuardArmed;
+
+    // When the pointing first went below the flip floor during the current
+    // flip, or null while it is above it. A flip transit dips for a few
+    // seconds by geometry alone, so what counts is how long it stays down.
+    private DateTime? _flipBelowFloorSince;
 
     // ---- guiding circuit breaker ----
     private int _consecutiveGuideFailures;
@@ -135,7 +145,7 @@ public class MountSafetyGuardService : BackgroundService {
     // Logs a full mount snapshot whenever tracking stops UNEXPECTEDLY (not a
     // slew, flip, park or our own safety trip). Built to chase an intermittent
     // ZWO AM3 that stops tracking near the zenith on the west side: comparing
-    // several events shows which invariant is constant — a fixed hour angle
+    // several events shows which invariant is constant, a fixed hour angle
     // (meridian/tracking limit), a fixed altitude (altitude limit), or a fixed
     // RA-axis angle (travel limit / hardware).
     private bool? _prevTracking;
@@ -191,13 +201,38 @@ public class MountSafetyGuardService : BackgroundService {
     /// <summary>Did the mount just cross the meridian WHILE TRACKING? A crossing
     /// is HA going − → ≥0 between two consecutive samples. A commanded slew that
     /// carries HA across 0 (e.g. slewing out of the home position to a target
-    /// just west of the meridian) is NOT a cable-wrap crossing — the mount is
+    /// just west of the meridian) is NOT a cable-wrap crossing, the mount is
     /// being driven to a legitimate pointing, not drifting past the meridian on
-    /// the sky — so this returns false while slewing.</summary>
-    public static bool DetectMeridianCrossing(double? prevHa, double ha, bool slewing) {
+    /// the sky, so this returns false while slewing.</summary>
+    public static bool DetectMeridianCrossing(double? prevHa, double ha, bool slewing,
+            double hoursSincePrev) {
         if (slewing) return false;
-        return prevHa.HasValue && prevHa.Value < 0 && ha >= 0;
+        if (!prevHa.HasValue || prevHa.Value >= 0 || ha < 0) return false;
+        // A tracking mount's hour angle advances one hour per hour, so between
+        // two samples it moves by the time between them. Anything faster is the
+        // mount being driven, and a GoTo is not a cable-wrap crossing however
+        // it lands.
+        //
+        // The slewing flag alone does not catch this: the guard polls every 15
+        // seconds while the mount is idle, and a GoTo that starts and finishes
+        // between two polls is never observed slewing. Starting a session on a
+        // target already west of the meridian then read as a crossing, and with
+        // the target already past the limit the guard tripped within a tick of
+        // the first frame (field report).
+        double advanced = ha - prevHa.Value;
+        double couldHaveTracked = Math.Max(0, hoursSincePrev) * TrackingSlackFactor
+                                  + MinCrossingSlackHours;
+        return advanced <= couldHaveTracked;
     }
+
+    /// <summary>How much faster than the sky a sample gap may look before it is
+    /// treated as a slew. Generous: a late tick or a clock adjustment must not
+    /// turn a real crossing into a missed one.</summary>
+    public const double TrackingSlackFactor = 2.0;
+
+    /// <summary>Floor under the same allowance, for the first sample after a
+    /// gap of nearly nothing. About seventy seconds of hour angle.</summary>
+    public const double MinCrossingSlackHours = 0.02;
 
     // ---------------------------------- loop ------------------------------------
 
@@ -265,10 +300,45 @@ public class MountSafetyGuardService : BackgroundService {
         // and use ShouldAbortForFlipTransit; every other slew keeps the normal
         // per-rig floor and helper (0 there still means off, as before).
         bool flipping = _meridian.State != MeridianFlipState.Idle;
+        if (!flipping) _flipBelowFloorSince = null;
         bool floorArmed = flipping
             ? s.SafetyStopEnabled
             : (!Tripped && AltitudeFloorDeg > 0);
-        if (!Tripped && floorArmed) {
+        // A flip is watched whether or not the mount reports slewing at this
+        // instant: one that stops with the OTA under the horizon is worse than
+        // one still moving through it.
+        if (!Tripped && floorArmed && flipping) {
+            var fscope = _equip.Telescope;
+            if (fscope is { IsConnected: true }) {
+                double fra = fscope.RightAscension, fdec = fscope.Declination;
+                if (!double.IsNaN(fra) && !double.IsNaN(fdec)) {
+                    double falt = CurrentAltitude(fscope.Altitude, fra, fdec);
+                    double ffloor = FlipFloorDeg;
+                    if (double.IsNaN(falt) || falt >= ffloor) {
+                        _flipBelowFloorSince = null;
+                    } else {
+                        _flipBelowFloorSince ??= DateTime.UtcNow;
+                        double secondsBelow =
+                            (DateTime.UtcNow - _flipBelowFloorSince.Value).TotalSeconds;
+                        double grace = Math.Max(0, s.FlipTransitGraceSeconds);
+                        if (MountSlewSafety.ShouldAbortForFlipTransit(
+                                falt, ffloor, secondsBelow, grace)) {
+                            try { await fscope.AbortSlewAsync(ct); }
+                            catch (Exception ex) {
+                                _logger.LogWarning(ex, "Safety: abort-slew (flip altitude) failed");
+                            }
+                            await TripAsync(
+                                $"Flip aborted: the OTA has been at {falt:F0}° altitude, below the "
+                                + $"{ffloor:F0}° flip floor, for {secondsBelow:F0}s during a meridian flip.",
+                                s, ct);
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!Tripped && floorArmed && !flipping) {
             var scope = _equip.Telescope;
             bool slewingNow = scope is { IsConnected: true, IsSlewing: true };
             // A new slew (idle -> slewing since the last tick) disarms the
@@ -279,23 +349,17 @@ public class MountSafetyGuardService : BackgroundService {
                 double ra = scope.RightAscension, dec = scope.Declination;
                 if (!double.IsNaN(ra) && !double.IsNaN(dec)) {
                     double altDeg = CurrentAltitude(scope.Altitude, ra, dec);
-                    double floorDeg = flipping ? FlipFloorDeg : AltitudeFloorDeg;
+                    double floorDeg = AltitudeFloorDeg;
                     // Arm the ordinary floor once the OTA reaches it this slew.
-                    // Flips keep their own horizon-strict transit logic and
-                    // aren't gated by the arming flag.
-                    if (!flipping && altDeg >= floorDeg) _altGuardArmed = true;
-                    bool abort = flipping
-                        ? MountSlewSafety.ShouldAbortForFlipTransit(altDeg, floorDeg, true)
-                        : (_altGuardArmed && MountSlewSafety.ShouldAbortForAltitude(altDeg, floorDeg, true));
+                    if (altDeg >= floorDeg) _altGuardArmed = true;
+                    bool abort = _altGuardArmed
+                        && MountSlewSafety.ShouldAbortForAltitude(altDeg, floorDeg, true);
                     if (abort) {
                         try { await scope.AbortSlewAsync(ct); }
                         catch (Exception ex) { _logger.LogWarning(ex, "Safety: abort-slew (altitude) failed"); }
                         await TripAsync(
-                            flipping
-                                ? $"Flip aborted: the OTA reached {altDeg:F0}° altitude, below the " +
-                                  $"{floorDeg:F0}° flip floor — below the horizon during a meridian flip."
-                                : $"Slew aborted: the OTA dropped to {altDeg:F0}° altitude, below the " +
-                                  $"{floorDeg:F0}° floor — a wrong-way slew heading for the mount/tripod.",
+                            $"Slew aborted: the OTA dropped to {altDeg:F0}° altitude, below the " +
+                            $"{floorDeg:F0}° floor, a wrong-way slew heading for the mount/tripod.",
                             s, ct);
                         return;
                     }
@@ -322,13 +386,21 @@ public class MountSafetyGuardService : BackgroundService {
 
         // ---- Guard 1: past-meridian cable wrap ----
         var (haHours, supportsPier, flipped) = UpdateMeridianState();
+        // Belt and braces on top of the crossing detector: the mount must also
+        // have been on this side of the meridian, in wall time, for as long as
+        // the limit says. An hour angle past the limit the moment a target is
+        // acquired west is arithmetic, not an hour of winding.
+        double minutesSinceCrossing = _crossingAtUtc.HasValue
+            ? (DateTime.UtcNow - _crossingAtUtc.Value).TotalMinutes
+            : 0;
         if (haHours.HasValue && _sawCrossing
+                && minutesSinceCrossing >= s.MaxMinutesPastMeridian
                 && ShouldTripMeridian(haHours.Value, supportsPier, flipped, s.MaxMinutesPastMeridian)
                 && _meridian.State == MeridianFlipState.Idle) {
             var mins = haHours.Value * 60.0;
             await TripAsync(
                 $"Mount tracked {mins:F0} min past the meridian without a flip " +
-                $"(limit {s.MaxMinutesPastMeridian:F0} min) — stopping to prevent a cable wrap.",
+                $"(limit {s.MaxMinutesPastMeridian:F0} min), stopping to prevent a cable wrap.",
                 s, ct);
             return;
         }
@@ -355,7 +427,7 @@ public class MountSafetyGuardService : BackgroundService {
             }
             await TripAsync(
                 $"Guider lost the star {_consecutiveGuideFailures} times in a row with no " +
-                $"recovery (limit {s.MaxConsecutiveGuideFailures}) — stopping the session.",
+                $"recovery (limit {s.MaxConsecutiveGuideFailures}), stopping the session.",
                 s, ct);
         }
     }
@@ -385,7 +457,7 @@ public class MountSafetyGuardService : BackgroundService {
     /// report). Skips the legitimate reasons tracking goes off: an in-progress
     /// slew (or one that just finished), a meridian flip, or our own safety trip.
     /// Records RA/Dec, hour angle, altitude, azimuth and pier side so several
-    /// events can be compared — whichever value is constant across dropouts
+    /// events can be compared, whichever value is constant across dropouts
     /// points at the cause (fixed HA = meridian limit, fixed altitude = altitude
     /// limit, fixed RA-axis angle = travel limit / hardware).
     /// </summary>
@@ -405,7 +477,7 @@ public class MountSafetyGuardService : BackgroundService {
 
         // Only care about a genuine on -> off transition.
         if (!(wasTracking && !tracking)) return;
-        // Expected reasons tracking is off — not a fault:
+        // Expected reasons tracking is off, not a fault:
         //  • slewing now, or slewing on the previous tick (tracking re-engages a
         //    beat after a GoTo completes);
         //  • a meridian flip in progress;
@@ -427,7 +499,7 @@ public class MountSafetyGuardService : BackgroundService {
             $"Alt={alt:F1}° Az={az:F1}° pier={pier}";
         LastTrackingDrop = $"{DateTime.UtcNow:HH:mm:ss}Z  {snap}";
         _logger.LogWarning(
-            "MOUNT TRACKING STOPPED unexpectedly (diagnostic — not a slew/flip/safety-stop): {Snap}. " +
+            "MOUNT TRACKING STOPPED unexpectedly (diagnostic, not a slew/flip/safety-stop): {Snap}. " +
             "Compare several of these: constant HA ⇒ meridian/tracking limit; constant Alt ⇒ altitude limit; " +
             "constant RA/pier ⇒ RA-axis travel limit or hardware.", snap);
     }
@@ -440,7 +512,8 @@ public class MountSafetyGuardService : BackgroundService {
     private (double? haHours, bool supportsPier, bool flipped) UpdateMeridianState() {
         var scope = _equip.Telescope;
         if (scope == null || !scope.IsConnected) {
-            _prevHa = null; _sawCrossing = false; _flippedSinceCrossing = false;
+            _prevHa = null; _prevHaAtUtc = null;
+            _sawCrossing = false; _crossingAtUtc = null; _flippedSinceCrossing = false;
             return (null, false, false);
         }
 
@@ -459,20 +532,26 @@ public class MountSafetyGuardService : BackgroundService {
         // Clearly east again (new approach / next night): reset the machine.
         if (ha < -0.1) {
             _sawCrossing = false;
+            _crossingAtUtc = null;
             _flippedSinceCrossing = false;
             _pierAtCrossing = PierSide.pierUnknown;
         }
 
         // Detect the meridian crossing (HA goes − → ≥0): record the pier side
-        // then. Gated on !slewing (see DetectMeridianCrossing) — a commanded slew
+        // then. Gated on !slewing (see DetectMeridianCrossing), a commanded slew
         // that carries HA across 0 (e.g. slewing out of home to a target just
         // west of the meridian) is not a cable-wrap crossing. Counting it tripped
         // the guard on a fresh GoTo to a west target (field report: "guard
         // indevido com alvo 1h depois do meridiano saindo do home"). _prevHa is
         // refreshed every tick (below), including during the slew, so the first
         // post-slew tracking tick compares against the SETTLED position.
-        if (DetectMeridianCrossing(_prevHa, ha, slewing)) {
+        var nowUtc = DateTime.UtcNow;
+        double hoursSincePrev = _prevHaAtUtc.HasValue
+            ? (nowUtc - _prevHaAtUtc.Value).TotalHours
+            : 0;
+        if (DetectMeridianCrossing(_prevHa, ha, slewing, hoursSincePrev)) {
             _sawCrossing = true;
+            _crossingAtUtc = nowUtc;
             _pierAtCrossing = pier;
             _flippedSinceCrossing = false;
         }
@@ -485,6 +564,7 @@ public class MountSafetyGuardService : BackgroundService {
         }
 
         _prevHa = ha;
+        _prevHaAtUtc = nowUtc;
         return (ha, supportsPier, _flippedSinceCrossing);
     }
 
@@ -506,13 +586,13 @@ public class MountSafetyGuardService : BackgroundService {
             if (g.IsConnected) await g.StopAsync(ct);
         } catch (Exception ex) { _logger.LogWarning(ex, "Safety: guider stop failed"); }
 
-        // 3. THE important one — turn tracking off so the RA axis stops winding.
+        // 3. THE important one, turn tracking off so the RA axis stops winding.
         var scope = _equip.Telescope;
         if (scope != null && scope.IsConnected) {
             try { await scope.SetTrackingAsync(false, ct); }
             catch (Exception ex) { _logger.LogWarning(ex, "Safety: stop-tracking failed"); }
 
-            // 4. Optional park (unwinds fully) — opt-in to avoid a surprise re-home.
+            // 4. Optional park (unwinds fully), opt-in to avoid a surprise re-home.
             if (s.ParkOnSafetyStop) {
                 try { await scope.ParkAsync(ct); }
                 catch (Exception ex) { _logger.LogWarning(ex, "Safety: park failed"); }

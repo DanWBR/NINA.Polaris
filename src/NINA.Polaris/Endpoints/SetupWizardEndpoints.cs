@@ -76,7 +76,7 @@ public static class SetupWizardEndpoints {
                               || !string.IsNullOrWhiteSpace(rig?.Telescope);
 
             // On Linux, "already set up" also means an indi-web profile with a
-            // real (non-simulator) driver exists — same rule as INDIAUTO.
+            // real (non-simulator) driver exists, same rule as INDIAUTO.
             bool indiConfigured = false;
             if (web.IsSupportedOs && web.Running) {
                 foreach (var name in await web.GetProfileNamesAsync(ct)) {
@@ -239,7 +239,7 @@ public static class SetupWizardEndpoints {
         });
 
         // Clean up an abandoned probe. Only stops indiserver when it is
-        // running OUR temp profile — never an operator's real profile.
+        // running OUR temp profile, never an operator's real profile.
         group.MapPost("/indi/abort", async (IndiWebManagerService web, CancellationToken ct) => {
             if (!web.IsSupportedOs) return Results.Ok(new { cleaned = false });
             var active = await web.GetActiveProfileAsync(ct);
@@ -277,7 +277,7 @@ public static class SetupWizardEndpoints {
         }
 
         // Unambiguous USB matches (a single installed candidate) join the
-        // probe even outside the brand list — the catalog already did the
+        // probe even outside the brand list, the catalog already did the
         // identification, and one candidate means there is nothing to ask.
         foreach (var candidates in usbCandidates) {
             if (candidates is { Count: 1 } && !IndiDetectEndpoints.IsSimulator(candidates[0])

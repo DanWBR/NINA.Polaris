@@ -26,7 +26,7 @@ public interface IRknnTileRunner : IDisposable {
     /// <summary>Model input width/height (256 for the GraXpert models).</summary>
     int TileSize { get; }
 
-    /// <summary>Model input channel count (3 — NHWC RGB).</summary>
+    /// <summary>Model input channel count (3, NHWC RGB).</summary>
     int Channels { get; }
 
     /// <summary>

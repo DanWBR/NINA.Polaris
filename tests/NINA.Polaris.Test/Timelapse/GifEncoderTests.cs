@@ -60,7 +60,7 @@ public class GifEncoderTests {
 
     // Walk the GIF89a block structure end to end. Throws on any malformed block
     // (bad sub-block framing, truncated LZW, missing trailer) and returns the
-    // number of image frames — a structural decode without a native library.
+    // number of image frames, a structural decode without a native library.
     private static (int frames, int gctSize) Walk(byte[] g) {
         Assert.That(Encoding.ASCII.GetString(g, 0, 6), Is.EqualTo("GIF89a"), "signature");
         int p = 6;

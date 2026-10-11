@@ -81,7 +81,7 @@ public class ImageRelayBayerStabilizationTests {
 
         // Once a real pattern is locked for the session, a long run of None
         // frames is a CCD_CFA dropout (some OSC INDI drivers only publish the
-        // pattern intermittently), so reuse is UNBOUNDED — the old 5-frame cap
+        // pattern intermittently), so reuse is UNBOUNDED, the old 5-frame cap
         // flashed the LIVE view mono a few seconds after each stack (field
         // report). A genuine OSC->mono change only happens on a camera
         // reconnect, which builds a fresh relay with _lastRelayBayer = None.

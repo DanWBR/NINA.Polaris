@@ -51,7 +51,7 @@ public class StarDetector {
     /// <summary>Use 8-connectivity (include diagonals) in the flood fill.
     /// Defaults off (4-connectivity) for the live-tracking / alignment case.
     /// Auto-focus turns this on: a heavily-defocused star is a faint DONUT ring
-    /// whose pixels connect mostly diagonally — 4-connectivity shatters it into
+    /// whose pixels connect mostly diagonally, 4-connectivity shatters it into
     /// arcs that each measure HFR≈1 (and the real ring blob is size-rejected),
     /// which is exactly the "big defocused star reads HFR~1" failure. 8-conn
     /// keeps the ring a single blob so its true (large) radius is measured.</summary>
@@ -86,8 +86,8 @@ public class StarDetector {
         // bool[W*H] is ~9 MB of LOH each call on a 9 MP sensor AND exceeds
         // ArrayPool<bool>'s 2^20-element cap, so Rent/Return was a no-op
         // (fresh alloc every call). Use a ulong bitset (1 bit per pixel):
-        // 64× fewer elements keeps it UNDER the pool cap up to 64 MP — real
-        // pooling — and it's 8× smaller in bytes, so churn drops 8×. Clear
+        // 64× fewer elements keeps it UNDER the pool cap up to 64 MP, real
+        // pooling, and it's 8× smaller in bytes, so churn drops 8×. Clear
         // only the words we use; the pool may hand back a longer array.
         int visitedWords = (width * height + 63) >> 6;
         var visited = ArrayPool<ulong>.Shared.Rent(visitedWords);
@@ -225,7 +225,7 @@ public class StarDetector {
     /// a local background estimated from the box border ring subtracted, and
     /// returns the radius at which the enclosed background-subtracted flux first
     /// reaches 50% of the total. For a donut the flux sits in the ring, so the
-    /// 50%-enclosed radius lands near the ring radius — a correctly large HFR —
+    /// 50%-enclosed radius lands near the ring radius, a correctly large HFR,
     /// instead of the ~1 that the above-threshold first-moment yields on the
     /// shattered arcs.
     /// </summary>
@@ -336,7 +336,7 @@ public class StarDetector {
         // the merged counts are identical to the serial scan (sums are
         // order-independent). The flood-fill detection below stays serial
         // because it shares the visited[] mask.
-        // MEMOPT: partition-local bins are rented from the shared pool —
+        // MEMOPT: partition-local bins are rented from the shared pool,
         // a fresh int[65536] is a 256 KB LOH array per partition per pass,
         // and Detect runs on every live frame.
         var histogram = new int[65536];
@@ -366,7 +366,7 @@ public class StarDetector {
         // If the zero bucket dominates the buffer (subframe black
         // border, un-touched live-stack accumulator cells from
         // alignment offsets, masked-out regions), the naive median
-        // is 0 and MAD collapses too — every real star gets clipped
+        // is 0 and MAD collapses too, every real star gets clipped
         // under a threshold of 0. Skip the zero bucket when zeros
         // outnumber real samples by a wide margin and the buffer
         // still has enough non-zero data to compute meaningful

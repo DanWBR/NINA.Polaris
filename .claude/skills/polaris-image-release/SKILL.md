@@ -18,7 +18,7 @@ would not enumerate, a kernel console pinned to a serial port nobody had.
 
 Ask for nothing you can check yourself. Confirm:
 
-- **WSL2 with root** (`wsl -u root`) — loop devices and chroot need it. No sudo
+- **WSL2 with root** (`wsl -u root`), loop devices and chroot need it. No sudo
   password is needed with `-u root`.
 - **qemu-user-static + binfmt**, only for arm64 images. See "Registering binfmt".
 - **NanaZip** (`NanaZipC.exe`) on the Windows side for compression.
@@ -32,7 +32,7 @@ plus a boot-test copy). Check free space on the WSL filesystem before starting.
 ## 1. Get the released .deb
 
 Pushing to master tags a release and CI builds the packages, so the deb the
-users install already exists — build one locally only if the release is
+users install already exists, build one locally only if the release is
 missing. Using the released artifact means the image carries the same bytes
 users get from the update button.
 
@@ -54,7 +54,7 @@ local build has a different version stamp and defeats the point.
 7z x -so "/mnt/e/GDrive/Polaris/<name>.7z" > /root/<name>.img
 ```
 
-`7z -so` streams, so piping it through `head -c` extracts only a prefix — handy
+`7z -so` streams, so piping it through `head -c` extracts only a prefix, handy
 for a quick look at a boot partition without unpacking 30 GB. It does not help
 for the update itself, which needs the whole image: ext4 will not mount from a
 truncated file, because the block bitmaps live at the end.
@@ -94,7 +94,7 @@ grep '^:qemu-aarch64:' /usr/lib/binfmt.d/qemu-aarch64.conf \
 ```
 
 Expand those `\xHH` escapes by hand and every `exec` on the distro starts
-failing with ELOOP — the magic no longer matches ELF, so the kernel hands x86
+failing with ELOOP, the magic no longer matches ELF, so the kernel hands x86
 binaries to qemu too. It cost a full WSL reinstall once. Let the kernel parse
 them.
 
@@ -103,25 +103,25 @@ them.
 Compression takes minutes and the upload takes longer, so check first. Run
 `scripts/image-verify.sh <img> <root-sectors>`; it reports:
 
-- **version** — `dpkg-query -W polaris` must be the version you installed.
-- **residue** — `machine-id` at 0 bytes, no `*/NINA.Polaris/cert` directory, no
+- **version**, `dpkg-query -W polaris` must be the version you installed.
+- **residue**, `machine-id` at 0 bytes, no `*/NINA.Polaris/cert` directory, no
   growroot marker, empty journal. A shipped machine-id makes every flashed
   device the same host to DHCP and mDNS; a shipped certificate means accepting
   it on one rig accepts it for all.
-- **kernel console** — the last `console=` must be a screen (`tty0` / `tty1`).
+- **kernel console**, the last `console=` must be a screen (`tty0` / `tty1`).
   The x86 image once shipped with only `console=ttyS0,115200n8`, left over from
   the autoinstall running on QEMU's serial port: on a real mini PC the display
   went black the instant the kernel took over from the EFI stub, and the only
   visible sign was that Ubuntu's recovery entry (which builds its own cmdline)
   still printed. If this check fails, fix `/etc/default/grub` **and** the
-  generated `grub.cfg` — `update-grub` cannot run against a loop device backed
+  generated `grub.cfg`, `update-grub` cannot run against a loop device backed
   by a file on `/mnt/c`, so patch the generated file and validate it with
   `chroot <mnt> grub-script-check /boot/grub/grub.cfg`.
 
 ## 5. Boot-test a copy (x86-64)
 
 Never boot the file you are going to ship. Booting writes a machine-id, a TLS
-keypair and the growroot marker into it — which is how those got shipped in the
+keypair and the growroot marker into it, which is how those got shipped in the
 first place. Copy it, boot the copy:
 
 ```bash
@@ -142,7 +142,7 @@ sshpass -p polaris ssh -p 2222 -o StrictHostKeyChecking=no polaris@127.0.0.1 \
 ```
 
 A first-boot image should answer `{"error":"auth required","authConfigured":false}`
-on `https://…:5000/api/system/status` — that is the sanitization proving itself:
+on `https://…:5000/api/system/status`, that is the sanitization proving itself:
 no profile, no password, no certificate.
 
 There is no equivalent for arm64: emulating those boards is unreliable enough
@@ -221,7 +221,7 @@ The download cards live in `website/content/install/install.json` plus the four
 locale copies (`install.pt-BR.json`, `.es`, `.fr`, `.de`). Each board is one
 entry in `images.items`; the x86-64 card is the first. Update `url`, `polaris`
 (`"0.97.2 (2026-07-29)"`) and `size` in **all five** files, then commit and
-push — the site deploys from master.
+push, the site deploys from master.
 
 Only edit the card for the image you actually rebuilt. The others still point
 at their own versions.

@@ -43,7 +43,7 @@ public class TakeExposureInstruction : SequenceInstruction {
 
     /// <summary>Filter to capture through. Written to the FITS header AND used
     /// to switch the wheel + apply the per-filter focuser offset (delta from the
-    /// previous filter) before capturing — when a wheel is connected. No-ops if
+    /// previous filter) before capturing, when a wheel is connected. No-ops if
     /// already on this filter or no wheel is present.</summary>
     public string? Filter { get; set; }
 
@@ -94,14 +94,14 @@ public class TakeExposureInstruction : SequenceInstruction {
 
         // Build the per-exposure options once (mirrors the AUTORUN path) so the
         // driver actually receives gain / offset / binning / frame-type / filter
-        // — previously the tree sequencer only set binning and captured with
+        //, previously the tree sequencer only set binning and captured with
         // defaults, so gain and the CCD_FRAME_TYPE tag were never applied.
-        // Offset falls back to the rig's DefaultOffset (bias pedestal) when the
-        // instruction doesn't pin one.
-        var rigOffset = ctx.Profiles.ActiveEquipmentProfile?.DefaultOffset ?? 0;
+        // Offset falls back to the rig's when the instruction does not pin one
+        // of its own (issue #26).
+        var advOffset = RigCaptureDefaults.Offset(ctx.Profiles);
         var capOpts = new NINA.Image.Interfaces.CaptureOptions(
             Gain: Gain,
-            Offset: Offset ?? (rigOffset > 0 ? rigOffset : (int?)null),
+            Offset: Offset ?? advOffset,
             BinX: Binning > 0 ? Binning : (int?)null,
             BinY: Binning > 0 ? Binning : (int?)null,
             ImageType: string.IsNullOrWhiteSpace(ImageType) ? "LIGHT" : ImageType,
@@ -110,7 +110,7 @@ public class TakeExposureInstruction : SequenceInstruction {
 
         // Fast-forward past frames captured before an interruption (resume /
         // retry). A fully-complete counter means this is a fresh re-entry
-        // (loop pass) — start a new full set.
+        // (loop pass), start a new full set.
         if (CompletedCount >= Count) CompletedCount = 0;
         if (CompletedCount > 0)
             ctx.Logger.LogInformation(
@@ -125,13 +125,31 @@ public class TakeExposureInstruction : SequenceInstruction {
             // a wait-and-retry on failure. Previously this loop had no try/catch at
             // all: a single transient CaptureAsync throw (a BLOB timeout during a
             // driver restart) escaped to SequenceEntityBase, whose defaults
-            // (Attempts=1, ErrorBehavior=AbortRun) killed the ENTIRE run — and on a
+            // (Attempts=1, ErrorBehavior=AbortRun) killed the ENTIRE run, and on a
             // PLAN that could then run end actions and power off the host. A driver
             // restart is recoverable in tens of seconds; the run just has to wait
             // for the watchdog. CaptureFrameWithRetryAsync does exactly that, and
             // CompletedCount (below) already makes a resumed frame idempotent.
             // Park here if a synchronized dither round is in flight (multi-cam).
             await ctx.Barrier.BeforeSubAsync("main", ct);
+
+            // And hold if THIS exposure would run past the meridian flip point.
+            // The flip trigger only asks whether a flip is due right now, which
+            // a sub that starts inside the window and ends outside it answers
+            // with "no" while tracking straight through (issue #30, reported
+            // against AUTORUN; the tree sequencer and PLAN share the gap).
+            // Only for a target: a dark or a flat has nowhere to be.
+            var flipTarget = ctx.CurrentTarget;
+            if (flipTarget != null && ImageType is null or "" or "LIGHT") {
+                var hold = ctx.MeridianFlip.WaitBeforeExposure(flipTarget.RaHours, ExposureSeconds);
+                if (hold > TimeSpan.Zero) {
+                    ctx.Logger.LogInformation(
+                        "TakeExposure '{Name}': holding {Sec:F0}s, a {Exp:F0}s exposure started "
+                        + "now would run past the meridian flip point",
+                        Name, hold.TotalSeconds, ExposureSeconds);
+                    await Task.Delay(hold, ct);
+                }
+            }
 
             NINA.Image.Interfaces.IImageData image =
                 await CaptureFrameWithRetryAsync(ctx, capOpts, ct);
@@ -184,7 +202,7 @@ public class TakeExposureInstruction : SequenceInstruction {
 
     /// <summary>Capture one frame, surviving a driver-restart recovery: wait for
     /// the camera to be ready, capture, and on a transient failure wait for ready
-    /// again and retry — up to <see cref="MaxCaptureRetries"/> times. Only a
+    /// again and retry, up to <see cref="MaxCaptureRetries"/> times. Only a
     /// failure that outlasts the retries (or a cancellation) propagates, so a
     /// recoverable BLOB timeout no longer trips the run's AbortRun policy.
     ///
@@ -214,7 +232,7 @@ public class TakeExposureInstruction : SequenceInstruction {
         }
         // Exhausted the retries: let it propagate to the entity error policy. If
         // the camera is genuinely broken (not just restarting), AbortRun is the
-        // right outcome — this only stops a TRANSIENT failure from doing that.
+        // right outcome, this only stops a TRANSIENT failure from doing that.
         throw last ?? new InvalidOperationException("Capture failed");
     }
 }
@@ -223,13 +241,13 @@ public class TakeExposureInstruction : SequenceInstruction {
 /// Ramp the camera cooler down to <see cref="TargetTempC"/> and wait until the
 /// sensor settles within <see cref="ToleranceDegC"/>.
 ///
-/// <see cref="RateDegPerMinute"/> mirrors <see cref="WarmCameraInstruction"/> —
+/// <see cref="RateDegPerMinute"/> mirrors <see cref="WarmCameraInstruction"/>,
 /// this instruction used to slam the setpoint while its warm-up twin ramped, so
 /// the gentle half of the cycle was the only half anyone got. Null = use the
 /// rig's CoolerRampDegPerMinute; 0 = no ramp.
 ///
 /// <see cref="TimeoutSeconds"/> budgets the SETTLE after the ramp arrives, not
-/// the ramp itself — a 27→0°C ramp at 2°C/min is ~14 min and would blow the old
+/// the ramp itself, a 27→0°C ramp at 2°C/min is ~14 min and would blow the old
 /// 600s deadline every time.
 /// </summary>
 public class CoolCameraInstruction : SequenceInstruction {
@@ -247,7 +265,7 @@ public class CoolCameraInstruction : SequenceInstruction {
                               coolerOnFirst: true, coolerOffWhenDone: false,
                               source: "Sequencer cooldown");
         // Wait for the setpoint to finish walking before we start judging the
-        // sensor against the target — otherwise the tolerance check races a
+        // sensor against the target, otherwise the tolerance check races a
         // setpoint that hasn't arrived yet and the timeout fires mid-ramp.
         await ctx.CoolingRamp.WaitAsync(ct);
 
@@ -269,7 +287,7 @@ public class CoolCameraInstruction : SequenceInstruction {
 /// sensor from thermal shock and the window from condensation.
 ///
 /// This instruction's hand-rolled ramp loop is the ancestor of
-/// <see cref="CoolingRampService"/> — it was the only ramp in the codebase, so it
+/// <see cref="CoolingRampService"/>, it was the only ramp in the codebase, so it
 /// got generalised rather than duplicated. Behaviour is unchanged (same 2°C/min,
 /// same 10s steps, cooler off on arrival); it now shares one implementation with
 /// the cooldown and with the UI buttons, so a fix here can't miss them.
@@ -292,7 +310,7 @@ public class WarmCameraInstruction : SequenceInstruction {
 }
 
 /// <summary>
-/// Cool the AUX camera to a setpoint — same ramp + wait/tolerance behaviour as
+/// Cool the AUX camera to a setpoint, same ramp + wait/tolerance behaviour as
 /// <see cref="CoolCameraInstruction"/> but on <c>ctx.Equipment.AuxCamera</c>.
 ///
 /// Ramps on the <c>Aux</c> slot, so a main-camera cooldown running at the same
@@ -328,7 +346,7 @@ public class CoolAuxCameraInstruction : SequenceInstruction {
 }
 
 /// <summary>
-/// Warm the AUX camera back to ambient and power off the cooler — same ramp as
+/// Warm the AUX camera back to ambient and power off the cooler, same ramp as
 /// <see cref="WarmCameraInstruction"/> but on <c>ctx.Equipment.AuxCamera</c>.
 /// </summary>
 public class WarmAuxCameraInstruction : SequenceInstruction {

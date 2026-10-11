@@ -61,7 +61,7 @@ public sealed class Trendline {
 /// fits a weighted trendline to each; their intersection estimates the focus
 /// position. The arm-membership rule is also what drives the sweep planner:
 /// a point belongs to an arm when it sits on that side of the minimum AND is
-/// meaningfully above it (Y &gt; minimum + 0.1) — so soft-rejected zero
+/// meaningfully above it (Y &gt; minimum + 0.1), so soft-rejected zero
 /// points and flat near-minimum scatter never count as arm coverage.
 /// </summary>
 public sealed class TrendlineFitting {

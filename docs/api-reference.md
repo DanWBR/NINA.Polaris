@@ -395,8 +395,18 @@ The authenticated Power controls use these endpoints:
 |--------|----------|----------|
 | `POST` | `/api/system/stop-app` | Stops only the Polaris process; the host remains running. |
 | `POST` | `/api/system/restart-app` | Restarts Polaris. |
-| `POST` | `/api/system/reboot` | Reboots the host on supported Linux/Windows deployments. |
-| `POST` | `/api/system/shutdown` | Powers off the host on supported Linux/Windows deployments. |
+| `POST` | `/api/system/reboot` | **DEVICE POWER.** Reboots the whole machine on supported Linux/Windows deployments. |
+| `POST` | `/api/system/shutdown` | **DEVICE POWER.** Powers the whole machine off on supported Linux/Windows deployments. |
+
+The last two are the **device**, not the Polaris process. A development build
+refuses them with `403` and says so in `GET /api/system/power`
+(`hostPowerRefusal`, and both capabilities report false), because two coding
+sessions called `/shutdown` to "stop the dev server" and switched off the
+developer's PC. Use `/api/system/stop-app` to stop Polaris itself. The refusal
+covers every path to device power, including the end-of-plan shutdown and the
+scheduled teardown, and `POLARIS_ALLOW_HOST_POWER=1` overrides it for a
+development build genuinely running a rig. `POLARIS_NO_HOST_POWER=1` switches
+device power off anywhere.
 
 macOS exposes only the Polaris process controls. After `/api/system/stop-app`
 is requested from the web interface, the browser stops reconnecting and tells

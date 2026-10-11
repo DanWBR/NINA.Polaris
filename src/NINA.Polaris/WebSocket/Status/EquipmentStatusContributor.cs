@@ -24,14 +24,16 @@ namespace NINA.Polaris.WebSocket.Status;
 public sealed class EquipmentStatusContributor : IStatusContributor {
     private readonly CameraStreamService _cameraStream;
     private readonly EquipmentManager _equip;
+    private readonly EquipmentSnapshotService _snapshot;
     private readonly NINA.Polaris.Services.Planetary.KeepCenteredService _keepCentered;
     private readonly NetworkManagerService _network;
     private readonly NINA.Polaris.Services.Simulator.SimulatorService _simulator;
     private readonly UsbDriveWatcherService _usbWatcher;
 
-    public EquipmentStatusContributor(CameraStreamService cameraStream, EquipmentManager equip, NINA.Polaris.Services.Planetary.KeepCenteredService keepCentered, NetworkManagerService network, NINA.Polaris.Services.Simulator.SimulatorService simulator, UsbDriveWatcherService usbWatcher) {
+    public EquipmentStatusContributor(CameraStreamService cameraStream, EquipmentManager equip, EquipmentSnapshotService snapshot, NINA.Polaris.Services.Planetary.KeepCenteredService keepCentered, NetworkManagerService network, NINA.Polaris.Services.Simulator.SimulatorService simulator, UsbDriveWatcherService usbWatcher) {
         _cameraStream = cameraStream;
         _equip = equip;
+        _snapshot = snapshot;
         _keepCentered = keepCentered;
         _network = network;
         _simulator = simulator;
@@ -48,13 +50,26 @@ public sealed class EquipmentStatusContributor : IStatusContributor {
         var simulator = _simulator;
         var usbWatcher = _usbWatcher;
 
-            tick.Blocks["equipment"] = equip.GetEquipmentStatus();
+            // Served from the snapshot thread, never read from the devices
+            // here: every property in this block is a blocking call (an SDK
+            // lock the video grab loop keeps barging, a 15 s Alpaca HTTP
+            // read), and doing it on the socket's thread is what froze the
+            // host on 2026-09-22. See EquipmentSnapshotService.
+            //
+            // The direct call is the cold-start path only: the first tick can
+            // land before the snapshot thread has produced anything, and at
+            // that point nothing is streaming and nothing is contended.
+            tick.Blocks["equipment"] = _snapshot.Latest ?? equip.GetEquipmentStatus();
 
             // Auxiliary camera capture loop status (running + frames
             // saved this session + a no-output-folder warning).
             tick.Blocks["cameraStream"] = new {
                 running = cameraStream.IsRunning,
                 mode = cameraStream.Mode,
+                // Who holds the camera exclusively, if anyone. A running
+                // stream owns it and every other capture is refused, which is
+                // what the header chip and the refusal messages are about.
+                owner = NINA.Polaris.Services.CameraCaptureGate.ExclusiveOwner,
                 exposure = cameraStream.ExposureSeconds,
                 gain = cameraStream.Gain,
                 frames = cameraStream.FrameCount,
@@ -117,6 +132,12 @@ public sealed class EquipmentStatusContributor : IStatusContributor {
                 hotspotSsid       = network.HotspotSsid,
                 lastError         = network.LastError,
                 unsupportedReason = network.UnsupportedReason,
+                // A wireless adapter that exists and that NetworkManager
+                // refuses to drive. Without this the card shows "no WiFi
+                // hardware" on a machine that plainly has some, and every
+                // hotspot attempt fails somewhere the operator never looks.
+                wifiUnmanagedIface = network.UnmanagedWifiInterface,
+                wifiUnmanagedReason = network.WifiUnmanagedReason,
                 lastRefreshAt     = network.LastRefreshAt,
                 // Auto AP fallback: when the rig is carried
                 // out of range of every saved network the
@@ -124,7 +145,18 @@ public sealed class EquipmentStatusContributor : IStatusContributor {
                 // reachable. fallbackEngaged tells the UI to
                 // show "Hotspot started automatically".
                 autoHotspotFallback = network.AutoHotspotFallback,
-                fallbackEngaged     = network.HotspotFallbackEngaged
+                fallbackEngaged     = network.HotspotFallbackEngaged,
+                // Wired preference: with wifiOffWhenWired on, the
+                // radio is parked while the cable carries an
+                // address (two interfaces on one subnet is an
+                // ARP-flux trap). parkedForWired is the state the
+                // Settings card explains.
+                wifiOffWhenWired    = network.WifiOffWhenWired,
+                wifiRadioOff        = network.WifiRadioOff,
+                parkedForWired      = network.WifiParkedForWired,
+                wired               = network.WiredConnected,
+                wiredInterface      = network.WiredInterface,
+                wiredIp             = network.WiredIp
             };
 
             // Auto-push of saved images to network storage

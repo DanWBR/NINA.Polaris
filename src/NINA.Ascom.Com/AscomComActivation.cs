@@ -64,7 +64,7 @@ public static class AscomComActivation {
     }
 
     /// <summary>Breadcrumb, for the adapters to bracket the driver's own
-    /// <c>Connected = true</c> — the other place a real driver can die.</summary>
+    /// <c>Connected = true</c>, the other place a real driver can die.</summary>
     public static void Note(string message) => Log(message);
 
     /// <summary>Public view of a driver's registered in-proc bitness, so a

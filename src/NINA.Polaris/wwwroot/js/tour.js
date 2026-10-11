@@ -9,7 +9,7 @@
 // Interactive introductory tour (coach-marks + auto panel switching).
 //
 // Self-contained module (same IIFE pattern as virtual-keyboard.js). It is
-// PURELY additive: it never touches equipment or fires API calls — it only
+// PURELY additive: it never touches equipment or fires API calls, it only
 // reads/sets the Alpine UI navigation state (window.__alpineRoot.tab and the
 // sub-tab fields) and draws a spotlight + arrow + tooltip over real controls.
 // So it cannot disturb Slew & Center, plate solving, captures, or any in-flight
@@ -285,7 +285,7 @@
         return [
             { center: true, title: 'Settings', body: "Let's walk through the Settings cards one by one: what each one is for. Cards that don't apply to your device are skipped.", before: open },
             { target: '[data-tour="set-https"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'HTTPS certificate', body: 'Generate/install a TLS certificate so the browser trusts the server over HTTPS, needed for WebGPU and secure remote access.' },
-            { target: '[data-tour="set-storage"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Auto-push to network storage', body: 'Automatically copy saved frames to a NAS / network share as they are written.' },
+            { target: '[data-tour="set-storage"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Auto-push to network or cloud storage', body: 'Automatically copy saved frames to a NAS, an SSH box or a cloud account as they are written.' },
             { target: '[data-tour="set-appearance"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Appearance', body: 'UI language, theme, font and density.' },
             { target: '[data-tour="set-skyimg"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Sky imagery (offline DSS)', body: 'Download deep-sky survey tiles for offline use, so the Sky map shows real imagery without internet.' },
             { target: '[data-tour="set-terminal"]', placement: 'bottom', skipIfMissing: true, before: open, title: 'Remote terminal', body: 'An in-browser SSH terminal to the Polaris host (or any Linux box on your LAN). Credentials are per-session and never saved.' },
@@ -312,7 +312,7 @@
 
     var state = { active: false, steps: null, idx: 0, dir: 1, els: null, raf: 0, onResize: null, onKey: null };
 
-    // Tour registry — start(id) picks the step list. 'intro' is the main
+    // Tour registry, start(id) picks the step list. 'intro' is the main
     // overview; 'statusbars' and 'settings' are the optional deep-dives.
     function tourSteps(id) {
         if (id === 'statusbars') return statusbarSteps();
@@ -426,7 +426,7 @@
     }
 
     // Resolve a step's target: wait (briefly) for it to exist + be visible,
-    // scrolling it into view. Calls cb(found) — found=false means the anchor
+    // scrolling it into view. Calls cb(found), found=false means the anchor
     // never showed up (e.g. a platform-specific Settings card that isn't
     // rendered on this host).
     function waitForTarget(step, cb) {
@@ -539,7 +539,7 @@
 
     window.PolarisTour = { start: start, stop: stop, maybeOfferFirstRun: maybeOfferFirstRun };
 
-    // Offer the tour after Alpine boots — but wait until the password / location
+    // Offer the tour after Alpine boots, but wait until the password / location
     // setup modals (if any) are dismissed so we never fight them.
     document.addEventListener('alpine:initialized', function () {
         var tries = 0;

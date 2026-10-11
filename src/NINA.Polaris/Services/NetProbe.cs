@@ -20,7 +20,7 @@ namespace NINA.Polaris.Services;
 /// Shared TCP reachability probe for the service health/listen checks.
 /// </summary>
 /// <remarks>
-/// The naive pattern these checks used —
+/// The naive pattern these checks used,
 /// <code>
 /// var connect = tcp.ConnectAsync(host, port, ct).AsTask();
 /// var winner  = await Task.WhenAny(connect, Task.Delay(timeoutMs, ct));
@@ -29,7 +29,7 @@ namespace NINA.Polaris.Services;
 /// abandons <c>connect</c> when the timeout wins. That task keeps running; if it
 /// later completes faulted (a delayed <c>SocketException (111): Connection
 /// refused</c> can arrive well after the cap under load), nothing observes the
-/// fault, so the finalizer rethrows it as an <c>UnobservedTaskException</c> —
+/// fault, so the finalizer rethrows it as an <c>UnobservedTaskException</c>,
 /// the misleading <c>[FATAL]</c> lines that flood the log at the GC's cadence,
 /// not the probe's. This helper always OBSERVES the connect task: on timeout it
 /// attaches a fault-only continuation that swallows the eventual exception.

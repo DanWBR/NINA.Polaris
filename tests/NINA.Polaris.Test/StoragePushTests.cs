@@ -12,6 +12,7 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using Microsoft.Extensions.Logging.Abstractions;
 using NINA.Polaris.Services;
 using NINA.Polaris.Services.Storage;
 using NUnit.Framework;
@@ -92,11 +93,108 @@ public class StoragePushTests {
 
     [Test]
     public void Factory_MapsEachKind() {
-        var f = new StorageTargetFactory();
-        using (var t = f.Create("smb"))   Assert.That(t.Kind, Is.EqualTo("smb"));
-        using (var t = f.Create("sftp"))  Assert.That(t.Kind, Is.EqualTo("sftp"));
-        using (var t = f.Create("local")) Assert.That(t.Kind, Is.EqualTo("local"));
+        var f = NewFactory();
+        using (var t = f.Create("smb"))    Assert.That(t.Kind, Is.EqualTo("smb"));
+        using (var t = f.Create("sftp"))   Assert.That(t.Kind, Is.EqualTo("sftp"));
+        using (var t = f.Create("local"))  Assert.That(t.Kind, Is.EqualTo("local"));
+        // One kind for every cloud provider: the provider is a property of the
+        // rclone remote, not of Polaris. Constructing it needs no rclone binary.
+        using (var t = f.Create("rclone")) Assert.That(t.Kind, Is.EqualTo("rclone"));
         Assert.Throws<NotSupportedException>(() => f.Create("ftp"));
+    }
+
+    // ---- IsUnderRoot: what a folder send is allowed to touch ----
+
+    [Test]
+    public void IsUnderRoot_AcceptsTheRootAndWhatIsInsideIt() {
+        var root = Path.Combine(Path.GetTempPath(), "cap");
+        Assert.Multiple(() => {
+            Assert.That(StoragePushService.IsUnderRoot(root, root), Is.True);
+            Assert.That(StoragePushService.IsUnderRoot(root, Path.Combine(root, "rig", "M31")), Is.True);
+        });
+    }
+
+    [Test]
+    public void IsUnderRoot_RejectsASiblingThatMerelySharesThePrefix() {
+        // /files2 is not inside /files, and a prefix comparison without the
+        // separator says it is.
+        var root = Path.Combine(Path.GetTempPath(), "files");
+        var sibling = Path.Combine(Path.GetTempPath(), "files2");
+        Assert.That(StoragePushService.IsUnderRoot(root, sibling), Is.False);
+    }
+
+    [Test]
+    public void IsUnderRoot_RejectsAPathThatClimbsOut() {
+        var root = Path.Combine(Path.GetTempPath(), "cap");
+        Assert.That(StoragePushService.IsUnderRoot(root, Path.Combine(root, "..", "elsewhere")),
+            Is.False);
+    }
+
+    [TestCase("", "/x")]
+    [TestCase("/x", "")]
+    public void IsUnderRoot_WithNothingToCompareIsFalse(string root, string candidate) {
+        Assert.That(StoragePushService.IsUnderRoot(root, candidate), Is.False);
+    }
+
+    // ---- what a folder send leaves behind ----
+
+    [Test]
+    public void ExcludedFromPush_SkipsAnInterruptedTransfersSidecar() {
+        var root = Path.Combine(Path.GetTempPath(), "cap");
+        Assert.That(StoragePushService.IsExcludedFromPush(root,
+            Path.Combine(root, "rig", "a.fits" + StoragePath.PartialSuffix)), Is.True);
+    }
+
+    [Test]
+    public void ExcludedFromPush_SkipsWhatTheOperatorThrewAway() {
+        var root = Path.Combine(Path.GetTempPath(), "cap");
+        Assert.Multiple(() => {
+            Assert.That(StoragePushService.IsExcludedFromPush(root,
+                Path.Combine(root, "discarded", "bad.fits")), Is.True);
+            Assert.That(StoragePushService.IsExcludedFromPush(root,
+                Path.Combine(root, "rig", "discarded", "bad.fits")), Is.True);
+        });
+    }
+
+    [Test]
+    public void ExcludedFromPush_KeepsAnOrdinaryFrame() {
+        var root = Path.Combine(Path.GetTempPath(), "cap");
+        Assert.That(StoragePushService.IsExcludedFromPush(root,
+            Path.Combine(root, "rig", "M31", "lights", "a.fits")), Is.False);
+    }
+
+    [Test]
+    public void ExcludedFromPush_DoesNotMatchAFolderMerelyNamedLikeIt() {
+        var root = Path.Combine(Path.GetTempPath(), "cap");
+        Assert.That(StoragePushService.IsExcludedFromPush(root,
+            Path.Combine(root, "discarded-ideas", "a.fits")), Is.False);
+    }
+
+    // ---- the config the lanes compare ----
+
+    [Test]
+    public void StorageConfig_NoticesANewRemote() {
+        var a = new StorageConfig("rclone", "", 0, "", "astro", "", "", "", 100, RemoteName: "gdrive");
+        var b = a with { RemoteName = "onedrive" };
+        Assert.That(a, Is.Not.EqualTo(b), "the lane must rebuild against the new remote");
+    }
+
+    [Test]
+    public void StorageConfig_NoticesAReAuthorisationThroughTheRevision() {
+        // The credential itself lives in rclone.conf, which this record cannot
+        // see. The revision is the only thing that tells the lane to reconnect.
+        var a = new StorageConfig("rclone", "", 0, "", "astro", "", "", "", 100,
+                                  RemoteName: "gdrive", BandwidthLimit: "", RemoteRevision: 1);
+        var b = a with { RemoteRevision = 2 };
+        Assert.That(a, Is.Not.EqualTo(b));
+    }
+
+    private static StorageTargetFactory NewFactory() {
+        var cfg = new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
+        var profiles = new ProfileService(cfg, NullLogger<ProfileService>.Instance);
+        var rclone = new NINA.Polaris.Services.External.RcloneService(
+            profiles, NullLogger<NINA.Polaris.Services.External.RcloneService>.Instance);
+        return new StorageTargetFactory(rclone, NullLoggerFactory.Instance);
     }
 
     // SHARESYNC-2: ListAsync backs the backfill pre-scan (enqueue only missing).

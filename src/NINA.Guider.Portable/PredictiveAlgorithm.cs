@@ -93,7 +93,7 @@ public sealed class PredictiveAlgorithm : IGuideAlgorithm {
     private double _estPeriodSec;
     // Cumulative correction this algorithm has commanded. Adding it back to the
     // measured residual reconstructs the underlying disturbance (PE + drift),
-    // which is what the model must learn — the raw residual is the controller's
+    // which is what the model must learn, the raw residual is the controller's
     // own already-corrected output.
     private double _appliedCum;
     // Last fit that cleared the confidence bar, for ExportModel.
@@ -451,7 +451,7 @@ public sealed class PredictiveAlgorithm : IGuideAlgorithm {
     /// though the model uses a series. A candidate at twice the true period has
     /// the true period as its own second harmonic, so scanning with harmonics
     /// would let the octave explain the data just as well while also spending
-    /// unpenalised parameters — the estimator would drift to the wrong
+    /// unpenalised parameters, the estimator would drift to the wrong
     /// fundamental. One harmonic per candidate makes the fundamental, which
     /// carries most of the amplitude, win on its own.</para></summary>
     private double EstimatePeriod(double slope, double intercept) {

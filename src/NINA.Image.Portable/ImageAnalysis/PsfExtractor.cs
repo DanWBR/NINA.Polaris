@@ -21,7 +21,7 @@ namespace NINA.Image.ImageAnalysis;
 ///
 /// Pipeline (all classical, traceable):
 ///   1. detect stars (<see cref="StarDetector"/>);
-///   2. keep only clean PSF probes — high SNR, NOT saturated, round, isolated,
+///   2. keep only clean PSF probes, high SNR, NOT saturated, round, isolated,
 ///      away from the border;
 ///   3. cut an odd stamp around each, subtract its local background, recenter
 ///      to sub-pixel accuracy (flux-weighted centroid + bilinear resample) and
@@ -122,7 +122,7 @@ public class PsfExtractor {
     /// <paramref name="gridX"/>×<paramref name="gridY"/> grid and fit a PSF per
     /// cell from the stars in (a margin-expanded) cell, falling back to the
     /// global PSF where a cell is too star-poor. This is what lets the
-    /// deconvolution treat corners differently from the centre — field
+    /// deconvolution treat corners differently from the centre, field
     /// curvature / coma / tilt make the PSF vary across the frame, and almost
     /// no consumer tool models that. Returns null when even the global PSF
     /// can't be measured.

@@ -118,6 +118,10 @@ public sealed class GuidingStatusContributor : IStatusContributor {
                 backend = activeGuider.Backend,
                 connected = true,
                 appState = activeGuider.AppState,
+                // What the last star selection saw ("14 found, 11 usable,
+                // 3 saturated"), so tuning the selection knobs is not
+                // guesswork. Native guider only; null elsewhere.
+                starSelection = (activeGuider as NativeGuider)?.LastStarSelection,
                 guiding = activeGuider.IsGuiding,
                 calibrating = activeGuider.IsCalibrating,
                 paused = activeGuider.IsPaused,
@@ -193,9 +197,17 @@ public sealed class GuidingStatusContributor : IStatusContributor {
                 }
             };
         } else {
+            // A disconnected guider has no session, and says so. These five
+            // used to be absent here, which let the client keep whatever it
+            // last saw: a guide camera that dropped during a dither left the
+            // yellow "Dithering: settling" banner on screen for the rest of the
+            // night, and STOP could not clear it because the server was no
+            // longer sending the field at all.
             guiderPayload = new {
                 backend = activeGuider.Backend,
                 connected = false, appState = "Stopped",
+                guiding = false, calibrating = false, looping = false,
+                paused = false, settling = false, dithering = false,
                 exposureMs = activeGuider.ExposureMs,
                 guideCameraConnected = equip.GuideCamera?.IsConnected ?? false,
                 guideCameraName = equip.GuideCamera?.DeviceName,

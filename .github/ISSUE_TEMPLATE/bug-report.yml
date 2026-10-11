@@ -1,0 +1,60 @@
+name: Bug report
+description: Something in Polaris does not do what it says
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For a device that will not appear or will not behave, use the
+        **Equipment report** instead: it asks for the driver output that
+        settles those in one round.
+
+  - type: input
+    id: polaris-version
+    attributes:
+      label: Polaris version
+      placeholder: "0.98.155"
+    validations:
+      required: true
+
+  - type: input
+    id: host
+    attributes:
+      label: Host and browser
+      description: The board or PC Polaris runs on, and what you were looking at it with.
+      placeholder: "Raspberry Pi 5, Ubuntu 24.04; Firefox on Windows"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you got.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Does it happen again
+      description: |
+        Every time, sometimes, or once. "Once, and I cannot reproduce it" is a
+        perfectly good answer and worth reporting; say what was going on around
+        it instead.
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log
+      description: |
+        `~/.local/share/NINA/Logs/nina-polaris-YYYYMMDD.log`, the lines around
+        the failure. If the page itself misbehaved, the browser console too.
+      render: shell
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: A screenshot helps when the complaint is about what is on screen.

@@ -366,7 +366,7 @@ public static class PlateSolveEndpoints {
                     // CD matrix (deg/px): carries the frame's true orientation
                     // INCLUDING parity (mirror), which the scalar rotation
                     // cannot. The SKY FOV rectangles use it to draw the real
-                    // sensor footprint. Nullable — some solvers (a.net online)
+                    // sensor footprint. Nullable, some solvers (a.net online)
                     // may not provide it.
                     cd11 = result.CD11, cd12 = result.CD12,
                     cd21 = result.CD21, cd22 = result.CD22
@@ -392,7 +392,7 @@ public static class PlateSolveEndpoints {
         // Captures one frame from the connected AUX camera, solves it, and
         // returns RA/Dec/rotation/scale. The aux rides the same mount, so
         // the value is the actual sky ROTATION + scale the aux frame will
-        // come out with — the operator sees the real pink aux FOV on SKY
+        // come out with, the operator sees the real pink aux FOV on SKY
         // rather than an assumed angle. Independent hardware from the main
         // camera, so it can run concurrently with the main solve.
         group.MapPost("/solve-aux", async (
@@ -589,7 +589,7 @@ public static class PlateSolveEndpoints {
             int width = 0, height = 0;
             double? hintRa = request.HintRa, hintDec = request.HintDec;
             // If the FITS already carries a full WCS (CRVAL/CRPIX/CD), reuse it
-            // and skip re-solving entirely — re-running ASTAP on a full-res frame
+            // and skip re-solving entirely, re-running ASTAP on a full-res frame
             // is slow and was timing out; the embedded WCS is exactly what a
             // prior solve produced and is enough to place the annotations.
             NINA.Image.FileFormat.FITS.WcsInfo? headerWcs = null;
@@ -629,7 +629,7 @@ public static class PlateSolveEndpoints {
                 }
             }
 
-            // Fast path: the FITS already has a usable WCS — project straight from
+            // Fast path: the FITS already has a usable WCS, project straight from
             // it, no solver call. This is instant and avoids the re-solve timeout.
             if (headerWcs != null
                 && (headerWcs.CD11 * headerWcs.CD22 - headerWcs.CD12 * headerWcs.CD21) != 0) {
@@ -762,7 +762,7 @@ public static class PlateSolveEndpoints {
             // YPIXSZ + NAXIS2), falling back to the active rig's
             // focal length + connected camera pixel size. ASTAP's -fov
             // is the field *height* (vertical), so derive it from the
-            // image HEIGHT + Y pixel size — using the width over-states
+            // image HEIGHT + Y pixel size, using the width over-states
             // the FOV on any non-square sensor and makes a hinted solve
             // fail at the wrong scale (N.I.N.A. desktop passes FoVH too).
             double fovDeg = 0;
@@ -870,8 +870,8 @@ public static class PlateSolveEndpoints {
                         NINA.Image.ImageData.BaseImageData img;
                         using (var fs = File.OpenRead(request.Path)) img = FITSReader.Read(fs);
                         // Prefer the solver's real CD matrix (carries parity /
-                        // mirror); only reconstruct from (scale, rotation) — which
-                        // assumes a fixed handedness and can mirror the RA axis — as
+                        // mirror); only reconstruct from (scale, rotation), which
+                        // assumes a fixed handedness and can mirror the RA axis, as
                         // a last resort when no CD matrix was reported.
                         var wcs = result.HasCdMatrix
                             ? WcsHeaders.FromCdMatrix(
@@ -1024,7 +1024,7 @@ public static class PlateSolveEndpoints {
     /// search radius. <c>Silent</c> suppresses the live progress
     /// console stream (used by the background per-frame solve that
     /// keeps the red FOV rectangle glued to the solved sky position
-    /// during live-stacking / autorun / plan — the operator never
+    /// during live-stacking / autorun / plan, the operator never
     /// asked for it, so it must not flood the solver-log panel).</summary>
     public record SolveLatestRequest(
         double? HintRa,

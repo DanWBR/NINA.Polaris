@@ -27,7 +27,7 @@ namespace NINA.Polaris.Test;
 /// indi_v4l2_ccd, asked for 2 s. The driver answered with three messages and
 /// put CCD_EXPOSURE into Alert. Polaris was watching for a BLOB, so it waited,
 /// the browser gave up first, and the operator was told "Request timed out" and
-/// shown an empty preview — for a camera that had already explained, in one
+/// shown an empty preview, for a camera that had already explained, in one
 /// line, that it tops out at half a second.
 /// </summary>
 [TestFixture]

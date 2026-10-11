@@ -191,6 +191,16 @@ Auto-start at Polaris boot is opt-in via `Phd2Gui:AutoStart` in
 Guiding state, unexpected"**, usually a guide star couldn't be
 locked. Lengthen `find_star` exposure or pick a denser field manually.
 
+**PHD2 cannot keep the guide camera, and Polaris reports that the INDI
+copy was disconnected**, Polaris has that same camera open itself
+through a vendor SDK or Alpaca, and a camera has one owner. Disconnect
+the guide camera in the GUIDE tab, or set this rig's guider to PHD2 in
+RIGS: in PHD2 mode Polaris releases its own handle when PHD2 opens the
+camera instead of disconnecting PHD2's. A camera merely selected in the
+card is not held and is never blocked. Worth clearing up quickly:
+repeated connect attempts against a held ASI camera can leave its
+firmware stuck, and only unplugging it clears that.
+
 **Profile switch hangs at "switching"**, PHD2 is busy disconnecting
 equipment. Wait 30s; it will resolve. If stuck longer, click ⟳ Refresh
 in the Control tab connection panel.

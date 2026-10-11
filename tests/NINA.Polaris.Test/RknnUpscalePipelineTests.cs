@@ -23,7 +23,7 @@ namespace NINA.Polaris.Test;
 /// <see cref="IRknnUpscaleTileRunner"/> stands in for the NPU. Core invariant: with
 /// a model that just NEAREST-NEIGHBOUR upsamples its (normalized) input, the whole
 /// pipeline's per-channel MAD-normalize → model → denormalize → stitch reduces to a
-/// plain 2× nearest upsample of the input — <c>out[oy,ox] == in[oy/2, ox/2]</c>.
+/// plain 2× nearest upsample of the input, <c>out[oy,ox] == in[oy/2, ox/2]</c>.
 /// That pins the tiling, normalization round-trip, and the scale×-larger stitch.
 /// </summary>
 [TestFixture]

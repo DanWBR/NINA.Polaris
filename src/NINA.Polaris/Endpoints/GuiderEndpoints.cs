@@ -188,7 +188,7 @@ public static class GuiderEndpoints {
                 return Results.BadRequest(new { error = "Save/load calibration is only available on the native guider." });
             var data = ng.ExportCalibrationData();
             if (data == null)
-                return Results.BadRequest(new { error = "No calibration to save yet — calibrate first." });
+                return Results.BadRequest(new { error = "No calibration to save yet, calibrate first." });
             return Results.Ok(new { calibration = data });
         });
 
@@ -419,18 +419,57 @@ public static class GuiderEndpoints {
             } catch (Exception ex) { return Results.Problem(ex.Message); }
         });
 
-        group.MapPost("/dither", async (ActiveGuiderProvider guiders, DitherRequest? request) => {
+        // A dither moves the mount, so it must not land in the middle of an
+        // imaging exposure: the sub being written gets the trail. Reported from
+        // the field (issue #32): pressing Dither during a running exposure
+        // dithered immediately.
+        //
+        // The dither therefore runs under the main camera's capture gate, which
+        // both waits for the exposure in flight and keeps the next one from
+        // starting until the settle is done. When the camera is already busy
+        // the wait can be minutes, far longer than any browser will hold a
+        // request open, so that case returns 202 and finishes in the
+        // background; the guider's own dithering flag in the status stream is
+        // what says when it actually starts.
+        group.MapPost("/dither", async (ActiveGuiderProvider guiders,
+                Microsoft.Extensions.Logging.ILoggerFactory lf, DitherRequest? request) => {
             var g = guiders.Active;
             if (!g.IsConnected) return Results.BadRequest(new { error = "Guider not connected" });
-            try {
-                await g.DitherAsync(
-                    pixels: request?.Pixels ?? 5.0,
-                    raOnly: request?.RaOnly ?? false,
-                    settlePixels: request?.SettlePixels ?? 1.5,
-                    settleTime: request?.SettleTime ?? 10,
-                    settleTimeout: request?.SettleTimeout ?? 40);
-                return Results.Ok(new { status = "dither_requested" });
-            } catch (Exception ex) { return Results.Problem(ex.Message); }
+
+            var px = request?.Pixels ?? 5.0;
+            var raOnly = request?.RaOnly ?? false;
+            var settlePixels = request?.SettlePixels ?? 1.5;
+            var settleTime = request?.SettleTime ?? 10;
+            var settleTimeout = request?.SettleTimeout ?? 40;
+            Task Dither() => g.DitherAsync(px, raOnly, settlePixels, settleTime, settleTimeout);
+
+            // A native video stream holds the camera exclusively and the gate
+            // would refuse us outright. There is no minutes-long shutter to
+            // ruin there, so dither straight away rather than not at all.
+            if (CameraCaptureGate.ExclusiveOwner != null) {
+                try { await Dither(); return Results.Ok(new { status = "dither_requested" }); }
+                catch (Exception ex) { return Results.Problem(ex.Message); }
+            }
+
+            if (!CameraCaptureGate.CaptureInFlight) {
+                try {
+                    await CameraCaptureGate.RunAsync(Dither,
+                        acquireTimeout: TimeSpan.FromSeconds(30));
+                    return Results.Ok(new { status = "dither_requested" });
+                } catch (Exception ex) { return Results.Problem(ex.Message); }
+            }
+
+            var log = lf.CreateLogger("Guider");
+            log.LogInformation("Dither queued: an exposure is in progress");
+            _ = Task.Run(async () => {
+                try {
+                    await CameraCaptureGate.RunAsync(Dither,
+                        acquireTimeout: TimeSpan.FromMinutes(20));
+                } catch (Exception ex) {
+                    log.LogWarning(ex, "Queued dither did not run");
+                }
+            });
+            return Results.Accepted(value: new { status = "queued" });
         });
 
         group.MapPost("/exposure/{ms:int}", async (int ms, ActiveGuiderProvider guiders) => {
@@ -541,7 +580,7 @@ public static class GuiderEndpoints {
         group.MapGet("/exposure", async (PHD2Client phd2) => {
             // "Not connected" is a normal state for a status probe (e.g. the
             // native guider is active, or PHD2 hasn't been launched yet), not a
-            // client error — return 200 so it doesn't spam the debug log.
+            // client error, return 200 so it doesn't spam the debug log.
             if (!phd2.IsConnected) return Results.Ok(new { connected = false });
             try {
                 var current = await phd2.GetExposureAsync();
@@ -561,7 +600,7 @@ public static class GuiderEndpoints {
         // ---- Dec guide mode ----
 
         group.MapGet("/dec-mode", async (PHD2Client phd2) => {
-            // Status probe — benign when PHD2 isn't connected (see /exposure).
+            // Status probe, benign when PHD2 isn't connected (see /exposure).
             if (!phd2.IsConnected) return Results.Ok(new { connected = false });
             try { return Results.Ok(new { mode = await phd2.GetDecGuideModeAsync() }); }
             catch (Exception ex) { return Results.Problem(ex.Message); }

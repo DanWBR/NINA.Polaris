@@ -25,7 +25,7 @@ namespace NINA.Polaris.Test;
 /// The field bug: while the star is missing the mount keeps tracking with no
 /// corrections, so the star drifts. The per-frame search was a fixed 15 px window
 /// around the lock, so once the drift exceeded that the star was never found
-/// again — it could be sitting 30 px away, blazing, in a clear sky, and the loop
+/// again, it could be sitting 30 px away, blazing, in a clear sky, and the loop
 /// stayed in LostLock all night. The only cure was the user doing stop → loop →
 /// start by hand, which re-detects on the full frame. "Isso é crítico para
 /// processos de captura longa."
@@ -43,7 +43,7 @@ public class NativeGuiderRecoveryTests {
     private const int Base = 15;
     private const int Max = 60;
 
-    /// <summary>Guiding normally (and the first lost frame — could be a satellite
+    /// <summary>Guiding normally (and the first lost frame, could be a satellite
     /// or a gust) keeps the tight window. Widening on every blip would invite
     /// neighbour-locks for no reason.</summary>
     [Test]
@@ -52,7 +52,7 @@ public class NativeGuiderRecoveryTests {
         Assert.That(NativeGuider.RecoverySearchRegionFor(1, Base, Max), Is.EqualTo(Base));
     }
 
-    /// <summary>Sustained loss widens the window — the actual fix for a drifting
+    /// <summary>Sustained loss widens the window, the actual fix for a drifting
     /// star. One base-width every 2 lost frames.</summary>
     [Test]
     public void SearchRegion_WidensAsFramesAreLost() {
@@ -64,7 +64,7 @@ public class NativeGuiderRecoveryTests {
     /// <summary>THE safety property. The window must never grow without bound: a
     /// huge search hands Find() a whole field of stars and it returns the
     /// BRIGHTEST, not ours. Locking a neighbour mid-session is worse than staying
-    /// lost — the jump gets applied as a correction.</summary>
+    /// lost, the jump gets applied as a correction.</summary>
     [Test]
     public void SearchRegion_IsCapped_NoMatterHowLongTheCloudLasts() {
         foreach (var lost in new[] { 8, 20, 100, 10_000 }) {
@@ -101,7 +101,7 @@ public class NativeGuiderRecoveryTests {
         Assert.That(pick, Is.Null, "a star 300px away is not the one we lost");
     }
 
-    /// <summary>Saturated stars are useless for centroiding — the same guard
+    /// <summary>Saturated stars are useless for centroiding, the same guard
     /// AutoSelectStarAsync applies. Must survive here or recovery would lock onto
     /// exactly the star that can't be measured.</summary>
     [Test]

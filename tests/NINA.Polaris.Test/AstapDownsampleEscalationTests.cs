@@ -27,7 +27,7 @@ namespace NINA.Polaris.Test;
 /// failed at -z 2 solved at -z 4 (coarser binning averages down noise, flattens
 /// the bright nebula's high-frequency structure, and compacts stars). This pins
 /// the escalation factor. The end-to-end recovery is a field check (needs ASTAP +
-/// the failing FITS — verified there: green+z4 solved a frame green+z2 couldn't).
+/// the failing FITS, verified there: green+z4 solved a frame green+z2 couldn't).
 /// </summary>
 [TestFixture]
 public class AstapDownsampleEscalationTests {
@@ -42,14 +42,14 @@ public class AstapDownsampleEscalationTests {
         return new AstapSolver(cfg, NullLogger<AstapSolver>.Instance, profiles);
     }
 
-    /// <summary>The default (-z 2) escalates to at least 4 — the factor that
+    /// <summary>The default (-z 2) escalates to at least 4, the factor that
     /// recovered the marginal M8 frame.</summary>
     [Test]
     public void Escalate_FromDefaultTwo_GoesToFour() {
         Assert.That(AstapSolver.EscalatedDownsample(2), Is.EqualTo(4));
     }
 
-    /// <summary>Auto (-z 0, "ASTAP decides") isn't coarse enough for these frames —
+    /// <summary>Auto (-z 0, "ASTAP decides") isn't coarse enough for these frames,
     /// escalate it to a concrete 4.</summary>
     [Test]
     public void Escalate_FromAuto_GoesToFour() {

@@ -168,6 +168,12 @@ public sealed class AscomComTelescope : ITelescope, IDisposable {
         try { drv.MoveAxis(1, 0.0); } catch { }
     });
 
+    /// <summary>Rate 0 on the one axis that direction jogs, so the other
+    /// axis (and any slew or tracking) keeps running. ASCOM defines
+    /// MoveAxis(axis, 0) as exactly "stop this axis".</summary>
+    public Task StopMotionAsync(MountJogDirection direction, CancellationToken ct = default)
+        => Jog(direction is MountJogDirection.North or MountJogDirection.South ? 1 : 0, 0.0);
+
     private Task Jog(int axis, double rate) => _disp.Invoke(() => {
         var drv = _driver;
         if (!_canMoveAxis || drv is null) return;

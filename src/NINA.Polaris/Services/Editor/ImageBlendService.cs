@@ -21,7 +21,7 @@ using SkiaSharp;
 namespace NINA.Polaris.Services.Editor;
 
 /// <summary>
-/// "Image Blend" tool — the in-app equivalent of PixInsight's ImageBlend
+/// "Image Blend" tool, the in-app equivalent of PixInsight's ImageBlend
 /// script. Loads a base image and a blend image once, then re-renders a
 /// downscaled JPEG preview as the user drags each image's independent
 /// blackpoint/midtones/highlights sliders + blend mode + opacity. The final

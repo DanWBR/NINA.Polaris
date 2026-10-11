@@ -19,7 +19,7 @@ using PortableGuideStep = NINA.Guider.Portable.GuideStep;
 
 namespace NINA.Polaris.Services;
 
-// Part of the NativeGuider class — split from NativeGuider.cs for
+// Part of the NativeGuider class, split from NativeGuider.cs for
 // readability. See NativeGuider.cs for the type overview + fields.
 public sealed partial class NativeGuider {
     // ----- Guide loop -----
@@ -27,7 +27,11 @@ public sealed partial class NativeGuider {
     private enum LoopMode { Loop, Guide }
 
     private async Task StartLoopAsync(LoopMode mode) {
-        await StopLoopAsync();
+        // Guide mode keeps the session state: StartGuidingAsync has already
+        // installed this run's settler and lock, and resetting here threw both
+        // away whenever a Loop was running first, which is the documented way
+        // to pick a star. Loop mode is a fresh session and resets.
+        await StopLoopAsync(resetSession: mode == LoopMode.Loop);
         _loopCts = new CancellationTokenSource();
         var token = _loopCts.Token;
         _paused = false;
@@ -37,36 +41,86 @@ public sealed partial class NativeGuider {
         _loopTask = Task.Run(() => LoopAsync(mode, token), token);
     }
 
-    private async Task StopLoopAsync() {
+    /// <summary>Tear the guide loop down, and optionally end the session with
+    /// it. <paramref name="resetSession"/> is what STOP means: no settle, no
+    /// dither, no lock, no markers on the frame, badge back to Stopped.
+    ///
+    /// The old version returned early when no loop was running, which made STOP
+    /// a no-op in exactly the case that needed it. A dither installed while a
+    /// stop was in flight (the wait for the loop task below can take seconds,
+    /// and IsGuiding is still true throughout) ended up with no loop to finish
+    /// it, and every later press of STOP took that early return: the
+    /// "Dithering: settling" banner stayed up for the rest of the night, and
+    /// LiveCaptureService.ShouldPause, which holds the LIVE loop while
+    /// IsDithering is raised, held it for just as long. Field report
+    /// 2026-10-01: target behind the roof during a guided live stack.</summary>
+    private async Task StopLoopAsync(bool resetSession = true) {
         var cts = _loopCts;
         var task = _loopTask;
-        if (cts == null) return;
-        try { cts.Cancel(); } catch { }
-        if (task != null) {
-            try { await task.WaitAsync(TimeSpan.FromSeconds(10)); } catch { }
+        if (cts != null) {
+            try { cts.Cancel(); } catch { }
+            if (task != null) {
+                try { await task.WaitAsync(TimeSpan.FromSeconds(10)); } catch { }
+            }
+            _loopCts = null;
+            _loopTask = null;
+            // Keep what the predictive algorithm learned about this mount's worm
+            // before the run's state goes away. Here rather than per frame: one
+            // profile write per session instead of one per guide frame.
+            PersistPredictiveModel();
         }
-        _loopCts = null;
-        _loopTask = null;
-        // Keep what the predictive algorithm learned about this mount's worm
-        // before the run's state goes away. Here rather than per frame: one
-        // profile write per session instead of one per guide frame.
-        PersistPredictiveModel();
-        lock (_settleLock) {
-            IsSettling = false;
-            IsDithering = false;
-            _settleActive = false;
-            _settler = null;
-        }
-        SetActivity(null);
-        if (AppState is "Guiding" or "Looping" or "Paused" or "LostLock") SetAppState("Stopped");
+        if (resetSession) ResetSessionState();
         // MEMOPT2: guiding retains almost nothing but churns ~2-3 full guide
         // frames + a preview JPEG per capture; under Workstation GC those freed
         // LOH segments sit as a high plateau (hundreds of MB) until the next
         // collection. Stopping the loop is a user-paced action, so compact once
         // here to hand that memory back to the OS on the SBC. Never per frame.
-        System.Runtime.GCSettings.LargeObjectHeapCompactionMode =
-            System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
-        GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+        if (cts != null) {
+            System.Runtime.GCSettings.LargeObjectHeapCompactionMode =
+                System.Runtime.GCLargeObjectHeapCompactionMode.CompactOnce;
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+        }
+    }
+
+    /// <summary>Everything a guiding session owns, dropped in one place: the
+    /// settle and dither state with the settler behind it, the activity phase,
+    /// the lock and the multi-star references, the markers drawn on the guide
+    /// frame, and the badge. Unconditional on purpose, so pressing STOP twice,
+    /// or pressing it when the loop has already gone, still leaves the guider
+    /// in the one state the operator asked for.
+    ///
+    /// The frame itself stays: the operator keeps seeing the guide camera's
+    /// last picture, without the crosshair and star boxes of a session that is
+    /// over. They come back when guiding starts again, from their own pick or
+    /// from the auto-selection.</summary>
+    private void ResetSessionState() {
+        SettleResult? abandoned = null;
+        lock (_settleLock) {
+            // A waiter (the live-stack dither trigger, the sequencer) is owed an
+            // answer. Dropping the settler without one left it waiting for an
+            // event that could no longer come.
+            if (_settler != null) {
+                abandoned = new SettleResult {
+                    Status = 1, Error = "Guiding stopped before the settle finished",
+                    TotalFrames = 0, DroppedFrames = 0
+                };
+            }
+            IsSettling = false;
+            IsDithering = false;
+            _settleActive = false;
+            _settler = null;
+            LastSettleStatus = null;
+            _settleErrPx = 0; _settleBelowSec = 0; _settleElapsedSec = 0;
+        }
+        _paused = false;
+        _starLostCount = 0;
+        _haveLock = false;
+        _calAnchorActive = false;
+        _multiStar.Clear();
+        ClearViewMarkers();
+        SetActivity(null);
+        SetAppState("Stopped");
+        if (abandoned != null) RaiseSettled(abandoned);
     }
 
     private async Task LoopAsync(LoopMode mode, CancellationToken ct) {
@@ -104,7 +158,7 @@ public sealed partial class NativeGuider {
                 // blocking for the exposure; a cam that returns faster than the
                 // nominal exposure (short exposures, cached/streamed frames, or a
                 // capture that fails fast) spun the loop and churned a full guide
-                // frame + preview per iteration — the +500 MB GC plateau. Sleep
+                // frame + preview per iteration, the +500 MB GC plateau. Sleep
                 // the remainder of the exposure period so the loop runs at ~1
                 // frame / exposure. The star-lost + error paths already dwell,
                 // so their elapsed >= period and this adds nothing there.
@@ -133,6 +187,9 @@ public sealed partial class NativeGuider {
 
         if (!found) {
             _starLostCount++;
+            // PHD2 arms the distance checker on a lost frame: the offsets that
+            // come back right after a loss are not to be trusted yet.
+            _distanceChecker.Activate();
             // Surface a distinct state the GUIDE UI already understands (PHD2
             // parity: StarLost -> "LostLock"). Without this the badge stayed
             // green "Guiding" through a whole cloud-out and the user had no
@@ -155,7 +212,7 @@ public sealed partial class NativeGuider {
             // left even the widened window. Then the ONLY thing that recovered
             // guiding was the user doing stop → loop → start by hand, which
             // re-detects on the full frame. Field report: "a guiagem nativa não
-            // sobrevive a alguns instantes de nuvens — não consegue pegar a estrela
+            // sobrevive a alguns instantes de nuvens, não consegue pegar a estrela
             // de volta e realinhar. Tenho que dar stop, loop e depois start guiding
             // manualmente. Isso é crítico para processos de captura longa."
             // Do that automatically instead, once, after the widened search has had
@@ -178,7 +235,46 @@ public sealed partial class NativeGuider {
 
         double dx = curX - _lockX;
         double dy = curY - _lockY;
+
+        // PHD2 runs two gates before it will move the mount on a measurement.
+        //
+        // The mass check asks whether the thing just centroided is the same
+        // star: a cloud, a satellite or a neighbour drifting into the window
+        // changes the mass, and guiding on that is guiding on noise.
+        bool measuring = AppState == "Guiding" && !_paused && !IsSettling;
+        _massChecker.SetExposure(expMs, isAutoExposure: false);
+        if (measuring && _massChecker.CheckMass(_lastFindMass)) {
+            var lim = _massChecker.LastLimits;
+            _logger.LogDebug("Frame dropped: star mass {Mass:F0} outside ({Low:F0}, {High:F0}), median {Med:F0}",
+                             _lastFindMass, lim.Low, lim.High, lim.Median);
+            SetActivity(null);
+            PushStep(new PortableGuideStep(NowMs(), 0, 0, 0, 0, 0, 0, snr, hfd, false));
+            BuildView(curX, curY, snr, true);
+            _distanceChecker.Activate();
+            return;
+        }
+        _massChecker.AppendData(_lastFindMass);
+
+        // The distance check drops an implausible jump while recovering from a
+        // star loss. With PHD2's default (tolerate jumps off) the tolerance is
+        // effectively infinite and this only bites in the five seconds after a
+        // loss, where PHD2 forces a tolerance of 2.
+        double distPx = Math.Sqrt(dx * dx + dy * dy);
+        if (!_distanceChecker.CheckDistance(distPx, double.MaxValue,
+                                            _errorTracker.AvgDistanceLong,
+                                            _errorTracker.FrameCount, measuring)) {
+            _logger.LogDebug("Frame dropped: offset {Dist:F2}px against a smoothed average of {Avg:F2}px",
+                             distPx, _errorTracker.AvgDistanceLong);
+            SetActivity(null);
+            PushStep(new PortableGuideStep(NowMs(), 0, 0, 0, 0, 0, 0, snr, hfd, false));
+            BuildView(curX, curY, snr, true);
+            return;
+        }
+
         var (raPx, decPx) = MountCoordTransform.CameraToMount(_calibration, dx, dy);
+        // PHD2 Guider::UpdateCurrentDistance, the averages the gate above reads.
+        if (measuring) _errorTracker.Update(distPx, Math.Abs(raPx));
+        else _errorTracker.Seed(distPx, Math.Abs(raPx));
 
         // Frame interval for the (time-aware) predictive algorithm; reactive
         // algorithms ignore it. First frame falls back to the exposure period.
@@ -202,15 +298,15 @@ public sealed partial class NativeGuider {
         double raRate = MountCoordTransform.RaRateAtDec(_calibration, decRad);
         double decRate = _calibration.YRate;
 
-        int minMoveRaMs = RateToMs(Rig.NativeMinMoveRaPx, raRate);
-        int minMoveDecMs = RateToMs(Rig.NativeMinMoveDecPx, decRate);
-        // Clamp each pulse to the smaller of the exposure period (so corrections
-        // can't run past the next frame) and the per-axis Max Duration cap.
-        int maxRaMs  = Math.Min(expMs, Math.Max(50, Rig.NativeMaxRaDurationMs));
-        int maxDecMs = Math.Min(expMs, Math.Max(50, Rig.NativeMaxDecDurationMs));
+        // Only the per-axis Max Duration bounds the pulse, as in PHD2's
+        // Scope::MoveAxis. It used to be capped at the exposure as well, so a
+        // one-second exposure silently turned a 2500 ms limit into 1000 ms and
+        // a large excursion took several frames to come back.
+        int maxRaMs  = Math.Max(0, Rig.NativeMaxRaDurationMs);
+        int maxDecMs = Math.Max(0, Rig.NativeMaxDecDurationMs);
 
-        int raMs = MountCoordTransform.ComputeMoveDurationMs(raCorr, raRate, minMoveRaMs, maxRaMs);
-        int decMs = MountCoordTransform.ComputeMoveDurationMs(decCorr, decRate, minMoveDecMs, maxDecMs);
+        int raMs = MountCoordTransform.ComputeMoveDurationMs(raCorr, raRate, maxRaMs);
+        int decMs = MountCoordTransform.ComputeMoveDurationMs(decCorr, decRate, maxDecMs);
 
         // Direction: correction moves the star back toward lock. PHD2
         // calibration measured WEST as +X-rate and SOUTH as +Y-rate, so a
@@ -261,6 +357,25 @@ public sealed partial class NativeGuider {
         // consumed most of it; the camera blocks for the exposure).
         await Task.CompletedTask;
     }
+
+    /// <summary>Test seam: a guiding session as the loop leaves it between
+    /// frames, without a camera, a mount or a star: a lock, a frame with the
+    /// marker drawn on it, and the state the operator reads on the badge. What
+    /// STOP has to undo.</summary>
+    internal void InstallSessionForTest(string appState) {
+        _lockX = 8; _lockY = 8;
+        _haveLock = true;
+        _view = new ViewFrame {
+            Pixels = new ushort[16 * 16], Width = 16, Height = 16, BitDepth = 16,
+            LockX = 8, LockY = 8, HaveLock = true, FrameId = ++_viewSeq
+        };
+        _view.Stars.Add((8, 8, 42.0, true, true));
+        SetAppState(appState);
+    }
+
+    /// <summary>Test seam: is a star locked? The lock itself is internal
+    /// geometry; whether there is one decides if a start picks again.</summary>
+    internal bool HasLockForTest => _haveLock;
 
     /// <summary>Test seam: install a settle exactly as DitherAsync or StartAsync
     /// would, without needing a camera, a mount or a star. The state machine is
@@ -330,6 +445,12 @@ public sealed partial class NativeGuider {
                 DroppedFrames = 0
             };
         }
+        RaiseSettled(result);
+    }
+
+    /// <summary>Raised outside the settle lock, always: a handler that turns
+    /// straight around and dithers again would otherwise deadlock.</summary>
+    private void RaiseSettled(SettleResult result) {
         if (result.Status != 0)
             _logger.LogWarning("Native settle failed: {Why}", result.Error);
         Settled?.Invoke(result);
@@ -353,7 +474,7 @@ public sealed partial class NativeGuider {
     /// effectively 8-bit despite the RAW16 enforcement in the camera adapter.
     /// An 8-bit FITS frame is decoded into the HIGH byte of each 16-bit sample
     /// (value &lt;&lt; 8), so every pixel's low byte is zero and only 256 grey
-    /// levels exist — the preview posterizes ("totally pixelated", few B&amp;W
+    /// levels exist, the preview posterizes ("totally pixelated", few B&amp;W
     /// nuances) even though guiding still works on the raw star peaks. The fix
     /// is to set the camera capture format to RAW16 (RIGS / INDI panel); this
     /// just tells the user that's what's happening.</summary>
@@ -377,7 +498,7 @@ public sealed partial class NativeGuider {
         _warned8Bit = true;
         if (!anyLowByte) {
             RaiseAlert(
-                "Guide camera is sending 8-bit (RAW8) frames — the preview will look " +
+                "Guide camera is sending 8-bit (RAW8) frames, the preview will look " +
                 "posterized/pixelated. Set the camera capture format to RAW16 " +
                 "(RIGS or the INDI control panel) for smooth guide images.", "warn");
         }
@@ -472,7 +593,7 @@ public sealed partial class NativeGuider {
         // Compare against the running baseline seeded at guiding start, NOT the
         // side stamped into the calibration. A freshly measured (or reconciled)
         // calibration is ground truth for the current side, so we must never
-        // mirror it on the strength of a stale stamped side — we react only to a
+        // mirror it on the strength of a stale stamped side, we react only to a
         // pier side that CHANGES while guiding. (Lazily adopt the baseline here
         // if it was unknown at start, e.g. the driver only reported it later.)
         if (_loopPierBaseline == PierSide.pierUnknown) {
@@ -515,7 +636,7 @@ public sealed partial class NativeGuider {
         if (_haveLock) {
             await BuildMultiStarAsync(ct);
             // AutoSelectStarAsync set the state to "Selected"; we're still
-            // actively guiding on the new side, so restore "Guiding" —
+            // actively guiding on the new side, so restore "Guiding",
             // otherwise the badge stays stuck on "Selected" after the flip
             // even though the loop keeps correcting (as the recalibrate branch
             // above already does on success).
@@ -524,28 +645,28 @@ public sealed partial class NativeGuider {
         RaiseAlert($"Pier side changed to {nowSide}; calibration mirrored.");
     }
 
-    /// <summary>Measure the guide-star field offset this frame. When multi-star
-    /// is engaged (rig enabled + more than one star locked) it captures a full
-    /// frame, recentres every tracked star and returns the robust combined
-    /// offset expressed as an effective primary position (lock + offset), so the
-    /// caller's <c>cur - lock</c> math is unchanged. Otherwise it falls back to
-    /// the single-star ROI path.</summary>
+    /// <summary>Measure the guide-star field offset this frame. The primary is
+    /// always measured by the single-star path; when multi-star is engaged the
+    /// secondaries then refine that measurement on the same frame, the way PHD2
+    /// does it. The result is returned as an effective primary position
+    /// (lock + offset), so the caller's <c>cur - lock</c> math is unchanged.</summary>
     private async Task<(double x, double y, bool found, double snr, double hfd)>
             MeasureGuideStarAsync(ICamera cam, CancellationToken ct) {
-        bool useMulti = Rig.NativeMultiStar && _multiStar.Count > 1;
-        if (!useMulti) {
-            // Widen the window while the star is missing so a star that merely
-            // drifted during a cloud is found again instead of being lost forever.
-            return await FindStarDetailedAsync(cam, ct,
-                RecoverySearchRegionFor(_starLostCount, SearchRegion, MaxRecoverySearchRegion));
-        }
-        // Multi-star needs the whole field, so clear any ROI.
-        try { await cam.SetSubframeAsync(0, 0, 0, 0, ct); } catch { }
-        var img = await CaptureFullAsync(cam, ct);
-        if (img == null) return (_lockX, _lockY, false, 0, 0);
-        _lastFrame = img; _lastFrameOriginX = 0; _lastFrameOriginY = 0;
-        var res = _multiStar.Update(img.Data, img.Properties.Width, img.Properties.Height);
-        if (!res.Found) return (_lockX, _lockY, false, res.Snr, res.Hfd);
+        // Widen the window while the star is missing so a star that merely
+        // drifted during a cloud is found again instead of being lost forever.
+        var (x, y, found, snr, hfd) = await FindStarDetailedAsync(cam, ct,
+            RecoverySearchRegionFor(_starLostCount, SearchRegion, MaxRecoverySearchRegion));
+
+        if (!found || !Rig.NativeMultiStar || _multiStar.Count <= 1) return (x, y, found, snr, hfd);
+
+        var img = _lastFrame;
+        if (img == null) return (x, y, found, snr, hfd);
+
+        // PHD2 refines only while actually guiding and not settling: during a
+        // dither the secondaries are measuring the move, not the seeing.
+        bool allowRefine = AppState == "Guiding" && !IsSettling;
+        var res = _multiStar.Refine(img.Data, img.Properties.Width, img.Properties.Height,
+                                    x, y, snr, hfd, x - _lockX, y - _lockY, allowRefine);
         return (_lockX + res.OffsetX, _lockY + res.OffsetY, true, res.Snr, res.Hfd);
     }
 
@@ -567,10 +688,10 @@ public sealed partial class NativeGuider {
 
         SetActivity("Selecting");
         int w = img.Properties.Width, h = img.Properties.Height;
-        var stars = NewGuideStarDetector().Detect(img.Data, w, h);
+        var stars = GuideStarDetector().Detect(img.Data, w, h);
 
-        int margin = SearchRegion + 5;
-        double satGuard = SaturationLevel(img.Properties.BitDepth, img.Properties.SignificantBitDepth, img.Data);
+        int margin = StarEdgeMargin();
+        double satGuard = SaturationLevelFor(img);
         double minSep = SearchRegion * 3.0;
 
         var refs = new List<(double x, double y)> { (_lockX, _lockY) };
@@ -648,7 +769,7 @@ public sealed partial class NativeGuider {
     /// frames have already lost it.
     ///
     /// While the star is missing the mount keeps tracking with NO corrections, so
-    /// the star drifts — periodic error plus polar-alignment drift. On a typical
+    /// the star drifts, periodic error plus polar-alignment drift. On a typical
     /// guide scale (2-5"/px) a few minutes of cloud is easily 20-40 px. The fixed
     /// 15 px window meant that once the star drifted out of it, it was never found
     /// again even after the sky cleared and it sat there blazing 30 px away: the
@@ -658,7 +779,7 @@ public sealed partial class NativeGuider {
     /// Widen one base-width every 2 lost frames, capped. The cap is deliberate and
     /// NOT generous: GuideStar.Find returns the BRIGHTEST peak in the window, so an
     /// over-wide search will happily lock a neighbouring star, and the resulting
-    /// jump in dx/dy would be applied as a correction — walking the target out of
+    /// jump in dx/dy would be applied as a correction, walking the target out of
     /// frame. Beyond the cap, re-acquisition (TryReacquireAsync) takes over, which
     /// picks by PROXIMITY instead and can afford to look further.</summary>
     internal static int RecoverySearchRegionFor(int starLostCount, int baseRegion, int maxRegion) {
@@ -671,7 +792,7 @@ public sealed partial class NativeGuider {
     /// NEAREST the old lock, within <paramref name="maxRadius"/>, ignoring
     /// saturated stars and those too close to the frame edge.
     ///
-    /// Nearest, deliberately — not brightest, which is what AutoSelectStarAsync
+    /// Nearest, deliberately, not brightest, which is what AutoSelectStarAsync
     /// uses when starting fresh. After a cloud-out the original star is the one
     /// that drifted a little; the brightest star in a 150 px radius may be a
     /// different star entirely, and re-locking onto it would silently re-frame the
@@ -700,7 +821,7 @@ public sealed partial class NativeGuider {
     /// → start dance the user had to do by hand after every cloud.
     ///
     /// Re-locking MOVES the lock point, so the correction that follows won't drag
-    /// the star back to where it was — the small residual drift is kept instead of
+    /// the star back to where it was, the small residual drift is kept instead of
     /// fought. That's the right trade: a few px of pointing shift costs one frame's
     /// worth of alignment (the stacker handles it), whereas the alternative on the
     /// table was guiding staying dead for the rest of the night.</summary>
@@ -708,15 +829,15 @@ public sealed partial class NativeGuider {
         try {
             _logger.LogInformation(
                 "Native guide: star lost for {N} frames; re-acquiring on the full frame", _starLostCount);
-            RaiseAlert("Guide star lost — re-acquiring…");
+            RaiseAlert("Guide star lost, re-acquiring…");
             try { await cam.SetSubframeAsync(0, 0, 0, 0, ct); } catch { }
             var img = await CaptureFullAsync(cam, ct);
             if (img == null) return;
             int w = img.Properties.Width, h = img.Properties.Height;
-            var stars = NewGuideStarDetector().Detect(img.Data, w, h);
-            double satGuard = SaturationLevel(img.Properties.BitDepth, img.Properties.SignificantBitDepth, img.Data);
+            var stars = GuideStarDetector().Detect(img.Data, w, h);
+            double satGuard = SaturationLevelFor(img);
             var pick = PickReacquireStar(stars, _lockX, _lockY, ReacquireRadiusPx,
-                                         w, h, SearchRegion + 5, satGuard);
+                                         w, h, StarEdgeMargin(), satGuard);
             if (pick == null) {
                 _logger.LogInformation(
                     "Native guide: re-acquire found no star within {R}px of the lock; still clouded?",
@@ -814,13 +935,14 @@ public sealed partial class NativeGuider {
         // INDI device's frame state, which leaked into the imaging camera.
         try { await cam.SetSubframeAsync(0, 0, 0, 0, ct); } catch { }
         var img = await CaptureFullAsync(cam, ct);
-        if (img == null) { _lastFindStatus = null; _lastFindSnr = 0; _lastFindHfd = 0; return (_lockX, _lockY, false, 0, 0); }
+        if (img == null) { _lastFindStatus = null; _lastFindSnr = 0; _lastFindHfd = 0; _lastFindMass = 0; return (_lockX, _lockY, false, 0, 0); }
         _lastFrame = img; _lastFrameOriginX = 0; _lastFrameOriginY = 0;
 
         int w = img.Properties.Width, h = img.Properties.Height;
         int sr = searchRegion ?? SearchRegion;
         var result = GuideStar.Find(img.Data, w, h, _lockX, _lockY, sr);
         _lastFindStatus = result.Status; _lastFindSnr = result.Snr; _lastFindHfd = result.Hfd;
+        _lastFindMass = result.Mass;
         if (!result.Found) {
             return (_lockX, _lockY, false, result.Snr, result.Hfd);
         }

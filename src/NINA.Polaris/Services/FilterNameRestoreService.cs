@@ -24,8 +24,8 @@ namespace NINA.Polaris.Services;
 /// Filter labels are the operator's data: they live on the rig
 /// (<c>EquipmentProfile.FilterNames</c>) and the driver is only a cache of
 /// them. INDI drivers routinely come back from a restart advertising
-/// "Filter 1..N" — the wheel has no memory of its own until CONFIG_SAVE lands
-/// — so something has to push the saved set back.
+/// "Filter 1..N", the wheel has no memory of its own until CONFIG_SAVE lands
+///, so something has to push the saved set back.
 ///
 /// That restore used to live in the BROWSER, on a status tick. Which meant it
 /// only happened when a browser happened to be open, on that page, at that

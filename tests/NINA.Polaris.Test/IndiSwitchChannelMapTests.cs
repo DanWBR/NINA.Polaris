@@ -26,7 +26,7 @@ namespace NINA.Polaris.Test;
 /// one vector PER OUTLET, element labels repeated across outlets, and
 /// on/off published as a two-member OneOfMany pair rather than a single
 /// toggle. The device snapshot is injected straight into
-/// <see cref="IndiClient.Devices"/> — no socket, no driver.
+/// <see cref="IndiClient.Devices"/>, no socket, no driver.
 /// </summary>
 [TestFixture]
 public class IndiSwitchChannelMapTests {
@@ -112,7 +112,7 @@ public class IndiSwitchChannelMapTests {
     }
 
     /// <summary>indi_asi_power labels all four on/off vectors "On/Off", so
-    /// qualification alone is not enough — the property name breaks the tie.</summary>
+    /// qualification alone is not enough, the property name breaks the tie.</summary>
     [Test]
     public async Task CollidingVectorLabels_FallBackToPropertyName() {
         using var client = ClientWith(OnOff("ONOFF0", on: false), OnOff("ONOFF1", on: false));
@@ -124,7 +124,7 @@ public class IndiSwitchChannelMapTests {
     }
 
     /// <summary>A OneOfMany vector with more than two members (a port's
-    /// None/Camera/Focuser/… role) is ONE selector channel — a dropdown — not a
+    /// None/Camera/Focuser/… role) is ONE selector channel, a dropdown, not a
     /// toggle per member. This is the field report against v0.98.51: the ASI
     /// Power ports came out as a wall of nine toggles each.</summary>
     [Test]
@@ -157,7 +157,7 @@ public class IndiSwitchChannelMapTests {
     }
 
     /// <summary>AnyOfMany vectors (Pegasus-style hubs, one vector holding all
-    /// outlets) keep one channel per element — the previous behaviour.</summary>
+    /// outlets) keep one channel per element, the previous behaviour.</summary>
     [Test]
     public async Task AnyOfManyVector_KeepsOneChannelPerElement() {
         var upb = new IndiSwitchProperty {
@@ -201,7 +201,7 @@ public class IndiSwitchChannelMapTests {
     }
 
     /// <summary>A Pegasus-style hub (one AnyOfMany vector holding every outlet)
-    /// has no per-port property index, so NOTHING groups — the flat layout those
+    /// has no per-port property index, so NOTHING groups, the flat layout those
     /// boxes rely on is preserved.</summary>
     [Test]
     public async Task PegasusStyleHub_StaysUngrouped() {

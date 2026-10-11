@@ -21,14 +21,14 @@ namespace NINA.Polaris.Test;
 
 /// <summary>
 /// FIELD6-17: the per-capture property writes in <see cref="IndiCamera"/>
-/// (binning / gain / offset / frame type) must be idempotent — a capture loop
+/// (binning / gain / offset / frame type) must be idempotent, a capture loop
 /// that is already configured should send CCD_EXPOSURE and nothing else.
 ///
 /// Why this is worth a test: unconditional re-writes are invisible in normal
 /// use (the driver just says "same as current, no change needed") and only bite
 /// on long guide runs, where ~100 pointless property writes a minute is exactly
 /// the per-frame reconfig known to wedge indi_asi_ccd. A regression here would
-/// be silent — nothing fails, frames just stop arriving hours later.
+/// be silent, nothing fails, frames just stop arriving hours later.
 ///
 /// These pin <see cref="IndiCamera.AlreadyAt"/>, the guard every numeric setter
 /// funnels through. The critical case is StaleAfterRestart: the guard must key
@@ -46,7 +46,7 @@ public class IndiCameraIdempotencyTests {
     }
 
     /// <summary>Steady state: driver already at bin 1x1 → suppress the write.
-    /// This is the whole point — the guide loop's every-frame CCD_BINNING.</summary>
+    /// This is the whole point, the guide loop's every-frame CCD_BINNING.</summary>
     [Test]
     public void AlreadyAt_AllValuesMatch_IsSatisfied() {
         var prop = Prop(("HOR_BIN", 1), ("VER_BIN", 1));
@@ -98,7 +98,7 @@ public class IndiCameraIdempotencyTests {
     /// The guard reads that live snapshot, so the next capture re-sends gain 120
     /// and the camera is correctly configured. Had the guard cached "we already
     /// wrote 120", it would skip the write and shoot every remaining sub at the
-    /// driver's default gain — a silent data-loss bug worse than the churn.</summary>
+    /// driver's default gain, a silent data-loss bug worse than the churn.</summary>
     [Test]
     public void AlreadyAt_StaleAfterRestart_ReWritesFromSnapshot() {
         // Driver restarted: CCD_CONTROLS is back at its default, not our 120.
@@ -118,7 +118,7 @@ public class IndiCameraIdempotencyTests {
     //
     // Field log 2026-07-16: an AF/solve teardown restored the SV405CC to full
     // frame while a sub was still exposing. Writing CCD_FRAME re-allocates the
-    // driver's capture buffer, so SVBGetVideoData timed out — a wasted frame plus
+    // driver's capture buffer, so SVBGetVideoData timed out, a wasted frame plus
     // a driver-restart cycle. SetSubframeAsync must abort an in-flight exposure
     // before changing geometry. This pins the decision that gates that abort.
 

@@ -150,7 +150,7 @@ public class CometEphemerisService {
     /// branch alone computes a = q / (1 - e), which is infinite at e = 1 and
     /// negative beyond it, so every long-period comet came out as NaN. In a
     /// live JPL set of comets within ±550 days of perihelion, 67 of 118 have
-    /// e >= 0.98 — the bright, newly discovered ones people actually want to
+    /// e >= 0.98, the bright, newly discovered ones people actually want to
     /// photograph are exactly the ones the elliptic-only code could not do.
     /// </summary>
     internal static (double nu, double r) SolveOrbit(double q, double e, double daysFromPerihelion) {

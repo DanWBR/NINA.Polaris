@@ -25,7 +25,7 @@ namespace NINA.Polaris.Services;
 /// Only the main imaging camera exposes one frame at a time across all the
 /// capture owners (LIVE/stream loop, AUTORUN, the advanced sequencer, manual
 /// snaps), so a single slot is enough. The guider camera runs its own loop
-/// and reports <c>exposureMs</c> separately — it is intentionally NOT tracked
+/// and reports <c>exposureMs</c> separately, it is intentionally NOT tracked
 /// here. Each <see cref="Begin"/> bumps <see cref="CaptureProgressSnapshot.RunId"/>
 /// and returns an <see cref="IDisposable"/>; disposing it ends only that run,
 /// so a late End from a superseded capture can't clobber a newer one.
@@ -70,7 +70,7 @@ public sealed class CaptureProgressService {
             // stall), is abandoned, or throws past the using, the shutter would
             // otherwise tick to 0 and sit there until a server restart (field
             // report: "preview shutter stuck at 0, won't reset"). Clearing it
-            // here only resets the UI indicator — it does not touch the camera.
+            // here only resets the UI indicator, it does not touch the camera.
             if (_active) {
                 var slackSeconds = Math.Max(_exposureSeconds + 60.0, 45.0);
                 if ((DateTime.UtcNow - _startedUtc).TotalSeconds > slackSeconds) {

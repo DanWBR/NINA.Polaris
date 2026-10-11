@@ -46,21 +46,56 @@ predictable subtree:
 ```
 {ImageOutputDir}/
   {RigName}/
-    lights/{Target}/{Filter}/{ISO-timestamp}/
-    calibration/dark/dark_{ExposureSec}s_{Gain}_{Temp}C.fits
-    calibration/flat/{Filter}/flat_{Timestamp}.fits
-    calibration/bias/bias_{Timestamp}.fits
-    stacked/                         (saved live stacks)
-    snaps/{Filter}_{Date}/           (from PREVIEW with Save on)
-    planetary/{Target}/{ts}.ser      (from the VIDEO tab)
-    siril/                           (Siril output)
-    bge/                             (GraXpert BGE output)
+    {Target}/lights/{Night}/         one object's subs, night by night
+    {Target}/aux/{Night}/            the second camera, same object
+    {Target}/stacked/{Night}/        integrations you asked for
+    {Target}/planetary/              SER clips and their stacks
+    calibration/{Camera}/dark/{Exposure}s_g{Gain}/
+    calibration/{Camera}/flat/{Filter}_g{Gain}/
+    calibration/{Camera}/bias/g{Gain}/
+    calibration/{Camera}/masters/    masters built in Studio
+    snaps/{Filter}_{Night}/          from PREVIEW with Save on
+    calibrated/ integrated/ processed/   Studio output
 ```
 
-Light frames are therefore grouped by target, then by filter, then by
-session date, which makes both housekeeping ("delete the cloudy night
-of June 3rd") and processing ("select all the luminance subs of
-IC 4606") a matter of navigating to one folder. The processing
+Light frames are therefore grouped by target, then by night, which
+makes both housekeeping ("delete the cloudy night of June 3rd") and
+processing ("select every sub of IC 4606") a matter of navigating to
+one folder. There is no filter level: the filter is in the file name
+and in the FITS header, which is where Studio reads it from.
+
+The night in that path is the astronomical night, not the calendar
+day: it rolls over at local midday, so a frame taken at 02:30 belongs
+to the evening that started the night before, and one session is one
+folder.
+
+**Folder layout**, in Settings under Image Output, decides the order of
+the first two levels:
+
+| Choice | A light lands at |
+| --- | --- |
+| Target, then night (the default) | `{rig}/M42/lights/2026-09-28/` |
+| Night, then target, `20260928` | `{rig}/20260928/M42/lights/` |
+| Night, then target, `2026-09-28` | `{rig}/2026-09-28/M42/lights/` |
+
+The night-first shapes are what an ASIAIR card looks like, and they
+suit an operator who thinks in sessions: everything shot on one night
+is one folder to copy off, back up or delete. Target-first suits one
+who thinks in projects: a target's whole history in one place.
+
+Aux frames and stacks follow the choice, so a night never splits
+across two shapes. Calibration does not: darks, flats and biases stay
+at `{rig}/calibration/{camera}/...`, because a master outlives the
+night it was shot on, and because a master belongs to the sensor that
+took it rather than to the rig. A rig with an imager and an aux camera
+used to drop both their darks into one folder whenever the exposure
+and gain agreed. Changing the setting moves nothing that is already on disk,
+and Studio indexes both shapes, since it reads FITS headers rather
+than path segments.
+
+The card also shows, in one line, where tonight's light will land and
+what it will be called, which is faster than reasoning about the
+tokens. The processing
 stages described in the next chapters add their own subtrees under the
 same rig folder: `calibration/masters/` for master frames,
 `calibrated/` for calibrated lights, `integrated/` for stacked
@@ -88,6 +123,29 @@ for the Studio root:
   Shift-click, as in a desktop file manager.
 - **Selection bar**: a summary such as "2 files · 124 MB" plus an
   indicator showing the current Studio root.
+
+### Per-frame repair tools
+
+Some defects belong to one frame and to the telescope that took it, not
+to a stack, so the toolbar row also holds single-frame repairs that write
+a new FITS and keep the original. Two are worth knowing about by name.
+
+**Violet halo** removes the out-of-focus violet skirt an ED doublet
+spreads around bright stars, from roughly 6 px outwards. It brings blue
+down towards the other two channels inside the halo only, capped per
+pixel at the mean of that pixel's own red and green, so star cores and
+their colour are left alone. **Halo strength** and **Halo radius** are
+the two knobs; larger focal ratios and brighter stars spread the skirt
+further. Because it corrects a telescope defect, run it on the original
+frame rather than on the output of a star colour repair.
+
+**Star fix** is the separate star colour repair, for cores that came out
+the wrong colour rather than for the skirt around them. The violet stage
+used to live inside it; it is its own tool now, since the two answer
+different faults and reach for different frames.
+
+The same row holds **Crop**, **Compare**, **Wavelets** and the
+**GraXpert** entry point (@sec-ai-cleanup).
 
 ### FITS metadata columns
 
@@ -147,6 +205,104 @@ reverse proxy (an intermediary web server in front of Polaris), a
 long-running ZIP download can hit the proxy's read timeout and abort.
 Give the proxy a long read timeout, or download over the direct LAN
 connection on port 5000, which has no such limit.
+
+## Sending data off the host {#sec-storage-push}
+
+Everything above moves data by hand. Polaris can also do it by
+itself: **Settings -> Storage push** copies every saved frame to a
+NAS over SMB, to another machine over SFTP, to a mounted folder, or
+to a cloud account, rebuilding the same folder tree at the far end.
+
+**The local copy always stays on the host.** The push is a copy and
+never a move; nothing is deleted at either end. A failed upload can
+cost you time, never data.
+
+The queue runs in the background with two lanes, one for images and
+one for the much heavier video and SER files, so a 4 GB planetary
+capture does not park the night's lights behind it. A frame is
+written under a temporary name and renamed once complete, so a
+half-copied file is never mistaken for a finished one. Repeated
+failures trip a breaker rather than retrying forever; **Retry
+failed** clears it once the destination is back. **Backfill** walks
+the capture folder and queues whatever the destination does not
+already have.
+
+On the LAN kinds, **Link share** caps how much of the network link
+the push may take, so the browser watching the session over that same
+link stays usable.
+
+### Cloud accounts
+
+Choose the **Cloud** kind for Google Drive, OneDrive, Dropbox,
+Nextcloud or WebDAV, SFTP and S3-compatible storage. The provider
+protocols and their sign in are handled by
+[rclone](https://rclone.org), which Polaris runs for you. It is a
+recommended package on a `.deb` install, so it is usually already
+there; if it is not, the card says so, lists every path it searched,
+and names the package:
+
+```bash
+sudo apt install rclone
+```
+
+On a Windows host, `winget install Rclone.Rclone` does the same job.
+Polaris also looks along PATH, so it finds the binary wherever the
+package manager put it.
+
+Your cloud account never enters the Polaris profile. rclone keeps it
+in its own configuration file inside the Polaris data directory,
+readable only by the account Polaris runs as, and Polaris only ever
+writes it through rclone itself.
+
+Signing in happens in the browser you already have Polaris open in.
+The Pi has none of its own, but it does not need one:
+
+1. **Set up a remote**, pick the provider, and give it a short name.
+2. Press **Sign in with the provider**. A tab opens on Google,
+   Microsoft or Dropbox.
+3. Sign in there. Your browser then lands on an address that cannot
+   load, which is expected: it points at the Pi, not at your phone or
+   laptop.
+4. Copy that whole address from the address bar, paste it into
+   **Address your browser landed on**, and press **Finish sign in**.
+
+That copy is the only manual step, and only because the provider
+insists on redirecting to rclone's own local address. With Polaris
+open on the host itself there is nothing to copy at all.
+
+OneDrive is the one exception: the sign in alone does not carry the
+drive id, so use **Sign in on another computer instead**, run
+`rclone config` there, and paste the whole section it writes.
+
+Because rclone runs its own transfer loop, the Link share control
+cannot reach it. The cloud kind gets a hard **Upload speed limit**
+instead. Pick something below your actual upload speed and the
+session, the preview and the guiding stay responsive while a night
+goes up.
+
+### When it uploads
+
+- **As each frame is saved**, which is the default.
+- **When a run finishes**, if *Upload the session folder when a run
+  finishes* is on. This catches the files that a live stack, a plate
+  solve or a Studio step wrote without saving a new frame, which the
+  per-frame push never sees.
+- **On demand**, from this tab: select exactly one folder and press
+  **Send to cloud**. Only what the destination is missing is queued,
+  so sending the same night twice costs nothing.
+
+## Downloading and sharing one frame
+
+**Download** sends the selection to your device: a single file goes
+straight through, several are packed into a ZIP on the fly. In the
+mobile app the download is handed to the phone's own download manager,
+which is what copes with a multi-gigabyte selection.
+
+**Share** hands one file to whatever your device shares with:
+WhatsApp, Telegram, AirDrop, the photo library. A FITS is shared as
+the rendered image, with the same stretch the viewer shows, because
+nothing on a phone opens a FITS and the messaging apps refuse the
+size. Files that are already images go as they are.
 
 ## Switching the Studio root
 

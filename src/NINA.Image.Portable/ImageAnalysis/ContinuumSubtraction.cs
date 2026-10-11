@@ -19,7 +19,7 @@ namespace NINA.Image.ImageAnalysis;
 
 /// <summary>
 /// Continuum subtraction: isolate the emission-line signal in a narrowband
-/// master by removing a scaled broadband (continuum) master —
+/// master by removing a scaled broadband (continuum) master,
 /// <c>NB' = max(0, NB - k·Continuum)</c>. Stars (pure continuum) largely
 /// cancel while the emission nebulosity remains. The scale <c>k</c> can be
 /// given, or estimated automatically from the bright (star-dominated) pixels

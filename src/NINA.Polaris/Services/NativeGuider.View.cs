@@ -19,7 +19,7 @@ using PortableGuideStep = NINA.Guider.Portable.GuideStep;
 
 namespace NINA.Polaris.Services;
 
-// Part of the NativeGuider class — split from NativeGuider.cs for
+// Part of the NativeGuider class, split from NativeGuider.cs for
 // readability. See NativeGuider.cs for the type overview + fields.
 public sealed partial class NativeGuider {
     /// <summary>Rebuild the per-axis guide algorithms from the current rig
@@ -39,8 +39,12 @@ public sealed partial class NativeGuider {
         // ZFilter exposure factor: 0 = use the PHD2 default (2.0); else clamp [1,20].
         double zExp = Rig.NativeZFilterExpFactor >= 1.0 ? Math.Min(Rig.NativeZFilterExpFactor, 20.0) : 2.0;
         var prior = RestorePredictiveModel();
+        // PHD2 parity: 'predictive' is ours, not PHD2's, and is no longer
+        // offered. A rig saved while it was gets PHD2's default for the axis.
+        var raAlgoName = string.IsNullOrWhiteSpace(Rig.NativeRaAlgorithm) ? "hysteresis" : Rig.NativeRaAlgorithm;
+        if (raAlgoName.Equals("predictive", StringComparison.OrdinalIgnoreCase)) raAlgoName = "hysteresis";
         _raAlgo = GuideAlgorithmFactory.Create(
-            string.IsNullOrWhiteSpace(Rig.NativeRaAlgorithm) ? "hysteresis" : Rig.NativeRaAlgorithm,
+            raAlgoName,
             minMove: Math.Max(0.0, Rig.NativeMinMoveRaPx),
             aggression: Math.Clamp(Rig.NativeRaAggression, 0.0, 2.0),
             hysteresis: Math.Clamp(Rig.NativeRaHysteresis, 0.0, 0.99),
@@ -60,6 +64,9 @@ public sealed partial class NativeGuider {
             zfilterExpFactor: zExp);
         _raAlgo.Reset();
         _decAlgo.Reset();
+        _massChecker.Reset();
+        _distanceChecker.Reset();
+        _errorTracker.Reset();
         _lastGuideMs = 0;
         // Dec backlash compensation: only when enabled on the rig AND the
         // calibration actually measured a backlash. Disabled by default
@@ -141,11 +148,6 @@ public sealed partial class NativeGuider {
         return false;
     }
 
-    private static int RateToMs(double px, double ratePxPerMs) {
-        if (ratePxPerMs <= 0) return 0;
-        return (int)Math.Round(px / ratePxPerMs);
-    }
-
     private void PushStep(PortableGuideStep p) {
         var step = new GuideStep {
             Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(p.TimestampMs).UtcDateTime,
@@ -209,6 +211,30 @@ public sealed partial class NativeGuider {
             vf.Stars.Add((primaryX, primaryY, snr, true, true));
         }
         _view = vf;
+    }
+
+    /// <summary>Drop the session's markers from the frame on screen: the lock
+    /// crosshair and the star boxes go, the picture stays. A new ViewFrame
+    /// rather than an edit in place, because the WS payload reads _view from
+    /// another thread; the pixel buffer is shared, not copied.
+    ///
+    /// Without this, STOP left the previous session's stars drawn over the
+    /// live frame, so the display claimed a lock the guider no longer had.
+    /// Field report 2026-10-01.</summary>
+    private void ClearViewMarkers() {
+        var vf = _view;
+        if (vf == null) return;
+        _view = new ViewFrame {
+            Pixels = vf.Pixels,
+            Width = vf.Width,
+            Height = vf.Height,
+            BitDepth = vf.BitDepth,
+            IsBayered = vf.IsBayered,
+            OriginX = vf.OriginX,
+            OriginY = vf.OriginY,
+            HaveLock = false,
+            FrameId = ++_viewSeq
+        };
     }
 
     /// <summary>WS-serializable view: frame geometry, lock, star markers, and a
@@ -294,6 +320,11 @@ public sealed partial class NativeGuider {
 
     /// <summary>Encode the latest guide frame as an auto-stretched JPEG for the
     /// PHD2-style camera view. Returns null when no frame is available yet.</summary>
+    /// <summary>Counter of the frame currently in the view, so a reader can
+    /// tell whether re-encoding it would produce anything new. Zero before the
+    /// guide loop has processed a frame.</summary>
+    public long ViewFrameId => _view?.FrameId ?? 0;
+
     public byte[]? EncodeViewJpeg(int maxDim = 600, int quality = 75, double gamma = 1.0) {
         var vf = _view;
         if (vf == null || vf.Pixels.Length < (long)vf.Width * vf.Height) return null;

@@ -16,7 +16,7 @@ namespace NINA.Polaris.Services.Planetary;
 
 /// <summary>
 /// Translational alignment by phase correlation, for planetary/lunar targets
-/// that FILL the frame — a close-up of the Moon or Sun where the whole frame is
+/// that FILL the frame, a close-up of the Moon or Sun where the whole frame is
 /// surface, with no dark sky and no limb. The centroid aligner is useless there:
 /// with ~all pixels above its threshold the intensity-weighted centroid sits at
 /// the frame centre on every frame and never moves, so the stack gets no
@@ -34,7 +34,7 @@ namespace NINA.Polaris.Services.Planetary;
 /// Integer-pixel precision, matching the stacker's nearest-neighbour shift
 /// (sub-pixel resampling is deferred there too). The reference FFT is computed
 /// once; each frame costs one forward + one inverse 2-D FFT over a central
-/// power-of-two ROI (capped at 512 to bound cost on an SBC — a global
+/// power-of-two ROI (capped at 512 to bound cost on an SBC, a global
 /// translation is the same everywhere, so a representative central crop suffices).
 /// </summary>
 public sealed class PhaseCorrelationAligner {

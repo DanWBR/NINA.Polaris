@@ -1,4 +1,4 @@
-/* Optional external assistant module — neutral host chrome only.
+/* Optional external assistant module, neutral host chrome only.
    Badge -> intro/subscribe modal -> floating action button -> iframe panel.
    No assistant-specific product logic lives here; everything shown is driven
    by a cloud-supplied manifest. Reuses the app's design tokens. */
@@ -174,7 +174,7 @@
    dark background blends in), clipped to the FAB's shape. */
 .assistant-fab-img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block; }
 /* Image FAB: drop the glossy "accent orb" chrome (light border + white inner
-   highlights + accent gradient) — it clashes with the dark icon. Keep only a
+   highlights + accent gradient), it clashes with the dark icon. Keep only a
    soft drop shadow for depth, and clip the image to the round shape. */
 .assistant-fab.has-img {
     border: none;

@@ -43,8 +43,8 @@ public sealed class FrameAligner {
     // to frame 0. Anchoring every frame directly to frame 0 breaks down over a
     // long session (the Moon/Sun drifts and its terminator/illumination change,
     // so late frames diverge too far from frame 0 and phase correlation locks the
-    // wrong peak). When the correlation peak is weak — a low-contrast frame with
-    // no detail to lock onto, e.g. a Moon near eclipse totality — the shift can't
+    // wrong peak). When the correlation peak is weak, a low-contrast frame with
+    // no detail to lock onto, e.g. a Moon near eclipse totality, the shift can't
     // be trusted, so we COAST: hold the last confident position and keep that
     // frame as the reference, re-locking when the subject brightens again.
     private ushort[]? _refLum;              // last confident reference frame

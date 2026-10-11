@@ -40,6 +40,21 @@ public class UserProfile {
     /// alongside the site coordinates.</summary>
     public string? HotspotWifiInterface { get; set; }
 
+    /// <summary>Turn the WiFi radio off while the host has a working wired
+    /// connection, and back on as soon as the cable is gone. Off by default.
+    /// Two interfaces on one subnet is an ARP-flux trap: the host answers
+    /// ARP for the wired address out of the wireless interface, so a WiFi
+    /// hiccup silently stalls sessions that were opened over the cable.
+    /// Managed by <see cref="NetworkManagerService"/>, which only ever
+    /// touches the radio while this is on.</summary>
+    public bool WifiOffWhenWired { get; set; }
+
+    /// <summary>The operator chose hotspot mode on purpose (the "Switch back to
+    /// Hotspot" button). Only then does a running hotspot stay put; any other
+    /// hotspot is a fallback, and the rig goes back to a saved WiFi network as
+    /// soon as one is in range. On the profile so a restart keeps the choice.</summary>
+    public bool WifiUserChoseHotspot { get; set; }
+
     /// <summary>Automatically pull the host clock onto this client's clock when
     /// they differ by more than an hour (an RTC-less SBC that booted with no
     /// network time). On by default; users can turn it off in Settings. Absent
@@ -49,7 +64,7 @@ public class UserProfile {
 
     /// <summary>One-shot scheduled rig teardown (UTC). When reached, Polaris
     /// stops capture + guiding, parks the mount, warms the camera and turns
-    /// cooling off, and — when <see cref="ScheduledShutdownHost"/> — powers the
+    /// cooling off, and, when <see cref="ScheduledShutdownHost"/>, powers the
     /// host down. Persisted so it survives a restart; cleared after it fires or
     /// is cancelled. Null = nothing scheduled.</summary>
     public DateTime? ScheduledShutdownUtc { get; set; }
@@ -98,7 +113,7 @@ public class UserProfile {
     public DateTime? SetupWizardCompletedUtc { get; set; }
 
     /// <summary>Self-update channel: "stable" (default; GitHub's latest
-    /// non-prerelease) or "preview" (opts into pre-releases — the Insider-style
+    /// non-prerelease) or "preview" (opts into pre-releases, the Insider-style
     /// early-access channel for risky new features). Global, not per-rig.</summary>
     public string UpdateChannel { get; set; } = "stable";
 
@@ -207,7 +222,7 @@ public class UserProfile {
 
     // Auto-push of saved images to network storage (NAS / share / SSH box).
     // Global (one target for the host), persisted in plain JSON like the
-    // DuckDns/PHD2 creds above — the profile file is already gated by OS
+    // DuckDns/PHD2 creds above, the profile file is already gated by OS
     // file permissions. Password is never returned by GET /api/storage/config
     // nor exposed over the WebSocket status. Pushed files mirror the local
     // capture tree onto the target; the local copy is kept.
@@ -226,7 +241,7 @@ public class UserProfile {
     public int    StoragePushLinkSharePercent { get; set; } =
         NINA.Polaris.Services.Storage.TransferPacer.DefaultSharePercent;
 
-    public string StorageKind { get; set; } = "smb";   // smb | sftp | local
+    public string StorageKind { get; set; } = "smb";   // smb | sftp | local | rclone
     public string StorageHost { get; set; } = "";        // host or IP (smb/sftp)
     public int    StoragePort { get; set; } = 0;          // 0 => provider default (445 smb / 22 sftp)
     public string StorageShare { get; set; } = "";        // SMB share name (no slashes)
@@ -235,6 +250,41 @@ public class UserProfile {
     public string StorageUsername { get; set; } = "";
     public string StoragePassword { get; set; } = "";
     public string? StorageLastTestResult { get; set; }    // last "Test connection" outcome
+
+    /// <summary>The server's own name, learned from the server when the host
+    /// was given as an IP. Lets the push find the server again after DHCP moves
+    /// it. Cleared when the operator points the host or share elsewhere.</summary>
+    public string StorageServerName { get; set; } = "";
+
+    /// <summary>Servers that worked, most recent first, capped by
+    /// <see cref="NINA.Polaris.Services.Storage.SmbServerMemory.MaxRecent"/>.
+    /// On the host rather than in the browser: browser storage is per address,
+    /// and the rig's address is exactly what keeps changing.</summary>
+    public List<StorageRecentServer> StorageRecent { get; set; } = new();
+
+    // ---- Cloud storage (the "rclone" kind) ----
+    //
+    // Polaris does not speak Drive, OneDrive or Dropbox itself: it drives the
+    // rclone binary, which already owns those protocols, their OAuth and their
+    // resumable uploads. Nothing here is a credential. The tokens live in
+    // {DataDir}/rclone/rclone.conf, mode 600, which Polaris never reads and
+    // never returns, because GET /api/system/profile hands the whole profile to
+    // any authenticated client.
+
+    /// <summary>rclone remote to upload to, by name. Empty = none chosen.</summary>
+    public string StorageRemoteName { get; set; } = "";
+    /// <summary>Upload speed cap in rclone syntax ("2M"), empty = unlimited.
+    /// Replaces the link-share percentage for this kind: a duty cycle needs a
+    /// transfer loop we own, and rclone owns its own.</summary>
+    public string StorageBandwidthLimit { get; set; } = "";
+    /// <summary>Bumped on every remote change so a queued upload notices that
+    /// the credentials behind its connection were replaced.</summary>
+    public int    StorageRemoteRevision { get; set; }
+    /// <summary>Offload everything a run wrote when the run finishes.</summary>
+    public bool   StoragePushOnSessionEnd { get; set; }
+    /// <summary>Explicit path to the rclone binary. Empty = look on PATH and in
+    /// the usual install locations.</summary>
+    public string? RclonePath { get; set; }
 
     // External post-processing tools (Siril + GraXpert). Empty/null
     // means "auto-detect" via BinaryLocator; set explicitly to
@@ -296,8 +346,20 @@ public class UserProfile {
 
     // Image output
     public string ImageOutputDir { get; set; } = "";
-    public string ImageNamePattern { get; set; } = "{target}_{filter}_{exposure}s_g{gain}_{temp}C_{datetime}_{seq}";
+    // The camera is in the default name on purpose: a light is only worth the
+    // darks and flats that match the sensor it came off, and reading that from
+    // the file name beats opening a header when you are picking masters out of
+    // a library. An existing profile keeps whatever it already has.
+    public string ImageNamePattern { get; set; } = "{target}_{camera}_{filter}_{exposure}s_g{gain}_{temp}C_{datetime}_{seq}";
     public string ImageFormat { get; set; } = "fits";
+
+    // How the light frames are foldered under the capture root:
+    //   target-first        {rig}/{target}/lights/{yyyy-MM-dd}  (the original)
+    //   night-first         {rig}/{yyyyMMdd}/{target}/lights     (a night at a time)
+    //   night-first-dashed  {rig}/{yyyy-MM-dd}/{target}/lights
+    // Calibration frames are unaffected: they stay rig-level so masters are
+    // reusable across nights. Nothing already written is moved.
+    public string ImageFolderLayout { get; set; } = "target-first";
 
     // PHD2 lifecycle preferences (app-global, not per-rig). When true the
     // PHD2AutoStartService launches PHD2 (and connects the JSON-RPC client)
@@ -352,7 +414,7 @@ public class UserProfile {
     /// <summary>
     /// DBGLOG-9: opt-in disk persistence for the debug log. When
     /// false (default), the LogService ring buffer is the only home
-    /// for entries — a server restart discards everything. When
+    /// for entries, a server restart discards everything. When
     /// true, LogRotatorService subscribes to the Appended event and
     /// flushes batched entries to disk.
     ///
@@ -386,7 +448,7 @@ public class UserProfile {
     /// persisted flag lets the operator turn the feature on from the
     /// Settings UI (behind a risk-acknowledgement modal) without editing a
     /// JSON file on a headless host. Either source being true enables the
-    /// endpoint. Default OFF — full shell access to the host is a serious
+    /// endpoint. Default OFF, full shell access to the host is a serious
     /// capability, so it stays opt-in.
     /// </summary>
     public bool TerminalEnabled { get; set; } = false;
@@ -428,6 +490,8 @@ public class NativeCalibrationData {
     // origin) so the "Review Calibration" RA/Dec scatter plot survives a restore.
     public double[][] RaPoints { get; set; } = Array.Empty<double[]>();
     public double[][] DecPoints { get; set; } = Array.Empty<double[]>();
+
+    public NativeCalibrationData Clone() => (NativeCalibrationData)MemberwiseClone();
 }
 
 /// <summary>The periodic-error model the predictive guide algorithm learned, kept
@@ -510,6 +574,12 @@ public class EquipmentProfile {
     /// common 90° and 180° travel-limit rotators are protected from an
     /// accidental full-turn command; 360° remains the legacy default.</summary>
     public double RotatorMaxAngle { get; set; } = 360;
+    /// <summary>Manual rotator: turn the camera the other way round from what
+    /// the solve's parity implies. A fact about this optical train (how many
+    /// reflections it has, which side the operator stands on) rather than
+    /// about the browser asking, so it rides on the rig. Null = not set,
+    /// which reads as false. See <see cref="ManualRotatorAdvice"/>.</summary>
+    public bool? ManualRotatorReverse { get; set; }
     public string? FlatDevice { get; set; }
     public string? Dome { get; set; }
     public string? Weather { get; set; }
@@ -517,7 +587,7 @@ public class EquipmentProfile {
     /// name, ASCOM ProgID, or Alpaca <c>host:port[:devnum]</c>).</summary>
     public string? Switch { get; set; }
     /// <summary>Power box backend kind. Same enum as
-    /// <see cref="FilterWheelDriver"/> — <c>indi</c> (default),
+    /// <see cref="FilterWheelDriver"/>, <c>indi</c> (default),
     /// <c>ascom-com</c>, or <c>alpaca</c>.</summary>
     public string SwitchDriver { get; set; } = "indi";
 
@@ -526,7 +596,7 @@ public class EquipmentProfile {
     // RIGPUT-1: the value-type per-rig fields below are NULLABLE with NO
     // initializer, on purpose. The rig PUT binds a whole EquipmentProfile, and
     // two callers send a PARTIAL body ({liveStackComputeMode} and
-    // {slewConfirmDeg,slewFloorDeg}) — System.Text.Json leaves an omitted nullable
+    // {slewConfirmDeg,slewFloorDeg}), System.Text.Json leaves an omitted nullable
     // property as null, so the handler can tell "absent" (null → don't touch) from
     // an explicit value (0/false included) and stop resetting the rig to model
     // defaults on every partial save. That reset was a live bug (a compute-mode
@@ -558,7 +628,28 @@ public class EquipmentProfile {
     // null ⇒ "not sent in this PUT, leave the stored value alone". Defaults for a
     // new rig live in CreateEquipmentProfile; read sites resolve `?? <default>`.
     public int? DefaultGain { get; set; }
+    /// <summary>The rig's offset: the black-level pedestal every capture on
+    /// this rig uses, wherever it was started from. 0 or null means "leave the
+    /// driver's setting alone": nothing is written and the frame's header
+    /// records what the driver reports.
+    ///
+    /// There used to be four of these, one per panel, on the theory that a
+    /// framing snap and a science frame need not agree about the pedestal. In
+    /// practice nobody wants four, and having them cost a long bug report
+    /// (issue #26) in which the operator typed an offset into one panel and
+    /// watched a different one come out of a capture started from another. The
+    /// pedestal is a property of how the sensor is being run, so it belongs to
+    /// the rig, next to gain.</summary>
     public int? DefaultOffset { get; set; }
+
+    // The three per-panel offsets, kept only so MigrateSingleOffset can fold a
+    // value an upgrading install already had into DefaultOffset. Nothing reads
+    // them, the UI no longer writes them, and the migration nulls them on first
+    // load. Delete them, and the migration, once installs have passed through a
+    // release that carries it.
+    public int? PreviewOffset { get; set; }
+    public int? AutorunOffset { get; set; }
+    public int? AdvOffset { get; set; }
     public int? DefaultBinning { get; set; }
     public int? FocuserStepSize { get; set; }
     public int? FocuserBacklashSteps { get; set; }
@@ -603,6 +694,8 @@ public class EquipmentProfile {
     public double PolarAlignExposureSec { get; set; } = 3.0;
     public int PolarAlignSettleSeconds { get; set; } = 2;
     public int PolarAlignGain { get; set; } = 100;
+    /// <summary>Camera for polar alignment: "main", "guide" or "aux".</summary>
+    public string PolarAlignCamera { get; set; } = "main";
 
     // Slew & Center plate-solve tunables. Used by SKY tab "Go to",
     // meridian-flip recenter, and live-stack auto-recenter trigger.
@@ -652,7 +745,7 @@ public class EquipmentProfile {
     public double? RequiredBackspacingMm { get; set; }
 
     /// <summary>Main-camera pixel size in micrometres. Fallback for backends
-    /// that don't report it via CCD_INFO — notably <c>indi_gphoto</c> (DSLRs),
+    /// that don't report it via CCD_INFO, notably <c>indi_gphoto</c> (DSLRs),
     /// which leaves CCD_PIXEL_SIZE at 0 until/unless told. 0 = "let the camera
     /// report it" (the normal case for dedicated astro cameras). When set and
     /// the connected camera reports 0, Polaris pushes it into the driver's
@@ -661,7 +754,7 @@ public class EquipmentProfile {
     public double CameraPixelSizeUm { get; set; }
 
     /// <summary>Main-camera sensor resolution + bit depth, for backends that
-    /// don't report it until/unless told — indi_gphoto rejects every exposure
+    /// don't report it until/unless told, indi_gphoto rejects every exposure
     /// ("Please update the CCD Information ...") until CCD_INFO has a non-zero
     /// Max X/Y. Filled by the DSLR picker (derived from the catalogue) and
     /// pushed to the driver on connect. 0 = let the camera report it.</summary>
@@ -691,14 +784,14 @@ public class EquipmentProfile {
     [System.Text.Json.Serialization.JsonIgnore]
     public double EffectiveGuiderFocalLengthMm => GuiderIsOag ? FocalLengthMm : GuiderFocalLengthMm;
 
-    /// <summary>OAG prism pick-off geometry — radial distance (mm, in the focal
+    /// <summary>OAG prism pick-off geometry, radial distance (mm, in the focal
     /// plane) from the optical axis to the centre of the guide chip's field.
     /// Drives where the guide FOV "square" is drawn on the SKY map relative to
     /// the main-scope solve. 0 = concentric with the main field. Only meaningful
     /// when <see cref="GuiderIsOag"/> is true.</summary>
     public double OagOffsetMm { get; set; }
 
-    /// <summary>OAG prism position angle — rotation (degrees) of the pick-off
+    /// <summary>OAG prism position angle, rotation (degrees) of the pick-off
     /// offset direction around the optical axis, measured from the camera's
     /// +Y (up) axis. Combined with the field rotation to place the guide FOV
     /// square. Only meaningful when <see cref="GuiderIsOag"/> is true.</summary>
@@ -748,13 +841,13 @@ public class EquipmentProfile {
     public double AuxFocalLengthMm { get; set; } = 200;
 
     /// <summary>Aux-camera pixel size in micrometres. Same role + fallback
-    /// behaviour as <see cref="CameraPixelSizeUm"/> but for the aux camera —
+    /// behaviour as <see cref="CameraPixelSizeUm"/> but for the aux camera,
     /// a DSLR on the aux port (indi_gphoto) reports 0, so Polaris pushes this
     /// into the aux driver's CCD_INFO on connect. 0 = let the camera report it.</summary>
     public double AuxCameraPixelSizeUm { get; set; }
 
     /// <summary>Aux-camera sensor resolution + bit depth. Same role as the main
-    /// camera's CameraMaxX/Y/BitDepth — needed to bootstrap indi_gphoto's
+    /// camera's CameraMaxX/Y/BitDepth, needed to bootstrap indi_gphoto's
     /// CCD_INFO so the aux DSLR's exposures aren't rejected. 0 = camera reports.</summary>
     public int AuxCameraMaxX { get; set; }
     public int AuxCameraMaxY { get; set; }
@@ -855,11 +948,11 @@ public class EquipmentProfile {
 
     /// <summary>Native guider RA minimum-move deadband (pixels). Errors
     /// below this are not corrected. Default 0.15 px.</summary>
-    public double NativeMinMoveRaPx { get; set; } = 0.15;
+    public double NativeMinMoveRaPx { get; set; } = 0.2;     // PHD2 DefaultMinMove
 
     /// <summary>Native guider Dec minimum-move deadband (pixels).
     /// Default 0.15 px.</summary>
-    public double NativeMinMoveDecPx { get; set; } = 0.15;
+    public double NativeMinMoveDecPx { get; set; } = 0.2;    // PHD2 DefaultMinMove
 
     /// <summary>Native guider RA hysteresis-algorithm aggression
     /// (0..2, fraction of the error corrected each frame). Default 0.70.</summary>
@@ -868,7 +961,7 @@ public class EquipmentProfile {
     /// <summary>Native guider Dec algorithm aggression (0..2, fraction of the
     /// error corrected each frame). Default 0.70. Separate from RA so each
     /// axis can be tuned independently (ASIAIR-style 10..150%).</summary>
-    public double NativeDecAggression { get; set; } = 0.70;
+    public double NativeDecAggression { get; set; } = 1.0;   // PHD2 resist-switch DefaultAggression
 
     /// <summary>Native guider RA hysteresis weight (0..0.99, fraction of
     /// the previous move blended into this one). Default 0.10.</summary>
@@ -920,7 +1013,7 @@ public class EquipmentProfile {
     public double NativeZFilterExpFactor { get; set; } = 0.0;
 
     /// <summary>Apply Dec backlash compensation (the amount is auto-measured
-    /// during calibration). Off by default — an over-large value oscillates
+    /// during calibration). Off by default, an over-large value oscillates
     /// worse than no compensation.</summary>
     public bool NativeBacklashComp { get; set; } = false;
 
@@ -936,6 +1029,50 @@ public class EquipmentProfile {
     /// <summary>Maximum number of guide stars to track when multi-star is on
     /// (primary + secondaries). Clamped to [1, 12].</summary>
     public int NativeMaxGuideStars { get; set; } = 8;
+
+    // ----- guide-star selection -----
+    //
+    // The detector's own defaults are tuned for imaging frames, and a guide
+    // camera is a different instrument: small, often binned, sometimes on a
+    // bright sky, with stars a few pixels across. When they do not suit a rig
+    // the result is "no suitable guide star" over a frame the operator can see
+    // stars in, so these are knobs rather than constants. Null = the tuned
+    // default, which is what every existing rig gets.
+
+    /// <summary>Detection threshold in sigma over the frame's noise (median +
+    /// n x MAD). Lower finds fainter stars and more noise; the detector's own
+    /// default is 5. Range [1, 20].</summary>
+    public double? NativeStarSigma { get; set; }
+    /// <summary>Smallest blob, in pixels above the threshold, accepted as a
+    /// star. The default of 5 drops a tight star on an undersampled guide
+    /// scope, which is one way a frame full of stars detects none. Range
+    /// [1, 200].</summary>
+    public int? NativeStarMinSize { get; set; }
+    /// <summary>Largest blob accepted as a star. Range [50, 20000].</summary>
+    public int? NativeStarMaxSize { get; set; }
+    /// <summary>Largest half-flux radius accepted, in pixels. Raise it for a
+    /// soft or defocused guide scope. Range [1, 100].</summary>
+    public double? NativeStarMaxHfd { get; set; }
+    /// <summary>How far from the frame edge a star has to be to be selectable,
+    /// in pixels. It has to leave room for the tracking window, so the
+    /// effective value is never below the search region. Range [0, 200].</summary>
+    public int? NativeStarEdgeMarginPx { get; set; }
+    /// <summary>How far a tap may be from a star and still mean it, in sensor
+    /// pixels. A finger on a downscaled frame is tens of pixels wide, hence 60
+    /// by default. Range [5, 300].</summary>
+    public double? NativeStarTapRadiusPx { get; set; }
+    /// <summary>Let a saturated star be used. Saturation flattens the top of
+    /// the star, which costs centroid precision, so it is avoided when there
+    /// is a choice; refusing outright is worse, since a saturated star still
+    /// guides better than no star. Auto-select warns and uses one when nothing
+    /// else is available, and a tapped star is always honoured. Turning this
+    /// on stops avoiding them in the first place.</summary>
+    public bool? NativeStarAllowSaturated { get; set; }
+
+    /// <summary>Star-selection method: null/"tuned" (default) or "classic",
+    /// the behaviour from before 2026-09-14. See
+    /// NativeGuider.DetectionModeClassic.</summary>
+    public string? NativeStarDetectionMode { get; set; }
 
     /// <summary>Guide-camera gain for native guiding. 0 = leave the camera's
     /// current/default gain. Default 40 (a sane mid-gain for common guide cams).</summary>
@@ -1130,7 +1267,7 @@ public class EquipmentProfile {
     /// <c>LiveStackingService.AddFrameAsync</c> is also persisted to
     /// disk as a regular LIGHT (lands in the same per-target /
     /// per-filter / per-session layout as a sequence capture).
-    /// Default ON — most users want both the integrated preview
+    /// Default ON, most users want both the integrated preview
     /// AND an archive they can re-stack offline in Siril /
     /// PixInsight later. Per-rig so visual-only EAA rigs can opt
     /// out (just untick the checkbox in the LIVE tab).</summary>
@@ -1152,7 +1289,7 @@ public class EquipmentProfile {
     /// buffer, the R/G/B accumulators and the eight scratch planes come to
     /// ~38 bytes per pixel, so a 11.7 MP OSC frame needs ~440 MB at 1:1 and
     /// ~110 MB at 1:2. This is the setting that decides whether live stacking
-    /// fits on a 1-1.5 GB SBC at all. Only the EAA PREVIEW is reduced — the
+    /// fits on a 1-1.5 GB SBC at all. Only the EAA PREVIEW is reduced, the
     /// subs written to disk are always full resolution.</para></summary>
     public int LiveStackBinning { get; set; } = 0;
 
@@ -1222,6 +1359,27 @@ public class EquipmentProfile {
     public List<SequenceItem>? AutorunSequence { get; set; }
     public DitherSettings? AutorunDither { get; set; }
     public SequenceEndActions? AutorunEndActions { get; set; }
+
+    /// <summary>Meridian flip and mount-safety settings for this rig's mount.
+    /// Null = never saved; the defaults apply. Not copied by the rig PUT
+    /// handler, so a rig save never clobbers it.</summary>
+    public MeridianFlipSettings? MeridianFlip { get; set; }
+}
+
+/// <summary>A storage target that worked, kept so it can be picked again
+/// without retyping it. The password stays on the host: the list the browser
+/// sees says only whether there is one.</summary>
+public class StorageRecentServer {
+    public string Kind { get; set; } = "smb";
+    public string Host { get; set; } = "";
+    public int Port { get; set; }
+    public string Share { get; set; } = "";
+    public string BasePath { get; set; } = "";
+    public string Domain { get; set; } = "";
+    public string Username { get; set; } = "";
+    public string Password { get; set; } = "";
+    public string ServerName { get; set; } = "";
+    public DateTime LastUsedUtc { get; set; }
 }
 
 /// <summary>One starred target. J2000, hours and degrees like everything

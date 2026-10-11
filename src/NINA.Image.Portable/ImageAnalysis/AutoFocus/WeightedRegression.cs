@@ -50,7 +50,7 @@ internal static class WeightedRegression {
         double slope = (sw * swxy - swx * swy) / denom;
         double intercept = (swy - slope * swx) / sw;
 
-        // Weighted coefficient of determination around the weighted mean —
+        // Weighted coefficient of determination around the weighted mean,
         // same definition Accord's CoefficientOfDetermination(inputs,
         // outputs, weights) applies.
         double ybarW = swy / sw;
@@ -69,7 +69,7 @@ internal static class WeightedRegression {
     /// Solved on x centered at the weighted mean for numerical conditioning
     /// (focuser positions reach 10⁵–10⁶ steps with tiny sweep spans; the raw
     /// {1, x, x²} basis is then nearly collinear and Cramer's rule cancels
-    /// catastrophically — the same trap the old Polaris FitParabola hit),
+    /// catastrophically, the same trap the old Polaris FitParabola hit),
     /// with coefficients mapped back to raw x.</summary>
     public static (double a2, double a1, double a0, double rSquared)
             Poly2(IReadOnlyList<FocusPoint> points) {

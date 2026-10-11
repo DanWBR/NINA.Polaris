@@ -286,7 +286,7 @@ public class SkyCatalogService {
 
     /// <summary>
     /// Like <see cref="AllObjects"/> but ALSO includes magnitude-less objects
-    /// that carry an apparent size ≥ 10′ — i.e. big emission / bright nebulae
+    /// that carry an apparent size ≥ 10′, i.e. big emission / bright nebulae
     /// (Sh2, LBN) that have no stellar magnitude and would otherwise never
     /// appear. Used by Tonight's Best so those large nebulae can be ranked by
     /// size instead of brightness. Lazy + cached (same bounded footprint).

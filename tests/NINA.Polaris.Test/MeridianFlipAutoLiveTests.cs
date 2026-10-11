@@ -46,7 +46,7 @@ public class MeridianFlipAutoLiveTests {
     [Test]
     public void CrossedMeridianWest_StayingWest_False() {
         // Both samples west (target acquired already west, or well past): NOT a
-        // fresh crossing — this is exactly the fresh-GoTo-to-NW-target case.
+        // fresh crossing, this is exactly the fresh-GoTo-to-NW-target case.
         Assert.That(MeridianFlipAutoLiveService.CrossedMeridianWest(0.2, 0.3), Is.False);
         Assert.That(MeridianFlipAutoLiveService.CrossedMeridianWest(1.0, 2.0), Is.False);
     }

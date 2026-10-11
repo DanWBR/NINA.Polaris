@@ -1,11 +1,11 @@
-// Polaris Astro Controller — UI internationalization runtime.
+// Polaris Astro Controller, UI internationalization runtime.
 //
 // Model: "English source as key" (gettext-style). The English text that
 // already lives in index.html / app.js IS the lookup key; a per-language
 // catalog at /data/locales/{lang}.json maps
 //   { "English source string": "Translated string" }.
 // English is the identity language: no catalog, no fetch, no observer, ZERO
-// overhead — the app behaves exactly as before for English users.
+// overhead, the app behaves exactly as before for English users.
 //
 // For any other language a MutationObserver translates text nodes +
 // title/placeholder/aria-label/alt attributes by looking up their current
@@ -39,7 +39,7 @@
     var catalog = Object.create(null);
     // Attributes whose values are user-visible and worth translating.
     var ATTRS = ['title', 'placeholder', 'aria-label', 'alt'];
-    // Text that is purely numbers / units / symbols is never a catalog key —
+    // Text that is purely numbers / units / symbols is never a catalog key,
     // skip it so the 1 Hz numeric status churn doesn't even hash-lookup.
     var NUMERIC = /^[\d\s.,:;%°"'+\-/x×()]+$/;
 
