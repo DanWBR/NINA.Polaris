@@ -67,6 +67,9 @@ public class ProfileService {
         Load();
     }
 
+    /// <summary>Where the profiles live; other per-host files sit beside them.</summary>
+    public string ProfileDirectory => _profileDir;
+
     public List<ProfileSummary> ListProfiles() {
         var files = Directory.GetFiles(_profileDir, "*.json")
             .Where(f => !f.EndsWith("active.json"))

@@ -492,6 +492,8 @@ public class NativeCalibrationData {
     // origin) so the "Review Calibration" RA/Dec scatter plot survives a restore.
     public double[][] RaPoints { get; set; } = Array.Empty<double[]>();
     public double[][] DecPoints { get; set; } = Array.Empty<double[]>();
+
+    public NativeCalibrationData Clone() => (NativeCalibrationData)MemberwiseClone();
 }
 
 /// <summary>The periodic-error model the predictive guide algorithm learned, kept

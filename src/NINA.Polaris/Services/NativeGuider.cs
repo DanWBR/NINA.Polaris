@@ -384,7 +384,8 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
         if (!_calibration.IsValid && TryRestoreCalibration()) {
             // Information, not a fault: it reads as an error in the GUIDE tab
             // otherwise, which is what the operator sees first on connect.
-            RaiseAlert("Restored last calibration for this rig. Recalibrate if the setup changed.", "info");
+            RaiseAlert(LastRestoreNote
+                ?? "Restored last calibration for this rig. Recalibrate if the setup changed.", "info");
         } else if (LastRestoreMismatch != null) {
             RaiseAlert(LastRestoreMismatch, "info");
         }
@@ -505,6 +506,20 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
 
     public Task LoopAsync(CancellationToken ct = default) {
         EnsureConnected();
+        // Loop always reads the rig's saved calibration (the file and the
+        // profile), so whatever happened since connecting, a profile that lost
+        // its list or gear that came back on another address, guiding starts
+        // from the calibration on disk.
+        bool had = _calibration.IsValid;
+        LastRestoreMismatch = null;
+        if (_calibrationCleared) {
+            // Cleared on purpose: the next calibration starts from nothing.
+        } else if (TryRestoreCalibration()) {
+            if (!had || LastRestoreNote != null)
+                RaiseAlert(LastRestoreNote ?? "Loaded the saved calibration for this rig.", "info");
+        } else if (!had && LastRestoreMismatch != null) {
+            RaiseAlert(LastRestoreMismatch, "info");
+        }
         return StartLoopAsync(LoopMode.Loop);
     }
 
@@ -916,6 +931,8 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
                 r.NativeCalibration = null;
             });
         } catch (Exception ex) { _logger.LogWarning(ex, "Failed to clear persisted calibration"); }
+        FileRemove(key);
+        _calibrationCleared = true;
         _logger.LogInformation("Native calibration cleared for {Key}", key);
         return Task.CompletedTask;
     }
@@ -1009,6 +1026,8 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
                 }
             });
         } catch (Exception ex) { _logger.LogWarning(ex, "Failed to persist flipped calibration"); }
+        FileUpsert(Rig.NativeCalibrations?.LastOrDefault(c =>
+            string.Equals(c.Key, key, StringComparison.OrdinalIgnoreCase)));
     }
 
     /// <summary>Equipment signature for the active rig: identifies the gear whose
