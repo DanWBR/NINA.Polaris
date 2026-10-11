@@ -58,6 +58,8 @@ public sealed class LiveCaptureService {
     public bool IsRunning { get; private set; }
     public double ExposureSeconds { get; private set; }
     public int Gain { get; private set; }
+    /// <summary>ISO for a camera that has one; null leaves the camera's own.</summary>
+    public int? Iso { get; private set; }
     public int BinX { get; private set; }
     public long FrameCount { get; private set; }
     public string? LastError { get; private set; }
@@ -86,7 +88,7 @@ public sealed class LiveCaptureService {
 
     /// <summary>Start the server-side LIVE loop. No-op (returns false) if a
     /// loop is already running or no camera is connected.</summary>
-    public bool Start(double exposureSeconds, int gain, int binning) {
+    public bool Start(double exposureSeconds, int gain, int binning, int? iso = null) {
         lock (_lock) {
             if (IsRunning) return false;
             if (_equip.Camera == null || !_equip.Camera.IsConnected) {
@@ -95,6 +97,7 @@ public sealed class LiveCaptureService {
             }
             ExposureSeconds = exposureSeconds > 0 ? exposureSeconds : 1.0;
             Gain = gain;
+            Iso = iso is > 0 ? iso : null;
             BinX = binning > 0 ? binning : 1;
             FrameCount = 0;
             LastError = null;
@@ -200,6 +203,7 @@ public sealed class LiveCaptureService {
                 try {
                     var opts = new CaptureOptions(
                         Gain: Gain > 0 ? Gain : (int?)null,
+                        Iso: Iso,
                         Offset: RigCaptureDefaults.Offset(_profile),
                         BinX: BinX, BinY: BinX,
                         ImageType: "LIGHT");

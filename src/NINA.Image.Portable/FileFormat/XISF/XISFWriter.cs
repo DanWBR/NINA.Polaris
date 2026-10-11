@@ -203,6 +203,8 @@ public static class XISFWriter {
                 WriteProperty(xw, "Instrument:Camera:Name", "String", meta.Camera.Name);
             if (meta.Camera.Gain != 0)
                 WriteProperty(xw, "Instrument:Camera:Gain", "Float32", meta.Camera.Gain.ToString(CultureInfo.InvariantCulture));
+            if (meta.Camera.Iso > 0)
+                WriteProperty(xw, "Instrument:Camera:ISOSpeed", "Int32", meta.Camera.Iso.ToString(CultureInfo.InvariantCulture));
             if (meta.Camera.BinX > 0) {
                 WriteProperty(xw, "Instrument:Camera:XBinning", "Int32", meta.Camera.BinX.ToString(CultureInfo.InvariantCulture));
                 WriteProperty(xw, "Instrument:Camera:YBinning", "Int32", meta.Camera.BinY.ToString(CultureInfo.InvariantCulture));
@@ -251,6 +253,8 @@ public static class XISFWriter {
                 WriteFitsKeyword(xw, "GAIN", meta.Camera.Gain.ToString(CultureInfo.InvariantCulture), null);
             if (meta.Camera.Offset != 0)
                 WriteFitsKeyword(xw, "OFFSET", meta.Camera.Offset.ToString(CultureInfo.InvariantCulture), null);
+            if (meta.Camera.Iso > 0)
+                WriteFitsKeyword(xw, "ISOSPEED", meta.Camera.Iso.ToString(CultureInfo.InvariantCulture), "ISO");
             foreach (var vc in meta.Camera.VendorCards) {
                 if (!string.IsNullOrWhiteSpace(vc.Keyword) && !string.IsNullOrWhiteSpace(vc.Value))
                     WriteFitsKeyword(xw, vc.Keyword, vc.Value, vc.Comment);

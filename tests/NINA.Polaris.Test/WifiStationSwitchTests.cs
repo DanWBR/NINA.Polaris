@@ -58,7 +58,7 @@ public class WifiStationSwitchTests {
         Assert.That(method, Is.GreaterThanOrEqualTo(0), "SwitchToStationAsync moved");
 
         var apDown = src.IndexOf("\"connection down polaris-hotspot\"", method, StringComparison.Ordinal);
-        var stationUp = src.IndexOf("\"connection up polaris-station\"", method, StringComparison.Ordinal);
+        var stationUp = src.IndexOf("$\"connection up {Shell(conName)}\"", method, StringComparison.Ordinal);
 
         Assert.Multiple(() => {
             Assert.That(apDown, Is.GreaterThanOrEqualTo(0),

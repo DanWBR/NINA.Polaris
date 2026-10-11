@@ -161,6 +161,10 @@ public static class FITSWriter {
             Add(cards, "GAIN", meta.Camera.Gain.ToString(CultureInfo.InvariantCulture));
         if (meta.Camera.Offset != 0)
             Add(cards, "OFFSET", meta.Camera.Offset.ToString(CultureInfo.InvariantCulture));
+        // ISOSPEED is the keyword DSLR-aware tools read (N.I.N.A., Siril,
+        // PixInsight, DeepSkyStacker): what matching a light to its dark keys on.
+        if (meta.Camera.Iso > 0)
+            Add(cards, "ISOSPEED", meta.Camera.Iso.ToString(CultureInfo.InvariantCulture), "ISO");
         if (meta.Camera.PixelSizeX > 0)
             Add(cards, "XPIXSZ", Fmt(meta.Camera.PixelSizeX), "Pixel size X (um)");
         if (meta.Camera.PixelSizeY > 0)

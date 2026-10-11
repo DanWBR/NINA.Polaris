@@ -147,6 +147,36 @@
 .editor-export-row input[type="number"] { width: 100%; }
 .editor-export-row .muted { white-space: nowrap; }
 
+/* Saved WiFi networks in the Station modal: one row per network, name on
+   the left, its state and the two actions on the right. */
+.wifi-saved {
+    margin-bottom: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 6px 8px;
+    font-size: 12px;
+}
+.wifi-saved-head {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+}
+.wifi-saved-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 0;
+}
+.wifi-saved-ssid {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* Theme the Export modal's dropdowns + number input so they match the
    dark UI instead of falling back to the OS white combobox. Mirrors the
    Settings-card select styling: dark surface, custom chevron, focus ring,
