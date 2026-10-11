@@ -24027,6 +24027,14 @@ function ninaApp() {
             }
         },
 
+        /// The new calibration reaches the page on the next status ticks (1-2 s);
+        /// redraw the open Review plot then, so it shows without reopening.
+        _redrawCalReviewSoon() {
+            const redraw = () => { if (this.showCalReview) this.$nextTick(() => this.drawCalReviewPlot()); };
+            setTimeout(redraw, 1500);
+            setTimeout(redraw, 3000);
+        },
+
         // Calibration review plot: RA points (blue) + Dec points (red) as PHD2's
         // "Review Calibration" shows, with the fitted axes through the origin.
         drawCalReviewPlot() {
@@ -24314,6 +24322,10 @@ function ninaApp() {
                 await this.apiPostJson('/api/guider/import-calibration', { calibration: cal });
                 await this.loadGuiderStatus?.();
                 this.toast('Calibration loaded from file', 'ok');
+                // Load file sits inside the Review panel, which only drew its
+                // plot when opened, so the loaded calibration showed its table
+                // and an empty plot.
+                this._redrawCalReviewSoon();
             } catch (e) { this.toastFail('Load calibration failed', e); }
         },
 
@@ -24498,12 +24510,8 @@ function ninaApp() {
             try {
                 await this.apiPost('/api/guider/flip-calibration');
                 this.toast('Calibration mirrored for the meridian flip', 'ok');
-                // The server mirrors the stored plot points too; the WS tick
-                // refreshes calDetails within ~1-2 s. Redraw the open Review
-                // plot then, so the mirrored axes show without reopening it.
-                const redraw = () => { if (this.showCalReview) this.drawCalReviewPlot(); };
-                setTimeout(redraw, 1500);
-                setTimeout(redraw, 3000);
+                // The server mirrors the stored plot points too.
+                this._redrawCalReviewSoon();
             } catch (e) { this.toastFail('Flip failed', e); }
         },
 
