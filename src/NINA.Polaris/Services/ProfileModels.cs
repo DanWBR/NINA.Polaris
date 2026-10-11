@@ -688,6 +688,8 @@ public class EquipmentProfile {
     public double PolarAlignExposureSec { get; set; } = 3.0;
     public int PolarAlignSettleSeconds { get; set; } = 2;
     public int PolarAlignGain { get; set; } = 100;
+    /// <summary>Camera for polar alignment: "main", "guide" or "aux".</summary>
+    public string PolarAlignCamera { get; set; } = "main";
 
     // Slew & Center plate-solve tunables. Used by SKY tab "Go to",
     // meridian-flip recenter, and live-stack auto-recenter trigger.
