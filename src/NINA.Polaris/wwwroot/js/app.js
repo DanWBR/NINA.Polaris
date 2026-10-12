@@ -28487,8 +28487,11 @@ function ninaApp() {
                 // stays pending until the long exposure+30s timeout, leaving the
                 // shutter spinning "forever" after an abort).
                 this._previewSnapAbort = new AbortController();
+                // A filter change runs first on the host and now waits for the
+                // wheel to stop (up to 60 s on a slow wheel).
+                const wheelAllowanceSec = previewBody.filter ? 60 : 0;
                 const resp = await this.apiPost('/api/camera/capture', previewBody, {
-                    timeout: Math.max(15000, (this.preview.exposure + 30) * 1000),
+                    timeout: Math.max(15000, (this.preview.exposure + 30 + wheelAllowanceSec) * 1000),
                     signal: this._previewSnapAbort.signal
                 });
                 const r = await resp.json();

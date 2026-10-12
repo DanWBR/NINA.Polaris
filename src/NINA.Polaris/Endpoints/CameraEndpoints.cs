@@ -131,12 +131,17 @@ public static class CameraEndpoints {
                 // wheel where it is.
                 if (!string.IsNullOrWhiteSpace(request.Filter)
                     && equip.FilterWheel != null) {
+                    // The move returns once the wheel has stopped on the
+                    // filter (IndiFilterWheel waits for it), so the exposure
+                    // below never starts with the wheel still turning.
                     try {
                         await equip.FilterWheel.SetFilterByNameAsync(request.Filter);
-                    } catch {
+                    } catch (Exception ex) {
                         // Don't fail the whole capture on a filter swap
                         // error, the user sees the wrong filter in
-                        // stats and can abort if it matters.
+                        // stats and can abort if it matters. But say so.
+                        capLogger.LogWarning(ex, "Filter change to '{Filter}' before the capture failed",
+                            request.Filter);
                     }
                 }
 

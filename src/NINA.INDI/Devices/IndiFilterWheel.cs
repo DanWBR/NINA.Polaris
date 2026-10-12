@@ -158,7 +158,15 @@ public class IndiFilterWheel : NINA.Image.Interfaces.IFilterWheel {
     public Task DisconnectAsync(CancellationToken ct = default)
         => _client.DisconnectDeviceAsync(DeviceName, ct);
 
+    /// <summary>How long a move may take before it is reported as failed. Slow
+    /// wheels (a QHY CFW with many slots) need several seconds per change.</summary>
+    internal static TimeSpan ArrivalTimeout = TimeSpan.FromSeconds(60);
+
     public async Task SetPositionAsync(int position, CancellationToken ct = default) {
+        // Already resting on that slot: nothing to move, and no full turn on
+        // the drivers that rotate once even for the slot they are on.
+        if (!IsMoving && Position == position) return;
+
         // INDIROB-1: ack-based write so a rejected filter change
         // (slot out of range, wheel uncalibrated, motor stuck) surfaces
         // as an exception with the driver's message instead of silently
@@ -176,10 +184,18 @@ public class IndiFilterWheel : NINA.Image.Interfaces.IFilterWheel {
         }
         // TimedOut = silent driver. Don't throw here because some
         // mechanical wheels legitimately take longer than the 5s
-        // default ack window to acknowledge (servo windup); the
-        // upstream caller polls Position separately for completion.
+        // default ack window to acknowledge (servo windup); the wait
+        // below gives them the rest of the arrival timeout.
 
-        // Persist the slot in the driver's own config (debounced).
+        // The ack is the driver's FIRST reply, and that reply is Busy, sent
+        // as the wheel starts turning. Returning on it let PREVIEW, AUTORUN,
+        // the sequencer and flats start the exposure with the wheel still
+        // moving (discussion #37). The move is over when the property leaves
+        // Busy reading the slot that was asked for.
+        try {
+            await WaitForArrivalAsync(position, ct);
+        } finally {
+            // Persist the slot in the driver's own config (debounced).
         //
         // INDI drivers save FILTER_SLOT in ~/.indi/<driver>_config.xml, and
         // IndiClient auto-dispatches CONFIG_LOAD on every CONNECT, which
@@ -191,10 +207,27 @@ public class IndiFilterWheel : NINA.Image.Interfaces.IFilterWheel {
         // is the same treatment the serial-port choice gets in
         // IndiClient.SetDevicePortAsync.
         //
-        // Deliberately also on the TimedOut path: CONFIG_SAVE stores the
-        // driver's CURRENT property values, so a write that never landed
-        // saves the slot the wheel is really on, not the one we asked for.
-        _client.ScheduleConfigSaveDebounced(DeviceName);
+            // Deliberately also on the timeout path: CONFIG_SAVE stores the
+            // driver's CURRENT property values, so a write that never landed
+            // saves the slot the wheel is really on, not the one we asked for.
+            _client.ScheduleConfigSaveDebounced(DeviceName);
+        }
+    }
+
+    internal async Task WaitForArrivalAsync(int position, CancellationToken ct) {
+        var deadline = DateTime.UtcNow + ArrivalTimeout;
+        while (true) {
+            var state = _client.GetProperty(DeviceName, "FILTER_SLOT")?.State;
+            if (state == Protocol.IndiPropertyState.Alert)
+                throw new InvalidOperationException(
+                    $"Filter wheel '{DeviceName}' reported an error moving to slot {position}");
+            if (state != Protocol.IndiPropertyState.Busy && Position == position) return;
+            if (DateTime.UtcNow >= deadline)
+                throw new TimeoutException(
+                    $"Filter wheel '{DeviceName}' did not reach slot {position} within "
+                    + $"{ArrivalTimeout.TotalSeconds:F0} s (now at {Position}, {state?.ToString() ?? "no state"})");
+            await Task.Delay(100, ct);
+        }
     }
 
     public async Task SetFilterByNameAsync(string filterName, CancellationToken ct = default) {
