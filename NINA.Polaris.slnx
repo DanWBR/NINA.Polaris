@@ -16,6 +16,7 @@
     <Project Path="src/NINA.Camera.SonySdk/NINA.Camera.SonySdk.csproj" />
     <Project Path="src/NINA.Camera.ZwoSdk/NINA.Camera.ZwoSdk.csproj" />
     <Project Path="src/NINA.Camera.PlayerOneSdk/NINA.Camera.PlayerOneSdk.csproj" />
+    <Project Path="src/NINA.Camera.QhySdk/NINA.Camera.QhySdk.csproj" />
     <Project Path="src/NINA.Camera.ToupTekSdk/NINA.Camera.ToupTekSdk.csproj" />
     <Project Path="src/NINA.Camera.AltairSdk/NINA.Camera.AltairSdk.csproj" />
     <Project Path="src/NINA.Camera.SvbonySdk/NINA.Camera.SvbonySdk.csproj" />

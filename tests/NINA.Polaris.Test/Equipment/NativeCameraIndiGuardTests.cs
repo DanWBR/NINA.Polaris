@@ -101,6 +101,42 @@ public class NativeCameraIndiGuardTests {
         }), Is.False);
     }
 
+    // ----- QHY: indi_qhy_ccd names the camera after its SDK id, not its model -----
+
+    [Test]
+    public void AQhyCameraCollidesWithItsTruncatedIndiName() {
+        // "QHY CCD " + the first 15 characters of the SDK id, while the native
+        // backend reports the bare model: only the id lines the two up.
+        Assert.That(NativeCameraIndiGuard.Collides("QHY CCD QHY600M-6bb54f4", new[] {
+            new NativeCameraIndiGuard.CameraSlot("qhy-sdk", "QHY600M", true, "QHY600M-6bb54f4c1d2e3f40"),
+        }), Is.True);
+    }
+
+    [Test]
+    public void TheModelAloneDoesNotMatchAQhyIndiName() {
+        Assert.That(NativeCameraIndiGuard.SameCamera("QHY CCD QHY600M-6bb54f4", "QHY600M"), Is.False);
+    }
+
+    [TestCase("QHY CCD QHY600M-6bb54f4", "QHY600M-6bb54f4c1d2e3f40", true)]
+    [TestCase("QHY CCD QHY268C-12345", "QHY268C-12345", true)]           // short id, not truncated
+    [TestCase("QHY CCD QHY600M", "QHY600M-6bb54f4c1d2e3f40", true)]      // a bare model name
+    [TestCase("QHY CCD QHY600M-0aa11b2", "QHY600M-6bb54f4c1d2e3f40", false)] // same model, other serial
+    [TestCase("QHY CCD QHY294M", "QHY294MPRO-6bb54f4c", false)]          // a model is not a prefix
+    [TestCase("QHY CCD ", "QHY600M-6bb54f4c1d2e3f40", false)]
+    [TestCase("ZWO CCD ASI585MC Pro", "QHY600M-6bb54f4c1d2e3f40", false)]
+    public void TheQhyRuleComparesTheIndiSuffixWithTheSdkId(string indi, string id, bool expected) {
+        Assert.That(NativeCameraIndiGuard.SameQhyCamera(indi, "qhy-sdk", id), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void TheQhyRuleOnlyAppliesToQhySdkSlots() {
+        Assert.That(NativeCameraIndiGuard.SameQhyCamera("QHY CCD QHY600M-6bb54f4", "zwo-sdk",
+            "QHY600M-6bb54f4c1d2e3f40"), Is.False);
+        Assert.That(NativeCameraIndiGuard.Collides("QHY CCD QHY600M-6bb54f4", new[] {
+            new NativeCameraIndiGuard.CameraSlot("qhy-sdk", "QHY600M", false, "QHY600M-6bb54f4c1d2e3f40"),
+        }), Is.False, "selected but not open is still not Polaris's");
+    }
+
     [TestCase(null)]
     [TestCase("")]
     [TestCase("   ")]

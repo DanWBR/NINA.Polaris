@@ -141,6 +141,7 @@ public class EquipmentManager : IDisposable {
             "svbony-sdk"  => CreateSvbonyCamera(deviceId),
             "zwo-sdk"     => CreateZwoCamera(deviceId),
             "playerone-sdk" => CreatePlayerOneCamera(deviceId),
+            "qhy-sdk"       => CreateQhyCamera(deviceId),
             "touptek-sdk"   => CreateToupTekCamera(deviceId),
             "altair-sdk"    => CreateAltairCamera(deviceId),
             "ascom-com"   => CreateAscomCamera(deviceId),
@@ -456,6 +457,21 @@ public class EquipmentManager : IDisposable {
         }
     }
 
+    /// <summary>QHY camera over the native QHYCCD SDK. Nothing is bundled:
+    /// Linux takes libqhyccd from the INDI libqhy package, Windows takes
+    /// qhyccd.dll from the QHYCCD driver installer. Still capture only, no
+    /// native video stream yet.</summary>
+    private static ICamera CreateQhyCamera(string deviceId) {
+        try {
+            return new NINA.Camera.QhySdk.QhySdkCamera(deviceId);
+        } catch (DllNotFoundException ex) {
+            throw new NotSupportedException(
+                "QHYCCD SDK native library not found. On Linux install the libqhy " +
+                "package; on Windows install the QHYCCD driver package (AllInOne). " +
+                "Or use the INDI driver instead.", ex);
+        }
+    }
+
     /// <summary>ToupTek camera over the native toupcam SDK. Cross-platform
     /// (Linux arm64/x64 + Windows x64); native lib bundled per-RID. The
     /// high-fps path for ToupTek planetary cameras.</summary>
@@ -559,6 +575,16 @@ public class EquipmentManager : IDisposable {
             Available: NINA.Camera.PlayerOneSdk.PlayerOneRegistry.IsAvailable,
             Description: "PlayerOne cameras via the native PlayerOneCamera SDK. " +
                 "Direct, low-overhead path for high-fps video (bypasses INDI)."));
+        // QHYCCD native SDK. Not bundled: libqhy (Linux) or the QHYCCD driver
+        // installer (Windows) provides it. Stills only for now.
+        var qhyAvailable = NINA.Camera.QhySdk.QhyRegistry.IsAvailable;
+        var qhyVersion = NINA.Camera.QhySdk.QhyRegistry.SdkVersion;
+        list.Add(new("qhy-sdk", "QHY (SDK, native)",
+            Available: qhyAvailable,
+            Description: "QHY cameras via the native QHYCCD SDK" +
+                (qhyAvailable && qhyVersion != null ? $" ({qhyVersion})" : "") +
+                ". Direct still capture with cooling (bypasses INDI); no native video stream yet. " +
+                "Needs the libqhy package on Linux or the QHYCCD driver installer on Windows."));
         // ToupTek native SDK. Cross-platform (Linux arm64/x64 + Windows x64);
         // the high-fps path for ToupTek planetary cameras.
         list.Add(new("touptek-sdk", "ToupTek (SDK, native)",
@@ -705,6 +731,16 @@ public class EquipmentManager : IDisposable {
                     .ToList();
             } catch (Exception ex) {
                 _logger.LogWarning(ex, "PlayerOne SDK discovery failed");
+                return Array.Empty<DiscoveredCamera>();
+            }
+        }
+        if (driver == "qhy-sdk") {
+            try {
+                return NINA.Camera.QhySdk.QhyDiscovery.Enumerate()
+                    .Select(e => new DiscoveredCamera(e.Id, e.Model, e.Info))
+                    .ToList();
+            } catch (Exception ex) {
+                _logger.LogWarning(ex, "QHY SDK discovery failed");
                 return Array.Empty<DiscoveredCamera>();
             }
         }
