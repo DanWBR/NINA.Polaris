@@ -5405,15 +5405,15 @@
                             </div>
                             <div class="phd2-cam-empty text-muted" x-show="!guider.view">Loop or guide to see the guide frame</div>
                             <!-- These banners are added and removed (x-if), not
-                                 hidden (x-show). Over the guide frame, which
-                                 repaints every second, iOS Safari kept painting a
-                                 hidden banner: the pulsing animation and the
-                                 transform give it a layer of its own, and setting
-                                 display:none on it did not always take the layer
-                                 down. Field report: "Dithering: settling" stayed
-                                 on the frame for an hour after the dither ended,
+                                 hidden (x-show). Field report (Android tablet, the
+                                 app's WebView): "Dithering: settling" stayed on the
+                                 guide frame for an hour after the dither ended,
                                  while the header badge, reading the same state,
-                                 said GUIDING. -->
+                                 said GUIDING. The pulsing animation and the
+                                 transform give the banner a compositor layer of
+                                 its own over a frame that repaints every second,
+                                 and the hidden banner kept being painted. A banner
+                                 that is not in the page cannot be. -->
                             <template x-if="guider.calibrating && guider.calProgress">
                                 <div class="phd2-cal-banner" x-text="'Calibrating: ' + guider.calProgress"></div>
                             </template>
