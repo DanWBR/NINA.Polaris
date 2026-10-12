@@ -711,7 +711,12 @@
         if (axes) {
             rot = -Math.atan2(-axes.yE, -axes.yN) * 180 / Math.PI;
         }
-        var rotPositive = ((rot % 360) + 360) % 360;
+        // `rot` carries the geometry's +180° convention (both paths), which
+        // a rectangle does not show but its label does: the text came out
+        // upside down and read 180° away from the target label for the same
+        // camera. The label uses the camera angle itself, as the red one does.
+        var labelRot = rot - 180;
+        var rotPositive = ((labelRot % 360) + 360) % 360;
         var labelText = (labelOverride != null && labelOverride !== '')
             ? labelOverride
             : 'Scope ' + w.toFixed(2) + 'x' + h.toFixed(2)
@@ -726,7 +731,7 @@
         // rotated target label). Live-rebuild from the change hook
         // (see skyRebuildMountGeoJson) keeps the text-rotate fresh
         // as time advances and parallactic at the rect evolves.
-        var textRotate = -(rot + parallactic);
+        var textRotate = -(labelRot + parallactic);
         var labelProps = {
             stroke: color,
             'stroke-opacity': 1,

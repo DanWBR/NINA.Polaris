@@ -47,7 +47,7 @@
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20261009-floatbtn">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260731-videonudge">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260902-ctrlrows">
-    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20261011-wifisaved">
+    <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20261011-kblift">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260726-framefit">
     <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260801-selectwidth">
     <link rel="stylesheet" href="/css/parts/09-mobile.css?v=20260801-hscroll">
@@ -15534,8 +15534,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <!-- Servers that worked before; picking one copies it on
                              the host, password included. -->
                         <label x-show="(storagePush.recent || []).length"><span class="lbl">Recent</span>
-                            <span style="display:flex; gap:6px; align-items:center">
-                                <select class="input input-sm" x-model.number="storagePush.recentPick">
+                            <span style="display:flex; flex-wrap:wrap; gap:6px; align-items:center">
+                                <select class="input input-sm" style="flex:1 1 140px; min-width:0" x-model.number="storagePush.recentPick">
                                     <option :value="-1">Pick a server used before</option>
                                     <template x-for="r in (storagePush.recent || [])" :key="r.index">
                                         <option :value="r.index" x-text="storageRecentLabel(r)"></option>
@@ -25281,7 +25281,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261011-mfsave"></script>
+    <script src="/js/app.js?v=20261011-kblift"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
