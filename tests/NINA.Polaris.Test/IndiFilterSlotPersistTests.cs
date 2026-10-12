@@ -127,9 +127,14 @@ public class IndiFilterSlotPersistTests {
                     var state = _reply == IndiPropertyReply.Ok ? "Ok" : "Alert";
                     var message = _reply == IndiPropertyReply.Alert
                         ? " message='Filter wheel is not calibrated'" : "";
+                    // Report the slot that was asked for, as a wheel that got
+                    // there does: the move waits until the driver reads it.
+                    var asked = System.Text.RegularExpressions.Regex.Match(
+                        text, "FILTER_SLOT_VALUE['\"]\\s*>\\s*([0-9.]+)");
+                    var slot = asked.Success ? asked.Groups[1].Value : "4";
                     var xml =
                         $"<setNumberVector device='{Device}' name='FILTER_SLOT' state='{state}'{message}>"
-                        + "<oneNumber name='FILTER_SLOT_VALUE'>4</oneNumber></setNumberVector>\n";
+                        + $"<oneNumber name='FILTER_SLOT_VALUE'>{slot}</oneNumber></setNumberVector>\n";
                     var bytes = Encoding.UTF8.GetBytes(xml);
                     await stream.WriteAsync(bytes, _cts.Token);
                     await stream.FlushAsync(_cts.Token);

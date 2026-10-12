@@ -314,6 +314,34 @@ sessions: point it at a bigger USB SSD, a NAS share mounted under
 `/mnt`, or a fresh project folder, and every subsequent capture and
 processing output lands there.
 
+## Saving to a USB drive
+
+A USB stick or a USB SSD (a solid-state drive, fast and sturdy) is
+the simplest way to give the host more room and to carry a night's
+data home. Polaris on Linux mounts the drive by itself, that is, it
+makes the files on it reachable, under `/media/polaris/<drive name>`.
+The drive can be formatted as exFAT (the format Windows and macOS
+both read and write, and the best choice for large files), FAT32,
+NTFS, or a Linux format such as ext4.
+
+- **Plugged in while Polaris runs:** a "USB drive detected" message
+  asks whether to use it as the capture home. Answer yes and every
+  later capture is saved on the drive.
+- **Plugged in before the host started:** Polaris does not ask about
+  a drive that was already there. Open **Settings → Image Output**,
+  press **Find USB drives**, pick the drive (its free space is shown
+  next to the name) and press **Save here**.
+- **Unplugged while it holds the capture home:** Polaris offers to go
+  back to the default folder (`files` in the polaris user's home) so
+  the next capture does not fail.
+
+Videos recorded in the VIDEO tab follow the same setting: SER files
+(the frame-by-frame video format planetary stacking programs read)
+are written under `<capture home>/<rig>/planetary/<target>/`.
+
+To use a folder on the drive instead of its top level, browse to that
+folder in FILES and press **Set as Studio root**, as above.
+
 ## Housekeeping on a small SD card
 
 A Raspberry Pi booting from a 32 or 64 GB SD card does not hold many

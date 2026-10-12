@@ -85,6 +85,10 @@ public class MeridianFlipService {
         }
     }
 
+    /// <summary>Drop a run's temporary override (PLAN) and go back to what the
+    /// operator saved on the active rig.</summary>
+    public void RestoreSavedSettings() => LoadSettingsForActiveRig();
+
     /// <summary>Apply settings the operator chose and keep them on the active
     /// rig. <see cref="UpdateSettings"/> alone is for a run's own temporary
     /// override (PLAN), which must not outlive the run.</summary>

@@ -54,6 +54,8 @@ public class PlanRunnerService : IHostedService {
     // end-actions document too and its own status no longer reflects the main run.
     // Destructive end actions (host shutdown) must never fire on a failed run.
     private bool _mainRunFailed;
+    // ApplyPlanFlipSettings swapped in the plan's flip knobs; undo at the end.
+    private bool _flipOverridden;
     private int _mainPlannedFrames;   // total light frames the main doc will capture
 
     private CancellationTokenSource? _cts;
@@ -106,15 +108,15 @@ public class PlanRunnerService : IHostedService {
             // MeridianFlipTrigger reads at runtime. Preserve the service's other
             // settings (pause-before, tolerance, settle, live-stack flag) and
             // only override the three knobs exposed in the PLAN panel.
-            if (plan.AutoMeridianFlip) {
-                ApplyPlanFlipSettings(plan);
-            }
-
             var doc = _compiler.Compile(plan);
             _mainPlannedFrames = CountFrames(doc.Root);
             _engine.Load(doc);
+            if (plan.AutoMeridianFlip) {
+                ApplyPlanFlipSettings(plan);
+            }
             _engine.Start();
             if (_engine.State != AdvancedSequenceState.Running) {
+                RestoreFlipSettings();
                 return (false, _engine.LastError ?? "The engine refused to start.");
             }
 
@@ -152,13 +154,13 @@ public class PlanRunnerService : IHostedService {
                 return (false, "There is no interrupted plan to resume.");
 
             var plan = _resumePlan;
+            _engine.LoadForResume(_resumeDoc);
             if (plan.AutoMeridianFlip) {
                 ApplyPlanFlipSettings(plan);
             }
-
-            _engine.LoadForResume(_resumeDoc);
             _engine.Start(resume: true);
             if (_engine.State != AdvancedSequenceState.Running) {
+                RestoreFlipSettings();
                 return (false, _engine.LastError ?? "The engine refused to resume.");
             }
 
@@ -274,6 +276,16 @@ public class PlanRunnerService : IHostedService {
         s.RecenterAfterFlip = plan.MeridianFlipRecenter;
         s.AutoFocusAfterFlip = plan.MeridianFlipAutoFocus;
         _flip.UpdateSettings(s);
+        _flipOverridden = true;
+    }
+
+    /// <summary>End the plan's flip override: back to what the operator saved
+    /// on the rig. Without this the override (flip on, the plan's minutes)
+    /// stayed in force for AUTORUN and LIVE until the host restarted.</summary>
+    private void RestoreFlipSettings() {
+        if (!_flipOverridden) return;
+        _flipOverridden = false;
+        _flip.RestoreSavedSettings();
     }
 
     /// <summary>Recursively sum the frame counts of every TakeExposure
@@ -394,6 +406,7 @@ public class PlanRunnerService : IHostedService {
         _userAborted = false;
         _mainRunFailed = false;
         _mainPlannedFrames = 0;
+        RestoreFlipSettings();
 
         if (plan == null) return;
 

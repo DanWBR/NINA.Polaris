@@ -134,6 +134,25 @@ public class AutorunPersistenceTests {
         Assert.That(flip2.Settings.MinutesAfterMeridian, Is.EqualTo(5));
     }
 
+    /// <summary>When the run ends, the same host goes back to the saved
+    /// settings instead of keeping the run's override until a restart.</summary>
+    [Test]
+    public void ATemporaryOverride_IsUndoneByRestoreSavedSettings() {
+        var flip = MakeFlip(NewProfile());
+        flip.SaveSettings(new MeridianFlipSettings { Enabled = false, MinutesAfterMeridian = 5, MaxMinutesPastMeridian = 30 });
+        var over = flip.Settings.Clone();
+        over.Enabled = true; over.MinutesAfterMeridian = 10;
+        flip.UpdateSettings(over);
+        Assert.That(flip.Settings.Enabled, Is.True);
+
+        flip.RestoreSavedSettings();
+        Assert.Multiple(() => {
+            Assert.That(flip.Settings.Enabled, Is.False);
+            Assert.That(flip.Settings.MinutesAfterMeridian, Is.EqualTo(5));
+            Assert.That(flip.Settings.MaxMinutesPastMeridian, Is.EqualTo(30));
+        });
+    }
+
     [Test]
     public void MeridianFlipSettings_FollowTheActiveRig() {
         var profile = NewProfile();

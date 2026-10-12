@@ -4016,7 +4016,7 @@
                         <button class="btn"
                                 :class="cameraStream.running ? 'btn-active' : ''"
                                 @click="toggleCameraStream()"
-                                :disabled="!selectedCamera || preview.busy || preview.looping"
+                                :disabled="!cameraStream.running && (!selectedCamera || preview.busy || preview.looping)"
                                 :title="cameraStream.supportsNative
                                     ? 'Native CCD_VIDEO_STREAM available, high fps'
                                     : 'Server loop fallback (no native stream on this camera)'">
@@ -4478,12 +4478,14 @@
                             <button class="btn"
                                     :class="cameraStream.running ? 'btn-active' : ''"
                                     @click="videoToggleStream()"
-                                    :disabled="!selectedCamera || videoRecording.recording">
+                                    :disabled="(!selectedCamera && !cameraStream.running) || videoRecording.recording">
                                 <span x-show="!cameraStream.running">🎥 Start Stream</span>
                                 <span x-show="cameraStream.running"
                                       x-text="'⏹ Stop Stream (cap ' + (cameraStream.captureFps?.toFixed?.(1) || cameraStream.fps?.toFixed?.(1) || '0.0')
                                               + ' / tx ' + (cameraStream.transmitFps?.toFixed?.(1) || '0.0') + ' fps)'"></span>
                             </button>
+                            <span x-show="cameraStream.running && cameraStream.lastError" class="text-warn"
+                                  style="font-size:11px" x-text="cameraStream.lastError"></span>
                             <span x-show="videoRecording.recording" class="text-muted" style="font-size:11px">
                                 → <code x-text="videoRecording.path"></code>
                                 · <span x-text="((videoRecording.bytes / 1048576) | 0) + ' MB'"></span>
@@ -17721,6 +17723,25 @@ Windows  winget install Rclone.Rclone</code></pre>
                            style="color:var(--accent);text-decoration:underline">Studio tab</a>:
                         navigate to the folder, then click <em>Set as Studio root</em>.
                     </p>
+                    <!-- Any USB drive mounted now, including one plugged in
+                         before the host started (the hot-plug prompt only
+                         offers drives that appear while Polaris runs). -->
+                    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px">
+                        <button class="btn btn-sm" type="button" :disabled="usbDrives.busy"
+                                @click="usbDrivesLoad()">Find USB drives</button>
+                        <select class="input-sm" style="flex:1 1 220px;min-width:0"
+                                x-show="usbDrives.list.length" x-model="usbDrives.pick">
+                            <template x-for="d in usbDrives.list" :key="d.path">
+                                <option :value="d.path" x-text="usbDriveLabel(d)"></option>
+                            </template>
+                        </select>
+                        <button class="btn btn-sm btn-primary" type="button" x-show="usbDrives.list.length"
+                                :disabled="!usbDrives.pick || usbDrives.busy"
+                                @click="usbDriveUse(usbDrives.pick)">Save here</button>
+                        <span class="hint" style="margin:0" x-show="usbDrives.loaded && !usbDrives.list.length">
+                            No USB drive found. Plug one in and try again.
+                        </span>
+                    </div>
 
                     <!-- Folder layout. The night belongs in the path either
                          way: what changes is whether a target's whole history
@@ -25566,7 +25587,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261011-kblift"></script>
+    <script src="/js/app.js?v=20261012-usbdrives"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

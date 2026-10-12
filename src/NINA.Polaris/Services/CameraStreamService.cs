@@ -191,9 +191,11 @@ public class CameraStreamService : IDisposable {
         Task? loop;
         IDisposable? sub;
         ICamera? cam;
+        bool wasNative;
         lock (_lock) {
             if (!IsRunning) return;
             IsRunning = false;
+            wasNative = Mode == "native";
             loop = _loopTask;
             sub = _nativeSubscription;
             _nativeSubscription = null;
@@ -202,7 +204,11 @@ public class CameraStreamService : IDisposable {
         }
 
         sub?.Dispose();
-        if (cam != null && cam.IsStreaming) {
+        // Native: always tell the driver, whatever the camera's flag says. The
+        // flag can be down while the driver still streams, and skipping the
+        // stop then left the camera streaming (and PREVIEW refused) until a
+        // restart (discussion #37).
+        if (cam != null && (wasNative || cam.IsStreaming)) {
             try { await cam.StopVideoStreamAsync(); }
             catch (Exception ex) { _logger.LogDebug(ex, "StopVideoStreamAsync failed (non-fatal)"); }
         }
@@ -268,7 +274,11 @@ public class CameraStreamService : IDisposable {
             try {
                 await cam.StartVideoStreamAsync(new VideoStreamOptions(
                     ExposureSeconds: ExposureSeconds, Gain: Gain, BinX: BinX, BinY: BinY), ct);
+            } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
+                // Stopped while starting: no fallback for a stream nobody wants.
+                return;
             } catch (Exception ex) {
+                if (ct.IsCancellationRequested) return;
                 _logger.LogWarning(ex, "Native StartVideoStreamAsync failed");
                 LastError = ex.Message;
                 // Convert to loop mode as a graceful fallback so the user
@@ -287,11 +297,20 @@ public class CameraStreamService : IDisposable {
             // to produce at least one usable frame; if not, drop
             // CCD_VIDEO_STREAM and switch to loop mode (per-exposure
             // CaptureAsync, which the ASI driver DOES service correctly).
-            try { await Task.Delay(TimeSpan.FromSeconds(2), ct); }
+            // A stop that raced the start above may have sent STREAM_OFF before
+            // our STREAM_ON reached the driver: end it again.
+            if (ct.IsCancellationRequested) {
+                try { await cam.StopVideoStreamAsync(CancellationToken.None); } catch { }
+                return;
+            }
+            // Long stream exposures need longer than 2 s for a first frame.
+            var firstFrameWait = TimeSpan.FromSeconds(Math.Max(2, ExposureSeconds * 2 + 1));
+            try { await Task.Delay(firstFrameWait, ct); }
             catch (OperationCanceledException) { return; }
             if (FrameCount == 0 && !ct.IsCancellationRequested) {
                 _logger.LogWarning(
-                    "Native CCD_VIDEO_STREAM produced no usable frames in 2s, falling back to loop mode");
+                    "Native video stream produced no usable frames in {S:F0}s, falling back to loop mode",
+                    firstFrameWait.TotalSeconds);
                 LastError = "Driver did not deliver parseable video stream BLOBs; using loop fallback.";
                 try { await cam.StopVideoStreamAsync(CancellationToken.None); }
                 catch (Exception ex) {

@@ -170,12 +170,17 @@ public static class CameraEndpoints {
                 // wheel where it is.
                 if (!string.IsNullOrWhiteSpace(request.Filter)
                     && equip.FilterWheel != null) {
+                    // The move returns once the wheel has stopped on the
+                    // filter (IndiFilterWheel waits for it), so the exposure
+                    // below never starts with the wheel still turning.
                     try {
                         await equip.FilterWheel.SetFilterByNameAsync(request.Filter);
-                    } catch {
+                    } catch (Exception ex) {
                         // Don't fail the whole capture on a filter swap
                         // error, the user sees the wrong filter in
-                        // stats and can abort if it matters.
+                        // stats and can abort if it matters. But say so.
+                        capLogger.LogWarning(ex, "Filter change to '{Filter}' before the capture failed",
+                            request.Filter);
                     }
                 }
 
@@ -724,9 +729,22 @@ public static class CameraEndpoints {
             });
         });
 
-        group.MapPost("/disconnect", async (EquipmentManager equip) => {
+        group.MapPost("/disconnect", async (EquipmentManager equip, CameraStreamService stream,
+                NINA.Polaris.Services.Planetary.VideoRecordingService recorder, ILoggerFactory loggerFactory) => {
             if (equip.Camera == null)
                 return Results.BadRequest(new { error = "No camera selected" });
+
+            // A recording and a stream outlive the camera otherwise: the stream
+            // kept its hold on the camera and the recorder kept writing, with the
+            // stop buttons greyed out because the camera reads as gone, until a
+            // restart (discussion #37). End both first, the file closed properly.
+            try {
+                if (recorder.IsRecording) await recorder.StopAsync();
+                await stream.StopAsync();
+            } catch (Exception ex) {
+                loggerFactory.CreateLogger("Polaris.Capture")
+                    .LogWarning(ex, "Stopping the video stream before disconnecting the camera failed");
+            }
 
             return await DeviceConnectGuard.RunAsync(
                 "disconnect", equip.Camera.DeviceName,

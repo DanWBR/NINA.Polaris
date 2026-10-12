@@ -130,6 +130,18 @@ public sealed class UsbDriveWatcherService : BackgroundService {
         }
     }
 
+    /// <summary>Every removable drive mounted right now, for the Settings
+    /// picker. The hot-plug prompt deliberately skips drives that were already
+    /// there at startup, so without this a drive plugged in before the host
+    /// booted could only be reached by browsing to it in FILES.</summary>
+    public IReadOnlyList<UsbDrive> CurrentDrives() {
+        try { return Enumerate().ToList(); }
+        catch (Exception ex) {
+            _log.LogDebug(ex, "USB watcher: listing drives failed");
+            return Array.Empty<UsbDrive>();
+        }
+    }
+
     private IEnumerable<UsbDrive> Enumerate() =>
         OperatingSystem.IsWindows() ? EnumerateWindows() : EnumerateLinux();
 
