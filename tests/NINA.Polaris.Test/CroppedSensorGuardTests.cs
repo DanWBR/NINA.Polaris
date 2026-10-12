@@ -107,4 +107,14 @@ public class CroppedSensorGuardTests {
     public void OnlyFullSensorFrameTypesAreChecked(string? imageType, bool expected) {
         Assert.That(ImageWriterService.IsFullSensorFrameType(imageType), Is.EqualTo(expected));
     }
+
+    /// <summary>The rig's sensor size is a reference only for the camera it was
+    /// set for.</summary>
+    [TestCase(6000, 4000, 3008, 3008, false)] // a Canon R8's size left on an SV605CC rig
+    [TestCase(SensorW, SensorH, ShotW, ShotH, true)] // the IMX183 driver showing its crop as the sensor
+    [TestCase(6000, 4000, 0, 0, true)]        // a DSLR that reports nothing: the field's purpose
+    [TestCase(0, 0, 3008, 3008, false)]       // nothing stored
+    public void TheRigSizeOnlyDescribesItsOwnCamera(int rigX, int rigY, int camX, int camY, bool expected) {
+        Assert.That(ImageWriterService.RigSensorDescribesCamera(rigX, rigY, camX, camY), Is.EqualTo(expected));
+    }
 }

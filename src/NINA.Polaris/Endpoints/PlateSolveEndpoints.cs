@@ -92,11 +92,14 @@ public static class PlateSolveEndpoints {
             // source, so it still has to come from the profile.
             var rig = profiles.ActiveEquipmentProfile;
             var cam = equip.Camera;
-            var pixelUm = rig.CameraPixelSizeUm > 0
-                ? rig.CameraPixelSizeUm
-                : (cam?.PixelSizeY > 0 ? cam.PixelSizeY : (cam?.PixelSizeX ?? 0));
-            var sensorX = rig.CameraMaxX > 0 ? rig.CameraMaxX : (cam?.MaxX ?? 0);
-            var sensorY = rig.CameraMaxY > 0 ? rig.CameraMaxY : (cam?.MaxY ?? 0);
+            // The camera's own report first, the rig's fields as the fallback
+            // they are: the DSLR picker fills them, and they stay on the rig
+            // when its camera changes (an SV605CC rig carried a Canon R8's
+            // 5.98um and 6000x4000, and its field came out twice too wide).
+            var camPixel = cam?.PixelSizeY > 0 ? cam.PixelSizeY : (cam?.PixelSizeX ?? 0);
+            var pixelUm = camPixel > 0 ? camPixel : rig.CameraPixelSizeUm;
+            var sensorX = cam?.MaxX > 0 ? cam.MaxX : rig.CameraMaxX;
+            var sensorY = cam?.MaxY > 0 ? cam.MaxY : rig.CameraMaxY;
 
             var pixelScale = SolverDatabaseAdvisor.PixelScale(pixelUm, rig.FocalLengthMm);
             var fov = SolverDatabaseAdvisor.FovDegrees(pixelScale, sensorX, sensorY);

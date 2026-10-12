@@ -293,8 +293,15 @@ public class ImageWriterService {
         // what a 5472x3672 night off a 5496x3672 IMX183 looked like, with no
         // warning anywhere. The rig's number is the operator's statement about
         // the sensor, so it does not move when a region does.
+        //
+        // The rig's number only counts when it describes THIS camera, though.
+        // It is filled by the DSLR picker, and it stays on the rig when the
+        // camera changes: a rig that once held a Canon R8 kept 6000x4000 after
+        // it moved to an SV605CC (3008x3008), and every correct light of that
+        // night was reported as a crop of a sensor it never had.
         var rigMaxX = _profile?.ActiveEquipmentProfile?.CameraMaxX ?? 0;
         var rigMaxY = _profile?.ActiveEquipmentProfile?.CameraMaxY ?? 0;
+        if (!RigSensorDescribesCamera(rigMaxX, rigMaxY, cam.MaxX, cam.MaxY)) { rigMaxX = 0; rigMaxY = 0; }
         int fullW = Math.Max(cam.MaxX, rigMaxX) / bin;
         int fullH = Math.Max(cam.MaxY, rigMaxY) / bin;
         int w = imageData.Properties.Width, h = imageData.Properties.Height;
@@ -313,6 +320,18 @@ public class ImageWriterService {
     /// one (a driver that has not published its geometry, or a rig field the
     /// operator never filled in).</summary>
     internal static int LargerSensorSide(int a, int b) => Math.Max(a > 0 ? a : 0, b > 0 ? b : 0);
+
+    /// <summary>Does the sensor size stored on the rig describe the camera that
+    /// is connected? Yes when the camera reports none (the DSLR case the field
+    /// exists for), or when both sides are within 2% of what the driver
+    /// reports, which still lets the rig expose a driver that republished its
+    /// sensor as a slightly smaller region (5472 of 5496). A size from another
+    /// camera, left behind when the rig's camera changed, is not.</summary>
+    internal static bool RigSensorDescribesCamera(int rigX, int rigY, int camX, int camY) {
+        if (rigX <= 0 || rigY <= 0) return false;
+        if (camX <= 0 || camY <= 0) return true;
+        return Math.Abs(rigX - camX) <= camX * 0.02 && Math.Abs(rigY - camY) <= camY * 0.02;
+    }
 
     /// <summary>Last-resort FITS OFFSET for a backend that did not stamp the
     /// frame itself: what the camera reports it is running at. 0 means "write
