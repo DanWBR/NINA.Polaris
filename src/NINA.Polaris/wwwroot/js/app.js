@@ -27922,7 +27922,9 @@ function ninaApp() {
         videoShutterCtx() {
             return {
                 isActive: () => !!this.videoRecording.recording,
-                disabled: () => !this.selectedCamera,
+                // A running recording can always be stopped, even when the
+                // camera reads as gone: the host may still be writing it.
+                disabled: () => !this.selectedCamera && !this.videoRecording.recording,
                 onTap: () => this.videoToggleRecord(),
                 onLongPress: () => this.videoToggleRecord(),
                 onAbort: () => this.videoToggleRecord()
@@ -29358,7 +29360,9 @@ function ninaApp() {
         async videoToggleRecord() {
             if (this.videoRecording.recording) {
                 try {
-                    await this.apiPost('/api/video/record/stop');
+                    // Stopping drains the frame queue and closes the SER file,
+                    // which can take longer than the default 15 s.
+                    await this.apiPost('/api/video/record/stop', null, { timeout: 60000 });
                     this.toast('Recording stopped', 'info');
                 } catch (e) { this.toastFail('Stop failed', e); }
                 return;

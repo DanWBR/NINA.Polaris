@@ -690,9 +690,22 @@ public static class CameraEndpoints {
             });
         });
 
-        group.MapPost("/disconnect", async (EquipmentManager equip) => {
+        group.MapPost("/disconnect", async (EquipmentManager equip, CameraStreamService stream,
+                NINA.Polaris.Services.Planetary.VideoRecordingService recorder, ILoggerFactory loggerFactory) => {
             if (equip.Camera == null)
                 return Results.BadRequest(new { error = "No camera selected" });
+
+            // A recording and a stream outlive the camera otherwise: the stream
+            // kept its hold on the camera and the recorder kept writing, with the
+            // stop buttons greyed out because the camera reads as gone, until a
+            // restart (discussion #37). End both first, the file closed properly.
+            try {
+                if (recorder.IsRecording) await recorder.StopAsync();
+                await stream.StopAsync();
+            } catch (Exception ex) {
+                loggerFactory.CreateLogger("Polaris.Capture")
+                    .LogWarning(ex, "Stopping the video stream before disconnecting the camera failed");
+            }
 
             return await DeviceConnectGuard.RunAsync(
                 "disconnect", equip.Camera.DeviceName,

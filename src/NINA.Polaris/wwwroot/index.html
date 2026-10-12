@@ -4026,7 +4026,7 @@
                         <button class="btn"
                                 :class="cameraStream.running ? 'btn-active' : ''"
                                 @click="toggleCameraStream()"
-                                :disabled="!selectedCamera || preview.busy || preview.looping"
+                                :disabled="!cameraStream.running && (!selectedCamera || preview.busy || preview.looping)"
                                 :title="cameraStream.supportsNative
                                     ? 'Native CCD_VIDEO_STREAM available, high fps'
                                     : 'Server loop fallback (no native stream on this camera)'">
@@ -4488,12 +4488,14 @@
                             <button class="btn"
                                     :class="cameraStream.running ? 'btn-active' : ''"
                                     @click="videoToggleStream()"
-                                    :disabled="!selectedCamera || videoRecording.recording">
+                                    :disabled="(!selectedCamera && !cameraStream.running) || videoRecording.recording">
                                 <span x-show="!cameraStream.running">🎥 Start Stream</span>
                                 <span x-show="cameraStream.running"
                                       x-text="'⏹ Stop Stream (cap ' + (cameraStream.captureFps?.toFixed?.(1) || cameraStream.fps?.toFixed?.(1) || '0.0')
                                               + ' / tx ' + (cameraStream.transmitFps?.toFixed?.(1) || '0.0') + ' fps)'"></span>
                             </button>
+                            <span x-show="cameraStream.running && cameraStream.lastError" class="text-warn"
+                                  style="font-size:11px" x-text="cameraStream.lastError"></span>
                             <span x-show="videoRecording.recording" class="text-muted" style="font-size:11px">
                                 → <code x-text="videoRecording.path"></code>
                                 · <span x-text="((videoRecording.bytes / 1048576) | 0) + ' MB'"></span>
@@ -25281,7 +25283,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261012-fwwait"></script>
+    <script src="/js/app.js?v=20261012-video"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

@@ -43,6 +43,8 @@ public class IndiCamera : ICamera, IDisposable {
     private readonly System.Collections.Concurrent.ConcurrentDictionary<int, Action<IImageData>> _streamSubscribers = new();
     private int _nextSubscriberId;
     private volatile bool _isStreaming;
+    // What we last asked the driver for; see the CCD_VIDEO_STREAM handler.
+    private volatile bool _streamWanted;
     // Counter of stream BLOBs that parsed as empty (FITSReader returned
     // Width=0 / Height=0, typically a driver that doesn't actually
     // emit FITS under CCD_VIDEO_STREAM). CameraStreamService reads this
@@ -728,10 +730,20 @@ public class IndiCamera : ICamera, IDisposable {
             await TrySetGainAsync(g, ct);
         }
 
+        // A stop that arrived during the setup above wins: raising the flag
+        // now would leave it up with nothing streaming.
+        ct.ThrowIfCancellationRequested();
         Interlocked.Exchange(ref _emptyStreamFrameCount, 0);
+        _streamWanted = true;
         _isStreaming = true;
-        await _client.SetSwitchAsync(DeviceName, "CCD_VIDEO_STREAM",
-            new Dictionary<string, bool> { ["STREAM_ON"] = true, ["STREAM_OFF"] = false }, ct);
+        try {
+            await _client.SetSwitchAsync(DeviceName, "CCD_VIDEO_STREAM",
+                new Dictionary<string, bool> { ["STREAM_ON"] = true, ["STREAM_OFF"] = false }, ct);
+        } catch {
+            _streamWanted = false;
+            _isStreaming = false;
+            throw;
+        }
     }
 
     /// <summary>STREAMSTALL: retune a running INDI stream in place. Exposure
@@ -754,8 +766,25 @@ public class IndiCamera : ICamera, IDisposable {
         return true;
     }
 
+    /// <summary>Size of the frames the driver streams: CCD_STREAM_FRAME (the
+    /// StreamManager crops every frame to it), else the binned CCD_FRAME.</summary>
+    private (int w, int h) StreamFrameSize() {
+        double w = _client.GetNumber(DeviceName, "CCD_STREAM_FRAME", "WIDTH");
+        double h = _client.GetNumber(DeviceName, "CCD_STREAM_FRAME", "HEIGHT");
+        if (w > 0 && h > 0) return ((int)w, (int)h);
+        w = _client.GetNumber(DeviceName, "CCD_FRAME", "WIDTH");
+        h = _client.GetNumber(DeviceName, "CCD_FRAME", "HEIGHT");
+        int bx = Math.Max(1, BinX), by = Math.Max(1, BinY);
+        return w > 0 && h > 0 ? ((int)w / bx, (int)h / by) : (0, 0);
+    }
+
     public async Task StopVideoStreamAsync(CancellationToken ct = default) {
-        if (!_isStreaming) return;
+        // Always sent. This used to return when the flag was already down,
+        // and the flag can be down while the driver streams (a STREAM_OFF
+        // that was lost, a start that raced a stop): every later stop then
+        // skipped the one write that ends it, and the camera stayed streaming
+        // until a restart, refusing PREVIEW (discussion #37).
+        _streamWanted = false;
         _isStreaming = false;
         try {
             await _client.SetSwitchAsync(DeviceName, "CCD_VIDEO_STREAM",
@@ -1316,9 +1345,22 @@ public class IndiCamera : ICamera, IDisposable {
                 // writes the real .cr2. Anything FITS (or no format hint) stays on
                 // the FITS reader.
                 var blobFmt = (element.Format ?? "").Trim().ToLowerInvariant();
-                bool treatAsRaw = blobFmt.Length > 0 && !blobFmt.Contains("fit");
+                bool isStreamFrame = IndiStreamFrameDecoder.IsStreamFormat(blobFmt);
+                bool treatAsRaw = !isStreamFrame && blobFmt.Length > 0 && !blobFmt.Contains("fit");
                 IImageData imageData;
-                if (treatAsRaw) {
+                if (isStreamFrame) {
+                    // A video stream frame still in flight after the stream was
+                    // turned off must not answer a single exposure: it is not
+                    // the frame that exposure asked for.
+                    if (!_isStreaming) continue;
+                    var (sw, sh) = StreamFrameSize();
+                    var frame = IndiStreamFrameDecoder.Decode(element.Data, blobFmt, sw, sh);
+                    if (frame == null) {
+                        Interlocked.Increment(ref _emptyStreamFrameCount);
+                        continue;
+                    }
+                    imageData = frame;
+                } else if (treatAsRaw) {
                     var decoded = DecodeRawDslrBlob(element.Data, blobFmt);
                     if (decoded == null) {
                         if (_isStreaming) Interlocked.Increment(ref _emptyStreamFrameCount);
@@ -1718,6 +1760,17 @@ public class IndiCamera : ICamera, IDisposable {
         // longer holds the controls this object last wrote.
         if (prop.Name == "CONNECTION" || prop.Name == "CONFIG_PROCESS")
             _resendControls = true;
+
+        // The driver says whether it streams. A stream it ended by itself
+        // (driver error, restart, a refused STREAM_ON) drops the flag here,
+        // instead of leaving every frame path believing a stream is running.
+        // "On" only counts while we asked for a stream, so a late echo of an
+        // old STREAM_OFF cannot strand a stream that was just started either.
+        // Any state: INDI keeps the vector Busy for as long as it streams, and
+        // answers a refused start with Alert and STREAM_OFF.
+        if (prop.Name == "CCD_VIDEO_STREAM" && prop is IndiSwitchProperty vs
+                && vs.Values.TryGetValue("STREAM_ON", out var on))
+            _isStreaming = on && _streamWanted;
 
         // A REFUSED EXPOSURE. The driver answers a CCD_EXPOSURE it will not
         // honour by putting the property into Alert, and says why in separate
