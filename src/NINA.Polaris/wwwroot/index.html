@@ -5404,19 +5404,33 @@
                                         title="Reset to the auto-stretched baseline">Auto</button>
                             </div>
                             <div class="phd2-cam-empty text-muted" x-show="!guider.view">Loop or guide to see the guide frame</div>
-                            <div class="phd2-cal-banner" x-show="guider.calibrating && guider.calProgress"
-                                 x-text="'Calibrating: ' + guider.calProgress"></div>
+                            <!-- These banners are added and removed (x-if), not
+                                 hidden (x-show). Over the guide frame, which
+                                 repaints every second, iOS Safari kept painting a
+                                 hidden banner: the pulsing animation and the
+                                 transform give it a layer of its own, and setting
+                                 display:none on it did not always take the layer
+                                 down. Field report: "Dithering: settling" stayed
+                                 on the frame for an hour after the dither ended,
+                                 while the header badge, reading the same state,
+                                 said GUIDING. -->
+                            <template x-if="guider.calibrating && guider.calProgress">
+                                <div class="phd2-cal-banner" x-text="'Calibrating: ' + guider.calProgress"></div>
+                            </template>
                             <!-- Dither / settle banner (ASIAIR-style). Dither
                                  takes precedence; while it's up the RMS/error
                                  history is frozen server-side so the excursion
                                  isn't counted as guiding error. -->
-                            <div class="phd2-dither-banner" x-show="guider.dithering" x-cloak>
-                                ⤡ Dithering: settling to &lt; <span x-text="(guiderSettlePixels ?? 1.5)"></span> px…
-                            </div>
-                            <div class="phd2-dither-banner phd2-settle-banner"
-                                 x-show="guider.settling && !guider.dithering" x-cloak>
-                                Settling…
-                            </div>
+                            <template x-if="guider.dithering">
+                                <div class="phd2-dither-banner">
+                                    ⤡ Dithering: settling to &lt; <span x-text="(guiderSettlePixels ?? 1.5)"></span> px…
+                                </div>
+                            </template>
+                            <template x-if="guider.settling && !guider.dithering">
+                                <div class="phd2-dither-banner phd2-settle-banner">
+                                    Settling…
+                                </div>
+                            </template>
                         </div>
                         <div class="phd2-rightcol">
                             <div class="phd2-bullseye">
