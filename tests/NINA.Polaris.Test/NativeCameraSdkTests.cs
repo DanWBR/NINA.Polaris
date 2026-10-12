@@ -54,6 +54,31 @@ public class NativeCameraSdkTests {
     }
 
     [Test]
+    public void QhyRegistry_IsAvailable_DoesNotThrow() {
+        // No Is.False here, unlike the others: a host with the QHYCCD driver
+        // package installed really does load qhyccd.dll from Program Files.
+        // The probe (GetQHYCCDSDKVersion) touches no USB device either way.
+        Assert.That(() => NINA.Camera.QhySdk.QhyRegistry.IsAvailable, Throws.Nothing);
+    }
+
+    [Test]
+    public void QhyRegistry_Candidates_WalkTheLinuxSonames() {
+        var names = NINA.Camera.QhySdk.QhyRegistry.CandidateNames();
+        if (OperatingSystem.IsWindows()) Assert.That(names, Is.EqualTo(new[] { "qhyccd.dll" }));
+        else if (OperatingSystem.IsLinux())
+            Assert.That(names, Is.EqualTo(new[] {
+                "libqhyccd.so", "libqhyccd.so.25", "libqhyccd.so.24", "libqhyccd.so.23",
+                "libqhyccd.so.22", "libqhyccd.so.21", "libqhyccd.so.20" }));
+    }
+
+    [Test]
+    public void QhyRegistry_WindowsInstallPath_IsTheAllInOneSdkFolder() {
+        var path = NINA.Camera.QhySdk.QhyRegistry.WindowsInstallPath();
+        if (!OperatingSystem.IsWindows()) { Assert.That(path, Is.Null); return; }
+        Assert.That(path, Does.EndWith(System.IO.Path.Combine("QHYCCD", "AllInOne", "sdk", "x64", "qhyccd.dll")));
+    }
+
+    [Test]
     public void ToupTekRegistry_IsAvailable_DoesNotThrow() {
         Assert.That(NINA.Camera.ToupTekSdk.ToupTekRegistry.IsAvailable, Is.False);
     }
@@ -76,5 +101,6 @@ public class NativeCameraSdkTests {
         Assert.That(() => new NINA.Camera.ZwoSdk.AsiSdkCamera("0"), Throws.Nothing);
         Assert.That(() => new NINA.Camera.PlayerOneSdk.PlayerOneSdkCamera("0"), Throws.Nothing);
         Assert.That(() => new NINA.Camera.ToupTekSdk.ToupTekSdkCamera("dev0"), Throws.Nothing);
+        Assert.That(() => new NINA.Camera.QhySdk.QhySdkCamera("QHY600M-6bb54f4c1d2e3f40"), Throws.Nothing);
     }
 }

@@ -67,6 +67,7 @@ sdk_present() {
         libasi)       lib=libASICamera2 ;;
         libsvbony)    lib=libSVBCameraSDK ;;
         libplayerone) lib=libPlayerOneCamera ;;
+        libqhy)       lib=libqhyccd ;;
         libtoupcam)   lib=libtoupcam ;;
         libaltaircam) lib=libaltaircam ;;
         # The INDI stack itself is source-built on these images, and the

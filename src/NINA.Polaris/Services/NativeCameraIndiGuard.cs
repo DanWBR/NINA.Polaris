@@ -138,17 +138,18 @@ public sealed class NativeCameraIndiGuard : IHostedService {
     /// out while PHD2 guides the rig: that camera is PHD2's to open, and the
     /// watchdog must stay free to put its INDI copy back.</summary>
     private IEnumerable<CameraSlot> CurrentSlots() {
-        yield return SlotOf(_equipment.CameraDriver, _equipment.Camera);
+        yield return SlotOf(_equipment.CameraDriver, _equipment.Camera, _equipment.CameraDeviceId);
         if (!PhD2OwnsTheGuideCamera)
-            yield return SlotOf(_equipment.GuideCameraDriver, _equipment.GuideCamera);
-        yield return SlotOf(_equipment.AuxCameraDriver, _equipment.AuxCamera);
+            yield return SlotOf(_equipment.GuideCameraDriver, _equipment.GuideCamera, _equipment.GuideCameraDeviceId);
+        yield return SlotOf(_equipment.AuxCameraDriver, _equipment.AuxCamera, _equipment.AuxCameraDeviceId);
     }
 
     /// <summary>Is this INDI device the camera sitting open in the guide slot
     /// through a vendor SDK? Asked only in PHD2 mode, where
     /// <see cref="CurrentSlots"/> no longer reports that slot.</summary>
     private bool IsOpenInTheGuideSlot(string indiDevice) =>
-        Collides(indiDevice, new[] { SlotOf(_equipment.GuideCameraDriver, _equipment.GuideCamera) });
+        Collides(indiDevice, new[] {
+            SlotOf(_equipment.GuideCameraDriver, _equipment.GuideCamera, _equipment.GuideCameraDeviceId) });
 
     /// <summary>True when the rig hands guiding to the external PHD2 process,
     /// which makes the guide camera PHD2's to open. Mirrors
@@ -165,12 +166,14 @@ public sealed class NativeCameraIndiGuard : IHostedService {
         }
     }
 
-    private static CameraSlot SlotOf(string? driver, ICamera? cam) =>
-        new(driver, cam?.DeviceName, cam is { IsConnected: true });
+    private static CameraSlot SlotOf(string? driver, ICamera? cam, string? deviceId) =>
+        new(driver, cam?.DeviceName, cam is { IsConnected: true }, deviceId);
 
     /// <summary>One camera slot as the guard sees it: the backend that drives
-    /// it, the name the device reports, and whether Polaris has it OPEN.</summary>
-    public readonly record struct CameraSlot(string? Driver, string? DeviceName, bool Connected);
+    /// it, the name the device reports, whether Polaris has it OPEN, and the
+    /// driver-specific id it was selected with (only the QHY rule reads it).</summary>
+    public readonly record struct CameraSlot(string? Driver, string? DeviceName, bool Connected,
+                                             string? DeviceId = null);
 
     /// <summary>Does an INDI device that just connected collide with a camera
     /// Polaris holds open through a vendor SDK?
@@ -186,13 +189,45 @@ public sealed class NativeCameraIndiGuard : IHostedService {
             if (!slot.Connected) continue;                      // selected is not open
             if (IsIndiDriver(slot.Driver)) continue;            // that one IS the INDI copy
             if (SameCamera(indiDevice, slot.DeviceName)) return true;
+            if (SameQhyCamera(indiDevice, slot.Driver, slot.DeviceId)) return true;
         }
         return false;
     }
 
+    /// <summary>
+    /// The QHY rule. indi_qhy_ccd names a camera "QHY CCD " followed by at most
+    /// 15 characters (qhy_ccd.cpp, "QHY CCD %.15s"). Current versions put the
+    /// model there ("QHY CCD QHY600M", from the hot-plug handler, with " 2"
+    /// appended for a second camera of the same model); older ones put the
+    /// SDK camera id ("QHY CCD QHY600M-6bb54f4" for id QHY600M-6bb54f4c1d2e3f40).
+    /// The SDK id is what a <c>qhy-sdk</c> slot was selected with, so compare
+    /// on that: the INDI suffix must be the id, the start of it when INDI
+    /// truncated it, or the model the id begins with.
+    /// </summary>
+    public static bool SameQhyCamera(string? indiDevice, string? driver, string? qhyCameraId) {
+        if (!string.Equals(driver, "qhy-sdk", StringComparison.OrdinalIgnoreCase)) return false;
+        if (string.IsNullOrWhiteSpace(indiDevice) || string.IsNullOrWhiteSpace(qhyCameraId)) return false;
+        const string IndiPrefix = "QHY CCD ";
+        if (!indiDevice.StartsWith(IndiPrefix, StringComparison.OrdinalIgnoreCase)) return false;
+        var tail = indiDevice[IndiPrefix.Length..].Trim();
+        var id = qhyCameraId.Trim();
+        if (tail.Length == 0) return false;
+        if (string.Equals(tail, id, StringComparison.OrdinalIgnoreCase)) return true;
+        // Truncated by INDI's %.15s: the whole tail is the start of the id.
+        if (tail.Length >= IndiIdChars) return id.StartsWith(tail, StringComparison.OrdinalIgnoreCase);
+        // A shorter tail that is not the whole id can only be a bare model
+        // name; it names this camera only when the id is that model plus a
+        // serial, so QHY294M never claims a QHY294MPRO.
+        return id.StartsWith(tail + "-", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>How many characters of the camera id indi_qhy_ccd keeps in
+    /// the device name.</summary>
+    private const int IndiIdChars = 15;
+
     /// <summary>A driver id that means "this camera IS the INDI device", so it
     /// is not a conflict. Everything else (zwo-sdk, svbony-sdk, playerone-sdk,
-    /// touptek-sdk, altair-sdk, alpaca, ascom, canon-edsdk, …) is a separate
+    /// qhy-sdk, touptek-sdk, altair-sdk, alpaca, ascom, canon-edsdk, …) is a separate
     /// owner of the hardware.</summary>
     public static bool IsIndiDriver(string? driver) =>
         string.IsNullOrWhiteSpace(driver)

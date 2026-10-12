@@ -111,6 +111,7 @@
     <ProjectReference Include="..\NINA.Camera.SvbonySdk\NINA.Camera.SvbonySdk.csproj" />
     <ProjectReference Include="..\NINA.Camera.ZwoSdk\NINA.Camera.ZwoSdk.csproj" />
     <ProjectReference Include="..\NINA.Camera.PlayerOneSdk\NINA.Camera.PlayerOneSdk.csproj" />
+    <ProjectReference Include="..\NINA.Camera.QhySdk\NINA.Camera.QhySdk.csproj" />
     <ProjectReference Include="..\NINA.Camera.ToupTekSdk\NINA.Camera.ToupTekSdk.csproj" />
     <ProjectReference Include="..\NINA.Camera.AltairSdk\NINA.Camera.AltairSdk.csproj" />
     <!-- Direct-WiFi mount drivers. Pure managed code, cross-platform. -->

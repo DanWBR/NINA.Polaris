@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>NINA.Camera.QhySdk</RootNamespace>
+    <AssemblyName>NINA.Camera.QhySdk</AssemblyName>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- QHYCCD SDK ships native binaries for Windows (x64/x86), Linux
+         (arm64/arm32/x64) and macOS. net10.0, no OS attribute: compiles
+         cross-platform, QhyRegistry probes at runtime. -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NINA.Core.Portable\NINA.Core.Portable.csproj" />
+    <ProjectReference Include="..\NINA.Image.Portable\NINA.Image.Portable.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The frame geometry, the Bayer mapping and the 8-to-16-bit widening are
+         pure and belong under test; the SDK calls around them cannot be, so
+         those helpers stay internal and the test assembly sees them. Same
+         arrangement as NINA.Camera.ZwoSdk. -->
+    <InternalsVisibleTo Include="NINA.Polaris.Test" />
+  </ItemGroup>
+
+  <!-- No native binary in the repo or in the build output, on any platform.
+       Linux takes libqhyccd.so from the INDI libqhy package, which also
+       installs the camera firmware and the udev rules that load it. Windows
+       takes qhyccd.dll from the QHYCCD driver package the operator installs
+       (the "AllInOne" installer), and QhyRegistry knows where that puts it.
+       See NINA.Camera.PlayerOneSdk.csproj for why a <Content> item here would
+       not reach the app's publish output anyway. -->
+
+</Project>
