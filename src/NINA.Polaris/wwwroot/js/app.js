@@ -1681,6 +1681,8 @@ function ninaApp() {
 
         // Server-side continuous video stream. Started by the Stream
         // button in PREVIEW; backend's CameraStreamService auto-picks
+        // Settings > Image Output: removable drives mounted now (/api/usb/drives).
+        usbDrives: { list: [], pick: '', loaded: false, busy: false },
         // native CCD_VIDEO_STREAM vs server-loop based on camera
         // capabilities. Updated each second from /ws/status.
         cameraStream: {
@@ -32925,6 +32927,48 @@ function ninaApp() {
                 + 'noise, and they won\'t match your cooled darks).\n\n'
                 + 'Turn the cooler on in RIGS → Camera first, or proceed anyway?',
                 { title: 'Cooler is off', okLabel: 'Start anyway', cancelLabel: 'Cancel', danger: true });
+        },
+        // Settings > Image Output: list the removable drives mounted now. The
+        // hot-plug prompt below only offers a drive that appears while Polaris
+        // runs, so one plugged in before the host booted needed this.
+        async usbDrivesLoad() {
+            this.usbDrives.busy = true;
+            try {
+                const r = await this.apiGet('/api/usb/drives');
+                const list = (r && r.drives) || [];
+                this.usbDrives.list = list;
+                if (!list.some(d => d.path === this.usbDrives.pick))
+                    this.usbDrives.pick = list.length ? list[0].path : '';
+            } catch (e) {
+                this.usbDrives.list = [];
+                this.toastFail('Could not list the USB drives', e);
+            } finally {
+                this.usbDrives.loaded = true;
+                this.usbDrives.busy = false;
+            }
+        },
+        usbDriveLabel(d) {
+            const name = d.label || d.path;
+            return d.freeBytes ? name + ' (' + this.formatBytes(d.freeBytes) + ' ' + this._t('free') + ')' : name;
+        },
+        async usbDriveUse(path) {
+            if (!path) return;
+            this.usbDrives.busy = true;
+            try {
+                const resp = await this.apiPost('/api/usb/use', { path });
+                const r = await resp.json().catch(() => ({}));
+                if (resp.ok && r.imageOutputDir) {
+                    this.settings.imageOutputDir = r.imageOutputDir;
+                    this.toast('Capture home set to ' + r.imageOutputDir, 'ok');
+                    try { await this._studioRefreshAfterFileOp(); } catch (_) {}
+                } else {
+                    this.toast('Could not use the USB drive' + (r.error ? ': ' + r.error : ''), 'error');
+                }
+            } catch (e) {
+                this.toastFail('Could not use the USB drive', e);
+            } finally {
+                this.usbDrives.busy = false;
+            }
         },
         // A removable USB drive appeared at runtime: ask once whether to move the
         // capture home onto it. Guards keep it to a single prompt per drive and

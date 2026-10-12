@@ -22,7 +22,8 @@ namespace NINA.Polaris.Services.Planetary;
 /// Records the live camera stream to a SER file. Subscribes to
 /// CameraStreamService frames and writes each one as it arrives.
 ///
-/// File path convention: {ImageOutputDir}/planetary/{TargetName}/{ISO-timestamp}.ser
+/// File path convention: {ImageOutputDir}/{Rig}/planetary/{TargetName}/{ISO-timestamp}.ser
+/// (ImageWriterService.BuildPlanetarySubDir).
 /// Auto-stops at MaxFrames or MaxDuration if either is configured.
 /// Drops frames silently if the writer falls behind (logged at debug,
 /// SER format can't tolerate gaps in the frame stream).

@@ -44,6 +44,13 @@ public static class UsbEndpoints {
             }
         });
 
+        // The removable drives mounted now, whenever they were plugged in.
+        g.MapGet("/drives", (UsbDriveWatcherService watcher, ProfileService profiles) =>
+            Results.Ok(new {
+                drives = watcher.CurrentDrives(),
+                imageOutputDir = profiles.Active?.ImageOutputDir
+            }));
+
         // Decline: keep the current home, stop offering this drive.
         g.MapPost("/dismiss", (UsbPathRequest req, UsbDriveWatcherService watcher) => {
             watcher.Dismiss(req.Path);
