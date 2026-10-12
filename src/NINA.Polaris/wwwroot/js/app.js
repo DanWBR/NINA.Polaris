@@ -5480,6 +5480,7 @@ function ninaApp() {
                     });
                 }
             }
+            if (this._isIOS()) this._installIosKeyboardReveal();
 
             // Tab-discard resilience: persist the active tab so a Chrome
             // Memory-Saver discard (common when two heavy Polaris tabs run
@@ -39873,6 +39874,60 @@ function ninaApp() {
             if (navigator.platform === 'MacIntel'
                 && navigator.maxTouchPoints > 1) return true;
             return false;
+        },
+
+        // iOS keyboard: bring the focused field above it. The shell is a fixed
+        // layout, and in the app the page sits in an iframe that iOS neither
+        // resizes nor scrolls when the keyboard opens, so a field in a dialog
+        // (the WiFi password, the SMB host) stayed under the keyboard. A
+        // top-level page can read the free height from visualViewport; the
+        // iframe cannot, so there the keyboard is assumed to take the lower
+        // half. The dialog's backdrop (or the nearest scrolling panel) gets
+        // .kb-lift, room to scroll, and is scrolled to put the field in view.
+        _installIosKeyboardReveal() {
+            const OVERLAYS = '.editor-export-backdrop, .modal-overlay, .confirm-modal-overlay, '
+                + '.plan-viz-backdrop, .cal-review-backdrop, .siril-modal';
+            const typing = el => !!el && (el.tagName === 'TEXTAREA' || el.isContentEditable
+                || (el.tagName === 'INPUT'
+                    && !/^(checkbox|radio|range|button|submit|reset|file|color|image|hidden)$/i.test(el.type)));
+            const scroller = el => {
+                for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+                    const oy = getComputedStyle(p).overflowY;
+                    if (oy === 'auto' || oy === 'scroll') return p;
+                }
+                return null;
+            };
+            let lifted = null, timer = null;
+            const drop = () => {
+                if (lifted) lifted.classList.remove('kb-lift');
+                lifted = null;
+            };
+            const reveal = el => {
+                if (!typing(el) || document.activeElement !== el) return;
+                const vv = window.visualViewport;
+                const free = window.parent === window && vv
+                    ? vv.height : window.innerHeight * 0.5;
+                const r = el.getBoundingClientRect();
+                if (r.top >= 8 && r.bottom <= free - 12) return;
+                const box = el.closest(OVERLAYS) || scroller(el);
+                if (!box) return;
+                if (lifted !== box) { drop(); box.classList.add('kb-lift'); lifted = box; }
+                // reading the rect lays out the lifted box first
+                const r2 = el.getBoundingClientRect();
+                const target = Math.max(16, Math.min(free * 0.3, free - r2.height - 16));
+                // rects are in screen px, scrollTop in the box's own px,
+                // which differ under the UI scale's zoom
+                const zoom = box.getBoundingClientRect().height / (box.offsetHeight || 1) || 1;
+                box.scrollTop += (r2.top - target) / zoom;
+            };
+            document.addEventListener('focusin', e => {
+                clearTimeout(timer);
+                // after the keyboard has animated in
+                timer = setTimeout(() => reveal(e.target), 300);
+            });
+            document.addEventListener('focusout', () => {
+                setTimeout(() => { if (!typing(document.activeElement)) drop(); }, 150);
+            });
         },
 
         // Phone/tablet detection (Android or iOS) — same surfaces the

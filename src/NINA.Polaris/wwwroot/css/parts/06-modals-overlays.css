@@ -2737,3 +2737,14 @@
     gap: 10px;
 }
 .goto-coords-frame .coords-grid { margin-top: 4px; }
+
+/* iOS keyboard (_installIosKeyboardReveal): a dialog backdrop or scrolling
+   panel holding the focused field gets room below and scrolls, so the field
+   can be brought above the keyboard. The dialog starts at the top instead of
+   the centre while it is lifted. The room is generous because the UI scale's
+   zoom shrinks vh relative to the box. */
+.kb-lift {
+    align-items: flex-start !important;
+    overflow-y: auto !important;
+    padding-bottom: 200vh !important;
+}
