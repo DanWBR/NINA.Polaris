@@ -1043,6 +1043,19 @@ public class IndiCamera : ICamera, IDisposable {
             // what the driver reports instead.
             _offset = 0;
         }
+        // The last frame came back short of the sensor (CheckFrameAgainstSensor):
+        // put the whole sensor back now, between exposures, where rewriting
+        // CCD_FRAME cannot cost a sub.
+        if (_cropDetected && _wantFullFrame) {
+            _cropDetected = false;
+            try { await SetSubframeAsync(0, 0, 0, 0, ct); }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception ex) {
+                _client.DiagLogger.LogWarning(ex,
+                    "{Device}: could not restore the full sensor after a cropped frame", DeviceName);
+            }
+        }
+
         // Reflect the requested frame kind (Light/Bias/Dark/Flat) on the driver
         // so the returned BLOB is tagged correctly. Defaults to LIGHT when the
         // caller didn't specify (e.g. PREVIEW snaps).
@@ -1169,8 +1182,54 @@ public class IndiCamera : ICamera, IDisposable {
 
     /// <summary>True while the last geometry we asked for was the whole sensor.
     /// Set false by a real region, so re-asserting after a config load cannot
-    /// undo a region the operator chose in VIDEO.</summary>
-    private bool _wantFullFrame;
+    /// undo a region the operator chose in VIDEO.
+    ///
+    /// Starts true: the whole sensor is what a camera is for until someone
+    /// asks for a region. It used to start false and only became true when
+    /// something called SetSubframeAsync(0,0,0,0), which a plain session of
+    /// PREVIEW, focus and lights never does. Every re-assertion below then
+    /// stayed off, and the SV605CC lost columns at each bin change (the driver
+    /// trims the region to its alignment: "Incompatible frame width 1002px.
+    /// Reducing by 2px" at bin 3) until 66 lights came out 2992x3004 off a
+    /// 3008x3008 sensor.</summary>
+    private bool _wantFullFrame = true;
+
+    /// <summary>A frame came back smaller than the sensor allows at its bin
+    /// while the whole sensor was wanted. The next capture puts the sensor
+    /// back before it exposes.</summary>
+    private volatile bool _cropDetected;
+    private (int w, int h) _lastCropWarned;
+
+    /// <summary>Is a frame of <paramref name="width"/> x <paramref name="height"/>
+    /// cropped, for a sensor of <paramref name="sensorX"/> x <paramref name="sensorY"/>
+    /// read at the given bin? A driver may trim a few binned pixels to its own
+    /// alignment (a width multiple of 8 and a height multiple of 2 are common,
+    /// so bin 3 of 3008 legitimately reads 1000 wide), which is not a crop.
+    /// Short by 8 binned columns or 4 binned rows is more than any alignment
+    /// takes.</summary>
+    internal static bool IsCroppedFullFrame(int width, int height, int sensorX, int sensorY, int binX, int binY) {
+        if (width <= 0 || height <= 0 || sensorX <= 0 || sensorY <= 0) return false;
+        int expectedW = sensorX / Math.Max(1, binX);
+        int expectedH = sensorY / Math.Max(1, binY);
+        return expectedW - width >= 8 || expectedH - height >= 4;
+    }
+
+    /// <summary>Check a delivered still against the sensor size the driver
+    /// publishes (CCD_INFO) and arm the full-frame restore when it falls short.</summary>
+    private void CheckFrameAgainstSensor(int width, int height) {
+        if (!_wantFullFrame) return;
+        var (sx, sy) = SensorSize();
+        int bx = Math.Max(1, BinX), by = Math.Max(1, BinY);
+        if (!IsCroppedFullFrame(width, height, sx, sy, bx, by)) return;
+        _cropDetected = true;
+        if (_lastCropWarned == (width, height)) return;
+        _lastCropWarned = (width, height);
+        _client.DiagLogger.LogWarning(
+            "{Device}: frame came back {W}x{H}, but the sensor reads {SX}x{SY} at bin {BX}x{BY} " +
+            "({EW}x{EH}). The driver's CCD_FRAME holds a smaller region; restoring the full " +
+            "sensor before the next exposure.",
+            DeviceName, width, height, sx, sy, bx, by, sx / bx, sy / by);
+    }
 
     private void OnDeviceConfigLoaded(string device) {
         if (device != DeviceName || !_wantFullFrame) return;
@@ -1400,6 +1459,12 @@ public class IndiCamera : ICamera, IDisposable {
                     }
                     continue;
                 }
+
+                // Every still is measured against the sensor the driver
+                // publishes, so a region left in CCD_FRAME is caught on the
+                // first frame it crops instead of a night later.
+                if (!isStreamFrame && !treatAsRaw && !_isStreaming)
+                    CheckFrameAgainstSensor(imageData.Properties.Width, imageData.Properties.Height);
 
                 imageData.MetaData.Camera.Name = DeviceName;
                 imageData.MetaData.Camera.Temperature = Temperature;

@@ -149,4 +149,27 @@ public class IndiCameraIdempotencyTests {
         Assert.That(IndiCamera.ShouldAbortInFlightBeforeSubframe(
             exposureInFlight: false, geometryChanges: false), Is.False);
     }
+
+    // The SV605CC night (indi_svbony_ccd, 3008x3008 sensor): the driver trimmed
+    // the region at each bin change and the frames that came back.
+
+    [TestCase(2992, 3004, 1, 1)]   // the 66 lights
+    [TestCase(3000, 3006, 1, 1)]   // bin 1 after a bin 3 preview
+    [TestCase(1496, 1502, 2, 2)]   // bin 2 after that
+    [TestCase(5472, 3672, 1, 1, 5496, 3672)] // the ASI183 night
+    public void ACroppedStill_IsCaught(int w, int h, int bx, int by, int sx = 3008, int sy = 3008) {
+        Assert.That(IndiCamera.IsCroppedFullFrame(w, h, sx, sy, bx, by), Is.True);
+    }
+
+    [TestCase(3008, 3008, 1, 1)]   // whole sensor
+    [TestCase(1504, 1504, 2, 2)]   // whole sensor at bin 2 (the native driver's frame)
+    [TestCase(1000, 1002, 3, 3)]   // bin 3: 1002 wide trimmed to 1000 by the driver's alignment
+    public void AFullFrame_OrAnAlignmentTrim_IsNotACrop(int w, int h, int bx, int by) {
+        Assert.That(IndiCamera.IsCroppedFullFrame(w, h, 3008, 3008, bx, by), Is.False);
+    }
+
+    [Test]
+    public void AnUnknownSensor_IsNeverCalledCropped() {
+        Assert.That(IndiCamera.IsCroppedFullFrame(2992, 3004, 0, 0, 1, 1), Is.False);
+    }
 }
