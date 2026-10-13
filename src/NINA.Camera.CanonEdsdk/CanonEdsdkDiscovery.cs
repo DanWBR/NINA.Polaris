@@ -39,6 +39,11 @@ public static class CanonEdsdkDiscovery {
     /// should fall back to a "no DSL R cameras detected" message.</summary>
     public static IReadOnlyList<CanonCameraEntry> Enumerate() {
         CanonEdsdkRegistry.EnsureInitialized();
+        // On the EDSDK thread, like every SDK call (see CanonEdsdkRegistry).
+        return CanonEdsdkRegistry.Run(EnumerateOnSdkThread);
+    }
+
+    private static IReadOnlyList<CanonCameraEntry> EnumerateOnSdkThread() {
 
         var result = new List<CanonCameraEntry>();
         var err = EdsdkNative.EdsGetCameraList(out var listRef);
@@ -82,6 +87,10 @@ public static class CanonEdsdkDiscovery {
     /// disconnect/dispose).</summary>
     public static IntPtr OpenCameraRefById(string id) {
         CanonEdsdkRegistry.EnsureInitialized();
+        return CanonEdsdkRegistry.Run(() => OpenCameraRefByIdOnSdkThread(id));
+    }
+
+    private static IntPtr OpenCameraRefByIdOnSdkThread(string id) {
 
         var err = EdsdkNative.EdsGetCameraList(out var listRef);
         if (err != EdsdkConstants.EDS_ERR_OK) return IntPtr.Zero;

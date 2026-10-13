@@ -36,10 +36,14 @@ public static class EdsdkConstants {
     public const uint kEdsPropID_FirmwareVersion = 0x00000007;
     public const uint kEdsPropID_BatteryLevel    = 0x00000008;
     public const uint kEdsPropID_SaveTo          = 0x0000000B;
+    // Values from EDSDKTypes.h. Tv, Av and ISO used to be 0x402, 0x403 and
+    // 0x401: setting the shutter speed wrote the ISO, and setting the ISO
+    // wrote the drive mode (0x401).
     public const uint kEdsPropID_AEMode          = 0x00000400;
-    public const uint kEdsPropID_Tv              = 0x00000402;
-    public const uint kEdsPropID_Av              = 0x00000403;
-    public const uint kEdsPropID_ISOSpeed        = 0x00000401;
+    public const uint kEdsPropID_DriveMode       = 0x00000401;
+    public const uint kEdsPropID_ISOSpeed        = 0x00000402;
+    public const uint kEdsPropID_Av              = 0x00000405;
+    public const uint kEdsPropID_Tv              = 0x00000406;
     public const uint kEdsPropID_ImageQuality    = 0x00000100;
     public const uint kEdsPropID_AvailableShots  = 0x0000080B;
 
@@ -55,9 +59,13 @@ public static class EdsdkConstants {
     public const int kEdsCameraCommand_ShutterButton_OFF        = 0x00000000;
     public const int kEdsCameraCommand_ShutterButton_Halfway    = 0x00000001;
     public const int kEdsCameraCommand_ShutterButton_Completely = 0x00000003;
+    public const int kEdsCameraCommand_ShutterButton_Completely_NonAF = 0x00010003;
 
     // ---- Object events (kEdsObjectEvent_*) ------------------------
     public const uint kEdsObjectEvent_All                       = 0x00000200;
+
+    // ---- State events (kEdsStateEvent_*) --------------------------
+    public const uint kEdsStateEvent_All                        = 0x00000300;
     public const uint kEdsObjectEvent_DirItemRequestTransfer    = 0x00000208;
     public const uint kEdsObjectEvent_DirItemRemoved            = 0x00000209;
 
@@ -148,19 +156,22 @@ public static class EdsdkConstants {
     // Same approach as Tv, only the values DSLRs typically expose for
     // astrophotography. The "Auto" entry (0x00) is intentionally omitted;
     // automatic ISO doesn't make sense for predictable stacking.
+    // Full stops, from the EDSDK API reference (ISO Speed, EdsCameraRef):
+    // 0x48 is ISO 100 and every stop adds 8. The table was one stop low
+    // (0x40 read as 100), so every ISO set or shown was off by a stop.
     public static readonly (uint Code, int Iso)[] IsoTable = new[] {
-        (0x28u,    50),
-        (0x40u,   100),
-        (0x48u,   200),
-        (0x50u,   400),
-        (0x58u,   800),
-        (0x60u,  1600),
-        (0x68u,  3200),
-        (0x70u,  6400),
-        (0x78u, 12800),
-        (0x80u, 25600),
-        (0x88u, 51200),
-        (0x90u,102400),
+        (0x40u,    50),
+        (0x48u,   100),
+        (0x50u,   200),
+        (0x58u,   400),
+        (0x60u,   800),
+        (0x68u,  1600),
+        (0x70u,  3200),
+        (0x78u,  6400),
+        (0x80u, 12800),
+        (0x88u, 25600),
+        (0x90u, 51200),
+        (0x98u,102400),
     };
 
     public static uint IsoCodeFor(int iso) {
