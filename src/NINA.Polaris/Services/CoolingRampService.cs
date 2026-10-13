@@ -124,6 +124,12 @@ public class CoolingRampService {
     /// arrives. At the 10s cadence 0.1°C is 0.6°C/min, i.e. rates below that are
     /// silently treated as 0.6°C/min rather than hanging. Rates &lt;= 0 mean
     /// "no ramp" and never reach here.</summary>
+    /// <summary>A sensor reading worth holding as a setpoint: a camera that has
+    /// not reported yet reads NaN or 0 on some backends, and holding a cooled
+    /// TEC at 0 C would be its own step.</summary>
+    internal static bool IsPlausibleSensorTemp(double c) =>
+        !double.IsNaN(c) && c > -60 && c < 70 && c != 0;
+
     internal static double StepSizeFor(double ratePerMinute) {
         var perStep = ratePerMinute * StepInterval.TotalMinutes;
         return Math.Max(0.1, perStep);
@@ -186,6 +192,14 @@ public class CoolingRampService {
         await Task.Yield();
         var startC = camera.Temperature;
         try {
+            // Hold the sensor where it is before the cooler comes on. Switching
+            // the TEC on first left the previous setpoint in force until the
+            // first step (a ToupTek opens with 10 C), so the TEC jumped to full
+            // power at once, and that step is what reset a USB-powered AE676C.
+            // Starting from the sensor's own temperature, the TEC starts at
+            // zero and follows the ramp.
+            if (coolerOnFirst && ratePerMinute > 0 && IsPlausibleSensorTemp(startC))
+                await camera.SetTemperatureAsync(startC, ct);
             if (coolerOnFirst) await camera.SetCoolerAsync(true, ct);
 
             if (ratePerMinute <= 0) {
