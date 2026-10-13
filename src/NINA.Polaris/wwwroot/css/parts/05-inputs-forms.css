@@ -673,9 +673,7 @@ body.link-offline .preview-pane::after {
 }
 
 .seq-input-num {
-    /* Bumped 60 → 80 px because the wider padding shrinks the inner
-       text area; 80 keeps 4-digit values + spinner arrows visible. */
-    width: 80px;
+    width: 56px;
 }
 
 .seq-input-filter {
@@ -703,6 +701,51 @@ body.link-offline .preview-pane::after {
 
 .seq-item-params select {
     width: 42px;
+}
+
+/* The ISO list: the 42 px above left one digit of "100" visible. */
+.seq-item-params .seq-input-iso {
+    width: 84px;
+}
+
+/* Exp, frame count and gain/ISO on one row. The row keeps its natural
+   width when the card has room and shrinks its inputs when it does not,
+   so ISO stays beside Exp instead of wrapping onto the binning line. */
+.seq-exp-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 1 auto;
+    min-width: 0;
+}
+
+.seq-exp-row > label {
+    flex: 0 1 auto;
+    min-width: 0;
+}
+
+.seq-exp-row > label > .seq-input {
+    flex: 1 1 auto;
+    min-width: 44px;
+    padding-left: 6px;
+    padding-right: 6px;
+}
+
+/* No spinner arrows: Chrome reserves their width even while hidden, and
+   in a narrow card that cut "300" down to "3". */
+.seq-exp-row input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+.seq-exp-row input[type="number"]::-webkit-outer-spin-button,
+.seq-exp-row input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
+}
+
+.seq-exp-row > label > .seq-input-iso {
+    min-width: 64px;
 }
 
 .seq-item-progress {
