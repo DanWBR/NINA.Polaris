@@ -35,9 +35,16 @@ public struct EdsDeviceInfo {
 /// object-event handler when the camera has a captured file ready for
 /// transfer. We use <c>Size</c> + <c>szFileName</c> to size the buffer
 /// and pick the right extension (.cr2 vs .jpg).</summary>
-[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi, Pack = 1)]
+// Pack 8, as EDSDKTypes.h declares for Windows (#pragma pack(push, 8)): with
+// the 64-bit size the native struct ends padded to 288 bytes.
+[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi, Pack = 8)]
 public struct EdsDirectoryItemInfo {
-    public uint Size;
+    // EdsUInt64 in EDSDK 13 (EDSDKTypes.h). Declared as uint, the struct was 8
+    // bytes short of the native one: EdsGetDirectoryItemInfo wrote past the
+    // end of the buffer (it took the test host down), and every field after
+    // this one was read 4 bytes off, szFileName included, so a capture never
+    // recognised its .CR3 / .JPG.
+    public ulong Size;
     public int  IsFolder;
     public uint GroupID;
     public uint Option;

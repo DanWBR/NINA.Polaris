@@ -62,18 +62,18 @@ public class CanonEdsdkConstantsTests {
 
     [Test]
     public void IsoCodeFor_StandardValues() {
-        Assert.That(EdsdkConstants.IsoCodeFor(100),   Is.EqualTo(0x40u));
-        Assert.That(EdsdkConstants.IsoCodeFor(800),   Is.EqualTo(0x58u));
-        Assert.That(EdsdkConstants.IsoCodeFor(3200),  Is.EqualTo(0x68u));
-        Assert.That(EdsdkConstants.IsoCodeFor(25600), Is.EqualTo(0x80u));
+        Assert.That(EdsdkConstants.IsoCodeFor(100),   Is.EqualTo(0x48u));
+        Assert.That(EdsdkConstants.IsoCodeFor(800),   Is.EqualTo(0x60u));
+        Assert.That(EdsdkConstants.IsoCodeFor(3200),  Is.EqualTo(0x70u));
+        Assert.That(EdsdkConstants.IsoCodeFor(25600), Is.EqualTo(0x88u));
     }
 
     [Test]
     public void IsoCodeFor_NonStandardValue_PicksNearest() {
         // ISO 250 isn't a Canon-native step; should land at 200.
-        Assert.That(EdsdkConstants.IsoCodeFor(250), Is.EqualTo(0x48u));
+        Assert.That(EdsdkConstants.IsoCodeFor(250), Is.EqualTo(0x50u));
         // ISO 7000 closest to 6400.
-        Assert.That(EdsdkConstants.IsoCodeFor(7000), Is.EqualTo(0x70u));
+        Assert.That(EdsdkConstants.IsoCodeFor(7000), Is.EqualTo(0x78u));
     }
 
     [Test]

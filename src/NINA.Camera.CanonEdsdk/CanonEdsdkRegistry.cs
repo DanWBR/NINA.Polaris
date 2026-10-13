@@ -124,7 +124,7 @@ public static class CanonEdsdkRegistry {
         if (_initialized) return;
         lock (_lock) {
             if (_initialized) return;
-            var err = EdsdkNative.EdsInitializeSDK();
+            var err = Run(EdsdkNative.EdsInitializeSDK);
             if (err != EdsdkConstants.EDS_ERR_OK) {
                 throw new InvalidOperationException(
                     $"EdsInitializeSDK failed with code 0x{err:X8}. " +
@@ -134,8 +134,79 @@ public static class CanonEdsdkRegistry {
             // Process-exit hook so the SDK gets a chance to release the
             // USB handles cleanly even on hard shutdown.
             AppDomain.CurrentDomain.ProcessExit += (_, _) => {
-                try { EdsdkNative.EdsTerminateSDK(); } catch { /* best effort */ }
+                try { Invoke(EdsdkNative.EdsTerminateSDK).Wait(2000); } catch { /* best effort */ }
             };
         }
     }
+
+    // ---- The EDSDK thread -----------------------------------------
+    //
+    // EDSDK on Windows hands its events (a picture ready to download, a
+    // property that changed) to the thread that initialised it, and only when
+    // that thread lets it: a GUI app's message loop, or, in a program without
+    // one, regular calls to EdsGetEvent(). Polaris is a server with neither, and
+    // nothing called EdsGetEvent, so TakePicture fired the shutter and the
+    // picture never reached Polaris: PREVIEW waited until the browser gave up
+    // (Canon EOS R8 on Windows, 2026-10-13). Calls also came from whatever
+    // thread-pool thread served the request, and the SDK is not made for that.
+    //
+    // So one thread owns the SDK: it initialises it, runs every call handed to
+    // it, and pumps EdsGetEvent between them, which is where the camera's object
+    // events (and with them the downloads) now run.
+
+    private static readonly System.Collections.Concurrent.BlockingCollection<Action> _work = new();
+    private static Thread? _sdkThread;
+    private static readonly TimeSpan PumpInterval = TimeSpan.FromMilliseconds(20);
+
+    private static void EnsureThread() {
+        if (_sdkThread != null) return;
+        lock (_work) {
+            if (_sdkThread != null) return;
+            // MTA, not STA: an STA thread has to pump window messages while it
+            // waits, and EdsOpenSession blocks it waiting for one, so a
+            // session never opened (the call hung for good with an R8).
+            // EdsGetEvent delivers the camera's events without a message loop.
+            var t = new Thread(Pump) { IsBackground = true, Name = "EDSDK" };
+            t.SetApartmentState(ApartmentState.MTA);
+            t.Start();
+            _sdkThread = t;
+        }
+    }
+
+    private static void Pump() {
+        while (true) {
+            try {
+                if (_work.TryTake(out var job, PumpInterval)) job();
+                if (_initialized) EdsdkNative.EdsGetEvent();
+            } catch {
+                // A job reports its own failure through its task; the pump
+                // itself must never stop, or the SDK goes deaf for good.
+            }
+        }
+    }
+
+    /// <summary>True on the EDSDK thread, where SDK calls run directly (event
+    /// handlers, and calls nested inside a job).</summary>
+    public static bool OnSdkThread => Thread.CurrentThread == _sdkThread;
+
+    /// <summary>Run <paramref name="f"/> on the EDSDK thread.</summary>
+    public static Task<T> Invoke<T>(Func<T> f) {
+        if (OnSdkThread) {
+            try { return Task.FromResult(f()); }
+            catch (Exception ex) { return Task.FromException<T>(ex); }
+        }
+        EnsureThread();
+        var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _work.Add(() => {
+            try { tcs.SetResult(f()); } catch (Exception ex) { tcs.SetException(ex); }
+        });
+        return tcs.Task;
+    }
+
+    public static Task Invoke(Action a) => Invoke<object?>(() => { a(); return null; });
+
+    /// <summary>Run <paramref name="f"/> on the EDSDK thread and wait for it.</summary>
+    public static T Run<T>(Func<T> f) => Invoke(f).GetAwaiter().GetResult();
+
+    public static void Run(Action a) => Invoke(a).GetAwaiter().GetResult();
 }

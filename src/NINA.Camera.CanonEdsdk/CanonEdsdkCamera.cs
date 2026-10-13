@@ -31,10 +31,10 @@ namespace NINA.Camera.CanonEdsdk;
 /// verbatim via the <see cref="IHasRawFile"/> hook) and the embedded
 /// JPEG (decoded to a luminance plane for the live preview).
 ///
-/// Threading: the EDSDK delivers events on its own thread. The
-/// object-event handler resolves a per-capture
-/// <c>TaskCompletionSource</c> back to whatever thread the
-/// <see cref="CaptureAsync"/> call originated on.
+/// Threading: every SDK call runs on the one EDSDK thread
+/// (<see cref="CanonEdsdkRegistry"/>), which also pumps EdsGetEvent; the
+/// object events, and the downloads in them, run there too, and resolve a
+/// per-capture <c>TaskCompletionSource</c> the caller awaits.
 ///
 /// Lifetime: the camera handle is opened in <see cref="ConnectAsync"/>
 /// and released in <see cref="DisconnectAsync"/>. Always pair them.
@@ -85,7 +85,13 @@ public class CanonEdsdkCamera : ICamera {
     // ---- Connect / disconnect ------------------------------------
 
     public Task ConnectAsync(CancellationToken ct = default) {
-        if (IsConnected) return Task.CompletedTask;
+        CanonEdsdkRegistry.EnsureInitialized();
+        return CanonEdsdkRegistry.Invoke(ConnectOnSdkThread);
+    }
+
+
+    private void ConnectOnSdkThread() {
+        if (IsConnected) return;
 
         _camRef = CanonEdsdkDiscovery.OpenCameraRefById(_deviceId);
         if (_camRef == IntPtr.Zero) {
@@ -118,8 +124,10 @@ public class CanonEdsdkCamera : ICamera {
         _stateHandler  = OnStateEvent;
         EdsdkNative.EdsSetObjectEventHandler(_camRef,
             EdsdkConstants.kEdsObjectEvent_All, _objectHandler, IntPtr.Zero);
+        // kEdsStateEvent_All (0x300), as EDSDKTypes.h defines it. 0xFFFFFFFF
+        // here never returned with an EOS R8: the connect hung inside this call.
         EdsdkNative.EdsSetCameraStateEventHandler(_camRef,
-            0xFFFFFFFF, _stateHandler, IntPtr.Zero);
+            EdsdkConstants.kEdsStateEvent_All, _stateHandler, IntPtr.Zero);
 
         // Tell the camera to deliver captures to the host instead of
         // its SD card, and fake the host-capacity probe so it doesn't
@@ -136,11 +144,15 @@ public class CanonEdsdkCamera : ICamera {
         }
 
         State = CameraStates.Idle;
-        return Task.CompletedTask;
     }
 
     public Task DisconnectAsync(CancellationToken ct = default) {
         if (!IsConnected) return Task.CompletedTask;
+        return CanonEdsdkRegistry.Invoke(DisconnectOnSdkThread);
+    }
+
+    private void DisconnectOnSdkThread() {
+        if (!IsConnected) return;
         try {
             EdsdkNative.EdsCloseSession(_camRef);
         } finally {
@@ -151,7 +163,6 @@ public class CanonEdsdkCamera : ICamera {
             _stateHandler = null;
             State = CameraStates.NoState;
         }
-        return Task.CompletedTask;
     }
 
     // ---- Setters --------------------------------------------------
@@ -169,22 +180,23 @@ public class CanonEdsdkCamera : ICamera {
 
     public Task SetIsoAsync(int iso, CancellationToken ct = default) {
         if (!IsConnected) return Task.CompletedTask;
-        var code = EdsdkConstants.IsoCodeFor(iso);
-        var err = EdsdkNative.EdsSetPropertyData(_camRef,
-            EdsdkConstants.kEdsPropID_ISOSpeed, 0, sizeof(uint), ref code);
-        if (err == EdsdkConstants.EDS_ERR_OK) {
-            SelectedIso = EdsdkConstants.IsoFromCode(code);
-        }
-        return Task.CompletedTask;
+        return CanonEdsdkRegistry.Invoke(() => {
+            var code = EdsdkConstants.IsoCodeFor(iso);
+            var err = EdsdkNative.EdsSetPropertyData(_camRef,
+                EdsdkConstants.kEdsPropID_ISOSpeed, 0, sizeof(uint), ref code);
+            if (err == EdsdkConstants.EDS_ERR_OK) {
+                SelectedIso = EdsdkConstants.IsoFromCode(code);
+            }
+        });
     }
 
     public Task AbortExposureAsync(CancellationToken ct = default) {
         if (!IsConnected) return Task.CompletedTask;
-        // For bulb exposures, end the bulb immediately.
-        EdsdkNative.EdsSendCommand(_camRef,
-            EdsdkConstants.kEdsCameraCommand_BulbEnd, 0);
         _pending?.Completion.TrySetCanceled();
-        return Task.CompletedTask;
+        // A bulb exposure holds the shutter: release it now.
+        return CanonEdsdkRegistry.Invoke(() => EdsdkNative.EdsSendCommand(_camRef,
+            EdsdkConstants.kEdsCameraCommand_PressShutterButton,
+            EdsdkConstants.kEdsCameraCommand_ShutterButton_OFF));
     }
 
     // ---- Capture --------------------------------------------------
@@ -199,54 +211,79 @@ public class CanonEdsdkCamera : ICamera {
         // Honour per-capture ISO override.
         if (opts?.Iso is int iso) await SetIsoAsync(iso, ct);
 
-        // Shutter speed: either pick the closest Tv enum or use Bulb.
-        if (exposureSeconds <= 30.0) {
-            var tvCode = EdsdkConstants.TvCodeFor(exposureSeconds);
-            EdsdkNative.EdsSetPropertyData(_camRef, EdsdkConstants.kEdsPropID_Tv,
-                0, sizeof(uint), ref tvCode);
-        } else {
-            // Bulb path also needs Tv set to the bulb code (0x0C) so
-            // the camera accepts the BulbStart command afterwards.
-            uint bulbCode = 0x0Cu;
-            EdsdkNative.EdsSetPropertyData(_camRef, EdsdkConstants.kEdsPropID_Tv,
-                0, sizeof(uint), ref bulbCode);
-        }
-
-        _pending = new CaptureContext(exposureSeconds, opts);
-        using var reg = ct.Register(() => _pending?.Completion.TrySetCanceled());
-
+        var pending = new CaptureContext(exposureSeconds, opts);
+        _pending = pending;
+        using var reg = ct.Register(() => pending.Completion.TrySetCanceled());
         State = CameraStates.Exposing;
 
-        if (exposureSeconds <= 30.0) {
-            // Plain shutter trigger; camera waits exposureSeconds then
-            // delivers DirItemRequestTransfer events for each asset.
-            var err = EdsdkNative.EdsSendCommand(_camRef,
-                EdsdkConstants.kEdsCameraCommand_TakePicture, 0);
-            if (err != EdsdkConstants.EDS_ERR_OK) {
-                _pending = null;
-                State = CameraStates.Error;
-                throw new InvalidOperationException(
-                    $"TakePicture failed (0x{err:X8}).");
-            }
-        } else {
-            // Bulb: BulbStart → sleep → BulbEnd. The camera dumps the
-            // CR2 + JPEG after BulbEnd.
-            EdsdkNative.EdsSendCommand(_camRef,
-                EdsdkConstants.kEdsCameraCommand_BulbStart, 0);
-            try {
-                await Task.Delay(TimeSpan.FromSeconds(exposureSeconds), ct);
-            } finally {
-                EdsdkNative.EdsSendCommand(_camRef,
-                    EdsdkConstants.kEdsCameraCommand_BulbEnd, 0);
-            }
-        }
-
         try {
-            return await _pending.Completion.Task.WaitAsync(ct);
+            // The shutter goes through PressShutterButton, fully pressed without
+            // autofocus and then released, the way Canon's own samples shoot.
+            // TakePicture is the old DSLR command, and newer bodies (the R
+            // series) answer it with an error or a focus attempt.
+            if (exposureSeconds <= 30.0) {
+                // Closest Tv, then press and release; the camera exposes for
+                // Tv and then raises DirItemRequestTransfer for each file,
+                // which the EDSDK thread picks up while pumping events.
+                var err = await CanonEdsdkRegistry.Invoke(() => {
+                    var tvCode = EdsdkConstants.TvCodeFor(exposureSeconds);
+                    EdsdkNative.EdsSetPropertyData(_camRef, EdsdkConstants.kEdsPropID_Tv,
+                        0, sizeof(uint), ref tvCode);
+                    return PressAndRelease();
+                });
+                if (err != EdsdkConstants.EDS_ERR_OK) {
+                    State = CameraStates.Error;
+                    throw new InvalidOperationException($"The camera refused to shoot (0x{err:X8}).");
+                }
+            } else {
+                // Longer than 30 s needs Bulb, which EDSDK cannot select: the
+                // camera has to be on B. Hold the shutter for the exposure,
+                // then release; the files come after the release.
+                var err = await CanonEdsdkRegistry.Invoke(() => EdsdkNative.EdsSendCommand(_camRef,
+                    EdsdkConstants.kEdsCameraCommand_PressShutterButton,
+                    EdsdkConstants.kEdsCameraCommand_ShutterButton_Completely_NonAF));
+                if (err != EdsdkConstants.EDS_ERR_OK) {
+                    State = CameraStates.Error;
+                    throw new InvalidOperationException(
+                        $"The camera refused to start a {exposureSeconds:0}s exposure (0x{err:X8}). " +
+                        "Exposures longer than 30 s need the camera's mode dial on B.");
+                }
+                try {
+                    await Task.Delay(TimeSpan.FromSeconds(exposureSeconds), ct);
+                } finally {
+                    await CanonEdsdkRegistry.Invoke(() => EdsdkNative.EdsSendCommand(_camRef,
+                        EdsdkConstants.kEdsCameraCommand_PressShutterButton,
+                        EdsdkConstants.kEdsCameraCommand_ShutterButton_OFF));
+                }
+            }
+
+            // A camera that shoots but never sends the file (saving to the
+            // card only, a full card) must not hold the request forever.
+            var limit = TimeSpan.FromSeconds(Math.Max(0, exposureSeconds) + 60);
+            try {
+                return await pending.Completion.Task.WaitAsync(limit, ct);
+            } catch (TimeoutException) {
+                throw new TimeoutException(
+                    $"The camera took the picture but did not send it to Polaris within " +
+                    $"{limit.TotalSeconds:F0} s. Check that it is not set to save to the card only.");
+            }
         } finally {
             _pending = null;
-            State = CameraStates.Idle;
+            if (State != CameraStates.Error) State = CameraStates.Idle;
         }
+    }
+
+    /// <summary>Press the shutter fully without autofocus, then release it;
+    /// on the EDSDK thread. Released even when the press failed, as Canon's
+    /// sample does, so the camera is never left with the button held.</summary>
+    private uint PressAndRelease() {
+        var err = EdsdkNative.EdsSendCommand(_camRef,
+            EdsdkConstants.kEdsCameraCommand_PressShutterButton,
+            EdsdkConstants.kEdsCameraCommand_ShutterButton_Completely_NonAF);
+        var off = EdsdkNative.EdsSendCommand(_camRef,
+            EdsdkConstants.kEdsCameraCommand_PressShutterButton,
+            EdsdkConstants.kEdsCameraCommand_ShutterButton_OFF);
+        return err != EdsdkConstants.EDS_ERR_OK ? err : off;
     }
 
     // ---- Event handlers ------------------------------------------
@@ -334,41 +371,36 @@ public class CanonEdsdkCamera : ICamera {
     }
 
     private static IImageData BuildImageData(CaptureContext pending) {
-        // Decode the JPEG (or, in RAW-only mode, fall back to a tiny
-        // placeholder) to satisfy IImageData.Data, the rest of the
-        // Polaris pipeline (live stack, stats, relay) only sees the
-        // luminance plane. The CR2 is what users actually want on
-        // disk; the JPEG is just for the on-screen preview.
-        ushort[] pixels;
+        // The preview: the JPEG the camera sent, or the full-size JPEG inside
+        // the RAW when it sent only that (CanonPreview). The RAW itself is
+        // what reaches the disk, untouched, through IHasRawFile.
+        ushort[] pixels = new ushort[1];
         int width = 1, height = 1;
-        if (pending.JpegBytes != null) {
-            using var bmp = SKBitmap.Decode(pending.JpegBytes);
-            if (bmp != null) {
+        bool mosaic = false;
+        SKBitmap? bmp = null;
+        try {
+            if (pending.JpegBytes != null) bmp = SKBitmap.Decode(pending.JpegBytes);
+            if ((bmp == null || bmp.Width <= 0) && pending.RawBytes != null) {
+                bmp?.Dispose();
+                bmp = CanonPreview.LargestEmbeddedJpeg(pending.RawBytes);
+            }
+            if (bmp != null && bmp.Width > 0 && bmp.Height > 0) {
                 width = bmp.Width;
                 height = bmp.Height;
-                pixels = new ushort[width * height];
-                // Rec.601 luminance from RGB. The cast bumps 8-bit
-                // values into the 16-bit range so the stretch /
-                // histogram pipeline downstream behaves identically
-                // to FITS captures.
-                for (int y = 0; y < height; y++) {
-                    for (int x = 0; x < width; x++) {
-                        var c = bmp.GetPixel(x, y);
-                        var luma = 0.299 * c.Red + 0.587 * c.Green + 0.114 * c.Blue;
-                        pixels[y * width + x] = (ushort)Math.Clamp(luma * 256, 0, 65535);
-                    }
-                }
-            } else {
-                pixels = new ushort[1];
+                pixels = CanonPreview.ToRggb(bmp);
+                mosaic = true;
             }
-        } else {
-            pixels = new ushort[1];
+        } finally {
+            bmp?.Dispose();
         }
 
         var props = new ImageProperties {
             Width = width, Height = height, BitDepth = 16,
-            IsBayered = false,
-            BayerPattern = NINA.Core.Enum.BayerPatternEnum.None
+            // 8-bit JPEG samples spread over 16 bits: say so, as the INDI
+            // DSLR path does, so nothing reads them as 16-bit data.
+            SignificantBitDepth = mosaic ? 8 : 0,
+            IsBayered = mosaic,
+            BayerPattern = mosaic ? NINA.Core.Enum.BayerPatternEnum.RGGB : NINA.Core.Enum.BayerPatternEnum.None
         };
         var meta = new ImageMetaData {
             CreationTime = DateTime.UtcNow,
