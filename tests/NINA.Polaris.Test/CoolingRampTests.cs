@@ -187,6 +187,31 @@ public class CoolingRampTests {
 
     /// <summary>Rate 0 = ramping off: setpoint written once, straight to target.
     /// The opt-out has to keep working, it's the pre-COOLRAMP behaviour.</summary>
+    /// <summary>The cooler comes on holding the sensor's own temperature, never the
+    /// setpoint left in the camera. A ToupTek opens with 10 C there; switching the
+    /// TEC on before the first step sent it straight to full power, the step that
+    /// reset a USB-powered AE676C.</summary>
+    [Test]
+    public async Task CoolDown_HoldsTheSensorTemperatureBeforeTheCoolerComesOn() {
+        var svc = new CoolingRampService(NullLogger<CoolingRampService>.Instance);
+        var cam = new FakeCamera { Temperature = 27.5 };
+
+        svc.Start(cam, -10, 2.0, coolerOnFirst: true, coolerOffWhenDone: false, source: "test");
+        for (int i = 0; i < 50 && cam.Ops.Count < 3; i++) await Task.Delay(20);
+        svc.Cancel();
+
+        Assert.That(cam.Ops.Take(2), Is.EqualTo(new[] { "target:27.5", "cooler:on" }));
+    }
+
+    [TestCase(double.NaN, false)]
+    [TestCase(0.0, false)]
+    [TestCase(27.5, true)]
+    [TestCase(-15.0, true)]
+    [TestCase(150.0, false)]
+    public void OnlyAPlausibleSensorReadingIsHeld(double c, bool expected) {
+        Assert.That(CoolingRampService.IsPlausibleSensorTemp(c), Is.EqualTo(expected));
+    }
+
     [Test]
     public async Task RateZero_WritesTargetOnce_NoRamp() {
         var svc = new CoolingRampService(NullLogger<CoolingRampService>.Instance);

@@ -148,6 +148,16 @@ public sealed class ToupTekSdkCamera : ICamera {
         _isColor = (flag & (ulong)Toupcam.eFLAG.FLAG_MONO) == 0;
         _supportsCooler = (flag & (ulong)(Toupcam.eFLAG.FLAG_TEC | Toupcam.eFLAG.FLAG_TEC_ONOFF)) != 0;
 
+        // The camera opens with its cooler already running towards its own
+        // default target (an AE676C: 10 C, TEC straight to its 6.1 V maximum).
+        // That step from nothing to full TEC power browns out a camera powered
+        // only through USB: on a Radxa Dragon Q6A, directly or behind an SV241
+        // Pro hub, the AE676C reset itself within seconds of every open, while
+        // the same camera cooled to 12 C without a fault when the setpoint was
+        // walked down. Cooling is started by Polaris, through the ramp.
+        if ((flag & (ulong)Toupcam.eFLAG.FLAG_TEC_ONOFF) != 0)
+            cam.put_Option(Toupcam.eOPTION.OPTION_TEC, 0);
+
         // Raw (bayer) output, max bit depth.
         cam.put_Option(Toupcam.eOPTION.OPTION_RAW, 1);
         cam.put_Option(Toupcam.eOPTION.OPTION_BITDEPTH, 1);

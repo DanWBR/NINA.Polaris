@@ -148,6 +148,13 @@ public sealed class AltairSdkCamera : ICamera {
         _isColor = (flag & (ulong)Altaircam.eFLAG.FLAG_MONO) == 0;
         _supportsCooler = (flag & (ulong)(Altaircam.eFLAG.FLAG_TEC | Altaircam.eFLAG.FLAG_TEC_ONOFF)) != 0;
 
+        // Same OEM as ToupTek: the camera opens with its cooler driving towards
+        // its own default target at full power, a step that can brown out a
+        // USB-powered camera (see ToupTekSdkCamera.ConnectAsync). Cooling is
+        // started by Polaris, through the ramp.
+        if ((flag & (ulong)Altaircam.eFLAG.FLAG_TEC_ONOFF) != 0)
+            cam.put_Option(Altaircam.eOPTION.OPTION_TEC, 0);
+
         // Raw (bayer) output, max bit depth.
         cam.put_Option(Altaircam.eOPTION.OPTION_RAW, 1);
         cam.put_Option(Altaircam.eOPTION.OPTION_BITDEPTH, 1);
