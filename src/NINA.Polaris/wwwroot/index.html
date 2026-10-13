@@ -46,7 +46,7 @@
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20260801-inputwidth">
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20261009-floatbtn">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260731-videonudge">
-    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20260902-ctrlrows">
+    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20261013-isowidth">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20261011-kblift">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20260726-framefit">
     <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20260801-selectwidth">
@@ -12463,6 +12463,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         </template>
                                     </div>
                                     <div class="seq-item-params">
+                                        <!-- Exposure, count and gain/ISO share one row: the inputs shrink
+                                             to fit a narrow card instead of pushing ISO onto the line below. -->
+                                        <div class="seq-exp-row">
                                         <button type="button" class="seq-type-pill"
                                                 x-show="item.imageType === 'FLAT'"
                                                 :class="{ 'seq-type-flat': item.autoExposure }"
@@ -12492,7 +12495,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         <label x-show="!cameraUsesIso()">G<input type="number" class="seq-input seq-input-num"
                                             x-model.number="item.gain" step="10" min="0"
                                             :disabled="seqState === 'running'"></label>
-                                        <label x-show="cameraUsesIso()">ISO<select class="seq-input"
+                                        <label x-show="cameraUsesIso()">ISO<select class="seq-input seq-input-iso"
                                             :value="item.iso || ''"
                                             @change="item.iso = Number($event.target.value) || null"
                                             :disabled="seqState === 'running'">
@@ -12501,6 +12504,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                                 <option :value="v" x-text="v" :selected="v === item.iso"></option>
                                             </template>
                                         </select></label>
+                                        </div>
                                         <span class="zwo-gain-presets"
                                               x-show="!cameraUsesIso() && zwoPresetsForActiveCamera() && seqState !== 'running'">
                                             <button type="button" class="zwo-gain-preset"
