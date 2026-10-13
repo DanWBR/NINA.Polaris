@@ -11,6 +11,7 @@
   "Forget": "Oublier",
   "If its address changes, Polaris finds it again by that name.": "Si son adresse change, Polaris le retrouve grâce à ce nom.",
   "If you take the rig somewhere your saved WiFi is out of range, the hotspot comes back up on its own after about a minute so you never need an ethernet cable to reach it. When a saved network comes back (a router that lost power, say), the rig returns to it by itself within a few minutes, unless you chose the hotspot with the button above.": "Si vous emportez votre équipement dans un endroit où votre réseau Wi-Fi enregistré est hors de portée, le point d'accès se reconnecte automatiquement au bout d'environ une minute ; vous n'avez donc jamais besoin d'un câble Ethernet pour y accéder. Quand un réseau enregistré revient (un routeur qui a perdu l'alimentation, par exemple), l'équipement y retourne de lui-même en quelques minutes, sauf si vous avez choisi le point d'accès avec le bouton ci-dessus.",
+  "Install from the EDSDK zip…": "Installer depuis le zip de l’EDSDK…",
   "No USB drive found. Plug one in and try again.": "Aucun disque USB trouvé. Branchez-en un et réessayez.",
   "Pick a server used before": "Choisir un serveur déjà utilisé",
   "Recent": "Récents",

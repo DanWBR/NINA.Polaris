@@ -12,6 +12,8 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using NINA.Camera.CanonEdsdk.Native;
 
@@ -35,12 +37,73 @@ public static class CanonEdsdkRegistry {
     private static bool _initialized;
     private static bool? _available;
 
-    /// <summary>True when <c>EDSDK.dll</c> is reachable on the standard
-    /// DLL search path (next to the Polaris .exe, in
-    /// <c>plugins/canon-edsdk/</c>, or anywhere on PATH) and
-    /// <c>EdsInitializeSDK</c> returns successfully. Cached after the
-    /// first probe, if the user adds the DLL after startup they need
-    /// to restart Polaris.</summary>
+    /// <summary>Folder name of the EDSDK inside the writable native-SDK pack
+    /// directory, where the zip installer puts the DLLs.</summary>
+    public const string PackFolder = "canon-edsdk";
+
+    /// <summary>The folder the EDSDK was loaded from, once it has been.</summary>
+    public static string? LoadedFrom { get; private set; }
+
+    static CanonEdsdkRegistry() {
+        try { NativeLibrary.SetDllImportResolver(typeof(EdsdkNative).Assembly, Resolve); }
+        catch { /* already set: the default search still applies */ }
+    }
+
+    /// <summary>Where Polaris looks for <c>EDSDK.dll</c>, in order: next to the
+    /// executable, in <c>plugins/canon-edsdk</c> beside it, and in
+    /// <c>canon-edsdk</c> under the writable native-SDK directory (the profile
+    /// data folder, no administrator rights needed, kept across updates).
+    /// Windows' own search (System32, PATH) follows when none has it.
+    ///
+    /// The guide used to send people to <c>plugins/canon-edsdk</c> while nothing
+    /// looked there: the DLL was only ever found next to the executable or on
+    /// PATH, because Windows does not search subfolders.</summary>
+    public static IEnumerable<string> SearchDirs() {
+        var baseDir = AppContext.BaseDirectory;
+        yield return baseDir;
+        yield return Path.Combine(baseDir, "plugins", PackFolder);
+        var pack = Environment.GetEnvironmentVariable(NINA.Image.NativeLibs.NativeSdkProbe.EnvVar);
+        if (!string.IsNullOrWhiteSpace(pack)) yield return Path.Combine(pack, PackFolder);
+    }
+
+    /// <summary>The folder the zip installer writes to, or null when the host
+    /// has not exported a native-SDK directory.</summary>
+    public static string? InstallDir {
+        get {
+            var pack = Environment.GetEnvironmentVariable(NINA.Image.NativeLibs.NativeSdkProbe.EnvVar);
+            return string.IsNullOrWhiteSpace(pack) ? null : Path.Combine(pack, PackFolder);
+        }
+    }
+
+    private static IntPtr Resolve(string libraryName, Assembly assembly, DllImportSearchPath? searchPath) {
+        if (!libraryName.StartsWith("EDSDK", StringComparison.OrdinalIgnoreCase)) return IntPtr.Zero;
+        foreach (var dir in SearchDirs()) {
+            var edsdk = Path.Combine(dir, "EDSDK.dll");
+            if (!File.Exists(edsdk)) continue;
+            // EDSDK.dll pulls in EdsImage.dll by name. Loading it from the same
+            // folder first means that lookup finds the copy already in the
+            // process instead of searching the default path for it.
+            var image = Path.Combine(dir, "EdsImage.dll");
+            if (File.Exists(image)) NativeLibrary.TryLoad(image, out _);
+            if (NativeLibrary.TryLoad(edsdk, out var handle)) {
+                LoadedFrom = dir;
+                return handle;
+            }
+        }
+        return IntPtr.Zero;
+    }
+
+    /// <summary>Forget a failed probe so the next <see cref="IsAvailable"/> looks
+    /// again, after the DLLs were installed without a restart. A probe that
+    /// succeeded stays: the SDK is initialised once per process.</summary>
+    public static void ResetProbe() {
+        lock (_lock) { if (!_initialized) _available = null; }
+    }
+
+    /// <summary>True when <c>EDSDK.dll</c> is found in one of
+    /// <see cref="SearchDirs"/> or on Windows' own search path and
+    /// <c>EdsInitializeSDK</c> returns successfully. Cached after the first
+    /// probe; <see cref="ResetProbe"/> clears a failed one.</summary>
     public static bool IsAvailable {
         get {
             if (_available.HasValue) return _available.Value;

@@ -6993,8 +6993,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                                   cameraVendorDevices = []; equipCameraChoice = '';
                                                   if (cameraDriver !== 'indi' && cameraDriverInfo?.available)
                                                       detectVendorCameras()">
+                                    <!-- Canon stays selectable without its SDK: picking it is
+                                         how the operator reaches the install button below. -->
                                     <template x-for="d in cameraDrivers" :key="d.id">
-                                        <option :value="d.id" :disabled="!d.available"
+                                        <option :value="d.id" :disabled="!d.available && d.id !== 'canon-edsdk'"
                                                 :selected="cameraDriver === d.id"
                                                 x-text="d.name + (d.available ? '' : ' (not installed)')"></option>
                                     </template>
@@ -7008,6 +7010,15 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                  x-show="cameraDriverInfo && !cameraDriverInfo.available"
                                  x-cloak>
                                 <span x-text="cameraDriverInfo?.name + ' DLLs not found on this host.'"></span>
+                                <!-- Canon's licence keeps EDSDK out of Polaris: the operator
+                                     downloads it, and this puts the right DLLs in place. -->
+                                <label class="btn btn-sm" x-show="cameraDriver === 'canon-edsdk'"
+                                       title="The zip you downloaded from Canon, or EDSDK.dll and EdsImage.dll from its EDSDK_64\Dll folder">
+                                    <span x-show="!canonSdkInstalling">Install from the EDSDK zip…</span>
+                                    <span x-show="canonSdkInstalling">Installing…</span>
+                                    <input type="file" accept=".zip,.dll" multiple hidden
+                                           :disabled="canonSdkInstalling" @change="installCanonSdk($event)">
+                                </label>
                                 <a x-show="cameraDriver === 'canon-edsdk'"
                                    href="https://github.com/DanWBR/nina-polaris/blob/master/docs/dslr-windows-canon.md"
                                    target="_blank">Install instructions →</a>
@@ -25321,7 +25332,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261012-usbdrives"></script>
+    <script src="/js/app.js?v=20261013-edsdk"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

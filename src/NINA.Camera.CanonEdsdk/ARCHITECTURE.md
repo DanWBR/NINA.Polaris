@@ -23,10 +23,11 @@ src/NINA.Camera.CanonEdsdk/
 ## Why a separate project
 
 EDSDK is **not redistributable**. Canon's EULA prohibits us from
-shipping `EDSDK.dll` + `EDSDKLib.dll` with Polaris. The user
-downloads the SDK from Canon's developer site and drops the native
-DLLs into `plugins/canon-edsdk/` next to the Polaris binary at
-runtime.
+shipping `EDSDK.dll` + `EdsImage.dll` with Polaris. The user
+downloads the SDK from Canon's developer site and installs it from
+RIGS → Camera (**Install from the EDSDK zip…**), which writes the
+64-bit DLLs to `native-sdks/canon-edsdk` in the profile data folder.
+`CanonEdsdkRegistry.SearchDirs` lists every folder searched.
 
 Keeping the wrapper in its own project means:
 

@@ -152,7 +152,8 @@ and they appear in **RIGS**, on the camera card's driver dropdown.
 
 - **Canon EDSDK** [@canon_edsdk]: register at
   [developer.canon-asia.com](https://developer.canon-asia.com/),
-  download EDSDK 13.x+, drop the DLLs in `plugins/canon-edsdk/`.
+  download EDSDK 13.x+, then install it from RIGS → Camera with
+  **Install from the EDSDK zip…**.
 - **Nikon SDK** [@nikon_sdk]:
   [developer.nikonimaging.com](https://developer.nikonimaging.com/),
   drop in `plugins/nikon-sdk/`.

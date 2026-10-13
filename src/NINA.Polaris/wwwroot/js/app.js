@@ -1450,6 +1450,8 @@ function ninaApp() {
         // refreshed by the "Detect" button.
         cameraDriver: 'indi',
         cameraDrivers: [],
+        // RIGS: a Canon EDSDK upload in progress (installCanonSdk).
+        canonSdkInstalling: false,
         cameraVendorDevices: [],
         cameraDiscovering: false,
         // PHD2-style display gamma for the native guide preview (0.10–3.00,
@@ -35636,6 +35638,34 @@ function ninaApp() {
         // Load the list of camera-driver kinds offered by this host
         // and their availability flags. Cached for the session, call
         // again only after the user installs a vendor SDK.
+        // RIGS, Canon EDSDK not found: upload what the operator downloaded from
+        // Canon (the zip, or EDSDK.dll + EdsImage.dll out of its EDSDK_64\Dll
+        // folder) and let the host put the 64-bit DLLs where Polaris looks.
+        async installCanonSdk(ev) {
+            const files = Array.from(ev?.target?.files || []);
+            if (ev?.target) ev.target.value = '';
+            if (!files.length) return;
+            const fd = new FormData();
+            for (const f of files) fd.append('files', f, f.name);
+            this.canonSdkInstalling = true;
+            try {
+                const r = await this.apiUpload('/api/camera/canon-edsdk/install', fd,
+                    { label: 'Install Canon EDSDK' });
+                const j = await r.json().catch(() => ({}));
+                if (!r.ok) {
+                    this.toast(j.error || 'Could not install the Canon EDSDK', 'error', 9000);
+                    return;
+                }
+                this.toast(j.message || 'Canon EDSDK installed', j.available ? 'ok' : 'warn', 7000);
+                await this.loadCameraDrivers();
+                if (j.available && this.cameraDriver === 'canon-edsdk') this.detectVendorCameras();
+            } catch (e) {
+                this.toastFail('Could not install the Canon EDSDK', e);
+            } finally {
+                this.canonSdkInstalling = false;
+            }
+        },
+
         async loadCameraDrivers() {
             try {
                 this.cameraDrivers = await this.apiGet('/api/camera/drivers');

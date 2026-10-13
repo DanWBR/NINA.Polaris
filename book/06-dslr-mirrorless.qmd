@@ -45,18 +45,26 @@ download the SDK themselves. It is a one-time, free process:
 2. Sign up for a free developer account.
 3. Accept the EDSDK licence and download the latest version (13.x or
    newer). The download is a Zip archive.
-4. Extract the archive and locate the **Windows** folder. Inside it
-   are the DLLs you need (the library files that make up the SDK):
-   `EDSDK.dll`, `EdsImage.dll`, and `Mc.dll`
-   (a codec helper); if `EDSDK_64.dll` is also present, copy that
-   too.
-5. Create a folder next to the Polaris executable called
-   `plugins/canon-edsdk/` and drop the DLLs there. Alternatively,
-   copy them next to the Polaris executable itself
-   (`NINA.Polaris.exe`); either location works because the standard
-   Windows DLL search path covers both.
-6. Restart Polaris so the detection probe (which checks the Windows
-   registry, the system-wide settings database) re-detects the SDK.
+4. In the RIGS tab's Camera card, pick **Canon EOS (EDSDK)** in the
+   driver list (it reads *(not installed)* until the SDK is in place)
+   and press **Install from the EDSDK zip…**. Choose the zip you
+   downloaded. Polaris takes out the two DLLs it needs (DLLs are the
+   library files that make up the SDK), `EDSDK.dll` and
+   `EdsImage.dll`, and puts them in its own SDK folder,
+   `%LOCALAPPDATA%\NINA.Polaris\profiles\native-sdks\canon-edsdk`. No
+   administrator rights are needed, updates leave that folder alone,
+   and Polaris uses the SDK at once, without a restart. If you
+   already extracted the zip, choose those two files from its
+   `EDSDK_64\Dll` folder instead.
+
+The zip holds each DLL twice. The copies under `EDSDK\Dll` are
+32-bit and the ones under `EDSDK_64\Dll` are 64-bit (the two kinds
+of Windows program, which cannot load each other's libraries).
+Polaris is a 64-bit program, so only the second pair works; the
+installer tells them apart by reading the files themselves. To
+install by hand instead, copy the 64-bit pair next to the Polaris
+executable, into `plugins\canon-edsdk` beside it, or into the SDK
+folder above, and restart Polaris.
 
 ### Connecting the camera
 
@@ -65,8 +73,8 @@ came with the camera or a known-good USB 2.0 cable, since USB 3.0
 cables sometimes confuse the body's USB controller. Power the camera
 on and set the mode dial to **M** (manual). In the RIGS tab's Camera
 card, pick the **Canon EOS (EDSDK)** entry in the driver dropdown; if
-the entry shows *Not installed*, the SDK probe did not find the DLLs,
-so confirm they are in `plugins/canon-edsdk/` and restart. Click
+the entry shows *Not installed*, install the SDK as described above.
+Click
 **Detect** to refresh the list of connected Canon bodies, pick the
 body ("EOS RP", "EOS 6D Mark II", and so on), and click **Connect**.
 
@@ -109,10 +117,10 @@ call returns `EDS_ERR_DEVICE_BUSY`.
 
 ### Troubleshooting Canon
 
-- **"EdsInitializeSDK failed"**: the DLLs are not reachable. Verify
-  `EDSDK.dll` is in `plugins/canon-edsdk/` or next to
-  `NINA.Polaris.exe`, and that Polaris is running as a 64-bit process
-  (it always is on .NET 10) so the 64-bit DLL is loaded.
+- **"EdsInitializeSDK failed"**, or *(not installed)* after copying
+  the DLLs by hand: they are the 32-bit copies from `EDSDK\Dll`, or
+  not in one of the folders Polaris searches. Use **Install from the
+  EDSDK zip…**, which picks the right copies itself.
 - **Detect returns no cameras**: another app holds the EDSDK session,
   or the camera's USB mode is set to PC mode but the cable is bad or
   the port is USB-power-only.
