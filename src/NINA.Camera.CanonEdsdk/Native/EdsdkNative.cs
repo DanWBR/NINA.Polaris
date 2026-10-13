@@ -25,10 +25,11 @@ namespace NINA.Camera.CanonEdsdk.Native;
 /// The native DLLs are <b>not</b> distributed in this repo. Canon's
 /// EDSDK EULA requires each developer to register on the Canon
 /// imaging-developer site, accept the licence, and download the
-/// matching version. Drop <c>EDSDK.dll</c> + <c>EdsImage.dll</c> +
-/// the helper DLLs next to the Polaris executable (or into
-/// <c>plugins/canon-edsdk/</c>) and Windows will resolve them via
-/// the standard DLL search path.
+/// matching version. <c>CanonEdsdkRegistry</c> resolves
+/// <c>EDSDK.dll</c> from the folders its <c>SearchDirs</c> lists (next
+/// to the executable, <c>plugins/canon-edsdk</c>, and
+/// <c>native-sdks/canon-edsdk</c> in the profile data folder), before
+/// Windows' own search path.
 /// </para>
 ///
 /// <para>
