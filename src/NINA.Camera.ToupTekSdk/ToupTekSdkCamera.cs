@@ -12,6 +12,7 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using NINA.Image.NativeLibs;
 using System.Collections.Concurrent;
 using NINA.Core.Enum;
 using NINA.Image.ImageData;
@@ -126,8 +127,12 @@ public sealed class ToupTekSdkCamera : ICamera {
     public Task ConnectAsync(CancellationToken ct = default) => Task.Run(() => {
         // Find the model entry to read flags + pixel size before opening.
         ulong flag = 0;
+        // A quarantined SDK (it crashed Polaris before) is not touched at all.
+        var quarantined = ToupTekRegistry.QuarantineReason;
+        if (quarantined != null)
+            throw new InvalidOperationException(char.ToUpperInvariant(quarantined[0]) + quarantined[1..]);
         try {
-            foreach (var d in Toupcam.EnumV2()) {
+            foreach (var d in NativeCallGuard.Run(ToupTekRegistry.GuardName, "listing cameras", Toupcam.EnumV2)) {
                 if (d.id == _camId) {
                     flag = d.model.flag;
                     _pixelSize = d.model.xpixsz;
@@ -137,7 +142,7 @@ public sealed class ToupTekSdkCamera : ICamera {
             }
         } catch { }
 
-        var cam = Toupcam.Open(_camId);
+        var cam = NativeCallGuard.Run(ToupTekRegistry.GuardName, "opening the camera", () => Toupcam.Open(_camId));
         if (cam == null) throw new InvalidOperationException(
             $"Failed to open the ToupTek camera '{_camId}'. The camera may already " +
             "be in use by another process. If an INDI driver for this camera is " +

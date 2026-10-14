@@ -141,7 +141,7 @@ public class TakeExposureInstruction : SequenceInstruction {
             // Only for a target: a dark or a flat has nowhere to be.
             var flipTarget = ctx.CurrentTarget;
             if (flipTarget != null && ImageType is null or "" or "LIGHT") {
-                var hold = ctx.MeridianFlip.WaitBeforeExposure(flipTarget.RaHours, ExposureSeconds);
+                var hold = ctx.MeridianFlip.WaitBeforeExposure(flipTarget.RaHours, flipTarget.DecDeg, ExposureSeconds);
                 if (hold > TimeSpan.Zero) {
                     ctx.Logger.LogInformation(
                         "TakeExposure '{Name}': holding {Sec:F0}s, a {Exp:F0}s exposure started "

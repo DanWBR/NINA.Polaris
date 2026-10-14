@@ -39,6 +39,10 @@ public sealed class AscomComTelescope : ITelescope, IDisposable {
     private string _deviceName = "ASCOM Telescope";
     private bool _canPark, _canUnpark, _canSync, _canSetTracking,
                  _canPierSide, _canMoveAxis, _canPulseGuide;
+    // The driver's EquatorialSystem, read at connect: of date (JNow, nearly
+    // every driver) or J2000. Polaris speaks J2000 (ITelescope), so positions
+    // are converted here when the driver is JNow.
+    private bool _mountIsJNow = true;
 
     public AscomComTelescope(string progId) {
         _progId = progId ?? throw new ArgumentNullException(nameof(progId));
@@ -49,8 +53,14 @@ public sealed class AscomComTelescope : ITelescope, IDisposable {
     public bool IsConnected => _driver != null
         && _disp.Invoke<bool>(() => SafeGet(() => (bool)_driver!.Connected)).Result;
 
-    public double RightAscension => Read(() => (double)_driver!.RightAscension, double.NaN);
-    public double Declination    => Read(() => (double)_driver!.Declination, double.NaN);
+    public double RightAscension => PointingJ2000().RaHours;
+    public double Declination    => PointingJ2000().DecDeg;
+
+    private (double RaHours, double DecDeg) PointingJ2000() {
+        var ra = Read(() => (double)_driver!.RightAscension, double.NaN);
+        var dec = Read(() => (double)_driver!.Declination, double.NaN);
+        return NINA.Core.Utility.EquatorialEpoch.FromMount(ra, dec, _mountIsJNow);
+    }
     public double Altitude       => Read(() => (double)_driver!.Altitude, double.NaN);
     public double Azimuth        => Read(() => (double)_driver!.Azimuth, double.NaN);
     public bool IsTracking       => Read(() => (bool)_driver!.Tracking);
@@ -89,6 +99,9 @@ public sealed class AscomComTelescope : ITelescope, IDisposable {
         _canPierSide     = SafeGet(() => (bool)_driver.CanPulseGuide); // proxy
         _canMoveAxis     = SafeGet(() => (bool)_driver.CanMoveAxis(0));
         _canPulseGuide   = SafeGet(() => (bool)_driver.CanPulseGuide);
+        try {
+            _mountIsJNow = NINA.Core.Utility.EquatorialEpoch.AscomSystemIsJNow((int)_driver.EquatorialSystem);
+        } catch { _mountIsJNow = true; }
     });
 
     public Task DisconnectAsync(CancellationToken ct = default) => _disp.Invoke(() => {
@@ -106,13 +119,15 @@ public sealed class AscomComTelescope : ITelescope, IDisposable {
             // Polaris's slew-center loop polls IsSlewing so we don't
             // need to block here.
             SafeSet(() => _driver!.Tracking = true);
-            _driver!.SlewToCoordinatesAsync(ra, dec);
+            var (mRa, mDec) = NINA.Core.Utility.EquatorialEpoch.ToMount(ra, dec, _mountIsJNow);
+            _driver!.SlewToCoordinatesAsync(mRa, mDec);
         });
 
     public Task SyncAsync(double ra, double dec, CancellationToken ct = default)
         => _disp.Invoke(() => {
             if (!_canSync || _driver == null) return;
-            _driver!.SyncToCoordinates(ra, dec);
+            var (mRa, mDec) = NINA.Core.Utility.EquatorialEpoch.ToMount(ra, dec, _mountIsJNow);
+            _driver!.SyncToCoordinates(mRa, mDec);
         });
 
     public Task ParkAsync(CancellationToken ct = default) => _disp.Invoke(() => {

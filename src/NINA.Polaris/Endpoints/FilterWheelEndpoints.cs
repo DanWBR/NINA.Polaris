@@ -214,7 +214,8 @@ public static class FilterWheelEndpoints {
             list.Add(new("qhy-sdk", "QHY (SDK, native)",
                 Available: NINA.Camera.QhySdk.QhyRegistry.IsAvailable,
                 Description: "A QHY filter wheel on a QHY camera's CFW port, or built into the camera " +
-                    "(MiniCAM8), through the native QHYCCD SDK. Pair it with the QHY (SDK, native) camera."));
+                    "(MiniCAM8), through the native QHYCCD SDK. Pair it with the QHY (SDK, native) camera.",
+                Quarantined: NINA.Camera.QhySdk.QhyRegistry.QuarantineReason));
             return Results.Ok(list);
         });
 

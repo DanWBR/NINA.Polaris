@@ -28,7 +28,7 @@ public class MeridianFlipTrigger : SequenceTrigger {
     public double DecDeg { get; set; }
 
     public override Task<bool> ShouldFireAsync(SequenceContext ctx, CancellationToken ct) {
-        return Task.FromResult(ctx.MeridianFlip.ShouldFlipNow(RaHours));
+        return Task.FromResult(ctx.MeridianFlip.ShouldFlipNow(RaHours, DecDeg));
     }
 
     public override async Task ExecuteAsync(SequenceContext ctx, CancellationToken ct) {

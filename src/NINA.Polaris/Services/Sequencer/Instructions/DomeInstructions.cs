@@ -1,3 +1,4 @@
+using NINA.Image.Interfaces;
 // N.I.N.A. Polaris
 // Copyright (C) 2024-2026 Daniel Wagner (DanWBR) and the N.I.N.A. Polaris contributors
 //
@@ -63,7 +64,9 @@ public class SyncDomeToScopeInstruction : SequenceInstruction {
 
         var lat = ctx.Profiles.Active.Latitude;
         var lon = ctx.Profiles.Active.Longitude;
-        var (az, _) = AltAzMath.RaDecToAltAz(mount.RightAscension, mount.Declination, lat, lon, DateTime.UtcNow);
+        // Azimuth on the sky of date; the mount reports J2000.
+        var (raNow, decNow) = mount.PointingOfDate();
+        var (az, _) = AltAzMath.RaDecToAltAz(raNow, decNow, lat, lon, DateTime.UtcNow);
         await dome.SlewToAzimuthAsync(az, ct);
     }
 }

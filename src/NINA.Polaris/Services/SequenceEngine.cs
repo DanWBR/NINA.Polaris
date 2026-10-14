@@ -551,7 +551,7 @@ public class SequenceEngine {
                     var (flipRa, flipDec) = !isCalibration && _meridianFlip.Settings.Enabled
                         ? FlipTarget(item) : (null, null);
                     if (flipRa.HasValue && flipDec.HasValue) {
-                        var hold = _meridianFlip.WaitBeforeExposure(flipRa.Value, item.Exposure);
+                        var hold = _meridianFlip.WaitBeforeExposure(flipRa.Value, flipDec.Value, item.Exposure);
                         if (hold > TimeSpan.Zero) {
                             _logger.LogInformation(
                                 "Holding {Sec:F0}s before frame {Frame} of '{Name}': a {Exp:F0}s "
@@ -560,7 +560,7 @@ public class SequenceEngine {
                             WaitingFor = "Waiting for the meridian flip point";
                             try { await Task.Delay(hold, ct); } finally { WaitingFor = null; }
                         }
-                        if (_meridianFlip.ShouldFlipNow(flipRa.Value)) {
+                        if (_meridianFlip.ShouldFlipNow(flipRa.Value, flipDec.Value)) {
                             _logger.LogInformation("Meridian flip due for target {Name}, executing", item.Name);
                             await _meridianFlip.ExecuteFlipAsync(flipRa.Value, flipDec.Value, ct);
                         }

@@ -7196,7 +7196,14 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <div class="equip-install-banner"
                                  x-show="cameraDriverInfo && !cameraDriverInfo.available"
                                  x-cloak>
-                                <span x-text="cameraDriverInfo?.name + ' DLLs not found on this host.'"></span>
+                                <span x-show="!cameraDriverInfo?.quarantined"
+                                      x-text="cameraDriverInfo?.name + ' DLLs not found on this host.'"></span>
+                                <!-- The SDK crashed Polaris once and was switched off so the
+                                     server would not restart into the same crash forever. -->
+                                <span x-show="cameraDriverInfo?.quarantined"
+                                      x-text="cameraDriverInfo?.quarantined"></span>
+                                <button class="btn btn-sm" x-show="cameraDriverInfo?.quarantined"
+                                        @click="reEnableCameraDriver()">Turn it back on</button>
                                 <!-- Canon's licence keeps EDSDK out of Polaris: the operator
                                      downloads it, and this puts the right DLLs in place. -->
                                 <label class="btn btn-sm" x-show="cameraDriver === 'canon-edsdk'"
@@ -25621,7 +25628,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261013-edsdk"></script>
+    <script src="/js/app.js?v=20261014-sdkguard"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

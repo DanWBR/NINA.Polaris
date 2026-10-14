@@ -13,6 +13,7 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using NINA.Polaris.Services;
+using NINA.Image.Interfaces;
 
 namespace NINA.Polaris.Endpoints;
 
@@ -43,7 +44,8 @@ public static class MeridianFlipEndpoints {
             double? timeToSetHours = null;
 
             if (equip.Telescope != null && equip.Telescope.IsConnected) {
-                var raHours = equip.Telescope.RightAscension;
+                // Hour angle is measured on the sky of date.
+                var (raHours, decOfDate) = equip.Telescope.PointingOfDate();
                 lst = MeridianFlipService.ComputeLstHours(DateTime.UtcNow, profile.Active.Longitude);
                 hourAngle = lst.Value - raHours;
                 while (hourAngle > 12) hourAngle -= 24;
@@ -51,7 +53,7 @@ public static class MeridianFlipEndpoints {
                 timeToMeridianHours = MeridianFlipService.HoursUntilMeridian(raHours, DateTime.UtcNow, profile.Active.Longitude);
                 timeToFlipHours = MeridianFlipService.HoursUntilFlip(
                     raHours, DateTime.UtcNow, profile.Active.Longitude, mf.Settings.MinutesAfterMeridian);
-                var decDeg = equip.Telescope.Declination;
+                var decDeg = decOfDate;
                 if (!double.IsNaN(decDeg)) {
                     timeToSetHours = AltitudeService.HoursUntilSet(
                         raHours, decDeg, DateTime.UtcNow,

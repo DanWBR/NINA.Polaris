@@ -53,8 +53,14 @@ public interface ITelescope {
     string DeviceName { get; }
     bool IsConnected { get; }
 
-    /// <summary>Current pointing in JNow equatorial coordinates.
-    /// RA in hours (0..24), Dec in degrees (-90..+90).</summary>
+    /// <summary>Current pointing in J2000 equatorial coordinates, the frame
+    /// of the catalogs, the SKY map and plate solving. RA in hours (0..24),
+    /// Dec in degrees (-90..+90). A backend whose mount works of date (JNow:
+    /// INDI's EQUATORIAL_EOD_COORD, an ASCOM driver whose EquatorialSystem is
+    /// topocentric) converts at its own boundary with
+    /// <c>NINA.Core.Utility.EquatorialEpoch</c>, so nothing above the backend
+    /// ever handles JNow. Code that needs the frame of date (hour angle,
+    /// altitude, meridian) converts from these explicitly.</summary>
     double RightAscension { get; }
     double Declination { get; }
 
@@ -82,12 +88,12 @@ public interface ITelescope {
     Task ConnectAsync(CancellationToken ct = default);
     Task DisconnectAsync(CancellationToken ct = default);
 
-    /// <summary>Slew to the given JNow coordinates and start tracking
+    /// <summary>Slew to the given J2000 coordinates and start tracking
     /// at the mount's current tracking rate (typically sidereal).</summary>
     Task SlewAsync(double ra, double dec, CancellationToken ct = default);
 
     /// <summary>Sync, tell the mount that its current physical pointing
-    /// equals the given JNow coordinates. Used by the plate-solve
+    /// equals the given J2000 coordinates. Used by the plate-solve
     /// Slew &amp; Center loop after a successful solve.</summary>
     Task SyncAsync(double ra, double dec, CancellationToken ct = default);
 

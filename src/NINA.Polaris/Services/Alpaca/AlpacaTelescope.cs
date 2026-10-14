@@ -56,6 +56,11 @@ public sealed class AlpacaTelescope : ITelescope, IDisposable {
     // Capability flags, frozen on ConnectAsync.
     private bool _canSync, _canPark, _canUnpark, _canSetTracking, _canPulseGuide;
 
+    // The driver's EquatorialSystem, read at connect: whether its RA/Dec are
+    // of date (JNow, nearly every driver) or J2000. Polaris speaks J2000
+    // (ITelescope), so positions are converted here when the driver is JNow.
+    private bool _mountIsJNow = true;
+
     public AlpacaTelescope(string host, int port, int deviceNumber) {
         _client = new AlpacaClient(host, port, "telescope", deviceNumber);
     }
@@ -122,6 +127,10 @@ public sealed class AlpacaTelescope : ITelescope, IDisposable {
         _canUnpark       = await SafeBool("canunpark", ct);
         _canSetTracking  = await SafeBool("cansettracking", ct);
         _canPulseGuide   = await SafeBool("canpulseguide", ct);
+        try {
+            _mountIsJNow = NINA.Core.Utility.EquatorialEpoch.AscomSystemIsJNow(
+                await _client.GetAsync<int>("equatorialsystem", ct));
+        } catch { _mountIsJNow = true; }
 
         // 4. Prime the cache before flipping the connected flag so
         //    callers reading the properties right after ConnectAsync
@@ -157,13 +166,14 @@ public sealed class AlpacaTelescope : ITelescope, IDisposable {
     // ---- ITelescope: slew / sync / abort ----
 
     /// <summary>
-    /// Slew to the given JNow coordinates and start tracking. Issues
+    /// Slew to the given J2000 coordinates and start tracking. Issues
     /// <c>slewtocoordinatesasync</c>, then polls <c>slewing</c> every
     /// 500 ms until it goes false (success) OR the caller cancels
     /// (we send <c>abortslew</c> on cancel) OR the 60 s safety timeout
     /// fires.
     /// </summary>
     public async Task SlewAsync(double ra, double dec, CancellationToken ct = default) {
+        (ra, dec) = NINA.Core.Utility.EquatorialEpoch.ToMount(ra, dec, _mountIsJNow);
         await _client.PutAsync("slewtocoordinatesasync", new Dictionary<string, string> {
             ["RightAscension"] = ra.ToString(CultureInfo.InvariantCulture),
             ["Declination"] = dec.ToString(CultureInfo.InvariantCulture)
@@ -198,6 +208,7 @@ public sealed class AlpacaTelescope : ITelescope, IDisposable {
     /// ack pattern <c>IndiTelescope.SyncAsync</c> already implements.
     /// </summary>
     public async Task SyncAsync(double ra, double dec, CancellationToken ct = default) {
+        (ra, dec) = NINA.Core.Utility.EquatorialEpoch.ToMount(ra, dec, _mountIsJNow);
         await _client.PutAsync("synctocoordinates", new Dictionary<string, string> {
             ["RightAscension"] = ra.ToString(CultureInfo.InvariantCulture),
             ["Declination"] = dec.ToString(CultureInfo.InvariantCulture)
@@ -357,8 +368,9 @@ public sealed class AlpacaTelescope : ITelescope, IDisposable {
     }
 
     private async Task RefreshOnceAsync(CancellationToken ct) {
-        _ra          = await SafeDouble("rightascension", ct);
-        _dec         = await SafeDouble("declination", ct);
+        var ra       = await SafeDouble("rightascension", ct);
+        var dec      = await SafeDouble("declination", ct);
+        (_ra, _dec)  = NINA.Core.Utility.EquatorialEpoch.FromMount(ra, dec, _mountIsJNow);
         _alt         = await SafeDouble("altitude", ct);
         _az          = await SafeDouble("azimuth", ct);
         _isSlewing   = await SafeBool("slewing", ct);

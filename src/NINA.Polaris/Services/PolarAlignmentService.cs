@@ -470,8 +470,15 @@ public class PolarAlignmentService {
                 return;
             }
 
-            ra0 = telescope.RightAscension;
-            dec0 = telescope.Declination;
+            // TPPA turns the RA axis alone, so the three points share one
+            // Dec in the mount's own frame, of date. The mount reports and
+            // takes J2000 (ITelescope); held constant in J2000, the Dec of
+            // date would shift with RA by up to ~0.1° and the mount would
+            // move its Dec axis between points. So ra0 / dec0 and the
+            // rotation are of date, and each slew converts back to J2000
+            // just before the call (SlewOfDateAsync).
+            (ra0, dec0) = NINA.Core.Utility.EquatorialEpoch.J2000ToJNow(
+                telescope.RightAscension, telescope.Declination, DateTime.UtcNow);
 
             // 2. Three solved points -----------------------------------------
             // Slew step measured in degrees; mount RA is in hours, so
@@ -510,7 +517,7 @@ public class PolarAlignmentService {
                 // make sure we know our exact pointing.
                 SetPhase(job, MovingPhaseFor(i));
                 _notify.Push("info", $"Polar align: slewing to point {i + 1}/3 (RA {targetRa:F3}h)", 2000);
-                await telescope.SlewAsync(targetRa, dec0, ct);
+                await SlewOfDateAsync(telescope, targetRa, dec0, ct);
 
                 // CRITICAL: SlewAsync only waits for the driver to ACK the
                 // coord write (slew accepted/started), NOT for the mount to
@@ -582,7 +589,10 @@ public class PolarAlignmentService {
                 // at dec0 for all three points. Log both frames per point
                 // so a bad session can be diagnosed from the LOG panel.
                 double mntRa = double.NaN, mntDec = double.NaN;
-                try { mntRa = telescope.RightAscension; mntDec = telescope.Declination; } catch { }
+                try {
+                    (mntRa, mntDec) = NINA.Core.Utility.EquatorialEpoch.J2000ToJNow(
+                        telescope.RightAscension, telescope.Declination, DateTime.UtcNow);
+                } catch { }
                 mountDecReadings.Add(mntDec);
                 _logger.LogInformation(
                     "Polar align point {N}: mount reports RA {MRa}h Dec {MDec}° (commanded RA {CRa}h Dec {CDec}°); solved RA {SRa}h Dec {SDec}° (of-date)",
@@ -643,7 +653,7 @@ public class PolarAlignmentService {
             // 4. Cosmetic slew home -----------------------------------------
             SetPhase(job, PolarAlignmentPhase.SlewingHome);
             try {
-                await telescope.SlewAsync(ra0, dec0, ct);
+                await SlewOfDateAsync(telescope, ra0, dec0, ct);
                 await WaitForSlewCompleteAsync(telescope, ct);
             } catch (OperationCanceledException) { throw; }
             catch (Exception ex) {
@@ -722,7 +732,7 @@ public class PolarAlignmentService {
             // Best-effort slew home so the mount isn't stranded.
             try {
                 if (_equip.Telescope != null && ra0 > 0)
-                    await _equip.Telescope.SlewAsync(ra0, dec0, CancellationToken.None);
+                    await SlewOfDateAsync(_equip.Telescope, ra0, dec0, CancellationToken.None);
             } catch { /* shutdown, eat it */ }
         } catch (Exception ex) {
             _logger.LogError(ex, "Polar alignment RunAsync crashed");
@@ -810,7 +820,14 @@ public class PolarAlignmentService {
     };
 
     /// <summary>Wrap an RA value back into [0, 24) hours. Adding
-    /// slewStepHours can push past 24h near RA=23h.</summary>
+    /// slewStepHours can push past 24h near RA=23h.</summary>
+    /// <summary>Slew to a position given of date: TPPA computes its points
+    /// in the mount's own frame and the mount interface takes J2000.</summary>
+    private static Task SlewOfDateAsync(ITelescope telescope, double raOfDate, double decOfDate, CancellationToken ct) {
+        var (ra, dec) = NINA.Core.Utility.EquatorialEpoch.JNowToJ2000(raOfDate, decOfDate, DateTime.UtcNow);
+        return telescope.SlewAsync(ra, dec, ct);
+    }
+
     private static double NormalizeRaHours(double ra) {
         var r = ra % 24.0;
         return r < 0 ? r + 24.0 : r;
@@ -971,16 +988,10 @@ public class PolarAlignmentService {
                 SetPhase(job, PolarAlignmentPhase.RudimentarySlewing);
                 _notify.Push("info",
                     $"Rudimentary align: slewing to {(job.TargetName ?? "target")}", 2500);
-                // Targets come from the catalog in J2000; INDI's
-                // EQUATORIAL_EOD_COORD is of-date (JNow). Slewing the raw
-                // J2000 numbers points the mount ~0.35° off, which the
-                // single-target error would then misread as polar error
-                // that never zeroes out. Precess to date for the slew.
-                // (The error math still compares J2000 target vs J2000
-                // solve, where the epoch offset cancels.)
-                var (slewRa, slewDec) = PolarAlignmentMath.PrecessJ2000ToDate(
-                    job.TargetRaHours.Value, job.TargetDecDeg.Value, DateTime.UtcNow);
-                await telescope.SlewAsync(slewRa, slewDec, ct);
+                // Targets come from the catalog in J2000, the frame the mount
+                // interface takes; the backend converts to the mount's own.
+                // (The error math compares J2000 target vs J2000 solve.)
+                await telescope.SlewAsync(job.TargetRaHours.Value, job.TargetDecDeg.Value, ct);
                 // Same fix as TPPA: block until the mount actually arrives,
                 // not just until the slew command is acknowledged, or we
                 // capture + solve mid-slew at the wrong pointing.

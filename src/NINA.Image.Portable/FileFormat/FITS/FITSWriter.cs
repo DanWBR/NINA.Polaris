@@ -196,6 +196,8 @@ public static class FITSWriter {
         if (meta.Telescope.RightAscension != 0 || meta.Telescope.Declination != 0) {
             Add(cards, "RA", Fmt(RaToDeg(meta.Telescope.RightAscension)), "Mount RA (deg)");
             Add(cards, "DEC", Fmt(meta.Telescope.Declination), "Mount Dec (deg)");
+            // The mount reports J2000 (ITelescope), like the target and every solve.
+            Add(cards, "EQUINOX", Fmt(2000.0), "Equinox of RA/DEC");
         }
         if (meta.Telescope.SideOfPier != PierSide.pierUnknown) {
             AddStr(cards, "PIERSIDE",

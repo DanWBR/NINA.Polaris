@@ -102,12 +102,21 @@ public static class QhyRegistry {
     /// <summary>True when the QHY native lib loads on this host. The probe
     /// is GetQHYCCDSDKVersion, which needs no InitQHYCCDResource and touches
     /// no USB device.</summary>
+    /// <summary>Name the SDK goes by in <see cref="NativeCallGuard"/>.</summary>
+    public const string GuardName = "qhy";
+
+    /// <summary>Why the SDK is switched off after it crashed Polaris, or null.</summary>
+    public static string? QuarantineReason => NativeCallGuard.QuarantineReason(GuardName);
+
     public static bool IsAvailable {
         get {
             try {
                 EnsureResolver();
-                if (GetQHYCCDSDKVersion(out var y, out var m, out var d, out _) == QHYCCD_SUCCESS)
-                    SdkVersion = $"{y:00}.{m:00}.{d:00}";
+                if (QuarantineReason != null) return false;
+                NativeCallGuard.Run(GuardName, "loading the SDK", () => {
+                    if (GetQHYCCDSDKVersion(out var y, out var m, out var d, out _) == QHYCCD_SUCCESS)
+                        SdkVersion = $"{y:00}.{m:00}.{d:00}";
+                });
                 return true;
             } catch (DllNotFoundException) { return false; }
             catch (BadImageFormatException) { return false; }
@@ -164,8 +173,10 @@ public static class QhyRegistry {
     internal static IReadOnlyList<QhyCameraId> Scan() {
         EnsureResolver();
         lock (_resource) {
-            EnsureInitializedLocked();
-            return ScanLocked();
+            return NativeCallGuard.Run(GuardName, "listing cameras", () => {
+                EnsureInitializedLocked();
+                return (IReadOnlyList<QhyCameraId>)ScanLocked();
+            });
         }
     }
 
@@ -203,29 +214,33 @@ public static class QhyRegistry {
                 shared.Users++;
                 return (shared.Handle, shared.Model);
             }
-            EnsureInitializedLocked();
-            string model = "";
-            if (!_scannedIds.Contains(id) || _open.Count == 0) {
-                foreach (var c in ScanLocked())
-                    if (c.Id == id) model = c.Model;
-            }
-            if (!_scannedIds.Contains(id)) {
-                ReleaseIfIdleLocked();
-                throw new InvalidOperationException($"QHY camera '{id}' not found.");
-            }
-            var h = OpenQHYCCD(id);
-            if (h == IntPtr.Zero) {
-                ReleaseIfIdleLocked();
-                return (IntPtr.Zero, model);
-            }
-            if (string.IsNullOrWhiteSpace(model)) {
-                var modelBuf = new byte[ModelBufferLength];
-                model = GetQHYCCDModel(id, modelBuf) == QHYCCD_SUCCESS ? CString(modelBuf) : "";
-            }
-            if (string.IsNullOrWhiteSpace(model)) model = ModelFromId(id);
-            _open[id] = new SharedHandle { Id = id, Handle = h, Model = model, Users = 1 };
-            return (h, model);
+            return NativeCallGuard.Run(GuardName, "opening the camera", () => OpenLocked(id));
         }
+    }
+
+    private static (IntPtr Handle, string Model) OpenLocked(string id) {
+        EnsureInitializedLocked();
+        string model = "";
+        if (!_scannedIds.Contains(id) || _open.Count == 0) {
+            foreach (var c in ScanLocked())
+                if (c.Id == id) model = c.Model;
+        }
+        if (!_scannedIds.Contains(id)) {
+            ReleaseIfIdleLocked();
+            throw new InvalidOperationException($"QHY camera '{id}' not found.");
+        }
+        var h = OpenQHYCCD(id);
+        if (h == IntPtr.Zero) {
+            ReleaseIfIdleLocked();
+            return (IntPtr.Zero, model);
+        }
+        if (string.IsNullOrWhiteSpace(model)) {
+            var modelBuf = new byte[ModelBufferLength];
+            model = GetQHYCCDModel(id, modelBuf) == QHYCCD_SUCCESS ? CString(modelBuf) : "";
+        }
+        if (string.IsNullOrWhiteSpace(model)) model = ModelFromId(id);
+        _open[id] = new SharedHandle { Id = id, Handle = h, Model = model, Users = 1 };
+        return (h, model);
     }
 
     /// <summary>Give back a handle Open returned. CloseQHYCCD runs when the

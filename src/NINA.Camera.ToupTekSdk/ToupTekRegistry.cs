@@ -46,11 +46,22 @@ public static class ToupTekRegistry {
         return NativeLibrary.TryLoad(libraryName, assembly, searchPath, out var sys) ? sys : IntPtr.Zero;
     }
 
+    /// <summary>Name the SDK goes by in <see cref="NativeCallGuard"/>.</summary>
+    public const string GuardName = "touptek";
+
+    /// <summary>Why the SDK is switched off after it crashed Polaris, or null.</summary>
+    public static string? QuarantineReason => NativeCallGuard.QuarantineReason(GuardName);
+
+    /// <summary>True when the native library loads. Only its version string is
+    /// read: the probe runs every time the driver list is shown, and it used
+    /// to enumerate the USB bus each time (Toupcam.EnumV2), the native call
+    /// most likely to fault.</summary>
     public static bool IsAvailable {
         get {
             try {
                 EnsureResolver();
-                _ = Toupcam.EnumV2();
+                if (QuarantineReason != null) return false;
+                _ = NativeCallGuard.Run(GuardName, "loading the SDK", Toupcam.Version);
                 return true;
             } catch (DllNotFoundException) { return false; }
             catch (BadImageFormatException) { return false; }

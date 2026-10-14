@@ -136,9 +136,13 @@ public static class MountSlewSafety {
             double latDeg, double lonDeg, DateTime utc,
             double minAltFloorDeg,
             double largeMoveDeg = LargeMoveDeg) {
+        // Mount and target are J2000 (ITelescope, catalogs): compared with each
+        // other as they are, and taken to the sky of date for the hour angle
+        // and the altitude.
+        var (targetRaNow, targetDecNow) = NINA.Core.Utility.EquatorialEpoch.J2000ToJNow(targetRaHours, targetDecDeg, utc);
         double lst = MeridianFlipService.ComputeLstHours(utc, lonDeg);
-        double haMin = TargetHaMinutes(targetRaHours, lst);
-        var (targetAlt, _) = AltitudeService.RaDecToAltAz(targetRaHours, targetDecDeg, utc, latDeg, lonDeg);
+        double haMin = TargetHaMinutes(targetRaNow, lst);
+        var (targetAlt, _) = AltitudeService.RaDecToAltAz(targetRaNow, targetDecNow, utc, latDeg, lonDeg);
 
         bool haveMount = !double.IsNaN(mountRaHours) && !double.IsNaN(mountDecDeg)
             && mountRaHours >= 0 && mountRaHours <= 24 && mountDecDeg >= -90 && mountDecDeg <= 90;

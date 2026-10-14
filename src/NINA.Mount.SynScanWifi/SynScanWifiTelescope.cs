@@ -98,16 +98,19 @@ public sealed class SynScanWifiTelescope : ITelescope, IDisposable {
     private bool South => (_latitude ?? 0) < 0;
     private bool Ready => _isConnected && _havePosition && _latitude.HasValue && _longitude.HasValue;
 
-    public double RightAscension {
-        get {
-            if (!Ready) return double.NaN;
-            var (ha, _, _) = Sky();
-            double ra = (Lst() - ha) % 24;
-            return ra < 0 ? ra + 24 : ra;
-        }
-    }
+    // The axes give hour angle and declination of date, so RA = LST - HA is
+    // JNow. Polaris speaks J2000 (ITelescope): converted here on the way out,
+    // and Slew / Sync convert their J2000 input back to JNow before the HA.
+    public double RightAscension => PointingJ2000().RaHours;
+    public double Declination => PointingJ2000().DecDeg;
 
-    public double Declination => Ready ? Sky().DecDeg : double.NaN;
+    private (double RaHours, double DecDeg) PointingJ2000() {
+        if (!Ready) return (double.NaN, double.NaN);
+        var (ha, dec, _) = Sky();
+        double ra = (Lst() - ha) % 24;
+        if (ra < 0) ra += 24;
+        return NINA.Core.Utility.EquatorialEpoch.JNowToJ2000(ra, dec, DateTime.UtcNow);
+    }
     public double Altitude => Ready ? EqAxisGeometry.Altitude(Sky().HaHours, Sky().DecDeg, _latitude!.Value) : double.NaN;
     public double Azimuth => Ready ? EqAxisGeometry.Azimuth(Sky().HaHours, Sky().DecDeg, _latitude!.Value) : double.NaN;
     public bool IsTracking => _trackingWanted && !_gotoInProgress
@@ -267,6 +270,7 @@ public sealed class SynScanWifiTelescope : ITelescope, IDisposable {
 
     public async Task SlewAsync(double ra, double dec, CancellationToken ct = default) {
         EnsureReady();
+        (ra, dec) = NINA.Core.Utility.EquatorialEpoch.J2000ToJNow(ra, dec, DateTime.UtcNow);
         double ha = EqAxisGeometry.WrapHours(Lst() - ra);
         double alt = EqAxisGeometry.Altitude(ha, dec, _latitude!.Value);
         if (alt < 0)
@@ -281,6 +285,7 @@ public sealed class SynScanWifiTelescope : ITelescope, IDisposable {
 
     public async Task SyncAsync(double ra, double dec, CancellationToken ct = default) {
         EnsureReady();
+        (ra, dec) = NINA.Core.Utility.EquatorialEpoch.J2000ToJNow(ra, dec, DateTime.UtcNow);
         int posRa = DecodeUInt(await AskAsync('j', Ra, ct: ct));
         int posDec = DecodeUInt(await AskAsync('j', Dec, ct: ct));
         double rawRa = EqAxisGeometry.StepsToDegrees(posRa, _cprRa);
