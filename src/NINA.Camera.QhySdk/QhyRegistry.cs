@@ -125,11 +125,28 @@ public static class QhyRegistry {
     // camera closes, never while one is open: releasing it tears down the
     // handles of every camera at once. This is the same lifecycle N.I.N.A.'s
     // QHY driver uses.
+    //
+    // A camera's filter wheel (on its CFW port, or built in as on the
+    // MiniCAM8) is driven through the camera's own handle, so the camera and
+    // its wheel share one: the first to open it gets a fresh handle, the
+    // second the same one, and CloseQHYCCD runs when the last of them lets
+    // go. They also share the lock that serialises calls on that handle, as
+    // the SDK is not thread-safe per camera.
 
     private static readonly object _resource = new();
     private static bool _initialized;
-    private static int _openCameras;
     private static readonly HashSet<string> _scannedIds = new(StringComparer.Ordinal);
+
+    private sealed class SharedHandle {
+        public required string Id;
+        public required IntPtr Handle;
+        public required string Model;
+        public int Users;
+        public bool Initialized;
+        public readonly object Calls = new();
+    }
+
+    private static readonly Dictionary<string, SharedHandle> _open = new(StringComparer.Ordinal);
 
     public record QhyCameraId(string Id, string Model);
 
@@ -176,13 +193,19 @@ public static class QhyRegistry {
     /// reported, so this scans first, except when another QHY camera is
     /// already open and the id is already in the table: a rescan then is a
     /// needless trip over a bus that camera is using. Returns the handle (zero
-    /// when OpenQHYCCD refused) and the model name.</summary>
+    /// when OpenQHYCCD refused) and the model name. A camera this process
+    /// already has open returns the same handle again; every Open needs its
+    /// own Close.</summary>
     internal static (IntPtr Handle, string Model) Open(string id) {
         EnsureResolver();
         lock (_resource) {
+            if (_open.TryGetValue(id, out var shared)) {
+                shared.Users++;
+                return (shared.Handle, shared.Model);
+            }
             EnsureInitializedLocked();
             string model = "";
-            if (!_scannedIds.Contains(id) || _openCameras == 0) {
+            if (!_scannedIds.Contains(id) || _open.Count == 0) {
                 foreach (var c in ScanLocked())
                     if (c.Id == id) model = c.Model;
             }
@@ -195,29 +218,56 @@ public static class QhyRegistry {
                 ReleaseIfIdleLocked();
                 return (IntPtr.Zero, model);
             }
-            _openCameras++;
             if (string.IsNullOrWhiteSpace(model)) {
                 var modelBuf = new byte[ModelBufferLength];
                 model = GetQHYCCDModel(id, modelBuf) == QHYCCD_SUCCESS ? CString(modelBuf) : "";
             }
             if (string.IsNullOrWhiteSpace(model)) model = ModelFromId(id);
+            _open[id] = new SharedHandle { Id = id, Handle = h, Model = model, Users = 1 };
             return (h, model);
         }
     }
 
-    /// <summary>Close a handle Open returned, and release the SDK resource
-    /// when it was the last one.</summary>
+    /// <summary>Give back a handle Open returned. CloseQHYCCD runs when the
+    /// last user lets go, and the SDK resource is released when that was the
+    /// last open camera.</summary>
     internal static void Close(IntPtr handle) {
         if (handle == IntPtr.Zero) return;
         lock (_resource) {
+            var shared = Find(handle);
+            if (shared != null) {
+                if (--shared.Users > 0) return;
+                _open.Remove(shared.Id);
+            }
             try { CloseQHYCCD(handle); } catch { }
-            if (_openCameras > 0) _openCameras--;
             ReleaseIfIdleLocked();
         }
     }
 
+    /// <summary>The lock every SDK call on <paramref name="handle"/> goes
+    /// through, shared by the camera and its filter wheel.</summary>
+    internal static object CallLock(IntPtr handle) {
+        lock (_resource) return Find(handle)?.Calls ?? new object();
+    }
+
+    /// <summary>Whether InitQHYCCD has run on this handle since it was
+    /// opened: the wheel skips it when the camera already did it.</summary>
+    internal static bool IsCameraInitialized(IntPtr handle) {
+        lock (_resource) return Find(handle)?.Initialized ?? false;
+    }
+
+    internal static void MarkCameraInitialized(IntPtr handle) {
+        lock (_resource) { var s = Find(handle); if (s != null) s.Initialized = true; }
+    }
+
+    private static SharedHandle? Find(IntPtr handle) {
+        foreach (var s in _open.Values)
+            if (s.Handle == handle) return s;
+        return null;
+    }
+
     private static void ReleaseIfIdleLocked() {
-        if (!_initialized || _openCameras > 0) return;
+        if (!_initialized || _open.Count > 0) return;
         try { ReleaseQHYCCDResource(); } catch { }
         _initialized = false;
         // A fresh InitQHYCCDResource starts with an empty table.

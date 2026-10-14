@@ -32,4 +32,36 @@ public static class QhyDiscovery {
             list.Add(new QhyCameraEntry(c.Id, c.Model, c.Id));
         return list;
     }
+
+    /// <summary>The QHY cameras that carry a filter wheel, with its slot count
+    /// in the model ("QHYminiCAM8 7-slot filter wheel"). Each camera is opened
+    /// to ask: through the shared handle when Polaris already has it open, and
+    /// skipped when something else (an INDI driver) holds it.</summary>
+    public static IReadOnlyList<QhyCameraEntry> EnumerateFilterWheels() {
+        QhyRegistry.EnsureResolver();
+        var list = new List<QhyCameraEntry>();
+        IReadOnlyList<QhyRegistry.QhyCameraId> found;
+        try { found = QhyRegistry.Scan(); }
+        catch { return list; }
+        foreach (var c in found) {
+            IntPtr h = IntPtr.Zero;
+            try {
+                (h, var model) = QhyRegistry.Open(c.Id);
+                if (h == IntPtr.Zero) continue;
+                int slots;
+                lock (QhyRegistry.CallLock(h)) {
+                    if (Native.QhyNative.IsQHYCCDCFWPlugged(h) != Native.QhyNative.QHYCCD_SUCCESS) continue;
+                    slots = (int)Math.Round(Native.QhyNative.GetQHYCCDParam(h, Native.QhyNative.CONTROL_ID.CONTROL_CFWSLOTSNUM));
+                }
+                if (slots <= 0) continue;
+                var name = string.IsNullOrWhiteSpace(model) ? c.Model : model;
+                list.Add(new QhyCameraEntry(c.Id, $"{name} {slots}-slot filter wheel", c.Id));
+            } catch {
+                // One camera that will not answer must not hide the others.
+            } finally {
+                QhyRegistry.Close(h);
+            }
+        }
+        return list;
+    }
 }

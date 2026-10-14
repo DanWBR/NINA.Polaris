@@ -829,6 +829,16 @@ public class EquipmentManager : IDisposable {
             return DiscoverAscomDrivers(
                 NINA.Ascom.Com.AscomComRegistry.DeviceType.FilterWheel);
         }
+        if (driver == "qhy-sdk") {
+            try {
+                return NINA.Camera.QhySdk.QhyDiscovery.EnumerateFilterWheels()
+                    .Select(e => new DiscoveredCamera(e.Id, e.Model, e.Info))
+                    .ToList();
+            } catch (Exception ex) {
+                _logger.LogWarning(ex, "QHY SDK filter wheel discovery failed");
+                return Array.Empty<DiscoveredCamera>();
+            }
+        }
         return Array.Empty<DiscoveredCamera>();
     }
 
@@ -1078,9 +1088,11 @@ public class EquipmentManager : IDisposable {
         "indi" => new IndiFilterWheel(_indiClient, deviceId),
         "ascom-com" => CreateAscomFilterWheel(deviceId),
         "alpaca" => AlpacaFilterWheel.FromDeviceId(deviceId),
+        // A QHY wheel is driven through its camera; the id is the camera's.
+        "qhy-sdk" => new NINA.Camera.QhySdk.QhyFilterWheel(deviceId),
         _ => throw new NotSupportedException(
             $"Filter wheel driver '{driver}' is not implemented yet. " +
-            "Use 'indi', 'alpaca', or 'ascom-com'."),
+            "Use 'indi', 'alpaca', 'ascom-com' or 'qhy-sdk'."),
     };
 
     private static IFilterWheel CreateAscomFilterWheel(string progId) {

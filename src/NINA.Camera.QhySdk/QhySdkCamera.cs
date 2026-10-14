@@ -74,9 +74,11 @@ public sealed class QhySdkCamera : ICamera {
     // SDK is not thread-safe per camera, and the status tick reads the
     // temperature and cooler power from another thread while a capture runs.
     // A still holds _sdk only around each call, never across the exposure
-    // wait, so those reads keep flowing during a long sub.
+    // wait, so those reads keep flowing during a long sub. The camera's filter
+    // wheel makes calls on the same handle, so _sdk is the registry's lock for
+    // that handle, taken over at connect.
     private readonly object _gate = new();
-    private readonly object _sdk = new();
+    private object _sdk = new();
     private CancellationTokenSource? _captureCts;
 
     public QhySdkCamera(string deviceId) {
@@ -164,11 +166,13 @@ public sealed class QhySdkCamera : ICamera {
                     "The camera may already be in use by another process. If an INDI " +
                     "driver for this camera is connected, disconnect it (or remove it " +
                     "from the running indiserver profile) before using the native SDK backend.");
+            _sdk = QhyRegistry.CallLock(h);
             try {
                 lock (_sdk) {
                     _handle = h;
                     InitCameraLocked();
                 }
+                QhyRegistry.MarkCameraInitialized(h);
             } catch {
                 lock (_sdk) { QhyRegistry.Close(h); _handle = IntPtr.Zero; }
                 throw;
