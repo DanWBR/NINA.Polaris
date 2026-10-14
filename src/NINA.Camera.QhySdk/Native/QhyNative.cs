@@ -69,6 +69,7 @@ internal static class QhyNative {
         CONTROL_CURTEMP = 14,          // degrees C
         CONTROL_CURPWM = 15,           // 0..255 on most models
         CONTROL_MANULPWM = 16,
+        CONTROL_CFWPORT = 17,          // the camera's filter wheel port
         CONTROL_COOLER = 18,
         CAM_COLOR = 20,                // IsQHYCCDControlAvailable returns the BAYER_ID
         CAM_BIN1X1MODE = 21,
@@ -76,6 +77,7 @@ internal static class QhyNative {
         CAM_BIN3X3MODE = 23,
         CAM_BIN4X4MODE = 24,
         CAM_IGNOREOVERSCAN_INTERFACE = 37,
+        CONTROL_CFWSLOTSNUM = 44,      // slots on the attached filter wheel
         CONTROL_DDR = 48,
         CAM_BIN6X6MODE = 75,
         CAM_BIN8X8MODE = 76,
@@ -121,6 +123,14 @@ internal static class QhyNative {
     public static extern uint GetQHYCCDSingleFrame(IntPtr handle, ref uint w, ref uint h, ref uint bpp, ref uint channels, byte[] imgdata);
     [DllImport(DLL, CallingConvention = CallingConvention.Winapi)] public static extern uint CancelQHYCCDExposingAndReadout(IntPtr handle);
     [DllImport(DLL, CallingConvention = CallingConvention.Winapi)] public static extern uint ControlQHYCCDTemp(IntPtr handle, double targettemp);
+    // The filter wheel on the camera's CFW port (or built in, as on the
+    // MiniCAM8) is driven through the camera's own handle. The order is the
+    // target slot as one ASCII hex digit ("0" = first slot); the status is
+    // the same digit once the wheel has stopped, and "N" (CFW2/CFW3) or "/"
+    // (A-series) while it moves.
+    [DllImport(DLL, CallingConvention = CallingConvention.Winapi)] public static extern uint IsQHYCCDCFWPlugged(IntPtr handle);
+    [DllImport(DLL, CallingConvention = CallingConvention.Winapi)] public static extern uint GetQHYCCDCFWStatus(IntPtr handle, byte[] status);
+    [DllImport(DLL, CallingConvention = CallingConvention.Winapi)] public static extern uint SendOrder2QHYCCDCFW(IntPtr handle, byte[] order, uint length);
     [DllImport(DLL, CallingConvention = CallingConvention.Winapi)]
     public static extern uint GetQHYCCDSDKVersion(out uint year, out uint month, out uint day, out uint subday);
 }

@@ -181,8 +181,8 @@ public static class FilterWheelEndpoints {
                 return Results.Ok(equip.GetAscomDrivers(
                     NINA.Ascom.Com.AscomComRegistry.DeviceType.FilterWheel));
             }
-            if (d == "alpaca") {
-                return Results.Ok(equip.GetDiscoveredFilterWheelsFor("alpaca"));
+            if (d == "alpaca" || d == "qhy-sdk") {
+                return Results.Ok(equip.GetDiscoveredFilterWheelsFor(d));
             }
             return Results.Ok(equip.GetDeviceNames()
                 .Select(n => new DiscoveredCamera(n, n, n))
@@ -208,6 +208,13 @@ public static class FilterWheelEndpoints {
                         ? $"Direct COM-interop. {n} driver(s) registered."
                         : "Install the ASCOM Platform + a filter-wheel driver."));
             }
+            // A QHY wheel on a camera's CFW port, or built in (MiniCAM8), through
+            // the camera's own SDK handle, so it works alongside the camera on
+            // the native QHY backend without INDI.
+            list.Add(new("qhy-sdk", "QHY (SDK, native)",
+                Available: NINA.Camera.QhySdk.QhyRegistry.IsAvailable,
+                Description: "A QHY filter wheel on a QHY camera's CFW port, or built into the camera " +
+                    "(MiniCAM8), through the native QHYCCD SDK. Pair it with the QHY (SDK, native) camera."));
             return Results.Ok(list);
         });
 
