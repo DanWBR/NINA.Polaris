@@ -12,6 +12,8 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using NINA.Image.NativeLibs;
+
 namespace NINA.Camera.QhySdk;
 
 /// <summary>Enumerate connected QHY cameras. Id is the SDK camera id
@@ -50,8 +52,10 @@ public static class QhyDiscovery {
                 if (h == IntPtr.Zero) continue;
                 int slots;
                 lock (QhyRegistry.CallLock(h)) {
-                    if (Native.QhyNative.IsQHYCCDCFWPlugged(h) != Native.QhyNative.QHYCCD_SUCCESS) continue;
-                    slots = (int)Math.Round(Native.QhyNative.GetQHYCCDParam(h, Native.QhyNative.CONTROL_ID.CONTROL_CFWSLOTSNUM));
+                    slots = NativeCallGuard.Run(QhyRegistry.GuardName, "looking for filter wheels", () =>
+                        Native.QhyNative.IsQHYCCDCFWPlugged(h) != Native.QhyNative.QHYCCD_SUCCESS
+                            ? 0
+                            : (int)Math.Round(Native.QhyNative.GetQHYCCDParam(h, Native.QhyNative.CONTROL_ID.CONTROL_CFWSLOTSNUM)));
                 }
                 if (slots <= 0) continue;
                 var name = string.IsNullOrWhiteSpace(model) ? c.Model : model;

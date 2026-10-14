@@ -12,6 +12,7 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using NINA.Image.NativeLibs;
 using NINA.Core.Enum;
 using NINA.Image.ImageData;
 using NINA.Image.Interfaces;
@@ -170,7 +171,7 @@ public sealed class QhySdkCamera : ICamera {
             try {
                 lock (_sdk) {
                     _handle = h;
-                    InitCameraLocked();
+                    NativeCallGuard.Run(QhyRegistry.GuardName, "initialising the camera", InitCameraLocked);
                 }
                 QhyRegistry.MarkCameraInitialized(h);
             } catch {

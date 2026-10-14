@@ -12,6 +12,8 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using NINA.Image.NativeLibs;
+
 namespace NINA.Camera.ToupTekSdk;
 
 /// <summary>Enumerate connected ToupTek cameras. Id is the SDK opaque device
@@ -24,7 +26,7 @@ public static class ToupTekDiscovery {
         ToupTekRegistry.EnsureResolver();
         var list = new List<ToupTekCameraEntry>();
         Toupcam.DeviceV2[] devs;
-        try { devs = Toupcam.EnumV2(); }
+        try { devs = NativeCallGuard.Run(ToupTekRegistry.GuardName, "listing cameras", Toupcam.EnumV2); }
         catch { return list; }
         if (devs == null) return list;
         foreach (var d in devs) {

@@ -546,6 +546,20 @@ public static class CameraEndpoints {
         group.MapGet("/drivers", (EquipmentManager equip)
             => Results.Ok(equip.GetAvailableCameraDrivers()));
 
+        // Turn a native SDK back on after Polaris switched it off for crashing
+        // the process (NativeCallGuard). The next call into it is guarded the
+        // same way, so a crash that is still there costs one restart again.
+        group.MapPost("/drivers/{driver}/re-enable", (string driver) => {
+            var sdk = (driver ?? "").Trim().ToLowerInvariant() switch {
+                "touptek-sdk" => NINA.Camera.ToupTekSdk.ToupTekRegistry.GuardName,
+                "qhy-sdk" => NINA.Camera.QhySdk.QhyRegistry.GuardName,
+                _ => null,
+            };
+            if (sdk == null) return Results.BadRequest(new { error = $"'{driver}' has no crash guard." });
+            var cleared = NINA.Image.NativeLibs.NativeCallGuard.Clear(sdk);
+            return Results.Ok(new { driver, reEnabled = cleared });
+        });
+
         // Per-driver camera discovery. For INDI: the device-name
         // list from the active connection. For vendor SDKs: the
         // SDK-specific enumeration call. Empty list when no cameras

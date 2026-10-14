@@ -35666,6 +35666,19 @@ function ninaApp() {
             }
         },
 
+        /// Lift the crash quarantine on the selected native SDK (the server
+        /// switched it off after it took Polaris down). The next call into it is
+        /// guarded again, so a crash that is still there costs one restart.
+        async reEnableCameraDriver() {
+            const id = this.cameraDriver;
+            try {
+                await this.apiPost(`/api/camera/drivers/${encodeURIComponent(id)}/re-enable`);
+                await this.loadCameraDrivers();
+            } catch (e) {
+                this.toastFail('Could not turn the driver back on', e);
+            }
+        },
+
         async loadCameraDrivers() {
             try {
                 this.cameraDrivers = await this.apiGet('/api/camera/drivers');

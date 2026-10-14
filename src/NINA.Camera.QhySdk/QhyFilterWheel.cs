@@ -13,6 +13,7 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using NINA.Image.Interfaces;
+using NINA.Image.NativeLibs;
 using static NINA.Camera.QhySdk.Native.QhyNative;
 
 namespace NINA.Camera.QhySdk;
@@ -84,8 +85,8 @@ public sealed class QhyFilterWheel : IFilterWheel {
                     "If an INDI driver is connected to this camera, disconnect it before using the native SDK.");
             try {
                 _sdk = QhyRegistry.CallLock(h);
-                int slots;
-                lock (_sdk) {
+                int slots = 0;
+                lock (_sdk) NativeCallGuard.Run(QhyRegistry.GuardName, "connecting the filter wheel", () => {
                     // The camera's own connect runs InitQHYCCD; a wheel
                     // connected on its own has to, or the CFW port does not
                     // answer.
@@ -100,7 +101,7 @@ public sealed class QhyFilterWheel : IFilterWheel {
                         throw new InvalidOperationException(
                             $"The QHY camera {model} reports no filter wheel. Check the wheel's cable and power.");
                     slots = (int)Math.Round(GetQHYCCDParam(h, CONTROL_ID.CONTROL_CFWSLOTSNUM));
-                }
+                });
                 if (slots is <= 0 or > 16)
                     throw new InvalidOperationException(
                         $"The QHY camera {model} reports a filter wheel with {slots} slots.");

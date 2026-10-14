@@ -433,13 +433,15 @@ public class EquipmentManager : IDisposable {
             Description: "QHY cameras via the native QHYCCD SDK" +
                 (qhyAvailable && qhyVersion != null ? $" ({qhyVersion})" : "") +
                 ". Direct still capture with cooling (bypasses INDI); no native video stream yet. " +
-                "Needs the libqhy package on Linux or the QHYCCD driver installer on Windows."));
+                "Needs the libqhy package on Linux or the QHYCCD driver installer on Windows.",
+            Quarantined: NINA.Camera.QhySdk.QhyRegistry.QuarantineReason));
         // ToupTek native SDK. Cross-platform (Linux arm64/x64 + Windows x64);
         // the high-fps path for ToupTek planetary cameras.
         list.Add(new("touptek-sdk", "ToupTek (SDK, native)",
             Available: NINA.Camera.ToupTekSdk.ToupTekRegistry.IsAvailable,
             Description: "ToupTek cameras via the native toupcam SDK. " +
-                "Direct, low-overhead path for high-fps video (bypasses INDI)."));
+                "Direct, low-overhead path for high-fps video (bypasses INDI).",
+            Quarantined: NINA.Camera.ToupTekSdk.ToupTekRegistry.QuarantineReason));
         // Altair native SDK (ToupTek-family OEM rebrand). Same cross-platform
         // coverage; high-fps path for Altair planetary cameras.
         list.Add(new("altair-sdk", "Altair (SDK, native)",
@@ -1398,7 +1400,11 @@ public class EquipmentManager : IDisposable {
 /// <summary>Describes one camera-driver kind exposed by the host.
 /// Used by <c>GET /api/camera/drivers</c> so the UI can populate the
 /// driver dropdown with the matching availability badges.</summary>
-public record CameraDriverInfo(string Id, string Name, bool Available, string Description);
+/// <param name="Quarantined">Why the driver's native SDK is switched off after
+/// it crashed Polaris (<see cref="NINA.Image.NativeLibs.NativeCallGuard"/>), or
+/// null.</param>
+public record CameraDriverInfo(string Id, string Name, bool Available, string Description,
+    string? Quarantined = null);
 
 /// <summary>One row in the per-driver camera-discovery dropdown. Id
 /// is what the UI passes back to <c>POST /api/camera/select</c>; the
