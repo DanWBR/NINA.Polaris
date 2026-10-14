@@ -174,8 +174,14 @@ public class MeridianFlipService {
         return ((lst % 24) + 24) % 24;
     }
 
+    /// <summary>The RA of date, the one the hour angle is measured on, of a
+    /// J2000 position (every RA Polaris holds above the mount backends is
+    /// J2000). The difference is about 1.4 minutes of hour angle in 2026.</summary>
+    public static double RaOfDate(double raJ2000Hours, double decJ2000Deg)
+        => NINA.Core.Utility.EquatorialEpoch.J2000ToJNow(raJ2000Hours, decJ2000Deg, DateTime.UtcNow).RaHours;
+
     /// <summary>
-    /// Hours until the given RA crosses the meridian (HA = 0).
+    /// Hours until the given RA of date crosses the meridian (HA = 0).
     ///   HA = LST − RA       (hours, signed in -12..+12)
     /// If HA &lt; 0, target is east of meridian (rising)  → time-to-meridian = -HA
     /// If HA &gt; 0, target is west of meridian (already passed) → time-to-next = 24 - HA
@@ -192,7 +198,8 @@ public class MeridianFlipService {
 
     /// <summary>
     /// Signed hours until the flip point (HA = MinutesAfterMeridian/60) for a
-    /// target at <paramref name="raHours"/>. Positive = the flip is still in
+    /// target at <paramref name="raHours"/>, an RA of date (see
+    /// <see cref="RaOfDate"/>). Positive = the flip is still in
     /// the future; negative = the target is already past the flip point (or a
     /// flip just happened). The UI shows a countdown when this is a small
     /// positive value; the auto-flip service triggers when it crosses 0.
@@ -223,11 +230,11 @@ public class MeridianFlipService {
     /// it returns is that remaining time. So a run gives up at most one
     /// exposure's worth of sky, once, at the flip.</para>
     /// </summary>
-    public TimeSpan WaitBeforeExposure(double raHours, double exposureSeconds) {
+    public TimeSpan WaitBeforeExposure(double raHours, double decDeg, double exposureSeconds) {
         if (!Settings.Enabled || exposureSeconds <= 0) return TimeSpan.Zero;
         if (_equip.Telescope == null || !_equip.Telescope.IsConnected) return TimeSpan.Zero;
 
-        double hours = HoursUntilFlip(raHours, DateTime.UtcNow,
+        double hours = HoursUntilFlip(RaOfDate(raHours, decDeg), DateTime.UtcNow,
             _profile.Active.Longitude, Settings.MinutesAfterMeridian);
         // Already past the flip point: ShouldFlipNow owns that case, and
         // holding here would only delay the flip it is about to perform.
@@ -243,14 +250,15 @@ public class MeridianFlipService {
     /// flip has completed since it did (see <see cref="FlippedSinceFlipPoint"/>).
     ///
     /// Returns false if no telescope, no settings, no target RA, or flip disabled.
+    /// The target is J2000, like every target Polaris holds.
     /// </summary>
-    public bool ShouldFlipNow(double targetRaHours) {
+    public bool ShouldFlipNow(double targetRaHours, double targetDecDeg) {
         if (!Settings.Enabled) return false;
         if (_equip.Telescope == null || !_equip.Telescope.IsConnected) return false;
 
         double lon = _profile.Active.Longitude;
         double lst = ComputeLstHours(DateTime.UtcNow, lon);
-        double ha = lst - targetRaHours;
+        double ha = lst - RaOfDate(targetRaHours, targetDecDeg);
         while (ha > 12) ha -= 24;
         while (ha < -12) ha += 24;
 

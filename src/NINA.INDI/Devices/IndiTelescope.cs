@@ -60,8 +60,22 @@ public class IndiTelescope : ITelescope {
         SupportsPulseGuide:      _client.GetProperty(DeviceName, "TELESCOPE_TIMED_GUIDE_NS") != null
                                  && _client.GetProperty(DeviceName, "TELESCOPE_TIMED_GUIDE_WE") != null);
 
-    public double RightAscension => _client.GetNumber(DeviceName, "EQUATORIAL_EOD_COORD", "RA");
-    public double Declination => _client.GetNumber(DeviceName, "EQUATORIAL_EOD_COORD", "DEC");
+    // EQUATORIAL_EOD_COORD is the mount's pointing of date (JNow); Polaris
+    // works in J2000 (ITelescope), so it is converted here, on the way in and
+    // on the way out, and nowhere else. Read raw, the mount's field of view
+    // sat about 20' off on SKY and a J2000 GoTo or plate-solve sync was
+    // written into the JNow property as is (issue #39).
+    public double RightAscension => PointingJ2000().RaHours;
+    public double Declination => PointingJ2000().DecDeg;
+
+    private (double RaHours, double DecDeg) PointingJ2000() {
+        double ra = _client.GetNumber(DeviceName, "EQUATORIAL_EOD_COORD", "RA");
+        double dec = _client.GetNumber(DeviceName, "EQUATORIAL_EOD_COORD", "DEC");
+        // 0h/0° is what a driver publishes before it has read the mount (see
+        // RefreshAsync); converted, it would look like a real position.
+        if (ra == 0 && dec == 0) return (0, 0);
+        return NINA.Core.Utility.EquatorialEpoch.JNowToJ2000(ra, dec, DateTime.UtcNow);
+    }
     public double Altitude => _client.GetNumber(DeviceName, "HORIZONTAL_COORD", "ALT");
     public double Azimuth => _client.GetNumber(DeviceName, "HORIZONTAL_COORD", "AZ");
     public bool IsTracking => _client.GetSwitch(DeviceName, "TELESCOPE_TRACK_STATE", "TRACK_ON");
@@ -152,8 +166,9 @@ public class IndiTelescope : ITelescope {
         //    limit, mount still parked, dome unsafe -- we surface the
         //    driver's message verbatim so the operator sees a real
         //    error instead of a silent no-op.
+        var (raNow, decNow) = NINA.Core.Utility.EquatorialEpoch.J2000ToJNow(ra, dec, DateTime.UtcNow);
         var ack = await _client.SetNumberAsyncAck(DeviceName, "EQUATORIAL_EOD_COORD",
-            new Dictionary<string, double> { ["RA"] = ra, ["DEC"] = dec }, ct: ct);
+            new Dictionary<string, double> { ["RA"] = raNow, ["DEC"] = decNow }, ct: ct);
         ThrowIfRejectedOrTimedOut(ack, "slew", "EQUATORIAL_EOD_COORD");
     }
 
@@ -161,8 +176,9 @@ public class IndiTelescope : ITelescope {
         await _client.SetSwitchAsync(DeviceName, "ON_COORD_SET",
             new Dictionary<string, bool> { ["TRACK"] = false, ["SLEW"] = false, ["SYNC"] = true }, ct);
 
+        var (raNow, decNow) = NINA.Core.Utility.EquatorialEpoch.J2000ToJNow(ra, dec, DateTime.UtcNow);
         var ack = await _client.SetNumberAsyncAck(DeviceName, "EQUATORIAL_EOD_COORD",
-            new Dictionary<string, double> { ["RA"] = ra, ["DEC"] = dec }, ct: ct);
+            new Dictionary<string, double> { ["RA"] = raNow, ["DEC"] = decNow }, ct: ct);
         ThrowIfRejectedOrTimedOut(ack, "sync", "EQUATORIAL_EOD_COORD");
     }
 

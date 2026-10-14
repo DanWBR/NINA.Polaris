@@ -13,6 +13,7 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using NINA.Polaris.Services;
+using NINA.Image.Interfaces;
 
 namespace NINA.Polaris.WebSocket.Status;
 
@@ -65,7 +66,8 @@ public sealed class SequencingStatusContributor : IStatusContributor {
         double? lstHours = null, hourAngleHours = null, timeToMeridianHours = null;
         double? timeToFlipHours = null, timeToSetHours = null;
         if (equip.Telescope != null && equip.Telescope.IsConnected) {
-            var raHours = equip.Telescope.RightAscension;
+            // Hour angle is measured on the sky of date.
+            var (raHours, decOfDate) = equip.Telescope.PointingOfDate();
             if (!double.IsNaN(raHours)) {
                 lstHours = MeridianFlipService.ComputeLstHours(DateTime.UtcNow, profile.Active.Longitude);
                 var ha = lstHours.Value - raHours;
@@ -83,7 +85,7 @@ public sealed class SequencingStatusContributor : IStatusContributor {
                 // target already past the meridian (descending west),
                 // this is the useful countdown, "time until meridian"
                 // is meaningless there (it already crossed). Needs Dec.
-                var decDeg = equip.Telescope.Declination;
+                var decDeg = decOfDate;
                 if (!double.IsNaN(decDeg)) {
                     timeToSetHours = AltitudeService.HoursUntilSet(
                         raHours, decDeg, DateTime.UtcNow,

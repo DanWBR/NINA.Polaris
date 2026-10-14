@@ -279,6 +279,8 @@ public static class XISFWriter {
             if (meta.Telescope.RightAscension != 0 || meta.Telescope.Declination != 0) {
                 WriteFitsKeyword(xw, "RA", Fmt(meta.Telescope.RightAscension * 15.0), "Mount RA (deg)");
                 WriteFitsKeyword(xw, "DEC", Fmt(meta.Telescope.Declination), "Mount Dec (deg)");
+                // The mount reports J2000 (ITelescope), like the target and every solve.
+                WriteFitsKeyword(xw, "EQUINOX", Fmt(2000.0), "Equinox of RA/DEC");
             }
 
             if (!string.IsNullOrEmpty(meta.FilterWheel.Name))

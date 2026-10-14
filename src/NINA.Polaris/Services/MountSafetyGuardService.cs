@@ -14,6 +14,7 @@
 
 using NINA.Core.Enum;
 using NINA.Polaris.Services.Sequencer;
+using NINA.Image.Interfaces;
 
 namespace NINA.Polaris.Services;
 
@@ -310,7 +311,8 @@ public class MountSafetyGuardService : BackgroundService {
         if (!Tripped && floorArmed && flipping) {
             var fscope = _equip.Telescope;
             if (fscope is { IsConnected: true }) {
-                double fra = fscope.RightAscension, fdec = fscope.Declination;
+                // Altitude is measured on the sky of date.
+                var (fra, fdec) = fscope.PointingOfDate();
                 if (!double.IsNaN(fra) && !double.IsNaN(fdec)) {
                     double falt = CurrentAltitude(fscope.Altitude, fra, fdec);
                     double ffloor = FlipFloorDeg;
@@ -346,7 +348,7 @@ public class MountSafetyGuardService : BackgroundService {
             // starting from its folded ≈-90° stow doesn't abort on frame one.
             if (slewingNow && !_altGuardSlewingPrev) _altGuardArmed = false;
             if (slewingNow) {
-                double ra = scope.RightAscension, dec = scope.Declination;
+                var (ra, dec) = scope.PointingOfDate();
                 if (!double.IsNaN(ra) && !double.IsNaN(dec)) {
                     double altDeg = CurrentAltitude(scope.Altitude, ra, dec);
                     double floorDeg = AltitudeFloorDeg;
@@ -488,10 +490,12 @@ public class MountSafetyGuardService : BackgroundService {
 
         double ra = scope.RightAscension, dec = scope.Declination;
         if (double.IsNaN(ra) || double.IsNaN(dec)) return;
+        // Hour angle and altitude on the sky of date; the RA/Dec logged are J2000.
+        var (raNow, decNow) = scope.PointingOfDate();
 
         double lst = MeridianFlipService.ComputeLstHours(DateTime.UtcNow, _profile.Active.Longitude);
-        double haMin = MountSlewSafety.TargetHaMinutes(ra, lst);
-        var (alt, az) = CurrentAltAz(scope.Altitude, scope.Azimuth, ra, dec);
+        double haMin = MountSlewSafety.TargetHaMinutes(raNow, lst);
+        var (alt, az) = CurrentAltAz(scope.Altitude, scope.Azimuth, raNow, decNow);
         var pier = scope.Capabilities.SupportsPierSide ? scope.SideOfPier.ToString().Replace("pier", "") : "n/a";
 
         string snap =
@@ -517,7 +521,8 @@ public class MountSafetyGuardService : BackgroundService {
             return (null, false, false);
         }
 
-        var ra = scope.RightAscension;
+        // Hour angle on the sky of date.
+        var ra = scope.PointingOfDate().RaHours;
         if (double.IsNaN(ra)) return (null, false, false);
 
         double lst = MeridianFlipService.ComputeLstHours(DateTime.UtcNow, _profile.Active.Longitude);

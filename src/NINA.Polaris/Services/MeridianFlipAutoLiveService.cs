@@ -13,6 +13,7 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using NINA.Core.Enum;
+using NINA.Image.Interfaces;
 
 namespace NINA.Polaris.Services;
 
@@ -123,10 +124,13 @@ public class MeridianFlipAutoLiveService : BackgroundService {
 
         var raHours = scope.RightAscension;
         if (double.IsNaN(raHours)) return;
+        // The hour angle is measured on the sky of date; the flip itself
+        // slews to the J2000 position, like every slew.
+        var raOfDate = scope.PointingOfDate().RaHours;
 
         // Signed hour angle (−12..+12): <0 east of meridian (rising), >0 west.
         double lst = MeridianFlipService.ComputeLstHours(DateTime.UtcNow, _profile.Active.Longitude);
-        double ha = lst - raHours;
+        double ha = lst - raOfDate;
         while (ha > 12) ha -= 24;
         while (ha < -12) ha += 24;
 
@@ -146,7 +150,7 @@ public class MeridianFlipAutoLiveService : BackgroundService {
 
         var minutesAfter = _meridian.Settings.MinutesAfterMeridian;
         var hoursUntilFlip = MeridianFlipService.HoursUntilFlip(
-            raHours, DateTime.UtcNow, _profile.Active.Longitude, minutesAfter);
+            raOfDate, DateTime.UtcNow, _profile.Active.Longitude, minutesAfter);
 
         // Re-arm the per-crossing guard once the target is well east of the
         // flip point again (a new target rising, or the next night).
