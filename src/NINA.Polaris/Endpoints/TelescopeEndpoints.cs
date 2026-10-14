@@ -136,16 +136,18 @@ public static class TelescopeEndpoints {
             if (scope.IsConnected) { mra = scope.RightAscension; mdec = scope.Declination; }
             double sideSign = 1.0;   // default (mount side unknown): west of meridian
             if (!double.IsNaN(mra)) {
-                double mha = lst - mra;
+                double mha = lst - scope.PointingOfDate().RaHours;
                 while (mha > 12) mha -= 24;
                 while (mha < -12) mha += 24;
                 sideSign = mha >= 0 ? 1.0 : -1.0;
             }
             const double haOffsetHours = 0.25;               // 15 min of time (~3.75 deg)
-            double ra = lst - sideSign * haOffsetHours;       // targetRA = LST - HA
-            while (ra >= 24) ra -= 24;
-            while (ra < 0) ra += 24;
-            double dec = Math.Clamp(lat, -90.0, 90.0);
+            double raOfDate = lst - sideSign * haOffsetHours; // targetRA = LST - HA
+            while (raOfDate >= 24) raOfDate -= 24;
+            while (raOfDate < 0) raOfDate += 24;
+            // The target is of date (LST, latitude); the mount takes J2000.
+            var (ra, dec) = NINA.Core.Utility.EquatorialEpoch.JNowToJ2000(
+                raOfDate, Math.Clamp(lat, -90.0, 90.0), utc);
 
             // Safety gate #4: after a mount-safety trip, require a re-home first.
             if (!force && guard.RequireHomeAfterTrip) {
