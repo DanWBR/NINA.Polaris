@@ -19,7 +19,7 @@ body:
     attributes:
       label: Polaris version
       description: Bottom of the SETTINGS tab, or `dpkg -l polaris` on the host.
-      placeholder: "0.98.155"
+      placeholder: "0.98.190"
     validations:
       required: true
 
@@ -104,10 +104,10 @@ body:
     attributes:
       label: Log
       description: |
-        The lines around the failure, not the whole night.
-        `~/.local/share/NINA/Logs/nina-polaris-YYYYMMDD.log`, and
-        `journalctl -u polaris --since "1 hour ago"` for anything that happened
-        before the app got far enough to write its own log.
+        The lines around the failure, not the whole night: the LOG panel's
+        **Export TXT**, or the session logs in `~/.local/share/NINA.Polaris/logs/`.
+        Add `journalctl -u polaris --since "1 hour ago"` for anything that
+        happened before the app got far enough to write its own log.
       render: shell
 
   - type: checkboxes

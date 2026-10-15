@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Ask a question
+    url: https://github.com/DanWBR/NINA.Polaris/discussions/categories/q-a
+    about: How do I..., is this normal, which setting does what. Answers there help the next person too.
+  - name: Talk an idea through
+    url: https://github.com/DanWBR/NINA.Polaris/discussions/categories/ideas
+    about: For an idea still taking shape. Once it is clear, a Feature request turns it into work.
+  - name: Show your setup
+    url: https://github.com/DanWBR/NINA.Polaris/discussions/categories/show-and-tell
+    about: Rigs, first light, a night that went well.

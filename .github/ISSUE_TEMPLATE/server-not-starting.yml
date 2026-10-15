@@ -1,0 +1,82 @@
+name: Polaris does not start, or keeps restarting
+description: The page says the server keeps restarting, or the server never comes up
+title: "[startup] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        When the browser shows **"The Polaris server keeps restarting. This is
+        not your network."**, the server process on the host is crashing and
+        being started again. The cause is on the host, in its log, so the
+        fields below ask for exactly that. Pasted text is far more useful than
+        a photo of the screen.
+
+  - type: input
+    id: polaris-version
+    attributes:
+      label: Polaris version
+      description: The one you updated to, if this started after an update. `dpkg -l polaris` on Linux.
+      placeholder: "0.98.190"
+    validations:
+      required: true
+
+  - type: input
+    id: host
+    attributes:
+      label: Host
+      description: Board or PC, and the operating system.
+      placeholder: "Raspberry Pi 5, Raspberry Pi OS bookworm 64-bit"
+    validations:
+      required: true
+
+  - type: textarea
+    id: when
+    attributes:
+      label: When it started
+      description: |
+        Right after an update, after plugging in a device, after a change in
+        RIGS, out of nowhere. And the equipment that was connected at the time.
+    validations:
+      required: true
+
+  - type: textarea
+    id: quiet
+    attributes:
+      label: Does it stop with no browser open?
+      description: |
+        Close every browser tab and the Polaris app, wait a minute, then look
+        at `systemctl status polaris` (or Task Manager on Windows). If the
+        restarts stop, something the page asks for triggers the crash, and
+        that narrows it down a lot.
+
+  - type: textarea
+    id: journal
+    attributes:
+      label: Service log (Linux)
+      description: The server's own output, including what it printed as it died.
+      value: |
+        systemctl status polaris --no-pager
+        journalctl -u polaris -b --no-pager | tail -300
+      render: shell
+
+  - type: textarea
+    id: crash
+    attributes:
+      label: Crash files
+      description: |
+        Polaris writes a `polaris_crash_*.log` the moment it dies of an
+        exception, and records a native camera SDK that took it down.
+        On Linux the folder is `/home/polaris/.local/share/NINA.Polaris/`,
+        on Windows `%LOCALAPPDATA%\NINA.Polaris\`.
+      value: |
+        ls -la /home/polaris/.local/share/NINA.Polaris/logs/
+        cat /home/polaris/.local/share/NINA.Polaris/logs/polaris_crash_*.log
+        ls -la /home/polaris/.local/share/NINA.Polaris/native-guard/
+      render: shell
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Whatever you already tried (rolling back, unplugging devices, rebooting) and what it changed.

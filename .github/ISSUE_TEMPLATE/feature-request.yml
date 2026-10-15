@@ -1,0 +1,84 @@
+name: Feature request
+description: Something Polaris does not do yet, or could do better
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for the idea. The most useful requests start from the night
+        at the telescope: what you were trying to do, and where Polaris got in
+        the way. A proposed solution is welcome, but the problem is what
+        decides how it gets built.
+
+        Still shaping the idea, or want to hear what others think first?
+        [Ideas in Discussions](https://github.com/DanWBR/NINA.Polaris/discussions/categories/ideas)
+        is the better place for that.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you are trying to do
+      description: |
+        The task, and where it gets stuck today. "When I image a mosaic I have
+        to re-enter the exposure for every panel" says more than "add a copy
+        button".
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like Polaris to do
+      description: How you picture it working. A sketch or a screenshot of another program helps.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - SKY (planetarium, targets, framing)
+        - AUTORUN / sequencer / PLAN
+        - Imaging and camera control
+        - LIVE stacking
+        - Guiding
+        - Focus
+        - Polar alignment
+        - Mount, slew and plate solving
+        - Equipment and drivers (INDI, ASCOM, Alpaca, native SDKs)
+        - Files, storage and sharing
+        - Phone and tablet use
+        - Installation, updates and the host system
+        - Something else
+    validations:
+      required: true
+
+  - type: textarea
+    id: today
+    attributes:
+      label: How you do it today
+      description: The workaround you use now, if any, or how another program (N.I.N.A., Ekos, ASIAIR, SharpCap) handles it.
+
+  - type: input
+    id: equipment
+    attributes:
+      label: Equipment involved
+      description: Only if the request depends on a particular device.
+      placeholder: "QHY MiniCAM8 with its built-in filter wheel"
+
+  - type: input
+    id: polaris-version
+    attributes:
+      label: Polaris version
+      description: Bottom of the SETTINGS tab. Helps tell a new feature from one that already exists in a later release.
+      placeholder: "0.98.190"
+
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Can you help?
+      options:
+        - label: I can test a build with this feature on my equipment.
+        - label: I would like to contribute code or documentation for it.
