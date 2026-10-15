@@ -748,6 +748,14 @@ body.link-offline .preview-pane::after {
     min-width: 64px;
 }
 
+/* Exp carries list="exposure-presets", and the global rule for those
+   inputs (02-imaging-panels.css) sets 100px, which outranks .seq-input-num:
+   Exp came out nearly twice the frame count, the row overflowed the card
+   and the card scrolled sideways. Pinned here, inside the row. */
+.seq-exp-row > label > .seq-input-num {
+    width: 56px;
+}
+
 .seq-item-progress {
     font-size: 11px;
     color: var(--accent);
