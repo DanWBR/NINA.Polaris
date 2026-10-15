@@ -117,6 +117,11 @@ html[data-font="system"] {
     --bg-secondary: #16213e;
     --bg-tertiary: #0f3460;
     --bg-input: #0d1b30;
+    /* Unchecked checkbox / radio: a fill a step above the panels and a
+       border bright enough to read as a control. On --bg-input with the
+       panel border, the box all but vanished into the card. */
+    --check-bg: #1a2c4c;
+    --check-border: #8796b8;
     --text-primary: #e0e0e0;
     --text-secondary: #a0a0b0;
     --text-muted: #606070;
