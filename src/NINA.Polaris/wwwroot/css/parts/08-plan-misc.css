@@ -160,8 +160,8 @@ input[type="radio"]:not(.checkbox-native) {
     min-height: 18px;
     margin: 0 6px 0 0;
     padding: 0;
-    background: var(--bg-input);
-    border: 1px solid var(--border);
+    background: var(--check-bg, var(--bg-input));
+    border: 1.5px solid var(--check-border, var(--border));
     border-radius: var(--radius);
     cursor: pointer;
     position: relative;
@@ -197,8 +197,8 @@ input[type="radio"]:not(.checkbox-native):checked {
 input[type="checkbox"]:not(.checkbox-native):checked::after {
     content: '';
     position: absolute;
-    left: 5px;
-    top: 1px;
+    left: 4.5px;
+    top: 0.5px;
     width: 5px;
     height: 10px;
     border: solid #fff;
@@ -238,6 +238,15 @@ label:has(> input[type="radio"]:not(.checkbox-native)),
     gap: 6px;
     cursor: pointer;
     user-select: none;
+    /* The option a checkbox names is something to read, not a hint: full
+       text colour, where the field-label grey of the panel around it made
+       "Plate-solve recenter" and friends hard to read at night. A label
+       whose box is disabled still dims with it. */
+    color: var(--text-primary);
+}
+label:has(> input[type="checkbox"]:not(.checkbox-native):disabled),
+label:has(> input[type="radio"]:not(.checkbox-native):disabled) {
+    color: var(--text-secondary);
 }
 
 /* Wheel-picker inline edit: number input that replaces the centre
