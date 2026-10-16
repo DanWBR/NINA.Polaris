@@ -717,8 +717,12 @@
    pills) so the row of pills lines up consistently. */
 .bin-presets {
     display: inline-flex;
+    flex-wrap: wrap;
     gap: 4px;
     vertical-align: middle;
+    /* Never wider than its row: a long list wraps instead of pushing the
+       panel (or an AUTORUN card) sideways. */
+    max-width: 100%;
 }
 .bin-preset {
     min-width: 40px;
