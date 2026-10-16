@@ -226,6 +226,17 @@ public class IndiClient : IDisposable {
             _ = Task.Run(async () => {
                 try {
                     await Task.Delay(1500);
+                    // A DSLR keeps its settings in the camera: image quality,
+                    // white balance, ISO are what the operator set on the body.
+                    // Replaying the gphoto driver's saved config wrote its old
+                    // values back over them on every connect, and a Canon R8
+                    // set to RAW three times in one evening kept coming back as
+                    // Large Normal JPEG, so a set of darks and bias was 8-bit.
+                    if (IsGphotoDslr(device)) {
+                        DiagLogger.LogInformation(
+                            "INDI CONFIG_LOAD skipped for '{Device}': a DSLR keeps its own settings", device);
+                        return;
+                    }
                     var loaded = await LoadDeviceConfigAsync(device);
                     if (loaded) {
                         DiagLogger.LogInformation(
@@ -720,6 +731,27 @@ public class IndiClient : IDisposable {
     /// false (without throwing) when the device doesn't advertise the
     /// property — some minimal drivers omit it, and we don't want a
     /// connect path to fail because of that.</summary>
+    /// <summary>Whether <paramref name="device"/> is a DSLR / mirrorless on
+    /// indi_gphoto (or one of its per-brand names), whose settings live in
+    /// the camera body rather than in the driver's saved config.</summary>
+    public bool IsGphotoDslr(string device) {
+        string? exec = null;
+        if (GetProperty(device, "DRIVER_INFO") is IndiTextProperty di
+                && di.Values.TryGetValue("DRIVER_EXEC", out var e))
+            exec = e;
+        return IsGphotoDslr(exec, GetProperty(device, "CCD_CAPTURE_TARGET") != null);
+    }
+
+    /// <summary>indi_gphoto_ccd and the names INDI installs for it per brand
+    /// (indi_canon_ccd, indi_nikon_ccd, indi_sony_ccd), or a device that
+    /// publishes CCD_CAPTURE_TARGET, which only gphoto does.</summary>
+    internal static bool IsGphotoDslr(string? driverExec, bool hasCaptureTarget) {
+        if (hasCaptureTarget) return true;
+        var x = (driverExec ?? "").Trim().ToLowerInvariant();
+        return x.Contains("gphoto")
+            || x is "indi_canon_ccd" or "indi_nikon_ccd" or "indi_sony_ccd";
+    }
+
     public async Task<bool> LoadDeviceConfigAsync(string device, CancellationToken ct = default) {
         return await SetConfigProcessAsync(device, "CONFIG_LOAD", ct);
     }
