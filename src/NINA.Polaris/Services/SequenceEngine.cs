@@ -637,7 +637,11 @@ public class SequenceEngine {
                         // Populate exposure-level metadata before saving / relaying
                         imageData.MetaData.Exposure.ExposureTime = item.Exposure;
                         imageData.MetaData.Exposure.ImageType = imageType;
-                        if (!string.IsNullOrEmpty(item.Filter))
+                        // The item's filter names the slot it asked for; it is
+                        // only in the light path when a wheel is connected. An
+                        // item saved with a wheel kept its filter after the wheel
+                        // went, and stamped it on a DSLR dark (FILTER='G').
+                        if (!string.IsNullOrEmpty(item.Filter) && _equip.FilterWheel is { IsConnected: true })
                             imageData.MetaData.Exposure.Filter = item.Filter;
                         // Leave a LIGHT frame's target name UNSET so SaveImage's
                         // FOV resolver fills it; a per-item name here would win over
