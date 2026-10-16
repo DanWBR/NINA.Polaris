@@ -564,23 +564,57 @@ public class NetworkManagerService : BackgroundService {
             }
         }
 
-        CurrentSsid = activeSsid;
+        // 4. What the active connection is CONFIGURED as (ap / infrastructure)
+        // and its SSID. The cached scan list above is not authoritative for
+        // our own AP: on a Raspberry Pi serving the hotspot it reported the
+        // in-use row as "Infra", so the panel said Station on the hotspot's
+        // own SSID and 10.42.0.1, and a list that came back without the
+        // in-use row read as Disconnected, which after the grace window has
+        // the fallback re-up the very AP the clients are on.
+        var (configuredMode, configuredSsid) = activeName != null
+            ? await ActiveConnectionWifiAsync(activeName, ct)
+            : (null, null);
+
+        CurrentSsid = activeSsid ?? configuredSsid;
         SignalStrength = signal;
-        CurrentMode = ResolveMode(activeName, activeMode, activeSsid);
+        CurrentMode = ResolveMode(activeName, activeMode, CurrentSsid, configuredMode);
         LastRefreshAt = DateTime.UtcNow;
     }
 
-    private WifiMode ResolveMode(string? activeName, string? mode, string? ssid) {
+    // The configured mode and SSID of a connection profile do not change while
+    // it is active, so they are read once per profile name, not every 5 s.
+    private string? _connInfoName;
+    private (string? Mode, string? Ssid) _connInfo;
+
+    private async Task<(string? Mode, string? Ssid)> ActiveConnectionWifiAsync(string name, CancellationToken ct) {
+        if (name == _connInfoName) return _connInfo;
+        var res = await RunCommandAsync("nmcli",
+            $"-g 802-11-wireless.mode,802-11-wireless.ssid connection show {Shell(name)}", ct);
+        if (res.exitCode != 0) return (null, null);
+        var lines = res.stdout.Split('\n');
+        string? mode = lines.Length > 0 ? lines[0].Trim() : null;
+        string? ssid = lines.Length > 1 ? lines[1].Trim() : null;
+        _connInfo = (string.IsNullOrEmpty(mode) ? null : mode, string.IsNullOrEmpty(ssid) ? null : ssid);
+        _connInfoName = name;
+        return _connInfo;
+    }
+
+    /// <summary>Hotspot, Station or Disconnected. What the active connection
+    /// is configured as wins (nmcli 802-11-wireless.mode "ap" or
+    /// "infrastructure"); then our own hotspot profile's name; the scan
+    /// list's MODE column ("Ap" / "Infra") only when neither says.</summary>
+    internal static WifiMode ResolveMode(string? activeName, string? mode, string? ssid, string? configuredMode = null) {
         if (string.IsNullOrEmpty(ssid)) return WifiMode.Disconnected;
-        // Prefer the explicit nmcli MODE column ("Infra" / "Ap"). Fall
-        // back to the connection name we created (polaris-hotspot vs
-        // polaris-station) so even older nmcli that omits MODE works.
+        if (configuredMode != null) {
+            if (configuredMode.Equals("ap", StringComparison.OrdinalIgnoreCase)) return WifiMode.Hotspot;
+            if (configuredMode.Equals("infrastructure", StringComparison.OrdinalIgnoreCase)) return WifiMode.Station;
+        }
+        if (activeName?.Equals("polaris-hotspot", StringComparison.OrdinalIgnoreCase) == true)
+            return WifiMode.Hotspot;
         if (!string.IsNullOrEmpty(mode)) {
             if (mode.Equals("Ap", StringComparison.OrdinalIgnoreCase)) return WifiMode.Hotspot;
             if (mode.Equals("Infra", StringComparison.OrdinalIgnoreCase)) return WifiMode.Station;
         }
-        if (activeName?.Equals("polaris-hotspot", StringComparison.OrdinalIgnoreCase) == true)
-            return WifiMode.Hotspot;
         return WifiMode.Station;
     }
 
