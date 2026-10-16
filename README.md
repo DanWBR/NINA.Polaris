@@ -83,9 +83,10 @@ welcome via an issue or PR.
 |---|---|
 | **Mounts** | ZWO AM3 · AM3N · AM5 · OnStep (LX200) · Sky-Watcher Star Adventurer GTi · Sky-Watcher AZ-GTi (SynScan WiFi) |
 | **Cameras (OSC / DSLR)** | ZWO ASI585MC Pro · ASI678MC · ASI715MC · ASI2600MC Pro · SVBony SV405CC · SV605CC · SV105 · ToupTek ATR533C · AE676C · Canon EOS Rebel T100 (4000D) · Canon EOS Rebel SL2 (200D) · Canon EOS R8 |
+| **Cameras (mono)** | ZWO ASI183MM Pro |
 | **Focus motors** | ZWO EAF · Gemini Focusing Motor / Focuser Pro |
 | **Guide cameras** | ZWO ASI120MM · ToupTek GPM462C |
-| **Filter wheels** | ZWO EFW Mini |
+| **Filter wheels** | ZWO EFW Mini (5 positions) · ZWO EFW (8 positions) |
 | **SBCs (server host)** | Raspberry Pi 4 (8 GB) · Raspberry Pi 5 (4 GB) · Orange Pi 4 Pro (4 GB) · Orange Pi 5 Pro (4 GB) · Radxa Dragon Q6A (6 GB) |
 | **Power boxes** | SVBony SV241 Pro |
 
