@@ -609,8 +609,11 @@ public class ImageWriterService {
             m.Telescope.SideOfPier = _equip.Telescope.SideOfPier;
         }
 
-        // Filter wheel
-        if (_equip.FilterWheel != null) {
+        // Filter wheel. Only a CONNECTED one says which filter is in the light
+        // path: a wheel the rig names but that is not connected answered with
+        // the last name it knew, and a DSLR dark with no wheel on the scope
+        // came out FILTER='G'.
+        if (_equip.FilterWheel is { IsConnected: true }) {
             m.FilterWheel.Name = _equip.FilterWheel.DeviceName;
             m.FilterWheel.Filter = _equip.FilterWheel.CurrentFilterName ?? "";
             m.FilterWheel.Position = _equip.FilterWheel.Position;
@@ -707,7 +710,7 @@ public class ImageWriterService {
         var typeUpper = (imageType ?? "LIGHT").Trim().ToUpperInvariant();
         var rig      = SanitizeFolder(string.IsNullOrEmpty(rigName) ? "Default" : rigName);
         var filter   = SanitizeFolder(string.IsNullOrEmpty(m.Exposure.Filter) ? "L" : m.Exposure.Filter);
-        var gain     = m.Camera.Gain;
+        var gainTag  = GainTag(m);
         var exposure = m.Exposure.ExposureTime;
 
         var layout = ParseFolderLayout(profile?.ImageFolderLayout);
@@ -725,13 +728,12 @@ public class ImageWriterService {
 
         var subPath = typeUpper switch {
             "DARK"      => Path.Combine(cal, "dark",
-                            FormattableString.Invariant($"{exposure:0.##}s_g{gain}")),
-            "BIAS"      => Path.Combine(cal, "bias",
-                            FormattableString.Invariant($"g{gain}")),
+                            FormattableString.Invariant($"{exposure:0.##}s_{gainTag}")),
+            "BIAS"      => Path.Combine(cal, "bias", gainTag),
             "DARKFLAT"  => Path.Combine(cal, "darkflat",
-                            FormattableString.Invariant($"{exposure:0.##}s_g{gain}")),
+                            FormattableString.Invariant($"{exposure:0.##}s_{gainTag}")),
             "FLAT"      => Path.Combine(cal, "flat",
-                            FormattableString.Invariant($"{filter}_g{gain}")),
+                            FormattableString.Invariant($"{filter}_{gainTag}")),
             // PREVIEW-tab snaps live in their own tree so they don't
             // mix with the science lights from a sequence. Folder is
             // {rig}/snaps/{filter}_{session-date}/{snap_NNNN}.fits. No target
@@ -848,14 +850,36 @@ public class ImageWriterService {
         return s.Replace(' ', '_');
     }
 
-    private static string SubstitutePattern(string pattern, IImageData img, int seq) {
+    /// <summary>"g120" for a camera with analogue gain, "iso1600" for one that
+    /// works in ISO (a DSLR has no gain, and its frames were named and filed
+    /// under "g0").</summary>
+    internal static string GainTag(ImageMetaData m) =>
+        UsesIso(m)
+            ? "iso" + m.Camera.Iso.ToString(CultureInfo.InvariantCulture)
+            : "g" + m.Camera.Gain.ToString(CultureInfo.InvariantCulture);
+
+    private static bool UsesIso(ImageMetaData m) => m.Camera.Gain == 0 && m.Camera.Iso > 0;
+
+    // Stands in for a token with nothing to say (no filter on the light path),
+    // so the token and the separator before it can be removed together.
+    private const char Nothing = '\u0001';
+
+    internal static string SubstitutePattern(string pattern, IImageData img, int seq) {
         var m = img.MetaData;
         var now = m.CreationTime.ToLocalTime();
+        // A DSLR's frames say iso1600 where a gain camera's say g120: the
+        // default pattern's literal "g{gain}" becomes "iso{iso}".
+        if (UsesIso(m)) pattern = pattern.Replace("g{gain}", "iso{iso}");
         string Token(string key) => key switch {
             "target"    => string.IsNullOrEmpty(m.Target.Name) ? "Unknown" : m.Target.Name,
-            "filter"    => string.IsNullOrEmpty(m.Exposure.Filter) ? "L" : m.Exposure.Filter,
+            // No filter wheel and no attached filter: nothing in the name. It
+            // used to say "L", a filter that was not there either.
+            "filter"    => string.IsNullOrEmpty(m.Exposure.Filter) ? Nothing.ToString() : m.Exposure.Filter,
             "exposure"  => m.Exposure.ExposureTime.ToString("0.##", CultureInfo.InvariantCulture),
-            "gain"      => m.Camera.Gain.ToString(CultureInfo.InvariantCulture),
+            "gain"      => UsesIso(m)
+                            ? m.Camera.Iso.ToString(CultureInfo.InvariantCulture)
+                            : m.Camera.Gain.ToString(CultureInfo.InvariantCulture),
+            "iso"       => m.Camera.Iso.ToString(CultureInfo.InvariantCulture),
             "binning"   => $"{m.Camera.BinX}x{m.Camera.BinY}",
             "bitdepth"  => img.Properties.BitDepth.ToString(CultureInfo.InvariantCulture),
             "date"      => now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
@@ -869,6 +893,11 @@ public class ImageWriterService {
             _           => "{" + key + "}"
         };
 
-        return System.Text.RegularExpressions.Regex.Replace(pattern, @"\{(\w+)\}", match => Token(match.Groups[1].Value));
+        var name = System.Text.RegularExpressions.Regex.Replace(pattern, @"\{(\w+)\}", match => Token(match.Groups[1].Value));
+        // Drop an empty token with the separator before it, or after it when
+        // the token leads the name.
+        name = System.Text.RegularExpressions.Regex.Replace(name, @"[_\-. ]?\u0001", "");
+        name = System.Text.RegularExpressions.Regex.Replace(name, @"^[_\-. ]+", "");
+        return name;
     }
 }

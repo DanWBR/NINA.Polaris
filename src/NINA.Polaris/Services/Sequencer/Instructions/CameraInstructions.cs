@@ -157,7 +157,9 @@ public class TakeExposureInstruction : SequenceInstruction {
             var imageType = string.IsNullOrWhiteSpace(ImageType) ? "LIGHT" : ImageType.Trim().ToUpperInvariant();
             image.MetaData.Exposure.ExposureTime = ExposureSeconds;
             image.MetaData.Exposure.ImageType = imageType;
-            if (!string.IsNullOrEmpty(Filter)) image.MetaData.Exposure.Filter = Filter;
+            // Only a connected wheel puts the instruction's filter in the light path.
+            if (!string.IsNullOrEmpty(Filter) && ctx.Equipment.FilterWheel is { IsConnected: true })
+                image.MetaData.Exposure.Filter = Filter;
             if (!string.IsNullOrEmpty(TargetName)) image.MetaData.Target.Name = TargetName;
 
             ctx.ImageWriter.SaveImage(image, targetName: TargetName, imageType: imageType, gain: Gain ?? 0);
