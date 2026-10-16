@@ -46,6 +46,29 @@ public class ImageWriterNamingTests {
     }
 
     [Test]
+    public void ADslrWithNoTemperature_LeavesItOutOfTheName() {
+        var name = ImageWriterService.SubstitutePattern(DefaultPattern, Frame("", 60, 0, 1600, temp: double.NaN), 11);
+        Assert.That(name, Is.EqualTo("Target2_GPhoto CCD_60s_iso1600_2026-10-15_19-33-15_0011"));
+    }
+
+    [Test]
+    public void ACooledCameraAtZero_KeepsItsZero() {
+        var name = ImageWriterService.SubstitutePattern(DefaultPattern,
+            Frame("L", 120, 100, 0, temp: 0, target: "M42", camera: "ASI2600MC"), 2);
+        Assert.That(name, Is.EqualTo("M42_ASI2600MC_L_120s_g100_0C_2026-10-15_19-33-15_0002"));
+    }
+
+    [TestCase(double.NaN, false, true)]
+    [TestCase(double.NaN, true, true)]
+    [TestCase(0.0, false, true)]     // a DSLR over gphoto publishes 0
+    [TestCase(0.0, true, false)]     // a cooled camera can sit at 0 °C
+    [TestCase(31.0, false, false)]
+    [TestCase(-10.0, true, false)]
+    public void WhenTheTemperatureIsNoReading(double temp, bool cooled, bool unknown) {
+        Assert.That(ImageWriterService.TemperatureUnknown(temp, cooled), Is.EqualTo(unknown));
+    }
+
+    [Test]
     public void AGainCamera_KeepsItsGain_AndFilter() {
         var name = ImageWriterService.SubstitutePattern(DefaultPattern,
             Frame("Ha", 300, 100, 0, temp: -10, target: "M31", camera: "ZWO ASI2600MM"), 1);

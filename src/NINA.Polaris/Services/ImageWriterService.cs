@@ -510,6 +510,12 @@ public class ImageWriterService {
         // frame from a path that stamps nothing, from the connected camera.
         if (m.Camera.Iso == 0 && isoCam != null && isoCam.SelectedIso > 0)
             m.Camera.Iso = isoCam.SelectedIso;
+        // No sensor temperature: a DSLR over gphoto reports 0 or nothing. Mark
+        // it unknown (NaN) so the name leaves the temperature out instead of
+        // saying 0C; the FITS writer already omits CCD-TEMP for it. A cooled
+        // camera at 0 °C keeps its reading.
+        if (TemperatureUnknown(m.Camera.Temperature, MainCameraIsCooled(m.Camera.Name)))
+            m.Camera.Temperature = double.NaN;
         // Camera offset. The capture paths stamp this themselves, from the
         // settings they actually applied; this is only the gap-filler for a
         // backend that stamps nothing. FITSWriter emits OFFSET when non-zero,
@@ -841,6 +847,19 @@ public class ImageWriterService {
 
     private static bool UsesIso(ImageMetaData m) => m.Camera.Gain == 0 && m.Camera.Iso > 0;
 
+    /// <summary>Whether a frame's sensor temperature is no reading at all:
+    /// NaN, or exactly 0 from a camera without a cooler (a DSLR over gphoto
+    /// publishes 0). A cooled camera can genuinely sit at 0 °C.</summary>
+    internal static bool TemperatureUnknown(double tempC, bool cooledCamera) =>
+        double.IsNaN(tempC) || (!cooledCamera && Math.Abs(tempC) < 0.001);
+
+    /// <summary>True when the frame came from the connected main camera and
+    /// that camera has a cooler.</summary>
+    private bool MainCameraIsCooled(string? frameCamera) =>
+        _equip.Camera is { IsConnected: true } cam
+        && cam.Capabilities.SupportsCooler
+        && (string.IsNullOrEmpty(frameCamera) || string.Equals(cam.DeviceName, frameCamera, StringComparison.Ordinal));
+
     // Stands in for a token with nothing to say (no filter on the light path),
     // so the token and the separator before it can be removed together.
     private const char Nothing = '\u0001';
@@ -851,6 +870,10 @@ public class ImageWriterService {
         // A DSLR's frames say iso1600 where a gain camera's say g120: the
         // default pattern's literal "g{gain}" becomes "iso{iso}".
         if (UsesIso(m)) pattern = pattern.Replace("g{gain}", "iso{iso}");
+        // No temperature reading: the token goes, and the default pattern's
+        // literal "C" after it with it.
+        bool noTemp = double.IsNaN(m.Camera.Temperature);
+        if (noTemp) pattern = pattern.Replace("{temp}C", "{temp}");
         string Token(string key) => key switch {
             "target"    => string.IsNullOrEmpty(m.Target.Name) ? "Unknown" : m.Target.Name,
             // No filter wheel and no attached filter: nothing in the name. It
@@ -869,7 +892,7 @@ public class ImageWriterService {
             "framenr"   => seq.ToString("0000"),
             "seq"       => seq.ToString("0000"),
             "camera"    => string.IsNullOrEmpty(m.Camera.Name) ? "cam" : m.Camera.Name,
-            "temp"      => m.Camera.Temperature.ToString("0", CultureInfo.InvariantCulture),
+            "temp"      => noTemp ? Nothing.ToString() : m.Camera.Temperature.ToString("0", CultureInfo.InvariantCulture),
             "imagetype" => m.Exposure.ImageType ?? "LIGHT",
             _           => "{" + key + "}"
         };
