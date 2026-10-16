@@ -49,9 +49,21 @@ export LC_ALL=C
 
 PLAN=$(apt-get install -s "$PKG" 2>&1) || fail "apt could not plan the install"
 
+# The one removal allowed: the PPA's indi-3rdparty-libs taking the place of
+# the archive's per-vendor SDK packages it Replaces (IndiPackagePlanner keeps
+# the same list).
+REPLACED_BY_3RDPARTY_LIBS=" libahp-gt libahp-xc libaltaircam libapogee-dbg libapogee3 libapogee3-dev libasi libastroasis libatik libbressercam libfishcamp libfishcamp-dev libfli-dbg libfli-dev libfli2 libflipro-dev libflipro2 libinovasdk libmallincam libmeadecam libmicam libnncam libogmacam libomegonprocam libpigpiod libpigpiod-dbg libpktriggercord libplayerone libqhy libqsi-dbg libqsi-dev libqsi7 libricohcamerasdk libsbig libstarshootg libsvbony libsvbonycam libtoupcam libtscam "
+
 if echo "$PLAN" | grep -q '^Remv '; then
     REMOVED=$(echo "$PLAN" | awk '/^Remv /{printf "%s ", $2}')
-    fail "refused: this would remove${REMOVED:+ $REMOVED}"
+    replaced_only=0
+    if echo "$PLAN" | grep -q '^Inst indi-3rdparty-libs '; then
+        replaced_only=1
+        for r in $REMOVED; do
+            case "$REPLACED_BY_3RDPARTY_LIBS" in *" $r "*) ;; *) replaced_only=0 ;; esac
+        done
+    fi
+    [ "$replaced_only" -eq 1 ] || fail "refused: this would remove${REMOVED:+ $REMOVED}"
 fi
 
 if ! echo "$PLAN" | grep -q '^Inst '; then
