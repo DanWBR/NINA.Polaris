@@ -1439,6 +1439,14 @@ app.Map("/indi-web/{**rest}", async (HttpContext ctx, IndiWebManagerService svc)
         rest = rest["/indi-web".Length..];
         if (string.IsNullOrEmpty(rest)) rest = "/";
     }
+    // Strip the optional /t/<token> auth segment the app's cross-origin
+    // iframe carries (AuthMiddleware already validated it), as for phd2-gui.
+    // indi-web's own URLs are relative, so they keep the segment.
+    if (rest.StartsWith("/t/", StringComparison.Ordinal)) {
+        var after = rest[3..];
+        var slash = after.IndexOf('/');
+        rest = slash >= 0 ? after[slash..] : "/";
+    }
     ctx.Request.Path = rest;
     var target = $"http://{svc.BindAddress}:{svc.BindPort}";
     await NINA.Polaris.Services.LoopbackProxy.ForwardAsync(

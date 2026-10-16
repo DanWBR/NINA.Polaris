@@ -182,7 +182,10 @@ public static class AuthEndpoints {
 
     // Proxy roots that accept a path-embedded token. Keep in sync with the
     // matching strip logic in the reverse-proxy map in Program.cs.
-    private static readonly string[] PathTokenRoots = { "/phd2-gui/t/" };
+    // indi-web too: in the app its panel is an iframe inside the cross-origin
+    // Polaris iframe, the cookie never reaches it, and /indi-web/ answered 401
+    // (a blank INDI Drivers panel on iOS and Android).
+    private static readonly string[] PathTokenRoots = { "/phd2-gui/t/", "/indi-web/t/" };
 
     private static void SetSessionCookie(HttpContext ctx, string token, bool persist = false) {
         // Cookie carries auth for the embedded sub-apps (phd2-gui,

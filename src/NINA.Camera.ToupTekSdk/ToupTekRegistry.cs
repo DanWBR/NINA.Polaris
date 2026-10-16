@@ -61,8 +61,17 @@ public static class ToupTekRegistry {
             try {
                 EnsureResolver();
                 if (QuarantineReason != null) return false;
-                _ = NativeCallGuard.Run(GuardName, "loading the SDK", Toupcam.Version);
-                return true;
+                // Nothing in the SDK is called: the library is loaded and its
+                // enumerate export looked up. Toupcam.Version() must not be the
+                // probe: the binding declares its return as a marshalled string,
+                // so .NET frees the SDK's own static buffer, and on Linux that
+                // aborts the process (free(): invalid pointer) the moment the
+                // camera-driver list is shown with the SDK installed.
+                return NativeCallGuard.Run(GuardName, "loading the SDK", () => {
+                    var lib = Resolve(OperatingSystem.IsWindows() ? "toupcam.dll" : "libtoupcam.so",
+                                      typeof(Toupcam).Assembly, null);
+                    return lib != IntPtr.Zero && NativeLibrary.TryGetExport(lib, "Toupcam_EnumV2", out _);
+                });
             } catch (DllNotFoundException) { return false; }
             catch (BadImageFormatException) { return false; }
             catch { return false; }

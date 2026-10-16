@@ -47072,6 +47072,17 @@ function ninaApp() {
         //               (initial open / after a 401-race) — never disrupts a
         //               working panel the user is interacting with.
         //   force=true:  always reload (used by Start / the Refresh button).
+        // In the Android / iOS app the Polaris UI is a cross-origin iframe and
+        // the session cookie never reaches the indi-web iframe inside it, so
+        // the panel came up blank on a 401. The token rides in the path
+        // instead (/indi-web/t/<token>/), as for the PHD2 GUI; indi-web's own
+        // URLs are relative and inherit it.
+        _indiWebBase() {
+            return this.auth?.token
+                ? '/indi-web/t/' + encodeURIComponent(this.auth.token) + '/'
+                : '/indi-web/';
+        },
+
         async indiWebEnsureIframe(force) {
             if (!this.auth.authenticated || !this.indiWeb.status?.running) {
                 this.indiWeb.iframeSrc = 'about:blank';
@@ -47079,14 +47090,15 @@ function ninaApp() {
             }
             const showing = (this.indiWeb.iframeSrc || '').startsWith('/indi-web/');
             if (showing && !force) return;
+            const base = this._indiWebBase();
             try {
-                const r = await fetch('/indi-web/?probe=' + Date.now(),
+                const r = await fetch(base + '?probe=' + Date.now(),
                     { cache: 'no-store', credentials: 'same-origin' });
                 // 2xx/3xx = proxy reachable AND auth accepted (a 401 from the
                 // gate would land here as 401 and we leave the iframe blank so
                 // the next refresh retries instead of baking in the error page).
                 if (r.status >= 200 && r.status < 400) {
-                    this.indiWeb.iframeSrc = '/indi-web/?_=' + Date.now();
+                    this.indiWeb.iframeSrc = base + '?_=' + Date.now();
                 }
             } catch (e) { /* transient; next refresh retries */ }
         },
