@@ -235,6 +235,7 @@ builder.Services.Configure<HostOptions>(o =>
 // server-side log call into it. Registered FIRST so other singletons
 // that resolve ILogger<T> in their constructor get the bridged logger.
 builder.Services.AddSingleton<NINA.Polaris.Services.Logging.LogService>();
+builder.Services.AddSingleton<NINA.Polaris.Services.Logging.DiagnosticsBundleService>();
 builder.Logging.Services.AddSingleton<Microsoft.Extensions.Logging.ILoggerProvider>(sp =>
     new NINA.Polaris.Services.Logging.LogBufferLoggerProvider(
         sp.GetRequiredService<NINA.Polaris.Services.Logging.LogService>()));
@@ -242,6 +243,9 @@ builder.Logging.Services.AddSingleton<Microsoft.Extensions.Logging.ILoggerProvid
 // service checks profile.LogToDisk per tick so toggling Settings takes
 // effect without a restart.
 builder.Services.AddHostedService<NINA.Polaris.Services.Logging.LogRotatorService>();
+// System events (USB, crashes, OOM, under-voltage, WiFi, indiserver) into the
+// same log, Linux only.
+builder.Services.AddHostedService<NINA.Polaris.Services.Logging.SystemJournalService>();
 // ASIAIR-style per-session guiding logs: native → PHD2-compatible guide log,
 // external PHD2 → copy of PHD2's own log. Opt-out via profile.SaveGuideLogs.
 builder.Services.AddHostedService<NINA.Polaris.Services.Logging.GuideSessionLogService>();

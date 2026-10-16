@@ -34,6 +34,13 @@ case "$1" in
             echo "polaris: created system user $POLARIS_USER"
         fi
 
+        # Read the system journal without sudo: Polaris brings USB, crash and
+        # WiFi events into its own log and the diagnostics zip. Takes effect
+        # when the service restarts at the end of this script.
+        if getent group systemd-journal >/dev/null 2>&1; then
+            usermod -aG systemd-journal $POLARIS_USER 2>/dev/null || true
+        fi
+
         # adduser usually creates the home, but be defensive in case
         # someone removed it or pre-created the user differently.
         if [ ! -d $POLARIS_HOME ]; then

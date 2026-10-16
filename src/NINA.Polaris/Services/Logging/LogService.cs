@@ -158,8 +158,14 @@ public class LogService {
         new Regex(@"token=[^&\s]+",                         RegexOptions.Compiled | RegexOptions.IgnoreCase),
         new Regex(@"Authorization:\s*Bearer\s+\S+",         RegexOptions.Compiled | RegexOptions.IgnoreCase),
         new Regex(@"polaris_session=[^;]+",                 RegexOptions.Compiled | RegexOptions.IgnoreCase),
+        new Regex(@"psk=[^&\s]+",                           RegexOptions.Compiled | RegexOptions.IgnoreCase),
+        new Regex(@"wifi-sec\.psk:\S+",                     RegexOptions.Compiled | RegexOptions.IgnoreCase),
     };
     private const string Redacted = "***";
+
+    /// <summary>The same redaction every log entry gets, for text that does
+    /// not come through <see cref="Append"/> (the diagnostics bundle).</summary>
+    public static string RedactText(string? s) => Redact(s) ?? string.Empty;
 
     private static string? Redact(string? s) {
         if (string.IsNullOrEmpty(s)) return s;
