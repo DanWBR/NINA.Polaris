@@ -36059,9 +36059,16 @@ function ninaApp() {
         // accepted, and kept returning full-sensor frames, so the panel, the
         // FITS header and the status all agreed on a binning that never
         // happened.
+        //
+        // Only up to bin 4. A driver can report every bin its sensor will do,
+        // and a QHY over INDI reports sixteen: sixteen buttons pushed Exp and
+        // the frame count out of the AUTORUN card and ran off the PREVIEW
+        // panel. Past 4 is not a deep-sky setting on any current sensor.
         binPresets() {
             const b = this.cameraCaps.supportedBins;
-            return (Array.isArray(b) && b.length) ? b.map(String) : ['1', '2', '3', '4'];
+            const list = (Array.isArray(b) && b.length) ? b.map(String) : ['1', '2', '3', '4'];
+            const capped = list.filter(v => Number(v) <= 4);
+            return capped.length ? capped : list.slice(0, 1);
         },
 
         // Pull every bin selection into the list the current camera offers.
