@@ -131,9 +131,13 @@ public sealed class ToupTekSdkCamera : ICamera {
         var quarantined = ToupTekRegistry.QuarantineReason;
         if (quarantined != null)
             throw new InvalidOperationException(char.ToUpperInvariant(quarantined[0]) + quarantined[1..]);
+        int index = -1;
         try {
-            foreach (var d in NativeCallGuard.Run(ToupTekRegistry.GuardName, "listing cameras", Toupcam.EnumV2)) {
+            var devs = NativeCallGuard.Run(ToupTekRegistry.GuardName, "listing cameras", Toupcam.EnumV2);
+            for (int i = 0; i < devs.Length; i++) {
+                var d = devs[i];
                 if (d.id == _camId) {
+                    index = i;
                     flag = d.model.flag;
                     _pixelSize = d.model.xpixsz;
                     if (!string.IsNullOrWhiteSpace(d.displayname)) DeviceName = d.displayname;
@@ -142,7 +146,15 @@ public sealed class ToupTekSdkCamera : ICamera {
             }
         } catch { }
 
-        var cam = NativeCallGuard.Run(ToupTekRegistry.GuardName, "opening the camera", () => Toupcam.Open(_camId));
+        // Off Windows the camera is opened by its index in the enumeration. The
+        // binding marshals Open's id as UTF-16 unless it is compiled with LINUX,
+        // and the published library never is (a RID-agnostic project reference
+        // does not inherit the RID), so libtoupcam read the id as "t" and every
+        // Open failed. OpenByIndex passes no string.
+        if (index < 0 && !OperatingSystem.IsWindows()) throw new InvalidOperationException(
+            $"The ToupTek camera '{_camId}' is not connected. Check its USB cable and power, then refresh the camera list.");
+        var cam = NativeCallGuard.Run(ToupTekRegistry.GuardName, "opening the camera",
+            () => OperatingSystem.IsWindows() ? Toupcam.Open(_camId) : Toupcam.OpenByIndex((uint)index));
         if (cam == null) throw new InvalidOperationException(
             $"Failed to open the ToupTek camera '{_camId}'. The camera may already " +
             "be in use by another process. If an INDI driver for this camera is " +

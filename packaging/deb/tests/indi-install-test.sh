@@ -101,6 +101,26 @@ rc=$(run indi-asi)
 grep -q "indi-bin" "$WORK/run/indi-install.json" && ok "it names what would have gone" || bad "the refusal does not say what"
 [ -s "$WORK/installed" ] && bad "apt ran anyway" || ok "apt never ran"
 
+# ---- 2b. the PPA's libs taking the place of the archive's SDK ------------
+echo "--- indi-3rdparty-libs replaces the archive's libasi ---"
+cat > "$PLAN_FILE" <<'EOF'
+Remv libasi [1.27+20221218230335-3]
+Inst indi-3rdparty-libs (2.2.0 INDI Stable Builds:26.04/resolute [arm64])
+Inst indi-3rdparty-drivers (2.2.0 INDI Stable Builds:26.04/resolute [arm64])
+EOF
+rc=$(run indi-3rdparty-drivers)
+[ "$rc" -eq 0 ] && ok "a vendor SDK it Replaces may go" || bad "refused: $(cat "$WORK/run/indi-install.json")"
+grep -q "indi-3rdparty-drivers" "$WORK/installed" && ok "apt was called" || bad "apt was not called"
+
+cat > "$PLAN_FILE" <<'EOF'
+Remv libasi [1.27]
+Remv phd2 [2.6.14]
+Inst indi-3rdparty-libs (2.2.0 INDI Stable Builds:26.04/resolute [arm64])
+EOF
+rc=$(run indi-3rdparty-drivers)
+[ "$rc" -ne 0 ] && ok "anything beyond what it Replaces is still refused" || bad "phd2 was allowed to go"
+[ -s "$WORK/installed" ] && bad "apt ran anyway" || ok "apt never ran"
+
 # ---- 3. it would overwrite source-built files ----------------------------
 echo "--- it would overwrite files built from source ---"
 cat > "$PLAN_FILE" <<'EOF'

@@ -89,6 +89,43 @@ public class IndiPackagePlannerTests {
     }
 
     [Test]
+    public void TheThirdPartyLibsMayReplaceTheArchivesVendorSdk() {
+        // An Orange Pi 5 Pro after the night above: indi-asi gone again, the
+        // archive's libasi it pulled in still there, and with it no
+        // indi-3rdparty-libs, so no ToupTek or other third-party INDI driver.
+        const string restore = """
+            Remv libasi [1.27+20221218230335-3]
+            Inst indi-3rdparty-libs (2.2.0+202608250615~ubuntu26.04.1 INDI Stable Builds:26.04/resolute [arm64])
+            Inst liblimesuite23.11-1 (23.11.0+dfsg-4 Ubuntu:26.04/resolute [arm64])
+            Inst indi-3rdparty-drivers (2.2.0+202608250819~ubuntu26.04.1 INDI Stable Builds:26.04/resolute [arm64])
+            """;
+        var plan = IndiPackagePlanner.Parse(restore);
+        Assert.That(plan.Ok, Is.True);
+        Assert.That(plan.Remove, Is.EqualTo(new[] { "libasi" }));
+    }
+
+    [Test]
+    public void TheThirdPartyLibsStillMayNotTakeAnythingElse() {
+        const string greedy = """
+            Remv libasi [1.27]
+            Remv phd2 [2.6.14]
+            Inst indi-3rdparty-libs (2.2.0 INDI Stable Builds:26.04/resolute [arm64])
+            """;
+        var plan = IndiPackagePlanner.Parse(greedy);
+        Assert.That(plan.Ok, Is.False);
+        Assert.That(plan.Refusal, Does.Contain("phd2"));
+    }
+
+    [Test]
+    public void TheArchivesVendorSdkIsOnlyReplaceableByTheThirdPartyLibs() {
+        const string other = """
+            Remv libasi [1.27]
+            Inst indi-asi (2.2 Ubuntu:26.04/resolute [arm64])
+            """;
+        Assert.That(IndiPackagePlanner.Parse(other).Ok, Is.False);
+    }
+
+    [Test]
     public void NothingToInstallIsNotSuccess() {
         var plan = IndiPackagePlanner.Parse("Reading package lists...\nBuilding dependency tree...\n");
         Assert.That(plan.Ok, Is.False);

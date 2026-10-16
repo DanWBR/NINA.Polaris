@@ -25,7 +25,11 @@
   <!-- The official binding gates its native-lib name + string marshalling on
        the LINUX compile symbol. Define it when publishing for a linux RID;
        the default (dev) build targets the Windows branch, which is correct
-       on the Windows dev box. -->
+       on the Windows dev box. In practice the published .deb carries the
+       Windows branch: a RID-agnostic project reference is built without the
+       app's RID, so this never fires. The native lib name is fixed by
+       ToupTekRegistry's resolver, and ToupTekSdkCamera opens by index off
+       Windows; nothing else Polaris calls marshals a string. -->
   <PropertyGroup Condition="$(RuntimeIdentifier.StartsWith('linux'))">
     <DefineConstants>$(DefineConstants);LINUX</DefineConstants>
   </PropertyGroup>

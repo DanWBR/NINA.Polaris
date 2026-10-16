@@ -45,6 +45,18 @@ public static class IndiPackagePlanner {
         "indi-3rdparty-drivers", "indi-3rdparty-libs", "polaris"
     };
 
+    /// <summary>The Replaces list of the PPA's indi-3rdparty-libs
+    /// (2.2.0, Ubuntu 26.04).</summary>
+    public static readonly HashSet<string> ReplacedByThirdPartyLibs = new(StringComparer.Ordinal) {
+        "libahp-gt", "libahp-xc", "libaltaircam", "libapogee-dbg", "libapogee3", "libapogee3-dev",
+        "libasi", "libastroasis", "libatik", "libbressercam", "libfishcamp", "libfishcamp-dev",
+        "libfli-dbg", "libfli-dev", "libfli2", "libflipro-dev", "libflipro2", "libinovasdk",
+        "libmallincam", "libmeadecam", "libmicam", "libnncam", "libogmacam", "libomegonprocam",
+        "libpigpiod", "libpigpiod-dbg", "libpktriggercord", "libplayerone", "libqhy", "libqsi-dbg",
+        "libqsi-dev", "libqsi7", "libricohcamerasdk", "libsbig", "libstarshootg", "libsvbony",
+        "libsvbonycam", "libtoupcam", "libtscam"
+    };
+
     public static IndiPackagePlan Parse(string? simulationOutput) {
         var install = new List<string>();
         var remove = new List<string>();
@@ -61,6 +73,15 @@ public static class IndiPackagePlanner {
             if (m.Groups[1].Value == "Inst") install.Add(m.Groups[2].Value);
             else remove.Add(m.Groups[2].Value);
         }
+
+        // The PPA's indi-3rdparty-libs bundles every vendor SDK and declares it
+        // Replaces the archive's per-vendor packages. Removing those is the
+        // package taking their place, not a swap of INDI builds: without this,
+        // a host left with the archive's libasi could never get the
+        // third-party drivers back from the panel.
+        if (remove.Count > 0 && install.Contains("indi-3rdparty-libs")
+            && remove.All(r => ReplacedByThirdPartyLibs.Contains(r)))
+            return new IndiPackagePlan(install, remove, true, null);
 
         if (remove.Count > 0) {
             var lost = remove.Where(r => LoadBearing.Contains(r, StringComparer.Ordinal)).ToList();
