@@ -8745,21 +8745,35 @@ function ninaApp() {
         // (same origin) so the GET works without us baking the token
         // into the URL (avoids logging the token in the access log).
         // The diagnostics zip: Polaris's logs plus, on Linux, the system
-        // journal, kernel log, indiserver log, USB and network state. Same
-        // cookie-authenticated download as logExport.
-        logDiagnostics() {
+        // journal, kernel log, indiserver log, USB and network state.
+        //
+        // In the Android / iOS app the WebView cannot download, so the shell
+        // does it: first its native share sheet (a few MB of zip goes straight
+        // to mail, Discord or Drive, which is where a bug report is headed),
+        // then the system download when sharing is not available. The shell
+        // fetches without the session cookie, hence the token in the URL.
+        async logDiagnostics() {
+            const stamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '');
+            const name = 'polaris-diagnostics-' + stamp + '.zip';
+            this.toast(this.$t('Preparing the diagnostics zip...'), 'info', 4000);
+            if (this._authWrapperOrigin) {
+                const url = this.authUrl('/api/logs/diagnostics');
+                if (await this._shellShare({ url, name, mime: 'application/zip' })) return;
+                if (this._shellDownload(url, name)) return;
+            }
             const a = document.createElement('a');
             a.href = '/api/logs/diagnostics';
             a.download = '';
             document.body.appendChild(a);
             a.click();
             a.remove();
-            this.toast(this.$t('Preparing the diagnostics zip...'), 'info', 4000);
         },
 
         logExport(format) {
             const fmt = format === 'txt' ? 'txt' : 'jsonl';
             const url = '/api/logs/export?format=' + fmt;
+            // In the app the shell hands it to the system download manager.
+            if (this._shellDownload(this.authUrl(url), 'polaris-log.' + fmt)) return;
             const a = document.createElement('a');
             a.href = url;
             a.download = '';   // browser uses Content-Disposition filename
