@@ -8744,6 +8744,19 @@ function ninaApp() {
         // browser's download dialog. Uses the auth-attached cookie
         // (same origin) so the GET works without us baking the token
         // into the URL (avoids logging the token in the access log).
+        // The diagnostics zip: Polaris's logs plus, on Linux, the system
+        // journal, kernel log, indiserver log, USB and network state. Same
+        // cookie-authenticated download as logExport.
+        logDiagnostics() {
+            const a = document.createElement('a');
+            a.href = '/api/logs/diagnostics';
+            a.download = '';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            this.toast(this.$t('Preparing the diagnostics zip...'), 'info', 4000);
+        },
+
         logExport(format) {
             const fmt = format === 'txt' ? 'txt' : 'jsonl';
             const url = '/api/logs/export?format=' + fmt;

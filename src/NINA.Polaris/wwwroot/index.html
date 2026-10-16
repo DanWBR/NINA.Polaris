@@ -23159,6 +23159,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <select class="log-ctl" x-model="logs.filterSource">
                     <option value="all">All sources</option>
                     <option value="server">Server</option>
+                    <option value="system">System (USB, crashes, WiFi)</option>
                     <option value="http">HTTP requests</option>
                     <option value="client">Client</option>
                     <option value="toast">Toasts</option>
@@ -23171,6 +23172,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <button class="btn btn-sm" @click="logCopyAll()" title="Copy all visible log lines to the clipboard">Copy</button>
                 <button class="btn btn-sm" @click="logExport('jsonl')">Export JSONL</button>
                 <button class="btn btn-sm" @click="logExport('txt')">Export TXT</button>
+                <button class="btn btn-sm" @click="logDiagnostics()"
+                        title="Download a zip with the logs and system information a bug report needs">Diagnostics</button>
                 <button class="btn btn-sm btn-danger" @click="logClear()">Clear</button>
                 <button class="btn btn-sm" @click="logClose()">✕ Close</button>
             </div>
@@ -25343,7 +25346,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261016-bincap"></script>
+    <script src="/js/app.js?v=20261016-diag"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

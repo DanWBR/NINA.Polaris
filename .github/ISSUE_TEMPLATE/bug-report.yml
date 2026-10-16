@@ -50,8 +50,10 @@ body:
     attributes:
       label: Log
       description: |
-        The lines around the failure: the LOG panel's **Export TXT** is the
-        easiest way to get them. On the host the session logs are in
+        Best: the LOG panel's **Diagnostics** button (Polaris 0.98.198 or later)
+        downloads one zip with Polaris's logs and, on Linux, the system log,
+        USB and network state. Attach it here. Otherwise paste the lines around
+        the failure from **Export TXT**. On the host the session logs are in
         `~/.local/share/NINA.Polaris/logs/` (Linux, as the `polaris` user) or
         `%LOCALAPPDATA%\NINA.Polaris\logs\` (Windows). If the page itself
         misbehaved, the browser console too.

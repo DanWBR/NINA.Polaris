@@ -104,7 +104,10 @@ body:
     attributes:
       label: Log
       description: |
-        The lines around the failure, not the whole night: the LOG panel's
+        Best: the LOG panel's **Diagnostics** button (Polaris 0.98.198 or later)
+        downloads one zip with Polaris's logs, the system log, the indiserver
+        log, the USB tree and package versions. Attach it here. Otherwise the
+        lines around the failure, not the whole night: the LOG panel's
         **Export TXT**, or the session logs in `~/.local/share/NINA.Polaris/logs/`.
         Add `journalctl -u polaris --since "1 hour ago"` for anything that
         happened before the app got far enough to write its own log.

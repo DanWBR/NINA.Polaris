@@ -96,6 +96,22 @@ public static class LogsEndpoints {
             return Results.Empty;
         });
 
+        // Diagnostics bundle: everything a bug report needs in one zip (the
+        // LOG panel's Diagnostics button). Built in memory, then sent: the zip
+        // writer finishes with synchronous writes, which the response stream
+        // refuses.
+        group.MapGet("/diagnostics", async (DiagnosticsBundleService diag, HttpContext ctx) => {
+            using var ms = new MemoryStream();
+            await diag.WriteZipAsync(ms, ctx.RequestAborted);
+            var ts = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
+            ctx.Response.ContentType = "application/zip";
+            ctx.Response.Headers.ContentDisposition =
+                $"attachment; filename=\"polaris-diagnostics-{ts}.zip\"";
+            ms.Position = 0;
+            await ms.CopyToAsync(ctx.Response.Body, ctx.RequestAborted);
+            return Results.Empty;
+        });
+
         // ASIAIR-style session guide logs on disk: list + download the files
         // saved under {LocalAppData}/NINA.Polaris/logs/guide/ (native PHD2-format
         // logs + copies of external PHD2's own guide log).
