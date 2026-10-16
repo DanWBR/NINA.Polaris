@@ -1510,13 +1510,10 @@ public class IndiCamera : ICamera, IDisposable {
                 var driverBayer = BayerPattern;
                 if (driverBayer != BayerPatternEnum.None
                         && imageData.Properties.BayerPattern == BayerPatternEnum.None) {
-                    imageData = new BaseImageData(
-                        imageData.Data,
-                        imageData.Properties with {
-                            BayerPattern = driverBayer,
-                            IsBayered = true
-                        },
-                        imageData.MetaData);
+                    imageData = WithProperties(imageData, imageData.Properties with {
+                        BayerPattern = driverBayer,
+                        IsBayered = true
+                    });
                 }
                 // SERSCALE-2: a driver that reports a SPECIFIC depth (8..15,
                 // e.g. CCD_BITSPERPIXEL=12) is passed through so the SER
@@ -1526,10 +1523,8 @@ public class IndiCamera : ICamera, IDisposable {
                 // kept and the recorder infers the depth from the data.
                 var driverBits = BitDepth;
                 if (driverBits is >= 8 and < 16 && imageData.Properties.SignificantBitDepth == 0) {
-                    imageData = new BaseImageData(
-                        imageData.Data,
-                        imageData.Properties with { SignificantBitDepth = driverBits },
-                        imageData.MetaData);
+                    imageData = WithProperties(imageData,
+                        imageData.Properties with { SignificantBitDepth = driverBits });
                 }
                 // Also propagate into MetaData so FITSWriter emits
                 // the BAYERPAT keyword when saving frames to disk. Use the
@@ -1574,6 +1569,21 @@ public class IndiCamera : ICamera, IDisposable {
                 // don't poison the whole stream.
             }
         }
+    }
+
+    /// <summary>The same frame with new properties, still carrying the
+    /// camera's own file. The two rebuilds above used to make a bare
+    /// BaseImageData and drop it: a gphoto DSLR reports its bit depth, so
+    /// every one of its frames lost the CR3 here and was saved as FITS of
+    /// whatever had been decoded for the preview (a LibRaw rendering, or the
+    /// 8-bit embedded JPEG), never as the RAW the camera recorded.</summary>
+    internal static IImageData WithProperties(IImageData src, ImageProperties props) {
+        var copy = new BaseImageData(src.Data, props, src.MetaData);
+        if (src is IHasRawFile raw && raw.RawFileBytes != null) {
+            copy.RawFileBytes = raw.RawFileBytes;
+            copy.RawFileExtension = raw.RawFileExtension;
+        }
+        return copy;
     }
 
     // ---- DSLR native-RAW decode (indi_gphoto FORMAT_NATIVE) ----
