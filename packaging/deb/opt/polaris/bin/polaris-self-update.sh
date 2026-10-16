@@ -118,6 +118,9 @@ removes_nothing() {
 # them installed, and tried in order otherwise. ffmpeg is the one that
 # matters most: MP4 output (time-lapse, SER to MP4) needs it.
 install_recommends() {
+    # A stale package list names versions the repository has since replaced,
+    # and every download then fails with 404. Offline it is all there is.
+    timeout 180 apt-get update -qq >> "$LOG" 2>&1 || true
     dpkg-query -W -f='${Recommends}
 ' polaris 2>/dev/null | tr ',' '
 ' | sed 's/([^)]*)//g'     | while read -r entry; do
