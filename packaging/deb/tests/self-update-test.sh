@@ -132,6 +132,48 @@ grep -q "recommends: libasi already present outside dpkg" "$WORK/update.log"    
 # still wanted.
 grep -q "install -y --no-install-recommends ffmpeg" "$CALLS"     && ok "other recommends still install"     || bad "the guard swallowed the whole extras pass"
 
+# ---- third run: a Recommend whose install would remove something ----------
+# The extras pass runs apt-get -y unattended, so apt's plan is read first. The
+# INDI PPA's third-party drivers may take the place of the archive's libasi
+# (indi-3rdparty-libs Replaces it); a plan that removes anything else, here
+# PHD2, is left out.
+echo
+echo "--- Recommends whose plan removes packages ---"
+: > "$CALLS"
+: > "$WORK/update.log"
+touch "$WORK/staged-once"
+touch "$WORK/cache/polaris-update.deb"
+cat > "$BIN/dpkg-query" <<'STUB'
+#!/usr/bin/env bash
+fmt=""; pkg=""
+while [ $# -gt 0 ]; do case "$1" in -W) ;; -f=*) fmt="${1#-f=}";; -f) shift; fmt="$1";; *) pkg="$1";; esac; shift; done
+case "$fmt" in
+  *Recommends*) [ "$pkg" = polaris ] && printf 'indi-3rdparty-drivers, indi-asi\n' ;;
+  *Status*) exit 1 ;;
+esac
+STUB
+cat > "$BIN/apt-get" <<STUB
+#!/usr/bin/env bash
+echo "\$*" >> "$CALLS"
+case "\$*" in
+  *"install -s"*indi-3rdparty-drivers)
+    printf 'Remv libasi [1.27]\nInst indi-3rdparty-libs (2.2.0 INDI Stable Builds:26.04/resolute [arm64])\nInst indi-3rdparty-drivers (2.2.0 INDI Stable Builds:26.04/resolute [arm64])\n' ;;
+  *"install -s"*indi-asi)
+    printf 'Remv phd2 [2.6.14]\nRemv indi-bin [2.2.2]\nInst indi-asi (2.2 Ubuntu:26.04/resolute [arm64])\n' ;;
+esac
+exit 0
+STUB
+chmod +x "$BIN/dpkg-query" "$BIN/apt-get"
+
+"$SCRIPT" >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 0 ] && ok "script still exits 0" || bad "script exit $rc"
+grep -q "install -y --no-install-recommends indi-3rdparty-drivers" "$CALLS" \
+    && ok "the third-party drivers install over the archive's libasi" || bad "indi-3rdparty-drivers was not installed"
+grep -q "install -y --no-install-recommends indi-asi" "$CALLS" \
+    && bad "a package that removes PHD2 was installed" || ok "a plan that removes PHD2 is left out"
+grep -q "recommends: indi-asi left out, it would remove phd2 indi-bin" "$WORK/update.log" \
+    && ok "the log names what would have gone" || bad "the skip is not explained: $(cat "$WORK/update.log")"
+
 # leave the stub in place: the harness owns PATH for the whole run.
 
 echo
