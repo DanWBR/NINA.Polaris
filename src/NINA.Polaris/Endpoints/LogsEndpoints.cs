@@ -137,6 +137,21 @@ public static class LogsEndpoints {
             return Results.File(path, "text/plain", safe);
         });
 
+        // One JSON per autofocus run under logs/autofocus/ (90-day retention):
+        // the list carries a summary per run, the download serves the file
+        // itself, which the LOG panel also draws as a curve.
+        group.MapGet("/autofocus", () => Results.Ok(new { runs = AutoFocusRunLog.List() }));
+
+        group.MapGet("/autofocus/download", (string? name) => {
+            var safe = Path.GetFileName(name ?? "");
+            if (string.IsNullOrEmpty(safe) || !safe.StartsWith("af_", StringComparison.Ordinal)
+                    || !safe.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                return Results.BadRequest(new { error = "invalid name" });
+            var path = Path.Combine(AutoFocusRunLog.Dir, safe);
+            if (!File.Exists(path)) return Results.NotFound(new { error = "not found" });
+            return Results.File(path, "application/json", safe);
+        });
+
         group.MapPost("/client", (LogService svc, ClientLogBatch body) => {
             if (body?.Entries == null || body.Entries.Count == 0) {
                 return Results.Ok(new { accepted = 0 });

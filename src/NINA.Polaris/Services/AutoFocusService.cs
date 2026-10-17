@@ -429,6 +429,7 @@ public class AutoFocusService {
                     LastResult = result;
                     State = AutoFocusState.Idle;
                 }
+                SaveRunLog(o, source, camera, focuser, result);
 
                 // Per-filter focus memory: record this run's optimum for the
                 // active filter (MAIN train only) + refresh the learned relative
@@ -471,6 +472,7 @@ public class AutoFocusService {
                 LastError = "Cancelled";
                 State = AutoFocusState.Idle;
             }
+            SaveRunLog(o, source, camera, focuser, LastResult);
         } catch (Exception ex) {
             _logger.LogError(ex, "Auto-focus failed, restoring start position {Pos}", startPosition);
             try { await focuser.MoveAbsoluteAsync(startPosition, CancellationToken.None); } catch { }
@@ -479,6 +481,7 @@ public class AutoFocusService {
                 LastResult = FailedResult(startPosition, ex.Message);
                 State = AutoFocusState.Idle;
             }
+            SaveRunLog(o, source, camera, focuser, LastResult);
         } finally {
             // BINNING FIRST, then the region. The comment that used to sit below
             // said exactly this and the code did the opposite: the region was
@@ -503,6 +506,29 @@ public class AutoFocusService {
                 try { await camera.SetSubframeAsync(0, 0, 0, 0, CancellationToken.None); }
                 catch (Exception ex) { _logger.LogWarning(ex, "AF failed to clear ROI subframe"); }
             }
+        }
+    }
+
+    /// <summary>Keeps the run on disk (logs/autofocus/), failed ones included:
+    /// a run that could not fit a curve is often the one worth reading the
+    /// next day. Best-effort; never fails the autofocus.</summary>
+    private void SaveRunLog(AutoFocusRunOptions o, string source, ICamera camera, IFocuser focuser,
+                            AutoFocusResult? result) {
+        if (result == null) return;
+        try {
+            string? filter = null;
+            if (source == "main" && _equip.FilterWheel is { IsConnected: true } wheel)
+                filter = wheel.CurrentFilterName;
+            double t = focuser.Temperature;
+            var run = new Logging.AutoFocusRunLog.Run(1, source, focuser.DeviceName, camera.DeviceName, filter,
+                double.IsFinite(t) ? t : null,
+                new(o.OffsetSteps, o.StepSize, o.ExposureSeconds, o.Binning, o.FramesPerPoint,
+                    AutoFocusMetricParser.Name(o.Metric), o.RSquaredThreshold, o.Attempts),
+                result);
+            var path = Logging.AutoFocusRunLog.Write(run);
+            _logger.LogInformation("Auto-focus run saved: {Path}", path);
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "Saving the auto-focus run failed");
         }
     }
 

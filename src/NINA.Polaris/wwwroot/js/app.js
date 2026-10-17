@@ -5129,6 +5129,9 @@ function ninaApp() {
         },
         // ASIAIR-style session guide logs on disk (loaded on demand in Settings).
         guideLogs: [],
+        // One JSON per autofocus run (logs/autofocus/), listed in Settings.
+        afLogs: [],
+        afLogViewer: { open: false, fileName: '', loading: false, error: '', run: null },
         // In-app PHD2 guide-log viewer (parses the PHD2-format log client-side).
         phd2Viewer: { open: false, fileName: '', loading: false, error: '',
                       sessions: [], sessionIdx: 0, pixelScale: 0, unit: 'px' },
@@ -24412,6 +24415,92 @@ function ninaApp() {
             } catch (e) { this.toastFail('Download failed', e); }
         },
 
+        // ---- Autofocus run logs (logs/autofocus/, one JSON per run) -------
+        async loadAfLogs() {
+            try {
+                const data = await this.apiGet('/api/logs/autofocus');
+                this.afLogs = (data && data.runs) || [];
+            } catch { this.afLogs = []; }
+        },
+        async downloadAfLog(name) {
+            try {
+                const resp = await this.apiFetch('/api/logs/autofocus/download?name=' + encodeURIComponent(name));
+                if (!resp || !resp.ok) { this.toast('Download failed', 'error'); return; }
+                const blob = await resp.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = name;
+                document.body.appendChild(a); a.click(); a.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+            } catch (e) { this.toastFail('Download failed', e); }
+        },
+        // One line per run in the list: when, filter, temperature, result.
+        afLogLine(r) {
+            const when = r.startedUtc ? new Date(r.startedUtc).toLocaleString() : r.name;
+            const parts = [when];
+            if (r.filter) parts.push(r.filter);
+            if (r.temperatureC != null) parts.push(r.temperatureC.toFixed(1) + ' °C');
+            if (r.success) {
+                if (r.finalHfr != null) parts.push('HFR ' + r.finalHfr.toFixed(2));
+                parts.push('R² ' + (r.rSquared || 0).toFixed(2));
+            } else {
+                parts.push(this.$t('Failed'));
+            }
+            return parts.join('  ·  ');
+        },
+        async openAfLog(name) {
+            this.afLogViewer = { open: true, fileName: name, loading: true, error: '', run: null };
+            try {
+                const resp = await this.apiFetch('/api/logs/autofocus/download?name=' + encodeURIComponent(name));
+                if (!resp || !resp.ok) throw new Error('HTTP ' + (resp ? resp.status : '?'));
+                this.afLogViewer.run = await resp.json();
+                this.afLogViewer.loading = false;
+                this.$nextTick(() => this._renderAfLogChart());
+            } catch (e) {
+                this.afLogViewer.loading = false;
+                this.afLogViewer.error = this.$t('Could not read the autofocus run') + ': ' + (e.message || '');
+            }
+        },
+        get afLogTiles() {
+            const run = this.afLogViewer.run;
+            const r = run && run.result;
+            if (!r) return [];
+            const num = (x, d) => (typeof x === 'number' && Number.isFinite(x) ? x.toFixed(d) : '--');
+            return [
+                { label: 'Result', value: r.success ? 'OK' : this.$t('Failed'), unit: '', color: r.success ? '#4caf50' : '#ef5350' },
+                { label: 'Final position', value: String(r.finalPosition ?? '--'), unit: '' },
+                { label: 'Final HFR', value: num(r.finalMeasuredHfr, 2), unit: '' },
+                { label: 'R²', value: num(r.rSquared, 2), unit: '' },
+                { label: 'Temperature', value: num(run.temperatureC, 1), unit: '°C' },
+                { label: 'Attempts', value: String(r.attempts ?? '--'), unit: '' },
+            ];
+        },
+        _renderAfLogChart() {
+            const cv = this.$refs.afLogChart;
+            const run = this.afLogViewer.run;
+            if (!cv || !run || !run.result || typeof Chart === 'undefined') return;
+            // The chart lives in the module-level _polarisCharts, like every
+            // other chart here: kept on the component, Alpine wraps it in a
+            // reactive proxy and Chart.js recurses through it until the stack
+            // overflows. The run is copied out of its proxy for the same reason.
+            if (_polarisCharts.afLog) { try { _polarisCharts.afLog.destroy(); } catch (_) {} delete _polarisCharts.afLog; }
+            const r = JSON.parse(JSON.stringify(run.result));
+            // Same shape as the live autoFocus state, so the FOCUS chart code
+            // draws it unchanged. NaN HFRs arrive as the string "NaN" and are
+            // dropped by its finite filter.
+            const af = {
+                points: r.points || [],
+                fits: r.fits,
+                metric: (run.settings && run.settings.metric) || 'HFR',
+                bestPosition: r.success ? r.bestPosition : null,
+                bestHfr: r.success ? r.bestPredictedHfr : null,
+            };
+            const chart = new Chart(cv.getContext('2d'), this._afChartConfig());
+            _polarisCharts.afLog = chart;
+            this._fillAfChart(chart, af);
+            chart.update('none');
+        },
+
         // ---- In-app PHD2 guide-log viewer ---------------------------------
         // Parse the PHD2-format guide log (the format the desktop PHD2 Log
         // Viewer reads) client-side and graph the RA/Dec error + RMS stats.
@@ -24577,10 +24666,12 @@ function ninaApp() {
             } catch (e) { this.toastFail('Flip failed', e); }
         },
 
-        // Auto-Focus V-curve: HFR vs Position, scatter + fit overlay
-        updateAfChart() {
+        // Auto-Focus V-curve: HFR vs Position, scatter + fit overlay. The
+        // config and the filling are separate so a saved run (LOG panel,
+        // logs/autofocus/) is drawn by exactly the same code as the live one.
+        _afChartConfig() {
             const t = this._chartTheme();
-            const c = this._ensureChart('afChart', 'af', 'scatter', () => ({
+            return {
                 type: 'scatter',
                 data: {
                     datasets: [
@@ -24628,9 +24719,21 @@ function ninaApp() {
                              title: { display: true, text: 'HFR', color: t.tick, font: { size: 10 } } }
                     }
                 }
-            }));
+            };
+        },
+
+        updateAfChart() {
+            const c = this._ensureChart('afChart', 'af', 'scatter', () => this._afChartConfig());
             if (!c) return;
-            const pts = this.autoFocus.points || [];
+            this._fillAfChart(c, this.autoFocus);
+            c.update('none');
+        },
+
+        // Fill the V-curve datasets from one run: the live autoFocus state or
+        // a saved run mapped to the same shape (points, fits, metric,
+        // bestPosition, bestHfr).
+        _fillAfChart(c, af) {
+            const pts = af.points || [];
             // FIELD2-1: filter out NaN / zero HFR samples (the
             // heavy-defocus extremes of the sweep) so the chart
             // shows a real V instead of a V with zero floors at
@@ -24642,7 +24745,7 @@ function ninaApp() {
             // contrast), a bowl like HFR, so the same curve machinery draws it;
             // only the axis label changes.
             try {
-                const contrastRun = (this.autoFocus.metric || 'HFR') !== 'HFR';
+                const contrastRun = (af.metric || 'HFR') !== 'HFR';
                 c.options.scales.y.title.text = contrastRun ? 'Contrast (inverted, lower = sharper)' : 'HFR';
             } catch (e) { /* chart options may not be built yet */ }
             // Inliers (used by the fit) and spurious points the robust fit
@@ -24665,7 +24768,7 @@ function ninaApp() {
             // AFPORT: draw the SERVED fits, the hyperbola (or the weighted
             // parabola when the method is parabolic) plus both trendline arm
             // segments, instead of re-deriving a heuristic parabola.
-            const fits = this.autoFocus.fits;
+            const fits = af.fits;
             // Span the fit line over the COARSE samples only. The fine cluster
             // sits inside that span anyway, but taking the extremes from all
             // points would let a clamped refinement target (one that landed on
@@ -24708,8 +24811,8 @@ function ninaApp() {
                     ? seg(fits.rightSlope, fits.rightIntercept, vx, maxP) : [];
                 // Best/final marker: the accepted result when idle, the live
                 // fit's derived focus point while the sweep runs.
-                const bx = this.autoFocus.bestPosition ?? fits.finalX;
-                const by = this.autoFocus.bestHfr ?? fits.finalY;
+                const bx = af.bestPosition ?? fits.finalX;
+                const by = af.bestHfr ?? fits.finalY;
                 c.data.datasets[2].data = (bx && Number.isFinite(by))
                     ? [{ x: bx, y: Math.max(0, by) }] : [];
             } else {
@@ -24718,7 +24821,6 @@ function ninaApp() {
                 if (c.data.datasets[4]) c.data.datasets[4].data = [];
                 if (c.data.datasets[5]) c.data.datasets[5].data = [];
             }
-            c.update('none');
         },
 
         // Live-stack overlay chart: SNR cumulative (primary) +
