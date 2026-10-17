@@ -52,31 +52,39 @@ public static class OpenClRuntime {
     public static bool Enabled =>
         Environment.GetEnvironmentVariable("POLARIS_DISABLE_GPU") != "1";
 
-    /// <summary>Cheap "should we even try the GPU?" gate (env + loader present,
-    /// and no vendor Mali driver left without its kernel device).</summary>
-    public static bool IsAvailable => Enabled && LoaderPresent && StrandedMali == null;
+    /// <summary>Cheap "should we even try the GPU?" gate (env, no vendor Mali
+    /// driver left without its kernel device, loader present). The Mali check
+    /// runs first: it may point the loader away from libmali, which has to
+    /// happen before the loader is first touched.</summary>
+    public static bool IsAvailable => Enabled && StrandedMali == null && LoaderPresent;
 
     /// <summary>Human-readable summary of the probe result (for logs / status).</summary>
     public static string Diagnostics {
         get {
             if (!Enabled) return "GPU disabled via POLARIS_DISABLE_GPU=1";
+            if (StrandedMali is { } why) return why;
             if (!LoaderPresent)
                 return "GPU unavailable: no OpenCL ICD loader (libOpenCL) on this system";
-            if (StrandedMali is { } why) return why;
+            if (_skippedMali != null) return _skippedMali;
             return "OpenCL ICD loader present (device probed at first use)";
         }
     }
 
+    internal const string SystemVendorDir = "/etc/OpenCL/vendors";
+    private static string? _skippedMali;
+
     private static readonly Lazy<string?> _strandedMali = new(() => {
         try {
-            var icds = Directory.Exists("/etc/OpenCL/vendors")
-                ? Directory.GetFiles("/etc/OpenCL/vendors", "*.icd")
-                    .Select(f => { try { return File.ReadAllText(f).Trim(); } catch { return ""; } })
-                    .Where(s => s.Length > 0).ToList()
-                : new List<string>();
+            var icds = Directory.Exists(SystemVendorDir)
+                ? Directory.GetFiles(SystemVendorDir, "*.icd")
+                    .Select(f => { try { return (File: f, Lib: File.ReadAllText(f).Trim()); } catch { return (File: f, Lib: ""); } })
+                    .Where(x => x.Lib.Length > 0).ToList()
+                : new List<(string File, string Lib)>();
             bool maliDevice = Directory.Exists("/dev")
                 && Directory.GetFiles("/dev", "mali*").Length > 0;
-            return StrandedMaliReason(icds, maliDevice);
+            var (refuse, keep) = PlanIcds(icds, maliDevice);
+            if (keep != null) PointLoaderAt(keep);
+            return refuse;
         } catch { return null; }
     });
 
@@ -87,17 +95,43 @@ public static class OpenClRuntime {
     /// /dev/mali0. Under a mainline kernel (panthor) there is no such device,
     /// and the first OpenCL call segfaults the process ("No mali devices
     /// found"), which put an Orange Pi 5 Pro moved to Armbian's 6.18 kernel
-    /// into a crash loop. Refused only when every installed driver is libmali:
-    /// with another one present (Mesa's rusticl) the loader still loads
-    /// libmali, so that case is left to the crash guard.</summary>
-    internal static string? StrandedMaliReason(IReadOnlyCollection<string> icdLibraries, bool maliDevicePresent) {
-        if (maliDevicePresent || icdLibraries.Count == 0) return null;
-        if (!icdLibraries.All(l => Path.GetFileName(l).StartsWith("libmali", StringComparison.OrdinalIgnoreCase)))
-            return null;
-        return "GPU unavailable: the installed OpenCL driver is the vendor Mali one (libmali), which needs "
+    /// into a crash loop. With only libmali installed the GPU is refused; with
+    /// another driver beside it (Mesa's rusticl, which ran Polaris's kernels on
+    /// that same board) the loader is pointed at the others only, since it
+    /// would otherwise still open libmali. Returns (reason to refuse, .icd
+    /// files to keep); both null when there is nothing to do.</summary>
+    internal static (string? Refuse, IReadOnlyList<string>? Keep) PlanIcds(
+            IReadOnlyCollection<(string File, string Lib)> icds, bool maliDevicePresent) {
+        if (maliDevicePresent || icds.Count == 0) return (null, null);
+        static bool IsLibmali(string lib) =>
+            Path.GetFileName(lib).StartsWith("libmali", StringComparison.OrdinalIgnoreCase);
+        if (!icds.Any(i => IsLibmali(i.Lib))) return (null, null);
+        var others = icds.Where(i => !IsLibmali(i.Lib)).Select(i => i.File).ToList();
+        if (others.Count > 0) return (null, others);
+        return ("GPU unavailable: the installed OpenCL driver is the vendor Mali one (libmali), which needs "
             + "the vendor kernel's /dev/mali0, and this kernel has none (a mainline kernel drives the GPU "
-            + "with panthor). Install mesa-opencl-icd for OpenCL on this kernel, or boot the vendor kernel.";
+            + "with panthor). Install mesa-opencl-icd for OpenCL on this kernel, or boot the vendor kernel.", null);
     }
+
+    /// <summary>Copies the usable .icd files to a folder of Polaris's own and
+    /// sets OCL_ICD_VENDORS to it. Through libc's setenv: the loader reads it
+    /// natively, and .NET's SetEnvironmentVariable does not reach native code
+    /// on Linux.</summary>
+    private static void PointLoaderAt(IReadOnlyList<string> keep) {
+        if (!OperatingSystem.IsLinux()) return;
+        var dir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "NINA.Polaris", "opencl-vendors");
+        Directory.CreateDirectory(dir);
+        foreach (var old in Directory.GetFiles(dir, "*.icd")) File.Delete(old);
+        foreach (var f in keep) File.Copy(f, Path.Combine(dir, Path.GetFileName(f)), overwrite: true);
+        if (setenv("OCL_ICD_VENDORS", dir, 1) != 0) return;
+        _skippedMali = "OpenCL: the vendor Mali driver (libmali) is skipped, this kernel has no /dev/mali0; "
+            + "using " + string.Join(", ", keep.Select(Path.GetFileName));
+    }
+
+    [DllImport("libc", SetLastError = true)]
+    private static extern int setenv(string name, string value, int overwrite);
 
     private static bool ProbeLoader() {
         try {

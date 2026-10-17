@@ -54,6 +54,15 @@ Environment=DOTNET_GCConserveMemory=5
 Environment=MALLOC_ARENA_MAX=2
 Environment=MALLOC_TRIM_THRESHOLD_=131072
 
+# GPU (OpenCL) on a mainline kernel. An RK3588 board on a mainline kernel
+# drives its Mali GPU with panthor, and its OpenCL comes from Mesa's rusticl
+# (mesa-opencl-icd), which only offers the Mali (panfrost) device when asked.
+# Measured on an Orange Pi 5 Pro on Armbian's 6.18: Mali-G610 MC4 found, the
+# GPU self-test passed on all six kernels. Another env var for the same
+# reason as above: the OpenCL loader reads it natively, which .NET cannot set
+# for it. No effect on a board without a Mali GPU or on the vendor kernel.
+Environment=RUSTICL_ENABLE=panfrost
+
 Restart=on-failure
 RestartSec=5
 

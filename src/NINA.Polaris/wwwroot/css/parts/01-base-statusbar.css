@@ -1073,3 +1073,17 @@ body.asst-dock-dragging {
     white-space: pre-wrap;
     margin-top: 2px;
 }
+/* Update modal: every line in the primary text colour, white in the day
+   theme and red in night mode. It sits over the blurred background image,
+   where the muted grey of .modal-card p, the secondary changelog colour and
+   the inline opacities left the version line, the changelog bodies and the
+   progress notes hard to read. Two classes so it outranks .modal-card p,
+   which lives in a stylesheet loaded after this one. */
+.modal-card.update-modal p, .modal-card.update-modal b, .modal-card.update-modal span,
+.modal-card.update-modal a, .modal-card.update-modal .hint,
+.modal-card.update-modal .update-commit-sha, .modal-card.update-modal .update-commit-subject,
+.modal-card.update-modal .update-commit-body {
+    color: var(--text-primary);
+}
+.modal-card.update-modal [style*="opacity"] { opacity: 1 !important; }
+.modal-card.update-modal .update-error { color: var(--danger, #f87171); }
