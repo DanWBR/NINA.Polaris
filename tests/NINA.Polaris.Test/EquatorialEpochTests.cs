@@ -32,16 +32,10 @@ namespace NINA.Polaris.Test;
 public class EquatorialEpochTests {
     private static double Sep(double ra1H, double dec1, double ra2H, double dec2) {
         double r = Math.PI / 180;
-        double sd = Math.Sin((dec2 - dec1) * r / 2), sr = Math.Sin((ra2H - ra1H) * 15 * r / 2);
-        double h = sd * sd + Math.Cos(dec1 * r) * Math.Cos(dec2 * r) * sr * sr;
-        return 2 * Math.Asin(Math.Min(1, Math.Sqrt(h))) / r;
+        double a1 = ra1H * 15 * r, a2 = ra2H * 15 * r, d1 = dec1 * r, d2 = dec2 * r;
+        double c = Math.Sin(d1) * Math.Sin(d2) + Math.Cos(d1) * Math.Cos(d2) * Math.Cos(a1 - a2);
+        return Math.Acos(Math.Clamp(c, -1, 1)) / r;
     }
-
-    private static (double RaHours, double DecDeg) ConvertForTest(double ra, double dec, DateTime date,
-            bool inverse, bool useApparentPlaceConversion)
-        => useApparentPlaceConversion
-            ? EquatorialEpoch.ConvertEpoch(ra, dec, date, inverse)
-            : EquatorialEpoch.Rotate(ra, dec, date, inverse);
 
     private static DateTime FromJd(double jd) => DateTime.FromOADate(jd - 2415018.5);
 
@@ -49,7 +43,7 @@ public class EquatorialEpochTests {
     /// θ Persei (with its proper motion applied) precessed to 2028 Nov 13.19.</summary>
     [Test]
     public void MatchesMeeusExample21b() {
-        var (ra, dec) = ConvertForTest(41.054063 / 15.0, 49.227750, FromJd(2462088.69), inverse: false, useApparentPlaceConversion: false);
+        var (ra, dec) = EquatorialEpoch.J2000ToJNow(41.054063 / 15.0, 49.227750, FromJd(2462088.69));
         Assert.Multiple(() => {
             Assert.That(ra * 15.0, Is.EqualTo(41.547214).Within(2e-5));
             Assert.That(dec, Is.EqualTo(49.348483).Within(2e-5));
@@ -60,31 +54,22 @@ public class EquatorialEpochTests {
     public void AgreesWithThePolarAlignmentPrecession() {
         var t = new DateTime(2026, 10, 14, 3, 0, 0, DateTimeKind.Utc);
         foreach (var (ra, dec) in new[] { (20.69, 45.28), (5.92, 7.41), (0.05, -60.0), (12.0, 0.0) }) {
-            var a = ConvertForTest(ra, dec, t, inverse: false, useApparentPlaceConversion: false);
+            var a = EquatorialEpoch.J2000ToJNow(ra, dec, t);
             var b = PolarAlignmentMath.PrecessJ2000ToDate(ra, dec, t);
             Assert.That(Sep(a.RaHours, a.DecDeg, b.raHours, b.decDeg), Is.LessThan(1e-9));
         }
     }
 
-    [TestCase(20.690532, 45.280339, true)]
-    [TestCase(20.690532, 45.280339, false)]   // Deneb
-    [TestCase(0.001, 30.0, true)]
-    [TestCase(0.001, 30.0, false)]            // RA wrap
-    [TestCase(23.999, -30.0, true)]
-    [TestCase(23.999, -30.0, false)]
-    [TestCase(2.53, 89.26, true)]
-    [TestCase(2.53, 89.26, false)]            // Polaris, next to the pole
-    [TestCase(6.0, -89.9, true)]
-    [TestCase(6.0, -89.9, false)]
-    [TestCase(0.0, 90.0, true)]
-    [TestCase(12.0, -90.0, true)]
-    public void JNowToJ2000_UndoesJ2000ToJNow(double ra, double dec, bool apparent) {
+    [TestCase(20.690532, 45.280339)]   // Deneb
+    [TestCase(0.001, 30.0)]            // RA wrap
+    [TestCase(23.999, -30.0)]
+    [TestCase(2.53, 89.26)]            // Polaris, next to the pole
+    [TestCase(6.0, -89.9)]
+    public void JNowToJ2000_UndoesJ2000ToJNow(double ra, double dec) {
         var t = new DateTime(2026, 10, 14, 3, 0, 0, DateTimeKind.Utc);
-        var now = ConvertForTest(ra, dec, t, inverse: false, apparent);
-        var back = ConvertForTest(now.RaHours, now.DecDeg, t, inverse: true, apparent);
-        // INDI's native forward/inverse functions are approximate inverses near the poles.
-        double toleranceDeg = apparent ? (Math.Abs(dec) > 89 ? 1.1 : 0.01) / 3600 : 1e-9;
-        Assert.That(Sep(ra, dec, back.RaHours, back.DecDeg), Is.LessThan(toleranceDeg));
+        var now = EquatorialEpoch.J2000ToJNow(ra, dec, t);
+        var back = EquatorialEpoch.JNowToJ2000(now.RaHours, now.DecDeg, t);
+        Assert.That(Sep(ra, dec, back.RaHours, back.DecDeg), Is.LessThan(1e-9));
         Assert.That(back.RaHours, Is.GreaterThanOrEqualTo(0).And.LessThan(24));
     }
 
@@ -103,7 +88,7 @@ public class EquatorialEpochTests {
     [Test]
     public void AtJ2000_TheFramesAgree() {
         var j2000 = new DateTime(2000, 1, 1, 12, 0, 0, DateTimeKind.Utc);
-        var now = ConvertForTest(5.5, 22.0, j2000, inverse: false, useApparentPlaceConversion: false);
+        var now = EquatorialEpoch.J2000ToJNow(5.5, 22.0, j2000);
         Assert.That(Sep(5.5, 22.0, now.RaHours, now.DecDeg), Is.LessThan(1e-4));
     }
 
@@ -125,31 +110,6 @@ public class EquatorialEpochTests {
     public void MountFrameHelpers_LeaveAJ2000MountAlone() {
         Assert.That(EquatorialEpoch.ToMount(3.0, 40.0, mountIsJNow: false), Is.EqualTo((3.0, 40.0)));
         Assert.That(EquatorialEpoch.FromMount(3.0, 40.0, mountIsJNow: false), Is.EqualTo((3.0, 40.0)));
-    }
-
-
-    [Test]
-    public void ApparentConversionMatchesOriginalExperiment() {
-        var date = new DateTime(2026, 10, 17, 14, 0, 50, DateTimeKind.Utc);
-        var result = EquatorialEpoch.ConvertEpoch(21.319890407147, 62.704136872949, date, inverse: true);
-        Assert.That(result.RaHours, Is.EqualTo(21.309179173071147).Within(1e-9));
-        Assert.That(result.DecDeg, Is.EqualTo(62.58819045347745).Within(1e-8));
-        var forward = EquatorialEpoch.ConvertEpoch(21.309500606675, 62.590340908767, date, inverse: false);
-        Assert.That(forward.RaHours, Is.EqualTo(21.32021185457184).Within(1e-9));
-        Assert.That(forward.DecDeg, Is.EqualTo(62.706295436512235).Within(1e-8));
-    }
-
-    [TestCase(double.NaN, 0)]
-    [TestCase(0, double.NaN)]
-    [TestCase(double.PositiveInfinity, 0)]
-    [TestCase(0, double.NegativeInfinity)]
-    public void NonFiniteCoordinatesRemainInvalidInBothDirections(double ra, double dec) {
-        foreach (bool apparent in new[] { false, true }) {
-            foreach (bool inverse in new[] { false, true }) {
-                var result = ConvertForTest(ra, dec, FromJd(2461331.0), inverse, apparent);
-                Assert.That(double.IsNaN(result.RaHours) && double.IsNaN(result.DecDeg), Is.True);
-            }
-        }
     }
 
     // ---- The INDI boundary ----

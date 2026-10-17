@@ -12,74 +12,37 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
-using System.Runtime.InteropServices;
-
-[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("NINA.Polaris.Test")]
-
 namespace NINA.Core.Utility;
 
 /// <summary>
-/// Coordinate conversion shared by mount backends and Polaris services. J2000
-/// coordinates become apparent equatorial coordinates of date when
-/// <see cref="UseApparentPlaceConversion"/> is enabled, or mean coordinates of
-/// date when disabled. No proper motion, parallax or atmospheric refraction is applied.
+/// The two equatorial frames Polaris meets: J2000, the frame of every catalog,
+/// the SKY map and every plate solve, and the mean equator and equinox of date
+/// ("JNow"), the frame most mounts point in (INDI's EQUATORIAL_EOD_COORD, an
+/// ASCOM driver whose EquatorialSystem is topocentric).
+///
+/// <para>Polaris works in J2000 everywhere above the mount backends: each
+/// backend converts to and from its mount's own frame, once, at the driver
+/// boundary. The two differ by the precession accumulated since 2000, about
+/// 0.35° (20′) in 2026: enough to put a GoTo off the sensor and the mount's
+/// field of view on SKY away from where it really points.</para>
+///
+/// <para>Precision: rigorous precession (IAU 1976, Meeus "Astronomical
+/// Algorithms" 2nd ed. ch. 21) and nothing else. Nutation (≤ 17″) and
+/// aberration (≤ 20″) are left out, so against a full apparent-place
+/// transformation this is good to well under an arcminute: below what a GoTo
+/// resolves, and a plate-solve sync measures the mount in the same frame it
+/// is then commanded in, so centering converges regardless.</para>
 /// </summary>
 public static class EquatorialEpoch {
-    /// <summary>
-    /// Selects precession, nutation and annual aberration in both directions.
-    /// Set false and rebuild to retain the original precession-only conversion.
-    /// The enabled path requires libindidriver.so.1 and its INDI C++ entry points.
-    /// This is a process-wide model choice, not a per-device capability detection.
-    /// </summary>
-    public const bool UseApparentPlaceConversion = true;
+    /// <summary>J2000 to the mean equator and equinox of <paramref name="atUtc"/>.
+    /// RA in hours [0, 24), Dec in degrees. NaN stays NaN.</summary>
+    public static (double RaHours, double DecDeg) J2000ToJNow(double raHours, double decDeg, DateTime atUtc)
+        => Rotate(raHours, decDeg, atUtc, inverse: false);
 
-    /// <summary>
-    /// Converts J2000 to coordinates of date for mount backends. RA is in hours
-    /// [0, 24), Dec in degrees; the model is selected by UseApparentPlaceConversion.
-    /// </summary>
-    public static (double RaHours, double DecDeg) J2000ToJNow(double raHours, double decDeg, DateTime atUtc) {
-        if (UseApparentPlaceConversion) {
-            return ConvertEpoch(raHours, decDeg, atUtc, inverse: false);
-        } else {
-            return Rotate(raHours, decDeg, atUtc, inverse: false);
-        }
-    }
-
-    /// <summary>
-    /// Converts mount coordinates of date back to J2000 using the same model as
-    /// J2000ToJNow. RA is in hours and Dec in degrees. Non-finite inputs return NaN.
-    /// </summary>
-    public static (double RaHours, double DecDeg) JNowToJ2000(double raHours, double decDeg, DateTime atUtc) {
-        if (UseApparentPlaceConversion) {
-            return ConvertEpoch(raHours, decDeg, atUtc, inverse: true);
-        } else {
-            return Rotate(raHours, decDeg, atUtc, inverse: true);
-        }
-    }
-
-    internal static (double RaHours, double DecDeg) ConvertEpoch(double raHours, double decDeg,
-            DateTime atUtc, bool inverse) {
-        if (!double.IsFinite(raHours) || !double.IsFinite(decDeg)) return (double.NaN, double.NaN);
-        double jd = (atUtc.Kind == DateTimeKind.Local ? atUtc.ToUniversalTime() : atUtc).ToOADate() + 2415018.5;
-        var input = new Equatorial { RaHours = raHours, DecDeg = decDeg };
-        Equatorial output;
-        if (inverse) ObservedToJ2000(ref input, jd, out output);
-        else J2000ToObserved(ref input, jd, out output);
-        return (output.RaHours, output.DecDeg);
-    }
-
-    // The same native entry points and ABI used by the validated simulator experiment.
-    [StructLayout(LayoutKind.Sequential)]
-    private struct Equatorial {
-        internal double RaHours;
-        internal double DecDeg;
-    }
-
-    [DllImport("libindidriver.so.1", EntryPoint = "_ZN4INDI15ObservedToJ2000EPNS_22IEquatorialCoordinatesEdS1_", CallingConvention = CallingConvention.Cdecl)]
-    private static extern void ObservedToJ2000(ref Equatorial input, double jd, out Equatorial output);
-
-    [DllImport("libindidriver.so.1", EntryPoint = "_ZN4INDI15J2000toObservedEPNS_22IEquatorialCoordinatesEdS1_", CallingConvention = CallingConvention.Cdecl)]
-    private static extern void J2000ToObserved(ref Equatorial input, double jd, out Equatorial output);
+    /// <summary>Mean equator and equinox of <paramref name="atUtc"/> back to J2000:
+    /// the exact inverse rotation of <see cref="J2000ToJNow"/>.</summary>
+    public static (double RaHours, double DecDeg) JNowToJ2000(double raHours, double decDeg, DateTime atUtc)
+        => Rotate(raHours, decDeg, atUtc, inverse: true);
 
     /// <summary>A position the mount reported, in J2000: converted when the
     /// mount points in JNow, as is when it already works in J2000.</summary>
@@ -104,7 +67,7 @@ public static class EquatorialEpoch {
         return r >= 24.0 ? 0.0 : r;
     }
 
-    internal static (double RaHours, double DecDeg) Rotate(double raHours, double decDeg, DateTime atUtc, bool inverse) {
+    private static (double, double) Rotate(double raHours, double decDeg, DateTime atUtc, bool inverse) {
         if (double.IsNaN(raHours) || double.IsNaN(decDeg) || double.IsInfinity(raHours) || double.IsInfinity(decDeg))
             return (double.NaN, double.NaN);
         var m = PrecessionMatrix(atUtc);
@@ -153,5 +116,4 @@ public static class EquatorialEpoch {
             { st * cz,                -st * sz,                 ct      },
         };
     }
-
 }
