@@ -1,2 +1,4 @@
 /opt/polaris/appsettings.json
 /etc/systemd/journald.conf.d/polaris-persistent.conf
+/etc/systemd/system.conf.d/polaris-watchdog.conf
+/etc/sysctl.d/90-polaris-panic.conf
