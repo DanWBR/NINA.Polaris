@@ -301,6 +301,7 @@ public class NetworkManagerService : BackgroundService {
             HasWifiInterface = true;
             _logger.LogInformation("NetworkManagerService: WiFi interface = {Iface}{Src}",
                 WifiInterface, !string.IsNullOrWhiteSpace(preferred) ? " (user-selected)" : " (auto)");
+            await RepinConnectionsAsync(WifiInterface!, ct);
         } catch (Exception ex) {
             _logger.LogDebug(ex, "wifi interface detection failed");
             HasWifiInterface = false;
@@ -1123,6 +1124,10 @@ public class NetworkManagerService : BackgroundService {
     /// (recreating it if the .deb bootstrap never ran), then brings it
     /// up. Returns true only when nmcli reports the AP activated.</summary>
     private async Task<bool> EnsureAndStartHotspotAsync(CancellationToken ct) {
+        // The adapter chosen for the hotspot may have gone since startup (a USB
+        // antenna unplugged, or never powered at boot): find the radio that is
+        // there and move the hotspot onto it before bringing it up.
+        await DetectWifiInterfaceAsync(ct);
         await EnsureHotspotConnectionAsync(ct);
         var up = await RunCommandAsync("nmcli", "connection up polaris-hotspot", ct, timeoutMs: 20000);
         if (up.exitCode != 0) {
@@ -1132,6 +1137,41 @@ public class NetworkManagerService : BackgroundService {
         }
         return true;
     }
+
+    /// <summary>Points the hotspot and the saved networks at <paramref name="iface"/>
+    /// when they are pinned to a different adapter. Choosing an external USB
+    /// adapter pins them all to it; when that adapter was missing at boot (on
+    /// an SV241-powered rig it came up late), the home network could not
+    /// autoconnect and the fallback failed with "No suitable device found ...
+    /// mismatching interface name", leaving the rig with no network although
+    /// the onboard radio was free. The saved adapter choice is not touched, so
+    /// once the adapter is back the next detection moves them back to it.</summary>
+    private async Task RepinConnectionsAsync(string iface, CancellationToken ct) {
+        try {
+            var names = new List<string> { "polaris-hotspot" };
+            names.AddRange((await SavedStationConnectionsAsync(ct)).Select(s => s.Name));
+            foreach (var name in names) {
+                var cur = await RunCommandAsync("nmcli",
+                    $"-g connection.interface-name connection show {Shell(name)}", ct, timeoutMs: 5000);
+                if (cur.exitCode != 0 || !NeedsRepin(cur.stdout.Trim(), iface)) continue;
+                var mod = await RunCommandAsync("nmcli",
+                    $"connection modify {Shell(name)} connection.interface-name {Shell(iface)}", ct, timeoutMs: 5000);
+                if (mod.exitCode == 0)
+                    _logger.LogInformation("NetworkManagerService: {Conn} moved from {Old} to {New}",
+                        name, cur.stdout.Trim(), iface);
+                else
+                    _logger.LogWarning("NetworkManagerService: moving {Conn} to {New} failed: {Err}",
+                        name, iface, mod.stderr.Trim());
+            }
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "RepinConnectionsAsync failed");
+        }
+    }
+
+    /// <summary>A connection pinned to an adapter other than the one in use.
+    /// An unpinned connection already follows whichever radio there is.</summary>
+    internal static bool NeedsRepin(string pinned, string iface)
+        => !string.IsNullOrWhiteSpace(pinned) && !string.Equals(pinned.Trim(), iface, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Creates the <c>polaris-hotspot</c> AP connection if it is
     /// missing, mirroring the .deb bootstrap (2.4 GHz b/g, shared IPv4 so
