@@ -52,8 +52,9 @@ public static class OpenClRuntime {
     public static bool Enabled =>
         Environment.GetEnvironmentVariable("POLARIS_DISABLE_GPU") != "1";
 
-    /// <summary>Cheap "should we even try the GPU?" gate (env + loader present).</summary>
-    public static bool IsAvailable => Enabled && LoaderPresent;
+    /// <summary>Cheap "should we even try the GPU?" gate (env + loader present,
+    /// and no vendor Mali driver left without its kernel device).</summary>
+    public static bool IsAvailable => Enabled && LoaderPresent && StrandedMali == null;
 
     /// <summary>Human-readable summary of the probe result (for logs / status).</summary>
     public static string Diagnostics {
@@ -61,8 +62,41 @@ public static class OpenClRuntime {
             if (!Enabled) return "GPU disabled via POLARIS_DISABLE_GPU=1";
             if (!LoaderPresent)
                 return "GPU unavailable: no OpenCL ICD loader (libOpenCL) on this system";
+            if (StrandedMali is { } why) return why;
             return "OpenCL ICD loader present (device probed at first use)";
         }
+    }
+
+    private static readonly Lazy<string?> _strandedMali = new(() => {
+        try {
+            var icds = Directory.Exists("/etc/OpenCL/vendors")
+                ? Directory.GetFiles("/etc/OpenCL/vendors", "*.icd")
+                    .Select(f => { try { return File.ReadAllText(f).Trim(); } catch { return ""; } })
+                    .Where(s => s.Length > 0).ToList()
+                : new List<string>();
+            bool maliDevice = Directory.Exists("/dev")
+                && Directory.GetFiles("/dev", "mali*").Length > 0;
+            return StrandedMaliReason(icds, maliDevice);
+        } catch { return null; }
+    });
+
+    /// <summary>Why the installed OpenCL drivers cannot run here, or null.</summary>
+    public static string? StrandedMali => _strandedMali.Value;
+
+    /// <summary>The vendor Mali OpenCL (libmali) talks to the vendor kernel's
+    /// /dev/mali0. Under a mainline kernel (panthor) there is no such device,
+    /// and the first OpenCL call segfaults the process ("No mali devices
+    /// found"), which put an Orange Pi 5 Pro moved to Armbian's 6.18 kernel
+    /// into a crash loop. Refused only when every installed driver is libmali:
+    /// with another one present (Mesa's rusticl) the loader still loads
+    /// libmali, so that case is left to the crash guard.</summary>
+    internal static string? StrandedMaliReason(IReadOnlyCollection<string> icdLibraries, bool maliDevicePresent) {
+        if (maliDevicePresent || icdLibraries.Count == 0) return null;
+        if (!icdLibraries.All(l => Path.GetFileName(l).StartsWith("libmali", StringComparison.OrdinalIgnoreCase)))
+            return null;
+        return "GPU unavailable: the installed OpenCL driver is the vendor Mali one (libmali), which needs "
+            + "the vendor kernel's /dev/mali0, and this kernel has none (a mainline kernel drives the GPU "
+            + "with panthor). Install mesa-opencl-icd for OpenCL on this kernel, or boot the vendor kernel.";
     }
 
     private static bool ProbeLoader() {
