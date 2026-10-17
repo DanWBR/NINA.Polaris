@@ -22,7 +22,7 @@ public static class TelescopeEndpoints {
     public static void MapTelescopeEndpoints(this WebApplication app) {
         var group = app.MapGroup("/api/telescope");
 
-        group.MapGet("/status", (EquipmentManager equip) => {
+        group.MapGet("/status", (EquipmentManager equip, ProfileService profiles) => {
             if (equip.Telescope == null)
                 return Results.Ok(new {
                     connected = false, tracking = false,
@@ -30,13 +30,15 @@ public static class TelescopeEndpoints {
                     pierSide = "unknown", slewing = false, parked = false
                 });
 
+            var (alt, az) = MountHorizontal.Of(equip.Telescope,
+                profiles.Active.Latitude, profiles.Active.Longitude, DateTime.UtcNow);
             return Results.Ok(new {
                 connected = equip.Telescope.IsConnected,
                 tracking = equip.Telescope.IsTracking,
                 ra = equip.Telescope.RightAscension,
                 dec = equip.Telescope.Declination,
-                alt = equip.Telescope.Altitude,
-                az = equip.Telescope.Azimuth,
+                alt,
+                az,
                 pierSide = equip.Telescope.SideOfPier.ToString(),
                 slewing = equip.Telescope.IsSlewing,
                 parked = equip.Telescope.IsParked
@@ -52,7 +54,7 @@ public static class TelescopeEndpoints {
         // re-sends its actual pointing -- read-only, no motion -- then
         // returns the refreshed coordinates. Non-INDI mounts already
         // read live, so they just echo the current values back.
-        group.MapPost("/refresh-position", async (EquipmentManager equip) => {
+        group.MapPost("/refresh-position", async (EquipmentManager equip, ProfileService profiles) => {
             if (equip.Telescope == null)
                 return Results.BadRequest(new { error = "No telescope selected" });
             try {
@@ -62,11 +64,13 @@ public static class TelescopeEndpoints {
                     // before we read them off the refreshed property.
                     await Task.Delay(600);
                 }
+                var (alt, az) = MountHorizontal.Of(equip.Telescope,
+                    profiles.Active.Latitude, profiles.Active.Longitude, DateTime.UtcNow);
                 return Results.Ok(new {
                     ra = equip.Telescope.RightAscension,
                     dec = equip.Telescope.Declination,
-                    alt = equip.Telescope.Altitude,
-                    az = equip.Telescope.Azimuth,
+                    alt,
+                    az,
                     parked = equip.Telescope.IsParked
                 });
             } catch (Exception ex) {

@@ -617,8 +617,10 @@ public class ImageWriterService {
                     Math.Max(profile.SensorWidthMm, 1);
             m.Telescope.RightAscension = Safe(_equip.Telescope.RightAscension);
             m.Telescope.Declination = Safe(_equip.Telescope.Declination);
-            m.Telescope.Altitude = Safe(_equip.Telescope.Altitude);
-            m.Telescope.Azimuth = Safe(_equip.Telescope.Azimuth);
+            var (scopeAlt, scopeAz) = MountHorizontal.Of(_equip.Telescope,
+                _profile.Active.Latitude, _profile.Active.Longitude, DateTime.UtcNow);
+            m.Telescope.Altitude = Safe(scopeAlt);
+            m.Telescope.Azimuth = Safe(scopeAz);
             m.Telescope.SideOfPier = _equip.Telescope.SideOfPier;
         }
 
