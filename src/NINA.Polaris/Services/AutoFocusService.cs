@@ -1150,7 +1150,9 @@ public class AutoFocusService {
             }
             st.LastDirection = dir;
             await MoveAndSettleAsync(focuser, ClampToTravel(focuser, target + st.Offset), ct);
-            return target;   // logical position (offset hidden, desktop parity)
+            // Logical position (offset hidden, desktop parity), taken from
+            // where the focuser actually stopped rather than where it was sent.
+            return focuser.Position - st.Offset;
         }
 
         // OVERSHOOT model
@@ -1187,8 +1189,9 @@ public class AutoFocusService {
         // stop at the rail while WaitForFocuserReached spins its full 60s
         // deadline waiting for a target the hardware can never report.
         target = ClampToTravel(focuser, target);
+        int before = focuser.Focuser_ReadCurrentSafely();
         await focuser.MoveAbsoluteAsync(target, ct);
-        await WaitForFocuserReached(focuser, target, ct);
+        await WaitForFocuserReached(focuser, before, target, ct);
     }
 
     /// <summary>Clamp a requested focuser target to the device's physical
@@ -1200,25 +1203,70 @@ public class AutoFocusService {
         return max > 0 ? Math.Clamp(target, 0, max) : Math.Max(0, target);
     }
 
-    private async Task WaitForFocuserReached(IFocuser focuser, int target, CancellationToken ct) {
-        // Drivers may settle a step or two off the exact request; don't spin
-        // forever chasing a position the hardware will never report verbatim.
-        const int toleranceSteps = 2;
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(60);
+    internal enum FocuserWait { Wait, Arrived, StoppedElsewhere, NeverMoved }
+
+    internal const int ArrivalToleranceSteps = 2;
+    internal static readonly TimeSpan StoppedStableFor = TimeSpan.FromSeconds(1.5);
+    internal static readonly TimeSpan NoMoveGrace = TimeSpan.FromSeconds(8);
+
+    /// <summary>What one reading of the focuser means for a move from
+    /// <paramref name="before"/> to <paramref name="target"/>.
+    ///
+    /// A focuser that stops a few steps off the request (backlash, microsteps,
+    /// firmware rounding) has still moved: the point is measured where it is.
+    /// The wait used to accept only ±2 steps and otherwise sat out 60 s per
+    /// point; a Gemini EAF stopping 3 to 4 steps off turned a 2 s-exposure
+    /// sweep into minutes. One that has not left its start position at all
+    /// after the grace is not going to: say so instead of measuring the same
+    /// spot over and over (the same focuser, its serial link timing out, was
+    /// asked for 6645, 6595, 6545… and stayed at 6445).</summary>
+    internal static FocuserWait Decide(int before, int target, int position, bool moving,
+                                       TimeSpan elapsed, TimeSpan stableFor) {
+        if (Math.Abs(position - target) <= ArrivalToleranceSteps)
+            return moving ? FocuserWait.Wait : FocuserWait.Arrived;
+        if (moving) return FocuserWait.Wait;
+        bool leftStart = Math.Abs(position - before) > ArrivalToleranceSteps;
+        if (!leftStart)
+            return elapsed >= NoMoveGrace ? FocuserWait.NeverMoved : FocuserWait.Wait;
+        return stableFor >= StoppedStableFor ? FocuserWait.StoppedElsewhere : FocuserWait.Wait;
+    }
+
+    private async Task WaitForFocuserReached(IFocuser focuser, int before, int target, CancellationToken ct) {
+        var started = DateTime.UtcNow;
+        var deadline = started + TimeSpan.FromSeconds(60);
+        int lastPos = int.MinValue;
+        var lastChange = started;
         while (DateTime.UtcNow < deadline) {
             ct.ThrowIfCancellationRequested();
-            bool reached = Math.Abs(focuser.Position - target) <= toleranceSteps;
-            if (reached && !focuser.IsMoving) {
-                await Task.Delay(FocuserSettleMs, ct);
-                // Re-confirm after the settle: some drivers briefly report Idle
-                // mid-travel, so a single "not moving" reading isn't enough.
-                if (!focuser.IsMoving && Math.Abs(focuser.Position - target) <= toleranceSteps)
+            int pos = focuser.Focuser_ReadCurrentSafely();
+            bool moving = focuser.IsMoving;
+            var now = DateTime.UtcNow;
+            if (pos != lastPos || moving) { lastPos = pos; lastChange = now; }
+            switch (Decide(before, target, pos, moving, now - started, now - lastChange)) {
+                case FocuserWait.Arrived:
+                    await Task.Delay(FocuserSettleMs, ct);
+                    // Re-confirm after the settle: some drivers briefly report
+                    // Idle mid-travel, so a single "not moving" reading isn't enough.
+                    if (!focuser.IsMoving
+                            && Math.Abs(focuser.Focuser_ReadCurrentSafely() - target) <= ArrivalToleranceSteps)
+                        return;
+                    break;
+                case FocuserWait.StoppedElsewhere:
+                    await Task.Delay(FocuserSettleMs, ct);
+                    if (focuser.IsMoving) break;
+                    _logger.LogInformation(
+                        "Focuser stopped at {Pos}, {Off} steps from the {Target} asked for; measuring where it is",
+                        focuser.Focuser_ReadCurrentSafely(), pos - target, target);
                     return;
+                case FocuserWait.NeverMoved:
+                    throw new InvalidOperationException(
+                        $"The focuser did not move: asked for {target}, it is still at {pos} after "
+                        + $"{(int)NoMoveGrace.TotalSeconds} s. Check its connection (cable, driver) and try again.");
             }
             await Task.Delay(150, ct);
         }
         _logger.LogWarning("Focuser did not reach {Target} (now {Pos}, moving={Moving}) within 60s",
-            target, focuser.Position, focuser.IsMoving);
+            target, focuser.Focuser_ReadCurrentSafely(), focuser.IsMoving);
     }
 }
 
