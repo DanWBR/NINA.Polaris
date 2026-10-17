@@ -60,6 +60,7 @@ public class IndiDriverWatchdogService : IHostedService {
         public readonly object Gate = new();
         public readonly List<DateTime> Timeouts = new();      // recent BLOB timeouts
         public readonly List<DateTime> Restarts = new();      // recent driver restarts
+        public readonly List<DateTime> FailedRestarts = new(); // of those, the ones indi-web refused
         public DateTime LastRestartAt = DateTime.MinValue;
         public bool RestartInFlight;
         // FIELD6-11: spurious-disconnect reconnects, tracked separately from
@@ -255,16 +256,24 @@ public class IndiDriverWatchdogService : IHostedService {
 
                 // Rate-limits: min gap since last restart + max restarts per window.
                 Prune(st.Restarts, now - RestartWindow);
+                Prune(st.FailedRestarts, now - RestartWindow);
                 if (now - st.LastRestartAt < MinRestartInterval) {
                     _logger.LogDebug("INDI watchdog: {Device} within min restart interval, skipping", device);
                     return;
                 }
                 if (st.Restarts.Count >= MaxRestartsPerWindow) {
                     Record(device, null, "capped");
-                    _notify.Push("error",
-                        $"INDI driver for {device} keeps wedging, restarted " +
-                        $"{st.Restarts.Count}× in {(int)RestartWindow.TotalMinutes} min. " +
-                        $"Manual intervention needed (check cabling / power / USB).", 12000);
+                    // Say which it was: a driver that wedges again after every
+                    // restart, or restarts that never happened.
+                    _notify.Push("error", st.FailedRestarts.Count >= st.Restarts.Count
+                        ? $"INDI camera {device} stopped delivering frames and Polaris could not " +
+                          $"restart its driver ({st.Restarts.Count} attempts in " +
+                          $"{(int)RestartWindow.TotalMinutes} min failed: {_indiWeb.LastError}). " +
+                          $"Restart it from the INDI Drivers tab; if frames still do not arrive, " +
+                          $"unplug the camera to power-cycle it."
+                        : $"INDI driver for {device} keeps wedging, restarted " +
+                          $"{st.Restarts.Count}× in {(int)RestartWindow.TotalMinutes} min. " +
+                          $"Manual intervention needed (check cabling / power / USB).", 12000);
                     _logger.LogWarning(
                         "INDI watchdog: {Device} hit restart cap ({N}/{RW}min), backing off",
                         device, st.Restarts.Count, (int)RestartWindow.TotalMinutes);
@@ -327,6 +336,7 @@ public class IndiDriverWatchdogService : IHostedService {
             st.Timeouts.Clear();   // give the freshly restarted driver a clean slate
         }
         if (!ok) {
+            lock (st.Gate) st.FailedRestarts.Add(DateTime.UtcNow);
             Record(device, label, "restart-failed");
             _notify.Push("error",
                 $"Failed to restart INDI driver '{label}': {_indiWeb.LastError}", 12000);
@@ -486,32 +496,47 @@ public class IndiDriverWatchdogService : IHostedService {
     /// to the sole running driver when there's only one.
     /// </summary>
     private async Task<string?> ResolveDriverLabelAsync(string device) {
-        // 1) DRIVER_INFO.DRIVER_NAME straight off the device.
+        string? driverName = null, driverExec = null;
         try {
-            if (_indi.GetProperty(device, "DRIVER_INFO") is IndiTextProperty di &&
-                di.Values.TryGetValue("DRIVER_NAME", out var dn) &&
-                !string.IsNullOrWhiteSpace(dn)) {
-                var running0 = await _indiWeb.GetRunningDriverLabelsAsync();
-                // Prefer an exact running-label match; otherwise trust DRIVER_NAME.
-                var exact = running0.FirstOrDefault(l =>
-                    string.Equals(l, dn, StringComparison.OrdinalIgnoreCase));
-                return exact ?? dn.Trim();
+            if (_indi.GetProperty(device, "DRIVER_INFO") is IndiTextProperty di) {
+                di.Values.TryGetValue("DRIVER_NAME", out driverName);
+                di.Values.TryGetValue("DRIVER_EXEC", out driverExec);
             }
         } catch (Exception ex) {
             _logger.LogDebug(ex, "INDI watchdog: DRIVER_INFO read failed for {Device}", device);
         }
+        return PickDriverLabel(device, driverName, driverExec, await _indiWeb.GetRunningDriversAsync());
+    }
 
-        // 2) Match the device name against running driver labels (a label is
-        //    typically a prefix of the device name, e.g. "ZWO CCD" ⊂
+    /// <summary>The indi-web label to restart for <paramref name="device"/>, or
+    /// null when none of the running drivers can be tied to it.
+    ///
+    /// The device's DRIVER_NAME used to be sent as the label whenever it matched
+    /// nothing: indi_toupcam_ccd calls itself "ToupTek", indi-web knows it as
+    /// "Toupcam", and every restart of a wedged AE676C came back 404 while the
+    /// cap message said it had been restarted three times. A label indi-web
+    /// does not have is never sent now.</summary>
+    internal static string? PickDriverLabel(string device, string? driverName, string? driverExec,
+                                            IReadOnlyList<IndiRunningDriver> running) {
+        static bool Same(string? a, string? b) =>
+            !string.IsNullOrWhiteSpace(a) && !string.IsNullOrWhiteSpace(b)
+            && string.Equals(a.Trim(), b.Trim(), StringComparison.OrdinalIgnoreCase);
+
+        // 1) The executable: the one name both sides agree on.
+        var byExec = running.FirstOrDefault(d => Same(d.Binary, driverExec));
+        if (byExec != null) return byExec.Label;
+        // 2) DRIVER_NAME against the label, then against indi-web's own name.
+        var byLabel = running.FirstOrDefault(d => Same(d.Label, driverName))
+                      ?? running.FirstOrDefault(d => Same(d.Name, driverName));
+        if (byLabel != null) return byLabel.Label;
+        // 3) A label is often a prefix of the device name ("ZWO CCD" of
         //    "ZWO CCD ASI2600MC Pro").
-        var running = await _indiWeb.GetRunningDriverLabelsAsync();
-        var byPrefix = running.FirstOrDefault(l =>
-            device.StartsWith(l, StringComparison.OrdinalIgnoreCase) ||
-            device.Contains(l, StringComparison.OrdinalIgnoreCase));
-        if (byPrefix != null) return byPrefix;
-
-        // 3) Single running driver → it must be the one.
-        return running.Count == 1 ? running[0] : null;
+        var byPrefix = running.FirstOrDefault(d =>
+            device.StartsWith(d.Label, StringComparison.OrdinalIgnoreCase) ||
+            device.Contains(d.Label, StringComparison.OrdinalIgnoreCase));
+        if (byPrefix != null) return byPrefix.Label;
+        // 4) A single running driver must be the one.
+        return running.Count == 1 ? running[0].Label : null;
     }
 
     private static void Prune(List<DateTime> stamps, DateTime cutoff)
