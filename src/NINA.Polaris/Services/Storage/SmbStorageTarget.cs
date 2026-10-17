@@ -82,10 +82,15 @@ public sealed class SmbStorageTarget : IStorageTarget {
         // incomplete and is overwritten by the next attempt.
         var tempPath = filePath + StoragePath.PartialSuffix;
 
-        var status = _store.CreateFile(out var handle, out _, tempPath,
-            AccessMask.GENERIC_WRITE | AccessMask.SYNCHRONIZE, SMBLibrary.FileAttributes.Normal,
-            ShareAccess.None, CreateDisposition.FILE_OVERWRITE_IF,
-            CreateOptions.FILE_NON_DIRECTORY_FILE | CreateOptions.FILE_SYNCHRONOUS_IO_NONALERT, null);
+        var status = CreateSidecar(tempPath, out var handle);
+        // A write that timed out can leave the server holding the old sidecar
+        // open, past our own close and delete, and every retry then failed on
+        // the same name with STATUS_SHARING_VIOLATION (an SMB share on a board
+        // with a slow WiFi link, 2026-10-17). This attempt writes beside it.
+        if (status == NTStatus.STATUS_SHARING_VIOLATION) {
+            tempPath = StoragePath.AttemptPartialPath(filePath, Guid.NewGuid().ToString("N")[..8]);
+            status = CreateSidecar(tempPath, out handle);
+        }
         if (status != NTStatus.STATUS_SUCCESS || handle == null)
             throw new IOException($"SMB create '{tempPath}' failed: {status}");
 
@@ -108,6 +113,12 @@ public sealed class SmbStorageTarget : IStorageTarget {
             throw;
         }
     }
+
+    private NTStatus CreateSidecar(string path, out object? handle) =>
+        _store!.CreateFile(out handle, out _, path,
+            AccessMask.GENERIC_WRITE | AccessMask.SYNCHRONIZE, SMBLibrary.FileAttributes.Normal,
+            ShareAccess.None, CreateDisposition.FILE_OVERWRITE_IF,
+            CreateOptions.FILE_NON_DIRECTORY_FILE | CreateOptions.FILE_SYNCHRONOUS_IO_NONALERT, null);
 
     /// <summary>Stream the local file into an open remote handle in MaxWriteSize
     /// chunks, closing the handle before returning so the caller can read the

@@ -9406,6 +9406,20 @@ function ninaApp() {
             // banner, so only a condition that survives 6 s gets one.
             this.link.alarm = this.link.state === 'offline'
                 || (this.link.state === 'slow' && Date.now() - this.link.since >= 6000);
+
+            // The log follows the alarm, not every flicker: each 60 s frame the
+            // host processes holds the status feed for ~4 s, and logging every
+            // one of those as a WARN filled an hour's log with "link ok -> slow"
+            // lines at 13 ms rtt and 0% loss. A worse state is logged again.
+            const inc = this.link.incident;
+            const sev = { ok: 0, slow: 1, offline: 2 }[this.link.state] || 0;
+            if (this.link.alarm && inc && sev > (inc.loggedSev || 0)) {
+                inc.loggedSev = sev;
+                this._logFromClient('warn',
+                    `link ${this.link.state} (age ${Math.round(this.link.ageMs)}ms, `
+                    + `rtt ${this.link.rttMedianMs != null ? this.link.rttMedianMs : '?'}ms, `
+                    + `loss ${this.link.lossPct}%)`, { source: 'link' });
+            }
         },
 
         // Host or network?
@@ -9455,7 +9469,6 @@ function ninaApp() {
                 return;
             }
 
-            const prev = this.link.state;
             this.link.state = state;
             this.link.since = Date.now();
 
@@ -9464,13 +9477,10 @@ function ninaApp() {
                 if (!this.link.incident) {
                     this.link.incident = {
                         startedAt: Date.now(), worstAgeMs: this.link.ageMs,
-                        worstRttMs: this.link.rttMs || 0, failed: 0
+                        worstRttMs: this.link.rttMs || 0, failed: 0, loggedSev: 0
                     };
                 }
-                this._logFromClient('warn',
-                    `link ${prev} -> ${state} (age ${Math.round(this.link.ageMs)}ms, `
-                    + `rtt ${this.link.rttMedianMs != null ? this.link.rttMedianMs : '?'}ms, `
-                    + `loss ${this.link.lossPct}%)`, { source: 'link' });
+                // Logged by the caller once the condition reaches the alarm.
                 return;
             }
 
@@ -9487,9 +9497,11 @@ function ninaApp() {
             const inc = this.link.incident;
             this.link.incident = null;
             const seconds = Math.round((this._linkOkSince - inc.startedAt) / 1000);
-            this._logFromClient('info',
-                `link incident over: ${seconds}s, ${inc.failed} command(s) unanswered, `
-                + `worst gap ${Math.round(inc.worstAgeMs)}ms`, { source: 'link' });
+            // Only an incident that was logged gets its end logged.
+            if (inc.loggedSev > 0 || inc.failed > 0)
+                this._logFromClient('info',
+                    `link incident over: ${seconds}s, ${inc.failed} command(s) unanswered, `
+                    + `worst gap ${Math.round(inc.worstAgeMs)}ms`, { source: 'link' });
 
             // NETUX-5: name the culprit once, in the past tense. Anything
             // shorter than a few seconds was not worth the operator's
