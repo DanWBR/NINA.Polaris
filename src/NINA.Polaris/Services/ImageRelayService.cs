@@ -145,7 +145,7 @@ public class ImageRelayService : IDisposable {
     /// field while the migration window is still open. Once the
     /// per-rig field is removed (one release out), this collapses
     /// back to just the quirks lookup.</summary>
-    private bool ActiveVerticalFlip() {
+    internal bool ActiveVerticalFlip() {
         if (_profiles == null) return false;
         var q = _profiles.GetActiveCameraQuirks();
         if (q.VerticalFlipImage) return true;

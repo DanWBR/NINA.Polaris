@@ -322,6 +322,8 @@ public static class PlateSolveEndpoints {
                 FITSWriter.Write(image, tempFits);
 
                 var options = new PlateSolveOptions {
+                    CaptureContext = CaptureWcsContext.Create(equip, profiles, image,
+                        ReferenceEquals(image, relay.LatestImageData) && relay.ActiveVerticalFlip()),
                     HintRa = hintRa,
                     HintDec = hintDec,
                     SearchRadiusDeg = request?.SearchRadiusDeg ?? profiles.Active.PlateSolveSearchRadiusDeg
@@ -531,6 +533,7 @@ public static class PlateSolveEndpoints {
                 PlateSolveHints.StampFocalLength(image, profiles.ActiveEquipmentProfile?.FocalLengthMm ?? 0);
                 FITSWriter.Write(image, tempFits);
                 var options = new PlateSolveOptions {
+                    CaptureContext = CaptureWcsContext.Create(equip, profiles, image, relay.ActiveVerticalFlip()),
                     HintRa = hintRa, HintDec = hintDec,
                     SearchRadiusDeg = request?.SearchRadiusDeg ?? profiles.Active.PlateSolveSearchRadiusDeg
                 };

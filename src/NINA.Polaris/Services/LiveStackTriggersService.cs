@@ -423,6 +423,7 @@ public class LiveStackTriggersService : IDisposable {
                 hintDec = scope.Declination;
             }
             var result = await _solver.SolveAsync(tempFits, new PlateSolveOptions {
+                CaptureContext = CaptureWcsContext.Create(_equip, _profiles, firstFrame),
                 HintRa = hintRa, HintDec = hintDec,
                 SearchRadiusDeg = 30, Downsample = 2
             });
@@ -455,6 +456,7 @@ public class LiveStackTriggersService : IDisposable {
         try {
             FITSWriter.Write(frame, tempFits);
             var result = await _solver.SolveAsync(tempFits, new PlateSolveOptions {
+                CaptureContext = CaptureWcsContext.Create(_equip, _profiles, frame),
                 HintRa = _referenceRaHours.Value,
                 HintDec = _referenceDecDeg.Value,
                 SearchRadiusDeg = 5,

@@ -455,6 +455,7 @@ public class SlewCenterService {
                 // bottom already turns into SlewCenterState.Cancelled. Falls back
                 // to ct when there is no progress service (tests / null-object).
                 var solveResult = await _solver.SolveAsync(tempFits, new PlateSolveOptions {
+                    CaptureContext = CaptureWcsContext.Create(_equip, _profiles, imageData),
                     HintRa = hintRa,
                     HintDec = hintDec,
                     FovDeg = fovDeg,

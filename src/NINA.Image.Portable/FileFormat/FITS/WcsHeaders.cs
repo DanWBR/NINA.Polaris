@@ -71,6 +71,10 @@ public static class WcsHeaders {
             WcsInfo wcs) {
         if (customKeywords == null) throw new ArgumentNullException(nameof(customKeywords));
         if (wcs == null) throw new ArgumentNullException(nameof(wcs));
+        customKeywords.Add(new("RADESYS", "FK5"));
+        customKeywords.Add(new("EQUINOX", "2000"));
+        customKeywords.Add(new("CUNIT1", "deg"));
+        customKeywords.Add(new("CUNIT2", "deg"));
         customKeywords.Add(new("CTYPE1", "RA---TAN"));
         customKeywords.Add(new("CTYPE2", "DEC--TAN"));
         customKeywords.Add(new("CRVAL1", Fmt(wcs.RaDeg)));

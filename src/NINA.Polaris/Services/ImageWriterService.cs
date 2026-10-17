@@ -237,10 +237,10 @@ public class ImageWriterService {
                 _logger.LogInformation("Saved RAW ({Ext}): {Path}",
                     extension, fullPath);
             } else if (format == "xisf") {
-                XISFWriter.Write(imageData, fullPath, rotator: rotMeta);
+                XISFWriter.Write(WithCaptureWcs(imageData, imageType, stacked, focalLengthMmOverride), fullPath, rotator: rotMeta);
                 _logger.LogInformation("Saved XISF: {Path}", fullPath);
             } else {
-                FITSWriter.Write(imageData, fullPath, rotator: rotMeta);
+                FITSWriter.Write(WithCaptureWcs(imageData, imageType, stacked, focalLengthMmOverride), fullPath, rotator: rotMeta);
                 _logger.LogInformation("Saved FITS: {Path}", fullPath);
             }
             _lastWrittenPath = fullPath;
@@ -254,6 +254,26 @@ public class ImageWriterService {
             return null;
         }
     }
+
+    internal IImageData WithCaptureWcs(IImageData image, string imageType, bool stacked,
+            double? focalLengthOverride) {
+        if (image.Properties.Wcs != null || stacked || focalLengthOverride.HasValue
+                || (!string.IsNullOrWhiteSpace(image.MetaData.Exposure.ImageType)
+                    && !IsWcsScienceFrame(image.MetaData.Exposure.ImageType))
+                || !IsWcsScienceFrame(imageType)) return image;
+        var calibration = _plateSolve?.CaptureCalibration;
+        var context = CaptureWcsContext.Create(_equip, _profile, image);
+        if (calibration == null || context == null) return image;
+        var wcs = calibration.ForFrame(context,
+            context.Telescope.RightAscension, context.Telescope.Declination);
+        return wcs == null ? image : new BaseImageData(image.Data,
+            image.Properties with { Wcs = wcs }, image.MetaData);
+    }
+
+    private static bool IsWcsScienceFrame(string? type) =>
+        string.Equals(type, "LIGHT", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(type, "Light Frame", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(type, "SNAP", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Warn when a science frame came back smaller than the sensor.
     ///
