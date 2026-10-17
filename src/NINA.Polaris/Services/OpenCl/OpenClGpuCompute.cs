@@ -36,6 +36,9 @@ namespace NINA.Polaris.Services.OpenCl;
 public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
     private readonly ILogger<OpenClGpuCompute> _log;
     private readonly object _initGate = new();
+
+    /// <summary>Name the OpenCL backend goes by in NativeCallGuard.</summary>
+    public const string GuardName = "opencl";
     private OpenClContext? _ctx;
     private bool _initTried;
     private bool _initFailed;
@@ -126,7 +129,11 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
                     return null;
                 }
                 var src = LoadKernelSource();
-                _ctx = new OpenClContext(src);
+                // A native OpenCL fault (a vendor driver without its kernel
+                // device) kills the process; the guard turns one such crash into
+                // the GPU switched off at the next start instead of a loop.
+                _ctx = NINA.Image.NativeLibs.NativeCallGuard.Run(GuardName, "creating the OpenCL context",
+                    () => new OpenClContext(src));
                 // Decide the per-op offload policy by probing each kernel
                 // GPU-vs-CPU on this exact device, for both discrete GPUs and
                 // unified-memory SBCs. "Unified memory ⇒ everything wins" is false
@@ -136,7 +143,8 @@ public sealed unsafe class OpenClGpuCompute : IGpuCompute, IDisposable {
                 // offloaded; the rest run on the CPU. _policy stays null across the
                 // probe so each kernel can run to be measured.
                 var unified = _ctx.HostUnifiedMemory;
-                var policy = ProbeOffloadPolicy(unified);
+                var policy = NINA.Image.NativeLibs.NativeCallGuard.Run(GuardName, "measuring the OpenCL kernels",
+                    () => ProbeOffloadPolicy(unified));
                 _policy = policy;
                 _log.LogInformation(
                     "OpenCL GPU backend ready: {Device} ({Mem} memory; offloading {Ops})",
