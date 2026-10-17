@@ -576,10 +576,8 @@ public sealed class AsiSdkCamera : ICamera {
     }
 
     /// <summary>True when no byte of the frame is set: a transfer that did not
-    /// arrive, since a real sensor read always carries offset and noise. On an
-    /// Orange Pi 5 Pro an ASI678MC on the USB 2 port came back like this on
-    /// every exposure, each one followed by a USB reset, and was counted as a
-    /// good frame.</summary>
+    /// arrive, since a real sensor read always carries offset and noise.
+    /// Without this check such a buffer would be handed on as a good frame.</summary>
     internal static bool IsEmptyFrame(byte[] data)
         => data.Length > 0 && data.AsSpan().IndexOfAnyExcept((byte)0) < 0;
 

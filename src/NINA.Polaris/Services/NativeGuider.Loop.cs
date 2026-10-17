@@ -508,9 +508,8 @@ public sealed partial class NativeGuider {
 
     /// <summary>Captures in a row that gave no usable frame, and whether that
     /// streak has been announced. A Loop that only ever got empty or failed
-    /// frames used to keep reporting "Looping" with nothing said anywhere: an
-    /// ASI678MC on an Orange Pi 5 Pro's USB 2 port returned all-zero frames
-    /// for twenty minutes that way.</summary>
+    /// frames used to keep reporting "Looping" with nothing said anywhere
+    /// except one log line per failed capture.</summary>
     private int _badFrameStreak;
     private bool _badFrameAlerted;
     internal const int BadFrameAlertAfter = 3;

@@ -21,10 +21,15 @@ using NUnit.Framework;
 
 namespace NINA.Polaris.Test;
 
-/// <summary>An ASI678MC on an Orange Pi 5 Pro's USB 2 port returned frames
-/// with every pixel 0 on each exposure, each followed by a USB reset. The ZWO
-/// driver handed them over as good frames and the guide Loop kept saying
-/// "Looping" with nothing in the log.</summary>
+/// <summary>A frame whose data never crossed the USB link comes back with
+/// every pixel 0. The ZWO driver handed such a buffer over as a good frame,
+/// and a guide Loop with no usable frames kept saying "Looping" with nothing
+/// shown to the operator.
+///
+/// Note: the black guide preview of a frame saturated by daylight is NOT an
+/// empty frame. The PHD2-style stretch puts the black point at the frame's own
+/// background, so an all-bright frame renders all black; that is how an
+/// ASI678MC delivering real, saturated frames was first mistaken for this.</summary>
 [TestFixture]
 public class EmptyGuideFrameTests {
     [Test]
