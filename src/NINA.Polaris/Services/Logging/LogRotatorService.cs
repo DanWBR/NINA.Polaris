@@ -45,7 +45,16 @@ public sealed class LogRotatorService : BackgroundService {
     /// <summary>One log file per session (per server run), ASIAIR-style:
     /// <c>polaris_yyyy-MM-dd_HHmmss.jsonl</c>, fixed for the life of the
     /// process. Retention still sweeps old sessions so the SD card is safe.</summary>
-    private readonly string _sessionFile;
+    private string _sessionFile;
+
+    /// <summary>The wall clock at the session start and a monotonic timer from
+    /// then. A board without an RTC (a Raspberry Pi 4) starts Polaris before NTP
+    /// has set the clock, so the name carried a stale date (a 16 Oct session
+    /// filed as polaris_2026-10-01_133842.jsonl). When the clock steps, the file
+    /// is renamed to the start time the corrected clock implies.</summary>
+    private DateTime _startWall = DateTime.Now;
+    private readonly System.Diagnostics.Stopwatch _sinceStart = System.Diagnostics.Stopwatch.StartNew();
+    private static readonly TimeSpan ClockStepThreshold = TimeSpan.FromMinutes(2);
     private readonly ConcurrentQueue<LogEntry> _pending = new();
     private DateTime _lastRetentionSweep = DateTime.MinValue;
     private bool _subscribed;
@@ -68,7 +77,30 @@ public sealed class LogRotatorService : BackgroundService {
         _logDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "NINA.Polaris", "logs");
-        _sessionFile = Path.Combine(_logDir, $"polaris_{DateTime.Now:yyyy-MM-dd_HHmmss}.jsonl");
+        _sessionFile = Path.Combine(_logDir, SessionFileName(_startWall));
+    }
+
+    internal static string SessionFileName(DateTime start) => $"polaris_{start:yyyy-MM-dd_HHmmss}.jsonl";
+
+    /// <summary>The session start the clock implies now, or null when the clock
+    /// has not stepped since <paramref name="startWall"/> was taken.</summary>
+    internal static DateTime? CorrectedStart(DateTime startWall, TimeSpan elapsed, DateTime now, TimeSpan threshold) {
+        var drift = now - (startWall + elapsed);
+        return drift.Duration() > threshold ? now - elapsed : null;
+    }
+
+    private void FollowClockStep() {
+        var corrected = CorrectedStart(_startWall, _sinceStart.Elapsed, DateTime.Now, ClockStepThreshold);
+        if (corrected == null) return;
+        _startWall = corrected.Value;
+        var renamed = Path.Combine(_logDir, SessionFileName(corrected.Value));
+        try {
+            if (File.Exists(_sessionFile) && !File.Exists(renamed)) File.Move(_sessionFile, renamed);
+        } catch (Exception ex) {
+            Console.Error.WriteLine($"[LogRotator] renaming {_sessionFile} after a clock step failed: {ex.Message}");
+            return;
+        }
+        _sessionFile = renamed;
     }
 
     protected override async Task ExecuteAsync(CancellationToken ct) {
@@ -87,6 +119,7 @@ public sealed class LogRotatorService : BackgroundService {
             try {
                 var enabled = _profiles.Active?.LogToDisk == true;
                 if (enabled) {
+                    FollowClockStep();
                     await FlushQueueAsync(ct);
                     MaybeSweepRetention();
                 } else {
