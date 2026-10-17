@@ -507,6 +507,12 @@ public sealed class AsiSdkCamera : ICamera {
                     Thread.Sleep(st == ASI_EXPOSURE_STATUS.ASI_EXP_WORKING ? 50 : 5);
                 }
                 lock (_sdk) Check(ASIGetDataAfterExp(_cameraId, bytes, new CLong(bytes.Length)), "ASIGetDataAfterExp");
+                // A sensor never reads exactly 0 everywhere (offset and noise
+                // see to that), so an all-zero buffer is a transfer that never
+                // arrived, reported as a success. Throwing sends it through the
+                // reopen below like any other failed exposure.
+                if (IsEmptyFrame(bytes))
+                    throw new InvalidOperationException(ExposureFailureMessage(w, h, attempt, emptyFrame: true));
                 } finally {
                     lock (_sdk) { try { ASIStopExposure(_cameraId); } catch { } }
                     State = CameraStates.Idle;
@@ -551,19 +557,31 @@ public sealed class AsiSdkCamera : ICamera {
     /// sent a field session down the wrong path twice: it names neither the
     /// geometry, nor the USB bandwidth in force, nor whether a reopen was
     /// already tried.</summary>
-    private string ExposureFailureMessage(int w, int h, int attempt) {
+    private string ExposureFailureMessage(int w, int h, int attempt, bool emptyFrame = false) {
         int bandwidth = _controls.Contains((int)ASI_CONTROL_TYPE.ASI_BANDWIDTHOVERLOAD)
             ? (int)ReadControl(ASI_CONTROL_TYPE.ASI_BANDWIDTHOVERLOAD) : -1;
-        var sb = new StringBuilder("ASI exposure failed");
+        var sb = new StringBuilder(emptyFrame ? "ASI frame came back empty, every pixel 0" : "ASI exposure failed");
         if (attempt > 1) sb.Append(" again after reopening the camera");
         sb.Append($" ({DeviceName}: {w}x{h} bin {_bin}, {_imgType}, {_exposureSec:0.###}s, gain {_gain}");
         if (bandwidth >= 0) sb.Append($", USB bandwidth {bandwidth}");
-        sb.Append("). The camera answers but will not expose, which usually means another "
-            + "program has it open, or its firmware is stuck after one closed it uncleanly "
-            + "(PHD2, an INDI driver): unplug the camera for a few seconds and reconnect. "
-            + "A host reboot does not clear it, because the camera keeps its power.");
+        sb.Append(emptyFrame
+            ? "). The exposure finished but its data never crossed the USB link, and the host "
+              + "usually resets the camera each time. Try another cable or another USB port; "
+              + "on a single-board computer, a port of its own rather than a shared hub."
+            : "). The camera answers but will not expose, which usually means another "
+              + "program has it open, or its firmware is stuck after one closed it uncleanly "
+              + "(PHD2, an INDI driver): unplug the camera for a few seconds and reconnect. "
+              + "A host reboot does not clear it, because the camera keeps its power.");
         return sb.ToString();
     }
+
+    /// <summary>True when no byte of the frame is set: a transfer that did not
+    /// arrive, since a real sensor read always carries offset and noise. On an
+    /// Orange Pi 5 Pro an ASI678MC on the USB 2 port came back like this on
+    /// every exposure, each one followed by a USB reset, and was counted as a
+    /// good frame.</summary>
+    internal static bool IsEmptyFrame(byte[] data)
+        => data.Length > 0 && data.AsSpan().IndexOfAnyExcept((byte)0) < 0;
 
     public bool IsStreaming => _streaming;
 
