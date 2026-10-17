@@ -1296,13 +1296,15 @@ public class EquipmentManager : IDisposable {
             // the mount panel + VIDEO sidebar shows/hides based on
             // this being non-empty.
             var slewRates = Telescope.GetSlewRates();
+            var (scopeAlt, scopeAz) = MountHorizontal.Of(Telescope,
+                _profiles?.Active.Latitude ?? 0, _profiles?.Active.Longitude ?? 0, DateTime.UtcNow);
             status["telescope"] = new {
                 name = Telescope.DeviceName,
                 connected = Telescope.IsConnected,
                 ra = Safe(Telescope.RightAscension),
                 dec = Safe(Telescope.Declination),
-                alt = Safe(Telescope.Altitude),
-                az = Safe(Telescope.Azimuth),
+                alt = Safe(scopeAlt),
+                az = Safe(scopeAz),
                 tracking = Telescope.IsTracking,
                 slewing = Telescope.IsSlewing,
                 parked = Telescope.IsParked,
