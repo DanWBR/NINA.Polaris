@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 #if !(NETFX_CORE || NETCOREAPP || WINDOWS_UWP)
@@ -7,9 +7,10 @@ using System.Runtime.ConstrainedExecution;
 #endif
 using System.Collections.Generic;
 using System.Threading;
+using System.Text;
 
 /*
-    Version: 59.29030.20250722
+    Version: 60.32549.20260908
 
     For .NET Framework & .NET Core
 
@@ -26,8 +27,18 @@ using System.Threading;
         (b) Camera ID (camId) may change due to connection or system restart. Enumerate the cameras to get the camera ID, and then call the Open function to pass in the camId parameter to open the camera.
 */
 
+/*
+    Coordinate:
+        (a) Functions with coordinate parameters, such as Toupcam_put_Roi, Toupcam_put_AEAuxRect, etc., the coordinate is always relative to the original resolution,
+            even that the image has been flipped, rotated, digital binning, ROI, or combination of the previous operations.
+        (b) Exception: if the image is upside down (see here), the coordinate must be also upsize down.
+        (c) Exception: hardware binning.
+*/
+
 internal class Toupcam : IDisposable
 {
+    public const int MAX = 128;
+
     [Flags]
     public enum eFLAG : ulong
     {
@@ -139,8 +150,8 @@ internal class Toupcam : IDisposable
         FLAG_10GIGE = 0x0000400000000000,
         /* 5 Gigabit GigE */
         FLAG_5GIGE = 0x0000800000000000,
-        /* 2.5 Gigabit GigE */
-        FLAG_25GIGE = 0x0001000000000000,
+        /* 40 Gigabit GigE */
+        FLAG_40GIGE = 0x0001000000000000,
         /* astro auto focuser */
         FLAG_AUTOFOCUSER = 0x0002000000000000,
         /* stand alone light source */
@@ -159,10 +170,16 @@ internal class Toupcam : IDisposable
         FLAG_GHOPTO = 0x0100000000000000,
         /* pixel format, RAW 10bits packed */
         FLAG_RAW10PACK = 0x0200000000000000,
-        /* usb3.2 */
+        /* USB 3.2 Gen 2 */
         FLAG_USB32 = 0x0400000000000000,
-        /* usb3.2 camera connected to usb3.0 port */
-        FLAG_USB32_OVER_USB30 = 0x0800000000000000
+        /* USB 3.2 Gen 2 camera connected to usb3.0 port */
+        FLAG_USB32_OVER_USB30 = 0x0800000000000000,
+        /* line scan camera */
+        FLAG_LINESCAN = 0x1000000000000000,
+        /* 2.5 Gigabit GigE */
+        FLAG_25GIGE = 0x2000000000000000,
+        /* pixel format, RAW 14bits packed */
+        FLAG_RAW14PACK = 0x4000000000000000
     };
 
     public enum eEVENT : uint
@@ -197,6 +214,10 @@ internal class Toupcam : IDisposable
         EVENT_AUTOEXPO_CONVFAIL = 0x000e,
         /* fix pattern noise correction status changed */
         EVENT_FPNC = 0x000f,
+        /* front buffer overflow */
+        EVENT_FRONT_OVERFLOW = 0x0010,
+        /* back buffer overflow */
+        EVENT_BACK_OVERFLOW = 0x0011,
         /* generic error */
         EVENT_ERROR = 0x0080,
         /* camera disconnected */
@@ -228,14 +249,19 @@ internal class Toupcam : IDisposable
         OPTION_NOFRAME_TIMEOUT = 0x01,
         /* [RW] set the priority of the internal thread which grab data from the usb device.
             Win: iValue: 0 => THREAD_PRIORITY_NORMAL; 1 => THREAD_PRIORITY_ABOVE_NORMAL; 2 => THREAD_PRIORITY_HIGHEST; 3 => THREAD_PRIORITY_TIME_CRITICAL; default: 1; see: https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-setthreadpriority
-            Linux & macOS: The high 16 bits for the scheduling policy, and the low 16 bits for the priority; see: https://linux.die.net/man/3/pthread_setschedparam
+            Linux & macOS: similar to Win
         */
         OPTION_THREAD_PRIORITY = 0x02,
+        /* [RW] obsolete & useless, noop.
+           0 = better image quality, more cpu usage (default)
+           1 = lower image quality, less cpu usage
+        */
+        OPTION_PROCESSMODE = 0x03,
         /* [RW]
-           0: RGB mode
-           1: RAW mode, read the CMOS or CCD raw data
-          -1: RAW mode, the difference from 1 is the execution of FFC, DFC, FPNC, black balance, and white balance
-          default value: 0
+          0: RGB mode
+          1: RAW mode, read the CMOS or CCD raw data
+         -1: RAW mode, the difference from 1 is the execution of FFC, DFC, FPNC, black balance, and white balance
+         default value: 0
         */
         OPTION_RAW = 0x04,
         /* [RW] 0 = only one, 1 = continue mode */
@@ -279,15 +305,19 @@ internal class Toupcam : IDisposable
         OPTION_DEMOSAIC_VIDEO = 0x13,
         /* [RW] demosaic method for still image */
         OPTION_DEMOSAIC_STILL = 0x14,
-        /* [RW] black level */
+        /* [RW] the black level refers to the baseline signal value output by an image sensor under no-light (completely dark) conditions.
+            In digital imaging systems, a fixed voltage offset is intentionally added to the signal to ensure that dark-region signals remain above zero, thereby preventing the loss of faint shadow details during A/D conversion.
+                (a) Prevent clipping: The sensor circuit's intrinsic noise may occasionally produce negative values. Without an offset, these negative values would be forcibly clipped to zero, resulting in the loss of shadow details.
+                (b) Preserve linearity: Raising the black level helps ensure that the sensor maintains consistent linear output behavior across the entire dynamic range.
+        */
         OPTION_BLACKLEVEL = 0x15,
         /* [RW] multithread image processing */
         OPTION_MULTITHREAD = 0x16,
-        /* [RW] binning
+        /* [RW] digital binning
                 0x01: (no binning)
                 n: (saturating add, n*n), 0x02(2*2), 0x03(3*3), 0x04(4*4), 0x05(5*5), 0x06(6*6), 0x07(7*7), 0x08(8*8). The Bitdepth of the data remains unchanged.
                 0x40 | n: (unsaturated add, n*n, works only in RAW mode), 0x42(2*2), 0x43(3*3), 0x44(4*4), 0x45(5*5), 0x46(6*6), 0x47(7*7), 0x48(8*8). The Bitdepth of the data is increased. For example, the original data with bitdepth of 12 will increase the bitdepth by 2 bits and become 14 after 2*2 binning.
-                0x80 | n: (average, n*n), 0x02(2*2), 0x03(3*3), 0x04(4*4), 0x05(5*5), 0x06(6*6), 0x07(7*7), 0x08(8*8). The Bitdepth of the data remains unchanged.
+                0x80 | n: (average, n*n), 0x82(2*2), 0x83(3*3), 0x84(4*4), 0x85(5*5), 0x86(6*6), 0x87(7*7), 0x88(8*8). The Bitdepth of the data remains unchanged.
             The final image size is rounded down to an even number, such as 640/3 to get 212
         */
         OPTION_BINNING = 0x17,
@@ -307,7 +337,7 @@ internal class Toupcam : IDisposable
                 0: disable
                 1: enable
                 -1: reset
-                (0xff000000 | n): set the average number to n, [1~255]
+                (0xff000000 | n): set the average number to n, [1, 255]
             get:
                 (val & 0xff): 0 => disable, 1 => enable, 2 => inited
                 ((val & 0xff00) >> 8): sequence
@@ -319,7 +349,8 @@ internal class Toupcam : IDisposable
                 0: Auto:
                     => one for video mode when auto exposure is enabled
                     => full capacity for others
-                1: DDR can cache frames to full capacity
+                -1: DDR can cache frames to full capacity
+            default: 0
         */
         OPTION_DDR_DEPTH = 0x1c,
         /* [RW] dark field correction
@@ -327,7 +358,7 @@ internal class Toupcam : IDisposable
                 0: disable
                 1: enable
                 -1: reset
-                (0xff000000 | n): set the average number to n, [1~255]
+                (0xff000000 | n): set the average number to n, [1, 255]
             get:
                 (val & 0xff): 0 => disable, 1 => enable, 2 => inited
                 ((val & 0xff00) >> 8): sequence
@@ -382,7 +413,9 @@ internal class Toupcam : IDisposable
         OPTION_BANDWIDTH = 0x2e,
         /* [RW] reload the last frame in trigger mode */
         OPTION_RELOAD = 0x2f,
-        /* [RW] dedicated thread for callback: 0 => disable, 1 => enable, default: 0 */
+        /* [RW] dedicated thread for callback: 0 => disable, 1 => enable
+                default: 1
+        */
         OPTION_CALLBACK_THREAD = 0x30,
         /* [RW] frontend (raw) frame buffer deque length, range: [2, 1024], default: 4
             All the memory will be pre-allocated when the camera starts, so, please attention to memory usage
@@ -439,7 +472,7 @@ internal class Toupcam : IDisposable
             All the memory will be pre-allocated when the camera starts, so, please attention to memory usage
         */
         OPTION_BACKEND_DEQUE_LENGTH = 0x41,
-        /* [RO] get the light source range, [0 ~ max] */
+        /* [RO] get the light source range, [0, max] */
         OPTION_LIGHTSOURCE_MAX = 0x42,
         /* [RW] light source */
         OPTION_LIGHTSOURCE = 0x43,
@@ -461,7 +494,7 @@ internal class Toupcam : IDisposable
         OPTION_FILTERWHEEL_SLOT = 0x48,
         /* [RW] filter wheel position:
             set:
-                -1: calibrate
+                -1: reset
                 val & 0xff: position between 0 and N-1, where N is the number of filter slots
                 (val >> 8) & 0x1: direction, 0 => clockwise spinning, 1 => auto direction spinning
             get:
@@ -474,7 +507,7 @@ internal class Toupcam : IDisposable
             0 or 100: full roi average, means "disabled"
         */
         OPTION_AUTOEXPOSURE_PERCENT = 0x4a,
-        /* [RW] anti shutter effect: 1 => disable, 0 => disable; default: 0 */
+        /* [RW] anti shutter effect: 1 => enable, 0 => disable; default: 0 */
         OPTION_ANTI_SHUTTER_EFFECT = 0x4b,
         /* [RO] get chamber humidity & temperature:
             high 16 bits: humidity, in 0.1%, such as: 325 means humidity is 32.5%
@@ -537,9 +570,9 @@ internal class Toupcam : IDisposable
         OPTION_RESET_SENSOR = 0x5e,
         /* [RW] Enable hardware ISP: 0 => auto (disable in RAW mode, otherwise enable), 1 => enable, -1 => disable; default: 0 */
         OPTION_ISP = 0x5f,
-        /* [RW] Auto exposure damp: time (thousandths). The larger the damping coefficient, the smoother and slower the exposure time changes */
+        /* [RW] Auto exposure damping: time (thousandths). The larger the damping coefficient, the smoother and slower the exposure time changes */
         OPTION_AUTOEXP_EXPOTIME_DAMP = 0x60,
-        /* [RW] Auto exposure damp: gain (thousandths). The larger the damping coefficient, the smoother and slower the gain changes */
+        /* [RW] Auto exposure damping: gain (thousandths). The larger the damping coefficient, the smoother and slower the gain changes */
         OPTION_AUTOEXP_GAIN_DAMP = 0x61,
         /* [RW] range: [1, 20] */
         OPTION_MOTOR_NUMBER = 0x62,
@@ -550,34 +583,35 @@ internal class Toupcam : IDisposable
         /* [RW] Pseudo: end color, BGR format */
         OPTION_PSEUDO_COLOR_END = 0x64,
         /* [RW] Pseudo:
-            -1 => custom: use startcolor & endcolor to generate the colormap
-            0 => disable
-            1 => spot
-            2 => spring
-            3 => summer
-            4 => autumn
-            5 => winter
-            6 => bone
-            7 => jet
-            8 => rainbow
-            9 => deepgreen
-            10 => ocean
-            11 => cool
-            12 => hsv
-            13 => pink
-            14 => hot
-            15 => parula
-            16 => magma
-            17 => inferno
-            18 => plasma
-            19 => viridis
-            20 => cividis
-            21 => twilight
-            22 => twilight_shifted
-            23 => turbo
-            24 => red
-            25 => green
-            26 => blue
+            -1 => Custom: use startcolor & endcolor to generate the colormap
+            0 => Disable
+            1 => Spot
+            2 => Spring
+            3 => Summer
+            4 => Autumn
+            5 => Winter
+            6 => Bone
+            7 => Jet
+            8 => Rainbow
+            9 => DeepGreen
+            10 => Ocean
+            11 => Cool
+            12 => HSV
+            13 => Pink
+            14 => Hot
+            15 => Parula
+            16 => Magma
+            17 => Inferno
+            18 => Plasma
+            19 => Viridis
+            20 => Cividis
+            21 => Twilight
+            22 => TwilightShifted
+            23 => Turbo
+            24 => Red
+            25 => Green
+            26 => Blue
+            27 => Spectrum
         */
         OPTION_PSEUDO_COLOR_ENABLE = 0x65,
         /* [RW] Low Power Consumption: 0 => disable, 1 => enable */
@@ -587,17 +621,17 @@ internal class Toupcam : IDisposable
                     0: disable
                     1: enable
                     -1: reset
-                    (0xff000000 | n): set the average number to n, [1~255]
+                    (0xff000000 | n): set the average number to n, [1, 255]
                 get:
                     (val & 0xff): 0 => disable, 1 => enable, 2 => inited
                     ((val & 0xff00) >> 8): sequence
                     ((val & 0xff0000) >> 16): average number
         */
         OPTION_FPNC = 0x67,
-        /* [RW] Auto exposure over exposure policy: when overexposed,
+        /* [RW] Auto exposure overexposure policy: when overexposed,
                 0 => directly reduce the exposure time/gain to the minimum value; or
-                1 => reduce exposure time/gain in proportion to current and target brightness.
-                n(n>1) => first adjust the exposure time to (maximum automatic exposure time * maximum automatic exposure gain) * n / 1000, and then adjust according to the strategy of 1
+                1 => reduce exposure time/gain according to the ratio between current and target brightness; or
+                n(n>1) => first, adjust the exposure time to (maximum automatic exposure time * maximum automatic exposure gain) * n / 1000, and then adjust according to the strategy of 1
             The advantage of policy 0 is that the convergence speed is faster, but there is black screen.
             Policy 1 avoids the black screen, but the convergence speed is slower.
             Default: 0
@@ -619,17 +653,19 @@ internal class Toupcam : IDisposable
         OPTION_AWB_CONTINUOUS = 0x6c,
         /* [RO] TEC target range: min(low 16 bits) = (short)(val & 0xffff), max(high 16 bits) = (short)((val >> 16) & 0xffff) */
         OPTION_TECTARGET_RANGE = 0x6d,
-        /* [RW] Correlated Double Sampling: 0~100 */
+        /* [RW] Correlated Double Sampling: 0~max (OPTION_CDS_MAX)
+             see https://www.next.gr/tutorials/sensors-and-transducers/image-sensor-noise-reduction-techniques-tutorial#correlated-double-sampling-cds
+        */
         OPTION_CDS = 0x6e,
         /* [RW] Low Power Consumption: Enable if exposure time is greater than the set value */
         OPTION_LOW_POWER_EXPOTIME = 0x6f,
         /* [RW] Sensor output offset to zero: 0 => disable, 1 => eanble; default: 0 */
         OPTION_ZERO_OFFSET = 0x70,
-        /* [RW] GVCP Timeout: millisecond, range = [3, 75], default: 15
+        /* [RW] GVCP Timeout: millisecond, range = [5, 150], default: 15(wire), 30(wireless)
              Unless in very special circumstances, generally no modification is required, just use the default value
         */
         OPTION_GVCP_TIMEOUT = 0x71,
-        /* [RW] GVCP Retry: range = [2, 8], default: 4
+        /* [RW] GVCP Retry: range = [2, 16], default: 4(wire), 8(wireless)
              Unless in very special circumstances, generally no modification is required, just use the default value
         */
         OPTION_GVCP_RETRY = 0x72,
@@ -659,7 +695,7 @@ internal class Toupcam : IDisposable
         OPTION_TIMED_TRIGGER_HIGH = 0x40000000,
         /* [RW] trigger threshold of auto exposure */
         OPTION_AUTOEXP_THLD_TRIGGER = 0x7d,
-        /* [RW] */
+        /* [RW] Lane */
         OPTION_LANE = 0x7e,
         /* [RW] Voltage bias */
         OPTION_VOLTAGEBIAS = 0x7f,
@@ -687,8 +723,40 @@ internal class Toupcam : IDisposable
             Because of it, if the adjustment becomes a problem, this setting is introduced for one of the solution.
         */
         OPTION_BLACKLEVEL_AUTOADJUST = 0x89,
+        /* [RW] user set */
+        OPTION_USER_SET = 0x8a,
         /* [RW] digital gain */
-        OPTION_DIGITAL_GAIN = 0x1001
+        OPTION_DIGITAL_GAIN = 0x1001,
+        /* [RW] Anti Blooming
+             Blooming occurs when the charge in a pixel exceeds the saturation level and the charge starts to fill adjacent pixels.
+             Some sensors are designed with structures built into them to limit blooming - anti-blooming structures.
+             Anti-blooming structures bleed off any excess charge before they can overflow the pixel and thereby stop blooming.
+             However, anti-blooming structures can reduce the effective quantum efficiency and introduce non linearity into the sensor.
+             Therefore, anti-blooming sensors are not recommended for applications requiring very low light or high accuracy measurements.
+        */
+        OPTION_ANTI_BLOOMING = 0x8b,
+        /* [RO} Anti Blooming */
+        OPTION_ANTI_BLOOMING_MAX = 0x8c,
+        /* [RO} Correlated Double Sampling */
+        OPTION_CDS_MAX = 0x8d,
+        /* [RW] Scan Type: 0(areascan), 1(linescan) */
+        OPTION_SCANTYPE = 0x8e,
+        /* [RW] Operation Mode: 1(area), 2(TDI), only TDI */
+        OPTION_OPERATIONMODE = 0x8f,
+        /* [RW] TDI Trigger Mode: 1(normal), 2(both), only TDI */
+        OPTION_TDITRIGGERMODE = 0x90,
+        /* [RW] TDI Trigger Stage: value represents the sensor scan stage, only TDI */
+        OPTION_TDISTAGE = 0x91,
+        /* [RW] Frame Interval in microseconds */
+        OPTION_FRAMEINTERVAL = 0x92,
+        /* [RO] Frame Interval, minimum */
+        OPTION_FRAMEINTERVAL_MIN = 0x93,
+        /* [RO] Frame Interval, maximum */
+        OPTION_FRAMEINTERVAL_MAX = 0x94,
+        /* [RW] default: 0 */
+        OPTION_IMAGEPTRRAW = 0x95,
+        /* [RW] default: 0 */
+        OPTION_IMAGEPTRBOTH = 0x96
     };
 
     /* HRESULT: error code */
@@ -700,20 +768,20 @@ internal class Toupcam : IDisposable
     public const int E_UNEXPECTED = unchecked((int)0x8000ffff);
     /* Not supported or not implemented */ /* Remark: This feature is not supported on this model of camera */
     public const int E_NOTIMPL = unchecked((int)0x80004001);
-    public const int E_NOINTERFACE = unchecked((int)0x80004002);
-    /* Permission denied */ /* Remark: The program on Linux does not have permission to open the USB device, please enable udev rules file or run as root */
-    public const int E_ACCESSDENIED = unchecked((int)0x80070005);
     /* Out of memory */
     public const int E_OUTOFMEMORY = unchecked((int)0x8007000e);
     /* One or more arguments are not valid */
     public const int E_INVALIDARG = unchecked((int)0x80070057);
+    public const int E_NOINTERFACE = unchecked((int)0x80004002);
     /* Pointer that is not valid */ /* Remark: Pointer is NULL */
     public const int E_POINTER = unchecked((int)0x80004003);
     /* Generic failure */
     public const int E_FAIL = unchecked((int)0x80004005);
+    /* Permission denied */ /* Remark: The program on Linux does not have permission to open the USB device, please enable udev rules file or run as root */
+    public const int E_ACCESSDENIED = unchecked((int)0x80070005);
     /* Call function in the wrong thread */
     public const int E_WRONG_THREAD = unchecked((int)0x8001010e);
-    /* Device not functioning */ /* Remark: It is generally caused by hardware errors, such as cable problems, USB port problems, poor contact, camera hardware damage, etc */
+    /* Device not functioning */ /* Remark: It is generally caused by hardware errors, such as cable problems, USB port problems, poor contact, insufficient power supply, camera hardware damage, etc */
     public const int E_GEN_FAILURE = unchecked((int)0x8007001f);
     /* The requested resource is in use */ /* Remark: The camera is already in use, such as duplicated opening/starting the camera, or being used by other application, etc */
     public const int E_BUSY = unchecked((int)0x800700aa);
@@ -721,8 +789,10 @@ internal class Toupcam : IDisposable
     public const int E_PENDING = unchecked((int)0x8000000a);
     /* This operation returned because the timeout period expired */
     public const int E_TIMEOUT = unchecked((int)0x8001011f);
-    /* Network is unreachable */
+    /* Network is unreachable */ /* Remark: Please check the IP settings of the camera and the computer, or the firewall settings */
     public const int E_UNREACH = unchecked((int)0x80072743);
+    /* The operation was canceled by the user */
+    public const int E_CANCELLED = unchecked((int)0x800704c7);
 
     public const int EXPOGAIN_DEF = 100;      /* exposure gain, default value */
     public const int EXPOGAIN_MIN = 100;      /* exposure gain, minimum value */
@@ -803,8 +873,26 @@ internal class Toupcam : IDisposable
     public const int HDR_B_MAX = 65535;
     public const int HDR_THRESHOLD_MIN = 0;
     public const int HDR_THRESHOLD_MAX = 4094;
-    public const int CDS_MIN = 0;        /* Correlated Double Sampling */
-    public const int CDS_MAX = 100;
+    public const int CDS_MIN = 0;          /* Correlated Double Sampling */
+    public const int ANTIBLOOMING_MIN = 0; /* Anti Blooming */
+    public const int GVCP_RETRY_DEF = 4;         /* GVCP Retry */
+    public const int GVCP_RETRY_MIN = 2;
+    public const int GVCP_RETRY_MAX = 20;
+    public const int GVCP_TIMEOUT_DEF = 40;      /* GVCP Timeout */
+    public const int GVCP_TIMEOUT_MIN = 20;
+    public const int GVCP_TIMEOUT_MAX = 200;
+    public const int GVSP_WAIT_PERCENT_DEF = 1;  /* GVSP wait percent */
+    public const int GVSP_WAIT_PERCENT_MIN = 0;
+    public const int GVSP_WAIT_PERCENT_MAX = 100;
+    public const int FRONTEND_MAX = 1024;    /* frontend frame buffer deque length */
+    public const int FRONTEND_DEF = 4;
+    public const int FRONTEND_MIN = 2;
+    public const int BACKEND_MAX = 1024;     /* backend frame buffer deque length */
+    public const int BACKEND_DEF = 3;
+    public const int BACKEND_MIN = 2;
+    public const int HEAT_MIN = 0;          /* Heat */
+    public const int LANE_MIN = 0;          /* Lane */
+    public const int FAN_MIN = 0;           /* Fan */
 
     public enum ePIXELFORMAT : uint
     {
@@ -834,7 +922,8 @@ internal class Toupcam : IDisposable
         PIXELFORMAT_HDR12HL = 0x11,
         /* HDR, Bitdepth: 14, Conversion Gain: High + Low */
         PIXELFORMAT_HDR14HL = 0x12,
-        PIXELFORMAT_RAW10PACK = 0x13
+        PIXELFORMAT_RAW10PACK = 0x13,
+        PIXELFORMAT_RAW14PACK = 0x14
     };
 
     [Flags]
@@ -860,6 +949,10 @@ internal class Toupcam : IDisposable
         FRAMEINFO_FLAG_COUNT = 0x00000100,
         /* Mechanical shutter: closed */
         FRAMEINFO_FLAG_MECHANICALSHUTTER = 0x00000200,
+        /* Horizontal Optical Black */
+        FRAMEINFO_FLAG_HOB = 0x00000400,
+        /* Vertical Optical Black */
+        FRAMEINFO_FLAG_VOB = 0x00000800,
         /* still image */
         FRAMEINFO_FLAG_STILL = 0x00008000,
         /* Conversion Gain: High */
@@ -903,20 +996,20 @@ internal class Toupcam : IDisposable
         /* Trigger delay time in microseconds, range: [0, 5000000] */
         IOCONTROLTYPE_GET_TRIGGERDELAY = 0x0f,
         IOCONTROLTYPE_SET_TRIGGERDELAY = 0x10,
-        /* Burst Counter, range: [1 ~ 65535] */
+        /* Burst Counter, range: [1, 65535] */
         IOCONTROLTYPE_GET_BURSTCOUNTER = 0x11,
         IOCONTROLTYPE_SET_BURSTCOUNTER = 0x12,
         /* 0x00 => Opto-isolated input, 0x01 => GPIO0, 0x02=> GPIO1 */
         IOCONTROLTYPE_GET_COUNTERSOURCE = 0x13,
         IOCONTROLTYPE_SET_COUNTERSOURCE = 0x14,
-        /* Counter Value, range: [1 ~ 65535] */
+        /* Counter Value, range: [1, 65535] */
         IOCONTROLTYPE_GET_COUNTERVALUE = 0x15,
         IOCONTROLTYPE_SET_COUNTERVALUE = 0x16,
         IOCONTROLTYPE_SET_RESETCOUNTER = 0x18,
-        /* PWM Frequency */
+        /* PWM Frequency, range: [0, 0xffffffff] */
         IOCONTROLTYPE_GET_PWM_FREQ = 0x19,
         IOCONTROLTYPE_SET_PWM_FREQ = 0x1a,
-        /* PWM Duty Ratio */
+        /* PWM Duty Ratio, default: 50, range: [0, 100] */
         IOCONTROLTYPE_GET_PWM_DUTYRATIO = 0x1b,
         IOCONTROLTYPE_SET_PWM_DUTYRATIO = 0x1c,
         /* PWM Source: 0x00 => Opto-isolated input, 0x01 => GPIO0, 0x02 => GPIO1 */
@@ -958,10 +1051,10 @@ internal class Toupcam : IDisposable
         /* exposure time signal: 0 => specified line, 1 => common exposure time */
         IOCONTROLTYPE_GET_EXPO_ACTIVE_MODE = 0x2f,
         IOCONTROLTYPE_SET_EXPO_ACTIVE_MODE = 0x30,
-        /* exposure start line, default: 0 */
+        /* exposure start line, default: 0, range: [0, 16384] */
         IOCONTROLTYPE_GET_EXPO_START_LINE = 0x31,
         IOCONTROLTYPE_SET_EXPO_START_LINE = 0x32,
-        /*  exposure end line, default: 0
+        /*  exposure end line, default: 0, range: [0, 16384]
             end line must be no less than start line
         */
         IOCONTROLTYPE_GET_EXPO_END_LINE = 0x33,
@@ -969,20 +1062,20 @@ internal class Toupcam : IDisposable
         /* exposure event: 0 => specified line, 1 => common exposure time */
         IOCONTROLTYPE_GET_EXEVT_ACTIVE_MODE = 0x35,
         IOCONTROLTYPE_SET_EXEVT_ACTIVE_MODE = 0x36,
-        /* Output Counter Value, range: [0 ~ 65535] */
+        /* Output Counter Value, range: [0, 65535] */
         IOCONTROLTYPE_GET_OUTPUTCOUNTERVALUE = 0x37,
         IOCONTROLTYPE_SET_OUTPUTCOUNTERVALUE = 0x38,
         /* Output pause: 1 => puase, 0 => unpause */
         IOCONTROLTYPE_SET_OUTPUT_PAUSE = 0x3a,
         /* Input state: 0 (low level) or 1 (high level) */
         IOCONTROLTYPE_GET_INPUT_STATE = 0x3b,
-        /* User pulse high level time: us */
+        /* User pulse high level time: us, range: [0, 0xffffffff] */
         IOCONTROLTYPE_GET_USER_PULSE_HIGH = 0x3d,
         IOCONTROLTYPE_SET_USER_PULSE_HIGH = 0x3e,
-        /* User pulse low level time: us */
+        /* User pulse low level time: us, range: [0, 0xffffffff] */
         IOCONTROLTYPE_GET_USER_PULSE_LOW = 0x3f,
         IOCONTROLTYPE_SET_USER_PULSE_LOW = 0x40,
-        /* User pulse number: default 0 */
+        /* User pulse number: default 0, range: [0, 0xffffffff] */
         IOCONTROLTYPE_GET_USER_PULSE_NUMBER = 0x41,
         IOCONTROLTYPE_SET_USER_PULSE_NUMBER = 0x42,
         /* External trigger number */
@@ -1094,13 +1187,30 @@ internal class Toupcam : IDisposable
     public struct FrameInfoV4
     {
         public FrameInfoV3 v3;
-        public uint reserved; /* not used */
+        public ushort hob; /* Horizontal Optical Black */
+        public ushort vob; /* Vertical Optical Black */
         public uint uLum;
         public ulong uFV;
         public ulong timecount;
         public uint framecount, tricount;
         public Gps gps;
     };
+    [StructLayout(LayoutKind.Sequential)]
+    public struct ImagePtr
+    {
+        public uint id;             /* 0 is reserved as an invalid id */
+        public byte pixelFormat;    /* PIXELFORMAT_xxxx */
+        public byte ergb;           /* see OPTION_RGB */
+        public byte snapR;
+        public byte infoVer;        /* FrameInfo version >= 4 */
+        public uint reserved;
+        public uint strideRaw;      /* stride of RAW, 0 means = image width (no padding) */
+        public IntPtr ptrInfo;
+        public IntPtr snapCtx;
+        public IntPtr ptrRaw;       /* RAW, see OPTION_IMAGEPTRRAW */
+        public IntPtr ptr8;
+        public IntPtr ptr16;
+    }
     [StructLayout(LayoutKind.Sequential), Obsolete("Use FrameInfoV4")]
     public struct FrameInfoV2
     {
@@ -1124,7 +1234,7 @@ internal class Toupcam : IDisposable
     {
         public ushort lensID;
         public byte lensType;
-        public byte statusAfmf;      /* LENS_AF = 0x00,  LENS_MF = 0x80 */
+        public byte statusAfmf;      /* LENS_AF = 0x00, LENS_MF = 0x80 */
 
         public ushort maxFocalLength;
         public ushort curFocalLength;
@@ -1210,15 +1320,27 @@ internal class Toupcam : IDisposable
     [DllImport("ntdll.dll", ExactSpelling = true, CallingConvention = CallingConvention.Cdecl, SetLastError = false)]
     public static extern void memcpy(IntPtr dest, IntPtr src, IntPtr count);
 #endif
-    static public uint MAKEFOURCC(uint a, uint b, uint c, uint d)
+    public static uint MAKEFOURCC(uint a, uint b, uint c, uint d)
     {
         return ((uint)(byte)(a) | ((uint)(byte)(b) << 8) | ((uint)(byte)(c) << 16) | ((uint)(byte)(d) << 24));
     }
 
-    static public int TDIBWIDTHBYTES(int bits)
+    public static int TDIBWIDTHBYTES(int bits)
     {
         return ((bits + 31) & (~31)) / 8;
     }
+
+    /* only WinForm
+    public static void InitBitmap8bppIndexedPalette(Bitmap bmp)
+    {
+        if (bmp.PixelFormat == PixelFormat.Format8bppIndexed) {
+            ColorPalette palette = bmp.Palette;
+            for (int i = 0; i < 256; i++)
+                palette.Entries[i] = Color.FromArgb(i, i, i);
+            bmp.Palette = palette;
+        }
+    }
+    */
 
     /* only for compatibility with .Net 4.0 and below */
     public static IntPtr IncIntPtr(IntPtr p, int offset)
@@ -1238,10 +1360,13 @@ internal class Toupcam : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    /* get the version of this dll/so, which is: 59.29030.20250722 */
+    /* get the version of this dll/so, which is: 60.32549.20260908 */
     public static string Version()
     {
-        return Toupcam_Version();
+        if (IsWindows())
+            return Marshal.PtrToStringUni(Toupcam_Version());
+        else
+            return Marshal.PtrToStringAnsi(Toupcam_Version());
     }
 
     private static DeviceV2[] Ptr2Device(IntPtr p, uint cnt)
@@ -1250,7 +1375,7 @@ internal class Toupcam : IDisposable
         DeviceV2[] arr = new DeviceV2[cnt];
         if (cnt > 0) {
             for (uint i = 0; i < cnt; ++i) {
-                if (IsUnicode()) {
+                if (IsWindows()) {
                     arr[i].displayname = Marshal.PtrToStringUni(p);
                     p = IncIntPtr(p, sizeof(char) * 64);
                     arr[i].id = Marshal.PtrToStringUni(p);
@@ -1275,18 +1400,26 @@ internal class Toupcam : IDisposable
     /* enumerate Toupcam cameras that are currently connected to computer */
     public static DeviceV2[] EnumV2()
     {
-        IntPtr p = Marshal.AllocHGlobal(512 * 128);
+        IntPtr p = Marshal.AllocHGlobal(512 * MAX);
         return Ptr2Device(p, Toupcam_EnumV2(p));
     }
 
     public static DeviceV2[] EnumWithName()
     {
-        IntPtr p = Marshal.AllocHGlobal(512 * 128);
+        IntPtr p = Marshal.AllocHGlobal(512 * MAX);
         return Ptr2Device(p, Toupcam_EnumWithName(p));
     }
 
     /* Initialize support for GigE cameras. If online/offline notifications are not required, the callback function can be set to null */
     public static int GigeEnable(DelegateHotplug funHotplug)
+    {
+        return GigeEnable(funHotplug, null);
+    }
+
+    /* opt: semicolon separated options:
+    *        "wifi": Enable WiFi adapter support
+    */
+    public static int GigeEnable(DelegateHotplug funHotplug, string opt)
     {
         HOTPLUG_CALLBACK pHotplug = delegate (IntPtr ctxHotplug)
         {
@@ -1299,9 +1432,12 @@ internal class Toupcam : IDisposable
         };
         IntPtr id = new IntPtr(Interlocked.Increment(ref sid_));
         map_.Add(id.ToInt32(), funHotplug);
-        return Toupcam_GigeEnable(pHotplug, id);
+        if (string.IsNullOrEmpty(opt))
+            return Toupcam_GigeEnable(pHotplug, id);
+        else
+            return Toupcam_GigeEnableV2(pHotplug, id, opt);
     }
-    
+
     /* Initialize support for PCIe cameras. If online/offline notifications are not required, the callback function can be set to null */
     public static int PciEnable(DelegateHotplug funHotplug)
     {
@@ -1318,22 +1454,26 @@ internal class Toupcam : IDisposable
         map_.Add(id.ToInt32(), funHotplug);
         return Toupcam_PciEnable(pHotplug, id);
     }
-    
+
     /* Initialize support for *.cti cameras. If online/offline notifications are not required, the callback function can be set to null
     * (1) ctiPath = null means all *.cti in GENICAM_GENTL64_PATH/GENICAM_GENTL32_PATH
     * or
     * (2) string[] ctiPath = {
-                "/full/path/to/file.cti"
+                "/full/path/to/file.cti",
                 ...
             }
     */
-    public static int CtiEnable(DelegateHotplug funHotplug, in string[] ctiPath)
+    public static int CtiEnable(DelegateHotplug funHotplug, string[] ctiPath)
     {
-        string[] newPath = null;
-        if (ctiPath != null && ctiPath.Length > 0 && ctiPath[ctiPath.Length - 1] != null) {
-            newPath = new string[ctiPath.Length + 1];
+        StringHandle[] HandleArray = null;
+        IntPtr[] PtrArray = null;
+        if (ctiPath != null && ctiPath.Length > 0) {
+            HandleArray = new StringHandle[ctiPath.Length];
             for (int i = 0; i < ctiPath.Length; ++i)
-                newPath[i] = ctiPath[i];
+                HandleArray[i] = new StringHandle(ctiPath[i]);
+            PtrArray = new IntPtr[ctiPath.Length + 1];
+            for (int i = 0; i < ctiPath.Length; ++i)
+                PtrArray[i] = HandleArray[i].Get();
         }
         HOTPLUG_CALLBACK pHotplug = delegate (IntPtr ctxHotplug)
         {
@@ -1346,19 +1486,29 @@ internal class Toupcam : IDisposable
         };
         IntPtr id = new IntPtr(Interlocked.Increment(ref sid_));
         map_.Add(id.ToInt32(), funHotplug);
-        return Toupcam_CtiEnable(pHotplug, id, newPath);
+        if (PtrArray == null)
+            return Toupcam_CtiEnable(pHotplug, id, IntPtr.Zero);
+        else {
+            GCHandle gch = GCHandle.Alloc(PtrArray, GCHandleType.Pinned);
+            try {
+                return Toupcam_CtiEnable(pHotplug, id, gch.AddrOfPinnedObject());
+            }
+            finally {
+                gch.Free();
+            }
+        }
     }
 
     [Obsolete("Use EnumV2")]
     public static Device[] Enum()
     {
-        IntPtr p = Marshal.AllocHGlobal(512 * 128);
+        IntPtr p = Marshal.AllocHGlobal(512 * MAX);
         IntPtr ti = p;
         uint cnt = Toupcam_Enum(p);
         Device[] arr = new Device[cnt];
         if (cnt > 0) {
             for (uint i = 0; i < cnt; ++i) {
-                if (IsUnicode()) {
+                if (IsWindows()) {
                     arr[i].displayname = Marshal.PtrToStringUni(p);
                     p = IncIntPtr(p, sizeof(char) * 64);
                     arr[i].id = Marshal.PtrToStringUni(p);
@@ -1375,7 +1525,10 @@ internal class Toupcam : IDisposable
                 p = IncIntPtr(p, IntPtr.Size);
 
                 {
-                    arr[i].model.name = Marshal.PtrToStringUni(Marshal.ReadIntPtr(q));
+                    if (IsWindows())
+                        arr[i].model.name = Marshal.PtrToStringUni(Marshal.ReadIntPtr(q));
+                    else
+                        arr[i].model.name = Marshal.PtrToStringAnsi(Marshal.ReadIntPtr(q));
                     q = IncIntPtr(q, IntPtr.Size);
                     arr[i].model.flag = (uint)Marshal.ReadInt32(q);
                     q = IncIntPtr(q, sizeof(int));
@@ -1404,15 +1557,16 @@ internal class Toupcam : IDisposable
         the object of Toupcam must be obtained by static mothod Open or OpenByIndex, it cannot be obtained by obj = new Toupcam (The constructor is private on purpose)
     */
     // camId: enumerated by EnumV2, null means the first enumerated camera
-    // For USB, GigE or PCIe camera, the camId can also be specified as (case sensitive):
-    //    (a) "sn:xxxxxxxxxxxx" (such as sn:ZP250212241204105), or
-    //    (b) "name:xxxxxx" (such as name:Camera1)
+    // For USB, GigE, CameraLink or CXP camera, the camId can also be specified as (case sensitive):
+    //    (a) "sn:xxxxxxxxxxxx" (Use SN, such as sn:ZP250212241204105), or
+    //    (b) "name:xxxxxx" (Use user-defined name, such as name:Camera1)
     // Moreover, for GigE camera, the camId can also be specified as (case sensitive):
-    //    (a) "ip:xxx.xxx.xxx.xxx" (such as ip:192.168.1.100), or
-    //    (b) "mac:xxxxxxxxxxxx" (such as mac:d05f64ffff23)
+    //    (a) "ip:xxx.xxx.xxx.xxx" (Use IP address, such as ip:192.168.1.100), or
+    //    (b) "mac:xxxxxxxxxxxx" (Use MAC address, such as mac:d05f64ffff23)
     public static Toupcam Open(string camId)
     {
-        SafeCamHandle tmphandle = Toupcam_Open(camId);
+        StringHandle camIdHandle = new StringHandle(camId);
+        SafeCamHandle tmphandle = Toupcam_Open(camIdHandle.Get());
         if (tmphandle == null || tmphandle.IsInvalid || tmphandle.IsClosed)
             return null;
         return new Toupcam(tmphandle);
@@ -1559,10 +1713,10 @@ internal class Toupcam : IDisposable
     {
         get
         {
-            string str = "";
+            string str = string.Empty;
             if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
                 return str;
-            IntPtr ptr = Marshal.AllocHGlobal(64);
+            IntPtr ptr = Marshal.AllocHGlobal(32);
             if (Toupcam_get_SerialNumber(handle_, ptr) >= 0)
                 str = Marshal.PtrToStringAnsi(ptr);
             Marshal.FreeHGlobal(ptr);
@@ -1575,7 +1729,7 @@ internal class Toupcam : IDisposable
     {
         get
         {
-            string str = "";
+            string str = string.Empty;
             if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
                 return str;
             IntPtr ptr = Marshal.AllocHGlobal(32);
@@ -1591,7 +1745,7 @@ internal class Toupcam : IDisposable
     {
         get
         {
-            string str = "";
+            string str = string.Empty;
             if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
                 return str;
             IntPtr ptr = Marshal.AllocHGlobal(32);
@@ -1607,7 +1761,7 @@ internal class Toupcam : IDisposable
     {
         get
         {
-            string str = "";
+            string str = string.Empty;
             if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
                 return str;
             IntPtr ptr = Marshal.AllocHGlobal(32);
@@ -1623,7 +1777,7 @@ internal class Toupcam : IDisposable
     {
         get
         {
-            string str = "";
+            string str = string.Empty;
             if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
                 return str;
             IntPtr ptr = Marshal.AllocHGlobal(32);
@@ -1631,6 +1785,27 @@ internal class Toupcam : IDisposable
                 str = Marshal.PtrToStringAnsi(ptr);
             Marshal.FreeHGlobal(ptr);
             return str;
+        }
+    }
+
+    public string Name
+    {
+        get
+        {
+            string str = string.Empty;
+            if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
+                return str;
+            IntPtr ptr = Marshal.AllocHGlobal(64);
+            if (Toupcam_query_Name(handle_, ptr) >= 0)
+                str = Marshal.PtrToStringAnsi(ptr);
+            Marshal.FreeHGlobal(ptr);
+            return str;
+        }
+        set
+        {
+            if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
+                return;
+            Toupcam_set_Name(handle_, value);
         }
     }
 
@@ -1642,6 +1817,25 @@ internal class Toupcam : IDisposable
                 return 0;
             return (uint)Toupcam_get_Field(handle_);
         }
+    }
+
+    public ModelV2 queryModel()
+    {
+        return toModelV2(Toupcam_query_Model(handle_));
+    }
+
+    /* load cfg:
+         (1) nullptr or empty string, load from EEPROM (address = 0)
+         (2) eeprom=???, load from EEPROM (address = 0x???)
+         (3) path\to\file.ini, load from ini file
+         (4) path\to\file.json, load from json file
+    */
+    public bool Load(string strPara)
+    {
+        if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
+            return false;
+        StringHandle strParaHandle = new StringHandle(strPara);
+        return CheckHResult(Toupcam_Load(handle_, strParaHandle.Get()));
     }
 
 #if !(WINDOWS_UWP)
@@ -1665,6 +1859,57 @@ internal class Toupcam : IDisposable
         else {
             return CheckHResult(Toupcam_StartPullModeWithCallback(handle_, null, IntPtr.Zero));
         }
+    }
+
+    public static FrameInfoV4 GetFrameInfoV4(ImagePtr ptr)
+    {
+#if !(NETFX_CORE || NETCOREAPP || WINDOWS_UWP)
+        return (FrameInfoV4)Marshal.PtrToStructure(ptr.ptrInfo, typeof(FrameInfoV4));
+#else
+        return Marshal.PtrToStructure<FrameInfoV4>(ptr.ptrInfo);
+#endif
+    }
+
+    public static FrameInfoV3 GetFrameInfoV3(ImagePtr ptr)
+    {
+#if !(NETFX_CORE || NETCOREAPP || WINDOWS_UWP)
+        return (FrameInfoV3)Marshal.PtrToStructure(ptr.ptrInfo, typeof(FrameInfoV3));
+#else
+        return Marshal.PtrToStructure<FrameInfoV3>(ptr.ptrInfo);
+#endif
+    }
+
+    /* Obtains a pointer to the frame buffer directly from the SDK, eliminating the need to copy frame data and thus improving performance */
+    /* bStill: to pull still image, set to 1, otherwise 0 */
+    public bool PullImagePtr(int bStill, ref ImagePtr ptrImage)
+    {
+        if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
+            return false;
+        return CheckHResult(Toupcam_PullImagePtr(handle_, bStill, out ptrImage));
+    }
+
+    /* After a frame buffer has been used, it must be returned to the SDK for reuse. Please note the following:
+        (a) The frame buffer must only be returned back after it is no longer in use. Any access after returning it is unsafe, as the SDK may have already reused the buffer and overwritten the memory with new data.
+        (b) If a frame buffer is not returned, the pool of available buffers will gradually decrease.
+        (c) Each frame buffer obtained via Pull (identified by its ID) may be returned only once; duplicate returns are not allowed.
+        (d) The return order does not need to match the Pull order; buffers may be returned out of order.
+        (e) Frame buffers that have not been returned remain valid after Stop. Frame buffers that have not been returned become invalid immediately after Close.
+    */
+    public bool PushImagePtr(uint ptrId)
+    {
+        if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
+            return false;
+        return CheckHResult(Toupcam_PushImagePtr(handle_, ptrId));
+    }
+
+    /* waitMS: The timeout interval, in milliseconds. If a nonzero value is specified, the function waits until the image is ok or the interval elapses.
+                If waitMS is zero, the function does not enter a wait state if the image is not available; it always returns immediately; this is equal to PullImagePtr.
+    */
+    public bool WaitImagePtr(uint waitMS, int bStill, ref ImagePtr ptrImage)
+    {
+        if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
+            return false;
+        return CheckHResult(Toupcam_WaitImagePtr(handle_, waitMS, bStill, out ptrImage));
     }
 
     /*  bits: 24 (RGB24), 32 (RGB32), 8 (Grey), 16 (Grey), 48(RGB48), 64(RGB64) */
@@ -1793,8 +2038,8 @@ internal class Toupcam : IDisposable
     }
 
     /*
-       nWaitMS: The timeout interval, in milliseconds. If a non-zero value is specified, the function either successfully fetches the image or waits for a timeout.
-                If nWaitMS is zero, the function does not wait when there are no images to fetch; It always returns immediately; this is equal to PullImage.
+       waitMS: The timeout interval, in milliseconds. If a non-zero value is specified, the function either successfully fetches the image or waits for a timeout.
+                If waitMS is zero, the function does not wait when there are no images to fetch; It always returns immediately; this is equal to PullImage.
        bStill: to pull still image, set to 1, otherwise 0
        bits: 24 (RGB24), 32 (RGB32), 48 (RGB48), 8 (Grey), 16 (Grey), 64 (RGB64).
              In RAW mode, this parameter is ignored.
@@ -1890,61 +2135,61 @@ internal class Toupcam : IDisposable
         return CheckHResult(Toupcam_PullImageV3(handle_, pImageData, bStill, bits, rowPitch, out pInfo));
     }
 
-    public bool WaitImage(uint nWaitMS, IntPtr pImageData, int bStill, int bits, int rowPitch, out FrameInfoV4 pInfo)
+    public bool WaitImage(uint waitMS, IntPtr pImageData, int bStill, int bits, int rowPitch, out FrameInfoV4 pInfo)
     {
         if (handle_ == null || handle_.IsInvalid || handle_.IsClosed) {
             pInfo = new FrameInfoV4();
             return false;
         }
-        return CheckHResult(Toupcam_WaitImageV4(handle_, nWaitMS, pImageData, bStill, bits, rowPitch, out pInfo));
+        return CheckHResult(Toupcam_WaitImageV4(handle_, waitMS, pImageData, bStill, bits, rowPitch, out pInfo));
     }
 
-    public bool WaitImage(uint nWaitMS, byte[] pImageData, int bStill, int bits, int rowPitch, out FrameInfoV4 pInfo)
+    public bool WaitImage(uint waitMS, byte[] pImageData, int bStill, int bits, int rowPitch, out FrameInfoV4 pInfo)
     {
         if (handle_ == null || handle_.IsInvalid || handle_.IsClosed) {
             pInfo = new FrameInfoV4();
             return false;
         }
-        return CheckHResult(Toupcam_WaitImageV4(handle_, nWaitMS, pImageData, bStill, bits, rowPitch, out pInfo));
+        return CheckHResult(Toupcam_WaitImageV4(handle_, waitMS, pImageData, bStill, bits, rowPitch, out pInfo));
     }
 
-    public bool WaitImage(uint nWaitMS, ushort[] pImageData, int bStill, int bits, int rowPitch, out FrameInfoV4 pInfo)
+    public bool WaitImage(uint waitMS, ushort[] pImageData, int bStill, int bits, int rowPitch, out FrameInfoV4 pInfo)
     {
         if (handle_ == null || handle_.IsInvalid || handle_.IsClosed) {
             pInfo = new FrameInfoV4();
             return false;
         }
-        return CheckHResult(Toupcam_WaitImageV4(handle_, nWaitMS, pImageData, bStill, bits, rowPitch, out pInfo));
+        return CheckHResult(Toupcam_WaitImageV4(handle_, waitMS, pImageData, bStill, bits, rowPitch, out pInfo));
     }
 
     [Obsolete("Use FrameInfoV4")]
-    public bool WaitImageV3(uint nWaitMS, IntPtr pImageData, int bStill, int bits, int rowPitch, out FrameInfoV3 pInfo)
+    public bool WaitImageV3(uint waitMS, IntPtr pImageData, int bStill, int bits, int rowPitch, out FrameInfoV3 pInfo)
     {
         if (handle_ == null || handle_.IsInvalid || handle_.IsClosed) {
             pInfo = new FrameInfoV3();
             return false;
         }
-        return CheckHResult(Toupcam_WaitImageV3(handle_, nWaitMS, pImageData, bStill, bits, rowPitch, out pInfo));
+        return CheckHResult(Toupcam_WaitImageV3(handle_, waitMS, pImageData, bStill, bits, rowPitch, out pInfo));
     }
 
     [Obsolete("Use FrameInfoV4")]
-    public bool WaitImageV3(uint nWaitMS, byte[] pImageData, int bStill, int bits, int rowPitch, out FrameInfoV3 pInfo)
+    public bool WaitImageV3(uint waitMS, byte[] pImageData, int bStill, int bits, int rowPitch, out FrameInfoV3 pInfo)
     {
         if (handle_ == null || handle_.IsInvalid || handle_.IsClosed) {
             pInfo = new FrameInfoV3();
             return false;
         }
-        return CheckHResult(Toupcam_WaitImageV3(handle_, nWaitMS, pImageData, bStill, bits, rowPitch, out pInfo));
+        return CheckHResult(Toupcam_WaitImageV3(handle_, waitMS, pImageData, bStill, bits, rowPitch, out pInfo));
     }
 
     [Obsolete("Use FrameInfoV4")]
-    public bool WaitImageV3(uint nWaitMS, ushort[] pImageData, int bStill, int bits, int rowPitch, out FrameInfoV3 pInfo)
+    public bool WaitImageV3(uint waitMS, ushort[] pImageData, int bStill, int bits, int rowPitch, out FrameInfoV3 pInfo)
     {
         if (handle_ == null || handle_.IsInvalid || handle_.IsClosed) {
             pInfo = new FrameInfoV3();
             return false;
         }
-        return CheckHResult(Toupcam_WaitImageV3(handle_, nWaitMS, pImageData, bStill, bits, rowPitch, out pInfo));
+        return CheckHResult(Toupcam_WaitImageV3(handle_, waitMS, pImageData, bStill, bits, rowPitch, out pInfo));
     }
 
     [Obsolete("Use FrameInfoV4")]
@@ -2089,7 +2334,7 @@ internal class Toupcam : IDisposable
         pEvent_ = new EVENT_CALLBACK(EventCallback);
         return CheckHResult(Toupcam_StartPushModeV4(handle_, pDataV4_, id_, pEvent_, id_));
     }
-    
+
     [Obsolete("Use FrameInfoV4")]
     public bool StartPushModeV3(DelegateDataCallbackV3 funData, DelegateEventCallback funEvent)
     {
@@ -2150,6 +2395,13 @@ internal class Toupcam : IDisposable
         return CheckHResult(Toupcam_SnapR(handle_, nResolutionIndex, nNumber));
     }
 
+    public bool SnapV2(uint nResolutionIndex, uint nNumber, int eRGB, IntPtr snapCtx)
+    {
+        if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
+            return false;
+        return CheckHResult(Toupcam_SnapV2(handle_, nResolutionIndex, nNumber, eRGB, snapCtx));
+    }
+
     /*
         soft trigger:
         nNumber:    0xffff:     trigger continuously
@@ -2165,65 +2417,65 @@ internal class Toupcam : IDisposable
 
     /*
         trigger synchronously
-        nWaitMS:    0:              by default, exposure * 102% + 4000 milliseconds
+        waitMS:    0:              by default, exposure * 102% + 4000 milliseconds
                     0xffffffff:     wait infinite
                     other:          milliseconds to wait
     */
-    public bool TriggerSync(uint nWaitMS, IntPtr pImageData, int bits, int rowPitch, out FrameInfoV4 pInfo)
+    public bool TriggerSync(uint waitMS, IntPtr pImageData, int bits, int rowPitch, out FrameInfoV4 pInfo)
     {
         if (handle_ == null || handle_.IsInvalid || handle_.IsClosed) {
             pInfo = new FrameInfoV4();
             return false;
         }
-        return CheckHResult(Toupcam_TriggerSyncV4(handle_, nWaitMS, pImageData, bits, rowPitch, out pInfo));
+        return CheckHResult(Toupcam_TriggerSyncV4(handle_, waitMS, pImageData, bits, rowPitch, out pInfo));
     }
 
-    public bool TriggerSync(uint nWaitMS, byte[] pImageData, int bits, int rowPitch, out FrameInfoV4 pInfo)
+    public bool TriggerSync(uint waitMS, byte[] pImageData, int bits, int rowPitch, out FrameInfoV4 pInfo)
     {
         if (handle_ == null || handle_.IsInvalid || handle_.IsClosed) {
             pInfo = new FrameInfoV4();
             return false;
         }
-        return CheckHResult(Toupcam_TriggerSyncV4(handle_, nWaitMS, pImageData, bits, rowPitch, out pInfo));
+        return CheckHResult(Toupcam_TriggerSyncV4(handle_, waitMS, pImageData, bits, rowPitch, out pInfo));
     }
 
-    public bool TriggerSync(uint nWaitMS, ushort[] pImageData, int bits, int rowPitch, out FrameInfoV4 pInfo)
+    public bool TriggerSync(uint waitMS, ushort[] pImageData, int bits, int rowPitch, out FrameInfoV4 pInfo)
     {
         if (handle_ == null || handle_.IsInvalid || handle_.IsClosed) {
             pInfo = new FrameInfoV4();
             return false;
         }
-        return CheckHResult(Toupcam_TriggerSyncV4(handle_, nWaitMS, pImageData, bits, rowPitch, out pInfo));
-    }
-    
-    [Obsolete("Use FrameInfoV4")]
-    public bool TriggerSync(uint nWaitMS, IntPtr pImageData, int bits, int rowPitch, out FrameInfoV3 pInfo)
-    {
-        if (handle_ == null || handle_.IsInvalid || handle_.IsClosed) {
-            pInfo = new FrameInfoV3();
-            return false;
-        }
-        return CheckHResult(Toupcam_TriggerSync(handle_, nWaitMS, pImageData, bits, rowPitch, out pInfo));
+        return CheckHResult(Toupcam_TriggerSyncV4(handle_, waitMS, pImageData, bits, rowPitch, out pInfo));
     }
 
     [Obsolete("Use FrameInfoV4")]
-    public bool TriggerSync(uint nWaitMS, byte[] pImageData, int bits, int rowPitch, out FrameInfoV3 pInfo)
+    public bool TriggerSync(uint waitMS, IntPtr pImageData, int bits, int rowPitch, out FrameInfoV3 pInfo)
     {
         if (handle_ == null || handle_.IsInvalid || handle_.IsClosed) {
             pInfo = new FrameInfoV3();
             return false;
         }
-        return CheckHResult(Toupcam_TriggerSync(handle_, nWaitMS, pImageData, bits, rowPitch, out pInfo));
+        return CheckHResult(Toupcam_TriggerSync(handle_, waitMS, pImageData, bits, rowPitch, out pInfo));
     }
 
     [Obsolete("Use FrameInfoV4")]
-    public bool TriggerSync(uint nWaitMS, ushort[] pImageData, int bits, int rowPitch, out FrameInfoV3 pInfo)
+    public bool TriggerSync(uint waitMS, byte[] pImageData, int bits, int rowPitch, out FrameInfoV3 pInfo)
     {
         if (handle_ == null || handle_.IsInvalid || handle_.IsClosed) {
             pInfo = new FrameInfoV3();
             return false;
         }
-        return CheckHResult(Toupcam_TriggerSync(handle_, nWaitMS, pImageData, bits, rowPitch, out pInfo));
+        return CheckHResult(Toupcam_TriggerSync(handle_, waitMS, pImageData, bits, rowPitch, out pInfo));
+    }
+
+    [Obsolete("Use FrameInfoV4")]
+    public bool TriggerSync(uint waitMS, ushort[] pImageData, int bits, int rowPitch, out FrameInfoV3 pInfo)
+    {
+        if (handle_ == null || handle_.IsInvalid || handle_.IsClosed) {
+            pInfo = new FrameInfoV3();
+            return false;
+        }
+        return CheckHResult(Toupcam_TriggerSync(handle_, waitMS, pImageData, bits, rowPitch, out pInfo));
     }
 
     public bool put_Size(int nWidth, int nHeight)
@@ -2342,7 +2594,8 @@ internal class Toupcam : IDisposable
               use minimum frame buffer. When new frame arrive, drop all the pending frame regardless of whether the frame buffer is full.
               If DDR present, also limit the DDR frame buffer to only one frame.
         2: soft realtime
-              Drop the oldest frame when the queue is full and then enqueue the new frame
+              use minimum frame buffer. When new frame arrive, drop all the pending frame regardless of whether the frame buffer is full.
+              If DDR present, the DDR frame buffer unchanged.
         default: 0
     */
     public bool put_RealTime(int val)
@@ -2371,26 +2624,26 @@ internal class Toupcam : IDisposable
     }
 
     /*
-    * bAutoExposure:
+    * mode:
     *   0: disable auto exposure
-    *   1: auto exposure continue mode
-    *   2: auto exposure once mode
+    *   1: auto exposure continuous mode
+    *   2: auto exposure once
     */
-    public bool get_AutoExpoEnable(out int bAutoExposure)
+    public bool get_AutoExpoEnable(out int mode)
     {
         if (handle_ == null || handle_.IsInvalid || handle_.IsClosed) {
-            bAutoExposure = 0;
+            mode = 0;
             return false;
         }
 
-        return CheckHResult(Toupcam_get_AutoExpoEnable(handle_, out bAutoExposure));
+        return CheckHResult(Toupcam_get_AutoExpoEnable(handle_, out mode));
     }
 
-    public bool put_AutoExpoEnable(int bAutoExposure)
+    public bool put_AutoExpoEnable(int mode)
     {
         if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
             return false;
-        return CheckHResult(Toupcam_put_AutoExpoEnable(handle_, bAutoExposure));
+        return CheckHResult(Toupcam_put_AutoExpoEnable(handle_, mode));
     }
 
     public bool get_AutoExpoEnable(out bool bAutoExposure)
@@ -2773,7 +3026,7 @@ internal class Toupcam : IDisposable
         return CheckHResult(Toupcam_get_Speed(handle_, out pSpeed));
     }
 
-    /* power supply:
+    /* Light Frequency:
             0 => 60HZ AC
             1 => 50Hz AC
             2 => DC
@@ -2854,6 +3107,7 @@ internal class Toupcam : IDisposable
         return CheckHResult(Toupcam_get_WhiteBalanceGain(handle_, aGain));
     }
 
+    /* Minimum width & height: 4 */
     public bool put_AWBAuxRect(int X, int Y, int Width, int Height)
     {
         if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
@@ -2884,6 +3138,7 @@ internal class Toupcam : IDisposable
         return true;
     }
 
+    /* Minimum width & height: 4 */
     public bool put_AEAuxRect(int X, int Y, int Width, int Height)
     {
         if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
@@ -2932,6 +3187,7 @@ internal class Toupcam : IDisposable
         return CheckHResult(Toupcam_get_BlackBalance(handle_, aSub));
     }
 
+    /* Minimum width & height: 4 */
     public bool put_ABBAuxRect(int X, int Y, int Width, int Height)
     {
         if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
@@ -3063,17 +3319,20 @@ internal class Toupcam : IDisposable
         return Toupcam_read_EEPROM(handle_, addr, pBuffer, pBuffer.Length);
     }
 
+    /* flash action */
     public const uint FLASH_SIZE = 0x00;    /* query total size */
-    public const uint FLASH_EBLOCK = 0x01;    /* query erase block size */
-    public const uint FLASH_RWBLOCK = 0x02;    /* query read/write block size */
-    public const uint FLASH_STATUS = 0x03;    /* query status */
+    public const uint FLASH_EBLOCK = 0x01;  /* query erase block size */
+    public const uint FLASH_RWBLOCK = 0x02; /* query read/write block size */
+    public const uint FLASH_STATUS = 0x03;  /* query status */
     public const uint FLASH_READ = 0x04;    /* read */
-    public const uint FLASH_WRITE = 0x05;    /* write */
-    public const uint FLASH_ERASE = 0x06;    /* erase */
-    /* Flash:
-       action = FLASH_XXXX: read, write, erase, query total size, query read/write block size, query erase block size
+    public const uint FLASH_WRITE = 0x05;   /* write */
+    public const uint FLASH_ERASE = 0x06;   /* erase */
+    /* flash zone */
+    public const uint FLASH_SENSOR = 0x00;  /* sensor */
+    public const uint FLASH_USER = 0x02;    /* user */
+
+    /* action = (zone << 24) | TOUPCAM_FLASH_XXXX: read, write, erase, query total size, query read/write block size, query erase block size
        addr = address
-       see democpp
     */
     public int rwc_Flash(uint action, uint addr, uint len, IntPtr pData)
     {
@@ -3124,6 +3383,100 @@ internal class Toupcam : IDisposable
         return Toupcam_read_UART(handle_, pBuffer, nBufferLen);
     }
 
+    /* Case insensitive */
+    public bool put_Int(string strName, int iValue)
+    {
+        if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
+            return false;
+        return CheckHResult(Toupcam_put_Int(handle_, strName, iValue));
+    }
+
+    /* Case insensitive */
+    public bool get_Int(string strName, out int iValue)
+    {
+        if (handle_ == null || handle_.IsInvalid || handle_.IsClosed) {
+            iValue = 0;
+            return false;
+        }
+        return CheckHResult(Toupcam_get_Int(handle_, strName, out iValue));
+    }
+
+    /* Case insensitive */
+    public bool put_Str(string strName, string strValue)
+    {
+        if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
+            return false;
+        return CheckHResult(Toupcam_put_Str(handle_, strName, strValue));
+    }
+
+    /* Case insensitive */
+    public bool put_Str(string strName, byte[] strValue)
+    {
+        if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
+            return false;
+        return CheckHResult(Toupcam_put_Str(handle_, strName, strValue));
+    }
+
+    /* Case insensitive */
+    public bool get_Str(string strName, out string strValue)
+    {
+        strValue = null;
+        if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
+            return false;
+
+        byte[] outputBuf = new byte[MAX]; /* output buffer (128 bytes are always sufficient) */
+        bool ret = CheckHResult(Toupcam_get_Str(handle_, strName, outputBuf));
+        if (ret)
+            strValue = Encoding.Default.GetString(outputBuf, 0, Array.IndexOf(outputBuf, (byte)0));
+        return ret;
+    }
+
+    /* Case insensitive */
+    public string get_Str(string strName)
+    {
+        string strValue = null;
+        if (get_Str(strName, out strValue) && (strValue != null))
+            return strValue;
+        return string.Empty;
+    }
+
+    /* Case insensitive */
+    public bool get_StrUtf8(string strName, out string strValue)
+    {
+        strValue = null;
+        if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
+            return false;
+
+        byte[] outputBuf = new byte[MAX]; /* output buffer (128 bytes are always sufficient) */
+        bool ret = CheckHResult(Toupcam_get_Str(handle_, strName, outputBuf));
+        if (ret)
+            strValue = Encoding.UTF8.GetString(outputBuf, 0, Array.IndexOf(outputBuf, (byte)0));
+        return ret;
+    }
+
+    /* Case insensitive */
+    public string get_StrUtf8(string strName)
+    {
+        string strValue = null;
+        if (get_StrUtf8(strName, out strValue) && (strValue != null))
+            return strValue;
+        return string.Empty;
+    }
+
+    /* Case insensitive */
+    public bool get_Str(string strName, out byte[] strValue)
+    {
+        strValue = null;
+        if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
+            return false;
+
+        byte[] outputBuf = new byte[MAX]; /* output buffer (128 bytes are always sufficient) */
+        bool ret = CheckHResult(Toupcam_get_Str(handle_, strName, outputBuf));
+        if (ret)
+            strValue = outputBuf;
+        return ret;
+    }
+
     public bool put_Option(eOPTION iOption, int iValue)
     {
         if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
@@ -3138,6 +3491,28 @@ internal class Toupcam : IDisposable
             return false;
         }
         return CheckHResult(Toupcam_get_Option(handle_, iOption, out iValue));
+    }
+
+    static public bool put_GlobalOption(eOPTION iOption, int iValue)
+    {
+        return (Toupcam_put_Option(null, iOption, iValue) >= 0);
+    }
+
+    static public bool get_GlobalOption(eOPTION iOption, out int iValue)
+    {
+        return (Toupcam_get_Option(null, iOption, out iValue) >= 0);
+    }
+
+    public int[] get_PixelFormatSupport()
+    {
+        int num = 0;
+        if (get_PixelFormatSupport(-1, out num) && (num > 0)) {
+            int[] arr = new int[num];
+            for (int i = 0; i < num; ++i)
+                get_PixelFormatSupport((sbyte)i, out arr[i]);
+            return arr;
+        }
+        return null;
     }
 
     /*
@@ -3188,6 +3563,20 @@ internal class Toupcam : IDisposable
         return Toupcam_get_BinningNumber(handle_);
     }
 
+    public string[] get_BinningValue()
+    {
+        int num = get_BinningNumber();
+        if (num <= 0)
+            return null;
+
+        string[] arr = new string[num];
+        for (int i = 0; i < num; ++i) {
+            arr[i] = string.Empty;
+            get_BinningValue((uint)i, out arr[i]);
+        }
+        return arr;
+    }
+
     public bool get_BinningValue(uint index, out string Value)
     {
         Value = null;
@@ -3200,6 +3589,20 @@ internal class Toupcam : IDisposable
         return ret;
     }
 
+    public string[] get_BinningMethod()
+    {
+        List<string> list = new List<string>();
+        uint index = 0;
+        do {
+            string strMethod;
+            if (!get_BinningMethod(index, out strMethod))
+                break;
+            list.Add(strMethod);
+            ++index;
+        } while (true);
+        return list.ToArray();
+    }
+
     public bool get_BinningMethod(uint index, out string Method)
     {
         Method = null;
@@ -3210,6 +3613,112 @@ internal class Toupcam : IDisposable
         if (ret)
             Method = Marshal.PtrToStringAnsi(methodPtr);
         return ret;
+    }
+
+    public bool readPtr(string key, int len, out byte[] data)
+    {
+        data = null;
+        if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
+            return false;
+
+        byte[] buffer = new byte[len];
+        GCHandle handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+
+        try {
+            if (CheckHResult(Toupcam_readPtr(handle_, key, len, handle.AddrOfPinnedObject()))) {
+                data = buffer;
+                return true;
+            }
+        }
+        finally {
+            handle.Free();
+        }
+        return false;
+    }
+
+    public bool readPtr(string key, int len, out string data)
+    {
+        data = null;
+        byte[] buffer = null;
+        if (!readPtr(key, len, out buffer))
+            return false;
+
+        int realLen = Array.IndexOf(buffer, (byte)0);
+        if (realLen < 0)
+            realLen = buffer.Length;
+
+        data = Encoding.Default.GetString(buffer, 0, realLen);
+        return true;
+    }
+
+    /*
+        int a = 0;
+        if (readPtr("???", out a)) {
+            ...
+        }
+    */
+    public bool readPtr<T>(string key, out T data) where T : struct
+    {
+        data = default(T);
+        if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
+            return false;
+        int len = Marshal.SizeOf(typeof(T));
+        IntPtr buffer = Marshal.AllocHGlobal(len);
+        try {
+            if (CheckHResult(Toupcam_readPtr(handle_, key, len, buffer))) {
+                data = (T)Marshal.PtrToStructure(buffer, typeof(T));
+                return true;
+            }
+        }
+        finally {
+            Marshal.FreeHGlobal(buffer);
+        }
+        return false;
+    }
+
+    public bool writePtr(string key, byte[] data)
+    {
+        if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
+            return false;
+
+        if (data == null || data.Length == 0)
+            return CheckHResult(Toupcam_writePtr(handle_, key, 0, IntPtr.Zero));
+        else {
+            GCHandle handle = GCHandle.Alloc(data, GCHandleType.Pinned);
+            try {
+                return CheckHResult(Toupcam_writePtr(handle_, key, data.Length, handle.AddrOfPinnedObject()));
+            }
+            finally {
+                handle.Free();
+            }
+        }
+    }
+
+    public bool writePtr(string key, string data)
+    {
+        if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
+            return false;
+        if (data == null || data.Length == 0)
+            return CheckHResult(Toupcam_writePtr(handle_, key, 0, IntPtr.Zero));
+        else
+            return writePtr(key, Encoding.Default.GetBytes(data));
+    }
+
+    /*
+        int a = 100;
+        writePtr("???", a);
+    */
+    public bool writePtr<T>(string key, T data) where T : struct
+    {
+        int len = Marshal.SizeOf(typeof(T));
+        IntPtr buffer = Marshal.AllocHGlobal(len);
+        try {
+            Marshal.StructureToPtr(data, buffer, false);
+            return CheckHResult(Toupcam_writePtr(handle_, key, len, buffer));
+        }
+        finally {
+            Marshal.FreeHGlobal(buffer);
+        }
     }
 
     public bool put_SelfTrigger(ref SelfTrigger pSt)
@@ -3278,7 +3787,9 @@ internal class Toupcam : IDisposable
         return CheckHResult(Toupcam_put_Temperature(handle_, nTemperature));
     }
 
-    /* xOffset, yOffset, xWidth, yHeight: must be even numbers */
+    /* xOffset, yOffset, xWidth, yHeight: must be even numbers
+        Minimum width & height: 8
+    */
     public bool put_Roi(uint xOffset, uint yOffset, uint xWidth, uint yHeight)
     {
         if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
@@ -3302,13 +3813,6 @@ internal class Toupcam : IDisposable
         if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
             return false;
         return CheckHResult(Toupcam_put_RoiN(handle_, xOffset, yOffset, xWidth, yHeight, (uint)(xOffset.Length)));
-    }
-
-    public bool put_XY(int x, int y)
-    {
-        if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
-            return false;
-        return CheckHResult(Toupcam_put_XY(handle_, x, y));
     }
 
     /*
@@ -3403,42 +3907,48 @@ internal class Toupcam : IDisposable
     {
         if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
             return false;
-        return CheckHResult(Toupcam_FfcExport(handle_, filePath));
+        StringHandle filePathHandle = new StringHandle(filePath);
+        return CheckHResult(Toupcam_FfcExport(handle_, filePathHandle.Get()));
     }
 
     public bool FfcImport(string filePath)
     {
         if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
             return false;
-        return CheckHResult(Toupcam_FfcImport(handle_, filePath));
+        StringHandle filePathHandle = new StringHandle(filePath);
+        return CheckHResult(Toupcam_FfcImport(handle_, filePathHandle.Get()));
     }
 
     public bool DfcExport(string filePath)
     {
         if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
             return false;
-        return CheckHResult(Toupcam_DfcExport(handle_, filePath));
+        StringHandle filePathHandle = new StringHandle(filePath);
+        return CheckHResult(Toupcam_DfcExport(handle_, filePathHandle.Get()));
     }
 
     public bool DfcImport(string filePath)
     {
         if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
             return false;
-        return CheckHResult(Toupcam_DfcImport(handle_, filePath));
+        StringHandle filePathHandle = new StringHandle(filePath);
+        return CheckHResult(Toupcam_DfcImport(handle_, filePathHandle.Get()));
     }
 
     public bool FpncExport(string filePath)
     {
         if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
             return false;
-        return CheckHResult(Toupcam_FpncExport(handle_, filePath));
+        StringHandle filePathHandle = new StringHandle(filePath);
+        return CheckHResult(Toupcam_FpncExport(handle_, filePathHandle.Get()));
     }
 
     public bool FpncImport(string filePath)
     {
         if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
             return false;
-        return CheckHResult(Toupcam_FpncImport(handle_, filePath));
+        StringHandle filePathHandle = new StringHandle(filePath);
+        return CheckHResult(Toupcam_FpncImport(handle_, filePathHandle.Get()));
     }
 
     public bool IoControl(uint ioLine, eIoControType eType, int outVal, out int inVal)
@@ -3539,7 +4049,7 @@ internal class Toupcam : IDisposable
     {
         if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
             return false;
-        IntPtr p = Marshal.AllocHGlobal(128);
+        IntPtr p = Marshal.AllocHGlobal(MAX);
         if (!CheckHResult(Toupcam_get_LensInfo(handle_, p))) {
             Marshal.FreeHGlobal(p);
             return false;
@@ -3554,11 +4064,11 @@ internal class Toupcam : IDisposable
         return CheckHResult(Toupcam_get_AFState(handle_, ref pState));
     }
 
-    public bool put_AFMode(eAFMode mode)
+    public bool put_AFMode(eAFMode mode, int bFixedWD, uint uiNear, uint uiFar)
     {
         if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
             return false;
-        return CheckHResult(Toupcam_put_AFMode(handle_, mode));
+        return CheckHResult(Toupcam_put_AFMode(handle_, mode, bFixedWD, uiNear, uiFar));
     }
 
     public bool put_AFRoi(uint xOffset, uint yOffset, uint xWidth, uint yHeight)
@@ -3644,6 +4154,41 @@ internal class Toupcam : IDisposable
         return CheckHResult(Toupcam_GetHistogramV2(handle_, pHistogramV2_, id_));
     }
 
+    public bool put_XY(int x, int y)
+    {
+        if (handle_ == null || handle_.IsInvalid || handle_.IsClosed)
+            return false;
+        return CheckHResult(Toupcam_put_XY(handle_, x, y));
+    }
+
+    public static string query_Name(string camId)
+    {
+        StringHandle camIdHandle = new StringHandle(camId);
+        IntPtr ptr = Marshal.AllocHGlobal(64);
+        string str = string.Empty;
+        if (Toupcam_get_Name(camIdHandle.Get(), ptr) >= 0)
+            str = Marshal.PtrToStringAnsi(ptr);
+        Marshal.FreeHGlobal(ptr);
+        return str;
+    }
+
+    public static int put_Name(string camId, string name)
+    {
+        StringHandle camIdHandle = new StringHandle(camId);
+        return Toupcam_put_Name(camIdHandle.Get(), name);
+    }
+
+    public static string query_SerialNumber(string camId)
+    {
+        StringHandle camIdHandle = new StringHandle(camId);
+        IntPtr ptr = Marshal.AllocHGlobal(32);
+        string str = string.Empty;
+        if (Toupcam_query_SerialNumber(camIdHandle.Get(), ptr) >= 0)
+            str = Marshal.PtrToStringAnsi(ptr);
+        Marshal.FreeHGlobal(ptr);
+        return str;
+    }
+
     /*
         calculate the clarity factor:
         pImageData: pointer to the image data
@@ -3686,7 +4231,8 @@ internal class Toupcam : IDisposable
     */
     public static int Replug(string camId)
     {
-        return Toupcam_Replug(camId);
+        StringHandle camIdHandle = new StringHandle(camId);
+        return Toupcam_Replug(camIdHandle.Get());
     }
 
     /* firmware update:
@@ -3709,7 +4255,9 @@ internal class Toupcam : IDisposable
         };
         IntPtr id = new IntPtr(Interlocked.Increment(ref sid_));
         map_.Add(id.ToInt32(), funProgress);
-        int ret = Toupcam_Update(camId, filePath, pProgress, id);
+        StringHandle camIdHandle = new StringHandle(camId);
+        StringHandle filePathHandle = new StringHandle(filePath);
+        int ret = Toupcam_Update(camIdHandle.Get(), filePathHandle.Get(), pProgress, id);
         map_.Remove(id.ToInt32());
         return ret;
     }
@@ -3718,9 +4266,12 @@ internal class Toupcam : IDisposable
     {
         ModelV2 model = new ModelV2();
         if (q != IntPtr.Zero) {
-            model.name = Marshal.PtrToStringUni(Marshal.ReadIntPtr(q));
+            if (IsWindows())
+                model.name = Marshal.PtrToStringUni(Marshal.ReadIntPtr(q));
+            else
+                model.name = Marshal.PtrToStringAnsi(Marshal.ReadIntPtr(q));
             q = IncIntPtr(q, IntPtr.Size);
-            if ((4 == IntPtr.Size) && IsUnicode())   /* 32bits windows */
+            if ((4 == IntPtr.Size) && IsWindows())   /* 32bits windows */
                 q = IncIntPtr(q, 4); //skip 4 bytes, different from the linux version
             model.flag = (ulong)Marshal.ReadInt64(q);
             q = IncIntPtr(q, sizeof(long));
@@ -3794,7 +4345,12 @@ internal class Toupcam : IDisposable
             return null;
         return Marshal.PtrToStringAnsi(ptr);
     }
-    
+
+    public static int PixelFormatBitdepth(ePIXELFORMAT pixelFormat)
+    {
+        return Toupcam_get_PixelFormatBitdepth(pixelFormat);
+    }
+
     public static int FfcFile(IntPtr[] data, uint num, uint width, uint height, uint fourcc, uint bits, string outfile)
     {
         return Toupcam_FfcFile(data, num, width, height, fourcc, bits, outfile);
@@ -3807,21 +4363,21 @@ internal class Toupcam : IDisposable
                 return "Success";
             case S_FALSE: /* Remark: Different from S_OK, such as internal values and user-set values have coincided, equivalent to noop */
                 return "Yet another success";
-            case E_INVALIDARG:
-                return "One or more arguments are not valid";
-            case E_NOTIMPL: /* Remark: This feature is not supported on this model of camera */
-                return "Not supported or not implemented";
-            case E_POINTER: /* Remark: Pointer is NULL */
-                return "Pointer that is not valid";
             case E_UNEXPECTED:/* Remark: Generally indicates that the conditions are not met, such as calling put_Option setting some options that do not support modification when the camera is running, and so on */
                 return "Catastrophic failure";
-            case E_ACCESSDENIED: /* Remark: The program on Linux does not have permission to open the USB device, please enable udev rules file or run as root */
-                return "General access denied error";
+            case E_NOTIMPL: /* Remark: This feature is not supported on this model of camera */
+                return "Not supported or not implemented";
             case E_OUTOFMEMORY:
                 return "Out of memory";
+            case E_INVALIDARG:
+                return "One or more arguments are not valid";
+            case E_POINTER: /* Remark: Pointer is NULL */
+                return "Pointer that is not valid";
+            case E_ACCESSDENIED: /* Remark: Insufficient permissions. This may be blocked by system security policies; on Linux, USB devices often require additional permission configuration, which can be resolved by setting up udev rules or running with root privileges */
+                return "Permission denied";
             case E_WRONG_THREAD:
                 return "Call function in the wrong thread";
-            case E_GEN_FAILURE: /* Remark: It is generally caused by hardware errors, such as cable problems, USB port problems, poor contact, camera hardware damage, etc */
+            case E_GEN_FAILURE: /* Remark: It is generally caused by hardware errors, such as cable problems, USB port problems, poor contact, insufficient power supply, camera hardware damage, etc */
                 return "Device not functioning";
             case E_BUSY: /* Remark: The camera is already in use, such as duplicated opening/starting the camera, or being used by other application, etc */
                 return "The requested resource is in use";
@@ -3831,6 +4387,8 @@ internal class Toupcam : IDisposable
                 return "This operation returned because the timeout period expired";
             case E_UNREACH:
                 return "Network is unreachable";
+            case E_CANCELLED:
+                return "The operation was canceled by the user";
             default:
                 return "Unspecified failure";
         }
@@ -3945,7 +4503,7 @@ internal class Toupcam : IDisposable
         }
     }
 
-    private static bool IsUnicode()
+    private static bool IsWindows()
     {
 #if (WINDOWS_UWP)
         return true;
@@ -3954,7 +4512,7 @@ internal class Toupcam : IDisposable
 #endif
     }
 
-#if !(WINDOWS_UWP)
+#if !(NETFX_CORE || NETCOREAPP || WINDOWS_UWP)
     public class SafeCamHandle : SafeHandleZeroOrMinusOneIsInvalid
     {
         [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
@@ -3978,18 +4536,18 @@ internal class Toupcam : IDisposable
     {
         [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
         private static extern void Toupcam_Close(IntPtr h);
-        
+
         public SafeCamHandle()
             : base(IntPtr.Zero, true)
         {
         }
-        
+
         override protected bool ReleaseHandle()
         {
             Toupcam_Close(handle);
             return true;
         }
-        
+
         public override bool IsInvalid
         {
             get { return base.handle == IntPtr.Zero || base.handle == (IntPtr)(-1); }
@@ -3997,12 +4555,49 @@ internal class Toupcam : IDisposable
     };
 #endif
 
-#if LINUX
-    private const string dll = "libtoupcam.so";
-    private const UnmanagedType ut = UnmanagedType.LPStr;
+    public sealed class StringHandle : IDisposable
+    {
+        public IntPtr ptr_;
+
+        public StringHandle(string s)
+        {
+            if (s != null) {
+                if (Environment.OSVersion.Platform == PlatformID.Win32NT)
+                    ptr_ = Marshal.StringToHGlobalUni(s);
+                else {
+                    byte[] bytes = Encoding.UTF8.GetBytes(s + "\0");
+                    ptr_ = Marshal.AllocHGlobal(bytes.Length);
+                    Marshal.Copy(bytes, 0, ptr_, bytes.Length);
+                }
+            }
+        }
+
+        public IntPtr Get() { return ptr_; }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        private void Dispose(bool disposing)
+        {
+            if (ptr_ != IntPtr.Zero) {
+                Marshal.FreeHGlobal(ptr_);
+                ptr_ = IntPtr.Zero;
+            }
+        }
+
+        ~StringHandle()
+        {
+            Dispose(false);
+        }
+    }
+
+#if NETCOREAPP
+    private const string dll = "toupcam";
 #else
     private const string dll = "toupcam.dll";
-    private const UnmanagedType ut = UnmanagedType.LPWStr;
 #endif
 
     public delegate void DelegateEventCallback(eEVENT nEvent);
@@ -4036,8 +4631,7 @@ internal class Toupcam : IDisposable
     };
 
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
-    [return: MarshalAs(ut)]
-    private static extern string Toupcam_Version();
+    private static extern IntPtr Toupcam_Version();
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi), Obsolete]
     private static extern uint Toupcam_Enum(IntPtr ptr);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
@@ -4045,7 +4639,9 @@ internal class Toupcam : IDisposable
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
     private static extern uint Toupcam_EnumWithName(IntPtr ptr);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
-    private static extern SafeCamHandle Toupcam_Open([MarshalAs(ut)] string camId);
+    private static extern SafeCamHandle Toupcam_Open(IntPtr camId);
+    [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+    private static extern int Toupcam_Load(SafeCamHandle h, IntPtr strPara);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
     private static extern SafeCamHandle Toupcam_OpenByIndex(uint index);
 #if !(WINDOWS_UWP)
@@ -4055,17 +4651,23 @@ internal class Toupcam : IDisposable
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
     private static extern int Toupcam_StartPullModeWithCallback(SafeCamHandle h, EVENT_CALLBACK funEvent, IntPtr ctxEvent);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+    private static extern int Toupcam_PullImagePtr(SafeCamHandle h, int bStill, out ImagePtr ptrImage);
+    [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+    private static extern int Toupcam_WaitImagePtr(SafeCamHandle h, uint waitMS, int bStill, out ImagePtr ptrImage);
+    [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+    private static extern int Toupcam_PushImagePtr(SafeCamHandle h, uint ptrId);
+    [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
     private static extern int Toupcam_PullImageV4(SafeCamHandle h, IntPtr pImageData, int bStill, int bits, int rowPitch, out FrameInfoV4 pInfo);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
     private static extern int Toupcam_PullImageV4(SafeCamHandle h, byte[] pImageData, int bStill, int bits, int rowPitch, out FrameInfoV4 pInfo);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
     private static extern int Toupcam_PullImageV4(SafeCamHandle h, ushort[] pImageData, int bStill, int bits, int rowPitch, out FrameInfoV4 pInfo);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
-    private static extern int Toupcam_WaitImageV4(SafeCamHandle h, uint nWaitMS, IntPtr pImageData, int bStill, int bits, int rowPitch, out FrameInfoV4 pInfo);
+    private static extern int Toupcam_WaitImageV4(SafeCamHandle h, uint waitMS, IntPtr pImageData, int bStill, int bits, int rowPitch, out FrameInfoV4 pInfo);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
-    private static extern int Toupcam_WaitImageV4(SafeCamHandle h, uint nWaitMS, byte[] pImageData, int bStill, int bits, int rowPitch, out FrameInfoV4 pInfo);
+    private static extern int Toupcam_WaitImageV4(SafeCamHandle h, uint waitMS, byte[] pImageData, int bStill, int bits, int rowPitch, out FrameInfoV4 pInfo);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
-    private static extern int Toupcam_WaitImageV4(SafeCamHandle h, uint nWaitMS, ushort[] pImageData, int bStill, int bits, int rowPitch, out FrameInfoV4 pInfo);
+    private static extern int Toupcam_WaitImageV4(SafeCamHandle h, uint waitMS, ushort[] pImageData, int bStill, int bits, int rowPitch, out FrameInfoV4 pInfo);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
     private static extern int Toupcam_PullImageV3(SafeCamHandle h, IntPtr pImageData, int bStill, int bits, int rowPitch, out FrameInfoV3 pInfo);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi), Obsolete]
@@ -4073,11 +4675,11 @@ internal class Toupcam : IDisposable
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi), Obsolete]
     private static extern int Toupcam_PullImageV3(SafeCamHandle h, ushort[] pImageData, int bStill, int bits, int rowPitch, out FrameInfoV3 pInfo);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi), Obsolete]
-    private static extern int Toupcam_WaitImageV3(SafeCamHandle h, uint nWaitMS, IntPtr pImageData, int bStill, int bits, int rowPitch, out FrameInfoV3 pInfo);
+    private static extern int Toupcam_WaitImageV3(SafeCamHandle h, uint waitMS, IntPtr pImageData, int bStill, int bits, int rowPitch, out FrameInfoV3 pInfo);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi), Obsolete]
-    private static extern int Toupcam_WaitImageV3(SafeCamHandle h, uint nWaitMS, byte[] pImageData, int bStill, int bits, int rowPitch, out FrameInfoV3 pInfo);
+    private static extern int Toupcam_WaitImageV3(SafeCamHandle h, uint waitMS, byte[] pImageData, int bStill, int bits, int rowPitch, out FrameInfoV3 pInfo);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi), Obsolete]
-    private static extern int Toupcam_WaitImageV3(SafeCamHandle h, uint nWaitMS, ushort[] pImageData, int bStill, int bits, int rowPitch, out FrameInfoV3 pInfo);
+    private static extern int Toupcam_WaitImageV3(SafeCamHandle h, uint waitMS, ushort[] pImageData, int bStill, int bits, int rowPitch, out FrameInfoV3 pInfo);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi), Obsolete]
     private static extern int Toupcam_PullImage(SafeCamHandle h, IntPtr pImageData, int bits, out uint pnWidth, out uint pnHeight);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi), Obsolete]
@@ -4141,22 +4743,24 @@ internal class Toupcam : IDisposable
     private static extern int Toupcam_SnapN(SafeCamHandle h, uint nResolutionIndex, uint nNumber);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
     private static extern int Toupcam_SnapR(SafeCamHandle h, uint nResolutionIndex, uint nNumber);
+    [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+    private static extern int Toupcam_SnapV2(SafeCamHandle h, uint nResolutionIndex, uint nNumber, int eRGB, IntPtr snapCtx);
 
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
     private static extern int Toupcam_Trigger(SafeCamHandle h, ushort nNumber);
 
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
-    private static extern int Toupcam_TriggerSyncV4(SafeCamHandle h, uint nWaitMS, IntPtr pImageData, int bits, int rowPitch, out FrameInfoV4 pInfo);
+    private static extern int Toupcam_TriggerSyncV4(SafeCamHandle h, uint waitMS, IntPtr pImageData, int bits, int rowPitch, out FrameInfoV4 pInfo);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
-    private static extern int Toupcam_TriggerSyncV4(SafeCamHandle h, uint nWaitMS, byte[] pImageData, int bits, int rowPitch, out FrameInfoV4 pInfo);
+    private static extern int Toupcam_TriggerSyncV4(SafeCamHandle h, uint waitMS, byte[] pImageData, int bits, int rowPitch, out FrameInfoV4 pInfo);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
-    private static extern int Toupcam_TriggerSyncV4(SafeCamHandle h, uint nWaitMS, ushort[] pImageData, int bits, int rowPitch, out FrameInfoV4 pInfo);
+    private static extern int Toupcam_TriggerSyncV4(SafeCamHandle h, uint waitMS, ushort[] pImageData, int bits, int rowPitch, out FrameInfoV4 pInfo);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi), Obsolete]
-    private static extern int Toupcam_TriggerSync(SafeCamHandle h, uint nWaitMS, IntPtr pImageData, int bits, int rowPitch, out FrameInfoV3 pInfo);
+    private static extern int Toupcam_TriggerSync(SafeCamHandle h, uint waitMS, IntPtr pImageData, int bits, int rowPitch, out FrameInfoV3 pInfo);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi), Obsolete]
-    private static extern int Toupcam_TriggerSync(SafeCamHandle h, uint nWaitMS, byte[] pImageData, int bits, int rowPitch, out FrameInfoV3 pInfo);
+    private static extern int Toupcam_TriggerSync(SafeCamHandle h, uint waitMS, byte[] pImageData, int bits, int rowPitch, out FrameInfoV3 pInfo);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi), Obsolete]
-    private static extern int Toupcam_TriggerSync(SafeCamHandle h, uint nWaitMS, ushort[] pImageData, int bits, int rowPitch, out FrameInfoV3 pInfo);
+    private static extern int Toupcam_TriggerSync(SafeCamHandle h, uint waitMS, ushort[] pImageData, int bits, int rowPitch, out FrameInfoV3 pInfo);
 
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
     private static extern int Toupcam_put_Size(SafeCamHandle h, int nWidth, int nHeight);
@@ -4219,9 +4823,9 @@ internal class Toupcam : IDisposable
         ------------------------------------------------------------------|
     */
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
-    private static extern int Toupcam_get_AutoExpoEnable(SafeCamHandle h, out int bAutoExposure);
+    private static extern int Toupcam_get_AutoExpoEnable(SafeCamHandle h, out int mode);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
-    private static extern int Toupcam_put_AutoExpoEnable(SafeCamHandle h, int bAutoExposure);
+    private static extern int Toupcam_put_AutoExpoEnable(SafeCamHandle h, int mode);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
     private static extern int Toupcam_get_AutoExpoTarget(SafeCamHandle h, out ushort Target);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
@@ -4343,18 +4947,18 @@ internal class Toupcam : IDisposable
     private static extern int Toupcam_get_BlackBalance(SafeCamHandle h, [Out] ushort[] aSub);
 
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
-    private static extern int Toupcam_put_AWBAuxRect(SafeCamHandle h, ref RECT pAuxRect);
+    private static extern int Toupcam_put_AWBAuxRect(SafeCamHandle h, ref RECT pRect);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
-    private static extern int Toupcam_get_AWBAuxRect(SafeCamHandle h, out RECT pAuxRect);
+    private static extern int Toupcam_get_AWBAuxRect(SafeCamHandle h, out RECT pRect);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
-    private static extern int Toupcam_put_AEAuxRect(SafeCamHandle h, ref RECT pAuxRect);
+    private static extern int Toupcam_put_AEAuxRect(SafeCamHandle h, ref RECT pRect);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
-    private static extern int Toupcam_get_AEAuxRect(SafeCamHandle h, out RECT pAuxRect);
+    private static extern int Toupcam_get_AEAuxRect(SafeCamHandle h, out RECT pRect);
 
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
-    private static extern int Toupcam_put_ABBAuxRect(SafeCamHandle h, ref RECT pAuxRect);
+    private static extern int Toupcam_put_ABBAuxRect(SafeCamHandle h, ref RECT pRect);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
-    private static extern int Toupcam_get_ABBAuxRect(SafeCamHandle h, out RECT pAuxRect);
+    private static extern int Toupcam_get_ABBAuxRect(SafeCamHandle h, out RECT pRect);
 
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
     private static extern int Toupcam_get_MonoMode(SafeCamHandle h);
@@ -4377,6 +4981,10 @@ internal class Toupcam : IDisposable
     private static extern int Toupcam_get_FpgaVersion(SafeCamHandle h, IntPtr fpgaver);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
     private static extern int Toupcam_get_ProductionDate(SafeCamHandle h, IntPtr pdate);
+    [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+    private static extern int Toupcam_query_Name(SafeCamHandle h, IntPtr name);
+    [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+    private static extern int Toupcam_set_Name(SafeCamHandle h, [MarshalAs(UnmanagedType.LPStr)] string name);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
     private static extern int Toupcam_get_PixelSize(SafeCamHandle h, uint nResolutionIndex, out float x, out float y);
 
@@ -4448,9 +5056,21 @@ internal class Toupcam : IDisposable
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
     private static extern int Toupcam_get_Option(SafeCamHandle h, eOPTION iOption, out int iValue);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+    private static extern int Toupcam_put_Int(SafeCamHandle h, [MarshalAs(UnmanagedType.LPStr)] string strName, int iValue);
+    [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+    private static extern int Toupcam_get_Int(SafeCamHandle h, [MarshalAs(UnmanagedType.LPStr)] string strName, out int iValue);
+    [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+    private static extern int Toupcam_put_Str(SafeCamHandle h, [MarshalAs(UnmanagedType.LPStr)] string strName, [MarshalAs(UnmanagedType.LPStr)] string strValue);
+    [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+    private static extern int Toupcam_put_Str(SafeCamHandle h, [MarshalAs(UnmanagedType.LPStr)] string strName, byte[] strValue);
+    [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+    private static extern int Toupcam_get_Str(SafeCamHandle h, [MarshalAs(UnmanagedType.LPStr)] string strName, byte[] strValue);
+    [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
     private static extern int Toupcam_get_PixelFormatSupport(SafeCamHandle h, sbyte cmd, out int iValue);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
     private static extern IntPtr Toupcam_get_PixelFormatName(ePIXELFORMAT val);
+    [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+    private static extern int Toupcam_get_PixelFormatBitdepth(ePIXELFORMAT val);
 
     /* Hardware Binning
     * Value: 1x1, 2x2, etc
@@ -4466,6 +5086,11 @@ internal class Toupcam : IDisposable
     private static extern int Toupcam_get_BinningValue(SafeCamHandle h, uint index, out IntPtr Value);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
     private static extern int Toupcam_get_BinningMethod(SafeCamHandle h, uint index, out IntPtr Value);
+
+    [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+    private static extern int Toupcam_readPtr(SafeCamHandle h, [MarshalAs(UnmanagedType.LPStr)] string key, int len, IntPtr pData);
+    [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+    private static extern int Toupcam_writePtr(SafeCamHandle h, [MarshalAs(UnmanagedType.LPStr)] string key, int len, IntPtr pData);
 
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
     private static extern int Toupcam_put_SelfTrigger(SafeCamHandle h, ref SelfTrigger pSt);
@@ -4491,18 +5116,18 @@ internal class Toupcam : IDisposable
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
     private static extern int Toupcam_FpncOnce(SafeCamHandle h);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
-    private static extern int Toupcam_FfcExport(SafeCamHandle h, [MarshalAs(ut)] string filePath);
+    private static extern int Toupcam_FfcExport(SafeCamHandle h, IntPtr filePath);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
-    private static extern int Toupcam_FfcImport(SafeCamHandle h, [MarshalAs(ut)] string filePath);
+    private static extern int Toupcam_FfcImport(SafeCamHandle h, IntPtr filePath);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
-    private static extern int Toupcam_DfcExport(SafeCamHandle h, [MarshalAs(ut)] string filePath);
+    private static extern int Toupcam_DfcExport(SafeCamHandle h, IntPtr filePath);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
-    private static extern int Toupcam_DfcImport(SafeCamHandle h, [MarshalAs(ut)] string filePath);
+    private static extern int Toupcam_DfcImport(SafeCamHandle h, IntPtr filePath);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
-    private static extern int Toupcam_FpncExport(SafeCamHandle h, [MarshalAs(ut)] string filePath);
+    private static extern int Toupcam_FpncExport(SafeCamHandle h, IntPtr filePath);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
-    private static extern int Toupcam_FpncImport(SafeCamHandle h, [MarshalAs(ut)] string filePath);
-    
+    private static extern int Toupcam_FpncImport(SafeCamHandle h, IntPtr filePath);
+
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
     private static extern int Toupcam_FfcFile(IntPtr[] data, uint num, uint width, uint height, uint fourcc, uint bits, [MarshalAs(UnmanagedType.LPStr)] string outfile);
 
@@ -4516,7 +5141,7 @@ internal class Toupcam : IDisposable
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
     private static extern int Toupcam_get_AFState(SafeCamHandle h, ref AFState pState);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
-    private static extern int Toupcam_put_AFMode(SafeCamHandle h, eAFMode mode);
+    private static extern int Toupcam_put_AFMode(SafeCamHandle h, eAFMode mode, int bFixedWD, uint uiNear, uint uiFar);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
     private static extern int Toupcam_put_AFRoi(SafeCamHandle h, uint xOffset, uint yOffset, uint xWidth, uint yHeight);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
@@ -4536,20 +5161,31 @@ internal class Toupcam : IDisposable
     private static extern void Toupcam_deBayerV2(uint nBayer, int nW, int nH, IntPtr input, IntPtr output, byte nBitDepth, byte nBitCount);
 
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
-    private static extern int Toupcam_Replug([MarshalAs(ut)] string camId);
+    private static extern int Toupcam_Replug(IntPtr camId);
 
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
-    private static extern int Toupcam_Update([MarshalAs(ut)] string camId, [MarshalAs(ut)] string filePath, PROGRESS_CALLBACK funProgress, IntPtr ctxProgress);
+    private static extern int Toupcam_Update(IntPtr camId, IntPtr filePath, PROGRESS_CALLBACK funProgress, IntPtr ctxProgress);
 
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
     private static extern int Toupcam_GigeEnable(HOTPLUG_CALLBACK funHotplug, IntPtr ctxHotplug);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+    private static extern int Toupcam_GigeEnableV2(HOTPLUG_CALLBACK funHotplug, IntPtr ctxHotplug, [MarshalAs(UnmanagedType.LPStr)] string opt);
+    [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
     private static extern int Toupcam_PciEnable(HOTPLUG_CALLBACK funHotplug, IntPtr ctxHotplug);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
-    private static extern int Toupcam_CtiEnable(HOTPLUG_CALLBACK funHotplug, IntPtr ctxHotplug, [MarshalAs(UnmanagedType.LPArray, ArraySubType = UnmanagedType.LPWStr)] string[] ctiPath);
+    private static extern int Toupcam_CtiEnable(HOTPLUG_CALLBACK funHotplug, IntPtr ctxHotplug, IntPtr ctiPath);
+
+    [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+    private static extern int Toupcam_put_Name(IntPtr camId, [MarshalAs(UnmanagedType.LPStr)] string name);
+    [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+    private static extern int Toupcam_get_Name(IntPtr camId, IntPtr name);
+    [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+    private static extern int Toupcam_query_SerialNumber(IntPtr camId, IntPtr sn);
 
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
     private static extern IntPtr Toupcam_get_Model(ushort idVendor, ushort idProduct);
+    [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
+    private static extern IntPtr Toupcam_query_Model(SafeCamHandle h);
     [DllImport(dll, ExactSpelling = true, CallingConvention = CallingConvention.Winapi)]
     private static extern IntPtr Toupcam_all_Model();
 

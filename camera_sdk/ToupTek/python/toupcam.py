@@ -1,4 +1,4 @@
-"""Version: 59.29030.20250722
+"""Version: 60.32549.20260908
 We use ctypes to call into the toupcam.dll/libtoupcam.so/libtoupcam.dylib API,
 the python class Toupcam is a thin wrapper class to the native api of toupcam.dll/libtoupcam.so/libtoupcam.dylib.
 So the manual en.html(English) and hans.html(Simplified Chinese) are also applicable for programming with toupcam.py.
@@ -11,6 +11,14 @@ See them in the 'doc' directory:
 Please distinguish between camera ID (camId) and camera SN:
     (a) SN is unique and persistent, fixed inside the camera and remains unchanged, and does not change with connection or system restart.
     (b) Camera ID (camId) may change due to connection or system restart. Enumerate the cameras to get the camera ID, and then call the Open function to pass in the camId parameter to open the camera.
+"""
+
+"""
+Coordinate:
+    (a) Functions with coordinate parameters, such as Toupcam_put_Roi, Toupcam_put_AEAuxRect, etc., the coordinate is always relative to the original resolution,
+        even that the image has been flipped, rotated, digital binning, ROI, or combination of the previous operations.
+    (b) Exception: if the image is upside down (see here), the coordinate must be also upsize down.
+    (c) Exception: hardware binning.
 """
 
 import sys, ctypes, os.path
@@ -65,7 +73,7 @@ TOUPCAM_FLAG_FILTERWHEEL         = 0x0000100000000000  # astro filter wheel
 TOUPCAM_FLAG_GIGE                = 0x0000200000000000  # 1 Gigabit GigE
 TOUPCAM_FLAG_10GIGE              = 0x0000400000000000  # 10 Gigabit GigE
 TOUPCAM_FLAG_5GIGE               = 0x0000800000000000  # 5 Gigabit GigE
-TOUPCAM_FLAG_25GIGE              = 0x0001000000000000  # 2.5 Gigabit GigE
+TOUPCAM_FLAG_40GIGE              = 0x0001000000000000  # 40 Gigabit GigE
 TOUPCAM_FLAG_AUTOFOCUSER         = 0x0002000000000000  # astro auto focuser
 TOUPCAM_FLAG_LIGHT_SOURCE        = 0x0004000000000000  # stand alone light source
 TOUPCAM_FLAG_CAMERALINK          = 0x0008000000000000  # camera link
@@ -75,8 +83,11 @@ TOUPCAM_FLAG_SELFTRIGGER         = 0x0040000000000000  # self trigger
 TOUPCAM_FLAG_RAW11               = 0x0080000000000000  # pixel format, RAW 11bits
 TOUPCAM_FLAG_GHOPTO              = 0x0100000000000000  # ghopto sensor
 TOUPCAM_FLAG_RAW10PACK           = 0x0200000000000000  # pixel format, RAW 10bits packed
-TOUPCAM_FLAG_USB32               = 0x0400000000000000  # usb3.2
-TOUPCAM_FLAG_USB32_OVER_USB30    = 0x0800000000000000  # usb3.2 camera connected to usb3.0 port
+TOUPCAM_FLAG_USB32               = 0x0400000000000000  # USB 3.2 Gen 2
+TOUPCAM_FLAG_USB32_OVER_USB30    = 0x0800000000000000  # USB 3.2 Gen 2 camera connected to usb3.0 port
+TOUPCAM_FLAG_LINESCAN            = 0x1000000000000000  # line scan camera
+TOUPCAM_FLAG_25GIGE              = 0x2000000000000000  # 2.5 Gigabit GigE
+TOUPCAM_FLAG_RAW14PACK           = 0x4000000000000000  # pixel format, RAW 14bits packed
 
 TOUPCAM_EVENT_EXPOSURE           = 0x0001          # exposure time or gain changed
 TOUPCAM_EVENT_TEMPTINT           = 0x0002          # white balance changed, Temp/Tint mode
@@ -93,6 +104,8 @@ TOUPCAM_EVENT_LEVELRANGE         = 0x000c          # level range changed
 TOUPCAM_EVENT_AUTOEXPO_CONV      = 0x000d          # auto exposure convergence
 TOUPCAM_EVENT_AUTOEXPO_CONVFAIL  = 0x000e          # auto exposure once mode convergence failed
 TOUPCAM_EVENT_FPNC               = 0x000f          # fix pattern noise correction status changed
+TOUPCAM_EVENT_FRONT_OVERFLOW     = 0x0010          # front buffer overflow
+TOUPCAM_EVENT_BACK_OVERFLOW      = 0x0011          # back buffer overflow
 TOUPCAM_EVENT_ERROR              = 0x0080          # generic error
 TOUPCAM_EVENT_DISCONNECTED       = 0x0081          # camera disconnected
 TOUPCAM_EVENT_NOFRAMETIMEOUT     = 0x0082          # no frame timeout error
@@ -109,7 +122,7 @@ TOUPCAM_EVENT_FACTORY            = 0x8001          # restore factory settings
 TOUPCAM_OPTION_NOFRAME_TIMEOUT        = 0x01       # [RW] no frame timeout: 0 => disable, positive value (>= NOFRAME_TIMEOUT_MIN) => timeout milliseconds. default: disable
 TOUPCAM_OPTION_THREAD_PRIORITY        = 0x02       # [RW] set the priority of the internal thread which grab data from the usb device.
                                                    #   Win: iValue: 0 => THREAD_PRIORITY_NORMAL; 1 => THREAD_PRIORITY_ABOVE_NORMAL; 2 => THREAD_PRIORITY_HIGHEST; 3 => THREAD_PRIORITY_TIME_CRITICAL; default: 1; see: https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-setthreadpriority
-                                                   #   Linux & macOS: The high 16 bits for the scheduling policy, and the low 16 bits for the priority; see: https://linux.die.net/man/3/pthread_setschedparam
+                                                   #   Linux & macOS: similar to Win
                                                    #
 TOUPCAM_OPTION_RAW                    = 0x04       # [RW]
                                                    #  0: RGB mode
@@ -140,9 +153,12 @@ TOUPCAM_OPTION_DEMOSAIC               = 0x12       # [RW] demosaic method for bo
                                                    #   default value: 0
 TOUPCAM_OPTION_DEMOSAIC_VIDEO         = 0x13       # [RW] demosaic method for video
 TOUPCAM_OPTION_DEMOSAIC_STILL         = 0x14       # [RW] demosaic method for still image
-TOUPCAM_OPTION_BLACKLEVEL             = 0x15       # [RW] black level
+TOUPCAM_OPTION_BLACKLEVEL             = 0x15       # [RW] the black level refers to the baseline signal value output by an image sensor under no-light (completely dark) conditions.
+                                                   #   In digital imaging systems, a fixed voltage offset is intentionally added to the signal to ensure that dark-region signals remain above zero, thereby preventing the loss of faint shadow details during A/D conversion.
+                                                   #       (a) Prevent clipping: The sensor circuit's intrinsic noise may occasionally produce negative values. Without an offset, these negative values would be forcibly clipped to zero, resulting in the loss of shadow details.
+                                                   #       (b) Preserve linearity: Raising the black level helps ensure that the sensor maintains consistent linear output behavior across the entire dynamic range.
 TOUPCAM_OPTION_MULTITHREAD            = 0x16       # [RW] multithread image processing
-TOUPCAM_OPTION_BINNING                = 0x17       # [RW] binning
+TOUPCAM_OPTION_BINNING                = 0x17       # [RW] digital binning
                                                    #     0x01: (no binning)
                                                    #     n: (saturating add, n*n), 0x02(2*2), 0x03(3*3), 0x04(4*4), 0x05(5*5), 0x06(6*6), 0x07(7*7), 0x08(8*8). The Bitdepth of the data remains unchanged.
                                                    #     0x40 | n: (unsaturated add, n*n, works only in RAW mode), 0x42(2*2), 0x43(3*3), 0x44(4*4), 0x45(5*5), 0x46(6*6), 0x47(7*7), 0x48(8*8). The Bitdepth of the data is increased. For example, the original data with bitdepth of 12 will increase the bitdepth by 2 bits and become 14 after 2*2 binning.
@@ -162,7 +178,7 @@ TOUPCAM_OPTION_FFC                    = 0x1b       # [RW] flat field correction
                                                    #         0: disable
                                                    #         1: enable
                                                    #         -1: reset
-                                                   #         (0xff000000 | n): set the average number to n, [1~255]
+                                                   #         (0xff000000 | n): set the average number to n, [1, 255]
                                                    #     get:
                                                    #         (val & 0xff): 0 => disable, 1 => enable, 2 => inited
                                                    #         ((val & 0xff00) >> 8): sequence
@@ -173,14 +189,15 @@ TOUPCAM_OPTION_DDR_DEPTH              = 0x1c       # [RW] the number of the fram
                                                    #     0: Auto:
                                                    #         => one for video mode when auto exposure is enabled
                                                    #         => full capacity for others
-                                                   #     1: DDR can cache frames to full capacity
+                                                   #     -1: DDR can cache frames to full capacity
+                                                   # default: 0
                                                    #
 TOUPCAM_OPTION_DFC                    = 0x1d       # [RW] dark field correction
                                                    #     set:
                                                    #         0: disable
                                                    #         1: enable
                                                    #         -1: reset
-                                                   #         (0xff000000 | n): set the average number to n, [1~255]
+                                                   #         (0xff000000 | n): set the average number to n, [1, 255]
                                                    #     get:
                                                    #         (val & 0xff): 0 => disable, 1 => enable, 2 => inited
                                                    #         ((val & 0xff00) >> 8): sequence
@@ -217,7 +234,9 @@ TOUPCAM_OPTION_MAX_PRECISE_FRAMERATE  = 0x2c       # [RO] get the precise frame 
 TOUPCAM_OPTION_PRECISE_FRAMERATE      = 0x2d       # [RW] precise frame rate current value in 0.1 fps. use TOUPCAM_OPTION_MAX_PRECISE_FRAMERATE, TOUPCAM_OPTION_MIN_PRECISE_FRAMERATE to get the range. if the set value is out of range, E_INVALIDARG will be returned
 TOUPCAM_OPTION_BANDWIDTH              = 0x2e       # [RW] bandwidth, [1-100]%
 TOUPCAM_OPTION_RELOAD                 = 0x2f       # [RW] reload the last frame in trigger mode
-TOUPCAM_OPTION_CALLBACK_THREAD        = 0x30       # [RW] dedicated thread for callback: 0 => disable, 1 => enable, default: 0
+TOUPCAM_OPTION_CALLBACK_THREAD        = 0x30       # [RW] dedicated thread for callback: 0 => disable, 1 => enable
+                                                   #      default: 1
+                                                   #
 TOUPCAM_OPTION_FRONTEND_DEQUE_LENGTH  = 0x31       # [RW] frontend (raw) frame buffer deque length, range: [2, 1024], default: 4
                                                    # All the memory will be pre-allocated when the camera starts, so, please attention to memory usage
                                                    #
@@ -254,7 +273,7 @@ TOUPCAM_OPTION_DEFECT_PIXEL           = 0x40       # [RW] Defect Pixel Correctio
 TOUPCAM_OPTION_BACKEND_DEQUE_LENGTH   = 0x41       # [RW] backend (pipelined) frame buffer deque length (Only available in pull mode), range: [2, 1024], default: 3
                                                    # All the memory will be pre-allocated when the camera starts, so, please attention to memory usage
                                                    #
-TOUPCAM_OPTION_LIGHTSOURCE_MAX        = 0x42       # [RO] get the light source range, [0 ~ max]
+TOUPCAM_OPTION_LIGHTSOURCE_MAX        = 0x42       # [RO] get the light source range, [0, max]
 TOUPCAM_OPTION_LIGHTSOURCE            = 0x43       # [RW] light source
 TOUPCAM_OPTION_HEARTBEAT              = 0x44       # [RW] Heartbeat interval in millisecond, range = [TOUPCAM_HEARTBEAT_MIN, TOUPCAM_HEARTBEAT_MAX], 0 = disable, default: disable
 TOUPCAM_OPTION_FRONTEND_DEQUE_CURRENT = 0x45       # [RO] get the current number in frontend deque
@@ -317,40 +336,41 @@ TOUPCAM_OPTION_OVERCLOCK_MAX          = 0x5c       # [RO] get overclock range: [
 TOUPCAM_OPTION_OVERCLOCK              = 0x5d       # [RW] overclock, default: 0
 TOUPCAM_OPTION_RESET_SENSOR           = 0x5e       # [WO] reset sensor
 TOUPCAM_OPTION_ISP                    = 0x5f       # [RW] Enable hardware ISP: 0 => auto (disable in RAW mode, otherwise enable), 1 => enable, -1 => disable; default: 0
-TOUPCAM_OPTION_AUTOEXP_EXPOTIME_DAMP  = 0x60       # [RW] Auto exposure damp: damping coefficient (thousandths). The larger the damping coefficient, the smoother and slower the exposure time changes
-TOUPCAM_OPTION_AUTOEXP_GAIN_DAMP      = 0x61       # [RW] Auto exposure damp: damping coefficient (thousandths). The larger the damping coefficient, the smoother and slower the gain changes
+TOUPCAM_OPTION_AUTOEXP_EXPOTIME_DAMP  = 0x60       # [RW] Auto exposure damping: damping coefficient (thousandths). The larger the damping coefficient, the smoother and slower the exposure time changes
+TOUPCAM_OPTION_AUTOEXP_GAIN_DAMP      = 0x61       # [RW] Auto exposure damping: damping coefficient (thousandths). The larger the damping coefficient, the smoother and slower the gain changes
 TOUPCAM_OPTION_MOTOR_NUMBER           = 0x62       # [RW] range: [1, 20]
 TOUPCAM_OPTION_MOTOR_POS              = 0x10000000 # [RW] range: [1, 702]
 TOUPCAM_OPTION_PSEUDO_COLOR_START     = 0x63       # [RW] Pseudo: start color, BGR format
 TOUPCAM_OPTION_PSEUDO_COLOR_END       = 0x64       # [RW] Pseudo: end color, BGR format
-TOUPCAM_OPTION_PSEUDO_COLOR_ENABLE    = 0x65       # [RW] Pseudo: -1 => custom: use startcolor & endcolor to generate the colormap
-                                                   #     0 => disable
-                                                   #     1 => spot
-                                                   #     2 => spring
-                                                   #     3 => summer
-                                                   #     4 => autumn
-                                                   #     5 => winter
-                                                   #     6 => bone
-                                                   #     7 => jet
-                                                   #     8 => rainbow
-                                                   #     9 => deepgreen
-                                                   #     10 => ocean
-                                                   #     11 => cool
-                                                   #     12 => hsv
-                                                   #     13 => pink
-                                                   #     14 => hot
-                                                   #     15 => parula
-                                                   #     16 => magma
-                                                   #     17 => inferno
-                                                   #     18 => plasma
-                                                   #     19 => viridis
-                                                   #     20 => cividis
-                                                   #     21 => twilight
-                                                   #     22 => twilight_shifted
-                                                   #     23 => turbo
-                                                   #     24 => red
-                                                   #     25 => green
-                                                   #     26 => blue
+TOUPCAM_OPTION_PSEUDO_COLOR_ENABLE    = 0x65       # [RW] Pseudo: -1 => Custom: use startcolor & endcolor to generate the colormap
+                                                   #     0 => Disable
+                                                   #     1 => Spot
+                                                   #     2 => Spring
+                                                   #     3 => Summer
+                                                   #     4 => Autumn
+                                                   #     5 => Winter
+                                                   #     6 => Bone
+                                                   #     7 => Jet
+                                                   #     8 => Rainbow
+                                                   #     9 => DeepGreen
+                                                   #     10 => Ocean
+                                                   #     11 => Cool
+                                                   #     12 => HSV
+                                                   #     13 => Pink
+                                                   #     14 => Hot
+                                                   #     15 => Parula
+                                                   #     16 => Magma
+                                                   #     17 => Inferno
+                                                   #     18 => Plasma
+                                                   #     19 => Viridis
+                                                   #     20 => Cividis
+                                                   #     21 => Twilight
+                                                   #     22 => TwilightShifted
+                                                   #     23 => Turbo
+                                                   #     24 => Red
+                                                   #     25 => Green
+                                                   #     26 => Blue
+                                                   #     27 => Spectrum
                                                    #
 TOUPCAM_OPTION_LOW_POWERCONSUMPTION   = 0x66       # [RW] Low Power Consumption: 0 => disable, 1 => enable
 TOUPCAM_OPTION_FPNC                   = 0x67       # [RW] Fix Pattern Noise Correction
@@ -358,16 +378,16 @@ TOUPCAM_OPTION_FPNC                   = 0x67       # [RW] Fix Pattern Noise Corr
                                                    #         0: disable
                                                    #         1: enable
                                                    #        -1: reset
-                                                   #         (0xff000000 | n): set the average number to n, [1~255]
+                                                   #         (0xff000000 | n): set the average number to n, [1, 255]
                                                    #     get:
                                                    #         (val & 0xff): 0 => disable, 1 => enable, 2 => inited
                                                    #         ((val & 0xff00) >> 8): sequence
                                                    #         ((val & 0xff0000) >> 16): average number
                                                    #
-TOUPCAM_OPTION_OVEREXP_POLICY         = 0x68       # [RW] Auto exposure over exposure policy: when overexposed,
+TOUPCAM_OPTION_OVEREXP_POLICY         = 0x68       # [RW] Auto exposure overexposure policy: when overexposed,
                                                    #     0 => directly reduce the exposure time/gain to the minimum value; or
-                                                   #     1 => reduce exposure time/gain in proportion to current and target brightness.
-                                                   #     n(n>1) => first adjust the exposure time to (maximum automatic exposure time * maximum automatic exposure gain) * n / 1000, and then adjust according to the strategy of 1
+                                                   #     1 => reduce exposure time/gain according to the ratio between current and target brightness; or
+                                                   #     n(n>1) => first, adjust the exposure time to (maximum automatic exposure time * maximum automatic exposure gain) * n / 1000, and then adjust according to the strategy of 1
                                                    # The advantage of policy 0 is that the convergence speed is faster, but there is black screen.
                                                    # Policy 1 avoids the black screen, but the convergence speed is slower.
                                                    # Default: 0
@@ -380,12 +400,13 @@ TOUPCAM_OPTION_AWB_CONTINUOUS         = 0x6c       # [RW] Auto White Balance: co
                                                    #     n>0: every n millisecond(s)
                                                    #     n<0: every -n frame
 TOUPCAM_OPTION_TECTARGET_RANGE        = 0x6d       # [RO] TEC target range: min(low 16 bits) = (short)(val & 0xffff), max(high 16 bits) = (short)((val >> 16) & 0xffff)
-TOUPCAM_OPTION_CDS                    = 0x6e       # [RW] Correlated Double Sampling: 0~100
+TOUPCAM_OPTION_CDS                    = 0x6e       # [RW] Correlated Double Sampling: 0~max (TOUPCAM_OPTION_CDS_MAX)
+                                                   #   see https://www.next.gr/tutorials/sensors-and-transducers/image-sensor-noise-reduction-techniques-tutorial#correlated-double-sampling-cds
 TOUPCAM_OPTION_LOW_POWER_EXPOTIME     = 0x6f       # [RW] Low Power Consumption: Enable if exposure time is greater than the set value
 TOUPCAM_OPTION_ZERO_OFFSET            = 0x70       # [RW] Sensor output offset to zero: 0 => disable, 1 => eanble; default: 0
-TOUPCAM_OPTION_GVCP_TIMEOUT           = 0x71       # [RW] GVCP Timeout: millisecond, range = [3, 75], default: 15
+TOUPCAM_OPTION_GVCP_TIMEOUT           = 0x71       # [RW] GVCP Timeout: millisecond, range = [5, 150], default: 15(wire), 30(wireless)
                                                    #   Unless in very special circumstances, generally no modification is required, just use the default value
-TOUPCAM_OPTION_GVCP_RETRY             = 0x72       # [RW] GVCP Retry: range = [2, 8], default: 4
+TOUPCAM_OPTION_GVCP_RETRY             = 0x72       # [RW] GVCP Retry: range = [2, 16], default: 4(wire), 8(wireless)
                                                    #   Unless in very special circumstances, generally no modification is required, just use the default value
 TOUPCAM_OPTION_GVSP_WAIT_PERCENT      = 0x73       # [RW] GVSP wait percent: range = [0, 100], default = (trigger mode: 100, realtime: 0, other: 1)
 TOUPCAM_OPTION_RESET_SEQ_TIMESTAMP    = 0x74       # [WO] Reset to 0: 1 => seq; 2 => timestamp; 3 => both
@@ -396,11 +417,11 @@ TOUPCAM_OPTION_ZERO_PADDING           = 0x78       # [RW] Zero padding: 0 => hig
 TOUPCAM_OPTION_UPTIME                 = 0x79       # [RO] device uptime in millisecond
 TOUPCAM_OPTION_BITRANGE               = 0x7a       # [RW] Bit range: [0, 8]
 TOUPCAM_OPTION_MODE_SEQ_TIMESTAMP     = 0x7b       # [RW] Mode of seq & timestamp: 0 => reset to 0 automatically; 1 => never reset automatically; default: 0
-TOUPCAP_OPTION_TIMED_TRIGGER_NUM      = 0x7c       # [RW] Timed trigger number
+TOUPCAM_OPTION_TIMED_TRIGGER_NUM      = 0x7c       # [RW] Timed trigger number
 TOUPCAM_OPTION_TIMED_TRIGGER_LOW      = 0x20000000 # [RW] Timed trigger: lower 32 bits of 64-bit integer, nanosecond since epoch (00:00:00 UTC on Thursday, 1 January 1970, see https://en.wikipedia.org/wiki/Unix_time)
 TOUPCAM_OPTION_TIMED_TRIGGER_HIGH     = 0x40000000 # [RW] Timed trigger: high 32 bits. The lower 32 bits must be set first, followed by the higher 32 bits
 TOUPCAM_OPTION_AUTOEXP_THLD_TRIGGER   = 0x7d       # [RW] trigger threshold of auto exposure
-TOUPCAM_OPTION_LANE                   = 0x7e       # [RW]
+TOUPCAM_OPTION_LANE                   = 0x7e       # [RW] Lane
 TOUPCAM_OPTION_VOLTAGEBIAS            = 0x7f       # [RW] Voltage bias
 TOUPCAM_OPTION_VOLTAGEBIAS_RANGE      = 0x80       # [RO] Voltage bias range: min (low 16bits), max (high 16bits)
 TOUPCAM_OPTION_READ_TIME              = 0x81       # [RO]
@@ -415,7 +436,25 @@ TOUPCAM_OPTION_BLACKLEVEL_AUTOADJUST  = 0x89       # [RW] Black level automatic 
                                                    #    This setting turn on/off black level auto adjust function by OB(Optical Black) level.
                                                    #    In case of long exposure and so on, OB level is offset by leak or any other reason.
                                                    #    Because of it, if the adjustment becomes a problem, this setting is introduced for one of the solution.
+TOUPCAM_OPTION_USER_SET               = 0x8a       # [RW] user set
 TOUPCAM_OPTION_DIGITAL_GAIN           = 0x1001     # [RW] digital gain
+TOUPCAM_OPTION_ANTI_BLOOMING          = 0x8b       # [RW] Anti Blooming
+                                                   #   Blooming occurs when the charge in a pixel exceeds the saturation level and the charge starts to fill adjacent pixels.
+                                                   #   Some sensors are designed with structures built into them to limit blooming - anti-blooming structures.
+                                                   #   Anti-blooming structures bleed off any excess charge before they can overflow the pixel and thereby stop blooming.
+                                                   #   However, anti-blooming structures can reduce the effective quantum efficiency and introduce non linearity into the sensor.
+                                                   #   Therefore, anti-blooming sensors are not recommended for applications requiring very low light or high accuracy measurements.
+TOUPCAM_OPTION_ANTI_BLOOMING_MAX      = 0x8c       # [RO] Anti Blooming
+TOUPCAM_OPTION_CDS_MAX                = 0x8d       # [RO] Correlated Double Sampling
+TOUPCAM_OPTION_SCANTYPE               = 0x8e       # [RW] Scan Type: 0(areascan), 1(linescan)
+TOUPCAM_OPTION_OPERATIONMODE          = 0x8f       # [RW] TDI Operation Mode: 1(area), 2(TDI)
+TOUPCAM_OPTION_TDITRIGGERMODE         = 0x90       # [RW] TDI Trigger Mode: 1(normal), 2(both)
+TOUPCAM_OPTION_TDISTAGE               = 0x91       # [RW] TDI Trigger Stage: sensor scan stage
+TOUPCAM_OPTION_FRAMEINTERVAL          = 0x92       # [RW] Frame Interval in microseconds
+TOUPCAM_OPTION_FRAMEINTERVAL_MIN      = 0x93       # [RO] Frame Interval, minimum
+TOUPCAM_OPTION_FRAMEINTERVAL_MAX      = 0x94       # [RO] Frame Interval, maximum
+TOUPCAM_OPTION_IMAGEPTRRAW            = 0x95       # [RW] default: 0
+TOUPCAM_OPTION_IMAGEPTRBOTH           = 0x96       # [RW] default: 0
 
 TOUPCAM_PIXELFORMAT_RAW8              = 0x00
 TOUPCAM_PIXELFORMAT_RAW10             = 0x01
@@ -437,6 +476,7 @@ TOUPCAM_PIXELFORMAT_HDR11HL           = 0x10   # HDR, Bitdepth: 11, Conversion G
 TOUPCAM_PIXELFORMAT_HDR12HL           = 0x11   # HDR, Bitdepth: 12, Conversion Gain: High + Low
 TOUPCAM_PIXELFORMAT_HDR14HL           = 0x12   # HDR, Bitdepth: 14, Conversion Gain: High + Low
 TOUPCAM_PIXELFORMAT_RAW10PACK         = 0x13
+TOUPCAM_PIXELFORMAT_RAW14PACK         = 0x14
 
 TOUPCAM_FRAMEINFO_FLAG_SEQ                = 0x00000001   # frame sequence number
 TOUPCAM_FRAMEINFO_FLAG_TIMESTAMP          = 0x00000002   # timestamp
@@ -448,6 +488,8 @@ TOUPCAM_FRAMEINFO_FLAG_GPS                = 0x00000040   # GPS
 TOUPCAM_FRAMEINFO_FLAG_AUTOFOCUS          = 0x00000080   # auto focus: uLum & uFV
 TOUPCAM_FRAMEINFO_FLAG_COUNT              = 0x00000100   # timecount, framecount, tricount
 TOUPCAM_FRAMEINFO_FLAG_MECHANICALSHUTTER  = 0x00000200   # Mechanical shutter: closed
+TOUPCAM_FRAMEINFO_FLAG_HOB                = 0x00000400   # Horizontal Optical Black
+TOUPCAM_FRAMEINFO_FLAG_VOB                = 0x00000800   # Vertical Optical Black
 TOUPCAM_FRAMEINFO_FLAG_STILL              = 0x00008000   # still image
 TOUPCAM_FRAMEINFO_FLAG_CG                 = 0x00010000   # Conversion Gain: High
 
@@ -476,16 +518,16 @@ TOUPCAM_IOCONTROLTYPE_GET_TRIGGERSOURCE            = 0x0d  # 0x00 => Opto-isolat
 TOUPCAM_IOCONTROLTYPE_SET_TRIGGERSOURCE            = 0x0e
 TOUPCAM_IOCONTROLTYPE_GET_TRIGGERDELAY             = 0x0f  # Trigger delay time in microseconds, range: [0, 5000000]
 TOUPCAM_IOCONTROLTYPE_SET_TRIGGERDELAY             = 0x10
-TOUPCAM_IOCONTROLTYPE_GET_BURSTCOUNTER             = 0x11  # Burst Counter, range: [1 ~ 65535]
+TOUPCAM_IOCONTROLTYPE_GET_BURSTCOUNTER             = 0x11  # Burst Counter, range: [1, 65535]
 TOUPCAM_IOCONTROLTYPE_SET_BURSTCOUNTER             = 0x12
 TOUPCAM_IOCONTROLTYPE_GET_COUNTERSOURCE            = 0x13  # 0x00 => Opto-isolated input, 0x01 => GPIO0, 0x02 => GPIO1
 TOUPCAM_IOCONTROLTYPE_SET_COUNTERSOURCE            = 0x14
-TOUPCAM_IOCONTROLTYPE_GET_COUNTERVALUE             = 0x15  # Counter Value, range: [1 ~ 65535]
+TOUPCAM_IOCONTROLTYPE_GET_COUNTERVALUE             = 0x15  # Counter Value, range: [1, 65535]
 TOUPCAM_IOCONTROLTYPE_SET_COUNTERVALUE             = 0x16
 TOUPCAM_IOCONTROLTYPE_SET_RESETCOUNTER             = 0x18
-TOUPCAM_IOCONTROLTYPE_GET_PWM_FREQ                 = 0x19  # PWM Frequency
+TOUPCAM_IOCONTROLTYPE_GET_PWM_FREQ                 = 0x19  # PWM Frequency, range: [0, 0xffffffff]
 TOUPCAM_IOCONTROLTYPE_SET_PWM_FREQ                 = 0x1a
-TOUPCAM_IOCONTROLTYPE_GET_PWM_DUTYRATIO            = 0x1b  # PWM Duty Ratio
+TOUPCAM_IOCONTROLTYPE_GET_PWM_DUTYRATIO            = 0x1b  # PWM Duty Ratio, default: 50, range: [0, 100]
 TOUPCAM_IOCONTROLTYPE_SET_PWM_DUTYRATIO            = 0x1c
 TOUPCAM_IOCONTROLTYPE_GET_PWMSOURCE                = 0x1d  # PWM Source: 0x00 => Opto-isolated input, 0x01 => GPIO0, 0x02 => GPIO1
 TOUPCAM_IOCONTROLTYPE_SET_PWMSOURCE                = 0x1e
@@ -514,22 +556,22 @@ TOUPCAM_IOCONTROLTYPE_GET_UART_LINEMODE            = 0x2d  # line mode: 0 => TX(
 TOUPCAM_IOCONTROLTYPE_SET_UART_LINEMODE            = 0x2e
 TOUPCAM_IOCONTROLTYPE_GET_EXPO_ACTIVE_MODE         = 0x2f  # exposure time signal: 0 => specified line, 1 => common exposure time
 TOUPCAM_IOCONTROLTYPE_SET_EXPO_ACTIVE_MODE         = 0x30
-TOUPCAM_IOCONTROLTYPE_GET_EXPO_START_LINE          = 0x31  # exposure start line, default: 0
+TOUPCAM_IOCONTROLTYPE_GET_EXPO_START_LINE          = 0x31  # exposure start line, default: 0, range: [0, 16384]
 TOUPCAM_IOCONTROLTYPE_SET_EXPO_START_LINE          = 0x32
-TOUPCAM_IOCONTROLTYPE_GET_EXPO_END_LINE            = 0x33  # exposure end line, default: 0
+TOUPCAM_IOCONTROLTYPE_GET_EXPO_END_LINE            = 0x33  # exposure end line, default: 0, range: [0, 16384]
                                                            # end line must be no less than start line
 TOUPCAM_IOCONTROLTYPE_SET_EXPO_END_LINE            = 0x34
 TOUPCAM_IOCONTROLTYPE_GET_EXEVT_ACTIVE_MODE        = 0x35  # exposure event: 0 => specified line, 1 => common exposure time
 TOUPCAM_IOCONTROLTYPE_SET_EXEVT_ACTIVE_MODE        = 0x36
-TOUPCAM_IOCONTROLTYPE_GET_OUTPUTCOUNTERVALUE       = 0x37  # Output Counter Value, range: [0 ~ 65535]
+TOUPCAM_IOCONTROLTYPE_GET_OUTPUTCOUNTERVALUE       = 0x37  # Output Counter Value, range: [0, 65535]
 TOUPCAM_IOCONTROLTYPE_SET_OUTPUTCOUNTERVALUE       = 0x38
 TOUPCAM_IOCONTROLTYPE_SET_OUTPUT_PAUSE             = 0x3a  # Output pause: 1 => puase, 0 => unpause
 TOUPCAM_IOCONTROLTYPE_GET_INPUT_STATE              = 0x3b  # Input state: 0 (low level) or 1 (high level)
-TOUPCAM_IOCONTROLTYPE_GET_USER_PULSE_HIGH          = 0x3d  # User pulse high level time: us
+TOUPCAM_IOCONTROLTYPE_GET_USER_PULSE_HIGH          = 0x3d  # User pulse high level time: us, range: [0, 0xffffffff]
 TOUPCAM_IOCONTROLTYPE_SET_USER_PULSE_HIGH          = 0x3e
-TOUPCAM_IOCONTROLTYPE_GET_USER_PULSE_LOW           = 0x3f  # User pulse low level time: us
+TOUPCAM_IOCONTROLTYPE_GET_USER_PULSE_LOW           = 0x3f  # User pulse low level time: us, range: [0, 0xffffffff]
 TOUPCAM_IOCONTROLTYPE_SET_USER_PULSE_LOW           = 0x40
-TOUPCAM_IOCONTROLTYPE_GET_USER_PULSE_NUMBER        = 0x41  # User pulse number: default 0
+TOUPCAM_IOCONTROLTYPE_GET_USER_PULSE_NUMBER        = 0x41  # User pulse number: default 0, range: [0, 0xffffffff]
 TOUPCAM_IOCONTROLTYPE_SET_USER_PULSE_NUMBER        = 0x42
 TOUPCAM_IOCONTROLTYPE_GET_EXTERNAL_TRIGGER_NUMBER  = 0x43  # External trigger number
 TOUPCAM_IOCONTROLTYPE_GET_DEBOUNCER_TRIGGER_NUMBER = 0x45  # Trigger signal number after debounce
@@ -553,7 +595,7 @@ TOUPCAM_AFSTATUS_ROICHANGED   = 0x5   # Focusing ends, roi changes
 TOUPCAM_AFSTATUS_SCENECHANGED = 0x6   # Focusing ends, scene changes
 TOUPCAM_AFSTATUS_MODECHANGED  = 0x7   # The end of focusing and the change in focusing mode is usually determined by the user moderator
 TOUPCAM_AFSTATUS_UNFINISH     = 0x8   # The focus is not complete. At the beginning of focusing, it will be set as incomplete
-    
+
 # AAF: Astro Auto Focuser
 TOUPCAM_AAF_SETPOSITION     = 0x01
 TOUPCAM_AAF_GETPOSITION     = 0x02
@@ -588,6 +630,7 @@ TOUPCAM_LEVELRANGE_CONTINUE = 0x0002 # continue
 TOUPCAM_LEVELRANGE_ROI      = 0xffff # update roi rect only
 
 # see rwc_Flash
+# flash action
 TOUPCAM_FLASH_SIZE      = 0x00    # query total size
 TOUPCAM_FLASH_EBLOCK    = 0x01    # query erase block size
 TOUPCAM_FLASH_RWBLOCK   = 0x02    # query read/write block size
@@ -596,22 +639,27 @@ TOUPCAM_FLASH_READ      = 0x04    # read
 TOUPCAM_FLASH_WRITE     = 0x05    # write
 TOUPCAM_FLASH_ERASE     = 0x06    # erase
 
+# flash zone
+TOUPCAM_FLASH_SENSOR    = 0x00    # sensor
+TOUPCAM_FLASH_USER      = 0x02    # user
+
 # HRESULT: error code
 S_OK            = 0x00000000 # Success
 S_FALSE         = 0x00000001 # Yet another success # Remark: Different from S_OK, such as internal values and user-set values have coincided, equivalent to noop
 E_UNEXPECTED    = 0x8000ffff # Catastrophic failure # Remark: Generally indicates that the conditions are not met, such as calling put_Option setting some options that do not support modification when the camera is running, and so on
 E_NOTIMPL       = 0x80004001 # Not supported or not implemented # Remark: This feature is not supported on this model of camera
-E_ACCESSDENIED  = 0x80070005 # Permission denied # Remark: The program on Linux does not have permission to open the USB device, please enable udev rules file or run as root
 E_OUTOFMEMORY   = 0x8007000e # Out of memory
 E_INVALIDARG    = 0x80070057 # One or more arguments are not valid
 E_POINTER       = 0x80004003 # Pointer that is not valid # Remark: Pointer is NULL
 E_FAIL          = 0x80004005 # Generic failure
+E_ACCESSDENIED  = 0x80070005 # Permission denied # Remark: Insufficient permissions. This may be blocked by system security policies; on Linux, USB devices often require additional permission configuration, which can be resolved by setting up udev rules or running with root privileges
 E_WRONG_THREAD  = 0x8001010e # Call function in the wrong thread
-E_GEN_FAILURE   = 0x8007001f # Device not functioning # Remark: It is generally caused by hardware errors, such as cable problems, USB port problems, poor contact, camera hardware damage, etc
+E_GEN_FAILURE   = 0x8007001f # Device not functioning # Remark: It is generally caused by hardware errors, such as cable problems, USB port problems, poor contact, insufficient power supply, camera hardware damage, etc
 E_BUSY          = 0x800700aa # The requested resource is in use # Remark: The camera is already in use, such as duplicated opening/starting the camera, or being used by other application, etc
 E_PENDING       = 0x8000000a # The data necessary to complete this operation is not yet available # Remark: No data is available at this time
 E_TIMEOUT       = 0x8001011f # This operation returned because the timeout period expired
-E_UNREACH       = 0x80072743 # Network is unreachable
+E_UNREACH       = 0x80072743 # Network is unreachable # Remark: Please check the IP settings of the camera and the computer, or the firewall settings
+E_CANCELLED     = 0x800704c7 # The operation was canceled by the user
 
 TOUPCAM_EXPOGAIN_DEF              = 100      # exposure gain, default value
 TOUPCAM_EXPOGAIN_MIN              = 100      # exposure gain, minimum value
@@ -692,8 +740,26 @@ TOUPCAM_HDR_B_MIN                 = 0
 TOUPCAM_HDR_B_MAX                 = 65535
 TOUPCAM_HDR_THRESHOLD_MIN         = 0
 TOUPCAM_HDR_THRESHOLD_MAX         = 4094
-TOUPCAM_CDS_MIN                   = 0
-TOUPCAM_CDS_MAX                   = 4094
+TOUPCAM_CDS_MIN                   = 0        # Correlated Double Sampling
+TOUPCAM_ANTIBLOOMING_MIN          = 0        # Anti Blooming
+TOUPCAM_GVCP_RETRY_DEF            = 4        # GVCP Retry
+TOUPCAM_GVCP_RETRY_MIN            = 2
+TOUPCAM_GVCP_RETRY_MAX            = 20
+TOUPCAM_GVCP_TIMEOUT_DEF          = 40       # GVCP Timeout
+TOUPCAM_GVCP_TIMEOUT_MIN          = 20
+TOUPCAM_GVCP_TIMEOUT_MAX          = 200
+TOUPCAM_GVSP_WAIT_PERCENT_DEF     = 1        # GVSP wait percent
+TOUPCAM_GVSP_WAIT_PERCENT_MIN     = 0
+TOUPCAM_GVSP_WAIT_PERCENT_MAX     = 100
+TOUPCAM_FRONTEND_MAX              = 1024     # frontend frame buffer deque length
+TOUPCAM_FRONTEND_DEF              = 4
+TOUPCAM_FRONTEND_MIN              = 2
+TOUPCAM_BACKEND_MAX               = 1024     # backend frame buffer deque length
+TOUPCAM_BACKEND_DEF               = 3
+TOUPCAM_BACKEND_MIN               = 2
+TOUPCAM_HEAT_MIN                  = 0        # Heat
+TOUPCAM_LANE_MIN                  = 0        # Lane
+TOUPCAM_FAN_MIN                   = 0        # Fan
 
 def TDIBWIDTHBYTES(bits):
     return ((bits + 31) // 32 * 4)
@@ -756,7 +822,8 @@ class ToupcamGps:
 class ToupcamFrameInfoV4:
     def __init__(self):
         self.v3 = ToupcamFrameInfoV3()
-        self.reserved = 0
+        self.hob = 0  # Horizontal Optical Black
+        self.vob = 0  # Vertical Optical Black
         self.uLum = 0
         self.uFV = 0
         self.timecount = 0
@@ -764,6 +831,21 @@ class ToupcamFrameInfoV4:
         self.tricount = 0
         self.gps = ToupcamGps()
 
+class ToupcamImagePtr:
+    def __init__(self):
+        self.id = 0                      # 0 is reserved as an invalid id
+        self.pixelFormat = 0             # TOUPCAM_PIXELFORMAT_xxxx
+        self.ergb = 0                    # see TOUPCAM_OPTION_RGB
+        self.snapR = False               # see Toupcam_SnapR
+        self.infoVer = 0                 # ToupcamFrameInfo version >= 4
+        self.reserved = 0
+        self.strideRaw = 0               # stride of RAW, 0 means = image width (no padding)
+        self.ptrInfo = None
+        self.snapCtx = None
+        self.ptrRaw = None               # RAW, see TOUPCAM_OPTION_IMAGEPTRRAW
+        self.ptr8 = None
+        self.ptr16 = None
+                        
 class ToupcamFrameInfoV2:
     def __init__(self):
         self.width = 0
@@ -837,7 +919,7 @@ class Toupcam:
 
     class __ModelV2(ctypes.Structure):
         pass
-        
+
     class __DeviceV2(ctypes.Structure):
         pass
 
@@ -871,6 +953,9 @@ class Toupcam:
                     ('reserved', ctypes.c_ushort)]         # not used
 
     class __FrameInfoV4(ctypes.Structure):
+        pass
+
+    class __ImagePtr(ctypes.Structure):
         pass
 
     class __FrameInfoV2(ctypes.Structure):
@@ -943,7 +1028,7 @@ class Toupcam:
 
     @classmethod
     def Version(cls):
-        """get the version of this dll, which is: 59.29030.20250722"""
+        """get the version of this dll, which is: 60.32549.20260908"""
         cls.__initlib()
         return cls.__lib.Toupcam_Version()
 
@@ -971,14 +1056,28 @@ class Toupcam:
     @classmethod
     def GigeEnable(cls, fun, ctx):
         """Initialize support for GigE cameras. If online/offline notifications are not required, the callback function can be set to None"""
+        cls.GigeEnableV2(fun, ctx, None)
+
+    @classmethod
+    def GigeEnableV2(cls, fun, ctx, opt):
+        """
+        opt: semicolon separated options:
+            "wifi": Enable WiFi adapter support
+        """
         cls.__initlib()
         cls.__gigeenable_fun = fun
         cls.__gigeenable_ctx = ctx
         if cls.__gigeenable_fun is None:
-            cls.__lib.Toupcam_GigeEnable(cls.__HOTPLUG_CALLBACK(0), None)
+            if opt is None or len(opt) == 0:
+                cls.__lib.Toupcam_GigeEnable(cls.__HOTPLUG_CALLBACK(0), None)
+            else:
+                cls.__lib.Toupcam_GigeEnableV2(cls.__HOTPLUG_CALLBACK(0), None, opt)
         else:
             cls.__gigeenable_cb = cls.__HOTPLUG_CALLBACK(cls.__gigeEnableCallbackFun)
-            cls.__lib.Toupcam_GigeEnable(cls.__gigeenable_cb, None)
+            if opt is None or len(opt) == 0:
+                cls.__lib.Toupcam_GigeEnable(cls.__gigeenable_cb, None)
+            else:
+                cls.__lib.Toupcam_GigeEnableV2(cls.__gigeenable_cb, None, opt)
 
     @staticmethod
     def __pciEnableCallbackFun(ctx):
@@ -1050,7 +1149,7 @@ class Toupcam:
             (4) On macOS, IONotificationPortCreate series APIs can also be used as an alternative.
         """
         if sys.platform == 'win32' or sys.platform == 'android':
-            raise HRESULTException(0x80004001)
+            raise HRESULTException(E_NOTIMPL)
         else:
             cls.__initlib()
             cls.__hotplug_fun = fun
@@ -1110,12 +1209,12 @@ class Toupcam:
         """
         the object of Toupcam must be obtained by classmethod Open or OpenByIndex, it cannot be obtained by obj = toupcam.Toupcam()
         Open(None) means try to Open the first enumerated camera
-        For USB, GigE or PCIe camera, the camId can also be specified as (case sensitive):
-            (a) "sn:xxxxxxxxxxxx" (such as sn:ZP250212241204105), or
-            (b) "name:xxxxxx" (such as name: Camera1)
+        For USB, GigE, CameraLink or CXP camera, the camId can also be specified as (case sensitive):
+            (a) "sn:xxxxxxxxxxxx" (Use SN, such as sn:ZP250212241204105), or
+            (b) "name:xxxxxx" (Use user-defined name, such as name: Camera1)
         Moreover, for GigE camera, the camId can also be specified as (case sensitive):
-            (a) "ip:xxx.xxx.xxx.xxx" (such as ip:192.168.1.100), or
-            (b) "mac:xxxxxxxxxxxx" (such as mac:d05f64ffff23)
+            (a) "ip:xxx.xxx.xxx.xxx" (Use IP address, such as ip:192.168.1.100), or
+            (b) "mac:xxxxxxxxxxxx" (Use MAC address, such as mac:d05f64ffff23)
         """
         cls.__initlib()
         if camId is None:
@@ -1149,6 +1248,21 @@ class Toupcam:
             self.__lib.Toupcam_Close(self.__h)
             self.__h = None
 
+    def Load(self, strPara):
+        """
+        load cfg:
+           (1) nullptr or empty string, load from EEPROM (address = 0)
+           (2) eeprom=???, load from EEPROM (address = 0x???)
+           (3) path\to\file.ini, load from ini file
+           (4) path\to\file.json, load from json file
+        """
+        if strPara is None:
+            cls.__lib.Toupcam_Load(self.__h, None)
+        elif sys.platform == 'win32':
+            h = cls.__lib.Toupcam_Load(self.__h, strPara)
+        else:
+            h = cls.__lib.Toupcam_Load(self.__h, strPara.encode())
+
     @staticmethod
     def __eventCallbackFun(nEvent, ctx):
         if ctx:
@@ -1175,7 +1289,7 @@ class Toupcam:
         pInfo.expotime = x.expotime
         pInfo.expogain = x.expogain
         pInfo.blacklevel = x.blacklevel
-        
+
     @staticmethod
     def __convertGps(gps, x):
         gps.utcstart = x.utcstart
@@ -1189,7 +1303,8 @@ class Toupcam:
     @staticmethod
     def __convertFrameInfoV4(pInfo, x):
         __class__.__convertFrameInfoV3(pInfo.v3, x.v3)
-        pInfo.reserved = x.reserved
+        pInfo.hob = x.hob
+        pInfo.vob = x.vob
         pInfo.uLum = x.uLum
         pInfo.uFV = x.uFV
         pInfo.timecount = x.timecount
@@ -1205,9 +1320,67 @@ class Toupcam:
         pInfo.seq = x.seq
         pInfo.timestamp = x.timestamp
 
+    @staticmethod
+    def __convertImagePtr(ptr):
+        newptr = ToupcamImagePtr()
+        newptr.id = ptr.id                   # 0 is reserved as an invalid id
+        newptr.pixelFormat = ptr.pixelFormat # TOUPCAM_PIXELFORMAT_xxxx
+        newptr.ergb = ptr.ergb               # see TOUPCAM_OPTION_RGB
+        newptr.snapR = ptr.snapR             # see Toupcam_SnapR
+        newptr.infoVer = ptr.infoVer         # ToupcamFrameInfo version >= 4
+        newptr.reserved = ptr.reserved
+        newptr.strideRaw = ptr.strideRaw     # stride of RAW, 0 means = image width (no padding)
+        newptr.ptrInfo = ptr.ptrInfo
+        newptr.snapCtx = ptr.snapCtx
+        newptr.ptrRaw = ptr.ptrRaw           # RAW, see TOUPCAM_OPTION_IMAGEPTRRAW
+        newptr.ptr8 = ptr.ptr8
+        newptr.ptr16 = ptr.ptr16
+        return newptr
+
+    @classmethod
+    def Ptr2FrameInfoV4(cls, ptr):
+        info = ToupcamFrameInfoV4();
+        __class__.__convertFrameInfoV4(info, ctypes.cast(ptr.ptrInfo, ctypes.POINTER(cls.__FrameInfoV4)).contents)
+        return info
+
+    @classmethod
+    def Ptr2FrameInfoV3(cls, ptr):
+        info = ToupcamFrameInfoV3();
+        __class__.__convertFrameInfoV3(info, ctypes.cast(ptr.ptrInfo, ctypes.POINTER(cls.__FrameInfoV3)).contents)
+        return info
+
+    def PullImagePtr(self, bStill):
+        """
+            Obtains a pointer to the frame buffer directly from the SDK, eliminating the need to copy frame data and thus improving performance
+            bStill: to pull still image, set to 1, otherwise 0
+        """
+        ptr = self.__ImagePtr()
+        self.__lib.Toupcam_PullImagePtr(self.__h, bStill, ctypes.byref(ptr))
+        return __class__.__convertImagePtr(ptr)
+
+    def PushImagePtr(self, ptrId):
+        """
+            After a frame buffer has been used, it must be returned to the SDK for reuse. Please note the following:
+                (a) The frame buffer must only be returned back after it is no longer in use. Any access after returning it is unsafe, as the SDK may have already reused the buffer and overwritten the memory with new data.
+                (b) If a frame buffer is not returned, the pool of available buffers will gradually decrease.
+                (c) Each frame buffer obtained via Pull (identified by its ID) may be returned only once; duplicate returns are not allowed.
+                (d) The return order does not need to match the Pull order; buffers may be returned out of order.
+                (e) Frame buffers that have not been returned remain valid after Stop. Frame buffers that have not been returned become invalid immediately after Close.
+        """
+        self.__lib.Toupcam_PushImagePtr(self.__h, ptrId)
+
+    def WaitImagePtr(self, waitMS, bStill):
+        """
+        waitMS: The timeout interval, in milliseconds. If a nonzero value is specified, the function waits until the image is ok or the interval elapses.
+                If waitMS is zero, the function does not enter a wait state if the image is not available; it always returns immediately; this is equal to PullImagePtr.
+        """
+        ptr = self.__ImagePtr()
+        self.__lib.Toupcam_WaitImagePtr(self.__h, waitMS, bStill, ctypes.byref(ptr))
+        return __class__.__convertImagePtr(ptr)
+
     """
-        nWaitMS: The timeout interval, in milliseconds. If a non-zero value is specified, the function either successfully fetches the image or waits for a timeout.
-                 If nWaitMS is zero, the function does not wait when there are no images to fetch; It always returns immediately; this is equal to PullImageV4.
+        waitMS: The timeout interval, in milliseconds. If a non-zero value is specified, the function either successfully fetches the image or waits for a timeout.
+                 If waitMS is zero, the function does not wait when there are no images to fetch; It always returns immediately; this is equal to PullImageV4.
         bStill: to pull still image, set to 1, otherwise 0
         bits: 24 (RGB24), 32 (RGB32), 48 (RGB48), 8 (Grey), 16 (Grey), 64 (RGB64).
               In RAW mode, this parameter is ignored.
@@ -1231,7 +1404,7 @@ class Toupcam:
                 |--------------------|---------------|-----------|-------------------|---------------|---------------|---------------|
                 | bits = 64          |      NA       | Convert to 64 |       NA      |       NA      | Convert to 64 |       64      |
                 |--------------------|---------------|---------------|---------------|---------------|---------------|---------------|
-        
+
         rowPitch: The distance from one row to the next row. rowPitch = 0 means using the default row pitch. rowPitch = -1 means zero padding, see below:
                 ----------------------------------------------------------------------------------------------
                 | format                             | 0 means default row pitch     | -1 means zero padding |
@@ -1255,12 +1428,12 @@ class Toupcam:
             self.__lib.Toupcam_PullImageV4(self.__h, pImageData, bStill, bits, rowPitch, ctypes.byref(x))
             self.__convertFrameInfoV4(pInfo, x)
 
-    def WaitImageV4(self, nWaitMS, pImageData, bStill, bits, rowPitch, pInfo):
+    def WaitImageV4(self, waitMS, pImageData, bStill, bits, rowPitch, pInfo):
         if pInfo is None:
-            self.__lib.Toupcam_WaitImageV4(self.__h, nWaitMS, pImageData, bStill, bits, rowPitch, None)
+            self.__lib.Toupcam_WaitImageV4(self.__h, waitMS, pImageData, bStill, bits, rowPitch, None)
         else:
             x = self.__FrameInfoV4()
-            self.__lib.Toupcam_WaitImageV4(self.__h, nWaitMS, pImageData, bStill, bits, rowPitch, ctypes.byref(x))
+            self.__lib.Toupcam_WaitImageV4(self.__h, waitMS, pImageData, bStill, bits, rowPitch, ctypes.byref(x))
             self.__convertFrameInfoV4(pInfo, x)
 
     def PullImageV3(self, pImageData, bStill, bits, rowPitch, pInfo):
@@ -1271,12 +1444,12 @@ class Toupcam:
             self.__lib.Toupcam_PullImageV3(self.__h, pImageData, bStill, bits, rowPitch, ctypes.byref(x))
             self.__convertFrameInfoV3(pInfo, x)
 
-    def WaitImageV3(self, nWaitMS, pImageData, bStill, bits, rowPitch, pInfo):
+    def WaitImageV3(self, waitMS, pImageData, bStill, bits, rowPitch, pInfo):
         if pInfo is None:
-            self.__lib.Toupcam_WaitImageV3(self.__h, nWaitMS, pImageData, bStill, bits, rowPitch, None)
+            self.__lib.Toupcam_WaitImageV3(self.__h, waitMS, pImageData, bStill, bits, rowPitch, None)
         else:
             x = self.__FrameInfoV3()
-            self.__lib.Toupcam_WaitImageV3(self.__h, nWaitMS, pImageData, bStill, bits, rowPitch, ctypes.byref(x))
+            self.__lib.Toupcam_WaitImageV3(self.__h, waitMS, pImageData, bStill, bits, rowPitch, ctypes.byref(x))
             self.__convertFrameInfoV3(pInfo, x)
 
     def PullImageV2(self, pImageData, bits, pInfo):
@@ -1375,7 +1548,7 @@ class Toupcam:
         self.__lib.Toupcam_Stop(self.__h)
 
     def Pause(self, bPause):
-        '''1 => pause, 0 => continue'''
+        """1 => pause, 0 => continue"""
         self.__lib.Toupcam_Pause(self.__h, ctypes.c_int(1 if bPause else 0))
 
     def Snap(self, nResolutionIndex):
@@ -1390,6 +1563,9 @@ class Toupcam:
         """multiple RAW still image snap, nResolutionIndex = 0xffffffff means use the cureent preview resolution"""
         self.__lib.Toupcam_SnapR(self.__h, ctypes.c_uint(nResolutionIndex), ctypes.c_uint(nNumber))
 
+    def SnapV2(self, nResolutionIndex, nNumber, eRGB):
+        self.__lib.Toupcam_SnapV2(self.__h, ctypes.c_uint(nResolutionIndex), ctypes.c_uint(nNumber), ctypes.c_int(eRGB), ctypes.c_void_p(None))
+
     def Trigger(self, nNumber):
         """
         soft trigger:
@@ -1399,32 +1575,32 @@ class Toupcam:
         """
         self.__lib.Toupcam_Trigger(self.__h, ctypes.c_ushort(nNumber))
 
-    def TriggerSyncV4(self, nWaitMS, pImageData, bits, rowPitch, pInfo):
+    def TriggerSyncV4(self, waitMS, pImageData, bits, rowPitch, pInfo):
         """
         trigger synchronously
-        nWaitMS:    0:              by default, exposure * 102% + 4000 milliseconds
+        waitMS:    0:              by default, exposure * 102% + 4000 milliseconds
                     0xffffffff:     wait infinite
                     other:          milliseconds to wait
         """
         if pInfo is None:
-            self.__lib.Toupcam_TriggerSyncV4(self.__h, nWaitMS, pImageData, bits, rowPitch, None)
+            self.__lib.Toupcam_TriggerSyncV4(self.__h, waitMS, pImageData, bits, rowPitch, None)
         else:
             x = self.__FrameInfoV4()
-            self.__lib.Toupcam_TriggerSyncV4(self.__h, nWaitMS, pImageData, bits, rowPitch, ctypes.byref(x))
+            self.__lib.Toupcam_TriggerSyncV4(self.__h, waitMS, pImageData, bits, rowPitch, ctypes.byref(x))
             self.__convertFrameInfoV4(pInfo, x)
 
-    def TriggerSync(self, nWaitMS, pImageData, bits, rowPitch, pInfo):
+    def TriggerSync(self, waitMS, pImageData, bits, rowPitch, pInfo):
         """
         trigger synchronously
-        nWaitMS:    0:              by default, exposure * 102% + 4000 milliseconds
+        waitMS:    0:              by default, exposure * 102% + 4000 milliseconds
                     0xffffffff:     wait infinite
                     other:          milliseconds to wait
         """
         if pInfo is None:
-            self.__lib.Toupcam_TriggerSync(self.__h, nWaitMS, pImageData, bits, rowPitch, None)
+            self.__lib.Toupcam_TriggerSync(self.__h, waitMS, pImageData, bits, rowPitch, None)
         else:
             x = self.__FrameInfoV3()
-            self.__lib.Toupcam_TriggerSync(self.__h, nWaitMS, pImageData, bits, rowPitch, ctypes.byref(x))
+            self.__lib.Toupcam_TriggerSync(self.__h, waitMS, pImageData, bits, rowPitch, ctypes.byref(x))
             self.__convertFrameInfoV3(pInfo, x)
 
     def put_Size(self, nWidth, nHeight):
@@ -1510,7 +1686,8 @@ class Toupcam:
             use minimum frame buffer. When new frame arrive, drop all the pending frame regardless of whether the frame buffer is full.
             If DDR present, also limit the DDR frame buffer to only one frame.
         2: soft realtime
-            Drop the oldest frame when the queue is full and then enqueue the new frame
+            use minimum frame buffer. When new frame arrive, drop all the pending frame regardless of whether the frame buffer is full.
+            If DDR present, the DDR frame buffer unchanged.
         default: 0
         """
         self.__lib.Toupcam_put_RealTime(self.__h, val)
@@ -1526,23 +1703,23 @@ class Toupcam:
 
     def get_AutoExpoEnable(self):
         """
-        bAutoExposure:
+        mode:
            0: disable auto exposure
-           1: auto exposure continue mode
-           2: auto exposure once mode
+           1: auto exposure continuous mode
+           2: auto exposure once
         """
         b = ctypes.c_int(0)
         self.__lib.Toupcam_get_AutoExpoEnable(self.__h, b)
         return b.value
 
-    def put_AutoExpoEnable(self, bAutoExposure):
+    def put_AutoExpoEnable(self, mode):
         """
-        bAutoExposure:
+        mode:
            0: disable auto exposure
-           1: auto exposure continue mode
-           2: auto exposure once mode
+           1: auto exposure continuous mode
+           2: auto exposure once
         """
-        self.__lib.Toupcam_put_AutoExpoEnable(self.__h, ctypes.c_int(bAutoExposure))
+        self.__lib.Toupcam_put_AutoExpoEnable(self.__h, ctypes.c_int(mode))
 
     def get_AutoExpoTarget(self):
         x = ctypes.c_ushort(TOUPCAM_AETARGET_DEF)
@@ -1553,7 +1730,7 @@ class Toupcam:
         self.__lib.Toupcam_put_AutoExpoTarget(self.__h, ctypes.c_int(Target))
 
     def put_AutoExpoRange(self, maxTime, minTime, maxGain, minGain):
-        ''' set the maximum/minimal auto exposure time and agin. The default maximum auto exposure time is 350ms '''
+        """set the maximum/minimal auto exposure time and agin. The default maximum auto exposure time is 350ms"""
         return self.__lib.Toupcam_put_AutoExpoRange(self.__h, ctypes.c_uint(maxTime), ctypes.c_uint(minTime), ctypes.c_ushort(maxGain), ctypes.c_ushort(minGain))
 
     def get_AutoExpoRange(self):
@@ -1627,7 +1804,7 @@ class Toupcam:
             y = (ctypes.c_ushort * 4)(aHigh[0], aHigh[1], aHigh[2], aHigh[3])
             self.__lib.Toupcam_put_LevelRange(self.__h, x, y)
         else:
-            raise HRESULTException(0x80070057)
+            raise HRESULTException(E_INVALIDARG)
 
     def get_LevelRange(self):
         x = (ctypes.c_ushort * 4)()
@@ -1648,7 +1825,7 @@ class Toupcam:
             rc.bottom = roiY + roiHeight
             self.__lib.Toupcam_put_LevelRangeV2(self.__h, mode, ctypes.byref(rc), x, y)
         else:
-            raise HRESULTException(0x80070057)
+            raise HRESULTException(E_INVALIDARG)
 
     def get_LevelRangeV2(self):
         mode = ctypes.c_ushort(0)
@@ -1749,7 +1926,7 @@ class Toupcam:
 
     def put_HZ(self, nHZ):
         """
-        power supply:
+        Light Frequency:
             0 => 60HZ AC
             1 => 50Hz AC
             2 => DC
@@ -1787,7 +1964,7 @@ class Toupcam:
             x = (ctypes.c_int * 3)(aGain[0], aGain[1], aGain[2])
             self.__lib.Toupcam_put_WhiteBalanceGain(self.__h, x)
         else:
-            raise HRESULTException(0x80070057)
+            raise HRESULTException(E_INVALIDARG)
 
     def get_WhiteBalanceGain(self):
         """White Balance, RGB Gain Mode"""
@@ -1796,6 +1973,7 @@ class Toupcam:
         return (x[0], x[1], x[2])
 
     def put_AWBAuxRect(self, X, Y, Width, Height):
+        """Minimum width & height: 4"""
         rc = self.__RECT()
         rc.left = X
         rc.right = X + Width
@@ -1810,6 +1988,7 @@ class Toupcam:
         return (rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top)
 
     def put_AEAuxRect(self, X, Y, Width, Height):
+        """Minimum width & height: 4"""
         rc = self.__RECT()
         rc.left = X
         rc.right = X + Width
@@ -1828,7 +2007,7 @@ class Toupcam:
             x = (ctypes.c_ushort * 3)(aSub[0], aSub[1], aSub[2])
             self.__lib.Toupcam_put_BlackBalance(self.__h, x)
         else:
-            raise HRESULTException(0x80070057)
+            raise HRESULTException(E_INVALIDARG)
 
     def get_BlackBalance(self):
         x = (ctypes.c_ushort * 3)()
@@ -1836,6 +2015,7 @@ class Toupcam:
         return (x[0], x[1], x[2])
 
     def put_ABBAuxRect(self, X, Y, Width, Height):
+        """Minimum width & height: 4"""
         rc = self.__RECT()
         rc.left = X
         rc.right = X + Width
@@ -1872,10 +2052,8 @@ class Toupcam:
 
     def rwc_Flash(self, action, addr, pData):
         """
-        Flash:
-        action = TOUPCAM_FLASH_XXXX: read, write, erase, query total size, query read/write block size, query erase block size
+        action = (zone << 24) | TOUPCAM_FLASH_XXXX: read, write, erase, query total size, query read/write block size, query erase block size
         addr = address
-        see democpp
         """
         self.__lib.Toupcam_rwc_Flash(self.__h, action, addr, ctypes.c_uint(len(pData)), pData)
 
@@ -1902,8 +2080,34 @@ class Toupcam:
         self.__lib.Toupcam_get_Option(self.__h, ctypes.c_uint(iOption), ctypes.byref(x))
         return x.value
 
+    def put_Int(self, strName, iValue):
+        """ Case insensitive """
+        self.__lib.Toupcam_put_Int(self.__h, strName, ctypes.c_int(iValue))
+
+    def get_Int(self, strName):
+        """ Case insensitive """
+        x = ctypes.c_int(0)
+        self.__lib.Toupcam_get_Int(self.__h, strName, ctypes.byref(x))
+        return x.value
+
+    def put_Str(self, strName, strValue):
+        """ Case insensitive """
+        self.__lib.Toupcam_put_Str(self.__h, strName, strValue)
+
+    def get_Str(self, strName):
+        """ Case insensitive """
+        outputBuf = create_string_buffer(TOUPCAM_MAX) # output buffer (128 bytes are always sufficient)
+        self.__lib.Toupcam_get_Str(self.__h, strName, outputBuf)
+        return outputBuf.value.decode()
+
+    def get_all_PixelFormatSupport(self):
+        num = self.get_PixelFormatSupport(0xff)
+        if num <= 0:
+            return []
+        return [self.get_PixelFormatSupport(i) for i in range(num)]
+
     def get_PixelFormatSupport(self, cmd):
-        """"
+        """
         cmd:
            0xff:     query the number
            0~number: query the nth pixel format
@@ -1913,30 +2117,50 @@ class Toupcam:
         self.__lib.Toupcam_get_PixelFormatSupport(self.__h, cmd, ctypes.byref(x))
         return x.value
 
-    # Hardware Binning
-    # Value: 1x1, 2x2, etc
-    # Method: Average, Add, Skip
     def put_Binning(self, Value, Method):
+        """
+        Hardware Binning
+        Value: 1x1, 2x2, etc
+        Method: Average, Add, Skip
+        """
         self.__lib.Toupcam_put_Binning(self.__h, Value, Method)
 
     def get_Binning(self):
         pValue = ctypes.c_char_p(0)
         pMethod = ctypes.c_char_p(0)
-        self.__lib.Toupcam_get_Binning(self.__h, ctypes.ref(pValue), ctypes.ref(pMethod))
-        return (pValue.value, pMethod.value)
-        
+        self.__lib.Toupcam_get_Binning(self.__h, ctypes.byref(pValue), ctypes.byref(pMethod))
+        return (pValue.value.decode('ascii'), pMethod.value.decode('ascii'))
+
+    def get_BinningValue(self):
+        num = self.get_BinningNumber()
+        if num <= 0:
+            return []
+        return [self.get_BinningValue(i) for i in range(num)]
+
     def get_BinningNumber(self):
         return self.__lib.Toupcam_get_BinningNumber(self.__h)
 
-    def get_BinningValue(self):
+    def get_BinningValue(self, index):
         p = ctypes.c_char_p(0)
-        self.__lib.Toupcam_get_BinningValue(self.__h, ctypes.ref(p))
-        return p.value
+        self.__lib.Toupcam_get_BinningValue(self.__h, index, ctypes.byref(p))
+        return p.value.decode('ascii')
 
-    def get_BinningMethod(self):
+    def get_all_BinningMethod(self):
+        methods = []
+        index = 0
+        while True:
+            try:
+                m = self.get_BinningMethod(index)
+                methods.append(m)
+                index += 1
+            except Exception:
+                break
+        return methods
+
+    def get_BinningMethod(self, index):
         p = ctypes.c_char_p(0)
-        self.__lib.Toupcam_get_BinningMethod(self.__h, ctypes.ref(p))
-        return p.value
+        self.__lib.Toupcam_get_BinningMethod(self.__h, index, ctypes.byref(p))
+        return p.value.decode('ascii')
 
     def put_Linear(self, v8, v16):
         self.__lib.Toupcam_put_Linear(self.__h, v8, v16)
@@ -1949,14 +2173,14 @@ class Toupcam:
             a = (ctypes.c_double * 9)(v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8])
             return self.__lib.Toupcam_put_ColorMatrix(self.__h, v)
         else:
-            raise HRESULTException(0x80070057)
+            raise HRESULTException(E_INVALIDARG)
 
     def put_InitWBGain(self, v):
         if len(v) == 3:
             a = (ctypes.c_short * 3)(v[0], v[1], v[2])
             self.__lib.Toupcam_put_InitWBGain(self.__h, a)
         else:
-            raise HRESULTException(0x80070057)
+            raise HRESULTException(E_INVALIDARG)
 
     def get_TecTargetRange(self):
         """TEC Target range: [min, max]"""
@@ -1968,7 +2192,7 @@ class Toupcam:
         if high > 32767:
             high = high - 65536
         return (low, high)
-    
+
     def get_Temperature(self):
         """get the temperature of the sensor, in 0.1 degrees Celsius (32 means 3.2 degrees Celsius, -35 means -3.5 degree Celsius)"""
         x = ctypes.c_short(0)
@@ -1983,7 +2207,10 @@ class Toupcam:
         self.__lib.Toupcam_put_Temperature(self.__h, ctypes.c_short(nTemperature))
 
     def put_Roi(self, xOffset, yOffset, xWidth, yHeight):
-        """xOffset, yOffset, xWidth, yHeight: must be even numbers"""
+        """
+        xOffset, yOffset, xWidth, yHeight: must be even numbers
+        Minimum width & height: 8
+        """
         self.__lib.Toupcam_put_Roi(self.__h, ctypes.c_uint(xOffset), ctypes.c_uint(yOffset), ctypes.c_uint(xWidth), ctypes.c_uint(yHeight))
 
     def get_Roi(self):
@@ -1996,15 +2223,56 @@ class Toupcam:
         return (x.value, y.value, w.value, h.value)
 
     def put_RoiN(self, xOffset, yOffset, xWidth, yHeight):
-        '''multiple Roi'''
+        """multiple Roi"""
         if len(xOffset) != len(yOffset) or len(xOffset) != len(xWidth) or len(xOffset) != len(yHeight):
-            raise HRESULTException(0x80070057)
+            raise HRESULTException(E_INVALIDARG)
         Num = len(xOffset)
         pxOffset = (ctypes.c_uint * Num)(*xOffset)
         pyOffset = (ctypes.c_uint * Num)(*yOffset)
         pxWidth = (ctypes.c_uint * Num)(*xWidth)
         pyHeight = (ctypes.c_uint * Num)(*yHeight)
         self.__lib.Toupcam_put_RoiN(self.__h, pxOffset, pyOffset, pxWidth, pyHeight, Num)
+
+    def readPtr(self, key, length):
+        if length is None:
+            raise HRESULTException(E_INVALIDARG)
+
+        buf = (ctypes.c_ubyte * length)()
+        self.__lib.Toupcam_readPtr(self.__h, key.encode('ascii'), length, ctypes.byref(buf))
+        return bytes(buf)
+
+    def readInt(self, key):
+        return int.from_bytes(self.readPtr(key, 4), sys.byteorder, signed=True)
+
+    def readLong(self, key):
+        return int.from_bytes(self.readPtr(key, 8), sys.byteorder, signed=True)
+
+    def readString(self, key, length):
+        data = self.readPtr(key, length)
+        try:
+            zero_index = data.index(0)
+            data = data[:zero_index]
+        except ValueError:
+            pass
+        return data.decode()
+
+    def writePtr(self, key, data):
+        if data is None:
+            self.__lib.Toupcam_writePtr(self.__h, key.encode('ascii'), 0, None)
+        elif isinstance(data, bytes):
+            length = len(data)
+            if length == 0:
+                self.__lib.Toupcam_writePtr(self.__h, key.encode('ascii'), 0, None)
+            else:
+                buf = (ctypes.c_ubyte * length).from_buffer_copy(data)
+                self.__lib.Toupcam_writePtr(self.__h, key.encode('ascii'), length, ctypes.byref(buf))
+        elif isinstance(data, str):
+            return self.writePtr(key, data.encode())
+        elif isinstance(data, int):
+            buf = ctypes.c_int(data)
+            self.__lib.Toupcam_writePtr(self.__h, key.encode('ascii'), ctypes.sizeof(buf), ctypes.byref(buf))
+        else:
+            raise HRESULTException(E_INVALIDARG)
 
     def put_XY(self, x, y):
         self.__lib.Toupcam_put_XY(self.__h, ctypes.c_int(x), ctypes.c_int(y))
@@ -2034,8 +2302,8 @@ class Toupcam:
         self.__lib.Toupcam_get_AFState(self.__h, ctypes.byref(x))
         return x.value
 
-    def put_AFMode(self, mode):
-        self.__lib.Toupcam_put_AFRoi(self.__h, ctypes.c_uint(mode))
+    def put_AFMode(self, mode, bFixedWD, uiNear, uiFar):
+        self.__lib.Toupcam_put_AFMode(self.__h, ctypes.c_uint(mode), ctypes.c_int(bFixedWD), ctypes.c_uint(uiNear), ctypes.c_uint(uiFar))
 
     def put_AFRoi(self, xOffset, yOffset, xWidth, yHeight):
         self.__lib.Toupcam_put_AFRoi(self.__h, ctypes.c_uint(xOffset), ctypes.c_uint(yOffset), ctypes.c_uint(xWidth), ctypes.c_uint(yHeight))
@@ -2191,7 +2459,12 @@ class Toupcam:
     @classmethod
     def PixelFormatName(cls, pixelFormat):
         cls.__initlib()
-        return cls.__lib.Toupcam_get_PixelFormatName(pixelFormat)
+        return cls.__lib.Toupcam_get_PixelFormatName(pixelFormat).decode('ascii')
+
+    @classmethod
+    def PixelFormatBitdepth(cls, pixelFormat):
+        cls.__initlib()
+        return cls.__lib.Toupcam_get_PixelFormatBitdepth(pixelFormat)
 
     @classmethod
     def Replug(cls, camId):
@@ -2242,7 +2515,7 @@ class Toupcam:
             cls.__lib.Toupcam_Gain2TempTint(x, ctypes.byref(temp), ctypes.byref(tint))
             return (temp.value, tint.value)
         else:
-            raise HRESULTException(0x80070057)
+            raise HRESULTException(E_INVALIDARG)
 
     @classmethod
     def TempTint2Gain(cls, temp, tint):
@@ -2254,7 +2527,7 @@ class Toupcam:
     @classmethod
     def __initlib(cls):
         if cls.__lib is None:
-            try: # Firstly try to load the library in the directory where this file is located
+            try: # First, try to load the library in the directory where this file is located
                 dir = os.path.dirname(os.path.realpath(__file__))
                 if sys.platform == 'win32':
                     cls.__lib = ctypes.windll.LoadLibrary(os.path.join(dir, 'toupcam.dll'))
@@ -2275,13 +2548,28 @@ class Toupcam:
 
             cls.__FrameInfoV4._fields_ = [
                         ('v3', cls.__FrameInfoV3),
-                        ('reserved', ctypes.c_uint),
+                        ('hob', ctypes.c_ushort),
+                        ('vob', ctypes.c_ushort),
                         ('uLum', ctypes.c_uint),
                         ('uFV', ctypes.c_longlong),
                         ('timecount', ctypes.c_longlong),
                         ('framecount', ctypes.c_uint),
                         ('tricount', ctypes.c_uint),
                         ('gps', cls.__Gps)]
+                        
+            cls.__ImagePtr._fields_ = [
+                        ("id", ctypes.c_uint),
+                        ("pixelFormat", ctypes.c_ubyte),
+                        ("ergb", ctypes.c_ubyte),
+                        ("snapR", ctypes.c_ubyte),
+                        ("infoVer", ctypes.c_ubyte),
+                        ("reserved", ctypes.c_uint),
+                        ("strideRaw", ctypes.c_uint),
+                        ("ptrInfo", ctypes.c_void_p),
+                        ("snapCtx", ctypes.c_void_p),
+                        ("ptrRaw", ctypes.c_void_p),
+                        ("ptr8", ctypes.POINTER(ctypes.c_ubyte)),
+                        ("ptr16", ctypes.POINTER(ctypes.c_ushort))]
 
             if sys.platform == 'win32':
                 cls.__ModelV2._fields_ = [                     # camera model v2 win32
@@ -2324,6 +2612,7 @@ class Toupcam:
             cls.__lib.Toupcam_put_Name.restype = ctypes.c_int
             cls.__lib.Toupcam_get_Name.restype = ctypes.c_int
             cls.__lib.Toupcam_Open.restype = ctypes.c_void_p
+            cls.__lib.Toupcam_Load.restype = ctypes.c_int
             cls.__lib.Toupcam_Replug.restype = ctypes.c_int
             cls.__lib.Toupcam_Update.restype = ctypes.c_int
             if sys.platform == 'win32':
@@ -2331,6 +2620,7 @@ class Toupcam:
                 cls.__lib.Toupcam_put_Name.argtypes = [ctypes.c_wchar_p, ctypes.c_char_p]
                 cls.__lib.Toupcam_get_Name.argtypes = [ctypes.c_wchar_p, ctypes.c_char * 64]
                 cls.__lib.Toupcam_Open.argtypes = [ctypes.c_wchar_p]
+                cls.__lib.Toupcam_Load.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p]
                 cls.__lib.Toupcam_Replug.argtypes = [ctypes.c_wchar_p]
                 cls.__lib.Toupcam_Update.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p, cls.__PROGRESS_CALLBACK, ctypes.py_object]
             else:
@@ -2338,8 +2628,10 @@ class Toupcam:
                 cls.__lib.Toupcam_put_Name.argtypes = [ctypes.c_char_p, ctypes.c_char_p]
                 cls.__lib.Toupcam_get_Name.argtypes = [ctypes.c_char_p, ctypes.c_char * 64]
                 cls.__lib.Toupcam_Open.argtypes = [ctypes.c_char_p]
+                cls.__lib.Toupcam_Load.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
                 cls.__lib.Toupcam_Replug.argtypes = [ctypes.c_char_p]
                 cls.__lib.Toupcam_Update.argtypes = [ctypes.c_char_p, ctypes.c_char_p, cls.__PROGRESS_CALLBACK, ctypes.py_object]
+            cls.__lib.Toupcam_Load.errcheck = cls.__errcheck
             cls.__lib.Toupcam_put_Name.errcheck = cls.__errcheck
             cls.__lib.Toupcam_get_Name.errcheck = cls.__errcheck
             cls.__lib.Toupcam_Replug.errcheck = cls.__errcheck
@@ -2357,6 +2649,15 @@ class Toupcam:
             cls.__lib.Toupcam_StartPullModeWithCallback.restype = ctypes.c_int
             cls.__lib.Toupcam_StartPullModeWithCallback.errcheck = cls.__errcheck
             cls.__lib.Toupcam_StartPullModeWithCallback.argtypes = [ctypes.c_void_p, cls.__EVENT_CALLBACK, ctypes.py_object]
+            cls.__lib.Toupcam_PullImagePtr.restype = ctypes.c_int
+            cls.__lib.Toupcam_PullImagePtr.errcheck = cls.__errcheck
+            cls.__lib.Toupcam_PullImagePtr.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.POINTER(cls.__ImagePtr)]
+            cls.__lib.Toupcam_PushImagePtr.restype = ctypes.c_int
+            cls.__lib.Toupcam_PushImagePtr.errcheck = cls.__errcheck
+            cls.__lib.Toupcam_PushImagePtr.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+            cls.__lib.Toupcam_WaitImagePtr.restype = ctypes.c_int
+            cls.__lib.Toupcam_WaitImagePtr.errcheck = cls.__errcheck
+            cls.__lib.Toupcam_WaitImagePtr.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_int, ctypes.POINTER(cls.__ImagePtr)]
             cls.__lib.Toupcam_PullImageV4.restype = ctypes.c_int
             cls.__lib.Toupcam_PullImageV4.errcheck = cls.__errcheck
             cls.__lib.Toupcam_PullImageV4.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.POINTER(cls.__FrameInfoV4)]
@@ -2396,6 +2697,9 @@ class Toupcam:
             cls.__lib.Toupcam_SnapR.restype = ctypes.c_int
             cls.__lib.Toupcam_SnapR.errcheck = cls.__errcheck
             cls.__lib.Toupcam_SnapR.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_uint]
+            cls.__lib.Toupcam_SnapV2.restype = ctypes.c_int
+            cls.__lib.Toupcam_SnapV2.errcheck = cls.__errcheck
+            cls.__lib.Toupcam_SnapV2.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_uint, ctypes.c_int, ctypes.c_void_p]
             cls.__lib.Toupcam_Trigger.restype = ctypes.c_int
             cls.__lib.Toupcam_Trigger.errcheck = cls.__errcheck
             cls.__lib.Toupcam_Trigger.argtypes = [ctypes.c_void_p, ctypes.c_ushort]
@@ -2737,11 +3041,25 @@ class Toupcam:
             cls.__lib.Toupcam_get_Option.restype = ctypes.c_int
             cls.__lib.Toupcam_get_Option.errcheck = cls.__errcheck
             cls.__lib.Toupcam_get_Option.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.POINTER(ctypes.c_int)]
+            cls.__lib.Toupcam_put_Int.restype = ctypes.c_int
+            cls.__lib.Toupcam_put_Int.errcheck = cls.__errcheck
+            cls.__lib.Toupcam_put_Int.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int]
+            cls.__lib.Toupcam_get_Int.restype = ctypes.c_int
+            cls.__lib.Toupcam_get_Int.errcheck = cls.__errcheck
+            cls.__lib.Toupcam_get_Int.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.POINTER(ctypes.c_int)]
+            cls.__lib.Toupcam_put_Str.restype = ctypes.c_int
+            cls.__lib.Toupcam_put_Str.errcheck = cls.__errcheck
+            cls.__lib.Toupcam_put_Str.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p]
+            cls.__lib.Toupcam_get_Str.restype = ctypes.c_int
+            cls.__lib.Toupcam_get_Str.errcheck = cls.__errcheck
+            cls.__lib.Toupcam_get_Str.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_char_p]
             cls.__lib.Toupcam_get_PixelFormatSupport.restype = ctypes.c_int
             cls.__lib.Toupcam_get_PixelFormatSupport.errcheck = cls.__errcheck
             cls.__lib.Toupcam_get_PixelFormatSupport.argtypes = [ctypes.c_void_p, ctypes.c_char, ctypes.POINTER(ctypes.c_int)]
             cls.__lib.Toupcam_get_PixelFormatName.restype = ctypes.c_char_p
             cls.__lib.Toupcam_get_PixelFormatName.argtypes = [ctypes.c_int]
+            cls.__lib.Toupcam_get_PixelFormatBitdepth.restype = ctypes.c_int
+            cls.__lib.Toupcam_get_PixelFormatBitdepth.argtypes = [ctypes.c_int]
             # Hardware Binning
             # Value: 1x1, 2x2, etc
             # Method: Average, Add
@@ -2769,6 +3087,12 @@ class Toupcam:
             cls.__lib.Toupcam_put_RoiN.restype = ctypes.c_int
             cls.__lib.Toupcam_put_RoiN.errcheck = cls.__errcheck
             cls.__lib.Toupcam_put_RoiN.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint), ctypes.POINTER(ctypes.c_uint), ctypes.POINTER(ctypes.c_uint), ctypes.POINTER(ctypes.c_uint), ctypes.c_uint]
+            cls.__lib.Toupcam_readPtr.restype = ctypes.c_int
+            cls.__lib.Toupcam_readPtr.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int, ctypes.c_void_p]
+            cls.__lib.Toupcam_readPtr.errcheck = cls.__errcheck
+            cls.__lib.Toupcam_writePtr.restype = ctypes.c_int
+            cls.__lib.Toupcam_writePtr.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int, ctypes.c_void_p]
+            cls.__lib.Toupcam_writePtr.errcheck = cls.__errcheck
             cls.__lib.Toupcam_put_XY.restype = ctypes.c_int
             cls.__lib.Toupcam_put_XY.errcheck = cls.__errcheck
             cls.__lib.Toupcam_put_XY.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int]
@@ -2786,7 +3110,7 @@ class Toupcam:
             cls.__lib.Toupcam_get_AFState.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint)]
             cls.__lib.Toupcam_put_AFMode.restype = ctypes.c_int
             cls.__lib.Toupcam_put_AFMode.errcheck = cls.__errcheck
-            cls.__lib.Toupcam_put_AFMode.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+            cls.__lib.Toupcam_put_AFMode.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_int, ctypes.c_uint, ctypes.c_uint]
             cls.__lib.Toupcam_put_AFRoi.restype = ctypes.c_int
             cls.__lib.Toupcam_put_AFRoi.errcheck = cls.__errcheck
             cls.__lib.Toupcam_put_AFRoi.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_uint, ctypes.c_uint, ctypes.c_uint]
@@ -2831,6 +3155,8 @@ class Toupcam:
             cls.__lib.Toupcam_GetHistogramV2.argtypes = [ctypes.c_void_p, cls.__HISTOGRAM_CALLBACK, ctypes.py_object]
             cls.__lib.Toupcam_GigeEnable.restype = ctypes.c_int
             cls.__lib.Toupcam_GigeEnable.argtypes = [cls.__HOTPLUG_CALLBACK, ctypes.c_void_p]
+            cls.__lib.Toupcam_GigeEnableV2.restype = ctypes.c_int
+            cls.__lib.Toupcam_GigeEnableV2.argtypes = [cls.__HOTPLUG_CALLBACK, ctypes.c_void_p, ctypes.c_char_p]
             cls.__lib.Toupcam_PciEnable.restype = ctypes.c_int
             cls.__lib.Toupcam_PciEnable.argtypes = [cls.__HOTPLUG_CALLBACK, ctypes.c_void_p]
             cls.__lib.Toupcam_CtiEnable.restype = ctypes.c_int

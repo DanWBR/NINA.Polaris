@@ -185,10 +185,10 @@ public sealed class ToupTekSdkCamera : ICamera {
         } catch { }
 
         // Off Windows the camera is opened by its index in the enumeration. The
-        // binding marshals Open's id as UTF-16 unless it is compiled with LINUX,
-        // and the published library never is (a RID-agnostic project reference
-        // does not inherit the RID), so libtoupcam read the id as "t" and every
-        // Open failed. OpenByIndex passes no string.
+        // SDK 59 binding marshalled Open's id as UTF-16 unless compiled with
+        // LINUX, which the published library never was, so every Open failed.
+        // SDK 60's binding picks the encoding at runtime; opening by index stays
+        // because it passes no string at all.
         if (index < 0 && !OperatingSystem.IsWindows()) throw new InvalidOperationException(
             $"The ToupTek camera '{_camId}' is not connected. Check its USB cable and power, then refresh the camera list.");
         var cam = NativeCallGuard.Run(ToupTekRegistry.GuardName, "opening the camera",
