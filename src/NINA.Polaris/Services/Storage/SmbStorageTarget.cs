@@ -287,12 +287,20 @@ public sealed class SmbStorageTarget : IStorageTarget {
         }
     }
 
+    /// <summary>How long one SMB request may wait for its answer. SMBLibrary's
+    /// default is 5 s, and a host on WiFi passes that routinely: each new frame
+    /// is also relayed to the browser over the same radio, the transmit queue
+    /// backs up, and round trips of over a second were measured on an Orange
+    /// Pi 5 Pro pushing to a wired share. Every such stall failed a 1 MiB write
+    /// with STATUS_IO_TIMEOUT and left the sidecar locked on the server.</summary>
+    internal const int ResponseTimeoutMs = 30_000;
+
     private static (SMB2Client client, ISMBFileStore store) Open(StorageConfig cfg) {
         if (string.IsNullOrWhiteSpace(cfg.Host)) throw new InvalidOperationException("SMB host is empty.");
         if (string.IsNullOrWhiteSpace(cfg.Share)) throw new InvalidOperationException("SMB share is empty.");
 
         var address = ResolveIPv4(cfg.Host);
-        var client = new SMB2Client();
+        var client = new SMB2Client(ResponseTimeoutMs);
         bool connected = client.Connect(address, SMBTransportType.DirectTCPTransport);
         if (!connected) throw new IOException($"Could not connect to {cfg.Host}:{(cfg.Port > 0 ? cfg.Port : 445)}");
 
