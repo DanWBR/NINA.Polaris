@@ -39,6 +39,9 @@ public sealed class ToupTekSdkCamera : ICamera {
     private double _pixelSize;
     private BayerPatternEnum _bayer = BayerPatternEnum.None;
     private bool _isColor, _supportsCooler;
+    private ulong _modelFlags;
+    private int _tecVoltMax;   // 0.1 V units; 0 = unknown, then CoolerPower stays 0
+    private int _heatMax;      // anti-dew heater levels; 0 = no heater
     private int _gainMin, _gainMax = 100;
     private double? _minExpSec, _maxExpSec;
 
@@ -90,7 +93,15 @@ public sealed class ToupTekSdkCamera : ICamera {
             return false;
         }
     }
-    public double CoolerPower => 0;
+    /// <summary>TEC drive as a percentage of its maximum voltage, the same
+    /// figure the INDI driver reports as cooler power.</summary>
+    public double CoolerPower {
+        get {
+            if (_cam == null || !_connected || !_supportsCooler || _tecVoltMax <= 0) return 0;
+            return _cam.get_Option(Toupcam.eOPTION.OPTION_TEC_VOLTAGE, out int v)
+                ? Math.Clamp(v * 100.0 / _tecVoltMax, 0, 100) : 0;
+        }
+    }
     public int BinX => _bin;
     public int BinY => _bin;
     public int BitDepth => _bitDepth > 8 ? 16 : 8;
@@ -115,14 +126,41 @@ public sealed class ToupTekSdkCamera : ICamera {
     public IReadOnlyList<int> IsoOptions { get; } = Array.Empty<int>();
     public int SelectedIso => 0;
 
+    /// <summary>Bin factors offered: the SDK bins 2 to 8 in software, 4 is as
+    /// far as an astro sensor is usefully binned.</summary>
+    internal static readonly int[] Bins = { 1, 2, 3, 4 };
+
     public CameraCapabilities Capabilities => new(
         SupportsCooler: _supportsCooler,
-        SupportsBinning: false,
+        SupportsBinning: true,
         SupportsRoi: true,
         SupportsIso: false,
         SupportsBulb: false,
         SupportsVideoStream: true,
-        SupportsWhiteBalance: false);
+        SupportsWhiteBalance: false,
+        SupportedBins: Bins);
+
+    /// <summary>OPTION_BINNING value for a bin factor. Average (0x80 | n)
+    /// keeps the 16-bit scale every frame is stored in; the SDK's saturating
+    /// sum clips bright stars, and the unsaturated sum raises the bit depth.</summary>
+    internal static int BinningOption(int bin) => bin <= 1 ? 1 : 0x80 | bin;
+
+    /// <summary>Choices of OPTION_CG, in its own numbering: 0 LCG, 1 HCG,
+    /// 2 HDR on a camera with FLAG_CGHDR. Empty when the camera has none.</summary>
+    internal static string[] ConversionGainModes(ulong flags) =>
+        (flags & (ulong)Toupcam.eFLAG.FLAG_CG) == 0 ? Array.Empty<string>()
+        : (flags & (ulong)Toupcam.eFLAG.FLAG_CGHDR) != 0 ? new[] { "LCG", "HCG", "HDR" }
+        : new[] { "LCG", "HCG" };
+
+    /// <summary>Cooler present: the model flags say so, or the camera answers
+    /// for a TEC voltage limit. Both are asked because the flags alone left
+    /// an AE676C with no cooler and no temperature on the native backend while
+    /// the INDI driver, on the same camera, read both.</summary>
+    private void ProbeCooler(Toupcam cam) {
+        _tecVoltMax = cam.get_Option(Toupcam.eOPTION.OPTION_TEC_VOLTAGE_MAX, out int vmax) && vmax > 0 ? vmax : 0;
+        _supportsCooler = (_modelFlags & (ulong)(Toupcam.eFLAG.FLAG_TEC | Toupcam.eFLAG.FLAG_TEC_ONOFF)) != 0
+                          || _tecVoltMax > 0;
+    }
 
     public Task ConnectAsync(CancellationToken ct = default) => Task.Run(() => {
         // Find the model entry to read flags + pixel size before opening.
@@ -162,8 +200,11 @@ public sealed class ToupTekSdkCamera : ICamera {
             "profile) before using the native SDK backend.");
         _cam = cam;
 
+        _modelFlags = flag;
         _isColor = (flag & (ulong)Toupcam.eFLAG.FLAG_MONO) == 0;
-        _supportsCooler = (flag & (ulong)(Toupcam.eFLAG.FLAG_TEC | Toupcam.eFLAG.FLAG_TEC_ONOFF)) != 0;
+        ProbeCooler(cam);
+        _heatMax = (flag & (ulong)Toupcam.eFLAG.FLAG_HEAT) != 0
+                   && cam.get_Option(Toupcam.eOPTION.OPTION_HEAT_MAX, out int hmax) && hmax > 0 ? hmax : 0;
 
         // The camera opens with its cooler already running towards its own
         // default target (an AE676C: 10 C, TEC straight to its 6.1 V maximum).
@@ -198,6 +239,8 @@ public sealed class ToupTekSdkCamera : ICamera {
         } catch { }
 
         _roiX = 0; _roiY = 0; _roiW = _maxX; _roiH = _maxY; _bin = 1;
+        // The SDK keeps binning across opens; start from the bin Polaris shows.
+        cam.put_Option(Toupcam.eOPTION.OPTION_BINNING, BinningOption(1));
         _gain = _gainMin;
         if (cam.get_Option(Toupcam.eOPTION.OPTION_BLACKLEVEL, out int bl0)) _offset = bl0;
         _connected = true;
@@ -216,7 +259,18 @@ public sealed class ToupTekSdkCamera : ICamera {
         State = CameraStates.NoState;
     }, ct);
 
-    public Task SetBinningAsync(int binX, int binY, CancellationToken ct = default) => Task.CompletedTask;
+    public Task SetBinningAsync(int binX, int binY, CancellationToken ct = default) => Task.Run(() => {
+        int bin = Math.Clamp(binX, Bins[0], Bins[^1]);
+        if (_cam == null || !_connected || bin == _bin) return;
+        // The output size changes with the bin, so pull mode is restarted
+        // around the change rather than handed a frame of the old size.
+        lock (_gate) {
+            bool wasPulling = _pullActive;
+            if (wasPulling) StopPull();
+            if (_cam.put_Option(Toupcam.eOPTION.OPTION_BINNING, BinningOption(bin))) _bin = bin;
+            if (wasPulling) EnsurePull();
+        }
+    }, ct);
 
     public Task SetTemperatureAsync(double temperature, CancellationToken ct = default) {
         if (_cam != null && _supportsCooler)
@@ -239,6 +293,22 @@ public sealed class ToupTekSdkCamera : ICamera {
         list.Add(new CameraControl("Gain", "Gain", "Analog gain",
             _gain, _gainMin, _gainMax == 0 ? ushort.MaxValue : _gainMax, _gainMin,
             Writable: true, Auto: false, AutoSupported: false, "int"));
+        // Conversion gain: LCG for full well, HCG for low read noise, HDR
+        // merging both where the sensor has it.
+        var cgModes = ConversionGainModes(_modelFlags);
+        if (cgModes.Length > 0 && _cam.get_Option(Toupcam.eOPTION.OPTION_CG, out int cg))
+            list.Add(new CameraControl("ConversionGain", "Conversion gain",
+                "LCG: larger full well, for bright targets and long exposures. HCG: lower read noise, for faint targets. HDR: both, merged by the sensor.",
+                Math.Clamp(cg, 0, cgModes.Length - 1), 0, cgModes.Length - 1, 1,
+                Writable: true, Auto: false, AutoSupported: false, "enum", cgModes));
+        if ((_modelFlags & (ulong)Toupcam.eFLAG.FLAG_LOW_NOISE) != 0
+                && _cam.get_Option(Toupcam.eOPTION.OPTION_LOW_NOISE, out int ln))
+            list.Add(new CameraControl("LowNoise", "Low noise mode",
+                "Higher signal-to-noise ratio at a lower frame rate",
+                ln != 0 ? 1 : 0, 0, 1, 0, Writable: true, Auto: false, AutoSupported: false, "bool"));
+        if (_heatMax > 0 && _cam.get_Option(Toupcam.eOPTION.OPTION_HEAT, out int heat))
+            list.Add(new CameraControl("Heat", "Anti-dew heater", "Heats the sensor window against dew (0 = off)",
+                heat, 0, _heatMax, 0, Writable: true, Auto: false, AutoSupported: false, "int"));
         // Offset / black level. Range scales with the current bit depth.
         int blackMax = 31 << Math.Max(0, (_bitDepth > 8 ? 16 : 8) - 8);
         if (_cam.get_Option(Toupcam.eOPTION.OPTION_BLACKLEVEL, out int bl))
@@ -291,12 +361,26 @@ public sealed class ToupTekSdkCamera : ICamera {
                 fan, 0, fanMax, fanMax, Writable: true, Auto: false, AutoSupported: false, "int"));
         double temp = double.NaN;
         if (_cam.get_Temperature(out short t)) temp = t / 10.0;
-        list.Add(new CameraControl("Temperature", "Sensor temperature", "°C (read-only)",
+        // The model flags ride along in the description: they decide which of
+        // these controls exist, and a camera that shows fewer than its INDI
+        // driver does is diagnosed from them.
+        list.Add(new CameraControl("Temperature", "Sensor temperature",
+            $"°C (read-only). SDK model flags 0x{_modelFlags:X}",
             temp, -50, 50, 0, Writable: false, Auto: false, AutoSupported: false, "float"));
+        // A cooler the flags did not announce can still show up later (an
+        // AE676C's cooling module has its own switch), so ask again here.
+        if (!_supportsCooler) ProbeCooler(_cam);
         if (_supportsCooler) {
-            _cam.get_Option(Toupcam.eOPTION.OPTION_TEC, out int tec);
-            list.Add(new CameraControl("Cooler", "Cooler (TEC)", "Thermoelectric cooler on/off",
-                tec != 0 ? 1 : 0, 0, 1, 0, Writable: true, Auto: false, AutoSupported: false, "bool"));
+            if (_tecVoltMax > 0)
+                list.Add(new CameraControl("CoolerPower", "Cooler power", "TEC drive, % of its maximum voltage (read-only)",
+                    CoolerPower, 0, 100, 0, Writable: false, Auto: false, AutoSupported: false, "float"));
+            // On/off only where the camera has the switch; without it the TEC
+            // always runs and only the set-point steers it.
+            if ((_modelFlags & (ulong)Toupcam.eFLAG.FLAG_TEC_ONOFF) != 0) {
+                _cam.get_Option(Toupcam.eOPTION.OPTION_TEC, out int tec);
+                list.Add(new CameraControl("Cooler", "Cooler (TEC)", "Thermoelectric cooler on/off",
+                    tec != 0 ? 1 : 0, 0, 1, 0, Writable: true, Auto: false, AutoSupported: false, "bool"));
+            }
             double target = 0;
             if (_cam.get_Option(Toupcam.eOPTION.OPTION_TECTARGET, out int tt)) target = tt / 10.0;
             list.Add(new CameraControl("TargetTemp", "Target temperature", "Cooler set-point (°C)",
@@ -338,6 +422,16 @@ public sealed class ToupTekSdkCamera : ICamera {
                     return _cam.put_Option(Toupcam.eOPTION.OPTION_DENOISE, (int)Math.Round(value));
                 case "Fan":
                     return _cam.put_Option(Toupcam.eOPTION.OPTION_FAN, (int)Math.Round(value));
+                case "ConversionGain": {
+                    int modes = ConversionGainModes(_modelFlags).Length;
+                    if (modes == 0) return false;
+                    return _cam.put_Option(Toupcam.eOPTION.OPTION_CG, Math.Clamp((int)Math.Round(value), 0, modes - 1));
+                }
+                case "LowNoise":
+                    return _cam.put_Option(Toupcam.eOPTION.OPTION_LOW_NOISE, value != 0 ? 1 : 0);
+                case "Heat":
+                    return _heatMax > 0
+                        && _cam.put_Option(Toupcam.eOPTION.OPTION_HEAT, Math.Clamp((int)Math.Round(value), 0, _heatMax));
                 case "Cooler":
                     return _cam.put_Option(Toupcam.eOPTION.OPTION_TEC, value != 0 ? 1 : 0);
                 case "TargetTemp":
@@ -464,7 +558,10 @@ public sealed class ToupTekSdkCamera : ICamera {
         }
         if (e != Toupcam.eEVENT.EVENT_IMAGE) return;
         if (_cam == null) return;
-        if (!_cam.get_Size(out int w, out int h) || w <= 0 || h <= 0) return;
+        // FinalSize is the frame as delivered, after ROI and binning; Size is
+        // the sensor resolution, which a binned frame no longer matches.
+        if ((!_cam.get_FinalSize(out int w, out int h) || w <= 0 || h <= 0)
+            && (!_cam.get_Size(out w, out h) || w <= 0 || h <= 0)) return;
         IImageData frame;
         try {
             if (_bitDepth > 8) {

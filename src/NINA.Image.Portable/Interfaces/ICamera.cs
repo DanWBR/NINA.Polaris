@@ -252,8 +252,9 @@ public record CaptureOptions(
 
 /// <summary>One native-SDK camera control surfaced to the dynamic config panel.
 /// <c>Id</c> is a stable identifier (the SDK control-type / config name) used to
-/// set the value back; <c>ValueType</c> is "int" | "float" | "bool" so the UI
-/// picks a slider, number field or toggle.</summary>
+/// set the value back; <c>ValueType</c> is "int" | "float" | "bool" | "enum" so
+/// the UI picks a slider, number field, toggle or list. An "enum" carries its
+/// choices in <c>Options</c>, and <c>Value</c> is the index of the chosen one.</summary>
 public record CameraControl(
     string Id,
     string Name,
@@ -265,7 +266,8 @@ public record CameraControl(
     bool Writable,
     bool Auto,
     bool AutoSupported,
-    string ValueType);
+    string ValueType,
+    IReadOnlyList<string>? Options = null);
 
 /// <summary>Optional-feature flags. Used by the UI to decide which
 /// controls to render for the currently-selected camera.</summary>

@@ -9588,8 +9588,21 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                                     </div>
                                                 </template>
 
+                                                <!-- List of named choices (conversion gain): the value
+                                                     is the index of the option -->
+                                                <template x-if="c.options && c.options.length && c.writable">
+                                                    <div class="indi-switch-row">
+                                                        <select class="input-sm"
+                                                                @change="setCamCtrl(c, Number($event.target.value))">
+                                                            <template x-for="(o, i) in c.options" :key="i">
+                                                                <option :value="i" :selected="i === c.value" x-text="o"></option>
+                                                            </template>
+                                                        </select>
+                                                    </div>
+                                                </template>
+
                                                 <!-- Numeric slider + number box -->
-                                                <template x-if="c.valueType !== 'bool' && c.writable">
+                                                <template x-if="c.valueType !== 'bool' && !(c.options && c.options.length) && c.writable">
                                                     <div class="indi-prop-rows">
                                                         <div class="indi-prop-row">
                                                             <span class="indi-elem-label"

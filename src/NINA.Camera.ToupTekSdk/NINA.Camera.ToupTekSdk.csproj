@@ -35,6 +35,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- The option encodings (binning, conversion gain) are pure and tested;
+         the SDK calls around them cannot be. Same as NINA.Camera.QhySdk. -->
+    <InternalsVisibleTo Include="NINA.Polaris.Test" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\NINA.Core.Portable\NINA.Core.Portable.csproj" />
     <ProjectReference Include="..\NINA.Image.Portable\NINA.Image.Portable.csproj" />
   </ItemGroup>
