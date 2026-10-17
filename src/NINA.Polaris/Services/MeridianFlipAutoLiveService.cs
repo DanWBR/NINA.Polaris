@@ -158,6 +158,7 @@ public class MeridianFlipAutoLiveService : BackgroundService {
 
         if (_flippedThisCrossing) return;
         if (_meridian.State != MeridianFlipState.Idle) return;
+        if (_meridian.RetryNotBefore is { } retry && DateTime.UtcNow < retry) return;
 
         // Only fire when we actually watched this target cross the meridian on
         // this stack AND it's past the flip point — never auto-flip a target
@@ -177,6 +178,9 @@ public class MeridianFlipAutoLiveService : BackgroundService {
         } else {
             _logger.LogWarning("Auto meridian flip did not complete: {Err}",
                 _meridian.LastFlipError ?? "unknown");
+            // The mount stayed on its side of the pier: still due, once the
+            // retry time has passed.
+            if (_meridian.RetryNotBefore != null) _flippedThisCrossing = false;
         }
     }
 }

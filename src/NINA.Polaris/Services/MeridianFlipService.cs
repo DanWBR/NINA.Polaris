@@ -12,6 +12,8 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using NINA.Core.Enum;
+
 namespace NINA.Polaris.Services;
 
 /// <summary>
@@ -21,7 +23,8 @@ namespace NINA.Polaris.Services;
 /// unit-tested without any equipment. The runtime flip workflow:
 ///   1. Pause guiding (PHD2) if running
 ///   2. Re-slew to the current target, mount firmware flips when crossing
-///      the meridian threshold
+///      the meridian threshold; a mount that reports its pier side and stays
+///      on the same one has not flipped, and the flip is tried again later
 ///   3. Wait for IsSlewing to clear + settle delay
 ///   4. Plate solve + center via SlewCenterService
 ///   5. Optional auto-focus after flip (filter offsets may shift focus)
@@ -50,6 +53,14 @@ public class MeridianFlipService {
     public DateTime? LastFlipAt { get; private set; }
     public string? LastFlipError { get; private set; }
     public int FlipsCompleted { get; private set; }
+
+    /// <summary>Set when the last flip's re-slew left the mount on the pier
+    /// side it started on: no new attempt before this time.</summary>
+    public DateTime? RetryNotBefore { get; private set; }
+
+    /// <summary>How long to wait before re-slewing again after a mount that
+    /// stayed on its side of the pier.</summary>
+    internal static readonly TimeSpan StayedOnSideRetry = TimeSpan.FromMinutes(5);
 
     public MeridianFlipService(EquipmentManager equip, ActiveGuiderProvider guiders, SlewCenterService slewCenter,
         AutoFocusService autoFocus, ProfileService profile, CaptureProgressService captureProgress,
@@ -255,6 +266,7 @@ public class MeridianFlipService {
     public bool ShouldFlipNow(double targetRaHours, double targetDecDeg) {
         if (!Settings.Enabled) return false;
         if (_equip.Telescope == null || !_equip.Telescope.IsConnected) return false;
+        if (RetryNotBefore is { } retry && DateTime.UtcNow < retry) return false;
 
         double lon = _profile.Active.Longitude;
         double lst = ComputeLstHours(DateTime.UtcNow, lon);
@@ -288,6 +300,46 @@ public class MeridianFlipService {
 
     private const double SolarPerSidereal = 0.9972695663;
 
+    internal enum FlipOutcome { Flipped, Unverified, StayedOnSide }
+
+    /// <summary>
+    /// Did the re-slew change the pier side?
+    ///
+    /// <para>The flip is a GoTo to the same target, and the driver decides the
+    /// pier side. An EQMod Star Adventurer GTi five minutes past the meridian
+    /// moved 87 steps, stayed on its side, and the flip was logged as complete:
+    /// its sync points shifted the RA it works in by 18 minutes, so to the
+    /// driver the target was still east.</para>
+    /// </summary>
+    internal static FlipOutcome Judge(PierSide before, PierSide after) {
+        if (before == PierSide.pierUnknown || after == PierSide.pierUnknown) return FlipOutcome.Unverified;
+        return before == after ? FlipOutcome.StayedOnSide : FlipOutcome.Flipped;
+    }
+
+    private static string SideName(PierSide side) => side switch {
+        PierSide.pierEast => "East",
+        PierSide.pierWest => "West",
+        _ => "unknown",
+    };
+
+    private PierSide ReadPierSide() {
+        var scope = _equip.Telescope;
+        if (scope == null || !scope.Capabilities.SupportsPierSide) return PierSide.pierUnknown;
+        try { return scope.SideOfPier; } catch { return PierSide.pierUnknown; }
+    }
+
+    /// <summary>The pier side after the slew, read again for a few seconds
+    /// while it still equals <paramref name="before"/>, in case the driver
+    /// reports it a poll later than the end of the slew.</summary>
+    private async Task<PierSide> PierSideAfterSlewAsync(PierSide before, CancellationToken ct) {
+        var after = ReadPierSide();
+        for (int i = 0; i < 6 && Judge(before, after) == FlipOutcome.StayedOnSide; i++) {
+            await Task.Delay(500, ct);
+            after = ReadPierSide();
+        }
+        return after;
+    }
+
     /// <summary>
     /// Execute the flip workflow for the given target. Caller is responsible
     /// for guaranteeing this is invoked only when ShouldFlipNow returned true
@@ -302,6 +354,7 @@ public class MeridianFlipService {
             _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             State = MeridianFlipState.Pausing;
             LastFlipError = null;
+            RetryNotBefore = null;
         }
 
         // Capture the active guider once so pause + resume target the same
@@ -330,9 +383,32 @@ public class MeridianFlipService {
             State = MeridianFlipState.Slewing;
             if (_equip.Telescope == null) throw new InvalidOperationException("Telescope disconnected");
 
-            _logger.LogInformation("Meridian flip: re-slewing to RA={Ra:F4} Dec={Dec:F4}", targetRaHours, targetDecDeg);
+            var pierBefore = ReadPierSide();
+            _logger.LogInformation("Meridian flip: re-slewing to RA={Ra:F4} Dec={Dec:F4} (pier side {Pier})",
+                targetRaHours, targetDecDeg, SideName(pierBefore));
             await _equip.Telescope.SlewAsync(targetRaHours, targetDecDeg, _cts!.Token);
             await WaitForSlewComplete(_cts.Token);
+
+            var pierAfter = await PierSideAfterSlewAsync(pierBefore, _cts.Token);
+            if (Judge(pierBefore, pierAfter) == FlipOutcome.StayedOnSide) {
+                var retryAt = DateTime.UtcNow + StayedOnSideRetry;
+                _logger.LogWarning(
+                    "Meridian flip: the mount is still on the {Pier} side of the pier after the re-slew; its driver " +
+                    "judged the target reachable without a flip. Imaging carries on and the flip is tried again in " +
+                    "{Min:F0} min. If this repeats, check the mount's meridian limit and its sync / alignment points.",
+                    SideName(pierAfter), StayedOnSideRetry.TotalMinutes);
+                if (wasGuiding && guider.IsConnected) {
+                    try { await guider.ResumeAsync(); } catch (Exception ex) {
+                        _logger.LogWarning(ex, "Guider resume failed");
+                    }
+                }
+                lock (_stateLock) {
+                    State = MeridianFlipState.Idle;
+                    LastFlipError = $"The mount stayed on the {SideName(pierAfter)} side of the pier; trying again in {StayedOnSideRetry.TotalMinutes:F0} min";
+                    RetryNotBefore = retryAt;
+                }
+                return false;
+            }
 
             // 3. Settle delay (mount-mechanical & cable wrap)
             if (Settings.SettleSecondsAfterFlip > 0) {
@@ -393,7 +469,8 @@ public class MeridianFlipService {
                 LastFlipAt = DateTime.UtcNow;
                 FlipsCompleted++;
             }
-            _logger.LogInformation("Meridian flip complete");
+            _logger.LogInformation("Meridian flip complete (pier side {Before} -> {After})",
+                SideName(pierBefore), SideName(pierAfter));
             return true;
 
         } catch (OperationCanceledException) {
