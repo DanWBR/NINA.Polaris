@@ -117,7 +117,7 @@ public static class XISFWriter {
             pixelOffset = 16 + headerBlocks * HeaderBlockSize;
             var xml = BuildXml(w, h, pixelOffset, uncompressedSize, dataBytes.LongLength,
                 compressionAttr, colorSpace, imageType,
-                meta, rotator, observerName, observatoryName, siteName, customKeywords);
+                meta, rotator, observerName, observatoryName, siteName, customKeywords, imageData.Properties.Wcs);
             headerBytes = Encoding.UTF8.GetBytes(xml);
             var needed = headerBytes.Length;
             if (needed <= headerBlocks * HeaderBlockSize) break;
@@ -151,7 +151,8 @@ public static class XISFWriter {
         NINA.Image.ImageData.ImageMetaData meta,
         RotatorMetaData? rotator,
         string? observerName, string? observatoryName, string? siteName,
-        IEnumerable<KeyValuePair<string, string>>? customKeywords) {
+        IEnumerable<KeyValuePair<string, string>>? customKeywords,
+        NINA.Image.FileFormat.FITS.WcsInfo? wcs) {
 
         var sb = new StringBuilder();
         var settings = new XmlWriterSettings {
@@ -340,6 +341,13 @@ public static class XISFWriter {
                 WriteFitsKeyword(xw, "OBJECT", meta.Target.Name, null);
                 WriteFitsKeyword(xw, "OBJCTRA", Fmt(meta.Target.RightAscension * 15.0), null);
                 WriteFitsKeyword(xw, "OBJCTDEC", Fmt(meta.Target.Declination), null);
+            }
+
+            if (wcs != null) {
+                var wcsCards = new List<KeyValuePair<string, string>>();
+                NINA.Image.FileFormat.FITS.WcsHeaders.Add(wcsCards, wcs);
+                foreach (var kv in wcsCards)
+                    WriteFitsKeyword(xw, kv.Key, kv.Value, null);
             }
 
             if (customKeywords != null) {

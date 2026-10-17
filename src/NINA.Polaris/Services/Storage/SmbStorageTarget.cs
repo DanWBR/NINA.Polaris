@@ -82,10 +82,15 @@ public sealed class SmbStorageTarget : IStorageTarget {
         // incomplete and is overwritten by the next attempt.
         var tempPath = filePath + StoragePath.PartialSuffix;
 
-        var status = _store.CreateFile(out var handle, out _, tempPath,
-            AccessMask.GENERIC_WRITE | AccessMask.SYNCHRONIZE, SMBLibrary.FileAttributes.Normal,
-            ShareAccess.None, CreateDisposition.FILE_OVERWRITE_IF,
-            CreateOptions.FILE_NON_DIRECTORY_FILE | CreateOptions.FILE_SYNCHRONOUS_IO_NONALERT, null);
+        var status = CreateSidecar(tempPath, out var handle);
+        // A write that timed out can leave the server holding the old sidecar
+        // open, past our own close and delete, and every retry then failed on
+        // the same name with STATUS_SHARING_VIOLATION (an SMB share on a board
+        // with a slow WiFi link, 2026-10-17). This attempt writes beside it.
+        if (status == NTStatus.STATUS_SHARING_VIOLATION) {
+            tempPath = StoragePath.AttemptPartialPath(filePath, Guid.NewGuid().ToString("N")[..8]);
+            status = CreateSidecar(tempPath, out handle);
+        }
         if (status != NTStatus.STATUS_SUCCESS || handle == null)
             throw new IOException($"SMB create '{tempPath}' failed: {status}");
 
@@ -108,6 +113,12 @@ public sealed class SmbStorageTarget : IStorageTarget {
             throw;
         }
     }
+
+    private NTStatus CreateSidecar(string path, out object? handle) =>
+        _store!.CreateFile(out handle, out _, path,
+            AccessMask.GENERIC_WRITE | AccessMask.SYNCHRONIZE, SMBLibrary.FileAttributes.Normal,
+            ShareAccess.None, CreateDisposition.FILE_OVERWRITE_IF,
+            CreateOptions.FILE_NON_DIRECTORY_FILE | CreateOptions.FILE_SYNCHRONOUS_IO_NONALERT, null);
 
     /// <summary>Stream the local file into an open remote handle in MaxWriteSize
     /// chunks, closing the handle before returning so the caller can read the
@@ -276,12 +287,20 @@ public sealed class SmbStorageTarget : IStorageTarget {
         }
     }
 
+    /// <summary>How long one SMB request may wait for its answer. SMBLibrary's
+    /// default is 5 s, and a host on WiFi passes that routinely: each new frame
+    /// is also relayed to the browser over the same radio, the transmit queue
+    /// backs up, and round trips of over a second were measured on an Orange
+    /// Pi 5 Pro pushing to a wired share. Every such stall failed a 1 MiB write
+    /// with STATUS_IO_TIMEOUT and left the sidecar locked on the server.</summary>
+    internal const int ResponseTimeoutMs = 30_000;
+
     private static (SMB2Client client, ISMBFileStore store) Open(StorageConfig cfg) {
         if (string.IsNullOrWhiteSpace(cfg.Host)) throw new InvalidOperationException("SMB host is empty.");
         if (string.IsNullOrWhiteSpace(cfg.Share)) throw new InvalidOperationException("SMB share is empty.");
 
         var address = ResolveIPv4(cfg.Host);
-        var client = new SMB2Client();
+        var client = new SMB2Client(ResponseTimeoutMs);
         bool connected = client.Connect(address, SMBTransportType.DirectTCPTransport);
         if (!connected) throw new IOException($"Could not connect to {cfg.Host}:{(cfg.Port > 0 ? cfg.Port : 445)}");
 

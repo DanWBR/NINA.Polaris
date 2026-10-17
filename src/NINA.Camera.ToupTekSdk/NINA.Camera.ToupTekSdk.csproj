@@ -16,23 +16,17 @@
          (arm64/armhf/armel/x64/x86), macOS and Android. net10.0, no OS
          attribute: compiles cross-platform, ToupTekRegistry probes at
          runtime. The official cross-platform binding (camera_sdk/ToupTek/
-         dotnet/toupcam.cs) is compiled in directly; it selects the native
-         lib name (libtoupcam.so vs toupcam.dll) at compile time via the
-         LINUX symbol, so we define it for linux RIDs below. The per-RID
-         native lib is copied into the app output by the items below. -->
+         dotnet/toupcam.cs) is compiled in directly. Since SDK 60 it imports
+         "toupcam" and picks the string encoding at runtime, so one build
+         serves every OS; ToupTekRegistry's resolver finds the library. The
+         per-RID native lib is copied into the app output by the items below. -->
   </PropertyGroup>
 
-  <!-- The official binding gates its native-lib name + string marshalling on
-       the LINUX compile symbol. Define it when publishing for a linux RID;
-       the default (dev) build targets the Windows branch, which is correct
-       on the Windows dev box. In practice the published .deb carries the
-       Windows branch: a RID-agnostic project reference is built without the
-       app's RID, so this never fires. The native lib name is fixed by
-       ToupTekRegistry's resolver, and ToupTekSdkCamera opens by index off
-       Windows; nothing else Polaris calls marshals a string. -->
-  <PropertyGroup Condition="$(RuntimeIdentifier.StartsWith('linux'))">
-    <DefineConstants>$(DefineConstants);LINUX</DefineConstants>
-  </PropertyGroup>
+  <ItemGroup>
+    <!-- The option encodings (binning, conversion gain) are pure and tested;
+         the SDK calls around them cannot be. Same as NINA.Camera.QhySdk. -->
+    <InternalsVisibleTo Include="NINA.Polaris.Test" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\NINA.Core.Portable\NINA.Core.Portable.csproj" />

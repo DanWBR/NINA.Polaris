@@ -1,6 +1,8 @@
 import java.util.Hashtable;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.List;
+import java.util.ArrayList;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import com.sun.jna.*;
@@ -9,7 +11,7 @@ import com.sun.jna.win32.*;
 import com.sun.jna.Structure.FieldOrder;
 
 /*
-    Version: 59.29030.20250722
+    Version: 60.32549.20260908
 
     We use JNA (https://github.com/java-native-access/jna) to call into the toupcam.dll/so/dylib API, the java class toupcam is a thin wrapper class to the native api.
     So the manual en.html(English) and hans.html(Simplified Chinese) are also applicable for programming with toupcam.java.
@@ -24,7 +26,17 @@ import com.sun.jna.Structure.FieldOrder;
         (b) Camera ID (camId) may change due to connection or system restart. Enumerate the cameras to get the camera ID, and then call the Open function to pass in the camId parameter to open the camera.
 */
 
+/*
+    Coordinate:
+        (a) Functions with coordinate parameters, such as Toupcam_put_Roi, Toupcam_put_AEAuxRect, etc., the coordinate is always relative to the original resolution,
+            even that the image has been flipped, rotated, digital binning, ROI, or combination of the previous operations.
+        (b) Exception: if the image is upside down (see here), the coordinate must be also upsize down.
+        (c) Exception: hardware binning.
+*/
+
 public class toupcam implements AutoCloseable {
+    public final static int MAX = 128;
+
     public final static long FLAG_CMOS                    = 0x00000001L;   /* cmos sensor */
     public final static long FLAG_CCD_PROGRESSIVE         = 0x00000002L;   /* progressive ccd sensor */
     public final static long FLAG_CCD_INTERLACED          = 0x00000004L;   /* interlaced ccd sensor */
@@ -73,7 +85,7 @@ public class toupcam implements AutoCloseable {
     public final static long FLAG_GIGE                    = 0x0000200000000000L;  /* 1 Gigabit GigE */
     public final static long FLAG_10GIGE                  = 0x0000400000000000L;  /* 10 Gigabit GigE */
     public final static long FLAG_5GIGE                   = 0x0000800000000000L;  /* 5 Gigabit GigE */
-    public final static long FLAG_25GIGE                  = 0x0001000000000000L;  /* 2.5 Gigabit GigE */
+    public final static long FLAG_40GIGE                  = 0x0001000000000000L;  /* 40 Gigabit GigE */
     public final static long FLAG_AUTOFOCUSER             = 0x0002000000000000L;  /* astro auto focuser */
     public final static long FLAG_LIGHT_SOURCE            = 0x0004000000000000L;  /* stand alone light source */
     public final static long FLAG_CAMERALINK              = 0x0008000000000000L;  /* camera link */
@@ -83,8 +95,11 @@ public class toupcam implements AutoCloseable {
     public final static long FLAG_RAW11                   = 0x0080000000000000L;  /* pixel format, RAW 11bits */
     public final static long FLAG_GHOPTO                  = 0x0100000000000000L;  /* ghopto sensor */
     public final static long FLAG_RAW10PACK               = 0x0200000000000000L;  /* pixel format, RAW 10bits packed */
-    public final static long FLAG_USB32                   = 0x0400000000000000L;  /* usb3.2 */
-    public final static long FLAG_USB32_OVER_USB30        = 0x0800000000000000L;  /* usb3.2 camera connected to usb3.0 port */
+    public final static long FLAG_USB32                   = 0x0400000000000000L;  /* USB 3.2 Gen 2 */
+    public final static long FLAG_USB32_OVER_USB30        = 0x0800000000000000L;  /* USB 3.2 Gen 2 camera connected to usb3.0 port */
+    public final static long FLAG_LINESCAN                = 0x1000000000000000L;  /* line scan camera */
+    public final static long FLAG_25GIGE                  = 0x2000000000000000L;  /* 2.5 Gigabit GigE */
+    public final static long FLAG_RAW14PACK               = 0x4000000000000000L;  /* pixel format, RAW 14bits packed */
     
     public final static int EVENT_EXPOSURE                = 0x0001; /* exposure time or gain changed */
     public final static int EVENT_TEMPTINT                = 0x0002; /* white balance changed, Temp/Tint mode */
@@ -101,6 +116,8 @@ public class toupcam implements AutoCloseable {
     public final static int EVENT_AUTOEXPO_CONV           = 0x000d; /* auto exposure convergence */
     public final static int EVENT_AUTOEXPO_CONVFAIL       = 0x000e; /* auto exposure once mode convergence failed */
     public final static int EVENT_FPNC                    = 0x000f; /* fix pattern noise correction status changed */
+    public final static int EVENT_FRONT_OVERFLOW          = 0x0010; /* front buffer overflow */
+    public final static int EVENT_BACK_OVERFLOW           = 0x0011; /* back buffer overflow */
     public final static int EVENT_ERROR                   = 0x0080; /* generic error */
     public final static int EVENT_DISCONNECTED            = 0x0081; /* camera disconnected */
     public final static int EVENT_NOFRAMETIMEOUT          = 0x0082; /* no frame timeout error */
@@ -117,7 +134,7 @@ public class toupcam implements AutoCloseable {
     public final static int OPTION_NOFRAME_TIMEOUT        = 0x01;       /* [RW] no frame timeout: 0 => disable, positive value (>= NOFRAME_TIMEOUT_MIN) => timeout milliseconds. default: disable */
     public final static int OPTION_THREAD_PRIORITY        = 0x02;       /* [RW] set the priority of the internal thread which grab data from the usb device.
                                                                              Win: iValue: 0 => THREAD_PRIORITY_NORMAL; 1 => THREAD_PRIORITY_ABOVE_NORMAL; 2 => THREAD_PRIORITY_HIGHEST; 3 => THREAD_PRIORITY_TIME_CRITICAL; default: 1; see: https://docs.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-setthreadpriority
-                                                                             Linux & macOS: The high 16 bits for the scheduling policy, and the low 16 bits for the priority; see: https://linux.die.net/man/3/pthread_setschedparam
+                                                                             Linux & macOS: similar to Win
                                                                         */
     public final static int OPTION_RAW                    = 0x04;       /* [RW]
                                                                            0: RGB mode
@@ -150,9 +167,13 @@ public class toupcam implements AutoCloseable {
                                                                         */
     public final static int OPTION_DEMOSAIC_VIDEO         = 0x13;       /* [RW] demosaic method for video */
     public final static int OPTION_DEMOSAIC_STILL         = 0x14;       /* [RW] demosaic method for still image */
-    public final static int OPTION_BLACKLEVEL             = 0x15;       /* [RW] black level */
+    public final static int OPTION_BLACKLEVEL             = 0x15;       /* [RW] the black level refers to the baseline signal value output by an image sensor under no-light (completely dark) conditions.
+                                                                             In digital imaging systems, a fixed voltage offset is intentionally added to the signal to ensure that dark-region signals remain above zero, thereby preventing the loss of faint shadow details during A/D conversion.
+                                                                                 (a) Prevent clipping: The sensor circuit's intrinsic noise may occasionally produce negative values. Without an offset, these negative values would be forcibly clipped to zero, resulting in the loss of shadow details.
+                                                                                 (b) Preserve linearity: Raising the black level helps ensure that the sensor maintains consistent linear output behavior across the entire dynamic range.
+                                                                        */
     public final static int OPTION_MULTITHREAD            = 0x16;       /* [RW] multithread image processing */
-    public final static int OPTION_BINNING                = 0x17;       /* [RW] binning
+    public final static int OPTION_BINNING                = 0x17;       /* [RW] digital binning
                                                                                0x01: (no binning)
                                                                                n: (saturating add, n*n), 0x02(2*2), 0x03(3*3), 0x04(4*4), 0x05(5*5), 0x06(6*6), 0x07(7*7), 0x08(8*8). The Bitdepth of the data remains unchanged.
                                                                                0x40 | n: (unsaturated add, n*n, works only in RAW mode), 0x42(2*2), 0x43(3*3), 0x44(4*4), 0x45(5*5), 0x46(6*6), 0x47(7*7), 0x48(8*8). The Bitdepth of the data is increased. For example, the original data with bitdepth of 12 will increase the bitdepth by 2 bits and become 14 after 2*2 binning.
@@ -172,25 +193,26 @@ public class toupcam implements AutoCloseable {
                                                                                     0: disable
                                                                                     1: enable
                                                                                     -1: reset
-                                                                                    (0xff000000 | n): set the average number to n, [1~255]
+                                                                                    (0xff000000 | n): set the average number to n, [1, 255]
                                                                                 get:
                                                                                     (val & 0xff): 0 => disable, 1 => enable, 2 => inited
                                                                                     ((val & 0xff00) >> 8): sequence
                                                                                     ((val & 0xff0000) >> 16): average number
                                                                         */
     public final static int OPTION_DDR_DEPTH              = 0x1c;       /* [RW] the number of the frames that DDR can cache
-                                                                          1: DDR cache only one frame
-                                                                          0: Auto:
-                                                                              => one for video mode when auto exposure is enabled
-                                                                              => full capacity for others
-                                                                          1: DDR can cache frames to full capacity
+                                                                                1: DDR cache only one frame
+                                                                                0: Auto:
+                                                                                    => one for video mode when auto exposure is enabled
+                                                                                     => full capacity for others
+                                                                                -1: DDR can cache frames to full capacity
+                                                                            default: 0
                                                                         */
     public final static int OPTION_DFC                    = 0x1d;       /* [RW] dark field correction
                                                                                 set:
                                                                                     0: disable
                                                                                     1: enable
                                                                                     -1: reset
-                                                                                    (0xff000000 | n): set the average number to n, [1~255]
+                                                                                    (0xff000000 | n): set the average number to n, [1, 255]
                                                                                 get:
                                                                                     (val & 0xff): 0 => disable, 1 => enable, 2 => inited
                                                                                     ((val & 0xff00) >> 8): sequence
@@ -227,7 +249,9 @@ public class toupcam implements AutoCloseable {
     public final static int OPTION_PRECISE_FRAMERATE      = 0x2d;       /* [RW] precise frame rate current value in 0.1 fps. use OPTION_MAX_PRECISE_FRAMERATE, OPTION_MIN_PRECISE_FRAMERATE to get the range. if the set value is out of range, E_INVALIDARG will be returned */
     public final static int OPTION_BANDWIDTH              = 0x2e;       /* [RW] bandwidth, [1-100]% */
     public final static int OPTION_RELOAD                 = 0x2f;       /* [RW] reload the last frame in trigger mode */
-    public final static int OPTION_CALLBACK_THREAD        = 0x30;       /* [RW] dedicated thread for callback: 0 => disable, 1 => enable, default: 0 */
+    public final static int OPTION_CALLBACK_THREAD        = 0x30;       /* [RW] dedicated thread for callback: 0 => disable, 1 => enable
+                                                                                default: 1
+                                                                        */
     public final static int OPTION_FRONTEND_DEQUE_LENGTH  = 0x31;       /* [RW] frontend (raw) frame buffer deque length, range: [2, 1024], default: 4
                                                                            All the memory will be pre-allocated when the camera starts, so, please attention to memory usage
                                                                         */
@@ -264,7 +288,7 @@ public class toupcam implements AutoCloseable {
     public final static int OPTION_BACKEND_DEQUE_LENGTH   = 0x41;       /* [RW] backend (pipelined) frame buffer deque length (Only available in pull mode), range: [2, 1024], default: 3
                                                                            All the memory will be pre-allocated when the camera starts, so, please attention to memory usage
                                                                         */
-    public final static int OPTION_LIGHTSOURCE_MAX        = 0x42;       /* [RO] get the light source range, [0 ~ max] */
+    public final static int OPTION_LIGHTSOURCE_MAX        = 0x42;       /* [RO] get the light source range, [0, max] */
     public final static int OPTION_LIGHTSOURCE            = 0x43;       /* [RW] light source */
     public final static int OPTION_HEARTBEAT              = 0x44;       /* [RW] Heartbeat interval in millisecond, range = [HEARTBEAT_MIN, HEARTBEAT_MAX], 0 = disable, default: disable */
     public final static int OPTION_FRONTEND_DEQUE_CURRENT = 0x45;       /* [RO] get the current number in frontend deque */
@@ -338,34 +362,35 @@ public class toupcam implements AutoCloseable {
     public final static int OPTION_MOTOR_POS              = 0x10000000; /* [RW] range: [1, 702] */
     public final static int OPTION_PSEUDO_COLOR_START     = 0x63;       /* [RW] Pseudo: start color, BGR format */
     public final static int OPTION_PSEUDO_COLOR_END       = 0x64;       /* [RW] Pseudo: end color, BGR format */
-    public final static int OPTION_PSEUDO_COLOR_ENABLE    = 0x65;       /* [RW] Pseudo: -1 => custom: use startcolor & endcolor to generate the colormap
-                                                                                0 => disable
-                                                                                1 => spot
-                                                                                2 => spring
-                                                                                3 => summer
-                                                                                4 => autumn
-                                                                                5 => winter
-                                                                                6 => bone
-                                                                                7 => jet
-                                                                                8 => rainbow
-                                                                                9 => deepgreen
-                                                                                10 => ocean
-                                                                                11 => cool
-                                                                                12 => hsv
-                                                                                13 => pink
-                                                                                14 => hot
-                                                                                15 => parula
-                                                                                16 => magma
-                                                                                17 => inferno
-                                                                                18 => plasma
-                                                                                19 => viridis
-                                                                                20 => cividis
-                                                                                21 => twilight
-                                                                                22 => twilight_shifted
-                                                                                23 => turbo
-                                                                                24 => red
-                                                                                25 => green
-                                                                                26 => blue
+    public final static int OPTION_PSEUDO_COLOR_ENABLE    = 0x65;       /* [RW] Pseudo: -1 => Custom: use startcolor & endcolor to generate the colormap
+                                                                                0 => Disable
+                                                                                1 => Spot
+                                                                                2 => Spring
+                                                                                3 => Summer
+                                                                                4 => Autumn
+                                                                                5 => Winter
+                                                                                6 => Bone
+                                                                                7 => Jet
+                                                                                8 => Rainbow
+                                                                                9 => DeepGreen
+                                                                                10 => Ocean
+                                                                                11 => Cool
+                                                                                12 => HSV
+                                                                                13 => Pink
+                                                                                14 => Hot
+                                                                                15 => Parula
+                                                                                16 => Magma
+                                                                                17 => Inferno
+                                                                                18 => Plasma
+                                                                                19 => Viridis
+                                                                                20 => Cividis
+                                                                                21 => Twilight
+                                                                                22 => TwilightShifted
+                                                                                23 => Turbo
+                                                                                24 => Red
+                                                                                25 => Green
+                                                                                26 => Blue
+                                                                                27 => Spectrum
                                                                         */
     public final static int OPTION_LOW_POWERCONSUMPTION   = 0x66;       /* [RW] Low Power Consumption: 0 => disable, 1 => enable */
     public final static int OPTION_FPNC                   = 0x67;       /* [RW] Fix Pattern Noise Correction
@@ -373,16 +398,16 @@ public class toupcam implements AutoCloseable {
                                                                                     0: disable
                                                                                     1: enable
                                                                                     -1: reset
-                                                                                    (0xff000000 | n): set the average number to n, [1~255]
+                                                                                    (0xff000000 | n): set the average number to n, [1, 255]
                                                                                 get:
                                                                                     (val & 0xff): 0 => disable, 1 => enable, 2 => inited
                                                                                     ((val & 0xff00) >> 8): sequence
                                                                                     ((val & 0xff0000) >> 16): average number
                                                                         */
-    public final static int OPTION_OVEREXP_POLICY          = 0x68;      /* [RW] Auto exposure over exposure policy: when overexposed,
+    public final static int OPTION_OVEREXP_POLICY          = 0x68;      /* [RW] Auto exposure overexposure policy: when overexposed,
                                                                                 0 => directly reduce the exposure time/gain to the minimum value; or
-                                                                                1 => reduce exposure time/gain in proportion to current and target brightness; or
-                                                                                n(n>1) => first adjust the exposure time to (maximum automatic exposure time * maximum automatic exposure gain) * n / 1000, and then adjust according to the strategy of 1
+                                                                                1 => reduce exposure time/gain according to the ratio between current and target brightness; or
+                                                                                n(n>1) => first, adjust the exposure time to (maximum automatic exposure time * maximum automatic exposure gain) * n / 1000, and then adjust according to the strategy of 1
                                                                             The advantage of policy 0 is that the convergence speed is faster, but there is black screen.
                                                                             Policy 1 avoids the black screen, but the convergence speed is slower.
                                                                             Default: 0
@@ -398,13 +423,15 @@ public class toupcam implements AutoCloseable {
                                                                             n<0: every -n frame
                                                                         */
     public final static int OPTION_TECTARGET_RANGE        = 0x6d;       /* [RO] TEC target range: min(low 16 bits) = (short)(val & 0xffff), max(high 16 bits) = (short)((val >> 16) & 0xffff) */
-    public final static int OPTION_CDS                    = 0x6e;       /* [RW] Correlated Double Sampling: 0~100 */
+    public final static int OPTION_CDS                    = 0x6e;       /* [RW] Correlated Double Sampling: 0~max (OPTION_CDS_MAX)
+                                                                             see https://www.next.gr/tutorials/sensors-and-transducers/image-sensor-noise-reduction-techniques-tutorial#correlated-double-sampling-cds
+                                                                        */
     public final static int OPTION_LOW_POWER_EXPOTIME     = 0x6f;       /* [RW] Low Power Consumption: Enable if exposure time is greater than the set value */
     public final static int OPTION_ZERO_OFFSET            = 0x70;       /* [RW] Sensor output offset to zero: 0 => disable, 1 => eanble; default: 0 */
-    public final static int OPTION_GVCP_TIMEOUT           = 0x71;       /* [RW] GVCP Timeout: millisecond, range = [3, 75], default: 15
+    public final static int OPTION_GVCP_TIMEOUT           = 0x71;       /* [RW] GVCP Timeout: millisecond, range = [5, 150], default: 15(wire), 30(wireless)
                                                                              Unless in very special circumstances, generally no modification is required, just use the default value
                                                                         */
-    public final static int OPTION_GVCP_RETRY             = 0x72;       /* [RW] GVCP Retry: range = [2, 8], default: 4
+    public final static int OPTION_GVCP_RETRY             = 0x72;       /* [RW] GVCP Retry: range = [2, 16], default: 4(wire), 8(wireless)
                                                                              Unless in very special circumstances, generally no modification is required, just use the default value
                                                                         */
     public final static int OPTION_GVSP_WAIT_PERCENT      = 0x73;       /* [RW] GVSP wait percent: range = [0, 100], default = (trigger mode: 100, realtime: 0, other: 1) */
@@ -420,7 +447,7 @@ public class toupcam implements AutoCloseable {
     public final static int OPTION_TIMED_TRIGGER_LOW      = 0x20000000; /* [RW] Timed trigger: lower 32 bits of 64-bit integer, nanosecond since epoch (00:00:00 UTC on Thursday, 1 January 1970, see https://en.wikipedia.org/wiki/Unix_time) */
     public final static int OPTION_TIMED_TRIGGER_HIGH     = 0x40000000; /* [RW] Timed trigger: high 32 bits. The lower 32 bits must be set first, followed by the higher 32 bits */
     public final static int OPTION_AUTOEXP_THLD_TRIGGER   = 0x7d;       /* [RW] trigger threshold of auto exposure */
-    public final static int OPTION_LANE                   = 0x7e;       /* [RW] */
+    public final static int OPTION_LANE                   = 0x7e;       /* [RW] Lane */
     public final static int OPTION_VOLTAGEBIAS            = 0x7f;       /* [RW] Voltage bias */
     public final static int OPTION_VOLTAGEBIAS_RANGE      = 0x80;       /* [RO] Voltage bias range: min (low 16bits), max (high 16bits) */
     public final static int OPTION_READ_TIME              = 0x81;       /* [RO] */
@@ -436,7 +463,26 @@ public class toupcam implements AutoCloseable {
                                                                                 In case of long exposure and so on, OB level is offset by leak or any other reason.
                                                                                 Because of it, if the adjustment becomes a problem, this setting is introduced for one of the solution.
                                                                         */
+    public final static int OPTION_USER_SET               = 0x8a;       /* [RW] user set */
     public final static int OPTION_DIGITAL_GAIN           = 0x1001;     /* [RW] digital gain */
+    public final static int OPTION_ANTI_BLOOMING          = 0x8b;       /* [RW] Anti Blooming
+                                                                             Blooming occurs when the charge in a pixel exceeds the saturation level and the charge starts to fill adjacent pixels.
+                                                                             Some sensors are designed with structures built into them to limit blooming - anti-blooming structures.
+                                                                             Anti-blooming structures bleed off any excess charge before they can overflow the pixel and thereby stop blooming.
+                                                                             However, anti-blooming structures can reduce the effective quantum efficiency and introduce non linearity into the sensor.
+                                                                             Therefore, anti-blooming sensors are not recommended for applications requiring very low light or high accuracy measurements.
+                                                                        */
+    public final static int OPTION_ANTI_BLOOMING_MAX      = 0x8c;       /* [RO] Anti Blooming */
+    public final static int OPTION_CDS_MAX                = 0x8d;       /* [RO] Correlated Double Sampling */
+    public final static int OPTION_SCANTYPE               = 0x8e;       /* [RW] Scan Type: 0(areascan), 1(linescan) */
+    public final static int OPTION_OPERATIONMODE          = 0x8f;       /* [RW] TDI Operation Mode: 1(area), 2(TDI) */
+    public final static int OPTION_TDITRIGGERMODE         = 0x90;       /* [RW] TDI Trigger Mode: 1(normal), 2(both) */
+    public final static int OPTION_TDISTAGE               = 0x91;       /* [RW] TDI Trigger Stage: sensor scan stage */
+    public final static int OPTION_FRAMEINTERVAL          = 0x92;       /* [RW] Frame Interval in microseconds */
+    public final static int OPTION_FRAMEINTERVAL_MIN      = 0x93;       /* [RO] Frame Interval, minimum */
+    public final static int OPTION_FRAMEINTERVAL_MAX      = 0x94;       /* [RO] Frame Interval, maximum */
+    public final static int OPTION_IMAGEPTRRAW            = 0x95;       /* [RW] default: 0 */
+    public final static int OPTION_IMAGEPTRBOTH           = 0x96;       /* [RW] default: 0 */
 
     public final static int PIXELFORMAT_RAW8              = 0x00;
     public final static int PIXELFORMAT_RAW10             = 0x01;
@@ -458,6 +504,7 @@ public class toupcam implements AutoCloseable {
     public final static int PIXELFORMAT_HDR12HL           = 0x11;   /* HDR, Bitdepth: 12, Conversion Gain: High + Low */
     public final static int PIXELFORMAT_HDR14HL           = 0x12;   /* HDR, Bitdepth: 14, Conversion Gain: High + Low */
     public final static int PIXELFORMAT_RAW10PACK         = 0x13;
+    public final static int PIXELFORMAT_RAW14PACK         = 0x14;
     
     public final static int FRAMEINFO_FLAG_SEQ                = 0x00000001; /* frame sequence number */
     public final static int FRAMEINFO_FLAG_TIMESTAMP          = 0x00000002; /* timestamp */
@@ -469,6 +516,8 @@ public class toupcam implements AutoCloseable {
     public final static int FRAMEINFO_FLAG_AUTOFOCUS          = 0x00000080; /* auto focus: uLum & uFV */
     public final static int FRAMEINFO_FLAG_COUNT              = 0x00000100; /* timecount, framecount, tricount */
     public final static int FRAMEINFO_FLAG_MECHANICALSHUTTER  = 0x00000200; /* Mechanical shutter: closed */
+    public final static int FRAMEINFO_FLAG_HOB                = 0x00000400; /* Horizontal Optical Black */
+    public final static int FRAMEINFO_FLAG_VOB                = 0x00000800; /* Vertical Optical Black */
     public final static int FRAMEINFO_FLAG_STILL              = 0x00008000; /* still image */
     public final static int FRAMEINFO_FLAG_CG                 = 0x00010000; /* Conversion Gain: High */
     
@@ -501,16 +550,16 @@ public class toupcam implements AutoCloseable {
     public final static int IOCONTROLTYPE_SET_TRIGGERSOURCE            = 0x0e;
     public final static int IOCONTROLTYPE_GET_TRIGGERDELAY             = 0x0f; /* Trigger delay time in microseconds, range: [0, 5000000] */
     public final static int IOCONTROLTYPE_SET_TRIGGERDELAY             = 0x10;
-    public final static int IOCONTROLTYPE_GET_BURSTCOUNTER             = 0x11; /* Burst Counter, range: [1 ~ 65535] */
+    public final static int IOCONTROLTYPE_GET_BURSTCOUNTER             = 0x11; /* Burst Counter, range: [1, 65535] */
     public final static int IOCONTROLTYPE_SET_BURSTCOUNTER             = 0x12;
     public final static int IOCONTROLTYPE_GET_COUNTERSOURCE            = 0x13; /* 0x00 => Opto-isolated input, 0x01 => GPIO0, 0x02=> GPIO1 */
     public final static int IOCONTROLTYPE_SET_COUNTERSOURCE            = 0x14;
-    public final static int IOCONTROLTYPE_GET_COUNTERVALUE             = 0x15; /* Counter Value, range: [1 ~ 65535] */
+    public final static int IOCONTROLTYPE_GET_COUNTERVALUE             = 0x15; /* Counter Value, range: [1, 65535] */
     public final static int IOCONTROLTYPE_SET_COUNTERVALUE             = 0x16;
     public final static int IOCONTROLTYPE_SET_RESETCOUNTER             = 0x18;
-    public final static int IOCONTROLTYPE_GET_PWM_FREQ                 = 0x19; /* PWM Frequency */
+    public final static int IOCONTROLTYPE_GET_PWM_FREQ                 = 0x19; /* PWM Frequency, range: [0, 0xffffffff] */
     public final static int IOCONTROLTYPE_SET_PWM_FREQ                 = 0x1a;
-    public final static int IOCONTROLTYPE_GET_PWM_DUTYRATIO            = 0x1b; /* PWM Duty Ratio */
+    public final static int IOCONTROLTYPE_GET_PWM_DUTYRATIO            = 0x1b; /* PWM Duty Ratio, default: 50, range: [0, 100] */
     public final static int IOCONTROLTYPE_SET_PWM_DUTYRATIO            = 0x1c;
     public final static int IOCONTROLTYPE_GET_PWMSOURCE                = 0x1d; /* PWM Source: 0x00 => Opto-isolated input, 0x01 => GPIO0, 0x02=> GPIO1 */
     public final static int IOCONTROLTYPE_SET_PWMSOURCE                = 0x1e;
@@ -543,23 +592,23 @@ public class toupcam implements AutoCloseable {
     public final static int IOCONTROLTYPE_SET_UART_LINEMODE            = 0x2e;
     public final static int IOCONTROLTYPE_GET_EXPO_ACTIVE_MODE         = 0x2f; /* exposure time signal: 0 => specified line, 1 => common exposure time */
     public final static int IOCONTROLTYPE_SET_EXPO_ACTIVE_MODE         = 0x30;
-    public final static int IOCONTROLTYPE_GET_EXPO_START_LINE          = 0x31; /* exposure start line, default: 0 */
+    public final static int IOCONTROLTYPE_GET_EXPO_START_LINE          = 0x31; /* exposure start line, default: 0, range: [0, 16384] */
     public final static int IOCONTROLTYPE_SET_EXPO_START_LINE          = 0x32;
-    public final static int IOCONTROLTYPE_GET_EXPO_END_LINE            = 0x33; /* exposure end line, default: 0
+    public final static int IOCONTROLTYPE_GET_EXPO_END_LINE            = 0x33; /* exposure end line, default: 0, range: [0, 16384]
                                                                                   end line must be no less than start line
                                                                                */
     public final static int IOCONTROLTYPE_SET_EXPO_END_LINE            = 0x34;
     public final static int IOCONTROLTYPE_GET_EXEVT_ACTIVE_MODE        = 0x35; /* exposure event: 0 => specified line, 1 => common exposure time */
     public final static int IOCONTROLTYPE_SET_EXEVT_ACTIVE_MODE        = 0x36;
-    public final static int IOCONTROLTYPE_GET_OUTPUTCOUNTERVALUE       = 0x37; /* Output Counter Value, range: [0 ~ 65535] */
+    public final static int IOCONTROLTYPE_GET_OUTPUTCOUNTERVALUE       = 0x37; /* Output Counter Value, range: [0, 65535] */
     public final static int IOCONTROLTYPE_SET_OUTPUTCOUNTERVALUE       = 0x38;
     public final static int IOCONTROLTYPE_SET_OUTPUT_PAUSE             = 0x3a; /* Output pause: 1 => puase, 0 => unpause */
     public final static int IOCONTROLTYPE_GET_INPUT_STATE              = 0x3b; /* Input state: 0 (low level) or 1 (high level) */
-    public final static int IOCONTROLTYPE_GET_USER_PULSE_HIGH          = 0x3d; /* User pulse high level time: us */
+    public final static int IOCONTROLTYPE_GET_USER_PULSE_HIGH          = 0x3d; /* User pulse high level time: us, range: [0, 0xffffffff] */
     public final static int IOCONTROLTYPE_SET_USER_PULSE_HIGH          = 0x3e;
-    public final static int IOCONTROLTYPE_GET_USER_PULSE_LOW           = 0x3f; /* User pulse low level time: us */
+    public final static int IOCONTROLTYPE_GET_USER_PULSE_LOW           = 0x3f; /* User pulse low level time: us, range: [0, 0xffffffff] */
     public final static int IOCONTROLTYPE_SET_USER_PULSE_LOW           = 0x40;
-    public final static int IOCONTROLTYPE_GET_USER_PULSE_NUMBER        = 0x41; /* User pulse number: default 0 */
+    public final static int IOCONTROLTYPE_GET_USER_PULSE_NUMBER        = 0x41; /* User pulse number: default 0, range: [0, 0xffffffff] */
     public final static int IOCONTROLTYPE_SET_USER_PULSE_NUMBER        = 0x42;
     public final static int IOCONTROLTYPE_GET_EXTERNAL_TRIGGER_NUMBER  = 0x43; /* External trigger number */
     public final static int IOCONTROLTYPE_GET_DEBOUNCER_TRIGGER_NUMBER = 0x45; /* Trigger signal number after debounce */
@@ -681,8 +730,27 @@ public class toupcam implements AutoCloseable {
     public final static int HDR_THRESHOLD_MIN         = 0;
     public final static int HDR_THRESHOLD_MAX         = 4094;
     public final static int CDS_MIN                   = 0;        /* Correlated Double Sampling */
-    public final static int CDS_MAX                   = 100;
+    public final static int ANTIBLOOMING_MIN          = 0;        /* Anti Blooming */
+    public final static int GVCP_RETRY_DEF            = 4;        /* GVCP Retry */
+    public final static int GVCP_RETRY_MIN            = 2;
+    public final static int GVCP_RETRY_MAX            = 20;
+    public final static int GVCP_TIMEOUT_DEF          = 40;       /* GVCP Timeout */
+    public final static int GVCP_TIMEOUT_MIN          = 20;
+    public final static int GVCP_TIMEOUT_MAX          = 200;
+    public final static int GVSP_WAIT_PERCENT_DEF     = 1;        /* GVSP wait percent */
+    public final static int GVSP_WAIT_PERCENT_MIN     = 0;
+    public final static int GVSP_WAIT_PERCENT_MAX     = 100;
+    public final static int FRONTEND_MAX              = 1024;     /* frontend frame buffer deque length */
+    public final static int FRONTEND_DEF              = 4;
+    public final static int FRONTEND_MIN              = 2;
+    public final static int BACKEND_MAX               = 1024;     /* backend frame buffer deque length */
+    public final static int BACKEND_DEF               = 3;
+    public final static int BACKEND_MIN               = 2;
+    public final static int HEAT_MIN                  = 0;       /* Heat */
+    public final static int LANE_MIN                  = 0;       /* Lane */
+    public final static int FAN_MIN                   = 0;       /* Fan */
     
+    /* flash action */
     public final static int FLASH_SIZE               = 0x00;    /* query total size */
     public final static int FLASH_EBLOCK             = 0x01;    /* query erase block size */
     public final static int FLASH_RWBLOCK            = 0x02;    /* query read/write block size */
@@ -690,6 +758,10 @@ public class toupcam implements AutoCloseable {
     public final static int FLASH_READ               = 0x04;    /* read */
     public final static int FLASH_WRITE              = 0x05;    /* write */
     public final static int FLASH_ERASE              = 0x06;    /* erase */
+    
+    /* flash zone */
+    public final static int FLASH_SENSOR             = 0x00;    /* sensor */
+    public final static int FLASH_USER               = 0x02;    /* user */
 
     static public int TDIBWIDTHBYTES(int bits) {
         return ((bits + 31) & (~31)) / 8;
@@ -698,21 +770,22 @@ public class toupcam implements AutoCloseable {
     public static class HRESULTException extends Exception {
         /* HRESULT: error code */
         public final static int S_OK            = 0x00000000; /* Success */
-        public final static int S_FALSE         = 0x00000001; /* Success with noop */ /* Remark: Different from S_OK, such as internal values and user-set values have coincided, equivalent to noop */
+        public final static int S_FALSE         = 0x00000001; /* Yet another success */ /* Remark: Different from S_OK, such as internal values and user-set values have coincided, equivalent to noop */
         public final static int E_UNEXPECTED    = 0x8000ffff; /* Catastrophic failure */ /* Remark: Generally indicates that the conditions are not met, such as calling put_Option setting some options that do not support modification when the camera is running, and so on */
         public final static int E_NOTIMPL       = 0x80004001; /* Not supported or not implemented */ /* Remark: This feature is not supported on this model of camera */
-        public final static int E_NOINTERFACE   = 0x80004002;
-        public final static int E_ACCESSDENIED  = 0x80070005; /* Permission denied */ /* Remark: The program on Linux does not have permission to open the USB device, please enable udev rules file or run as root */
         public final static int E_OUTOFMEMORY   = 0x8007000e; /* Out of memory */
         public final static int E_INVALIDARG    = 0x80070057; /* One or more arguments are not valid */
+        public final static int E_NOINTERFACE   = 0x80004002;
         public final static int E_POINTER       = 0x80004003; /* Pointer that is not valid */ /* Remark: Pointer is NULL */
         public final static int E_FAIL          = 0x80004005; /* Generic failure */
+        public final static int E_ACCESSDENIED  = 0x80070005; /* Permission denied */ /* Remark: Insufficient permissions. This may be blocked by system security policies; on Linux, USB devices often require additional permission configuration, which can be resolved by setting up udev rules or running with root privileges */
         public final static int E_WRONG_THREAD  = 0x8001010e; /* Call function in the wrong thread */
-        public final static int E_GEN_FAILURE   = 0x8007001f; /* Device not functioning */ /* Remark: It is generally caused by hardware errors, such as cable problems, USB port problems, poor contact, camera hardware damage, etc */
+        public final static int E_GEN_FAILURE   = 0x8007001f; /* Device not functioning */ /* Remark: It is generally caused by hardware errors, such as cable problems, USB port problems, poor contact, insufficient power supply, camera hardware damage, etc */
         public final static int E_BUSY          = 0x800700aa; /* The requested resource is in use */ /* Remark: The camera is already in use, such as duplicated opening/starting the camera, or being used by other application, etc */
         public final static int E_PENDING       = 0x8000000a; /* The data necessary to complete this operation is not yet available */ /* Remark: No data is available at this time */
         public final static int E_TIMEOUT       = 0x8001011f; /* This operation returned because the timeout period expired */
-        public final static int E_UNREACH       = 0x80072743; /* Network is unreachable */
+        public final static int E_UNREACH       = 0x80072743; /* Network is unreachable */ /* Remark: Please check the IP settings of the camera and the computer, or the firewall settings */
+        public final static int E_CANCELLED     = 0x800704c7; /* The operation was canceled by the user */
         
         private final int _hresult;
         
@@ -731,30 +804,32 @@ public class toupcam implements AutoCloseable {
 
         public static String toString(int hresult) {
             switch (hresult) {
-                case E_INVALIDARG:
-                    return "One or more arguments are not valid";
-                case E_NOTIMPL: /* Remark: This feature is not supported on this model of camera */
-                    return "Not supported or not implemented";
-                case E_POINTER: /* Remark: Pointer is NULL */
-                    return "Pointer that is not valid";
                 case E_UNEXPECTED:/* Remark: Generally indicates that the conditions are not met, such as calling put_Option setting some options that do not support modification when the camera is running, and so on */
                     return "Catastrophic failure";
-                case E_ACCESSDENIED: /* Remark: The program on Linux does not have permission to open the USB device, please enable udev rules file or run as root */
-                    return "Permission denied";
+                case E_NOTIMPL: /* Remark: This feature is not supported on this model of camera */
+                    return "Not supported or not implemented";
                 case E_OUTOFMEMORY:
                     return "Out of memory";
+                case E_INVALIDARG:
+                    return "One or more arguments are not valid";
+                case E_POINTER: /* Remark: Pointer is NULL */
+                    return "Pointer that is not valid";
+                case E_ACCESSDENIED: /* Remark: Insufficient permissions. This may be blocked by system security policies; on Linux, USB devices often require additional permission configuration, which can be resolved by setting up udev rules or running with root privileges */
+                    return "Permission denied";
                 case E_WRONG_THREAD:
                     return "Call function in the wrong thread";
-                case E_GEN_FAILURE: /* Remark: It is generally caused by hardware errors, such as cable problems, USB port problems, poor contact, camera hardware damage, etc */
+                case E_GEN_FAILURE: /* Remark: It is generally caused by hardware errors, such as cable problems, USB port problems, poor contact, insufficient power supply, camera hardware damage, etc */
                     return "Device not functioning";
                 case E_BUSY: /* Remark: The camera is already in use, such as duplicated opening/starting the camera, or being used by other application, etc */
                     return "The requested resource is in use";
-                case E_PENDING:/* Remark: No data is available at this time */
+                case E_PENDING: /* Remark: No data is available at this time */
                     return "The data necessary to complete this operation is not yet available";
                 case E_TIMEOUT:
                     return "This operation returned because the timeout period expired";
                 case E_UNREACH:
                     return "Network is unreachable";
+                case E_CANCELLED:
+                    return "The operation was canceled by the user";
                 default:
                     return "Unspecified failure";
             }
@@ -763,6 +838,10 @@ public class toupcam implements AutoCloseable {
 
     public static String PixelFormatName(int pixelFormat) {
         return _lib.Toupcam_get_PixelFormatName(pixelFormat);
+    }
+
+    public static int PixelFormatBitdepth(int pixelFormat) {
+        return _lib.Toupcam_get_PixelFormatBitdepth(pixelFormat);
     }
 
     private static int errCheck(int hresult) throws HRESULTException {
@@ -819,10 +898,11 @@ public class toupcam implements AutoCloseable {
         public short reserved;    /* not used */
     }
 
-    @FieldOrder({ "v3", "reserved", "uLum", "uFV", "timecount", "framecount", "tricount", "gps" })
+    @FieldOrder({ "v3", "hob", "vob", "uLum", "uFV", "timecount", "framecount", "tricount", "gps" })
     public static class FrameInfoV4 extends Structure {
         public FrameInfoV3 v3;
-        public int reserved; /* not used */
+        public short hob; /* Horizontal Optical Black */
+        public short vob; /* Vertical Optical Black */
         public int uLum;
         public long uFV;
         public long timecount;
@@ -917,6 +997,34 @@ public class toupcam implements AutoCloseable {
     private static class RECT extends Structure {
         public int left, top, right, bottom;
     }
+
+    @FieldOrder({ "id", "pixelFormat", "ergb", "snapR", "infoVer", "reserved", "strideRaw", "ptrInfo", "snapCtx", "ptrRaw", "ptr8", "ptr16" })
+    public static class ImagePtr extends Structure {
+        public int id;                /* 0 is reserved as an invalid id */
+        public byte pixelFormat;      /* TOUPCAM_PIXELFORMAT_xxxx */
+        public byte ergb;             /* see TOUPCAM_OPTION_RGB */
+        public byte snapR;            /* see Toupcam_SnapR */
+        public byte infoVer;          /* ToupcamFrameInfo version >= 4 */
+        public int reserved;
+        public int strideRaw;         /* stride of RAW, 0 means = image width (no padding) */
+        public Pointer ptrInfo;
+        public Pointer snapCtx;
+        public Pointer ptrRaw;        /* RAW, see TOUPCAM_OPTION_IMAGEPTRRAW */
+        public Pointer ptr8;
+        public Pointer ptr16;
+    }
+
+    public static FrameInfoV3 Ptr2FrameInfoV3(Pointer ptrInfo) {
+        FrameInfoV3 s = Structure.newInstance(FrameInfoV3.class, ptrInfo);
+        s.read();
+        return s;
+    }
+
+    public static FrameInfoV4 Ptr2FrameInfoV4(Pointer ptrInfo) {
+        FrameInfoV4 s = Structure.newInstance(FrameInfoV4.class, ptrInfo);
+        s.read();
+        return s;
+    }
     
     private interface CLib {
         Pointer Toupcam_Version();
@@ -924,10 +1032,13 @@ public class toupcam implements AutoCloseable {
         int Toupcam_EnumWithName(Pointer ptr);
         Pointer Toupcam_OpenByIndex(int index);
         void Toupcam_Close(Pointer h);
+        int Toupcam_PullImagePtr(Pointer h, int bStill, ImagePtr ptrImage);
+        int Toupcam_PushImagePtr(Pointer h, int ptrId);
+        int Toupcam_WaitImagePtr(Pointer h, int waitMS, int bStill, ImagePtr ptrImage);
         int Toupcam_PullImageV4(Pointer h, Pointer pImageData, int bStill, int bits, int rowPitch, FrameInfoV4 pInfo);
-        int Toupcam_WaitImageV4(Pointer h, int nWaitMS, Pointer pImageData, int bStill, int bits, int rowPitch, FrameInfoV4 pInfo);
+        int Toupcam_WaitImageV4(Pointer h, int waitMS, Pointer pImageData, int bStill, int bits, int rowPitch, FrameInfoV4 pInfo);
         @Deprecated int Toupcam_PullImageV3(Pointer h, Pointer pImageData, int bStill, int bits, int rowPitch, FrameInfoV3 pInfo);
-        @Deprecated int Toupcam_WaitImageV3(Pointer h, int nWaitMS, Pointer pImageData, int bStill, int bits, int rowPitch, FrameInfoV3 pInfo);
+        @Deprecated int Toupcam_WaitImageV3(Pointer h, int waitMS, Pointer pImageData, int bStill, int bits, int rowPitch, FrameInfoV3 pInfo);
         @Deprecated int Toupcam_PullImageV2(Pointer h, Pointer pImageData, int bits, FrameInfoV2 pInfo);
         @Deprecated int Toupcam_PullStillImageV2(Pointer h, Pointer pImageData, int bits, FrameInfoV2 pInfo);
         @Deprecated int Toupcam_PullImageWithRowPitchV2(Pointer h, Pointer pImageData, int bits, int rowPitch, FrameInfoV2 pInfo);
@@ -937,9 +1048,10 @@ public class toupcam implements AutoCloseable {
         int Toupcam_Snap(Pointer h, int nResolutionIndex);
         int Toupcam_SnapN(Pointer h, int nResolutionIndex, int nNumber);
         int Toupcam_SnapR(Pointer h, int nResolutionIndex, int nNumber);
+        int Toupcam_SnapV2(Pointer h, int nResolutionIndex, int nNumber, int eRGB, Pointer snapCtx);
         int Toupcam_Trigger(Pointer h, short nNumber);
-        int Toupcam_TriggerSyncV4(Pointer h, int nWaitMS, Pointer pImageData, int bits, int rowPitch, FrameInfoV4 pInfo);
-        @Deprecated int Toupcam_TriggerSync(Pointer h, int nWaitMS, Pointer pImageData, int bits, int rowPitch, FrameInfoV3 pInfo);
+        int Toupcam_TriggerSyncV4(Pointer h, int waitMS, Pointer pImageData, int bits, int rowPitch, FrameInfoV4 pInfo);
+        @Deprecated int Toupcam_TriggerSync(Pointer h, int waitMS, Pointer pImageData, int bits, int rowPitch, FrameInfoV3 pInfo);
         int Toupcam_put_Size(Pointer h, int nWidth, int nHeight);
         int Toupcam_get_Size(Pointer h, IntByReference nWidth, IntByReference nHeight);
         int Toupcam_put_eSize(Pointer h, int nResolutionIndex);
@@ -959,8 +1071,8 @@ public class toupcam implements AutoCloseable {
         int Toupcam_put_Roi(Pointer h, int xOffset, int yOffset, int xWidth, int yHeight);
         int Toupcam_put_RoiN(Pointer h, int[] xOffset, int[] yOffset, int[] xWidth, int[] yHeight, int Num);
         int Toupcam_put_XY(Pointer h, int x, int y);
-        int Toupcam_get_AutoExpoEnable(Pointer h, IntByReference bAutoExposure);
-        int Toupcam_put_AutoExpoEnable(Pointer h, int bAutoExposure);
+        int Toupcam_get_AutoExpoEnable(Pointer h, IntByReference mode);
+        int Toupcam_put_AutoExpoEnable(Pointer h, int mode);
         int Toupcam_get_AutoExpoTarget(Pointer h, ShortByReference Target);
         int Toupcam_put_AutoExpoTarget(Pointer h, short Target);
         int Toupcam_put_AutoExpoRange(Pointer h, int maxTime, int minTime, short maxGain, short minGain);
@@ -1013,12 +1125,12 @@ public class toupcam implements AutoCloseable {
         int Toupcam_get_WhiteBalanceGain(Pointer h, int[] aGain);
         int Toupcam_put_BlackBalance(Pointer h, short[] aSub);
         int Toupcam_get_BlackBalance(Pointer h, short[] aSub);
-        int Toupcam_put_AWBAuxRect(Pointer h, RECT pAuxRect);
-        int Toupcam_get_AWBAuxRect(Pointer h, RECT pAuxRect);
-        int Toupcam_put_AEAuxRect(Pointer h, RECT pAuxRect);
-        int Toupcam_get_AEAuxRect(Pointer h, RECT pAuxRect);
-        int Toupcam_put_ABBAuxRect(Pointer h, RECT pAuxRect);
-        int Toupcam_get_ABBAuxRect(Pointer h, RECT pAuxRect);
+        int Toupcam_put_AWBAuxRect(Pointer h, RECT pRect);
+        int Toupcam_get_AWBAuxRect(Pointer h, RECT pRect);
+        int Toupcam_put_AEAuxRect(Pointer h, RECT pRect);
+        int Toupcam_get_AEAuxRect(Pointer h, RECT pRect);
+        int Toupcam_put_ABBAuxRect(Pointer h, RECT pRect);
+        int Toupcam_get_ABBAuxRect(Pointer h, RECT pRect);
         int Toupcam_get_MonoMode(Pointer h);
         int Toupcam_get_StillResolutionNumber(Pointer h);
         int Toupcam_get_StillResolution(Pointer h, int nResolutionIndex, IntByReference pWidth, IntByReference pHeight);
@@ -1044,8 +1156,14 @@ public class toupcam implements AutoCloseable {
         int Toupcam_read_UART(Pointer h, Pointer pBuffer, int nBufferLen);
         int Toupcam_put_Option(Pointer h, int iOption, int iValue);
         int Toupcam_get_Option(Pointer h, int iOption, IntByReference iValue);
+        int Toupcam_put_Int(Pointer h, String strName, int iValue);
+        int Toupcam_get_Int(Pointer h, String strName, IntByReference iValue);
+        int Toupcam_put_Str(Pointer h, String strName, String strValue);
+        int Toupcam_put_Str(Pointer h, String strName, byte[] strValue);
+        int Toupcam_get_Str(Pointer h, String strName, byte[] strValue);
         int Toupcam_get_PixelFormatSupport(Pointer h, byte cmd, IntByReference pixelFormat);
         String Toupcam_get_PixelFormatName(int val);
+        int Toupcam_get_PixelFormatBitdepth(int val);
         /* Hardware Binning
          * Value: 1x1, 2x2, etc
          * Method: Average, Add
@@ -1055,6 +1173,8 @@ public class toupcam implements AutoCloseable {
         int Toupcam_get_BinningNumber(Pointer h);
         int Toupcam_get_BinningValue(Pointer h, int index, PointerByReference Value);
         int Toupcam_get_BinningMethod(Pointer h, int index, PointerByReference Value);
+        int Toupcam_readPtr(Pointer h, String key, int len, Pointer pData);
+        int Toupcam_writePtr(Pointer h, String key, int len, Pointer pData);
         int Toupcam_put_SelfTrigger(Pointer h, SelfTrigger pSt);
         int Toupcam_get_SelfTrigger(Pointer h, SelfTrigger pSt);
         int Toupcam_put_Linear(Pointer h, byte[] v8, short[] v16);
@@ -1069,18 +1189,18 @@ public class toupcam implements AutoCloseable {
         int Toupcam_AAF(Pointer h, int action, int outVal, IntByReference inVal);
         int Toupcam_get_LensInfo(Pointer h, Pointer pInfo);
         int Toupcam_get_AFState(Pointer h, Pointer pState);
-        int Toupcam_put_AFMode(Pointer h, int mode);
+        int Toupcam_put_AFMode(Pointer h, int mode, int bFixedWD, int uiNear, int uiFar);
         int Toupcam_put_AFRoi(Pointer h, int xOffset, int yOffset, int xWidth, int yHeight);
         int Toupcam_put_AFAperture(Pointer h, int iAperture);
         int Toupcam_put_AFFMPos(Pointer h, int iFMPos);
         int Toupcam_get_FocusMotor(Pointer h, FocusMotor pFocusMotor);
 
-        int Toupcam_TriggerSyncV4Array(Pointer h, int nWaitMS, byte[] pImageData, int bits, int rowPitch, FrameInfoV4 pInfo);
+        int Toupcam_TriggerSyncV4Array(Pointer h, int waitMS, byte[] pImageData, int bits, int rowPitch, FrameInfoV4 pInfo);
         int Toupcam_PullImageV4Array(Pointer h, byte[] pImageData, int bStill, int bits, int rowPitch, FrameInfoV4 pInfo);
-        int Toupcam_WaitImageV4Array(Pointer h, int nWaitMS, byte[] pImageData, int bStill, int bits, int rowPitch, FrameInfoV4 pInfo);
-        @Deprecated int Toupcam_TriggerSyncArray(Pointer h, int nWaitMS, byte[] pImageData, int bits, int rowPitch, FrameInfoV3 pInfo);
+        int Toupcam_WaitImageV4Array(Pointer h, int waitMS, byte[] pImageData, int bStill, int bits, int rowPitch, FrameInfoV4 pInfo);
+        @Deprecated int Toupcam_TriggerSyncArray(Pointer h, int waitMS, byte[] pImageData, int bits, int rowPitch, FrameInfoV3 pInfo);
         @Deprecated int Toupcam_PullImageV3Array(Pointer h, byte[] pImageData, int bStill, int bits, int rowPitch, FrameInfoV3 pInfo);
-        @Deprecated int Toupcam_WaitImageV3Array(Pointer h, int nWaitMS, byte[] pImageData, int bStill, int bits, int rowPitch, FrameInfoV3 pInfo);
+        @Deprecated int Toupcam_WaitImageV3Array(Pointer h, int waitMS, byte[] pImageData, int bStill, int bits, int rowPitch, FrameInfoV3 pInfo);
         @Deprecated int Toupcam_PullImageV2Array(Pointer h, byte[] pImageData, int bits, FrameInfoV2 pInfo);
         @Deprecated int Toupcam_PullStillImageV2Array(Pointer h, byte[] pImageData, int bits, FrameInfoV2 pInfo);
         @Deprecated int Toupcam_PullImageWithRowPitchV2Array(Pointer h, byte[] pImageData, int bits, int rowPitch, FrameInfoV2 pInfo);
@@ -1105,6 +1225,7 @@ public class toupcam implements AutoCloseable {
         }
         
         Pointer Toupcam_Open(WString camId);
+        int Toupcam_Load(Pointer h, WString strPara);
         int Toupcam_Replug(WString camId);
         int Toupcam_StartPullModeWithCallback(Pointer h, EVENT_CALLBACK funEvent, Pointer ctxEvent);
         int Toupcam_StartPullModeWithWndMsg(Pointer h, Pointer hWnd, int nMsg);
@@ -1123,6 +1244,7 @@ public class toupcam implements AutoCloseable {
         }
         int Toupcam_Update(WString camId, WString filePath, PROGRESS_CALLBACK funProgress, Pointer ctxProgress);
         int Toupcam_GigeEnable(HOTPLUG_CALLBACK funHotplug, Pointer ctxHotplug);
+        int Toupcam_GigeEnableV2(HOTPLUG_CALLBACK funHotplug, Pointer ctxHotplug, String opt);
         int Toupcam_PciEnable(HOTPLUG_CALLBACK funHotplug, Pointer ctxHotplug);
         int Toupcam_CtiEnable(HOTPLUG_CALLBACK funHotplug, Pointer ctxHotplug, WString[] ctiPath);
 
@@ -1130,7 +1252,7 @@ public class toupcam implements AutoCloseable {
             void invoke(Pointer aHist, int nFlag, Pointer ctxHistogram);
         }
         int Toupcam_GetHistogramV2(Pointer h, HISTOGRAM_CALLBACK funHistogram, Pointer ctxHistogram);
-     }
+    }
     
     private interface CLibrary extends CLib, Library {
         CLibrary INSTANCE = (CLibrary)Native.load("toupcam", CLibrary.class, options_);
@@ -1140,6 +1262,7 @@ public class toupcam implements AutoCloseable {
         }
         
         Pointer Toupcam_Open(String camId);
+        int Toupcam_Load(Pointer h, String strPara);
         int Toupcam_Replug(String camId);
         int Toupcam_StartPullModeWithCallback(Pointer h, EVENT_CALLBACK funEvent, Pointer ctxEvent);
         int Toupcam_FfcImport(Pointer h, String filePath);
@@ -1159,6 +1282,7 @@ public class toupcam implements AutoCloseable {
         }
         int Toupcam_Update(String camId, String filePath, PROGRESS_CALLBACK funProgress, Pointer ctxProgress);
         int Toupcam_GigeEnable(HOTPLUG_CALLBACK funHotplug, Pointer ctxHotplug);
+        int Toupcam_GigeEnableV2(HOTPLUG_CALLBACK funHotplug, Pointer ctxHotplug, String opt);
         int Toupcam_PciEnable(HOTPLUG_CALLBACK funHotplug, Pointer ctxHotplug);
         int Toupcam_CtiEnable(HOTPLUG_CALLBACK funHotplug, Pointer ctxHotplug, String[] ctiPath);
 
@@ -1223,7 +1347,7 @@ public class toupcam implements AutoCloseable {
     };
     
     private final static CLib _lib = Platform.isWindows() ?  WinLibrary.INSTANCE : CLibrary.INSTANCE;
-    private final static Hashtable _hash = new Hashtable();
+    private final static Map<Integer, Object> _hash = new HashMap<>();
     private static int _clsid = 0;
     private static IHotplugCallback _hotplug = null;
     private static CLibrary.HOTPLUG_CALLBACK _hotplugcallback = null;
@@ -1245,8 +1369,8 @@ public class toupcam implements AutoCloseable {
         _handle = h;
         synchronized (_hash) {
             _objid = _clsid++;
+            _hash.put(_objid, this);
         }
-        _hash.put(_objid, this);
     }
     
     @Override
@@ -1258,10 +1382,12 @@ public class toupcam implements AutoCloseable {
         
         _callback = null;
         _cb = null;
-        _hash.remove(_objid);
+        synchronized (_hash) {
+            _hash.remove(_objid);
+        }
     }
     
-    /* get the version of this dll/so/dylib, which is: 59.29030.20250722 */
+    /* get the version of this dll/so/dylib, which is: 60.32549.20260908 */
     public static String Version() {
         if (Platform.isWindows())
             return _lib.Toupcam_Version().getWideString(0);
@@ -1371,17 +1497,20 @@ public class toupcam implements AutoCloseable {
     
     /* enumerate cameras that are currently connected to the computer */
     public static DeviceV2[] EnumV2() {
-        Memory ptr = new Memory(512 * 128);
+        Memory ptr = new Memory(512 * MAX);
         return Ptr2Device(ptr, _lib.Toupcam_EnumV2(ptr));
     }
     
     public static DeviceV2[] EnumWithName() {
-        Memory ptr = new Memory(512 * 128);
+        Memory ptr = new Memory(512 * MAX);
         return Ptr2Device(ptr, _lib.Toupcam_EnumWithName(ptr));
     }
 
     private static void OnHotplugCallback(Pointer ctxHotplug) {
-        Object o = _hash.get((int)Pointer.nativeValue(ctxHotplug));
+        Object o = null;
+        synchronized (_hash) {
+            o = _hash.get((int)Pointer.nativeValue(ctxHotplug));
+        }
         if (o instanceof IHotplugCallback) {
             ((IHotplugCallback)o).onHotplug();
         }
@@ -1389,8 +1518,18 @@ public class toupcam implements AutoCloseable {
 
     /* Initialize support for GigE cameras. If online/offline notifications are not required, the callback function can be set to null */
     public static void GigeEnable(IHotplugCallback cb) throws HRESULTException {
-        int id = _clsid++;
-        _hash.put(id, cb);
+        GigeEnable(cb, null);
+    }
+
+    /* opt: semicolon separated options:
+    *        "wifi": Enable WiFi adapter support
+    */
+    public static void GigeEnable(IHotplugCallback cb, String opt) throws HRESULTException {
+        int id;
+        synchronized (_hash) {
+            id = _clsid++;
+            _hash.put(id, cb);
+        }
         if (Platform.isWindows()) {
             WinLibrary.HOTPLUG_CALLBACK p = new WinLibrary.HOTPLUG_CALLBACK() {
                 @Override
@@ -1399,7 +1538,10 @@ public class toupcam implements AutoCloseable {
                 }
             };
             Native.setCallbackThreadInitializer(p, new CallbackThreadInitializer(false, false, "hotplugCallback"));
-            errCheck(((WinLibrary)_lib).Toupcam_GigeEnable(p, new Pointer(id)));
+            if ((opt == null) || (opt.isEmpty()))
+                errCheck(((WinLibrary)_lib).Toupcam_GigeEnable(p, new Pointer(id)));
+            else
+                errCheck(((WinLibrary)_lib).Toupcam_GigeEnableV2(p, new Pointer(id), opt));
         }
         else {
             CLibrary.HOTPLUG_CALLBACK p = new CLibrary.HOTPLUG_CALLBACK() {
@@ -1409,14 +1551,20 @@ public class toupcam implements AutoCloseable {
                 }
             };
             Native.setCallbackThreadInitializer(p, new CallbackThreadInitializer(false, false, "hotplugCallback"));
-            errCheck(((CLibrary)_lib).Toupcam_GigeEnable(p, new Pointer(id)));
+            if ((opt == null) || (opt.isEmpty()))
+                errCheck(((CLibrary)_lib).Toupcam_GigeEnable(p, new Pointer(id)));
+            else
+                errCheck(((CLibrary)_lib).Toupcam_GigeEnableV2(p, new Pointer(id), opt));
         }
     }
     
     /* Initialize support for PCIe cameras. If online/offline notifications are not required, the callback function can be set to null */
     public static void PciEnable(IHotplugCallback cb) throws HRESULTException {
-        int id = _clsid++;
-        _hash.put(id, cb);
+        int id;
+        synchronized (_hash) {
+            id = _clsid++;
+            _hash.put(id, cb);
+        }
         if (Platform.isWindows()) {
             WinLibrary.HOTPLUG_CALLBACK p = new WinLibrary.HOTPLUG_CALLBACK() {
                 @Override
@@ -1443,15 +1591,18 @@ public class toupcam implements AutoCloseable {
     * (1) ctiPath = null means all *.cti in GENICAM_GENTL64_PATH/GENICAM_GENTL32_PATH
     * or
     * (2) ctiPath[] = {
-                "/full/path/to/file.cti"
+                "/full/path/to/file.cti",
                 ...
             }
     */
     public static void CtiEnable(IHotplugCallback cb, String[] ctiPath) throws HRESULTException {
-        int id = _clsid++;
-        _hash.put(id, cb);
+        int id;
+        synchronized (_hash) {
+            id = _clsid++;
+            _hash.put(id, cb);
+        }
         if (Platform.isWindows()) {
-            WString[] newPath = new WString[ctiPath.length + 1];
+            WString[] newPath = new WString[ctiPath.length + 1]; /* Use NULL pointer to indicate the end of the array */
             for (int i = 0; i < ctiPath.length; ++i) {
                 newPath[i] = (ctiPath[i] != null) ? new WString(ctiPath[i]) : null;
             }
@@ -1484,12 +1635,12 @@ public class toupcam implements AutoCloseable {
         the object of toupcam must be obtained by static mothod Open or OpenByIndex, it cannot be obtained by obj = new toupcam (The constructor is private on purpose)
     */
     // camId: enumerated by EnumV2, null means the first enumerated camera
-    // For USB, GigE or PCIe camera, the camId can also be specified as (case sensitive):
-    //    (a) "sn:xxxxxxxxxxxx" (such as sn:ZP250212241204105), or
-    //    (b) "name:xxxxxx" (such as name:Camera1)
+    // For USB, GigE, CameraLink or CXP camera, the camId can also be specified as (case sensitive):
+    //    (a) "sn:xxxxxxxxxxxx" (Use SN, such as sn:ZP250212241204105), or
+    //    (b) "name:xxxxxx" (Use user-defined name, such as name:Camera1)
     //Moreover, for GigE camera, the camId can also be specified as (case sensitive):
-    //    (a) "ip:xxx.xxx.xxx.xxx" (such as ip:192.168.1.100), or
-    //    (b) "mac:xxxxxxxxxxxx" (such as mac:d05f64ffff23)
+    //    (a) "ip:xxx.xxx.xxx.xxx" (Use IP address, such as ip:192.168.1.100), or
+    //    (b) "mac:xxxxxxxxxxxx" (Use MAC address, such as mac:d05f64ffff23)
     public static toupcam Open(String camId) {
         Pointer tmphandle = null;
         if (Platform.isWindows()) {
@@ -1520,6 +1671,27 @@ public class toupcam implements AutoCloseable {
         if (tmphandle == null)
             return null;
         return new toupcam(tmphandle);
+    }
+
+    /* load cfg:
+         (1) nullptr or empty string, load from EEPROM (address = 0)
+         (2) eeprom=???, load from EEPROM (address = 0x???)
+         (3) path\to\file.ini, load from ini file
+         (4) path\to\file.json, load from json file
+    */
+    public int Load(String strPara) throws HRESULTException {
+        if (Platform.isWindows()) {
+            if (strPara == null || strPara.isEmpty())
+                return errCheck(((WinLibrary)_lib).Toupcam_Load(_handle, null));
+            else
+                return errCheck(((WinLibrary)_lib).Toupcam_Load(_handle, new WString(strPara)));
+        }
+        else {
+            if (strPara == null || strPara.isEmpty())
+                return errCheck(((CLibrary)_lib).Toupcam_Load(_handle, null));
+            else
+                return errCheck(((CLibrary)_lib).Toupcam_Load(_handle, strPara));
+        }
     }
     
     public int getResolutionNumber() throws HRESULTException {
@@ -1604,7 +1776,10 @@ public class toupcam implements AutoCloseable {
     }
     
     private static void OnEventCallback(int nEvent, Pointer ctxEvent) {
-        Object o = _hash.get((int)Pointer.nativeValue(ctxEvent));
+        Object o = null;
+        synchronized (_hash) {
+            o = _hash.get((int)Pointer.nativeValue(ctxEvent));
+        }
         if (o instanceof toupcam) {
             toupcam t = (toupcam)o;
             if (t._cb != null)
@@ -1643,6 +1818,30 @@ public class toupcam implements AutoCloseable {
             errCheck(HRESULTException.E_NOTIMPL);
     }
 
+    /* Obtains a pointer to the frame buffer directly from the SDK, eliminating the need to copy frame data and thus improving performance */
+    /* bStill: to pull still image, set to 1, otherwise 0 */
+    public void PullImagePtr(int bStill, ImagePtr ptrImage) throws HRESULTException {
+        errCheck(_lib.Toupcam_PullImagePtr(_handle, bStill, ptrImage));
+    }
+
+    /* After a frame buffer has been used, it must be returned to the SDK for reuse. Please note the following:
+        (a) The frame buffer must only be returned back after it is no longer in use. Any access after returning it is unsafe, as the SDK may have already reused the buffer and overwritten the memory with new data.
+        (b) If a frame buffer is not returned, the pool of available buffers will gradually decrease.
+        (c) Each frame buffer obtained via Pull (identified by its ID) may be returned only once; duplicate returns are not allowed.
+        (d) The return order does not need to match the Pull order; buffers may be returned out of order.
+        (e) Frame buffers that have not been returned remain valid after Stop. Frame buffers that have not been returned become invalid immediately after Close.
+    */
+    public void PushImagePtr(int ptrId) throws HRESULTException {
+        errCheck(_lib.Toupcam_PushImagePtr(_handle, ptrId));
+    }
+    
+    /* waitMS: The timeout interval, in milliseconds. If a nonzero value is specified, the function waits until the image is ok or the interval elapses.
+                If waitMS is zero, the function does not enter a wait state if the image is not available; it always returns immediately; this is equal to PullImagePtr.
+    */
+    public void WaitImagePtr(int waitMS, int bStill, ImagePtr ptrImage) throws HRESULTException {
+        errCheck(_lib.Toupcam_WaitImagePtr(_handle, waitMS, bStill, ptrImage));
+    }
+
     @Deprecated
     public void PullImageV2(ByteBuffer pImageData, int bits, FrameInfoV2 pInfo) throws HRESULTException {
         if (pImageData.isDirect())
@@ -1674,8 +1873,8 @@ public class toupcam implements AutoCloseable {
     }
     
     /*
-       nWaitMS: The timeout interval, in milliseconds. If a non-zero value is specified, the function either successfully fetches the image or waits for a timeout.
-                If nWaitMS is zero, the function does not wait when there are no images to fetch; It always returns immediately; this is equal to PullImage.
+       waitMS: The timeout interval, in milliseconds. If a non-zero value is specified, the function either successfully fetches the image or waits for a timeout.
+                If waitMS is zero, the function does not wait when there are no images to fetch; It always returns immediately; this is equal to PullImage.
        bStill: to pull still image, set to 1, otherwise 0
        bits: 24 (RGB24), 32 (RGB32), 48 (RGB48), 8 (Grey), 16 (Grey), 64 (RGB64).
              In RAW mode, this parameter is ignored.
@@ -1743,32 +1942,32 @@ public class toupcam implements AutoCloseable {
         errCheck(_lib.Toupcam_PullImageV3Array(_handle, pImageData, bStill, bits, rowPitch, pInfo));
     }
 
-    public void WaitImage(int nWaitMS, ByteBuffer pImageData, int bStill, int bits, int rowPitch, FrameInfoV4 pInfo) throws HRESULTException {
+    public void WaitImage(int waitMS, ByteBuffer pImageData, int bStill, int bits, int rowPitch, FrameInfoV4 pInfo) throws HRESULTException {
         if (pImageData.isDirect())
-            errCheck(_lib.Toupcam_WaitImageV4(_handle, nWaitMS, Native.getDirectBufferPointer(pImageData), bStill, bits, rowPitch, pInfo));
+            errCheck(_lib.Toupcam_WaitImageV4(_handle, waitMS, Native.getDirectBufferPointer(pImageData), bStill, bits, rowPitch, pInfo));
         else if (pImageData.hasArray())
-            WaitImage(nWaitMS, pImageData.array(), bStill, bits, rowPitch, pInfo);
+            WaitImage(waitMS, pImageData.array(), bStill, bits, rowPitch, pInfo);
         else
             errCheck(HRESULTException.E_INVALIDARG);
     }
 
-    public void WaitImage(int nWaitMS, byte[] pImageData, int bStill, int bits, int rowPitch, FrameInfoV4 pInfo) throws HRESULTException {
-        errCheck(_lib.Toupcam_WaitImageV4Array(_handle, nWaitMS, pImageData, bStill, bits, rowPitch, pInfo));
+    public void WaitImage(int waitMS, byte[] pImageData, int bStill, int bits, int rowPitch, FrameInfoV4 pInfo) throws HRESULTException {
+        errCheck(_lib.Toupcam_WaitImageV4Array(_handle, waitMS, pImageData, bStill, bits, rowPitch, pInfo));
     }
 
     @Deprecated
-    public void WaitImageV3(int nWaitMS, ByteBuffer pImageData, int bStill, int bits, int rowPitch, FrameInfoV3 pInfo) throws HRESULTException {
+    public void WaitImageV3(int waitMS, ByteBuffer pImageData, int bStill, int bits, int rowPitch, FrameInfoV3 pInfo) throws HRESULTException {
         if (pImageData.isDirect())
-            errCheck(_lib.Toupcam_WaitImageV3(_handle, nWaitMS, Native.getDirectBufferPointer(pImageData), bStill, bits, rowPitch, pInfo));
+            errCheck(_lib.Toupcam_WaitImageV3(_handle, waitMS, Native.getDirectBufferPointer(pImageData), bStill, bits, rowPitch, pInfo));
         else if (pImageData.hasArray())
-            WaitImageV3(nWaitMS, pImageData.array(), bStill, bits, rowPitch, pInfo);
+            WaitImageV3(waitMS, pImageData.array(), bStill, bits, rowPitch, pInfo);
         else
             errCheck(HRESULTException.E_INVALIDARG);
     }
 
     @Deprecated
-    public void WaitImageV3(int nWaitMS, byte[] pImageData, int bStill, int bits, int rowPitch, FrameInfoV3 pInfo) throws HRESULTException {
-        errCheck(_lib.Toupcam_WaitImageV3Array(_handle, nWaitMS, pImageData, bStill, bits, rowPitch, pInfo));
+    public void WaitImageV3(int waitMS, byte[] pImageData, int bStill, int bits, int rowPitch, FrameInfoV3 pInfo) throws HRESULTException {
+        errCheck(_lib.Toupcam_WaitImageV3Array(_handle, waitMS, pImageData, bStill, bits, rowPitch, pInfo));
     }
 
     @Deprecated
@@ -1827,6 +2026,10 @@ public class toupcam implements AutoCloseable {
     public void SnapR(int nResolutionIndex, int nNumber) throws HRESULTException {
         errCheck(_lib.Toupcam_SnapR(_handle, nResolutionIndex, nNumber));
     }
+
+    public void SnapV2(int nResolutionIndex, int nNumber, int eRGB) throws HRESULTException {
+        errCheck(_lib.Toupcam_SnapV2(_handle, nResolutionIndex, nNumber, eRGB, Pointer.NULL));
+    }
     
     /*
         soft trigger:
@@ -1840,36 +2043,36 @@ public class toupcam implements AutoCloseable {
     
     /*
       trigger synchronously
-      nWaitMS:      0:              by default, exposure * 102% + 4000 milliseconds
+      waitMS:      0:              by default, exposure * 102% + 4000 milliseconds
                     0xffffffff:     wait infinite
                     other:          milliseconds to wait
     */
-    public void TriggerSync(int nWaitMS, ByteBuffer pImageData, int bits, int rowPitch, FrameInfoV3 pInfo) throws HRESULTException {
+    public void TriggerSync(int waitMS, ByteBuffer pImageData, int bits, int rowPitch, FrameInfoV3 pInfo) throws HRESULTException {
         if (pImageData.isDirect())
-            errCheck(_lib.Toupcam_TriggerSync(_handle, nWaitMS, Native.getDirectBufferPointer(pImageData), bits, rowPitch, pInfo));
+            errCheck(_lib.Toupcam_TriggerSync(_handle, waitMS, Native.getDirectBufferPointer(pImageData), bits, rowPitch, pInfo));
         else if (pImageData.hasArray())
-            TriggerSync(nWaitMS, pImageData.array(), bits, rowPitch, pInfo);
+            TriggerSync(waitMS, pImageData.array(), bits, rowPitch, pInfo);
         else
             errCheck(HRESULTException.E_INVALIDARG);
     }
 
-    public void TriggerSync(int nWaitMS, byte[] pImageData, int bits, int rowPitch, FrameInfoV4 pInfo) throws HRESULTException {
-        errCheck(_lib.Toupcam_TriggerSyncV4Array(_handle, nWaitMS, pImageData, bits, rowPitch, pInfo));
+    public void TriggerSync(int waitMS, byte[] pImageData, int bits, int rowPitch, FrameInfoV4 pInfo) throws HRESULTException {
+        errCheck(_lib.Toupcam_TriggerSyncV4Array(_handle, waitMS, pImageData, bits, rowPitch, pInfo));
     }
 
     @Deprecated
-    public void TriggerSync(int nWaitMS, ByteBuffer pImageData, int bits, int rowPitch, FrameInfoV4 pInfo) throws HRESULTException {
+    public void TriggerSync(int waitMS, ByteBuffer pImageData, int bits, int rowPitch, FrameInfoV4 pInfo) throws HRESULTException {
         if (pImageData.isDirect())
-            errCheck(_lib.Toupcam_TriggerSyncV4(_handle, nWaitMS, Native.getDirectBufferPointer(pImageData), bits, rowPitch, pInfo));
+            errCheck(_lib.Toupcam_TriggerSyncV4(_handle, waitMS, Native.getDirectBufferPointer(pImageData), bits, rowPitch, pInfo));
         else if (pImageData.hasArray())
-            TriggerSync(nWaitMS, pImageData.array(), bits, rowPitch, pInfo);
+            TriggerSync(waitMS, pImageData.array(), bits, rowPitch, pInfo);
         else
             errCheck(HRESULTException.E_INVALIDARG);
     }
 
     @Deprecated
-    public void TriggerSync(int nWaitMS, byte[] pImageData, int bits, int rowPitch, FrameInfoV3 pInfo) throws HRESULTException {
-        errCheck(_lib.Toupcam_TriggerSyncArray(_handle, nWaitMS, pImageData, bits, rowPitch, pInfo));
+    public void TriggerSync(int waitMS, byte[] pImageData, int bits, int rowPitch, FrameInfoV3 pInfo) throws HRESULTException {
+        errCheck(_lib.Toupcam_TriggerSyncArray(_handle, waitMS, pImageData, bits, rowPitch, pInfo));
     }
     
     public void put_Size(int nWidth, int nHeight) throws HRESULTException {
@@ -1968,7 +2171,8 @@ public class toupcam implements AutoCloseable {
               use minimum frame buffer. When new frame arrive, drop all the pending frame regardless of whether the frame buffer is full.
               If DDR present, also limit the DDR frame buffer to only one frame.
         2: soft realtime
-              Drop the oldest frame when the queue is full and then enqueue the new frame
+              use minimum frame buffer. When new frame arrive, drop all the pending frame regardless of whether the frame buffer is full.
+              If DDR present, the DDR frame buffer unchanged.
         default: 0
     */
     public void put_RealTime(int val) throws HRESULTException {
@@ -2005,10 +2209,10 @@ public class toupcam implements AutoCloseable {
     */
     
     /*
-    * bAutoExposure:
+    * mode:
     *   0: disable auto exposure
-    *   1: auto exposure continue mode
-    *   2: auto exposure once mode
+    *   1: auto exposure continuous mode
+    *   2: auto exposure once
     */
     public int get_AutoExpoEnable() throws HRESULTException {
         IntByReference p = new IntByReference();
@@ -2016,8 +2220,8 @@ public class toupcam implements AutoCloseable {
         return p.getValue();
     }
     
-    public void put_AutoExpoEnable(int bAutoExposure) throws HRESULTException {
-        errCheck(_lib.Toupcam_put_AutoExpoEnable(_handle, bAutoExposure));
+    public void put_AutoExpoEnable(int mode) throws HRESULTException {
+        errCheck(_lib.Toupcam_put_AutoExpoEnable(_handle, mode));
     }
     
     public short get_AutoExpoTarget() throws HRESULTException {
@@ -2029,7 +2233,6 @@ public class toupcam implements AutoCloseable {
     public void put_AutoExpoTarget(short Target) throws HRESULTException {
         errCheck(_lib.Toupcam_put_AutoExpoTarget(_handle, Target));
     }
-    
     
     public void put_AutoExpoRange(int maxTime, int minTime, short maxGain, short minGain) throws HRESULTException {
         errCheck(_lib.Toupcam_put_AutoExpoRange(_handle, maxTime, minTime, maxGain, minGain));
@@ -2252,7 +2455,7 @@ public class toupcam implements AutoCloseable {
         return p.getValue();
     }
     
-    /* power supply:
+    /* Light Frequency:
             0 => 60HZ AC
             1 => 50Hz AC
             2 => DC
@@ -2305,6 +2508,7 @@ public class toupcam implements AutoCloseable {
         errCheck(_lib.Toupcam_get_WhiteBalanceGain(_handle, aGain));
     }
     
+    /* Minimum width & height: 4 */
     public void put_AWBAuxRect(int X, int Y, int Width, int Height) throws HRESULTException {
         RECT rc = new RECT();
         rc.left = X;
@@ -2321,6 +2525,7 @@ public class toupcam implements AutoCloseable {
         return new int[] { rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top };
     }
     
+    /* Minimum width & height: 4 */
     public void put_AEAuxRect(int X, int Y, int Width, int Height) throws HRESULTException {
         RECT rc = new RECT();
         rc.left = X;
@@ -2349,6 +2554,7 @@ public class toupcam implements AutoCloseable {
         return p;
     }
     
+    /* Minimum width & height: 4 */
     public void put_ABBAuxRect(int X, int Y, int Width, int Height) throws HRESULTException {
         RECT rc = new RECT();
         rc.left = X;
@@ -2408,10 +2614,8 @@ public class toupcam implements AutoCloseable {
         return errCheck(_lib.Toupcam_read_EEPROMArray(_handle, addr, pBuffer, pBuffer.length));
     }
 
-    /* Flash:
-      action = FLASH_XXXX: read, write, erase, query total size, query read/write block size, query erase block size
+    /* action = (zone << 24) | TOUPCAM_FLASH_XXXX: read, write, erase, query total size, query read/write block size, query erase block size
       addr = address
-      see democpp
     */
     public int rwc_Flash(int action, int addr, ByteBuffer pBuffer) throws HRESULTException {
         if (pBuffer.isDirect())
@@ -2491,7 +2695,47 @@ public class toupcam implements AutoCloseable {
         errCheck(_lib.Toupcam_get_Option(_handle, iOption, p));
         return p.getValue();
     }
+    
+    /* Case insensitive */
+    public void put_Int(String strName, int iValue) throws HRESULTException {
+        errCheck(_lib.Toupcam_put_Int(_handle, strName, iValue));
+    }
+    
+    /* Case insensitive */
+    public int get_Int(String strName) throws HRESULTException {
+        IntByReference p = new IntByReference();
+        errCheck(_lib.Toupcam_get_Int(_handle, strName, p));
+        return p.getValue();
+    }
 
+    /* Case insensitive */
+    public void put_Str(String strName, String strValue) throws HRESULTException {
+        errCheck(_lib.Toupcam_put_Str(_handle, strName, strValue));
+    }
+
+    /* Case insensitive */
+    public void put_Str(String strName, byte[] strValue) throws HRESULTException {
+        errCheck(_lib.Toupcam_put_Str(_handle, strName, strValue));
+    }
+
+    /* Case insensitive */
+    public String get_Str(String strName) throws HRESULTException {
+        byte[] buf = new byte[MAX];  /* output buffer (128 bytes are always sufficient) */
+        errCheck(_lib.Toupcam_get_Str(_handle, strName, buf));
+        return Native.toString(buf);
+    }
+
+    public int[] getPixelFormatSupport() throws HRESULTException {
+        int num = get_PixelFormatSupport((byte)-1);
+        if (num > 0) {
+            int[] arr = new int[num];
+            for (byte i = 0; i < num; i++)
+                arr[i] = get_PixelFormatSupport(i);
+            return arr;
+        }
+        return null;
+    }
+    
     /*
      * cmd:
      * -1:       query the number
@@ -2503,7 +2747,7 @@ public class toupcam implements AutoCloseable {
         errCheck(_lib.Toupcam_get_PixelFormatSupport(_handle, cmd, p));
         return p.getValue();
     }
-
+    
     /* Hardware Binning
      * Value: 1x1, 2x2, etc
      * Method: Average, Add, Skip
@@ -2511,7 +2755,7 @@ public class toupcam implements AutoCloseable {
     void put_Binning(Pointer h, String Value, String Method) throws HRESULTException {
         errCheck(_lib.Toupcam_put_Binning(_handle, Value, Method));
     }
-
+    
     String[] get_Binning(Pointer h) throws HRESULTException {
         PointerByReference pValue = new PointerByReference();
         PointerByReference pMethod = new PointerByReference();
@@ -2521,33 +2765,127 @@ public class toupcam implements AutoCloseable {
         arrString[1] = pMethod.getValue().getString(0);
         return arrString;
     }
+    
+    public String[] getBinningValue() throws HRESULTException {
+        int num = get_BinningNumber();
+        if (num <= 0)
+            return null;
 
+        String[] arr = new String[num];
+        for (int i = 0; i < num; i++)
+            arr[i] = get_BinningValue(i);
+        return arr;
+    }
+    
     int get_BinningNumber() throws HRESULTException {
         return _lib.Toupcam_get_BinningNumber(_handle);
     }
-
+    
     String get_BinningValue(int index) throws HRESULTException {
         PointerByReference pValue = new PointerByReference();
         errCheck(_lib.Toupcam_get_BinningValue(_handle, index, pValue));
         return pValue.getValue().getString(0);
     }
-
+    
+    public String[] get_BinningMethod() {
+        List<String> methods = new ArrayList<>();
+        int index = 0;
+        while (true) {
+            try {
+                String method = get_BinningMethod(index);
+                methods.add(method);
+                index++;
+            } catch (HRESULTException e) {
+                break;
+            }
+        }
+        return methods.toArray(new String[0]);
+    }
+    
     String get_BinningMethod(int index) throws HRESULTException {
         PointerByReference pMethod = new PointerByReference();
         errCheck(_lib.Toupcam_get_BinningMethod(_handle, index, pMethod));
         return pMethod.getValue().getString(0);
     }
+    
+    public void writePtr(String key, Object data) throws HRESULTException {
+        if (data == null) {
+            errCheck(_lib.Toupcam_writePtr(_handle, key, 0, null));
+        }
+        else if (data instanceof byte[]) {
+            byte[] buf = (byte[])data;
+            if (buf.length == 0)
+                errCheck(_lib.Toupcam_writePtr(_handle, key, 0, null));
+            else {
+                Memory mem = new Memory(buf.length);
+                mem.write(0, buf, 0, buf.length);
+                errCheck(_lib.Toupcam_writePtr(_handle, key, buf.length, mem));
+            }
+        }
+        else if (data instanceof String) {
+            writePtr(key, ((String)data).getBytes());
+        }
+        else if (data instanceof Integer) {
+            Memory mem = new Memory(4);
+            mem.setInt(0, (Integer)data);
+            errCheck(_lib.Toupcam_writePtr(_handle, key, 4, mem));
+        }
+        else if (data instanceof Long) {
+            Memory mem = new Memory(8);
+            mem.setLong(0, (Long)data);
+            errCheck(_lib.Toupcam_writePtr(_handle, key, 8, mem));
+        }
+        else {
+            errCheck(HRESULTException.E_INVALIDARG);
+        }
+    }
+    
+    public byte[] readPtr(String key, int length) throws HRESULTException {
+        if (length <= 0)
+            return null;
+        Memory mem = new Memory(length);
+        errCheck(_lib.Toupcam_readPtr(_handle, key, length, mem));
+        return mem.getByteArray(0, length);
+    }
+    
+    /*
+        String sa = readPtr("???", String.class)
+        Integer ib = readPtr("???", Integer.class)
+        Long lc = readPtr("???", Long.class)
+    */
+    public <T> T readPtr(String key, Class<T> clazz) throws HRESULTException {
+        int size = 0;
+        if (clazz == Integer.class) size = 4;
+        else if (clazz == Long.class) size = 8;
+        else if (clazz == String.class) size = 256;
+        else errCheck(HRESULTException.E_INVALIDARG);
 
+        Memory mem = new Memory(size);
+        errCheck(_lib.Toupcam_readPtr(_handle, key, size, mem));
+        if (clazz == Integer.class) return clazz.cast(mem.getInt(0));
+        if (clazz == Long.class) return clazz.cast(mem.getLong(0));
+        if (clazz == String.class) {
+            byte[] tmp = mem.getByteArray(0, size);
+            int len = 0;
+            for (; len < tmp.length; len++) {
+                if (tmp[len] == 0)
+                    break;
+            }
+            return clazz.cast(new String(tmp, 0, len));
+        }
+        return null;
+    }
+    
     public void put_SelfTrigger(SelfTrigger pSt) throws HRESULTException {
         errCheck(_lib.Toupcam_put_SelfTrigger(_handle, pSt));
     }
-
+    
     public SelfTrigger get_SelfTrigger() throws HRESULTException {
         SelfTrigger p = new SelfTrigger();
         errCheck(_lib.Toupcam_get_SelfTrigger(_handle, p));
         return p;
     }
-
+    
     public void put_Linear(byte[] v8, short[] v16) throws HRESULTException {
         errCheck(_lib.Toupcam_put_Linear(_handle, v8, v16));
     }
@@ -2582,7 +2920,9 @@ public class toupcam implements AutoCloseable {
         errCheck(_lib.Toupcam_put_Temperature(_handle, nTemperature));
     }
     
-    /* xOffset, yOffset, xWidth, yHeight: must be even numbers */
+    /* xOffset, yOffset, xWidth, yHeight: must be even numbers
+        Minimum width & height: 8
+    */
     public void put_Roi(int xOffset, int yOffset, int xWidth, int yHeight) throws HRESULTException {
         errCheck(_lib.Toupcam_put_Roi(_handle, xOffset, yOffset, xWidth, yHeight));
     }
@@ -2596,15 +2936,11 @@ public class toupcam implements AutoCloseable {
         errCheck(_lib.Toupcam_get_Roi(_handle, p, q, r, s));
         return new int[] { p.getValue(), q.getValue(), r.getValue(), s.getValue() };
     }
-
+    
     public void put_RoiN(int[] xOffset, int[] yOffset, int[] xWidth, int[] yHeight) throws HRESULTException {
         if (xOffset.length != yOffset.length || xOffset.length != xWidth.length || xOffset.length != yHeight.length)
             throw new HRESULTException(HRESULTException.E_INVALIDARG);
         errCheck(_lib.Toupcam_put_RoiN(_handle, xOffset, yOffset, xWidth, yHeight, xOffset.length));
-    }
-    
-    public void put_XY(int x, int y) throws HRESULTException {
-        errCheck(_lib.Toupcam_put_XY(_handle, x, y));
     }
     
     /*
@@ -2782,7 +3118,7 @@ public class toupcam implements AutoCloseable {
     }
 
     public LensInfo get_LensInfo() throws HRESULTException {
-        Memory ptr = new Memory(128);
+        Memory ptr = new Memory(MAX);
         errCheck(_lib.Toupcam_get_LensInfo(_handle, ptr));
         return Ptr2LensInfo(ptr);
     }
@@ -2797,8 +3133,8 @@ public class toupcam implements AutoCloseable {
         return pState;
     }
 
-    public void put_AFMode(int mode) throws HRESULTException {
-        errCheck(_lib.Toupcam_put_AFMode(_handle, mode));
+    public void put_AFMode(int mode, int bFixedWD, int uiNear, int uiFar) throws HRESULTException {
+        errCheck(_lib.Toupcam_put_AFMode(_handle, mode, bFixedWD, uiNear, uiFar));
     }
 
     public void put_AFRoi(int xOffset, int yOffset, int xWidth, int yHeight) throws HRESULTException {
@@ -2820,7 +3156,10 @@ public class toupcam implements AutoCloseable {
     }
 
     private static void OnHistogramCallback(Pointer aHist, int nFlag, Pointer ctxHistogram) {
-        Object o = _hash.get((int)Pointer.nativeValue(ctxHistogram));
+        Object o = null;
+        synchronized (_hash) {
+            o = _hash.get((int)Pointer.nativeValue(ctxHistogram));
+        }
         if (o instanceof toupcam) {
             toupcam t = (toupcam)o;
             if (t._histogram != null) {
@@ -2855,7 +3194,11 @@ public class toupcam implements AutoCloseable {
             errCheck(((CLibrary)_lib).Toupcam_GetHistogramV2(_handle, (CLibrary.HISTOGRAM_CALLBACK)_histogramcallback, new Pointer(_objid)));
         }
     }
-    
+
+    public void put_XY(int x, int y) throws HRESULTException {
+        errCheck(_lib.Toupcam_put_XY(_handle, x, y));
+    }
+
     /*
         simulate replug:
         return > 0, the number of device has been replug
@@ -2871,7 +3214,10 @@ public class toupcam implements AutoCloseable {
     }
 
     private static void OnProgressCallback(int percent, Pointer ctxProgress) {
-        Object o = _hash.get((int)Pointer.nativeValue(ctxProgress));
+        Object o = null;
+        synchronized (_hash) {
+            o = _hash.get((int)Pointer.nativeValue(ctxProgress));
+        }
         if (o instanceof IProgressCallback) {
             ((IProgressCallback)o).onProgress(percent);
         }
@@ -2886,8 +3232,11 @@ public class toupcam implements AutoCloseable {
         Once an unplugging or power outage occurs during the upgrade process, the camera will no longer be available and can only be returned to the factory for repair.
     */
     public static void Update(String camId, String filePath, IProgressCallback cb) throws HRESULTException {
-        int id = _clsid++;
-        _hash.put(id, cb);
+        int id;
+        synchronized (_hash) {
+            id = _clsid++;
+            _hash.put(id, cb);
+        }
         if (Platform.isWindows()) {
             WinLibrary.PROGRESS_CALLBACK p = new WinLibrary.PROGRESS_CALLBACK() {
                 @Override

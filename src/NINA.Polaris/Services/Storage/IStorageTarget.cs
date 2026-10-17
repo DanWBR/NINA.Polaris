@@ -119,6 +119,13 @@ public static class StoragePath {
     /// interrupted transfer, never a usable capture.</summary>
     public const string PartialSuffix = ".part";
 
+    /// <summary>A sidecar name of its own for one attempt, used when the usual
+    /// one is still held open on the server by an attempt that timed out. It
+    /// keeps <see cref="PartialSuffix"/>, so a leftover still reads as
+    /// incomplete.</summary>
+    public static string AttemptPartialPath(string filePath, string token)
+        => filePath + "." + token + PartialSuffix;
+
     /// <summary>Split a relative path into clean segments, dropping any leading
     /// base prefix's separators and collapsing "." / empty parts. Rejects any
     /// path that tries to escape upward ("..").</summary>

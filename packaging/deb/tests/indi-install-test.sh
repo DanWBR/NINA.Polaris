@@ -42,7 +42,9 @@ cat > "$BIN/apt-get" <<STUB
 #!/usr/bin/env bash
 case "\$*" in
   *"install -s"*) cat "\$PLAN_FILE"; exit 0 ;;
-  *download*)     [ -n "\${DOWNLOAD_OK:-}" ] && { touch ./fake.deb; exit 0; } || exit 1 ;;
+  *download*)     [ -n "\${DOWNLOAD_OK:-}" ] && { touch ./fake.deb; exit 0; }
+                  echo "E: Failed to fetch https://ppa.example/indi-asi_2.2_arm64.deb  404  Not Found" >&2; exit 100 ;;
+  update*)        echo "update" >> "$WORK/updated"; exit 0 ;;
   *install*)      echo "\$*" >> "$WORK/installed"; exit 0 ;;
 esac
 exit 0
@@ -154,6 +156,11 @@ echo "--- the download failed, so nothing is known ---"
 : > "$OWNED_FILE"
 unset DOWNLOAD_OK
 rc=$(run indi-asi)
+# A stale package list made this 404 on a real board, and the message gave no
+# hint of it: apt's own reason is now part of the refusal.
+grep -q "404  Not Found" "$WORK/run/indi-install.json" && ok "apt's reason is in the message" \
+    || bad "the download error is not reported: $(cat "$WORK/run/indi-install.json")"
+[ -s "$WORK/updated" ] && ok "the package list is refreshed before planning" || bad "apt-get update never ran"
 [ "$rc" -ne 0 ] && ok "refused rather than installed on an assumption" \
     || bad "installed without being able to check"
 [ -s "$WORK/installed" ] && bad "apt ran anyway" || ok "apt never ran"

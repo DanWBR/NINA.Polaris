@@ -65,9 +65,14 @@ public class PlateSolveService {
     /// position instead of "Unknown". Null until the first successful solve.</summary>
     public LastSolveInfo? LastSuccessfulSolve { get; private set; }
 
-    private void RecordSolve(PlateSolveResult r) {
+    private volatile CaptureWcsCalibration? _captureCalibration;
+    internal CaptureWcsCalibration? CaptureCalibration => _captureCalibration;
+
+    internal void RecordSolve(PlateSolveResult r, CaptureWcsContext? captureContext) {
         if (r.Success) {
             LastSuccessfulSolve = new LastSolveInfo(r.RaHours, r.DecDeg, DateTime.UtcNow);
+            if (captureContext != null)
+                _captureCalibration = CaptureWcsCalibration.FromSolve(captureContext, r);
         }
     }
 
@@ -105,7 +110,7 @@ public class PlateSolveService {
         if (primary.IsAvailable) {
             try { onLog?.Invoke($"== {primary.DisplayName} =="); } catch { }
             var result = await primary.SolveAsync(fitsPath, options, ct, onLog);
-            if (result.Success) { RecordSolve(result); return result; }
+            if (result.Success) { RecordSolve(result, options.CaptureContext); return result; }
             primaryError = result.Error;
             _logger.LogWarning("Primary solver {Name} failed: {Err}", primary.DisplayName, result.Error);
         } else {
@@ -118,7 +123,7 @@ public class PlateSolveService {
             _logger.LogInformation("Falling back to blind solver {Name}", blind.DisplayName);
             try { onLog?.Invoke($"== blind fallback: {blind.DisplayName} =="); } catch { }
             var blindResult = await blind.SolveAsync(fitsPath, options, ct, onLog);
-            if (blindResult.Success) { RecordSolve(blindResult); return blindResult; }
+            if (blindResult.Success) { RecordSolve(blindResult, options.CaptureContext); return blindResult; }
             return PlateSolveResult.Failed(
                 $"Primary ({primary.DisplayName}) failed: {primaryError}. " +
                 $"Blind fallback ({blind.DisplayName}) failed: {blindResult.Error}");
@@ -136,6 +141,7 @@ public class PlateSolveService {
 public sealed record LastSolveInfo(double RaHours, double DecDeg, DateTime WhenUtc);
 
 public class PlateSolveOptions {
+    internal CaptureWcsContext? CaptureContext { get; set; }
     public double? HintRa { get; set; }
     public double? HintDec { get; set; }
     public double SearchRadiusDeg { get; set; } = 30;

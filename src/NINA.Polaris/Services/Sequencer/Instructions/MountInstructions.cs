@@ -148,7 +148,9 @@ public class SolveAndSyncInstruction : SequenceInstruction {
         var tempFits = Path.Combine(Path.GetTempPath(), $"nina_solve_{Guid.NewGuid():N}.fits");
         NINA.Image.FileFormat.FITS.FITSWriter.Write(image, tempFits);
         try {
-            var solve = await ctx.PlateSolver.SolveAsync(tempFits, new PlateSolveOptions(), ct);
+            var solve = await ctx.PlateSolver.SolveAsync(tempFits, new PlateSolveOptions {
+                CaptureContext = CaptureWcsContext.Create(ctx.Equipment, ctx.Profiles, image)
+            }, ct);
             if (!solve.Success)
                 throw new InvalidOperationException($"Plate solve failed: {solve.Error}");
             await ctx.Equipment.Telescope.SyncAsync(solve.RaHours, solve.DecDeg, ct);

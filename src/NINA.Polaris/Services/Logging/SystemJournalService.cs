@@ -43,6 +43,7 @@ public sealed class SystemJournalService : BackgroundService {
     internal const string IndiserverLog = "/tmp/indiserver.log";
 
     private readonly RateLimiter _limiter = new(perMinute: 30);
+    private readonly RepeatCollapser _repeats = new(TimeSpan.FromMinutes(5));
 
     public SystemJournalService(LogService log, ILogger<SystemJournalService> logger) {
         _log = log;
@@ -54,6 +55,7 @@ public sealed class SystemJournalService : BackgroundService {
         if (!File.Exists("/usr/bin/journalctl") && !File.Exists("/bin/journalctl")) return;
         try { await Task.Delay(TimeSpan.FromSeconds(3), ct); } catch { return; }
 
+        _ = Task.Run(() => FlushRepeatsAsync(ct), ct);
         if (!await JournalReadableAsync(ct)) {
             _logger.LogInformation(
                 "System journal not readable by this user: USB, crash and WiFi events will not appear in the log. " +
@@ -143,6 +145,10 @@ public sealed class SystemJournalService : BackgroundService {
     }
 
     private void Append(DateTime at, SystemEvent ev) {
+        // An identical line again within the window is counted, not logged:
+        // a guide camera reset by the kernel on every exposure wrote one WARN
+        // every 3 s for an hour and buried the warnings that mattered.
+        if (!_repeats.Offer(ev.Level, ev.Category, ev.Message, at)) return;
         var verdict = _limiter.Admit(ev.Category, at);
         if (verdict.Suppressed > 0)
             _log.Append(new LogEntry(0, at, "warn", "system",
@@ -150,6 +156,18 @@ public sealed class SystemJournalService : BackgroundService {
                 Category: ev.Category));
         if (!verdict.Admit) return;
         _log.Append(new LogEntry(0, at, ev.Level, "system", ev.Message, Category: ev.Category));
+    }
+
+    /// <summary>Writes the "repeated N×" lines, on a timer so a burst that
+    /// stops still gets its count reported.</summary>
+    private async Task FlushRepeatsAsync(CancellationToken ct) {
+        while (!ct.IsCancellationRequested) {
+            try { await Task.Delay(TimeSpan.FromSeconds(30), ct); } catch { return; }
+            foreach (var r in _repeats.Flush(DateTime.UtcNow))
+                _log.Append(new LogEntry(0, DateTime.UtcNow, r.Level, "system",
+                    $"{r.Message} (repeated {r.Count}× in the last {Math.Max(1, (int)Math.Round(r.Span.TotalMinutes))} min)",
+                    Category: r.Category));
+        }
     }
 
     private static async Task<(int Code, string Stdout, string Stderr)> RunAsync(
@@ -168,6 +186,55 @@ public sealed class SystemJournalService : BackgroundService {
             return (proc.ExitCode, await outTask, await errTask);
         } catch {
             return (-1, "", "");
+        }
+    }
+
+    /// <summary>Collapses an identical line repeated within a window: the first
+    /// one is let through, the repeats are counted, and <see cref="Flush"/>
+    /// hands back one summary per window for as long as they keep coming.</summary>
+    internal sealed class RepeatCollapser {
+        private readonly TimeSpan _window;
+        private sealed class Run {
+            public required string Level, Category, Message;
+            public DateTime Since;      // start of the current counting window
+            public DateTime LastSeen;
+            public int Count;           // repeats held back in this window
+        }
+        private readonly Dictionary<string, Run> _runs = new();
+
+        public RepeatCollapser(TimeSpan window) { _window = window; }
+
+        public readonly record struct Summary(string Level, string Category, string Message, int Count, TimeSpan Span);
+
+        /// <summary>True when the line should be logged.</summary>
+        public bool Offer(string level, string category, string message, DateTime at) {
+            var key = level + "\u0001" + category + "\u0001" + message;
+            lock (_runs) {
+                if (_runs.TryGetValue(key, out var r) && at - r.LastSeen < _window) {
+                    r.Count++;
+                    r.LastSeen = at;
+                    return false;
+                }
+                _runs[key] = new Run { Level = level, Category = category, Message = message, Since = at, LastSeen = at };
+                return true;
+            }
+        }
+
+        /// <summary>One summary per line whose window has run out with repeats
+        /// in it. A line still repeating starts a new window; one that has
+        /// gone quiet is forgotten, so its next appearance is logged in full.</summary>
+        public List<Summary> Flush(DateTime now) {
+            var due = new List<Summary>();
+            lock (_runs) {
+                foreach (var (key, r) in _runs.ToList()) {
+                    bool quiet = now - r.LastSeen >= _window;
+                    if (!quiet && now - r.Since < _window) continue;
+                    if (r.Count > 0) due.Add(new Summary(r.Level, r.Category, r.Message, r.Count, r.LastSeen - r.Since));
+                    if (quiet) _runs.Remove(key);
+                    else { r.Since = now; r.Count = 0; }
+                }
+            }
+            return due;
         }
     }
 

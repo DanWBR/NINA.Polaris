@@ -47,6 +47,11 @@ esac
 export DEBIAN_FRONTEND=noninteractive
 export LC_ALL=C
 
+# A stale package list plans versions the repository has since replaced, and
+# the download below then fails with 404. Offline, the old list is all there
+# is, so a failed refresh is not fatal.
+timeout 180 apt-get update -qq >/dev/null 2>&1 || true
+
 PLAN=$(apt-get install -s "$PKG" 2>&1) || fail "apt could not plan the install"
 
 # The one removal allowed: the PPA's indi-3rdparty-libs taking the place of
@@ -80,7 +85,7 @@ trap 'rm -rf "$STAGE"' EXIT
 CLASH=""
 CLASH_N=0
 
-if ( cd "$STAGE" && apt-get download $INCOMING >/dev/null 2>&1 ); then
+if DLERR=$( cd "$STAGE" && apt-get download $INCOMING 2>&1 >/dev/null ); then
     for deb in "$STAGE"/*.deb; do
         [ -e "$deb" ] || continue
         # dpkg-deb -c prints a tar listing; take the regular files only, and
@@ -100,7 +105,8 @@ else
     # Could not check. Say so rather than installing on the assumption that
     # it is fine: this guard exists because the failure it prevents is
     # invisible afterwards.
-    fail "could not download the package to check what it would replace; nothing was installed"
+    WHY=$(echo "$DLERR" | grep '^E:' | head -1 | sed 's/^E: //' | tr -d '"\\')
+    fail "could not download the package to check what it would replace; nothing was installed${WHY:+ ($WHY)}"
 fi
 
 if [ "$CLASH_N" -gt 0 ]; then

@@ -7,6 +7,32 @@ for batch processing (master frames, calibration, integration,
 combine, color calibration) and **Edit** for individual frame
 adjustments (sliders, AI cleanup, crop, export).
 
+## Sky coordinates in captured images (WCS)
+
+After a successful plate solve with the main camera, Polaris adds sky
+coordinates (WCS) to subsequent full-frame LIGHT and SNAP images saved as
+FITS or XISF. Compatible astronomy software can use this information to
+show where the image lies on the sky.
+
+Before starting a capture, use **Solve** in PREVIEW or **Slew & Center**.
+Polaris then reuses the measured camera orientation and image scale,
+combined with the mount's reported position. Each new exposure does not
+need a separate plate solve.
+
+Repeat the plate solve after restarting Polaris, changing your equipment
+or focal length, rotating the camera, or performing a meridian flip.
+For an alt-az mount, repeat it as needed as the field rotates.
+
+These coordinates are approximate and depend on the accuracy of the
+mount's reported position. For precise measurements, plate solve the
+saved image itself.
+
+This automatic addition applies to full-frame images from the main
+camera. Calibration frames, cropped images, auxiliary-camera images and
+stacks are excluded. Solving an imported file does not update the
+information used for new captures. Existing WCS is preserved, and native
+DSLR RAW files are unchanged.
+
 ## Why it is unified
 
 The three old tabs (FILES, STUDIO, EDITOR) were three views of the

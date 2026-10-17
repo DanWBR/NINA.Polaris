@@ -60,6 +60,11 @@ namespace NINA.Polaris.Services;
 public sealed record IndiInstalledDriver(string Label, string? Binary, string? Family,
                                          string? Manufacturer = null);
 
+/// <summary>A driver of the running indi-web profile. <paramref name="Label"/>
+/// is what start/stop/restart take; <paramref name="Name"/> is indi-web's own
+/// name for it, which is not always the label ("Touptek" vs "Toupcam").</summary>
+public sealed record IndiRunningDriver(string Label, string? Binary, string? Name);
+
 public class IndiWebManagerService : BackgroundService {
     /// <summary>The unit the .deb ships in /lib/systemd/system. Starting
     /// indi-web through it is what keeps the drivers alive across a restart of
@@ -434,13 +439,20 @@ public class IndiWebManagerService : BackgroundService {
     /// (from <c>GET /api/server/drivers</c>). Empty when indi-web is down or
     /// no server is running. Labels are what the start/stop/restart calls
     /// take.</summary>
-    public async Task<List<string>> GetRunningDriverLabelsAsync(CancellationToken ct = default) {
+    public async Task<List<string>> GetRunningDriverLabelsAsync(CancellationToken ct = default)
+        => (await GetRunningDriversAsync(ct)).Select(d => d.Label).ToList();
+
+    /// <summary>The drivers of the running profile with what identifies each:
+    /// the label indi-web acts on, the executable and indi-web's name. A
+    /// device's own DRIVER_NAME is none of these reliably: indi_toupcam_ccd
+    /// calls itself "ToupTek" while indi-web knows it as "Toupcam".</summary>
+    public async Task<List<IndiRunningDriver>> GetRunningDriversAsync(CancellationToken ct = default) {
         if (!IsSupportedOs || !Running) return [];
         try {
             var drivers = await Http.GetFromJsonAsync<List<IndiWebDriver>>(
                 "/api/server/drivers", ct);
             return drivers?.Where(d => !string.IsNullOrWhiteSpace(d.Label))
-                          .Select(d => d.Label!).ToList() ?? [];
+                          .Select(d => new IndiRunningDriver(d.Label!, d.Binary, d.Name)).ToList() ?? [];
         } catch (Exception ex) {
             _logger.LogDebug(ex, "indi-web GET /api/server/drivers failed");
             return [];
@@ -744,6 +756,7 @@ public class IndiWebManagerService : BackgroundService {
     }
 
     private sealed class IndiWebDriver {
+        public string? Name { get; set; }
         public string? Label { get; set; }
         public string? Version { get; set; }
         public string? Binary { get; set; }

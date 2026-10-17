@@ -292,7 +292,13 @@ public static class FITSWriter {
         if (imageData.Properties.Wcs != null) {
             var wcsCards = new List<KeyValuePair<string, string>>();
             WcsHeaders.Add(wcsCards, imageData.Properties.Wcs);
-            foreach (var kv in wcsCards) AddStr(cards, kv.Key, kv.Value);
+            foreach (var kv in wcsCards) {
+                cards.RemoveAll(card => card.StartsWith(kv.Key.PadRight(8) + "=", StringComparison.Ordinal));
+                if (double.TryParse(kv.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
+                    Add(cards, kv.Key, kv.Value);
+                else
+                    AddStr(cards, kv.Key, kv.Value);
+            }
         }
 
         // ---- Custom user keywords (last so they can override anything) ----

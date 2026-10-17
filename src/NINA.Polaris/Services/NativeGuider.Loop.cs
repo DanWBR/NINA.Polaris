@@ -38,6 +38,8 @@ public sealed partial class NativeGuider {
         _slewHold = false;
         _starLostCount = 0;
         _warned8Bit = false;
+        _badFrameStreak = 0;
+        _badFrameAlerted = false;
         SetAppState(mode == LoopMode.Guide ? "Guiding" : "Looping");
         _loopTask = Task.Run(() => LoopAsync(mode, token), token);
     }
@@ -549,6 +551,32 @@ public sealed partial class NativeGuider {
         }
     }
 
+    /// <summary>Captures in a row that gave no usable frame, and whether that
+    /// streak has been announced. A Loop that only ever got empty or failed
+    /// frames used to keep reporting "Looping" with nothing said anywhere
+    /// except one log line per failed capture.</summary>
+    private int _badFrameStreak;
+    private bool _badFrameAlerted;
+    internal const int BadFrameAlertAfter = 3;
+
+    internal void NoteBadFrame(string why) {
+        _badFrameStreak++;
+        if (_badFrameStreak < BadFrameAlertAfter || _badFrameAlerted) return;
+        _badFrameAlerted = true;
+        RaiseAlert($"No usable guide frame in {_badFrameStreak} captures in a row: {why}");
+    }
+
+    internal void NoteGoodFrame() {
+        if (_badFrameAlerted) RaiseInfo("Guide frames are arriving again.");
+        _badFrameStreak = 0;
+        _badFrameAlerted = false;
+    }
+
+    /// <summary>True when every pixel is 0. A sensor read always carries
+    /// offset and noise, so this is a frame whose data never arrived.</summary>
+    internal static bool IsEmptyFrame(ushort[]? data)
+        => data is { Length: > 0 } && data.AsSpan().IndexOfAnyExcept((ushort)0) < 0;
+
     private async Task<IImageData?> CaptureFullAsync(ICamera cam, CancellationToken ct, string? phase = null) {
         int expMs = Math.Max(50, Rig.NativeGuideExposureMs);
         int bin = Math.Clamp(Rig.NativeGuideBin <= 0 ? 1 : Rig.NativeGuideBin, 1, 4);
@@ -576,6 +604,7 @@ public sealed partial class NativeGuider {
             await _captureGate.WaitAsync(capCts.Token);
         } catch (OperationCanceledException) when (!ct.IsCancellationRequested) {
             _logger.LogWarning("Guide capture waited {Ms} ms for the camera and gave up", budgetMs);
+            NoteBadFrame("the guide camera stays busy with an earlier exposure.");
             if (phase != null) SetActivity(null);
             return null;
         } catch (OperationCanceledException) {
@@ -584,6 +613,15 @@ public sealed partial class NativeGuider {
         }
         try {
             var img = await cam.CaptureAsync(expMs / 1000.0, opts, capCts.Token);
+            // Checked before calibration, which could otherwise turn a real
+            // frame into zeros or hide an empty one.
+            if (IsEmptyFrame(img?.Data)) {
+                _logger.LogWarning("Guide camera returned an empty frame (every pixel 0)");
+                NoteBadFrame("the guide camera returns empty frames (every pixel 0), so its data "
+                    + "is not crossing the USB link. Try another cable or another USB port.");
+                return null;
+            }
+            if (img != null) NoteGoodFrame();
             // Apply the dark library / bad-pixel map (per NativeGuideCalibrationMode)
             // before any consumer sees the frame, so star detection, the multi-star
             // tracker, calibration and the live view all run on a calibrated frame.
@@ -596,6 +634,7 @@ public sealed partial class NativeGuider {
             // Our budget elapsed, not a user Stop: a dropped/stalled frame.
             // Abort the exposure so the driver resets before the next attempt.
             _logger.LogWarning("Guide capture exceeded {Ms} ms budget (dropped BLOB?); aborting to recover", budgetMs);
+            NoteBadFrame($"each capture runs past its {budgetMs} ms budget without a frame.");
             // Bound the abort: if the INDI link itself wedged (dropped BLOB at
             // RA reversal / cloud-out on a USB guide cam), an unbounded abort
             // hangs the loop forever -- Stop then times out and abandons a
@@ -611,6 +650,7 @@ public sealed partial class NativeGuider {
             throw;
         } catch (Exception ex) {
             _logger.LogWarning(ex, "Guide capture failed");
+            NoteBadFrame(ex.Message);
             return null;
         } finally {
             _captureGate.Release();

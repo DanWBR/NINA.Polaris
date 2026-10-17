@@ -27,6 +27,11 @@ case "$1" in
             mkdir -p /var/log/journal 2>/dev/null || true
             systemctl restart systemd-journald 2>/dev/null || true
         fi
+        # REBOOT ON HANG: reboot after a kernel panic from now on. The
+        # hardware-watchdog drop-in (/etc/systemd/system.conf.d) is read at the
+        # next boot; PID 1 is not re-executed in the middle of an unattended
+        # update for it.
+        sysctl -q -p /etc/sysctl.d/90-polaris-panic.conf 2>/dev/null || true
         # ---- 1. System user ----
         if ! getent passwd $POLARIS_USER >/dev/null; then
             adduser --system --group --home $POLARIS_HOME \

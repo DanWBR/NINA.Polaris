@@ -127,6 +127,57 @@ public class SystemEventsTests {
         Assert.That(next, Is.EqualTo((true, 7)));
     }
 
+    private const string UsbReset = "usb 5-1: reset high-speed USB device number 3 using ehci-platform";
+
+    [Test]
+    public void ARepeatedLineIsLoggedOnce_AndSummarisedPerWindow() {
+        // A guide camera the kernel resets on every 2 s exposure: one WARN every
+        // ~3 s for an hour, which buried every other warning in the log.
+        var c = new SystemJournalService.RepeatCollapser(TimeSpan.FromMinutes(5));
+        var t0 = new DateTime(2026, 10, 17, 13, 0, 0, DateTimeKind.Utc);
+        var logged = Enumerable.Range(0, 100).Count(i => c.Offer("warn", "kernel", UsbReset, t0.AddSeconds(3 * i)));
+        Assert.That(logged, Is.EqualTo(1), "only the first is written");
+        Assert.That(c.Flush(t0.AddMinutes(2)), Is.Empty, "nothing due before the window runs out");
+        var s = c.Flush(t0.AddMinutes(5).AddSeconds(1));
+        Assert.That(s, Has.Count.EqualTo(1));
+        Assert.That(s[0].Count, Is.EqualTo(99));
+        Assert.That(s[0].Message, Is.EqualTo(UsbReset));
+        Assert.That(s[0].Level, Is.EqualTo("warn"));
+    }
+
+    [Test]
+    public void AFloodThatGoesOnGetsOneSummaryPerWindow() {
+        var c = new SystemJournalService.RepeatCollapser(TimeSpan.FromMinutes(5));
+        var t0 = new DateTime(2026, 10, 17, 13, 0, 0, DateTimeKind.Utc);
+        c.Offer("warn", "kernel", UsbReset, t0);
+        for (int i = 1; i <= 100; i++) c.Offer("warn", "kernel", UsbReset, t0.AddSeconds(3 * i));
+        Assert.That(c.Flush(t0.AddMinutes(5).AddSeconds(1)).Single().Count, Is.EqualTo(100));
+        // Still repeating: counted again, not logged again.
+        for (int i = 101; i <= 200; i++)
+            Assert.That(c.Offer("warn", "kernel", UsbReset, t0.AddSeconds(3 * i)), Is.False);
+        Assert.That(c.Flush(t0.AddMinutes(10).AddSeconds(2)).Single().Count, Is.EqualTo(100));
+    }
+
+    [Test]
+    public void ALineThatWentQuietIsLoggedInFullNextTime() {
+        var c = new SystemJournalService.RepeatCollapser(TimeSpan.FromMinutes(5));
+        var t0 = new DateTime(2026, 10, 17, 13, 0, 0, DateTimeKind.Utc);
+        c.Offer("warn", "kernel", UsbReset, t0);
+        c.Offer("warn", "kernel", UsbReset, t0.AddSeconds(3));
+        c.Flush(t0.AddMinutes(6));                // reports the one repeat, forgets the line
+        Assert.That(c.Offer("warn", "kernel", UsbReset, t0.AddMinutes(20)), Is.True);
+        Assert.That(c.Flush(t0.AddMinutes(30)), Is.Empty, "a lone line has nothing to summarise");
+    }
+
+    [Test]
+    public void DifferentLinesAreNotCollapsedTogether() {
+        var c = new SystemJournalService.RepeatCollapser(TimeSpan.FromMinutes(5));
+        var t0 = new DateTime(2026, 10, 17, 13, 0, 0, DateTimeKind.Utc);
+        Assert.That(c.Offer("warn", "kernel", UsbReset, t0), Is.True);
+        Assert.That(c.Offer("warn", "kernel", "usb 2-1: USB disconnect, device number 2", t0.AddSeconds(1)), Is.True);
+        Assert.That(c.Offer("error", "kernel", UsbReset, t0.AddSeconds(2)), Is.True, "another level is another line");
+    }
+
     [Test]
     public async Task TheDiagnosticsZip_HasTheLogsAndRedactsSecrets() {
         var log = new LogService();

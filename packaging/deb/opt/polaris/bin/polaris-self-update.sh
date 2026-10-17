@@ -76,7 +76,7 @@ sdk_present() {
         # on one card, and the archive's libasi then repointed all four ZWO
         # sonames at older builds. The focuser failed loudly on a missing
         # symbol; the camera just quietly dropped from SDK 1.41 to 1.27.
-        indi-bin|indi-full)
+        indi-bin|indi-full|indi-3rdparty-drivers)
             [ -e /usr/bin/indiserver ] && ! dpkg -S /usr/bin/indiserver >/dev/null 2>&1 && return 0
             return 1 ;;
         *) return 1 ;;
@@ -93,12 +93,34 @@ sdk_present() {
     return 1
 }
 
+# A Recommend is installed only when apt's plan for it removes nothing. The
+# one exception is the INDI PPA's indi-3rdparty-libs taking the place of the
+# per-vendor SDK packages it Replaces (polaris-indi-install.sh and
+# IndiPackagePlanner keep the same list). On 2026-09-25 an archive INDI
+# driver installed by hand removed indi-bin, libindi1 and PHD2, and the
+# archive's libasi it brought took the third-party drivers with it; this
+# loop runs apt-get -y unattended, so it reads the plan first.
+REPLACED_BY_3RDPARTY_LIBS=" libahp-gt libahp-xc libaltaircam libapogee-dbg libapogee3 libapogee3-dev libasi libastroasis libatik libbressercam libfishcamp libfishcamp-dev libfli-dbg libfli-dev libfli2 libflipro-dev libflipro2 libinovasdk libmallincam libmeadecam libmicam libnncam libogmacam libomegonprocam libpigpiod libpigpiod-dbg libpktriggercord libplayerone libqhy libqsi-dbg libqsi-dev libqsi7 libricohcamerasdk libsbig libstarshootg libsvbony libsvbonycam libtoupcam libtscam "
+removes_nothing() {
+    plan=$(apt-get install -s --no-install-recommends "$1" 2>/dev/null) || return 0
+    removed=$(echo "$plan" | awk '/^Remv /{printf "%s ", $2}')
+    [ -z "$removed" ] && return 0
+    echo "$plan" | grep -q '^Inst indi-3rdparty-libs ' || return 1
+    for r in $removed; do
+        case "$REPLACED_BY_3RDPARTY_LIBS" in *" $r "*) ;; *) return 1 ;; esac
+    done
+    return 0
+}
+
 # Missing Recommends, one apt run each (bounded to 5 minutes) so a package
 # this distro does not carry, or a mirror that is down, only skips that one.
 # An entry with alternatives ("libraw23 | libraw20") is satisfied by any of
 # them installed, and tried in order otherwise. ffmpeg is the one that
 # matters most: MP4 output (time-lapse, SER to MP4) needs it.
 install_recommends() {
+    # A stale package list names versions the repository has since replaced,
+    # and every download then fails with 404. Offline it is all there is.
+    timeout 180 apt-get update -qq >> "$LOG" 2>&1 || true
     dpkg-query -W -f='${Recommends}
 ' polaris 2>/dev/null | tr ',' '
 ' | sed 's/([^)]*)//g'     | while read -r entry; do
@@ -119,6 +141,9 @@ install_recommends() {
         [ "$skip" -eq 1 ] && continue
         done_one=0
         for p in $alts; do
+            if ! removes_nothing "$p"; then
+                echo "recommends: $p left out, it would remove $removed" >> "$LOG"; continue
+            fi
             if timeout 300 apt-get install -y --no-install-recommends "$p" >> "$LOG" 2>&1; then
                 echo "recommends: $p installed" >> "$LOG"; done_one=1; break
             fi

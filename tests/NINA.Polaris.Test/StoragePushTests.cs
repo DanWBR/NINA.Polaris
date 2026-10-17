@@ -310,4 +310,14 @@ public class StoragePushTests {
             src.Delete(true); dst.Delete(true);
         }
     }
+
+    [Test]
+    public void ALockedSidecarIsReplacedByOneOfItsOwn_StillMarkedPartial() {
+        // After an SMB write timed out the server kept the usual .part open and
+        // every retry failed on it with STATUS_SHARING_VIOLATION.
+        var alt = StoragePath.AttemptPartialPath("rig/a.fits", "1a2b3c4d");
+        Assert.That(alt, Is.EqualTo("rig/a.fits.1a2b3c4d" + StoragePath.PartialSuffix));
+        Assert.That(alt, Does.EndWith(StoragePath.PartialSuffix), "a leftover still reads as incomplete");
+        Assert.That(alt, Is.Not.EqualTo("rig/a.fits" + StoragePath.PartialSuffix));
+    }
 }

@@ -9911,8 +9911,21 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                                     </div>
                                                 </template>
 
+                                                <!-- List of named choices (conversion gain): the value
+                                                     is the index of the option -->
+                                                <template x-if="c.options && c.options.length && c.writable">
+                                                    <div class="indi-switch-row">
+                                                        <select class="input-sm"
+                                                                @change="setCamCtrl(c, Number($event.target.value))">
+                                                            <template x-for="(o, i) in c.options" :key="i">
+                                                                <option :value="i" :selected="i === c.value" x-text="o"></option>
+                                                            </template>
+                                                        </select>
+                                                    </div>
+                                                </template>
+
                                                 <!-- Numeric slider + number box -->
-                                                <template x-if="c.valueType !== 'bool' && c.writable">
+                                                <template x-if="c.valueType !== 'bool' && !(c.options && c.options.length) && c.writable">
                                                     <div class="indi-prop-rows">
                                                         <div class="indi-prop-row">
                                                             <span class="indi-elem-label"
@@ -17937,6 +17950,30 @@ Windows  winget install Rclone.Rclone</code></pre>
                             </li>
                         </template>
                     </ul>
+
+                    <!-- Autofocus runs: one JSON per run under logs/autofocus/,
+                         kept 90 days (apart from the 7-day session log). -->
+                    <p class="hint" style="margin-top:14px">
+                        Every autofocus run is saved as a JSON file under <code>logs/autofocus/</code>
+                        (points, fit, R², chosen position, temperature, filter) and kept for 90 days.
+                    </p>
+                    <div style="margin-top:6px; display:flex; align-items:center; gap:8px">
+                        <button class="btn btn-sm" @click="loadAfLogs()">Refresh autofocus runs</button>
+                        <span class="hint" x-show="afLogs.length===0" style="margin:0">No autofocus runs saved yet.</span>
+                    </div>
+                    <ul x-show="afLogs.length>0" style="list-style:none; padding:0; margin:8px 0 0; max-height:200px; overflow:auto">
+                        <template x-for="r in afLogs" :key="r.name">
+                            <li style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:3px 0; border-bottom:1px solid var(--border, #333)">
+                                <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1"
+                                      :style="r.success ? '' : 'color:var(--text-warn, #f59e0b)'"
+                                      :title="r.error || r.name" x-text="afLogLine(r)"></span>
+                                <button class="btn btn-sm" @click="downloadAfLog(r.name)"
+                                        title="Download the run as JSON">⬇</button>
+                                <button class="btn btn-sm" @click="openAfLog(r.name)"
+                                        title="Show the focus curve of this run">📈 View</button>
+                            </li>
+                        </template>
+                    </ul>
                 </div>
 
 
@@ -23604,6 +23641,40 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
     </div>
 
+    <!-- Autofocus run viewer: a saved run (logs/autofocus/) drawn with the
+         FOCUS tab's own V-curve code. Top level for the same reason as the
+         guide-log viewer above. -->
+    <div class="modal-overlay" x-show="afLogViewer.open" x-cloak
+         @keydown.escape.window="afLogViewer.open=false"
+         @click.self="afLogViewer.open=false">
+        <div style="width:min(960px,96vw);max-height:92vh;overflow:auto;background:var(--panel,#16213e);border:1px solid var(--border);border-radius:12px;padding:16px">
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+                <h3 style="margin:0;font-size:15px">📈 <span>Autofocus run</span>,
+                    <span style="font-weight:400;font-size:13px;color:var(--text-secondary)" x-text="afLogViewer.fileName"></span></h3>
+                <button class="btn btn-sm" @click="afLogViewer.open=false">✕</button>
+            </div>
+            <p class="hint" x-show="afLogViewer.loading" style="margin-top:12px">Loading…</p>
+            <p class="text-warn" x-show="afLogViewer.error" style="margin-top:12px" x-text="afLogViewer.error"></p>
+            <template x-if="!afLogViewer.loading && !afLogViewer.error && afLogViewer.run">
+                <div>
+                    <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px">
+                        <template x-for="t in afLogTiles" :key="t.label">
+                            <div style="flex:1;min-width:96px;background:var(--bg-elevated,rgba(255,255,255,0.05));border:1px solid var(--border);border-radius:8px;padding:8px 10px">
+                                <div class="hint" style="margin:0;font-size:10px;text-transform:uppercase" x-text="t.label"></div>
+                                <div style="font-size:18px;font-weight:700" :style="t.color?('color:'+t.color):''"><span x-text="t.value"></span><span style="font-size:11px;font-weight:400;color:var(--text-secondary)" x-text="' '+t.unit"></span></div>
+                            </div>
+                        </template>
+                    </div>
+                    <div style="height:320px;margin-top:14px"><canvas x-ref="afLogChart"></canvas></div>
+                    <p class="hint" style="margin-top:6px;font-size:11px">
+                        <span x-text="(afLogViewer.run.filter ? afLogViewer.run.filter + '  ·  ' : '') + (afLogViewer.run.focuser || '') + '  ·  ' + (afLogViewer.run.result.method || '')"></span>
+                        <span x-show="afLogViewer.run.result.error" x-text="'  ·  ' + afLogViewer.run.result.error"></span>
+                    </p>
+                </div>
+            </template>
+        </div>
+    </div>
+
     <!-- PLAN: host-shutdown risk confirmation -->
     <!-- Violet halo (ED doublet out-of-focus pedestal) run modal -->
     <div class="modal-overlay" x-show="violetHalo.modalOpen" x-cloak
@@ -25631,7 +25702,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261016-indiwebtok"></script>
+    <script src="/js/app.js?v=20261017-aflogs2"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
