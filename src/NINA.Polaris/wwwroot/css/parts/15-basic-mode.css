@@ -319,12 +319,9 @@
     .basic-shell .bs-temp .bs-tcool:first-of-type{display:none}
 }
 
-/* Portrait phones: the HUD becomes a short strip so the image starts higher. */
-@media (orientation: portrait) and (max-width: 560px){
-    .basic-shell .bs-lhud{width:auto; right:84px; padding:6px 10px}
-    .basic-shell .bs-lsnr .v{font-size:22px}
-    .basic-shell .bs-lhud .bs-lrow{display:inline-flex; margin-right:12px}
-}
+/* LIVE: one line of counts instead of the quality card. */
+.basic-shell .bs-lhud.bs-lhud-min{width:auto; padding:6px 12px; border-radius:16px}
+.basic-shell .bs-lhud.bs-lhud-min .bs-lrow{margin-top:0; gap:12px; white-space:nowrap}
 
 /* Short landscape screens (a tablet on its side): the right rail no longer
    fits its full column, and the lowest buttons slid under the bottom bar.
@@ -338,8 +335,6 @@
     .basic-shell .bs-lacts{flex-direction:row; gap:4px}
     .basic-shell .bs-lacts .bs-lt{display:none}
     .basic-shell .bs-lacts .bs-lreset{padding:0 9px; height:30px}
-    .basic-shell .bs-lhud{width:180px; padding:8px 10px}
-    .basic-shell .bs-lsnr .v{font-size:22px}
 }
 
 /* mount speed slider (in the mount pad side column) */

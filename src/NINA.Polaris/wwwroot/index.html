@@ -64,7 +64,7 @@
          Inert unless a manifest URL is configured (assistant-config.json). -->
     <link rel="stylesheet" href="/css/parts/13-assistant.css?v=20260705-assist15">
     <link rel="stylesheet" href="/css/parts/14-uiscale-text.css?v=20260707-hintsize">
-    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20261018-field1">
+    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20261018-field2">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -22370,13 +22370,9 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         <div id="basicCurveSlot" x-show="basicScreen==='focus'" x-cloak></div>
         <div id="basicGuideGraphSlot" x-show="basicScreen==='guide'" x-cloak></div>
 
-        <!-- Live stacking quality HUD: SNR / frames / ETA / state. -->
-        <div class="bs-lhud" x-show="basicScreen==='live' && liveStackStatus" x-cloak>
-            <div class="bs-lsnr num"><span class="v" x-text="(liveStackStatus && liveStackStatus.cumulativeSnr > 0) ? liveStackStatus.cumulativeSnr.toFixed(1) : '--'"></span><span class="l">SNR</span></div>
-            <div class="bs-lrow num"><span>Frames <b x-text="(liveStackStatus && liveStackStatus.frameCount) || 0"></b></span><span x-show="(liveStackStatus && liveStackStatus.rejectedFrames) > 0">Dropped <b x-text="(liveStackStatus && liveStackStatus.rejectedFrames) || 0"></b></span></div>
-            <div class="bs-lrow num" x-show="basicLiveIntegration()"><span>Total <b x-text="basicLiveIntegration()"></b></span></div>
-            <div class="bs-lrow num" x-show="liveStackStatus && liveStackStatus.lastFrameHfr > 0"><span>HFR <b x-text="liveStackStatus && liveStackStatus.lastFrameHfr > 0 ? liveStackStatus.lastFrameHfr.toFixed(2) : ''"></b></span><span x-show="liveStackStatus && liveStackStatus.lastFrameStarCount > 0">Stars <b x-text="(liveStackStatus && liveStackStatus.lastFrameStarCount) || 0"></b></span></div>
-            <div class="bs-leta num" x-show="basicSnrEta()" x-text="basicSnrEta()"></div>
+        <!-- Live stacking: frames stacked, dropped, and the integrated time. -->
+        <div class="bs-lhud bs-lhud-min" x-show="basicScreen==='live' && liveStackStatus" x-cloak>
+            <div class="bs-lrow num"><span>Stacked <b x-text="(liveStackStatus && liveStackStatus.frameCount) || 0"></b></span><span>Dropped <b x-text="(liveStackStatus && liveStackStatus.rejectedFrames) || 0"></b></span><span x-show="basicLiveTotal()">Total <b x-text="basicLiveTotal()"></b></span></div>
         </div>
 
         <!-- Video quality HUD: sharpness (focus aid) / FPS / REC frames+duration. -->
@@ -25429,7 +25425,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261018-field1"></script>
+    <script src="/js/app.js?v=20261018-field2"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

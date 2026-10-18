@@ -31017,23 +31017,15 @@ function ninaApp() {
         basicEquipModalTitle() {
             return ({ camera: 'Camera settings', mount: 'Mount settings', focuser: 'Focuser settings', filter: 'Filter wheel settings', guide: 'Guiding settings' })[this.basicEquipModal] || 'Settings';
         },
-        // Field HUD: integrated time so far, "32 × 60s · 32m".
-        basicLiveIntegration() {
+        // Field HUD: integrated time so far ("32m", "1h 4m").
+        basicLiveTotal() {
             const n = (this.liveStackStatus && this.liveStackStatus.frameCount) || 0;
             const exp = Number(this.exposure) || 0;
             if (n <= 0 || exp <= 0) return '';
             const total = n * exp;
-            const t = total < 60 ? Math.round(total) + 's'
+            return total < 60 ? Math.round(total) + 's'
                 : total < 3600 ? Math.round(total / 60) + 'm'
                 : Math.floor(total / 3600) + 'h ' + Math.round((total % 3600) / 60) + 'm';
-            const e = exp < 1 ? exp.toFixed(2) : (Number.isInteger(exp) ? exp : exp.toFixed(1));
-            return `${n} × ${e}s · ${t}`;
-        },
-        // The SNR ETA, or nothing: formatSnrEta's "-" placeholder showed as a
-        // lone dash in the field HUD.
-        basicSnrEta() {
-            const s = this.formatSnrEta(this.liveStackStatus);
-            return s && s !== '-' ? s : '';
         },
         // "→ -10°" and "100%" next to the sensor temperature while the cooler
         // runs, so a cooler at its limit is visible without opening anything.
