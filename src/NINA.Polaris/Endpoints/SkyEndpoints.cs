@@ -190,6 +190,7 @@ public static class SkyEndpoints {
                     magnitude = o.Magnitude,
                     type = o.Type,
                     commonName = o.CommonName,
+                    targetName = o.TargetName,
                     sizeArcmin = o.SizeArcmin,
                     aliases = o.Aliases
                 })
@@ -397,9 +398,8 @@ public static class SkyEndpoints {
                 found = true,
                 name = o.Name,
                 commonName = o.CommonName,
-                // Friendly label: prefer the common name, fall back to the
-                // catalog designation.
-                displayName = string.IsNullOrWhiteSpace(o.CommonName) ? o.Name : o.CommonName,
+                // A short name to put in the target field.
+                displayName = o.TargetName,
                 type = o.Type,
                 magnitude = o.Magnitude >= 99 ? (double?)null : o.Magnitude,
                 ra = o.Ra,

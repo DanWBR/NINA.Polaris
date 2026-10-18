@@ -26440,7 +26440,7 @@ function ninaApp() {
 
         planAddTargetFromCatalog(o) {
             const t = this._blankTarget();
-            t.name = o.commonName || o.name || 'Target';
+            t.name = o.targetName || o.name || 'Target';
             t.raHours = o.ra ?? o.raHours ?? 0;
             t.decDeg = o.dec ?? o.decDeg ?? 0;
             // Persist the catalog designation so the card thumbnail resolves
@@ -28855,7 +28855,7 @@ function ninaApp() {
             // Catalogue results carry ra (hours) + dec (degrees).
             this.filesSolveModal.hintRaHours = o.ra ?? o.raHours ?? null;
             this.filesSolveModal.hintDecDeg = o.dec ?? o.decDeg ?? null;
-            this.filesSolveModal.objectName = o.commonName || o.name || '';
+            this.filesSolveModal.objectName = o.targetName || o.name || '';
             this.filesSolveModal.search = o.name || this.filesSolveModal.objectName;
             this.filesSolveModal.searchResults = [];
         },
