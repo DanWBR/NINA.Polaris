@@ -229,6 +229,13 @@ public sealed class ToupTekSdkCamera : ICamera {
         if ((flag & (ulong)Toupcam.eFLAG.FLAG_TEC_ONOFF) != 0)
             cam.put_Option(Toupcam.eOPTION.OPTION_TEC, 0);
 
+        // The camera opens with its own auto exposure running (an AE676C:
+        // continuous, up to 350 ms and gain 500). In video mode it overrode
+        // every exposure and gain Polaris set, so the live view always looked
+        // the same brightness whatever the exposure, and a recording came out
+        // at gain 500.
+        cam.put_AutoExpoEnable(0);
+
         // Raw (bayer) output, max bit depth.
         cam.put_Option(Toupcam.eOPTION.OPTION_RAW, 1);
         cam.put_Option(Toupcam.eOPTION.OPTION_BITDEPTH, 1);

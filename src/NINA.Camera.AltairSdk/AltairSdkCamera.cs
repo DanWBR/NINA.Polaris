@@ -158,6 +158,10 @@ public sealed class AltairSdkCamera : ICamera {
         if ((flag & (ulong)Altaircam.eFLAG.FLAG_TEC_ONOFF) != 0)
             cam.put_Option(Altaircam.eOPTION.OPTION_TEC, 0);
 
+        // Opens with the SDK's auto exposure running, which overrides the
+        // exposure and gain Polaris sets (same SDK family as ToupTek).
+        cam.put_AutoExpoEnable(0);
+
         // Raw (bayer) output, max bit depth.
         cam.put_Option(Altaircam.eOPTION.OPTION_RAW, 1);
         cam.put_Option(Altaircam.eOPTION.OPTION_BITDEPTH, 1);
