@@ -126,16 +126,19 @@ public sealed class AltairSdkCamera : ICamera {
     public Task ConnectAsync(CancellationToken ct = default) => Task.Run(() => {
         // Find the model entry to read flags + pixel size before opening.
         ulong flag = 0;
+        bool found = false;
         try {
             foreach (var d in Altaircam.EnumV2()) {
                 if (d.id == _camId) {
                     flag = d.model.flag;
                     _pixelSize = d.model.xpixsz;
                     if (!string.IsNullOrWhiteSpace(d.displayname)) DeviceName = d.displayname;
+                    found = true;
                     break;
                 }
             }
         } catch { }
+        if (found) CameraClaims.ThrowIfHeld(DeviceName, "Altair SDK");
 
         var cam = Altaircam.Open(_camId);
         if (cam == null) throw new InvalidOperationException(

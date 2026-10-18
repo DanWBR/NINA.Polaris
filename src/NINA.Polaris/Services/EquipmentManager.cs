@@ -96,6 +96,18 @@ public class EquipmentManager : IDisposable {
         _simGear = simGear;
         _profiles = profiles;
         _indiClient.DeviceFound += OnDeviceFound;
+        CameraClaims.HolderOf = name => IndiCameraHolding(_indiClient, name);
+    }
+
+    /// <summary>The connected INDI camera device that is the camera a native
+    /// SDK knows as <paramref name="nativeName"/>, or null.</summary>
+    internal static string? IndiCameraHolding(IndiClient indi, string nativeName) {
+        foreach (var device in indi.GetDeviceNames()) {
+            if (!CameraClaims.SameModel(device, nativeName)) continue;
+            if (indi.GetProperty(device, "CCD_EXPOSURE") == null) continue;
+            if (indi.GetSwitch(device, "CONNECTION", "CONNECT")) return device;
+        }
+        return null;
     }
 
     public IEnumerable<string> GetDeviceNames() => _indiClient.GetDeviceNames();

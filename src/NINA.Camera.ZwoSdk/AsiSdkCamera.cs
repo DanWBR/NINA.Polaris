@@ -168,6 +168,7 @@ public sealed class AsiSdkCamera : ICamera {
             }
         }
         if (!found) throw new InvalidOperationException($"ASI camera id {_cameraId} not found.");
+        CameraClaims.ThrowIfHeld(info.Name, "ZWO SDK");
 
         var openErr = ASIOpenCamera(_cameraId);
         if (openErr != ASI_ERROR_CODE.ASI_SUCCESS)
@@ -447,6 +448,11 @@ public sealed class AsiSdkCamera : ICamera {
     public Task<IImageData> CaptureAsync(double exposureSeconds, CaptureOptions? opts = null,
                                          CancellationToken ct = default) => Task.Run<IImageData>(() => {
         lock (_gate) {
+            // A camera already given up on is not called into again: closing
+            // and reopening an ASI678MC caught in a USB reset loop on every
+            // guide frame ended with Polaris dying in the SDK.
+            if (!_connected) throw new InvalidOperationException(
+                $"The ZWO camera is not connected: {_disconnectReason ?? "it was disconnected"}.");
             if (_streaming) throw new InvalidOperationException("Stop the video stream before a still exposure.");
             // Re-assert the 16-bit ROI format (size + bin + image type) right
             // before the still, mirroring the SVBony native path. We own the
@@ -521,10 +527,13 @@ public sealed class AsiSdkCamera : ICamera {
               } catch (Exception ex) when (attempt < StillAttempts && IsRecoverable(ex)) {
                 StillReopens++;
                 bool reopened = ReopenHandle(forStream: false);
-                if (!reopened) throw new InvalidOperationException(
-                    ExposureFailureMessage(w, h, attempt) + " The SDK also refused to reopen the "
-                    + "camera, so it is not answering at all: cut its USB power (unplug it for a "
-                    + "few seconds) and reconnect.", ex);
+                if (!reopened) {
+                    MarkUnresponsive();
+                    throw new InvalidOperationException(
+                        ExposureFailureMessage(w, h, attempt) + " The SDK also refused to reopen the "
+                        + "camera, so it is not answering at all: cut its USB power (unplug it for a "
+                        + "few seconds) and reconnect.", ex);
+                }
                 // Reopening resets the ROI/format, so re-assert them for the retry.
                 ApplyRoi();
                 ApplyExposureGain(exposureSeconds, opts?.Gain, opts?.Offset);
@@ -829,6 +838,18 @@ public sealed class AsiSdkCamera : ICamera {
         _disconnectReason = rc == ASI_ERROR_CODE.ASI_ERROR_CAMERA_REMOVED
             ? "the camera reported itself removed from the USB bus"
             : "the SDK no longer knows this camera id, which is what a removed camera looks like";
+    }
+
+    /// <summary>The reopen after a failed exposure was refused: the camera
+    /// stays disconnected until the operator reconnects it, instead of every
+    /// following capture closing and reopening a handle that is not there.</summary>
+    private void MarkUnresponsive() {
+        if (!_connected) return;
+        _connected = false;
+        _streaming = false;
+        _disconnectReason = "the camera stopped answering and the SDK refused to reopen it; "
+            + "unplug it for a few seconds and reconnect";
+        State = CameraStates.NoState;
     }
 
     // ----- Dynamic control panel (self-describing via ASIGetControlCaps) -----
