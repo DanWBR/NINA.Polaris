@@ -17614,7 +17614,7 @@ Windows  winget install Rclone.Rclone</code></pre>
                         Auto-connect hardware on server startup
                     </label>
                     <p class="hint" style="margin-top:6px">
-                        Tries INDI at <code x-text="(settings.indiHost || 'localhost') + ':' + (settings.indiPort || 7624)"></code>, then runs Alpaca local-network discovery, then connects every device saved on the active rig. Each result fires a toast on every connected browser. Default off so a fresh install never dials hardware that isn't powered up yet.
+                        Tries INDI at <code x-text="(settings.indiHost || 'localhost') + ':' + (settings.indiPort || 7624)"></code>, then runs Alpaca local-network discovery, then connects every device saved on the active rig. Each result fires a toast on every connected browser. On by default; a device that is not powered up yet is simply reported and skipped.
                     </p>
                 </div>
 
@@ -25417,7 +25417,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261017-aflogs2"></script>
+    <script src="/js/app.js?v=20261018-autoconnect"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

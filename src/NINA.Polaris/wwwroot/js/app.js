@@ -1203,7 +1203,7 @@ function ninaApp() {
             saveGuideLogs: true,
             // Boot-time auto-connect, INDI + Alpaca discovery +
             // active-rig device bind. Pushed by HardwareAutoConnectService.
-            autoConnectOnStartup: false,
+            autoConnectOnStartup: true,
             // Auto-sync the host clock from this client when off by >1h. Default on.
             autoClockSync: true,
             // Self-update channel: 'stable' or 'preview' (early-access).
@@ -13146,7 +13146,8 @@ function ninaApp() {
                     this.settings.imageNamePattern = data.imageNamePattern || '';
                     this.settings.imageFolderLayout = data.imageFolderLayout || 'target-first';
                     this.settings.preferAdvancedSequencer = !!data.preferAdvancedSequencer;
-                    this.settings.autoConnectOnStartup = !!data.autoConnectOnStartup;
+                    // Default on (absent ⇒ true), like the server.
+                    this.settings.autoConnectOnStartup = data.autoConnectOnStartup !== false;
                     this.settings.locationPromptDismissed = !!data.locationPromptDismissed;
                     // Auto clock sync: default on (absent ⇒ true).
                     this.settings.autoClockSync = data.autoClockSync !== false;

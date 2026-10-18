@@ -96,10 +96,10 @@ public class UserProfile {
 
     /// <summary>Master toggle for HardwareAutoConnectService, when on,
     /// app startup tries INDI, runs Alpaca discovery, and then
-    /// re-connects every device saved on the active rig. Default off
-    /// so a fresh install never silently dials hardware that isn't
-    /// powered up yet.</summary>
-    public bool AutoConnectOnStartup { get; set; } = false;
+    /// re-connects every device saved on the active rig. Default on: a
+    /// rig that boots in the field should come back with its equipment
+    /// connected. A profile saved with it off keeps it off.</summary>
+    public bool AutoConnectOnStartup { get; set; } = true;
     /// <summary>The operator answered the first-run location prompt, even if
     /// by declining it. Host-side on purpose: it used to be a localStorage
     /// flag, and localStorage is keyed by origin, so changing the host's IP
