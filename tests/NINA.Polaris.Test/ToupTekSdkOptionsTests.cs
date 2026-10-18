@@ -55,4 +55,17 @@ public class ToupTekSdkOptionsTests {
         ulong flags = (ulong)Toupcam.eFLAG.FLAG_CG | (ulong)Toupcam.eFLAG.FLAG_CGHDR;
         Assert.That(ToupTekSdkCamera.ConversionGainModes(flags), Is.EqualTo(new[] { "LCG", "HCG", "HDR" }));
     }
+    [TestCase(2, 12, 0x42)]   // 12-bit data summed 2x2 is 14-bit: fits
+    [TestCase(4, 12, 0x44)]   // 4x4 adds 4 bits: 16, still fits
+    [TestCase(2, 16, 0x02)]   // a 16-bit sensor has no room: saturating sum
+    [TestCase(3, 14, 0x03)]
+    public void SumBinningAddsBitsOnlyWhereTheFrameHasRoom(int bin, int bits, int option) {
+        Assert.That(ToupTekSdkCamera.BinningOption(bin, sum: true, sensorBits: bits), Is.EqualTo(option));
+    }
+
+    [Test]
+    public void TheTecLimitRangeIsMaxHighMinLow() {
+        // 6.1 V max, 0.5 V min, in 0.1 V.
+        Assert.That(ToupTekSdkCamera.TecLimitRange((61 << 16) | 5), Is.EqualTo((5, 61)));
+    }
 }
