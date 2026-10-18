@@ -71,4 +71,8 @@
        both RIDs: the managed assemblies arrive, the native ones never did,
        and nobody noticed because every host already had them. -->
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="NINA.Polaris.Test" />
+  </ItemGroup>
+
 </Project>

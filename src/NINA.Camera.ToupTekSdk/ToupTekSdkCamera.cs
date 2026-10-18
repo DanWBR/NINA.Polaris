@@ -173,11 +173,18 @@ public sealed class ToupTekSdkCamera : ICamera {
     internal static (int Min, int Max) TecLimitRange(int packed) => (packed & 0xFFFF, (packed >> 16) & 0xFFFF);
 
     /// <summary>Choices of OPTION_CG, in its own numbering: 0 LCG, 1 HCG,
-    /// 2 HDR on a camera with FLAG_CGHDR. Empty when the camera has none.</summary>
+    /// 2 HDR on a camera with FLAG_CGHDR or MCG on one with FLAG_GHOPTO.
+    /// Empty when the camera has none.</summary>
     internal static string[] ConversionGainModes(ulong flags) =>
         (flags & (ulong)Toupcam.eFLAG.FLAG_CG) == 0 ? Array.Empty<string>()
         : (flags & (ulong)Toupcam.eFLAG.FLAG_CGHDR) != 0 ? new[] { "LCG", "HCG", "HDR" }
+        : (flags & (ulong)Toupcam.eFLAG.FLAG_GHOPTO) != 0 ? new[] { "LCG", "HCG", "MCG" }
         : new[] { "LCG", "HCG" };
+
+    /// <summary>OPTION_TECTARGET_RANGE: min in the low 16 bits, max in the
+    /// high 16, each a signed value in 0.1 C.</summary>
+    internal static (double Min, double Max) TecTargetRange(int packed)
+        => ((short)(packed & 0xFFFF) / 10.0, (short)((packed >> 16) & 0xFFFF) / 10.0);
 
     /// <summary>Cooler present: the model flags say so, or the camera answers
     /// for a TEC voltage limit. Both are asked because the flags alone left
@@ -463,7 +470,9 @@ public sealed class ToupTekSdkCamera : ICamera {
             if (_tecVoltMax > 0)
                 list.Add(new CameraControl("CoolerPower", "Cooler power", "TEC drive, % of its maximum voltage (read-only)",
                     CoolerPower, 0, 100, 0, Writable: false, Auto: false, AutoSupported: false, "float"));
-            if (_tecVoltLimitMax > 0 && _cam.get_Option(Toupcam.eOPTION.OPTION_TEC_VOLTAGE_MAX, out int limit))
+            // A camera whose limit range is a single value (an AE676C: 6.1 to 6.1 V)
+            // has nothing to adjust.
+            if (_tecVoltLimitMax > _tecVoltLimitMin && _cam.get_Option(Toupcam.eOPTION.OPTION_TEC_VOLTAGE_MAX, out int limit))
                 list.Add(new CameraControl("CoolerVoltageLimit", "Cooler voltage limit",
                     "Highest voltage the TEC may use, V. Lower it when the camera drops off the USB bus with the cooler working hard: it cools less and draws less current.",
                     limit / 10.0, _tecVoltLimitMin / 10.0, _tecVoltLimitMax / 10.0, _tecVoltLimitMax / 10.0,
@@ -477,8 +486,11 @@ public sealed class ToupTekSdkCamera : ICamera {
             }
             double target = 0;
             if (_cam.get_Option(Toupcam.eOPTION.OPTION_TECTARGET, out int tt)) target = tt / 10.0;
+            // The model's own set-point range where it reports one.
+            var (tMin, tMax) = _cam.get_Option(Toupcam.eOPTION.OPTION_TECTARGET_RANGE, out int tr)
+                && TecTargetRange(tr).Max > TecTargetRange(tr).Min ? TecTargetRange(tr) : (-40.0, 20.0);
             list.Add(new CameraControl("TargetTemp", "Target temperature", "Cooler set-point (°C)",
-                target, -40, 20, 0, Writable: true, Auto: false, AutoSupported: false, "int"));
+                target, tMin, tMax, 0, Writable: true, Auto: false, AutoSupported: false, "int"));
         }
         return list;
     }
