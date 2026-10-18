@@ -51,6 +51,10 @@ internal static class QhyNative {
     /// under 32), the header's model buffers are 256 elsewhere.</summary>
     public const int IdBufferLength = 64;
     public const int ModelBufferLength = 256;
+    /// <summary>GetQHYCCDReadModeName writes into a caller buffer with no
+    /// length either; the SDK keeps the names in 256-byte arrays
+    /// (MAX_READMODE_NAME).</summary>
+    public const int ReadModeNameLength = 256;
 
     /// <summary>Stream modes for SetQHYCCDStreamMode.</summary>
     public const byte SingleFrameMode = 0;
@@ -77,10 +81,18 @@ internal static class QhyNative {
         CAM_BIN3X3MODE = 23,
         CAM_BIN4X4MODE = 24,
         CAM_IGNOREOVERSCAN_INTERFACE = 37,
+        QHYCCD_3A_AUTOEXPOSURE = 39,
+        CONTROL_AMPV = 41,             // amp glow control: 0 auto, 1 on, 2 off
         CONTROL_CFWSLOTSNUM = 44,      // slots on the attached filter wheel
         CONTROL_DDR = 48,
+        CAM_HUMIDITY = 62,             // read with GetQHYCCDHumidity, not GetQHYCCDParam
+        CAM_PRESSURE = 63,             // read with GetQHYCCDPressure, mbar
+        CONTROL_SensorChamberCycle_PUMP = 65,  // air pump that dries the sensor chamber
+        CAM_Sensor_ULVO_Status = 67,   // sensor power status: 1 or 8 good, 2 or 9 tripped
         CAM_BIN6X6MODE = 75,
         CAM_BIN8X8MODE = 76,
+        CONTROL_AUTOEXPOSURE = 88,
+        CONTROL_AUTOWHITEBALANCE = 1024,
     }
 
     /// <summary><c>BAYER_ID</c>: what IsQHYCCDControlAvailable(CAM_COLOR)
@@ -123,6 +135,18 @@ internal static class QhyNative {
     public static extern uint GetQHYCCDSingleFrame(IntPtr handle, ref uint w, ref uint h, ref uint bpp, ref uint channels, byte[] imgdata);
     [DllImport(DLL, CallingConvention = CallingConvention.Winapi)] public static extern uint CancelQHYCCDExposingAndReadout(IntPtr handle);
     [DllImport(DLL, CallingConvention = CallingConvention.Winapi)] public static extern uint ControlQHYCCDTemp(IntPtr handle, double targettemp);
+    // Read modes (photographic, high gain, extended full well, ...). The SDK
+    // wants SetQHYCCDReadMode before SetQHYCCDStreamMode and InitQHYCCD, and
+    // a mode can change the chip image size and pixel size, so a change is a
+    // re-initialisation.
+    [DllImport(DLL, CallingConvention = CallingConvention.Winapi)] public static extern uint GetQHYCCDNumberOfReadModes(IntPtr handle, out uint numModes);
+    [DllImport(DLL, CallingConvention = CallingConvention.Winapi)] public static extern uint GetQHYCCDReadModeName(IntPtr handle, uint mode, byte[] name);
+    [DllImport(DLL, CallingConvention = CallingConvention.Winapi)] public static extern uint GetQHYCCDReadMode(IntPtr handle, out uint mode);
+    [DllImport(DLL, CallingConvention = CallingConvention.Winapi)] public static extern uint SetQHYCCDReadMode(IntPtr handle, uint mode);
+    // Sensor chamber sensors on the models that have them (CAM_HUMIDITY,
+    // CAM_PRESSURE): %RH and mbar.
+    [DllImport(DLL, CallingConvention = CallingConvention.Winapi)] public static extern uint GetQHYCCDHumidity(IntPtr handle, out double rh);
+    [DllImport(DLL, CallingConvention = CallingConvention.Winapi)] public static extern uint GetQHYCCDPressure(IntPtr handle, out double pressure);
     // The filter wheel on the camera's CFW port (or built in, as on the
     // MiniCAM8) is driven through the camera's own handle. The order is the
     // target slot as one ASCII hex digit ("0" = first slot); the status is

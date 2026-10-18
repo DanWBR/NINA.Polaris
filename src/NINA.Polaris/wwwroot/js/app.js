@@ -13188,7 +13188,8 @@ function ninaApp() {
                     this.settings.imageNamePattern = data.imageNamePattern || '';
                     this.settings.imageFolderLayout = data.imageFolderLayout || 'target-first';
                     this.settings.preferAdvancedSequencer = !!data.preferAdvancedSequencer;
-                    this.settings.autoConnectOnStartup = !!data.autoConnectOnStartup;
+                    // Default on (absent ⇒ true), like the server.
+                    this.settings.autoConnectOnStartup = data.autoConnectOnStartup !== false;
                     this.settings.locationPromptDismissed = !!data.locationPromptDismissed;
                     // Auto clock sync: default on (absent ⇒ true).
                     this.settings.autoClockSync = data.autoClockSync !== false;

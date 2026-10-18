@@ -210,6 +210,8 @@ public sealed class SvbonySdkCamera : ICamera {
         _lastRoiX = 0; _lastRoiY = 0; _lastRoiW = _maxX; _lastRoiH = _maxY; _lastRoiBin = 1;
         _roiApplied = true;
 
+        ReleaseAutoModes();
+
         _gain = ReadControl(SVB_CONTROL_TYPE.SVB_GAIN);
         // SVBony exposes the sensor bias pedestal ("offset") as the black-level
         // control.
@@ -651,6 +653,43 @@ public sealed class SvbonySdkCamera : ICamera {
             : "the SDK no longer knows this camera id, which is what a removed camera looks like";
     }
 
+    /// <summary>Every auto-capable control put back to manual at connect. The
+    /// SDK can bring a camera up with auto exposure, gain or white balance
+    /// still on (PHD2 forces every SVBony control to manual for this reason),
+    /// and a control on auto overrides what Polaris writes in video mode: a
+    /// ToupTek camera that came up that way ignored every exposure set in the
+    /// live view.</summary>
+    private void ReleaseAutoModes() {
+        lock (_sdk) {
+            if (SVBGetNumOfControls(_cameraId, out var nCtrl) != SVB_ERROR_CODE.SVB_SUCCESS) return;
+            for (int i = 0; i < nCtrl; i++) {
+                var caps = new SVB_CONTROL_CAPS();
+                if (SVBGetControlCaps(_cameraId, i, ref caps) != SVB_ERROR_CODE.SVB_SUCCESS
+                    || caps.IsAutoSupported == 0 || caps.IsWritable == 0) continue;
+                var type = (SVB_CONTROL_TYPE)caps.ControlType;
+                if (SVBGetControlValue(_cameraId, type, out var v, out var a) == SVB_ERROR_CODE.SVB_SUCCESS && a != 0)
+                    SVBSetControlValue(_cameraId, type, v, 0);
+            }
+        }
+    }
+
+    internal static readonly string[] FlipOptions = { "None", "Horizontal", "Vertical", "Both" };
+    internal static readonly string[] FrameSpeedOptions = { "Low", "Medium", "High" };
+
+    /// <summary>How the panel draws a control: a list for the ones with
+    /// named values (SVB_FLIP_STATUS, the frame speed), a toggle for 0..1,
+    /// otherwise a number.</summary>
+    internal static (string ValueType, IReadOnlyList<string>? Options) ControlKind(int controlType, double min, double max) {
+        string[]? named = controlType switch {
+            (int)SVB_CONTROL_TYPE.SVB_FLIP => FlipOptions,
+            (int)SVB_CONTROL_TYPE.SVB_FRAME_SPEED_MODE => FrameSpeedOptions,
+            _ => null,
+        };
+        if (named != null && min == 0 && max >= 1 && max < named.Length)
+            return ("enum", named.Take((int)max + 1).ToArray());
+        return (min == 0 && max == 1) ? ("bool", null) : ("int", null);
+    }
+
     // ----- Dynamic control panel (self-describing via SVBGetControlCaps) -----
 
     public IReadOnlyList<CameraControl> GetControls() {
@@ -668,10 +707,15 @@ public sealed class SvbonySdkCamera : ICamera {
                         cur = v.Value; isAuto = a;
                     }
                     double min = caps.MinValue.Value, max = caps.MaxValue.Value, def = caps.DefaultValue.Value;
-                    string vt = (min == 0 && max == 1) ? "bool" : "int";
+                    var (vt, options) = ControlKind(caps.ControlType, min, max);
+                    if (type == SVB_CONTROL_TYPE.SVB_CURRENT_TEMPERATURE) {
+                        // Read-only and in 0.1 C; show degrees. The target stays
+                        // in 0.1 C: saved panel values are in that unit.
+                        cur /= 10; min /= 10; max /= 10; def /= 10; vt = "float";
+                    }
                     string name = string.IsNullOrWhiteSpace(caps.Name) ? type.ToString() : caps.Name.Trim();
                     list.Add(new CameraControl(type.ToString(), name, caps.Description?.Trim(),
-                        cur, min, max, def, caps.IsWritable != 0, isAuto != 0, caps.IsAutoSupported != 0, vt));
+                        cur, min, max, def, caps.IsWritable != 0, isAuto != 0, caps.IsAutoSupported != 0, vt, options));
                 }
             }
         } catch { }
@@ -680,11 +724,24 @@ public sealed class SvbonySdkCamera : ICamera {
 
     public bool SetControl(string id, double value, bool auto) {
         if (!_connected || !Enum.TryParse<SVB_CONTROL_TYPE>(id, out var type)) return false;
+        long v = (long)Math.Round(value);
         try {
+            bool ok;
             lock (_sdk) {
-                return SVBSetControlValue(_cameraId, type,
-                    new CLong((nint)(long)Math.Round(value)), auto ? 1 : 0) == SVB_ERROR_CODE.SVB_SUCCESS;
+                ok = SVBSetControlValue(_cameraId, type,
+                    new CLong((nint)v), auto ? 1 : 0) == SVB_ERROR_CODE.SVB_SUCCESS;
             }
+            // Keep the driver's own copy in step: the next capture rewrites
+            // exposure, gain and offset from these fields, and the FITS header
+            // reads them.
+            if (ok) {
+                switch (type) {
+                    case SVB_CONTROL_TYPE.SVB_GAIN when !auto: _gain = (int)v; break;
+                    case SVB_CONTROL_TYPE.SVB_EXPOSURE when !auto && v > 0: _exposureSec = v / 1_000_000.0; break;
+                    case SVB_CONTROL_TYPE.SVB_BLACK_LEVEL: _offset = (int)v; break;
+                }
+            }
+            return ok;
         } catch { return false; }
     }
 

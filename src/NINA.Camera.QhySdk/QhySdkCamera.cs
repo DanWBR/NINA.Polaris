@@ -54,6 +54,14 @@ public sealed class QhySdkCamera : ICamera {
     private double _exposureSec = 1;
     private int _roiX, _roiY, _roiW, _roiH, _bin = 1;
 
+    // Read modes, from GetQHYCCDNumberOfReadModes / GetQHYCCDReadModeName at
+    // connect. Empty when the camera has only the one. A change re-runs the
+    // initialisation (see ApplyReadModeLocked); one asked for while a still
+    // holds _gate waits in _pendingReadMode (-1 = none) for the next capture.
+    private IReadOnlyList<string> _readModes = Array.Empty<string>();
+    private uint _readMode;
+    private int _pendingReadMode = -1;
+
     // The cooler. QHY firmware comes in two eras: the old one must be told
     // the target every couple of seconds or it stops regulating, the new one
     // does not care, and nothing in the SDK says which one a camera runs.
@@ -171,7 +179,9 @@ public sealed class QhySdkCamera : ICamera {
             try {
                 lock (_sdk) {
                     _handle = h;
-                    NativeCallGuard.Run(QhyRegistry.GuardName, "initialising the camera", InitCameraLocked);
+                    Interlocked.Exchange(ref _pendingReadMode, -1);
+                    NativeCallGuard.Run(QhyRegistry.GuardName, "initialising the camera",
+                        () => InitCameraLocked(readMode: null, keepState: false));
                 }
                 QhyRegistry.MarkCameraInitialized(h);
             } catch {
@@ -188,10 +198,17 @@ public sealed class QhySdkCamera : ICamera {
     }, ct);
 
     /// <summary>Everything between OpenQHYCCD and the first exposure, in the
-    /// order the SDK documents: stream mode before InitQHYCCD, chip geometry
-    /// after it, bit depth and controls last. Caller holds _sdk.</summary>
-    private void InitCameraLocked() {
+    /// order the SDK documents: read mode and stream mode before InitQHYCCD,
+    /// chip geometry after it, bit depth and controls last. Caller holds _sdk.
+    ///
+    /// <para><paramref name="readMode"/> is the read mode to select first, or
+    /// null to leave the camera in the one it is in. <paramref name="keepState"/>
+    /// is the re-initialisation after a read mode change: the cooler, gain and
+    /// offset this backend tracks are carried over and written back instead of
+    /// being reset as on a fresh connect.</para></summary>
+    private void InitCameraLocked(uint? readMode, bool keepState) {
         var h = _handle;
+        if (readMode is uint mode) Check(SetQHYCCDReadMode(h, mode), "SetQHYCCDReadMode");
         Check(SetQHYCCDStreamMode(h, SingleFrameMode), "SetQHYCCDStreamMode");
         Check(InitQHYCCD(h), "InitQHYCCD");
 
@@ -225,6 +242,15 @@ public sealed class QhySdkCamera : ICamera {
         // the frame. N.I.N.A. switches it on whenever the camera has it.
         if (Has(CONTROL_ID.CONTROL_DDR)) SetQHYCCDParam(h, CONTROL_ID.CONTROL_DDR, 1);
 
+        // The SDK's own auto exposure and auto white balance would override
+        // the exposure and gain Polaris sets on every still. Switched off
+        // wherever one reads back on; nothing is written where it is off.
+        foreach (var id in AutoModeControls) {
+            if (!Has(id)) continue;
+            var v = GetQHYCCDParam(h, id);
+            if (!IsParamError(v) && v != 0) SetQHYCCDParam(h, id, 0);
+        }
+
         _hasGain = Has(CONTROL_ID.CONTROL_GAIN);
         _gainMin = _gainMax = 0;
         if (_hasGain && GetQHYCCDParamMinMaxStep(h, CONTROL_ID.CONTROL_GAIN, out var gmin, out var gmax, out _) == QHYCCD_SUCCESS) {
@@ -249,13 +275,18 @@ public sealed class QhySdkCamera : ICamera {
             // SDK reports failure here even when it filled the values in.
             GetQHYCCDParamMinMaxStep(h, CONTROL_ID.CONTROL_MANULPWM, out _, out var pmax, out _);
             if (pmax > 0 && pmax < 100_000) _pwmMax = pmax;
-            // Start from a known state: TEC off, target 0 C. There is no way to
-            // read back whether the cooler is on, so reporting "off" while a
-            // previous session left it running would be a lie the operator
-            // could not see. N.I.N.A. does the same on connect.
-            SetQHYCCDParam(h, CONTROL_ID.CONTROL_MANULPWM, 0);
-            _coolerOn = false;
-            _targetTemp = 0;
+            if (keepState) {
+                // A read mode change: the cooler stays as the operator left it.
+                if (_coolerOn) ControlQHYCCDTemp(h, _targetTemp);
+            } else {
+                // Start from a known state: TEC off, target 0 C. There is no way to
+                // read back whether the cooler is on, so reporting "off" while a
+                // previous session left it running would be a lie the operator
+                // could not see. N.I.N.A. does the same on connect.
+                SetQHYCCDParam(h, CONTROL_ID.CONTROL_MANULPWM, 0);
+                _coolerOn = false;
+                _targetTemp = 0;
+            }
         }
 
         var bins = new List<int>();
@@ -263,11 +294,43 @@ public sealed class QhySdkCamera : ICamera {
             if (Has(id)) bins.Add(bin);
         _supportedBins = bins;
 
-        _gain = _hasGain ? ClampToRange((int)Math.Round(SafeParam(CONTROL_ID.CONTROL_GAIN)), _gainMin, _gainMax) : 0;
-        _offset = _hasOffset ? (int)Math.Round(SafeParam(CONTROL_ID.CONTROL_OFFSET)) : 0;
-        _lastTempC = double.NaN;
-        _lastPwm = 0;
+        if (keepState) {
+            // The tracked values win over whatever InitQHYCCD put back; the
+            // gain range can differ between read modes.
+            _gain = _hasGain ? ClampToRange(_gain, _gainMin, _gainMax) : 0;
+            if (_hasGain) SetQHYCCDParam(h, CONTROL_ID.CONTROL_GAIN, _gain);
+            if (_hasOffset) SetQHYCCDParam(h, CONTROL_ID.CONTROL_OFFSET, _offset);
+        } else {
+            _gain = _hasGain ? ClampToRange((int)Math.Round(SafeParam(CONTROL_ID.CONTROL_GAIN)), _gainMin, _gainMax) : 0;
+            _offset = _hasOffset ? (int)Math.Round(SafeParam(CONTROL_ID.CONTROL_OFFSET)) : 0;
+            _lastTempC = double.NaN;
+            _lastPwm = 0;
+            ReadModesLocked();
+        }
+        if (readMode is uint selected) _readMode = selected;
     }
+
+    /// <summary>The read mode names and the mode in force. A camera with a
+    /// single mode gets an empty list and no panel control, as in N.I.N.A.
+    /// Caller holds _sdk.</summary>
+    private void ReadModesLocked() {
+        var h = _handle;
+        _readModes = Array.Empty<string>();
+        _readMode = 0;
+        if (GetQHYCCDNumberOfReadModes(h, out var n) != QHYCCD_SUCCESS || n < 2 || n > 64) return;
+        var names = new List<string>((int)n);
+        for (uint i = 0; i < n; i++) {
+            var buf = new byte[ReadModeNameLength];
+            names.Add(ReadModeName(GetQHYCCDReadModeName(h, i, buf) == QHYCCD_SUCCESS ? buf : null, i));
+        }
+        _readModes = names;
+        if (GetQHYCCDReadMode(h, out var cur) == QHYCCD_SUCCESS && cur < n) _readMode = cur;
+    }
+
+    /// <summary>Auto modes switched off at every initialisation.</summary>
+    private static readonly CONTROL_ID[] AutoModeControls = {
+        CONTROL_ID.CONTROL_AUTOEXPOSURE, CONTROL_ID.QHYCCD_3A_AUTOEXPOSURE, CONTROL_ID.CONTROL_AUTOWHITEBALANCE,
+    };
 
     private static readonly (int Bin, CONTROL_ID Id)[] BinControls = {
         (1, CONTROL_ID.CAM_BIN1X1MODE), (2, CONTROL_ID.CAM_BIN2X2MODE),
@@ -295,6 +358,7 @@ public sealed class QhySdkCamera : ICamera {
             }
             _coolerOn = false;
             _frameBuf = null;
+            Interlocked.Exchange(ref _pendingReadMode, -1);
             // A disconnect the operator asked for is not news.
             _disconnectReason = null;
             State = CameraStates.NoState;
@@ -369,6 +433,15 @@ public sealed class QhySdkCamera : ICamera {
     }, ct);
 
     private IImageData CaptureLocked(double exposureSeconds, CaptureOptions? opts, CancellationToken token) {
+        // A read mode asked for during the previous still. Applied before the
+        // exposure settings, since the re-initialisation can reset them.
+        var pending = Interlocked.Exchange(ref _pendingReadMode, -1);
+        if (pending >= 0 && !ApplyReadModeLocked((uint)pending)) {
+            if (!_connected)
+                throw new InvalidOperationException($"{DeviceName} could not be re-initialised after a read mode change: {_disconnectReason}.");
+            throw new InvalidOperationException(
+                $"{DeviceName} refused read mode \"{ReadModeLabel(pending)}\"; it stays in \"{ReadModeLabel((int)_readMode)}\".");
+        }
         ApplyExposureGain(exposureSeconds, opts?.Gain, opts?.Offset);
         var frame = ComputeResolution(_roiX, _roiY, _roiW, _roiH, _bin, _sensor);
         lock (_sdk) {
@@ -589,6 +662,38 @@ public sealed class QhySdkCamera : ICamera {
     private static int ClampToRange(int v, int min, int max) =>
         max > min ? Math.Clamp(v, min, max) : v;
 
+    /// <summary>A read mode name from GetQHYCCDReadModeName's buffer (null
+    /// when the call failed), or "Mode n" when the SDK gave none.</summary>
+    internal static string ReadModeName(byte[]? buf, uint index) {
+        if (buf != null) {
+            int len = Array.IndexOf(buf, (byte)0);
+            if (len < 0) len = buf.Length;
+            var name = System.Text.Encoding.ASCII.GetString(buf, 0, len).Trim();
+            if (name.Length > 0) return name;
+        }
+        return $"Mode {index}";
+    }
+
+    /// <summary>A panel value as an index into a list of
+    /// <paramref name="count"/> choices, or null when it falls outside.</summary>
+    internal static int? EnumIndex(double value, int count) {
+        if (double.IsNaN(value) || double.IsInfinity(value)) return null;
+        var i = Math.Round(value);
+        return i >= 0 && i < count ? (int)i : null;
+    }
+
+    /// <summary>The first sdkMax + 1 of <paramref name="options"/> when the
+    /// SDK reports a whole maximum short of the full list (a camera that
+    /// takes fewer values), else all of them.</summary>
+    internal static string[] TrimOptions(string[] options, double sdkMax) {
+        if (sdkMax >= 1 && sdkMax < options.Length - 1 && sdkMax == Math.Floor(sdkMax))
+            return options[..((int)sdkMax + 1)];
+        return options;
+    }
+
+    private string ReadModeLabel(int index) =>
+        index >= 0 && index < _readModes.Count ? _readModes[index] : $"Mode {index}";
+
     // ----- SDK access -----
 
     private bool Has(CONTROL_ID id) => IsQHYCCDControlAvailable(_handle, id) == QHYCCD_SUCCESS;
@@ -664,58 +769,211 @@ public sealed class QhySdkCamera : ICamera {
         }
     }
 
+    // ----- Read mode -----
+
+    /// <summary>Panel read mode change. Applied at once when no still is in
+    /// flight; a still holds _gate for its whole exposure, so a change asked
+    /// for meanwhile is left for the next capture to apply before it exposes,
+    /// and the panel shows it as already chosen.</summary>
+    private bool SetReadMode(double value) {
+        if (_readModes.Count < 2 || EnumIndex(value, _readModes.Count) is not int mode) return false;
+        if (!Monitor.TryEnter(_gate, 200)) {
+            Interlocked.Exchange(ref _pendingReadMode, mode);
+            return true;
+        }
+        try {
+            Interlocked.Exchange(ref _pendingReadMode, -1);
+            return _connected && ApplyReadModeLocked((uint)mode);
+        } finally {
+            Monitor.Exit(_gate);
+        }
+    }
+
+    /// <summary>Switch read mode: SetQHYCCDReadMode and then the whole
+    /// initialisation again (stream mode, InitQHYCCD, geometry), the sequence
+    /// N.I.N.A. uses, because a mode can change the chip image and pixel size
+    /// (the QHY294 Pro's 47 MP mode, the QHY42 Pro's HDR mode). Panel controls
+    /// InitQHYCCD may reset are read before and written back after. On a
+    /// failure the previous mode is restored, and when even that fails the
+    /// camera is reported disconnected. Caller holds _gate.</summary>
+    private bool ApplyReadModeLocked(uint mode) {
+        if (mode == _readMode) return true;
+        var prev = _readMode;
+        var sensorBefore = _sensor;
+        bool ok = true;
+        try {
+            ReinitLocked(mode);
+        } catch {
+            ok = false;
+            try {
+                ReinitLocked(prev);
+            } catch (Exception ex) {
+                _connected = false;
+                _disconnectReason = $"re-initialising the camera after a read mode change failed ({ex.Message})";
+            }
+        }
+        // ROI coordinates from the old geometry mean nothing in the new one.
+        if (_sensor != sensorBefore) { _roiX = 0; _roiY = 0; _roiW = 0; _roiH = 0; }
+        if (_supportedBins.Count > 0 && !_supportedBins.Contains(_bin)) _bin = 1;
+        return ok;
+    }
+
+    private void ReinitLocked(uint mode) {
+        lock (_sdk) {
+            if (_handle == IntPtr.Zero) throw new InvalidOperationException($"{DeviceName} is not connected.");
+            var carried = new List<(CONTROL_ID Id, double Value)>();
+            foreach (var id in CarriedOverControls) {
+                if (!Has(id)) continue;
+                var v = GetQHYCCDParam(_handle, id);
+                if (!IsParamError(v)) carried.Add((id, v));
+            }
+            NativeCallGuard.Run(QhyRegistry.GuardName, "changing the read mode",
+                () => InitCameraLocked(mode, keepState: true));
+            foreach (var (id, v) in carried)
+                if (Has(id)) SetQHYCCDParam(_handle, id, v);
+        }
+    }
+
     // ----- Dynamic control panel -----
+
+    /// <summary>One curated panel control. <c>Type</c> is the CameraControl
+    /// ValueType. <c>Default</c> null reports the current value as the
+    /// default; <c>Min</c>/<c>Max</c> replace what GetQHYCCDParamMinMaxStep
+    /// says.</summary>
+    private sealed record PanelControl(CONTROL_ID Id, string Name, string Description, string Type, bool Writable,
+                                       double? Default = null, string[]? Options = null,
+                                       double? Min = null, double? Max = null);
+
+    /// <summary>CONTROL_AMPV values 0, 1, 2, as N.I.N.A. and indi_qhy_ccd
+    /// name them.</summary>
+    internal static readonly string[] AmpGlowModes = { "Auto", "On", "Off" };
+
+    private const string ReadModeId = "ReadMode";
 
     /// <summary>The controls offered to the config panel. QHY has no
     /// self-describing control list (names, types, writability), so this is a
-    /// curated set; each one only appears when the camera reports it.</summary>
-    private static readonly (CONTROL_ID Id, string Name, string Type, bool Writable)[] PanelControls = {
-        (CONTROL_ID.CONTROL_GAIN, "Gain", "int", true),
-        (CONTROL_ID.CONTROL_OFFSET, "Offset", "int", true),
-        (CONTROL_ID.CONTROL_USBTRAFFIC, "USB traffic", "int", true),
-        (CONTROL_ID.CONTROL_SPEED, "Readout speed", "int", true),
-        (CONTROL_ID.CONTROL_CURTEMP, "Sensor temperature", "float", false),
-        (CONTROL_ID.CONTROL_CURPWM, "Cooler PWM", "int", false),
+    /// curated set; each one only appears when the camera reports it. The
+    /// cooler's manual PWM, the bit depth and the SDK's image processing
+    /// (brightness, contrast, gamma, white balance) are left out on purpose:
+    /// the backend drives the first two itself and keeps the frames raw.</summary>
+    private static readonly PanelControl[] PanelControls = {
+        new(CONTROL_ID.CONTROL_GAIN, "Gain",
+            "Analog gain. Higher gain lowers read noise, for faint targets; lower gain keeps more dynamic range, for bright ones.",
+            "int", true),
+        new(CONTROL_ID.CONTROL_OFFSET, "Offset",
+            "Black level: keeps the darkest pixels above zero. Darks, flats and lights must share it.",
+            "int", true),
+        new(CONTROL_ID.CONTROL_AMPV, "Amp glow control",
+            "Suppresses the glow some sensors show at an edge on long exposures. Auto lets the camera decide. Take darks with the same setting.",
+            "enum", true, Default: 0, Options: AmpGlowModes),
+        new(CONTROL_ID.CONTROL_ROWNOISERE, "Row noise reduction",
+            "Reduces horizontal banding (row noise). Try it when stacked images show stripes; take darks with the same setting.",
+            "bool", true, Default: 0),
+        new(CONTROL_ID.CONTROL_USBTRAFFIC, "USB traffic",
+            "Pause between USB packets. Raise it when frames arrive torn or the camera drops off the bus; lower it for faster downloads.",
+            "int", true),
+        new(CONTROL_ID.CONTROL_SPEED, "Readout speed",
+            "Readout and transfer speed (0 = slowest). Faster shortens downloads; slow it down on a weak USB link.",
+            "int", true),
+        new(CONTROL_ID.CONTROL_DDR, "DDR buffer",
+            "Holds each frame in the camera's own memory before it crosses USB, so a bus hiccup does not tear the frame. Leave on.",
+            "bool", true, Default: 1),
+        new(CONTROL_ID.CONTROL_SensorChamberCycle_PUMP, "Chamber drying pump",
+            "Circulates the sensor chamber air through the desiccant. Turn on when the chamber humidity climbs.",
+            "bool", true, Default: 0),
+        new(CONTROL_ID.CONTROL_CURTEMP, "Sensor temperature", "°C (read-only)", "float", false),
+        new(CONTROL_ID.CONTROL_CURPWM, "Cooler PWM", "Raw cooler drive the camera reports (read-only)", "int", false),
+        new(CONTROL_ID.CAM_Sensor_ULVO_Status, "Sensor power status",
+            "1 or 8: normal. 2 or 9: the sensor's under-voltage protection tripped; check the 12 V supply, then reconnect the camera (read-only)",
+            "int", false, Min: 0, Max: 9),
     };
+
+    /// <summary>Writable panel controls InitQHYCCD may put back to their
+    /// defaults, carried over a read mode change. Gain and offset are not
+    /// here: the backend tracks those itself.</summary>
+    private static readonly CONTROL_ID[] CarriedOverControls = PanelControls
+        .Where(c => c.Writable && c.Id != CONTROL_ID.CONTROL_GAIN && c.Id != CONTROL_ID.CONTROL_OFFSET)
+        .Select(c => c.Id).ToArray();
+
+    private const string ReadModeDescription =
+        "How the sensor is read out (photographic, high gain, extended full well, ...); each mode has its own noise and full well. "
+        + "Darks and flats must match it. Changing it re-initialises the camera, which can change the frame size and resets the ROI; "
+        + "asked for during an exposure, it applies from the next frame.";
 
     public IReadOnlyList<CameraControl> GetControls() {
         var list = new List<CameraControl>();
         if (!_connected) return list;
         try {
+            var modes = _readModes;
+            if (modes.Count > 1) {
+                int pending = Volatile.Read(ref _pendingReadMode);
+                int cur = pending >= 0 ? pending : (int)_readMode;
+                list.Add(new CameraControl(ReadModeId, "Read mode", ReadModeDescription,
+                    cur, 0, modes.Count - 1, 0, Writable: true, Auto: false, AutoSupported: false, "enum", modes));
+            }
             lock (_sdk) {
                 if (_handle == IntPtr.Zero) return list;
-                foreach (var (id, name, type, writable) in PanelControls) {
-                    if (!Has(id)) continue;
+                foreach (var pc in PanelControls) {
+                    if (!Has(pc.Id)) continue;
                     double min = 0, max = 0;
-                    if (GetQHYCCDParamMinMaxStep(_handle, id, out var mn, out var mx, out _) == QHYCCD_SUCCESS) {
+                    if (GetQHYCCDParamMinMaxStep(_handle, pc.Id, out var mn, out var mx, out _) == QHYCCD_SUCCESS) {
                         min = mn; max = mx;
                     }
-                    var cur = GetQHYCCDParam(_handle, id);
+                    var cur = GetQHYCCDParam(_handle, pc.Id);
                     if (IsParamError(cur)) cur = min;
-                    // Gain is tracked here (see ApplyExposureGain), so report
-                    // the value the next still will use.
-                    if (id == CONTROL_ID.CONTROL_GAIN) cur = _gain;
-                    if (id == CONTROL_ID.CONTROL_CURPWM && max <= 0) max = _pwmMax;
-                    list.Add(new CameraControl(id.ToString(), name, null,
-                        cur, min, max, cur, writable, false, false, type));
+                    // Gain and offset are tracked here (see ApplyExposureGain),
+                    // so report the values the next still will use.
+                    if (pc.Id == CONTROL_ID.CONTROL_GAIN) cur = _gain;
+                    if (pc.Id == CONTROL_ID.CONTROL_OFFSET) cur = _offset;
+                    if (pc.Id == CONTROL_ID.CONTROL_CURPWM && max <= 0) max = _pwmMax;
+                    IReadOnlyList<string>? options = null;
+                    if (pc.Type == "bool") {
+                        min = 0; max = 1; cur = cur != 0 ? 1 : 0;
+                    } else if (pc.Type == "enum" && pc.Options != null) {
+                        var opts = TrimOptions(pc.Options, max);
+                        options = opts;
+                        min = 0; max = opts.Length - 1;
+                        cur = EnumIndex(cur, opts.Length) ?? 0;
+                    }
+                    if (pc.Min is double fmin) min = fmin;
+                    if (pc.Max is double fmax) max = fmax;
+                    list.Add(new CameraControl(pc.Id.ToString(), pc.Name, pc.Description,
+                        cur, min, max, pc.Default ?? cur, pc.Writable, false, false, pc.Type, options));
                 }
+                // The chamber sensors have their own getters, not GetQHYCCDParam.
+                if (Has(CONTROL_ID.CAM_HUMIDITY) && GetQHYCCDHumidity(_handle, out var rh) == QHYCCD_SUCCESS && !IsParamError(rh))
+                    list.Add(new CameraControl(CONTROL_ID.CAM_HUMIDITY.ToString(), "Chamber humidity",
+                        "Relative humidity inside the sensor chamber, % (read-only). A rising value means the desiccant needs drying.",
+                        rh, 0, 100, 0, Writable: false, Auto: false, AutoSupported: false, "float"));
+                if (Has(CONTROL_ID.CAM_PRESSURE) && GetQHYCCDPressure(_handle, out var mbar) == QHYCCD_SUCCESS && !IsParamError(mbar))
+                    list.Add(new CameraControl(CONTROL_ID.CAM_PRESSURE.ToString(), "Chamber pressure",
+                        "Air pressure inside the sensor chamber, mbar (read-only)",
+                        mbar, 0, 2000, 0, Writable: false, Auto: false, AutoSupported: false, "float"));
             }
         } catch { }
         return list;
     }
 
     public bool SetControl(string id, double value, bool auto) {
-        if (!_connected || !Enum.TryParse<CONTROL_ID>(id, out var cid)) return false;
-        bool writable = false;
-        foreach (var c in PanelControls) if (c.Id == cid) writable = c.Writable;
-        if (!writable) return false;
+        if (!_connected) return false;
+        if (id == ReadModeId) return SetReadMode(value);
+        if (!Enum.TryParse<CONTROL_ID>(id, out var cid)) return false;
+        PanelControl? pc = null;
+        foreach (var c in PanelControls) if (c.Id == cid) pc = c;
+        if (pc == null || !pc.Writable) return false;
+        double v;
+        if (pc.Type == "bool") v = value != 0 ? 1 : 0;
+        else if (pc.Type == "enum") {
+            if (pc.Options == null || EnumIndex(value, pc.Options.Length) is not int i) return false;
+            v = i;
+        } else v = Math.Round(value);
         try {
             lock (_sdk) {
                 if (_handle == IntPtr.Zero) return false;
-                if (SetQHYCCDParam(_handle, cid, Math.Round(value)) != QHYCCD_SUCCESS) return false;
+                if (SetQHYCCDParam(_handle, cid, v) != QHYCCD_SUCCESS) return false;
             }
-            if (cid == CONTROL_ID.CONTROL_GAIN) _gain = (int)Math.Round(value);
-            if (cid == CONTROL_ID.CONTROL_OFFSET) _offset = (int)Math.Round(value);
+            if (cid == CONTROL_ID.CONTROL_GAIN) _gain = (int)v;
+            if (cid == CONTROL_ID.CONTROL_OFFSET) _offset = (int)v;
             return true;
         } catch { return false; }
     }

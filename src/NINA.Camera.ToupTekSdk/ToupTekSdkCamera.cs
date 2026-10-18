@@ -41,6 +41,8 @@ public sealed class ToupTekSdkCamera : ICamera {
     private bool _isColor, _supportsCooler;
     private ulong _modelFlags;
     private int _tecVoltMax;   // 0.1 V units; 0 = unknown, then CoolerPower stays 0
+    private int _tecVoltLimitMin, _tecVoltLimitMax;   // allowed range of the TEC limit, 0.1 V
+    private bool _binSum;      // binning adds pixels instead of averaging them
     private int _heatMax;      // anti-dew heater levels; 0 = no heater
     private int _gainMin, _gainMax = 100;
     private double? _minExpSec, _maxExpSec;
@@ -52,6 +54,18 @@ public sealed class ToupTekSdkCamera : ICamera {
 
     private Toupcam.DelegateEventCallback? _evtCb;
     private volatile bool _pullActive;
+
+    /// <summary>
+    /// The camera stays started in software-trigger mode for as long as it is
+    /// connected, and each still is one trigger.
+    ///
+    /// <para>Stills used to start the camera, take the first frame and stop it
+    /// again. A stopped AE676C does not run its cooler, so the TEC went on and
+    /// off with every frame: 30 bias frames a second or two apart took the
+    /// sensor from 14 C to 24 C with the cooler "on", while 60 s darks, with
+    /// the camera running nearly all the time, held 11 C.</para>
+    /// </summary>
+    private bool _softTrigger;
     private ushort[]? _buf16;
     private byte[]? _buf8;
 
@@ -143,14 +157,34 @@ public sealed class ToupTekSdkCamera : ICamera {
     /// <summary>OPTION_BINNING value for a bin factor. Average (0x80 | n)
     /// keeps the 16-bit scale every frame is stored in; the SDK's saturating
     /// sum clips bright stars, and the unsaturated sum raises the bit depth.</summary>
-    internal static int BinningOption(int bin) => bin <= 1 ? 1 : 0x80 | bin;
+    internal static int BinningOption(int bin, bool sum = false, int sensorBits = 16) {
+        if (bin <= 1) return 1;
+        if (!sum) return 0x80 | bin;
+        // The unsaturated sum adds bits (12-bit data binned 2x2 is 14-bit);
+        // where the result would not fit the 16-bit frame, the saturating sum.
+        int added = (int)Math.Ceiling(Math.Log2(bin * bin));
+        return sensorBits + added <= 16 ? 0x40 | bin : bin;
+    }
+
+    internal static readonly string[] BinningModes = { "Average", "Sum" };
+
+    /// <summary>OPTION_TEC_VOLTAGE_MAX_RANGE packs the allowed limit as max in
+    /// the high 16 bits and min in the low 16, both in 0.1 V.</summary>
+    internal static (int Min, int Max) TecLimitRange(int packed) => (packed & 0xFFFF, (packed >> 16) & 0xFFFF);
 
     /// <summary>Choices of OPTION_CG, in its own numbering: 0 LCG, 1 HCG,
-    /// 2 HDR on a camera with FLAG_CGHDR. Empty when the camera has none.</summary>
+    /// 2 HDR on a camera with FLAG_CGHDR or MCG on one with FLAG_GHOPTO.
+    /// Empty when the camera has none.</summary>
     internal static string[] ConversionGainModes(ulong flags) =>
         (flags & (ulong)Toupcam.eFLAG.FLAG_CG) == 0 ? Array.Empty<string>()
         : (flags & (ulong)Toupcam.eFLAG.FLAG_CGHDR) != 0 ? new[] { "LCG", "HCG", "HDR" }
+        : (flags & (ulong)Toupcam.eFLAG.FLAG_GHOPTO) != 0 ? new[] { "LCG", "HCG", "MCG" }
         : new[] { "LCG", "HCG" };
+
+    /// <summary>OPTION_TECTARGET_RANGE: min in the low 16 bits, max in the
+    /// high 16, each a signed value in 0.1 C.</summary>
+    internal static (double Min, double Max) TecTargetRange(int packed)
+        => ((short)(packed & 0xFFFF) / 10.0, (short)((packed >> 16) & 0xFFFF) / 10.0);
 
     /// <summary>Cooler present: the model flags say so, or the camera answers
     /// for a TEC voltage limit. Both are asked because the flags alone left
@@ -158,6 +192,8 @@ public sealed class ToupTekSdkCamera : ICamera {
     /// the INDI driver, on the same camera, read both.</summary>
     private void ProbeCooler(Toupcam cam) {
         _tecVoltMax = cam.get_Option(Toupcam.eOPTION.OPTION_TEC_VOLTAGE_MAX, out int vmax) && vmax > 0 ? vmax : 0;
+        (_tecVoltLimitMin, _tecVoltLimitMax) = cam.get_Option(Toupcam.eOPTION.OPTION_TEC_VOLTAGE_MAX_RANGE, out int range)
+            && TecLimitRange(range).Max > 0 ? TecLimitRange(range) : (0, _tecVoltMax);
         _supportsCooler = (_modelFlags & (ulong)(Toupcam.eFLAG.FLAG_TEC | Toupcam.eFLAG.FLAG_TEC_ONOFF)) != 0
                           || _tecVoltMax > 0;
     }
@@ -217,6 +253,13 @@ public sealed class ToupTekSdkCamera : ICamera {
         if ((flag & (ulong)Toupcam.eFLAG.FLAG_TEC_ONOFF) != 0)
             cam.put_Option(Toupcam.eOPTION.OPTION_TEC, 0);
 
+        // The camera opens with its own auto exposure running (an AE676C:
+        // continuous, up to 350 ms and gain 500). In video mode it overrode
+        // every exposure and gain Polaris set, so the live view always looked
+        // the same brightness whatever the exposure, and a recording came out
+        // at gain 500.
+        cam.put_AutoExpoEnable(0);
+
         // Raw (bayer) output, max bit depth.
         cam.put_Option(Toupcam.eOPTION.OPTION_RAW, 1);
         cam.put_Option(Toupcam.eOPTION.OPTION_BITDEPTH, 1);
@@ -244,6 +287,11 @@ public sealed class ToupTekSdkCamera : ICamera {
         cam.put_Option(Toupcam.eOPTION.OPTION_BINNING, BinningOption(1));
         _gain = _gainMin;
         if (cam.get_Option(Toupcam.eOPTION.OPTION_BLACKLEVEL, out int bl0)) _offset = bl0;
+
+        _softTrigger = (flag & (ulong)Toupcam.eFLAG.FLAG_TRIGGER_SOFTWARE) != 0
+                       && cam.put_Option(Toupcam.eOPTION.OPTION_TRIGGER, 1);
+        if (_softTrigger) EnsurePull();
+
         _connected = true;
         _disconnectReason = null;
         State = CameraStates.Idle;
@@ -268,10 +316,23 @@ public sealed class ToupTekSdkCamera : ICamera {
         lock (_gate) {
             bool wasPulling = _pullActive;
             if (wasPulling) StopPull();
-            if (_cam.put_Option(Toupcam.eOPTION.OPTION_BINNING, BinningOption(bin))) _bin = bin;
+            if (_cam.put_Option(Toupcam.eOPTION.OPTION_BINNING, BinningOption(bin, _binSum, _bitDepth))) _bin = bin;
             if (wasPulling) EnsurePull();
         }
     }, ct);
+
+    private bool ApplyBinningMode(bool sum) {
+        if (_cam == null) return false;
+        lock (_gate) {
+            _binSum = sum;
+            if (_bin <= 1) return true;
+            bool wasPulling = _pullActive;
+            if (wasPulling) StopPull();
+            bool ok = _cam.put_Option(Toupcam.eOPTION.OPTION_BINNING, BinningOption(_bin, _binSum, _bitDepth));
+            if (wasPulling) EnsurePull();
+            return ok;
+        }
+    }
 
     public Task SetTemperatureAsync(double temperature, CancellationToken ct = default) {
         if (_cam != null && _supportsCooler)
@@ -310,6 +371,40 @@ public sealed class ToupTekSdkCamera : ICamera {
         if (_heatMax > 0 && _cam.get_Option(Toupcam.eOPTION.OPTION_HEAT, out int heat))
             list.Add(new CameraControl("Heat", "Anti-dew heater", "Heats the sensor window against dew (0 = off)",
                 heat, 0, _heatMax, 0, Writable: true, Auto: false, AutoSupported: false, "int"));
+        if ((_modelFlags & (ulong)Toupcam.eFLAG.FLAG_HIGH_FULLWELL) != 0
+                && _cam.get_Option(Toupcam.eOPTION.OPTION_HIGH_FULLWELL, out int hfw))
+            list.Add(new CameraControl("HighFullwell", "High full well",
+                "Larger full-well capacity, for bright targets and long exposures",
+                hfw != 0 ? 1 : 0, 0, 1, 0, Writable: true, Auto: false, AutoSupported: false, "bool"));
+        list.Add(new CameraControl("BinningMode", "Binning mode",
+            "Average keeps the brightness of a single pixel. Sum adds the pixels, for more signal per binned pixel; bright stars saturate sooner.",
+            _binSum ? 1 : 0, 0, 1, 0, Writable: true, Auto: false, AutoSupported: false, "enum", BinningModes));
+        if (_cam.get_AutoExpoEnable(out int ae))
+            list.Add(new CameraControl("AutoExposure", "Auto exposure",
+                "The camera picks exposure and gain itself (up to 350 ms), overriding what Polaris sets. For daylight framing only; leave off for imaging.",
+                ae != 0 ? 1 : 0, 0, 1, 0, Writable: true, Auto: false, AutoSupported: false, "bool"));
+        if (_cam.get_Option(Toupcam.eOPTION.OPTION_FRAMERATE, out int fr))
+            list.Add(new CameraControl("FrameRateLimit", "Frame rate limit",
+                "Caps the live video frame rate (0 = no limit). Lowers USB load and CPU use.",
+                fr, 0, 63, 0, Writable: true, Auto: false, AutoSupported: false, "int"));
+        int overclockMax = _cam.get_Option(Toupcam.eOPTION.OPTION_OVERCLOCK_MAX, out int ocm) ? ocm : 0;
+        if (overclockMax > 0 && _cam.get_Option(Toupcam.eOPTION.OPTION_OVERCLOCK, out int oc))
+            list.Add(new CameraControl("Overclock", "Overclock", "Higher video frame rate (0 = off)",
+                oc, 0, overclockMax, 0, Writable: true, Auto: false, AutoSupported: false, "int"));
+        if (_cam.get_Option(Toupcam.eOPTION.OPTION_LOW_POWERCONSUMPTION, out int lowPower))
+            list.Add(new CameraControl("LowPower", "Low power mode",
+                "Lowers the camera's own power draw during long exposures. Worth trying when a USB-powered camera drops off the bus.",
+                lowPower != 0 ? 1 : 0, 0, 1, 0, Writable: true, Auto: false, AutoSupported: false, "bool"));
+        if (_cam.get_Option(Toupcam.eOPTION.OPTION_DEFECT_PIXEL, out int dpc))
+            list.Add(new CameraControl("DefectPixel", "Defect pixel correction",
+                "The camera fills in its known bad pixels. Turn off to keep the raw data untouched (darks remove hot pixels anyway).",
+                dpc != 0 ? 1 : 0, 0, 1, 1, Writable: true, Auto: false, AutoSupported: false, "bool"));
+        if (_cam.get_Option(Toupcam.eOPTION.OPTION_TAILLIGHT, out int led))
+            list.Add(new CameraControl("TailLight", "Status LED", "The light on the back of the camera",
+                led != 0 ? 1 : 0, 0, 1, 1, Writable: true, Auto: false, AutoSupported: false, "bool"));
+        if (_cam.get_Option(Toupcam.eOPTION.OPTION_POWER, out int mw) && mw > 0)
+            list.Add(new CameraControl("PowerDraw", "Power draw", "Camera power consumption, W (read-only)",
+                mw / 1000.0, 0, 50, 0, Writable: false, Auto: false, AutoSupported: false, "float"));
         // Offset / black level. Range scales with the current bit depth.
         int blackMax = 31 << Math.Max(0, (_bitDepth > 8 ? 16 : 8) - 8);
         if (_cam.get_Option(Toupcam.eOPTION.OPTION_BLACKLEVEL, out int bl))
@@ -375,6 +470,13 @@ public sealed class ToupTekSdkCamera : ICamera {
             if (_tecVoltMax > 0)
                 list.Add(new CameraControl("CoolerPower", "Cooler power", "TEC drive, % of its maximum voltage (read-only)",
                     CoolerPower, 0, 100, 0, Writable: false, Auto: false, AutoSupported: false, "float"));
+            // A camera whose limit range is a single value (an AE676C: 6.1 to 6.1 V)
+            // has nothing to adjust.
+            if (_tecVoltLimitMax > _tecVoltLimitMin && _cam.get_Option(Toupcam.eOPTION.OPTION_TEC_VOLTAGE_MAX, out int limit))
+                list.Add(new CameraControl("CoolerVoltageLimit", "Cooler voltage limit",
+                    "Highest voltage the TEC may use, V. Lower it when the camera drops off the USB bus with the cooler working hard: it cools less and draws less current.",
+                    limit / 10.0, _tecVoltLimitMin / 10.0, _tecVoltLimitMax / 10.0, _tecVoltLimitMax / 10.0,
+                    Writable: true, Auto: false, AutoSupported: false, "float"));
             // On/off only where the camera has the switch; without it the TEC
             // always runs and only the set-point steers it.
             if ((_modelFlags & (ulong)Toupcam.eFLAG.FLAG_TEC_ONOFF) != 0) {
@@ -384,8 +486,11 @@ public sealed class ToupTekSdkCamera : ICamera {
             }
             double target = 0;
             if (_cam.get_Option(Toupcam.eOPTION.OPTION_TECTARGET, out int tt)) target = tt / 10.0;
+            // The model's own set-point range where it reports one.
+            var (tMin, tMax) = _cam.get_Option(Toupcam.eOPTION.OPTION_TECTARGET_RANGE, out int tr)
+                && TecTargetRange(tr).Max > TecTargetRange(tr).Min ? TecTargetRange(tr) : (-40.0, 20.0);
             list.Add(new CameraControl("TargetTemp", "Target temperature", "Cooler set-point (°C)",
-                target, -40, 20, 0, Writable: true, Auto: false, AutoSupported: false, "int"));
+                target, tMin, tMax, 0, Writable: true, Auto: false, AutoSupported: false, "int"));
         }
         return list;
     }
@@ -435,6 +540,29 @@ public sealed class ToupTekSdkCamera : ICamera {
                         && _cam.put_Option(Toupcam.eOPTION.OPTION_HEAT, Math.Clamp((int)Math.Round(value), 0, _heatMax));
                 case "Cooler":
                     return _cam.put_Option(Toupcam.eOPTION.OPTION_TEC, value != 0 ? 1 : 0);
+                case "CoolerVoltageLimit": {
+                    if (_tecVoltLimitMax <= 0) return false;
+                    int v = Math.Clamp((int)Math.Round(value * 10), _tecVoltLimitMin, _tecVoltLimitMax);
+                    if (!_cam.put_Option(Toupcam.eOPTION.OPTION_TEC_VOLTAGE_MAX, v)) return false;
+                    _tecVoltMax = v;   // cooler power is reported against the limit in force
+                    return true;
+                }
+                case "HighFullwell":
+                    return _cam.put_Option(Toupcam.eOPTION.OPTION_HIGH_FULLWELL, value != 0 ? 1 : 0);
+                case "BinningMode":
+                    return ApplyBinningMode(value != 0);
+                case "AutoExposure":
+                    return _cam.put_AutoExpoEnable(value != 0 ? 1 : 0);
+                case "FrameRateLimit":
+                    return _cam.put_Option(Toupcam.eOPTION.OPTION_FRAMERATE, Math.Clamp((int)Math.Round(value), 0, 63));
+                case "Overclock":
+                    return _cam.put_Option(Toupcam.eOPTION.OPTION_OVERCLOCK, Math.Max(0, (int)Math.Round(value)));
+                case "LowPower":
+                    return _cam.put_Option(Toupcam.eOPTION.OPTION_LOW_POWERCONSUMPTION, value != 0 ? 1 : 0);
+                case "DefectPixel":
+                    return _cam.put_Option(Toupcam.eOPTION.OPTION_DEFECT_PIXEL, value != 0 ? 1 : 0);
+                case "TailLight":
+                    return _cam.put_Option(Toupcam.eOPTION.OPTION_TAILLIGHT, value != 0 ? 1 : 0);
                 case "TargetTemp":
                     return _cam.put_Option(Toupcam.eOPTION.OPTION_TECTARGET, (int)Math.Round(value * 10));
                 default:
@@ -476,15 +604,19 @@ public sealed class ToupTekSdkCamera : ICamera {
         lock (_captureGate) _captureTcs = tcs;
         bool startedForCapture = !_pullActive;
         EnsurePull();
+        bool triggered = _softTrigger && !_streaming && _cam.Trigger(1);
         State = CameraStates.Exposing;
         try {
             int waitMs = (int)(exposureSeconds * 1000 * 2 + 3000);
-            if (!tcs.Task.Wait(waitMs, ct))
+            if (!tcs.Task.Wait(waitMs, ct)) {
+                // A frame for this trigger arriving later must not answer the next capture.
+                if (triggered) { try { _cam.Trigger(0); } catch { } }
                 throw new TimeoutException("ToupTek frame timed out.");
+            }
             return tcs.Task.Result;
         } finally {
             lock (_captureGate) _captureTcs = null;
-            if (startedForCapture && !_streaming) StopPull();
+            if (startedForCapture && !_streaming && !_softTrigger) StopPull();
             State = CameraStates.Idle;
         }
     }, ct);
@@ -504,6 +636,7 @@ public sealed class ToupTekSdkCamera : ICamera {
                 ApplyExposureGain(opts?.ExposureSeconds ?? _exposureSec, opts?.Gain);
                 _streaming = true;
                 State = CameraStates.Exposing;
+                if (_softTrigger) SetTriggerMode(0);
                 EnsurePull();
             }
         }, ct);
@@ -525,9 +658,22 @@ public sealed class ToupTekSdkCamera : ICamera {
             _streaming = false;
         }
         bool capturePending; lock (_captureGate) capturePending = _captureTcs != null;
-        if (!capturePending) StopPull();
+        if (_softTrigger) {
+            // Back to waiting for triggers, still started so the cooler keeps running.
+            SetTriggerMode(1);
+            if (capturePending) { try { _cam?.Trigger(1); } catch { } }
+        } else if (!capturePending) StopPull();
         State = CameraStates.Idle;
     }, ct);
+
+    /// <summary>0 = video (free running), 1 = software trigger. The mode is
+    /// changed with the camera stopped and the camera is started again.</summary>
+    private void SetTriggerMode(int mode) {
+        if (_cam == null) return;
+        StopPull();
+        _cam.put_Option(Toupcam.eOPTION.OPTION_TRIGGER, mode);
+        EnsurePull();
+    }
 
     private void EnsurePull() {
         if (_cam == null || _pullActive) return;
