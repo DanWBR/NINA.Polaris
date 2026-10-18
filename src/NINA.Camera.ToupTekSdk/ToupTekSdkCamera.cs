@@ -191,6 +191,7 @@ public sealed class ToupTekSdkCamera : ICamera {
         // because it passes no string at all.
         if (index < 0 && !OperatingSystem.IsWindows()) throw new InvalidOperationException(
             $"The ToupTek camera '{_camId}' is not connected. Check its USB cable and power, then refresh the camera list.");
+        if (index >= 0) CameraClaims.ThrowIfHeld(DeviceName, "ToupTek SDK");
         var cam = NativeCallGuard.Run(ToupTekRegistry.GuardName, "opening the camera",
             () => OperatingSystem.IsWindows() ? Toupcam.Open(_camId) : Toupcam.OpenByIndex((uint)index));
         if (cam == null) throw new InvalidOperationException(
