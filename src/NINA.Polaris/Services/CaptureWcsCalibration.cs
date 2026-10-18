@@ -62,6 +62,9 @@ internal sealed record CaptureWcsContext(
 /// </summary>
 internal sealed record CaptureWcsCalibration(CaptureWcsContext Context,
         double CD11, double CD12, double CD21, double CD22) {
+    private const double AngleToleranceDegrees = 0.1;
+    private const double FloatingPointEpsilon = 1e-12;
+
     internal static CaptureWcsCalibration? FromSolve(CaptureWcsContext context, PlateSolveResult result) {
         if (!result.Success || !double.IsFinite(result.RaHours)
                 || !double.IsFinite(result.DecDeg) || Math.Abs(result.DecDeg) > 90) return null;
@@ -97,7 +100,7 @@ internal sealed record CaptureWcsCalibration(CaptureWcsContext Context,
                 || previous.SensorWidth != current.SensorWidth || previous.SensorHeight != current.SensorHeight
                 || previous.PierSide != current.PierSide
                 || !ReferenceEquals(previous.Rotator, current.Rotator)
-                || previous.RotatorAngle != current.RotatorAngle
+                || (previous.Rotator != null && !RotatorAnglesMatch(previous.RotatorAngle, current.RotatorAngle))
                 || !double.IsFinite(raHours) || raHours < 0 || raHours >= 24
                 || !double.IsFinite(decDeg) || Math.Abs(decDeg) > 90) return null;
         // Rescale each column independently for hardware binning. Solver-side
@@ -107,5 +110,15 @@ internal sealed record CaptureWcsCalibration(CaptureWcsContext Context,
         return WcsHeaders.FromCdMatrix(raHours * 15, decDeg,
             (current.Width + 1) / 2.0, (current.Height + 1) / 2.0,
             CD11 * x, CD12 * y, CD21 * x, CD22 * y, current.Width, current.Height);
+    }
+
+    private static bool RotatorAnglesMatch(double? previous, double? current) {
+        if (!previous.HasValue || !current.HasValue) {
+            return false;
+        }
+
+        double difference = Math.Abs(Math.IEEERemainder(current.Value - previous.Value, 360.0));
+
+        return difference <= AngleToleranceDegrees + FloatingPointEpsilon;
     }
 }

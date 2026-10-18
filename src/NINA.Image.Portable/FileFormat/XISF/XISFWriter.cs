@@ -277,7 +277,9 @@ public static class XISFWriter {
                 WriteFitsKeyword(xw, "FOCALLEN", Fmt(meta.Telescope.FocalLength), "Focal length (mm)");
             if (meta.Telescope.FocalRatio > 0)
                 WriteFitsKeyword(xw, "FOCRATIO", Fmt(meta.Telescope.FocalRatio), "Focal ratio (f/N)");
-            if (meta.Telescope.RightAscension != 0 || meta.Telescope.Declination != 0) {
+            // TODO: Distinguish missing coordinates from the valid RA=0, Dec=0 position: https://github.com/DanWBR/NINA.Polaris/issues/45
+            bool hasMountPosition = meta.Telescope.RightAscension != 0 || meta.Telescope.Declination != 0;
+            if (hasMountPosition) {
                 WriteFitsKeyword(xw, "RA", Fmt(meta.Telescope.RightAscension * 15.0), "Mount RA (deg)");
                 WriteFitsKeyword(xw, "DEC", Fmt(meta.Telescope.Declination), "Mount Dec (deg)");
                 // The mount reports J2000 (ITelescope), like the target and every solve.
@@ -346,8 +348,12 @@ public static class XISFWriter {
             if (wcs != null) {
                 var wcsCards = new List<KeyValuePair<string, string>>();
                 NINA.Image.FileFormat.FITS.WcsHeaders.Add(wcsCards, wcs);
-                foreach (var kv in wcsCards)
+                foreach (var kv in wcsCards) {
+                    if (kv.Key == "EQUINOX" && hasMountPosition) {
+                        continue;
+                    }
                     WriteFitsKeyword(xw, kv.Key, kv.Value, null);
+                }
             }
 
             if (customKeywords != null) {
