@@ -50,6 +50,11 @@ public sealed class PlayerOneSdkCamera : ICamera {
     private bool _roiApplied;
     private int _lastRoiX, _lastRoiY, _lastRoiW, _lastRoiH, _lastRoiBin;
     private POAImgFormat _imgFormat = POAImgFormat.POA_RAW16;
+    // Colour camera binning with POA_MONO_BIN on: the SDK says the binned
+    // frame loses its Bayer pattern, so it must not be tagged as one.
+    private bool _monoBin;
+    // Sensor mode the operator chose, put back after a reopen; -1 = untouched.
+    private int _sensorMode = -1;
 
     private readonly ConcurrentDictionary<int, Action<IImageData>> _streamSubs = new();
     private int _nextSubId;
@@ -182,6 +187,9 @@ public sealed class PlayerOneSdkCamera : ICamera {
         // "reset to full frame" calls right after connect are no-ops.
         _lastRoiX = 0; _lastRoiY = 0; _lastRoiW = _maxX; _lastRoiH = _maxY; _lastRoiBin = 1;
         _roiApplied = true;
+        ReleaseAutoModes();
+        _monoBin = _isColor && ReadInt(POAConfig.POA_MONO_BIN) != 0;
+        _sensorMode = -1;
         _gain = ReadInt(POAConfig.POA_GAIN);
         _offset = ReadInt(POAConfig.POA_OFFSET);
         _connected = true;
@@ -431,6 +439,10 @@ public sealed class PlayerOneSdkCamera : ICamera {
             if (POAOpenCamera(_cameraId) != POAErrors.POA_OK) return false;
             if (POAInitCamera(_cameraId) != POAErrors.POA_OK) return false;
             _roiApplied = false;
+            // Put back what changes how frames are read: the sensor mode, and
+            // mono bin, which the Bayer tag on every frame follows.
+            if (_sensorMode >= 0) POASetSensorMode(_cameraId, _sensorMode);
+            if (_monoBin) POASetConfig(_cameraId, POAConfig.POA_MONO_BIN, POAConfigValue.Bool(true), POABool.POA_FALSE);
         }
         ApplyExposureGain(_exposureSec, _gain, _offset);
         bool wasStreaming = _streaming;
@@ -477,9 +489,10 @@ public sealed class PlayerOneSdkCamera : ICamera {
             Buffer.BlockCopy(bytes, 0, pixels, 0, pixels.Length * 2);
         else
             for (int i = 0; i < pixels.Length; i++) pixels[i] = (ushort)(bytes[i] << 8);
+        var bayer = EffectiveBayer(_bayer, _monoBin, _bin);
         var props = new ImageProperties {
             Width = w, Height = h, BitDepth = BitDepth,
-            IsBayered = _bayer != BayerPatternEnum.None, BayerPattern = _bayer,
+            IsBayered = bayer != BayerPatternEnum.None, BayerPattern = bayer,
             // RAW16 delivers right-aligned raw ADC values; advertise the real
             // depth so the SER recorder left-aligns to the 16-bit container the
             // way planetary tools expect. RAW8 is already widened above.
@@ -501,7 +514,7 @@ public sealed class PlayerOneSdkCamera : ICamera {
         meta.Camera.PixelSizeY = _pixelSize;
         // FITS/XISF writers stamp BAYERPAT from meta.Camera.BayerPattern, not
         // props, propagate the detected pattern so OSC frames save with it.
-        meta.Camera.BayerPattern = _bayer;
+        meta.Camera.BayerPattern = bayer;
         return new BaseImageData(pixels, props, meta);
     }
 
@@ -552,12 +565,72 @@ public sealed class PlayerOneSdkCamera : ICamera {
 
     // ----- Dynamic control panel (self-describing via POAGetConfigAttributes) -----
 
+    /// <summary>Configs the panel leaves out. The ST4 guide pulses are
+    /// momentary relays: a toggle left on drives the mount until it is turned
+    /// off. POA_EXP repeats POA_EXPOSURE in seconds. The four flip configs
+    /// become one "Flip" list. POA_HEATER is a deprecated read-only mirror of
+    /// the heater power.</summary>
+    internal static bool HiddenFromPanel(POAConfig cfg) => cfg switch {
+        POAConfig.POA_GUIDE_NORTH or POAConfig.POA_GUIDE_SOUTH
+            or POAConfig.POA_GUIDE_EAST or POAConfig.POA_GUIDE_WEST => true,
+        POAConfig.POA_EXP => true,
+        POAConfig.POA_FLIP_NONE or POAConfig.POA_FLIP_HORI
+            or POAConfig.POA_FLIP_VERT or POAConfig.POA_FLIP_BOTH => true,
+        POAConfig.POA_HEATER => true,
+        _ => false,
+    };
+
+    internal static readonly string[] FlipOptions = { "None", "Horizontal", "Vertical", "Both" };
+
+    /// <summary>The flip config for a "Flip" choice: setting it selects that
+    /// flip (the SDK ignores the value written).</summary>
+    internal static POAConfig FlipConfig(int index) => POAConfig.POA_FLIP_NONE + Math.Clamp(index, 0, 3);
+
+    /// <summary>The Bayer order a frame really has: mono bin merges each
+    /// Bayer cell when binning, so a binned frame is grey.</summary>
+    internal static BayerPatternEnum EffectiveBayer(BayerPatternEnum sensor, bool monoBin, int bin)
+        => monoBin && bin > 1 ? BayerPatternEnum.None : sensor;
+
+    /// <summary>Exposure, gain and white balance put back to manual at connect.
+    /// A config left on auto overrides what Polaris writes in video mode: a
+    /// ToupTek camera that came up with auto exposure on ignored every
+    /// exposure set in the live view.</summary>
+    private void ReleaseAutoModes() {
+        POAConfig[] cfgs = { POAConfig.POA_EXPOSURE, POAConfig.POA_GAIN,
+                             POAConfig.POA_WB_R, POAConfig.POA_WB_G, POAConfig.POA_WB_B };
+        lock (_sdk) {
+            foreach (var cfg in cfgs) {
+                var v = new POAConfigValue(); var a = POABool.POA_FALSE;
+                if (POAGetConfig(_cameraId, cfg, ref v, ref a) == POAErrors.POA_OK && a == POABool.POA_TRUE)
+                    POASetConfig(_cameraId, cfg, POAConfigValue.Int(v.intValue), POABool.POA_FALSE);
+            }
+        }
+    }
+
+    /// <summary>Every config this camera has, by asking the SDK for its list.
+    /// The POAConfig enum used to be the list, and it named only seven, so
+    /// white balance, USB bandwidth, frame limit, fan, heater and the bin
+    /// options never reached the panel.</summary>
+    private List<POAConfig> CameraConfigs() {
+        var ids = new List<POAConfig>();
+        if (POAGetConfigsCount(_cameraId, out var n) == POAErrors.POA_OK) {
+            for (int i = 0; i < n; i++) {
+                var attr = new POAConfigAttributes();
+                if (POAGetConfigAttributes(_cameraId, i, ref attr) == POAErrors.POA_OK && !ids.Contains(attr.configID))
+                    ids.Add(attr.configID);
+            }
+        }
+        if (ids.Count == 0) ids.AddRange(Enum.GetValues<POAConfig>());
+        return ids;
+    }
+
     public IReadOnlyList<CameraControl> GetControls() {
         var list = new List<CameraControl>();
         if (!_connected) return list;
         try {
             lock (_sdk) {
-                foreach (POAConfig cfg in Enum.GetValues<POAConfig>()) {
+                foreach (POAConfig cfg in CameraConfigs()) {
+                    if (HiddenFromPanel(cfg)) continue;
                     var attr = new POAConfigAttributes();
                     if (POAGetConfigAttributesByConfigID(_cameraId, cfg, ref attr) != POAErrors.POA_OK) continue;
                     double min, max, def; string vt;
@@ -583,14 +656,80 @@ public sealed class PlayerOneSdkCamera : ICamera {
                     list.Add(new CameraControl(cfg.ToString(), name, attr.szDescription?.Trim(),
                         cur, min, max, def, attr.isWritable != 0, isAuto, attr.isSupportAuto != 0, vt));
                 }
+                AddFlipControl(list);
+                AddSensorModeControl(list);
             }
         } catch { }
         return list;
     }
 
-    public bool SetControl(string id, double value, bool auto) {
-        if (!_connected || !Enum.TryParse<POAConfig>(id, out var cfg)) return false;
+    /// <summary>The four flip configs as one list. Mono cameras only: on a
+    /// colour camera a flip may change the Bayer order the frame is read in,
+    /// and Polaris tags every frame with the sensor's own.</summary>
+    private void AddFlipControl(List<CameraControl> list) {
+        if (_isColor) return;
+        var attr = new POAConfigAttributes();
+        if (POAGetConfigAttributesByConfigID(_cameraId, POAConfig.POA_FLIP_NONE, ref attr) != POAErrors.POA_OK) return;
+        int cur = 0;
+        for (int i = 1; i < FlipOptions.Length; i++) {
+            var v = new POAConfigValue(); var a = POABool.POA_FALSE;
+            if (POAGetConfig(_cameraId, FlipConfig(i), ref v, ref a) == POAErrors.POA_OK && v.intValue != 0) { cur = i; break; }
+        }
+        list.Add(new CameraControl("Flip", "Flip", "Mirror the image horizontally, vertically or both",
+            cur, 0, FlipOptions.Length - 1, 0, Writable: true, Auto: false, AutoSupported: false, "enum", FlipOptions));
+    }
+
+    /// <summary>Sensor modes (e.g. Normal, LowNoise, HDR on the Uranus) are not
+    /// a config, so the panel never listed them.</summary>
+    private void AddSensorModeControl(List<CameraControl> list) {
+        if (POAGetSensorModeCount(_cameraId, out var n) != POAErrors.POA_OK || n <= 0) return;
+        var names = new List<string>(); var descs = new List<string>();
+        for (int i = 0; i < n; i++) {
+            var info = new POASensorModeInfo();
+            string nm = POAGetSensorModeInfo(_cameraId, i, ref info) == POAErrors.POA_OK
+                        && !string.IsNullOrWhiteSpace(info.name) ? info.name.Trim() : $"Mode {i}";
+            names.Add(nm);
+            if (!string.IsNullOrWhiteSpace(info.desc)) descs.Add($"{nm}: {info.desc.Trim()}");
+        }
+        int cur = POAGetSensorMode(_cameraId, out var m) == POAErrors.POA_OK ? m : 0;
+        string desc = "Changed only while the live video is stopped."
+                      + (descs.Count > 0 ? " " + string.Join(" ", descs) : "");
+        list.Add(new CameraControl("SensorMode", "Sensor mode", desc,
+            cur, 0, n - 1, 0, Writable: true, Auto: false, AutoSupported: false, "enum", names));
+    }
+
+    /// <summary>POASetSensorMode wants the exposure stopped, so it is refused
+    /// while a stream runs (its pull thread sized the buffer for the current
+    /// mode) and while a still holds the capture gate. The ROI is written
+    /// again afterwards in case the mode change reset it.</summary>
+    private bool SetSensorMode(int index) {
+        if (_streaming || !Monitor.TryEnter(_gate)) return false;
         try {
+            if (_streaming) return false;
+            lock (_sdk) {
+                if (POAGetSensorModeCount(_cameraId, out var n) != POAErrors.POA_OK || n <= 0) return false;
+                index = Math.Clamp(index, 0, n - 1);
+                if (POASetSensorMode(_cameraId, index) != POAErrors.POA_OK) return false;
+                _roiApplied = false;
+            }
+            _sensorMode = index;
+            ApplyRoi();
+            return true;
+        } finally { Monitor.Exit(_gate); }
+    }
+
+    public bool SetControl(string id, double value, bool auto) {
+        if (!_connected) return false;
+        try {
+            if (id == "SensorMode") return SetSensorMode((int)Math.Round(value));
+            if (id == "Flip") {
+                if (_isColor) return false;
+                lock (_sdk)
+                    return POASetConfig(_cameraId, FlipConfig((int)Math.Round(value)),
+                        POAConfigValue.Bool(true), POABool.POA_FALSE) == POAErrors.POA_OK;
+            }
+            if (!Enum.TryParse<POAConfig>(id, out var cfg) || HiddenFromPanel(cfg)) return false;
+            bool ok;
             lock (_sdk) {
                 var attr = new POAConfigAttributes();
                 var vt = POAValueType.VAL_INT;
@@ -599,9 +738,23 @@ public sealed class PlayerOneSdkCamera : ICamera {
                 var cv = vt == POAValueType.VAL_FLOAT
                     ? POAConfigValue.Float(value)
                     : POAConfigValue.Int((int)Math.Round(value));
-                return POASetConfig(_cameraId, cfg, cv, auto ? POABool.POA_TRUE : POABool.POA_FALSE) == POAErrors.POA_OK;
+                ok = POASetConfig(_cameraId, cfg, cv, auto ? POABool.POA_TRUE : POABool.POA_FALSE) == POAErrors.POA_OK;
             }
+            if (ok) NoteConfigWritten(cfg, (int)Math.Round(value), auto);
+            return ok;
         } catch { return false; }
+    }
+
+    /// <summary>Keeps the driver's own copy in step with a panel write: the
+    /// next capture rewrites exposure, gain and offset from these fields, the
+    /// FITS header reads them, and mono bin decides the Bayer tag.</summary>
+    private void NoteConfigWritten(POAConfig cfg, int v, bool auto) {
+        switch (cfg) {
+            case POAConfig.POA_GAIN when !auto: _gain = v; break;
+            case POAConfig.POA_EXPOSURE when !auto && v > 0: _exposureSec = v / 1_000_000.0; break;
+            case POAConfig.POA_OFFSET: _offset = v; break;
+            case POAConfig.POA_MONO_BIN: _monoBin = _isColor && v != 0; break;
+        }
     }
 
     private static BayerPatternEnum MapBayer(POABayerPattern p) => p switch {

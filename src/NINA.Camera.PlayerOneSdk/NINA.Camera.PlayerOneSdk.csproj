@@ -18,6 +18,13 @@
     <ProjectReference Include="..\NINA.Image.Portable\NINA.Image.Portable.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The panel's pure helpers (which controls to list, how to type them,
+         the Bayer tag under mono bin) are under test; the SDK calls around
+         them need the camera. Same arrangement as NINA.Camera.ZwoSdk. -->
+    <InternalsVisibleTo Include="NINA.Polaris.Test" />
+  </ItemGroup>
+
   <PropertyGroup>
     <PoaSdk>$(MSBuildThisFileDirectory)..\..\camera_sdk\PlayerOne</PoaSdk>
     <PoaLinux>$(PoaSdk)\Linux_v3.10.1\lib</PoaLinux>

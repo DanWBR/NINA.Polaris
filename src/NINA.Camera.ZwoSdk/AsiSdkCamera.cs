@@ -233,6 +233,9 @@ public sealed class AsiSdkCamera : ICamera {
         _lastRoiX = 0; _lastRoiY = 0; _lastRoiW = _maxX; _lastRoiH = _maxY; _lastRoiBin = 1;
         _lastRoiImgType = _imgType;
         _roiApplied = true;
+        ReleaseAutoModes();
+        _monoBin = _isColor && _controls.Contains(AsiMonoBin)
+                   && ReadControl((ASI_CONTROL_TYPE)AsiMonoBin) != 0;
         _gain = ReadControl(ASI_CONTROL_TYPE.ASI_GAIN);
         _offset = ReadControl(ASI_CONTROL_TYPE.ASI_OFFSET);
         _connected = true;
@@ -242,6 +245,49 @@ public sealed class AsiSdkCamera : ICamera {
 
     private readonly HashSet<int> _controls = new();
     private int _bandwidthMin, _bandwidthMax, _bandwidthDefault;
+
+    // Control types from ASICamera2.h that the AsiNative enum leaves out. Kept
+    // out of the enum on purpose: the panel id is the enum's ToString(), so
+    // naming them would change ids ("9" -> "ASI_FLIP") that
+    // NativeCameraControlStore has already saved per camera.
+    internal const int AsiWbR = 3, AsiWbB = 4, AsiFlip = 9, AsiMonoBin = 18;
+
+    internal static readonly string[] FlipOptions = { "None", "Horizontal", "Vertical", "Both" };
+
+    // Colour camera binning with ASI_MONO_BIN on: the binned frame has no
+    // Bayer pattern left, so it must not be tagged (and debayered) as one.
+    private bool _monoBin;
+
+    /// <summary>The Bayer order a frame really has. Mono bin merges each
+    /// Bayer cell when binning, so a binned frame is grey.</summary>
+    internal static BayerPatternEnum EffectiveBayer(BayerPatternEnum sensor, bool monoBin, int bin)
+        => monoBin && bin > 1 ? BayerPatternEnum.None : sensor;
+
+    /// <summary>How the panel draws a control: a list for the ones with
+    /// named values, a toggle for 0..1, otherwise a number.</summary>
+    internal static (string ValueType, IReadOnlyList<string>? Options) ControlKind(int controlType, double min, double max) {
+        string[]? named = controlType == AsiFlip ? FlipOptions : null;
+        if (named != null && min == 0 && max >= 1 && max < named.Length)
+            return ("enum", named.Take((int)max + 1).ToArray());
+        return (min == 0 && max == 1) ? ("bool", null) : ("int", null);
+    }
+
+    /// <summary>Exposure, gain and white balance put back to manual at connect.
+    /// ASIInitCamera normally starts them so, but a control left on auto
+    /// overrides what Polaris writes in video mode: a ToupTek camera that came
+    /// up with auto exposure on ignored every exposure set in the live view.
+    /// The USB bandwidth's auto is left alone; stills keep the camera's own.</summary>
+    private void ReleaseAutoModes() {
+        int[] ids = { (int)ASI_CONTROL_TYPE.ASI_GAIN, (int)ASI_CONTROL_TYPE.ASI_EXPOSURE, AsiWbR, AsiWbB };
+        lock (_sdk) {
+            foreach (var id in ids) {
+                if (!_controls.Contains(id)) continue;
+                var t = (ASI_CONTROL_TYPE)id;
+                if (ASIGetControlValue(_cameraId, t, out var v, out var a) == ASI_ERROR_CODE.ASI_SUCCESS && a != 0)
+                    ASISetControlValue(_cameraId, t, v, 0);
+            }
+        }
+    }
     // What the operator asked of the cooler, so a reopen can put it back: the
     // SDK loses it on ASICloseCamera, and a silently warm imaging camera is a
     // ruined sequence.
@@ -321,6 +367,9 @@ public sealed class AsiSdkCamera : ICamera {
             if (ASIOpenCamera(_cameraId) != ASI_ERROR_CODE.ASI_SUCCESS) return false;
             if (ASIInitCamera(_cameraId) != ASI_ERROR_CODE.ASI_SUCCESS) return false;
             _roiApplied = false;               // force the ROI/format write below
+            // The frames are tagged from _monoBin, so the camera must agree.
+            if (_monoBin)
+                ASISetControlValue(_cameraId, (ASI_CONTROL_TYPE)AsiMonoBin, new CLong(1), 0);
         }
         if (forStream) ApplyUsbConservative();
         ApplyExposureGain(_exposureSec, _gain, _offset);
@@ -772,9 +821,10 @@ public sealed class AsiSdkCamera : ICamera {
             Buffer.BlockCopy(bytes, 0, pixels, 0, pixels.Length * 2);
         else
             for (int i = 0; i < pixels.Length; i++) pixels[i] = (ushort)(bytes[i] << 8);
+        var bayer = EffectiveBayer(_bayer, _monoBin, _bin);
         var props = new ImageProperties {
             Width = w, Height = h, BitDepth = BitDepth,
-            IsBayered = _bayer != BayerPatternEnum.None, BayerPattern = _bayer,
+            IsBayered = bayer != BayerPatternEnum.None, BayerPattern = bayer,
             // RAW16 delivers right-aligned raw ADC values (a 12-bit sensor gives
             // 0..4095 in the low bits). Advertise the real depth so the SER
             // recorder can left-align to the 16-bit container the way ZWO's own
@@ -796,7 +846,7 @@ public sealed class AsiSdkCamera : ICamera {
         meta.Camera.BinX = (short)_bin;
         meta.Camera.BinY = (short)_bin;
         if (!double.IsNaN(_lastTempC)) meta.Camera.Temperature = _lastTempC;
-        meta.Camera.BayerPattern = _bayer;
+        meta.Camera.BayerPattern = bayer;
         return new BaseImageData(pixels, props, meta);
     }
 
@@ -869,10 +919,14 @@ public sealed class AsiSdkCamera : ICamera {
                         cur = v.Value; isAuto = a;
                     }
                     double min = caps.MinValue.Value, max = caps.MaxValue.Value, def = caps.DefaultValue.Value;
-                    string vt = (min == 0 && max == 1) ? "bool" : "int";
+                    var (vt, options) = ControlKind(caps.ControlType, min, max);
+                    if (type == ASI_CONTROL_TYPE.ASI_TEMPERATURE) {
+                        // The SDK reports ten times the temperature; show degrees.
+                        cur /= 10; min /= 10; max /= 10; def /= 10; vt = "float";
+                    }
                     string name = string.IsNullOrWhiteSpace(caps.Name) ? type.ToString() : caps.Name.Trim();
                     list.Add(new CameraControl(type.ToString(), name, caps.Description?.Trim(),
-                        cur, min, max, def, caps.IsWritable != 0, isAuto != 0, caps.IsAutoSupported != 0, vt));
+                        cur, min, max, def, caps.IsWritable != 0, isAuto != 0, caps.IsAutoSupported != 0, vt, options));
                 }
             }
         } catch { }
@@ -881,12 +935,28 @@ public sealed class AsiSdkCamera : ICamera {
 
     public bool SetControl(string id, double value, bool auto) {
         if (!_connected || !Enum.TryParse<ASI_CONTROL_TYPE>(id, out var type)) return false;
+        long v = (long)Math.Round(value);
         try {
+            bool ok;
             lock (_sdk) {
-                return ASISetControlValue(_cameraId, type,
-                    new CLong((nint)(long)Math.Round(value)), auto ? 1 : 0) == ASI_ERROR_CODE.ASI_SUCCESS;
+                ok = ASISetControlValue(_cameraId, type,
+                    new CLong((nint)v), auto ? 1 : 0) == ASI_ERROR_CODE.ASI_SUCCESS;
             }
+            if (ok) NoteControlWritten((int)type, v, auto);
+            return ok;
         } catch { return false; }
+    }
+
+    /// <summary>Keeps the driver's own copy in step with a panel write: the
+    /// next capture rewrites exposure, gain and offset from these fields, the
+    /// FITS header reads them, and mono bin decides the Bayer tag.</summary>
+    private void NoteControlWritten(int type, long v, bool auto) {
+        switch (type) {
+            case (int)ASI_CONTROL_TYPE.ASI_GAIN when !auto: _gain = (int)v; break;
+            case (int)ASI_CONTROL_TYPE.ASI_EXPOSURE when !auto && v > 0: _exposureSec = v / 1_000_000.0; break;
+            case (int)ASI_CONTROL_TYPE.ASI_OFFSET: _offset = (int)v; break;
+            case AsiMonoBin: _monoBin = _isColor && v != 0; break;
+        }
     }
 
     private static BayerPatternEnum MapBayer(ASI_BAYER_PATTERN p) => p switch {

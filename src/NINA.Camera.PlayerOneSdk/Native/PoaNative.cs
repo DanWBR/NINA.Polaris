@@ -53,27 +53,55 @@ internal static class PoaNative {
 
     public enum POAImgFormat { POA_RAW8 = 0, POA_RAW16, POA_RGB24, POA_MONO8, POA_END = -1 }
 
-    // Config indices: order matches the POAConfig enum in the header.
+    // Config indices: order matches the POAConfig enum in the header. The
+    // names are the panel ids (and what NativeCameraControlStore saves).
     public enum POAConfig {
         POA_EXPOSURE = 0,   // us, int
         POA_GAIN = 1,       // int
+        POA_HARDWARE_BIN = 2,
         POA_TEMPERATURE = 3, // C, float, read-only
+        POA_WB_R = 4,       // -1200..1200
+        POA_WB_G = 5,
+        POA_WB_B = 6,
         POA_OFFSET = 7,     // int
+        POA_AUTOEXPO_MAX_GAIN = 8,
+        POA_AUTOEXPO_MAX_EXPOSURE = 9,   // ms
+        POA_AUTOEXPO_BRIGHTNESS = 10,
+        POA_GUIDE_NORTH = 11,
+        POA_GUIDE_SOUTH = 12,
+        POA_GUIDE_EAST = 13,
+        POA_GUIDE_WEST = 14,
+        POA_EGAIN = 15,     // e/ADU, float, read-only
         POA_COOLER_POWER = 16, // 0..100, int, read-only
         POA_TARGET_TEMP = 17,  // C, int
         POA_COOLER = 18,    // bool
+        POA_HEATER = 19,    // deprecated, read-only
+        POA_HEATER_POWER = 20,
+        POA_FAN_POWER = 21,
+        POA_FLIP_NONE = 22,
+        POA_FLIP_HORI = 23,
+        POA_FLIP_VERT = 24,
+        POA_FLIP_BOTH = 25,
+        POA_FRAME_LIMIT = 26,
+        POA_HQI = 27,
+        POA_USB_BANDWIDTH_LIMIT = 28,
+        POA_PIXEL_BIN_SUM = 29,
+        POA_MONO_BIN = 30,
+        POA_EXP = 31,       // s, float
     }
 
     /// <summary>C union {long intValue; double floatValue; POABool boolValue;}.
-    /// Total size is 8 bytes (double). We expose only the low-32 int slot
-    /// (all our int configs fit in int32, exposure max 2e9) and the double.
-    /// A fresh value zero-inits the high 4 bytes so the 64-bit Linux C long
-    /// is read correctly for positive values.</summary>
+    /// Total size is 8 bytes (double). We read the low-32 int slot (all our
+    /// int configs fit in int32, exposure max 2e9) and the double. Writes go
+    /// through the 64-bit slot so a negative value (white balance runs
+    /// -1200..1200) is sign-extended for the 64-bit Linux C long; on Windows
+    /// the C long is the low 4 bytes and the rest is ignored.</summary>
     [StructLayout(LayoutKind.Explicit, Size = 8)]
     public struct POAConfigValue {
         [FieldOffset(0)] public int intValue;
+        [FieldOffset(0)] public long longValue;
         [FieldOffset(0)] public double floatValue;
-        public static POAConfigValue Int(int v) => new() { intValue = v };
+        public static POAConfigValue Int(int v) => new() { longValue = v };
         public static POAConfigValue Float(double v) => new() { floatValue = v };
         public static POAConfigValue Bool(bool v) => new() { intValue = v ? 1 : 0 };
     }
@@ -93,6 +121,12 @@ internal static class PoaNative {
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 64)] public string szConfName;
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string szDescription;
         [MarshalAs(UnmanagedType.ByValArray, SizeConst = 64)] public byte[] reserved;
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
+    public struct POASensorModeInfo {
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 64)] public string name;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string desc;
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
@@ -125,6 +159,8 @@ internal static class PoaNative {
     [DllImport(DLL, CallingConvention = CallingConvention.Cdecl)] public static extern POAErrors POAOpenCamera(int nCameraID);
     [DllImport(DLL, CallingConvention = CallingConvention.Cdecl)] public static extern POAErrors POAInitCamera(int nCameraID);
     [DllImport(DLL, CallingConvention = CallingConvention.Cdecl)] public static extern POAErrors POACloseCamera(int nCameraID);
+    [DllImport(DLL, CallingConvention = CallingConvention.Cdecl)] public static extern POAErrors POAGetConfigsCount(int nCameraID, out int pConfCount);
+    [DllImport(DLL, CallingConvention = CallingConvention.Cdecl)] public static extern POAErrors POAGetConfigAttributes(int nCameraID, int nConfIndex, ref POAConfigAttributes pConfAttr);
     [DllImport(DLL, CallingConvention = CallingConvention.Cdecl)] public static extern POAErrors POAGetConfigAttributesByConfigID(int nCameraID, POAConfig confID, ref POAConfigAttributes pConfAttr);
     [DllImport(DLL, CallingConvention = CallingConvention.Cdecl)] public static extern POAErrors POAGetConfig(int nCameraID, POAConfig confID, ref POAConfigValue pConfValue, ref POABool pIsAuto);
     [DllImport(DLL, CallingConvention = CallingConvention.Cdecl)] public static extern POAErrors POASetConfig(int nCameraID, POAConfig confID, POAConfigValue confValue, POABool isAuto);
@@ -140,4 +176,11 @@ internal static class PoaNative {
     [DllImport(DLL, CallingConvention = CallingConvention.Cdecl)] public static extern POAErrors POAStopExposure(int nCameraID);
     [DllImport(DLL, CallingConvention = CallingConvention.Cdecl)] public static extern POAErrors POAImageReady(int nCameraID, ref POABool pIsReady);
     [DllImport(DLL, CallingConvention = CallingConvention.Cdecl)] public static extern POAErrors POAGetImageData(int nCameraID, byte[] pBuf, CLong lBufSize, int nTimeoutms);
+
+    // Sensor modes (since SDK 3.x; a count of 0 means the camera has none).
+    // POASetSensorMode wants the exposure stopped.
+    [DllImport(DLL, CallingConvention = CallingConvention.Cdecl)] public static extern POAErrors POAGetSensorModeCount(int nCameraID, out int pModeCount);
+    [DllImport(DLL, CallingConvention = CallingConvention.Cdecl)] public static extern POAErrors POAGetSensorModeInfo(int nCameraID, int modeIndex, ref POASensorModeInfo pSenModeInfo);
+    [DllImport(DLL, CallingConvention = CallingConvention.Cdecl)] public static extern POAErrors POASetSensorMode(int nCameraID, int modeIndex);
+    [DllImport(DLL, CallingConvention = CallingConvention.Cdecl)] public static extern POAErrors POAGetSensorMode(int nCameraID, out int pModeIndex);
 }
