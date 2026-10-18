@@ -52,6 +52,18 @@ public sealed class ToupTekSdkCamera : ICamera {
 
     private Toupcam.DelegateEventCallback? _evtCb;
     private volatile bool _pullActive;
+
+    /// <summary>
+    /// The camera stays started in software-trigger mode for as long as it is
+    /// connected, and each still is one trigger.
+    ///
+    /// <para>Stills used to start the camera, take the first frame and stop it
+    /// again. A stopped AE676C does not run its cooler, so the TEC went on and
+    /// off with every frame: 30 bias frames a second or two apart took the
+    /// sensor from 14 C to 24 C with the cooler "on", while 60 s darks, with
+    /// the camera running nearly all the time, held 11 C.</para>
+    /// </summary>
+    private bool _softTrigger;
     private ushort[]? _buf16;
     private byte[]? _buf8;
 
@@ -244,6 +256,11 @@ public sealed class ToupTekSdkCamera : ICamera {
         cam.put_Option(Toupcam.eOPTION.OPTION_BINNING, BinningOption(1));
         _gain = _gainMin;
         if (cam.get_Option(Toupcam.eOPTION.OPTION_BLACKLEVEL, out int bl0)) _offset = bl0;
+
+        _softTrigger = (flag & (ulong)Toupcam.eFLAG.FLAG_TRIGGER_SOFTWARE) != 0
+                       && cam.put_Option(Toupcam.eOPTION.OPTION_TRIGGER, 1);
+        if (_softTrigger) EnsurePull();
+
         _connected = true;
         _disconnectReason = null;
         State = CameraStates.Idle;
@@ -476,15 +493,19 @@ public sealed class ToupTekSdkCamera : ICamera {
         lock (_captureGate) _captureTcs = tcs;
         bool startedForCapture = !_pullActive;
         EnsurePull();
+        bool triggered = _softTrigger && !_streaming && _cam.Trigger(1);
         State = CameraStates.Exposing;
         try {
             int waitMs = (int)(exposureSeconds * 1000 * 2 + 3000);
-            if (!tcs.Task.Wait(waitMs, ct))
+            if (!tcs.Task.Wait(waitMs, ct)) {
+                // A frame for this trigger arriving later must not answer the next capture.
+                if (triggered) { try { _cam.Trigger(0); } catch { } }
                 throw new TimeoutException("ToupTek frame timed out.");
+            }
             return tcs.Task.Result;
         } finally {
             lock (_captureGate) _captureTcs = null;
-            if (startedForCapture && !_streaming) StopPull();
+            if (startedForCapture && !_streaming && !_softTrigger) StopPull();
             State = CameraStates.Idle;
         }
     }, ct);
@@ -504,6 +525,7 @@ public sealed class ToupTekSdkCamera : ICamera {
                 ApplyExposureGain(opts?.ExposureSeconds ?? _exposureSec, opts?.Gain);
                 _streaming = true;
                 State = CameraStates.Exposing;
+                if (_softTrigger) SetTriggerMode(0);
                 EnsurePull();
             }
         }, ct);
@@ -525,9 +547,22 @@ public sealed class ToupTekSdkCamera : ICamera {
             _streaming = false;
         }
         bool capturePending; lock (_captureGate) capturePending = _captureTcs != null;
-        if (!capturePending) StopPull();
+        if (_softTrigger) {
+            // Back to waiting for triggers, still started so the cooler keeps running.
+            SetTriggerMode(1);
+            if (capturePending) { try { _cam?.Trigger(1); } catch { } }
+        } else if (!capturePending) StopPull();
         State = CameraStates.Idle;
     }, ct);
+
+    /// <summary>0 = video (free running), 1 = software trigger. The mode is
+    /// changed with the camera stopped and the camera is started again.</summary>
+    private void SetTriggerMode(int mode) {
+        if (_cam == null) return;
+        StopPull();
+        _cam.put_Option(Toupcam.eOPTION.OPTION_TRIGGER, mode);
+        EnsurePull();
+    }
 
     private void EnsurePull() {
         if (_cam == null || _pullActive) return;
