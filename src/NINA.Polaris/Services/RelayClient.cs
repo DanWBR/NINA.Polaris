@@ -318,6 +318,13 @@ public class RelayClient : IHostedService, IDisposable {
         _ = Task.Run(() => PumpLocalToTunnelAsync(tunnel, sendLock, sid, bridge, ct));
     }
 
+    /// <summary>Largest local WebSocket message carried over the tunnel. A
+    /// preview frame is one message: an AE676C's 3536x3536 16-bit frame is
+    /// 14.7 MB after LZ4, and the old 8 MB cap closed the image stream on
+    /// every capture, so a remote browser never got a frame. The relay server
+    /// accepts tunnel frames up to 64 MB; this leaves room for the framing.</summary>
+    internal const int MaxLocalWsMessage = 60 * 1024 * 1024;
+
     private async Task PumpLocalToTunnelAsync(ClientWebSocket tunnel, SemaphoreSlim sendLock,
         uint sid, LocalWsBridge bridge, CancellationToken ct) {
         try {
@@ -329,7 +336,7 @@ public class RelayClient : IHostedService, IDisposable {
                     r = await bridge.Local.ReceiveAsync(buffer, ct);
                     if (r.MessageType == WebSocketMessageType.Close) break;
                     ms.Write(buffer, 0, r.Count);
-                    if (ms.Length > 8 * 1024 * 1024) throw new InvalidDataException("WS frame too large (>8MB)");
+                    if (ms.Length > MaxLocalWsMessage) throw new InvalidDataException("WS frame too large (>60MB)");
                 } while (!r.EndOfMessage);
 
                 if (r.MessageType == WebSocketMessageType.Close) break;

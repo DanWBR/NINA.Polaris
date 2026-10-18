@@ -55,6 +55,28 @@ public class CatalogObject {
     /// when the source catalog didn't carry size info.</summary>
     public double? SizeArcmin { get; set; }
 
+    /// <summary>The name a session, folder or file is given for this object.</summary>
+    public string TargetName => TargetLabel(Name, CommonName, Catalog);
+
+    /// <summary>
+    /// A short name for a target: the common name when there is exactly one,
+    /// otherwise the designation.
+    ///
+    /// <para>The common name used to go in as it was. On the Notable catalogue
+    /// that field is a one-line description, so the Sculptor Group came out as
+    /// "Nearest galaxy group beyond the Local Group"; elsewhere it is a list,
+    /// and M17 would have been "Checkmark Nebula,Lobster Nebula,Swan
+    /// Nebula,omega Nebula".</para>
+    /// </summary>
+    public static string TargetLabel(string name, string? commonName, string? catalog) {
+        if (string.Equals(catalog, "Notable", StringComparison.OrdinalIgnoreCase)) return name;
+        var common = commonName?.Trim();
+        if (string.IsNullOrEmpty(common) || common.Contains(',') || common.Length > MaxTargetLabel) return name;
+        return common;
+    }
+
+    private const int MaxTargetLabel = 32;
+
     public string RaFormatted {
         get {
             var h = (int)Ra;

@@ -64,7 +64,7 @@
          Inert unless a manifest URL is configured (assistant-config.json). -->
     <link rel="stylesheet" href="/css/parts/13-assistant.css?v=20260705-assist15">
     <link rel="stylesheet" href="/css/parts/14-uiscale-text.css?v=20260707-hintsize">
-    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20260831-basic26">
+    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20261018-field2">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -22650,17 +22650,14 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          same Alpine state. Only rendered on phones (basicMode); the live image
          is the real .preview-area relocated into #basicImageSlot. -->
     <template x-if="basicMode">
-    <div class="basic-shell" x-data="{ modeMenu:false, mountOpen:true, expandedField:null, editName:null, editExp:null, editGain:null, seqOpen:true, focusOpen:true }">
+    <div class="basic-shell" x-data="{ modeMenu:false, mountMenu:false, mountOpen:true, expandedField:null, editName:null, editExp:null, editGain:null, seqOpen:true, focusOpen:true }">
         <div id="basicImageSlot"></div>
         <div id="basicCurveSlot" x-show="basicScreen==='focus'" x-cloak></div>
         <div id="basicGuideGraphSlot" x-show="basicScreen==='guide'" x-cloak></div>
 
-        <!-- Live stacking quality HUD: SNR / frames / ETA / state. -->
-        <div class="bs-lhud" x-show="basicScreen==='live' && liveStackStatus" x-cloak>
-            <div class="bs-lsnr num"><span class="v" x-text="(liveStackStatus && liveStackStatus.cumulativeSnr > 0) ? liveStackStatus.cumulativeSnr.toFixed(1) : '--'"></span><span class="l">SNR</span></div>
-            <div class="bs-lrow num"><span>Frames <b x-text="(liveStackStatus && liveStackStatus.frameCount) || 0"></b></span><span x-show="(liveStackStatus && liveStackStatus.rejectedFrames) > 0">Dropped <b x-text="(liveStackStatus && liveStackStatus.rejectedFrames) || 0"></b></span></div>
-            <div class="bs-leta num" x-show="formatSnrEta(liveStackStatus)" x-text="formatSnrEta(liveStackStatus)"></div>
-            <span class="bs-lstate" :class="liveStackEnabled ? '' : 'off'" x-text="liveStackEnabled ? '● Stacking' : '⏸ Stopped'"></span>
+        <!-- Live stacking: frames stacked, dropped, and the integrated time. -->
+        <div class="bs-lhud bs-lhud-min" x-show="basicScreen==='live' && liveStackStatus" x-cloak>
+            <div class="bs-lrow num"><span>Stacked <b x-text="(liveStackStatus && liveStackStatus.frameCount) || 0"></b></span><span>Dropped <b x-text="(liveStackStatus && liveStackStatus.rejectedFrames) || 0"></b></span><span x-show="basicLiveTotal()">Total <b x-text="basicLiveTotal()"></b></span></div>
         </div>
 
         <!-- Video quality HUD: sharpness (focus aid) / FPS / REC frames+duration. -->
@@ -22723,7 +22720,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         <!-- Collapsed: a small pill to bring the sequence list back. -->
         <button class="bs-seqreopen" x-show="basicScreen==='autorun' && !seqOpen" x-cloak @click="seqOpen=true">&#9776; <span x-text="sequence.length"></span> <span x-text="sequence.length===1 ? 'set' : 'sets'"></span></button>
 
-        <div class="bs-temp">&#10052; <b class="bs-num" x-text="(cameraTemp!=null ? Number(cameraTemp).toFixed(1) : '--') + '&deg;C'"></b></div>
+        <div class="bs-temp">&#10052; <b class="bs-num" x-text="(cameraTemp!=null ? Number(cameraTemp).toFixed(1) : '--') + '°C'"></b><span class="bs-tcool bs-num" x-show="basicCoolerTarget()" x-text="basicCoolerTarget()"></span><span class="bs-tcool bs-num" x-show="basicCoolerPower()" x-text="basicCoolerPower()"></span></div>
         <div class="bs-topbar">
             <button class="bs-topicn" :class="basicScreen==='guide' ? 'on' : ''" @click="basicGoMode('guide')" title="Guide" aria-label="Guide">&#128760;</button>
             <button class="bs-modepill" @click="modeMenu = !modeMenu"><span x-text="basicScreen==='focus' ? 'Focus' : (basicScreen==='autorun' ? 'Autorun' : (basicScreen==='guide' ? 'Guide' : (basicScreen==='live' ? 'Live' : (basicScreen==='video' ? 'Video' : (basicScreen==='sky' ? 'Sky' : (basicScreen==='config' ? 'Setup' : 'Preview'))))))"></span> <span class="bs-caret">&#9660;</span></button>
@@ -22954,7 +22951,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                  graph-overlay toggle is pointless on guide (the graph is
                  already pinned at the bottom), so it hides. -->
             <button class="bs-icn" @click="basicScreen==='guide' ? basicGuideFit() : _pzFit(basicActiveCanvas())" title="Fit"><span class="bs-big">&#9635;</span>Fit</button>
-            <button class="bs-icn" x-show="basicScreen!=='guide'" :class="guideOverlay.on ? 'on' : ''" @click="toggleGuideOverlay()" title="Guiding graph (drag + resize)"><span class="bs-big">&#128760;</span>Guide</button>
+            <button class="bs-icn" x-show="basicScreen!=='guide'" :class="guideOverlay.on ? 'on' : ''" @click="toggleGuideOverlay()" title="Guiding graph (drag + resize)"><span class="bs-big">&#128760;</span><span class="bs-num" x-text="basicGuideRms() || 'Guide'"></span></button>
             <button class="bs-icn" @click="basicScreen==='guide' ? guideZoomBy(1.3) : _pzZoomButton(basicActiveCanvas(), 1.3)" title="Zoom in"><span class="bs-big">&#128269;</span>Zoom</button>
         </div>
 
@@ -23080,9 +23077,12 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                              @pointerleave="shutterPointerCancel()">
                             <div class="bs-core"></div>
                         </div>
-                        <button class="bs-lreset" @click="resetLiveStack()">&#8635; Reset</button>
-                        <button class="bs-lreset" @click="saveServerStack()" title="Save the current stack to disk">&#128190; Save</button>
-                        <button class="bs-lreset" :class="liveStackSaveFrames ? 'on' : ''" @click="liveStackSaveFrames = !liveStackSaveFrames; saveLiveStackSaveFrames()" title="Also save every sub-frame to disk">Save frames</button>
+                        <div class="bs-sprog bs-num" x-show="captureProgressActive()" x-text="captureProgressLabel()"></div>
+                        <div class="bs-lacts">
+                            <button class="bs-lreset" @click="resetLiveStack()" title="Start the stack again"><span class="bs-li">&#8635;</span><span class="bs-lt"> Reset</span></button>
+                            <button class="bs-lreset" @click="saveServerStack()" title="Save the stacked image to disk"><span class="bs-li">&#128190;</span><span class="bs-lt"> Save stack</span></button>
+                            <button class="bs-lreset bs-switch" :class="liveStackSaveFrames ? 'on' : ''" @click="liveStackSaveFrames = !liveStackSaveFrames; saveLiveStackSaveFrames()" :title="liveStackSaveFrames ? 'Every sub-frame is saved to disk (tap to stop)' : 'Sub-frames are not saved (tap to save each one)'"><span class="bs-knob"></span><span class="bs-lt"> Subs</span></button>
+                        </div>
                     </div>
                 </template>
 
@@ -23177,18 +23177,26 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
 
         <div class="bs-bottom" x-show="basicScreen!=='autorun'">
             <button class="bs-full" @click="basicSetPref('off')">Full Mode</button>
-            <div class="bs-chip" x-show="basicScreen==='preview' || basicScreen==='live' || basicScreen==='video'"><span class="bs-dot" :class="selectedCamera ? '' : 'off'"></span><span class="bs-name" x-text="selectedCamera || 'Cam'"></span></div>
-            <div class="bs-chip" x-show="basicScreen==='preview' || basicScreen==='live' || basicScreen==='guide' || basicScreen==='video' || basicScreen==='sky'"><span class="bs-dot" :class="mount.connected ? '' : 'off'"></span><span class="bs-name" x-text="selectedTelescope || 'Mount'"></span></div>
-            <div class="bs-chip" x-show="basicScreen==='preview'"><span class="bs-dot" :class="focusConnected ? '' : 'off'"></span><span class="bs-name" x-text="selectedFocuser || 'Focuser'"></span></div>
+            <div class="bs-chip" x-show="basicScreen==='preview' || basicScreen==='live' || basicScreen==='video'" @click="basicChipInfo('Camera', selectedCamera, !!selectedCamera)"><span class="bs-dot" :class="selectedCamera ? '' : 'off'"></span><span class="bs-cico">&#128247;</span><span class="bs-name" x-text="selectedCamera || 'Cam'"></span></div>
+            <div class="bs-chip" x-show="basicScreen==='preview' || basicScreen==='live' || basicScreen==='guide' || basicScreen==='video' || basicScreen==='sky'" @click="basicChipInfo('Mount', selectedTelescope, mount.connected)"><span class="bs-dot" :class="mount.connected ? '' : 'off'"></span><span class="bs-cico">&#128301;</span><span class="bs-name" x-text="selectedTelescope || 'Mount'"></span></div>
+            <div class="bs-chip" x-show="basicScreen==='live' && guider.connected" x-cloak @click="basicChipInfo('Guide camera', guider.guideCameraName, guider.guideCameraConnected)"><span class="bs-dot" :class="guider.guideCameraConnected ? '' : 'off'"></span><span class="bs-cico">&#128760;</span><span class="bs-name" x-text="guider.guideCameraName || 'Guide cam'"></span></div>
+            <div class="bs-chip" x-show="basicScreen==='preview' || (basicScreen==='live' && selectedFocuser)" @click="basicChipInfo('Focuser', selectedFocuser, focusConnected)"><span class="bs-dot" :class="focusConnected ? '' : 'off'"></span><span class="bs-cico">&#127919;</span><span class="bs-name" x-text="selectedFocuser || 'Focuser'"></span></div>
             <button class="bs-auto" x-show="basicScreen==='preview'" :class="stretchAuto ? 'on' : ''" @click="toggleAutoStretch()">Auto stretch</button>
             <div class="bs-chip" x-show="basicScreen==='focus'" x-cloak><span class="bs-dot" :class="focusConnected ? '' : 'off'"></span><span class="bs-name" x-text="selectedFocuser || 'Focuser'"></span></div>
             <div class="bs-chip bs-num" x-show="basicScreen==='focus'" x-cloak>Step <b x-text="focusStepFast"></b></div>
             <div class="bs-chip bs-num" x-show="basicScreen==='focus' && autoFocus.lastHfr" x-cloak>HFR <b x-text="autoFocus.lastHfr?.toFixed(2)"></b></div>
             <div class="bs-chip" x-show="basicScreen==='guide'" x-cloak><span class="bs-dot" :class="guider.guideCameraConnected ? '' : 'off'"></span><span class="bs-name" x-text="guider.guideCameraName || 'Guide cam'"></span></div>
             <div class="bs-mountacts" x-show="mount.connected && (basicScreen==='preview' || basicScreen==='live' || basicScreen==='guide' || basicScreen==='video' || basicScreen==='sky')" x-cloak>
-                <button class="bs-mbtn" @click="telescopeFindHome()">&#8962; Home</button>
-                <button class="bs-mbtn" @click="basicMountPark()">&#9209; Park</button>
-                <button class="bs-mbtn" @click="basicMountSync()">&#8646; Sync</button>
+                <button class="bs-mbtn" :class="mountMenu ? 'on' : ''" @click="mountMenu = !mountMenu"><span class="bs-mico">&#128301; </span>Mount &#9662;</button>
+                <!-- Home and Park are full slews: one tap away from the bottom
+                     bar they ended sessions by accident, so they sit behind
+                     this menu and say so when a session is running. -->
+                <div class="bs-mountmenu" x-show="mountMenu" x-cloak @click.outside="mountMenu=false">
+                    <div class="bs-mwarn" x-show="basicSessionBusy()" x-text="basicSessionBusy()"></div>
+                    <button @click="mountMenu=false; telescopeFindHome()">&#8962; Home</button>
+                    <button @click="mountMenu=false; basicMountPark()">&#9209; Park</button>
+                    <button @click="mountMenu=false; basicMountSync()">&#8646; Solve &amp; sync</button>
+                </div>
             </div>
         </div>
 
@@ -25702,7 +25710,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261018-autoconnect"></script>
+    <script src="/js/app.js?v=20261018-field2"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

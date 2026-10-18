@@ -286,6 +286,57 @@
 
 .basic-shell .bs-lreset.on{border-color:var(--bs-ok); color:var(--bs-ok)}
 
+/* ---- Field UI: HUD extras, live actions, mount menu, device chips ---- */
+.basic-shell .bs-tcool{color:var(--bs-muted); font-size:11px}
+.basic-shell .bs-sprog{font-size:11px; color:var(--bs-muted); margin-top:-2px}
+.basic-shell .bs-lacts{display:flex; flex-direction:column; gap:6px; align-items:center}
+.basic-shell .bs-switch{display:flex; align-items:center; gap:6px}
+.basic-shell .bs-knob{width:22px; height:12px; border-radius:6px; background:#4a5673; position:relative; flex:0 0 auto}
+.basic-shell .bs-knob::after{content:""; position:absolute; top:2px; left:2px; width:8px; height:8px; border-radius:50%;
+    background:#c9d3e6; transition:left .15s}
+.basic-shell .bs-switch.on .bs-knob{background:var(--bs-ok)}
+.basic-shell .bs-switch.on .bs-knob::after{left:12px; background:#05140b}
+.basic-shell .bs-cico{font-size:12px; line-height:1}
+.basic-shell .bs-chip{cursor:pointer}
+.basic-shell .bs-mountacts{position:relative}
+.basic-shell .bs-mbtn.on{border-color:var(--bs-accent2); color:var(--bs-accent2)}
+.basic-shell .bs-mountmenu{position:absolute; right:0; bottom:40px; min-width:170px; display:flex; flex-direction:column;
+    gap:6px; padding:8px; background:var(--bs-panel); border:1px solid var(--bs-border); border-radius:14px;
+    backdrop-filter:blur(10px); z-index:45}
+.basic-shell .bs-mountmenu button{height:36px; border-radius:10px; background:var(--bs-chip); border:0; color:var(--text);
+    font-size:13px; font-weight:600; text-align:left; padding:0 12px; font-family:inherit}
+.basic-shell .bs-mwarn{font-size:11px; color:var(--bs-warn); padding:2px 4px 4px}
+
+.basic-shell .bs-full{white-space:nowrap}
+
+/* Narrow phones: the chip names collapse (rule above) but the icons stay; the
+   cooler keeps its power and drops the set-point, which crowded the mode pill. */
+@media (max-width: 560px){
+    .basic-shell .bs-bottom .bs-chip .bs-cico{font-size:13px; margin-left:5px}
+    .basic-shell .bs-bottom .bs-chip:not(.bs-num){padding:0 7px}
+    .basic-shell .bs-mbtn .bs-mico{display:none}
+    .basic-shell .bs-mbtn{padding:0 10px}
+    .basic-shell .bs-temp .bs-tcool:first-of-type{display:none}
+}
+
+/* LIVE: one line of counts instead of the quality card. */
+.basic-shell .bs-lhud.bs-lhud-min{width:auto; padding:6px 12px; border-radius:16px}
+.basic-shell .bs-lhud.bs-lhud-min .bs-lrow{margin-top:0; gap:12px; white-space:nowrap}
+
+/* Short landscape screens (a tablet on its side): the right rail no longer
+   fits its full column, and the lowest buttons slid under the bottom bar.
+   Tighten the column and put the stack actions in one row of icons. */
+@media (max-height: 560px){
+    .basic-shell .bs-rail{gap:6px}
+    .basic-shell .bs-exp{padding:3px 4px}
+    .basic-shell .bs-exp .bs-v{font-size:13px}
+    .basic-shell .bs-shutter{width:56px; height:56px}
+    .basic-shell .bs-shutter .bs-core{width:36px; height:36px}
+    .basic-shell .bs-lacts{flex-direction:row; gap:4px}
+    .basic-shell .bs-lacts .bs-lt{display:none}
+    .basic-shell .bs-lacts .bs-lreset{padding:0 9px; height:30px}
+}
+
 /* mount speed slider (in the mount pad side column) */
 .basic-shell .bs-spd{background:var(--bs-panel); border:1px solid var(--bs-border); border-radius:10px; padding:5px 7px;
     min-width:112px; backdrop-filter:blur(8px)}

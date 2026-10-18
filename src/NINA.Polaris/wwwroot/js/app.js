@@ -26470,7 +26470,7 @@ function ninaApp() {
 
         planAddTargetFromCatalog(o) {
             const t = this._blankTarget();
-            t.name = o.commonName || o.name || 'Target';
+            t.name = o.targetName || o.name || 'Target';
             t.raHours = o.ra ?? o.raHours ?? 0;
             t.decDeg = o.dec ?? o.decDeg ?? 0;
             // Persist the catalog designation so the card thumbnail resolves
@@ -28922,7 +28922,7 @@ function ninaApp() {
             // Catalogue results carry ra (hours) + dec (degrees).
             this.filesSolveModal.hintRaHours = o.ra ?? o.raHours ?? null;
             this.filesSolveModal.hintDecDeg = o.dec ?? o.decDeg ?? null;
-            this.filesSolveModal.objectName = o.commonName || o.name || '';
+            this.filesSolveModal.objectName = o.targetName || o.name || '';
             this.filesSolveModal.search = o.name || this.filesSolveModal.objectName;
             this.filesSolveModal.searchResults = [];
         },
@@ -31083,6 +31083,48 @@ function ninaApp() {
         },
         basicEquipModalTitle() {
             return ({ camera: 'Camera settings', mount: 'Mount settings', focuser: 'Focuser settings', filter: 'Filter wheel settings', guide: 'Guiding settings' })[this.basicEquipModal] || 'Settings';
+        },
+        // Field HUD: integrated time so far ("32m", "1h 4m").
+        basicLiveTotal() {
+            const n = (this.liveStackStatus && this.liveStackStatus.frameCount) || 0;
+            const exp = Number(this.exposure) || 0;
+            if (n <= 0 || exp <= 0) return '';
+            const total = n * exp;
+            return total < 60 ? Math.round(total) + 's'
+                : total < 3600 ? Math.round(total / 60) + 'm'
+                : Math.floor(total / 3600) + 'h ' + Math.round((total % 3600) / 60) + 'm';
+        },
+        // "→ -10°" and "100%" next to the sensor temperature while the cooler
+        // runs, so a cooler at its limit is visible without opening anything.
+        // Two pieces so a narrow phone can keep only the power.
+        basicCoolerTarget() {
+            if (!this.equipCameraInfo || !this.equipCameraInfo.coolerOn) return '';
+            const t = Number(this.equipCoolerTarget);
+            return Number.isFinite(t) ? `→ ${Math.round(t)}°` : '';
+        },
+        basicCoolerPower() {
+            if (!this.equipCameraInfo || !this.equipCameraInfo.coolerOn) return '';
+            const last = (this.tempHistory || [])[this.tempHistory.length - 1];
+            return last && last.power != null ? `${Math.round(last.power)}%` : '';
+        },
+        // Total guiding RMS for the rail button while guiding.
+        basicGuideRms() {
+            if (!this.guider || !this.guider.guiding) return '';
+            const r = Number(this.guider.rmsTotal);
+            return Number.isFinite(r) && r > 0 ? r.toFixed(2) + '″' : '';
+        },
+        // Why a mount move now would hurt, or '' when nothing is running.
+        basicSessionBusy() {
+            if (this.liveStackEnabled) return 'Live stacking is running';
+            if (this.seqState === 'running') return 'Autorun is running';
+            if (this.videoRecording && this.videoRecording.recording) return 'Recording video';
+            if (this.guider && this.guider.guiding) return 'Guiding is running';
+            return '';
+        },
+        // Tapping a device chip names the device (the name is hidden on a phone).
+        basicChipInfo(kind, name, connected) {
+            this.toast(kind + ': ' + (name || 'none selected') + (connected ? '' : ' (not connected)'),
+                connected ? 'info' : 'warn', 3000);
         },
         // Bottom-bar mount actions, each behind a confirm. Home reuses
         // telescopeFindHome (which confirms on its own); Park and Sync add one.
