@@ -50909,6 +50909,30 @@ function ninaApp() {
             return this.filterChoices('').length > 0;
         },
 
+        // Friendly label and explanation for fields whose raw name does not
+        // say what they do. "isLoop" on its own read like "repeat the count",
+        // and a block ticked that way repeated until someone stopped the run.
+        _advSeqFieldMeta(key, node) {
+            if (key === 'isLoop') {
+                const endless = !!node.isLoop && !(node.conditions && node.conditions.length);
+                return {
+                    label: 'Repeat this block',
+                    hint: 'Runs the block again while every loop condition holds (time, altitude, number of exposures…). '
+                        + 'Leave it off to run the block once.',
+                    warn: endless ? 'No loop condition: this block repeats until you stop the run.' : ''
+                };
+            }
+            return { label: '', hint: '', warn: '' };
+        },
+        // Blocks that repeat with nothing to end them.
+        _advSeqEndlessLoops(node, out = []) {
+            if (!node) return out;
+            if (node.isLoop && !(node.conditions && node.conditions.length))
+                out.push(node.name || node.type || 'block');
+            (node.items || []).forEach(c => this._advSeqEndlessLoops(c, out));
+            return out;
+        },
+
         advSeqEditableFields() {
             const n = this.advSeqSelectedNode();
             if (!n) return [];
@@ -50937,7 +50961,8 @@ function ninaApp() {
                     kind = 'enum';
                     options = ['', ...this.filterChoices(typeof v === 'string' ? v : '')];
                 }
-                out.push({ key: k, kind, options });
+                const meta = this._advSeqFieldMeta(k, n);
+                out.push({ key: k, kind, options, label: meta.label, hint: meta.hint, warn: meta.warn });
             }
             return out;
         },
@@ -50988,6 +51013,11 @@ function ninaApp() {
         // blocks skip, interrupted exposure sets pick up at the next frame.
         async _advSeqDoStart(resume) {
             this.advSeqResumePrompt = false;
+            const endless = this._advSeqEndlessLoops(this.advSeq.doc && this.advSeq.doc.root);
+            if (endless.length && !await this._confirmAsync(
+                'These blocks repeat until you stop the run, because "Repeat this block" is on '
+                + 'with no loop condition: ' + endless.join(', ') + '. Start anyway?',
+                { title: 'Sequence without an end', okLabel: 'Start anyway', cancelLabel: 'Cancel' })) return;
             if (!resume) await this.advSeqSaveDoc();
             const r = await this.apiPostJson('/api/sequencer/start' + (resume ? '?resume=1' : ''));
             this.advSeq.state = r.state;

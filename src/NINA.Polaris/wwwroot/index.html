@@ -13057,7 +13057,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 </div>
                                 <template x-for="field in advSeqEditableFields()" :key="field.key">
                                     <div class="prop-row">
-                                        <label x-text="field.key"></label>
+                                        <label x-text="field.label || field.key" :title="field.hint || ''"></label>
                                         <template x-if="field.kind === 'bool'">
                                             <input type="checkbox" :checked="advSeqSelectedNode()[field.key]"
                                                    @change="advSeqSelectedNode()[field.key] = $event.target.checked; advSeqDirty = true">
@@ -13079,6 +13079,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                                 </template>
                                             </select>
                                         </template>
+                                        <div class="prop-hint" x-show="field.hint" x-text="field.hint"
+                                             style="flex-basis:100%;font-size:11px;color:var(--text-muted);margin-top:2px"></div>
+                                        <div class="prop-hint" x-show="field.warn" x-text="field.warn"
+                                             style="flex-basis:100%;font-size:11px;color:var(--warning, #f0b429);margin-top:2px"></div>
                                     </div>
                                 </template>
                                 <hr style="margin:12px 0;border-color:var(--border)">
@@ -25425,7 +25429,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261018-field2"></script>
+    <script src="/js/app.js?v=20261019-advloop"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
