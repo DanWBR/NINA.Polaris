@@ -56,6 +56,10 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     // fire on a satellite streak or a gust, short enough that a real cloud-out
     // recovers on its own instead of waiting for the operator.
     private const int ReacquireAfterLostFrames = 10;
+    // Wait between re-acquisition attempts while the star stays lost. One
+    // attempt was all a loss ever got, and a rig still moving at that moment
+    // stayed unguided until the operator restarted it.
+    private const long ReacquireRetryMs = 15_000;
     // Max distance (px) from the old lock that re-acquisition will accept a star.
     // Bounds how far the pointing can shift in one recovery.
     private const double ReacquireRadiusPx = 150;
@@ -195,6 +199,7 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     private volatile bool _settleActive;
     private double _settleErrPx, _settleBelowSec, _settleElapsedSec;
     private int _starLostCount;
+    private long _lastReacquireMs;
     private int _mountLostCount;
 
     public string Backend => "native";
@@ -554,6 +559,12 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
         // does not say the loop is there, because a stop keeps that state until
         // its teardown completes.
         if (!IsGuiding || !_haveLock || _stopping || _loopCts == null) {
+            return Task.CompletedTask;
+        }
+        // Nor while the star is lost: there is nothing to settle on, and the
+        // settle just times out a minute later.
+        if (_starLostCount > 0) {
+            _logger.LogInformation("Native dither skipped: the guide star is lost");
             return Task.CompletedTask;
         }
         // Offset the lock position by a random vector of the requested

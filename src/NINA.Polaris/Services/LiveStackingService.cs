@@ -114,6 +114,26 @@ public class LiveStackingService {
     // winner even at 250 px, but a handful of stars widened would let an
     // accidental alignment through.
     private const int WideMatchMinStars = 8;
+    // Search radii, px, tried in turn once the tight window fails.
+    private static readonly double[] WideMatchRadii = { 250.0, 800.0 };
+    // Agreeing star pairs a wide search must find before it is believed.
+    private const int WideMatchMinVotes = 8;
+
+    /// <summary>
+    /// Whether the 180 degree orientation may be tried for a frame.
+    ///
+    /// <para>A mount that reports its pier side says whether it flipped: with
+    /// the side unchanged a rotated match can only be a coincidence, and one
+    /// put a frame that was merely shifted into the stack upside down. Only
+    /// a mount that does not report the side leaves it to the stars.</para>
+    /// </summary>
+    internal static bool MayProbeFlipped(PierSide reference, PierSide current, bool alreadyFlipped) {
+        if (reference == PierSide.pierUnknown || current == PierSide.pierUnknown) return true;
+        // Already stacking rotated frames: the reference orientation stays
+        // available (the mount may flip back), and so does the rotated one.
+        if (alreadyFlipped) return true;
+        return current != reference;
+    }
 
     // ---- Meridian flip (Part B) ---------------------------------
     // The accumulator stays in the REFERENCE orientation. After a GEM
@@ -1411,7 +1431,8 @@ public class LiveStackingService {
                     // pier hint says so or we're already tracking a flip.
                     bool flippedFirst = _flipped || pierFlipHint;
 
-                    alignedData = TryAlignOriented(stars, data, flippedFirst, out bool usedFlipped, out usedTransform);
+                    alignedData = TryAlignOriented(stars, data, flippedFirst,
+                        MayProbeFlipped(_referencePier, curPier, _flipped), out bool usedFlipped, out usedTransform);
                     if (alignedData == null) {
                         RecordReject($"alignment failed ({stars.Count} stars detected)");
                         return;
@@ -1662,11 +1683,12 @@ public class LiveStackingService {
     /// orientation won so the caller can track flip state.
     /// </summary>
     private ushort[]? TryAlignOriented(List<DetectedStar> stars, ushort[] data,
-                                       bool flippedFirst, out bool usedFlipped,
+                                       bool flippedFirst, bool mayFlip, out bool usedFlipped,
                                        out AffineTransform? used) {
         usedFlipped = false;
         used = null;
-        var order = flippedFirst ? new[] { true, false } : new[] { false, true };
+        var order = !mayFlip ? new[] { false }
+            : flippedFirst ? new[] { true, false } : new[] { false, true };
         foreach (var flip in order) {
             if (!flip) {
                 // Every frame matches against the FIRST frame's stars, so the
@@ -1685,7 +1707,15 @@ public class LiveStackingService {
                 if (t == null
                         && stars.Count >= WideMatchMinStars
                         && (_referenceStars?.Count ?? 0) >= WideMatchMinStars) {
-                    t = StarMatcher.Match(_referenceStars!, stars, maxSearchRadius: 250.0);
+                    // Then wider still: a rig that shifts by a few arcminutes
+                    // (a cable pulling, the tripod settling) lands 250+ px away
+                    // on a fine pixel scale, and every frame after it was
+                    // dropped until a reset.
+                    foreach (var radius in WideMatchRadii) {
+                        t = StarMatcher.Match(_referenceStars!, stars, maxSearchRadius: radius,
+                            minVotes: WideMatchMinVotes);
+                        if (t != null) break;
+                    }
                     if (t != null) {
                         _logger.LogInformation(
                             "Frame aligned only at the wide radius: drift dx={Tx:F0} dy={Ty:F0} px "
@@ -1705,7 +1735,8 @@ public class LiveStackingService {
                 // Bigger search radius: a flip that wasn't plate-solve
                 // recentred can leave a large residual translation that the
                 // default 50 px window would miss.
-                var t = StarMatcher.Match(_referenceStars!, rotStars, maxSearchRadius: 250.0);
+                var t = StarMatcher.Match(_referenceStars!, rotStars, maxSearchRadius: 250.0,
+                    minVotes: WideMatchMinVotes);
                 if (t != null) {
                     usedFlipped = true;
                     // Single warp lands the (un-rotated) frame on the
