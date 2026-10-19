@@ -261,6 +261,7 @@ find "$BUILD_DIR/opt/polaris/bin" -type d -exec chmod 0755 {} \; 2>/dev/null || 
 find "$BUILD_DIR/etc/polkit-1" -type f -exec chmod 0644 {} \; 2>/dev/null || true
 find "$BUILD_DIR/etc/systemd" -type f -exec chmod 0644 {} \; 2>/dev/null || true
 find "$BUILD_DIR/etc/sysctl.d" -type f -exec chmod 0644 {} \; 2>/dev/null || true
+find "$BUILD_DIR/etc/NetworkManager" -type f -exec chmod 0644 {} \; 2>/dev/null || true
 find "$BUILD_DIR/etc" -type d -exec chmod 0755 {} \; 2>/dev/null || true
 
 # 7. Build the .deb

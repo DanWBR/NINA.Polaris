@@ -37,6 +37,7 @@ public sealed partial class NativeGuider {
         _paused = false;
         _slewHold = false;
         _starLostCount = 0;
+        _lastReacquireMs = 0;
         _warned8Bit = false;
         _badFrameStreak = 0;
         _badFrameAlerted = false;
@@ -264,9 +265,7 @@ public sealed partial class NativeGuider {
             // manualmente. Isso é crítico para processos de captura longa."
             // Do that automatically instead, once, after the widened search has had
             // its chance.
-            if (_starLostCount == ReacquireAfterLostFrames) {
-                await TryReacquireAsync(cam, ct);
-            }
+            await MaybeReacquireAsync(cam, ct);
 
             // Back off while the star is gone so a long cloud-out doesn't spin
             // the loop at full tilt hammering captures (and, on short exposures,
@@ -275,11 +274,6 @@ public sealed partial class NativeGuider {
             try { await Task.Delay(dwell, ct); } catch (OperationCanceledException) { }
             return;
         }
-        // Star reacquired: clear the lost-lock state so the UI goes back to
-        // "Guiding" the moment a frame finds it again.
-        if (_starLostCount > 0 && AppState == "LostLock") SetAppState("Guiding");
-        _starLostCount = 0;
-
         double dx = curX - _lockX;
         double dy = curY - _lockY;
 
@@ -298,6 +292,7 @@ public sealed partial class NativeGuider {
             PushStep(new PortableGuideStep(NowMs(), 0, 0, 0, 0, 0, 0, snr, hfd, false));
             BuildView(curX, curY, snr, true);
             _distanceChecker.Activate();
+            await NoteRejectedWhileLostAsync(cam, ct);
             return;
         }
         _massChecker.AppendData(_lastFindMass);
@@ -315,8 +310,17 @@ public sealed partial class NativeGuider {
             SetActivity(null);
             PushStep(new PortableGuideStep(NowMs(), 0, 0, 0, 0, 0, 0, snr, hfd, false));
             BuildView(curX, curY, snr, true);
+            await NoteRejectedWhileLostAsync(cam, ct);
             return;
         }
+
+        // The star is back only when a measurement passes both gates. A
+        // widened search that finds something the distance check then drops
+        // used to clear the loss: the count never reached the re-acquisition,
+        // and the state flicked back to Guiding long enough to let a dither
+        // through with no star (field, 2026-10-18).
+        if (_starLostCount > 0 && AppState == "LostLock") SetAppState("Guiding");
+        _starLostCount = 0;
 
         var (raPx, decPx) = MountCoordTransform.CameraToMount(_calibration, dx, dy);
         // PHD2 Guider::UpdateCurrentDistance, the averages the gate above reads.
@@ -910,6 +914,27 @@ public sealed partial class NativeGuider {
     /// fought. That's the right trade: a few px of pointing shift costs one frame's
     /// worth of alignment (the stacker handles it), whereas the alternative on the
     /// table was guiding staying dead for the rest of the night.</summary>
+    /// <summary>Time for a full-frame re-acquisition? After enough lost
+    /// frames, and again every <see cref="ReacquireRetryMs"/> while the star
+    /// stays lost.</summary>
+    internal static bool ShouldReacquire(int lostFrames, long msSinceLastAttempt)
+        => lostFrames >= ReacquireAfterLostFrames && msSinceLastAttempt >= ReacquireRetryMs;
+
+    private async Task MaybeReacquireAsync(ICamera cam, CancellationToken ct) {
+        long now = NowMs();
+        if (!ShouldReacquire(_starLostCount, now - _lastReacquireMs)) return;
+        _lastReacquireMs = now;
+        await TryReacquireAsync(cam, ct);
+    }
+
+    /// <summary>A frame found something but a gate dropped it. While the star
+    /// is lost that is still a lost frame.</summary>
+    private async Task NoteRejectedWhileLostAsync(ICamera cam, CancellationToken ct) {
+        if (_starLostCount == 0) return;
+        _starLostCount++;
+        await MaybeReacquireAsync(cam, ct);
+    }
+
     private async Task TryReacquireAsync(ICamera cam, CancellationToken ct) {
         try {
             _logger.LogInformation(

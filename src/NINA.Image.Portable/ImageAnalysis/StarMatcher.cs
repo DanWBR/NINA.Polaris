@@ -39,7 +39,8 @@ public static class StarMatcher {
     /// </summary>
     public static AffineTransform? Match(
         List<DetectedStar> referenceStars, List<DetectedStar> currentStars,
-        double maxSearchRadius = 50.0, int maxStarsToUse = 50, int ransacIterations = 100) {
+        double maxSearchRadius = 50.0, int maxStarsToUse = 50, int ransacIterations = 100,
+        int minVotes = 3) {
 
         var refStars = referenceStars.Take(maxStarsToUse).ToList();
         var curStars = currentStars.Take(maxStarsToUse).ToList();
@@ -61,6 +62,13 @@ public static class StarMatcher {
         // gives RANSAC an almost-pure inlier set.
         var (tx, ty, votes) = EstimateTranslation(refStars, curStars,
             maxSearchRadius);
+
+        // A wide window lets chance coincidences pile up in one bin: with 50
+        // stars a side and a 250 px window, three accidental votes happen,
+        // and a live stack accepted a frame that was only shifted as a
+        // "meridian flip", stacking it upside down. A caller searching wide
+        // asks for more agreement, and no fallback pairing is tried.
+        if (minVotes > 3 && votes < minVotes) return null;
 
         List<(DetectedStar refStar, DetectedStar curStar)> pairs;
         if (votes >= 3 && refStars.Count >= 5 && curStars.Count >= 5) {

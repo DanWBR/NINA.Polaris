@@ -32,6 +32,16 @@ case "$1" in
         # next boot; PID 1 is not re-executed in the middle of an unattended
         # update for it.
         sysctl -q -p /etc/sysctl.d/90-polaris-panic.conf 2>/dev/null || true
+        # WIFI POWER SAVE: the NetworkManager drop-in turns it off for every
+        # connection brought up from now on; the radio already up gets it now,
+        # without dropping the link the operator may be connected through.
+        if [ -d /run/systemd/system ]; then
+            nmcli general reload conf 2>/dev/null || true
+            for netdev in /sys/class/net/*; do
+                [ -d "$netdev/wireless" ] || continue
+                iw dev "$(basename "$netdev")" set power_save off 2>/dev/null || true
+            done
+        fi
         # ---- 1. System user ----
         if ! getent passwd $POLARIS_USER >/dev/null; then
             adduser --system --group --home $POLARIS_HOME \
