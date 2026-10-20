@@ -569,6 +569,10 @@ builder.Services.AddHostedService<MeridianFlipAutoLiveService>();
 // state; also hosted so its poll loop runs.
 builder.Services.AddSingleton<MountSafetyGuardService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<MountSafetyGuardService>());
+// A mount that drops its plate-solve sync mid-session gets it back (AM3/AM5),
+// and the INDI mount driver keeps its own debug log so the next one can be traced.
+builder.Services.AddHostedService<PointingWatchdogService>();
+builder.Services.AddHostedService<MountDriverLogService>();
 
 // Wind guard: watches the guide stream for an error that has run away and is
 // not coming back, and restarts guiding when it finds one. Hosted because it

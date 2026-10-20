@@ -610,6 +610,10 @@ public class LiveStackingService {
 
     public bool IsRunning => _isRunning;
     public int FrameCount => _frameCount;
+
+    /// <summary>Raised after a frame is added to the stack, with its offset
+    /// from the reference frame.</summary>
+    public event Action<LiveFrameAlignment>? FrameAligned;
     public int Width => _width;
     public int Height => _height;
 
@@ -1550,6 +1554,15 @@ public class LiveStackingService {
                 _lastMetaData = imageData.MetaData;
             }
 
+            // Where this frame sat against the reference: the pointing
+            // watchdog compares it with what the mount says it did.
+            try {
+                FrameAligned?.Invoke(new LiveFrameAlignment(_frameCount,
+                    usedTransform?.Tx ?? 0, usedTransform?.Ty ?? 0, _flipped, DateTime.UtcNow));
+            } catch (Exception ex) {
+                _logger.LogDebug(ex, "FrameAligned subscriber failed");
+            }
+
             // LIVE-TRACE (FIELD6-8): one line per integrated frame answering
             // "why is the LIVE view mono?" end-to-end. Deliberately verbose and
             // deliberately at Information so it lands in the in-app LOG panel —
@@ -2097,3 +2110,8 @@ public class LiveStackingService {
 /// <param name="Width">Resulting stack width in pixels.</param>
 /// <param name="Height">Resulting stack height in pixels.</param>
 public record StackBinningOption(int Bin, int EstimatedMB, bool Fits, int Width, int Height);
+
+/// <summary>A stacked frame's position against the reference: the
+/// translation (px) the aligner applied, and whether it was the 180-degree
+/// orientation. Frame 1 is the reference itself (0, 0).</summary>
+public sealed record LiveFrameAlignment(int FrameCount, double Tx, double Ty, bool Flipped, DateTime AtUtc);
