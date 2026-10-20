@@ -13906,13 +13906,13 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     <button class="btn btn-sm btn-primary"
                                             @click="filesSolveCenter(true)"
                                             :disabled="!mount?.connected"
-                                            title="Center on this field without a big slew (the scope is already pointing here -- just refine the framing)">
+                                            title="Center on this field without a big slew (the scope is already pointing here -- just refine the framing). The frame's rotation becomes the SKY framing angle.">
                                         Center Only
                                     </button>
                                     <button class="btn btn-sm btn-primary"
                                             @click="filesSolveCenter(false)"
                                             :disabled="!mount?.connected"
-                                            title="Slew to the solved RA/Dec and center (iterative plate-solve convergence)">
+                                            title="Slew to the solved RA/Dec and center (iterative plate-solve convergence). The frame's rotation becomes the SKY framing angle.">
                                         Slew &amp; Center
                                     </button>
                                     <button class="btn btn-sm"
@@ -25714,7 +25714,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261019-advloop"></script>
+    <script src="/js/app.js?v=20261020-filerot"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
