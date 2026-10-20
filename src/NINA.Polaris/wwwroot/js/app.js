@@ -29012,6 +29012,8 @@ function ninaApp() {
         // result-card actions (raw mount sync, FOV-rotation overlays)
         // were removed because they are dangerous (sync overwrites the
         // mount model) or don't make sense for re-framing a file.
+        // The file's rotation becomes the SKY framing angle, so the job turns
+        // a rotator to it, or Measure framing guides a manual one.
         async filesSolveCenter(centerOnly) {
             const r = this.filesSolveResult;
             if (!r || !r.success) return;
@@ -29019,13 +29021,21 @@ function ninaApp() {
                 this.toast('Connect the mount first', 'warn');
                 return;
             }
+            const body = {
+                ra: r.raHours,
+                dec: r.decDeg,
+                toleranceArcsec: 30,
+                centerOnly: !!centerOnly
+            };
+            if (Number.isFinite(r.rotationDeg)) {
+                this.skyRotSet(r.rotationDeg);
+                this.skyRotAdvice = null;
+                this._skyRotLastTurn = null;
+                this.skyRotAdjust = true;
+                body.rotation = this.skyTargetRotDeg;
+            }
             try {
-                const data = await this._postSlewAndCenter({
-                    ra: r.raHours,
-                    dec: r.decDeg,
-                    toleranceArcsec: 30,
-                    centerOnly: !!centerOnly
-                });
+                const data = await this._postSlewAndCenter(body);
                 if (data && data.jobId) {
                     // Same start-up as the SKY tab's own slew & center: reset the
                     // status and the leftover console from a previous run, then
