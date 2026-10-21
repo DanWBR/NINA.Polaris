@@ -27456,6 +27456,19 @@ function ninaApp() {
                     this.equipFilterChoice = this.selectedFilterWheel;
                 }
             }
+            // Rotator choices are role-filtered, so a same-named non-rotator
+            // must not keep a stale saved choice alive. The live status name
+            // also repairs an empty choice after backend auto-connect.
+            if (this.rotatorDriver === 'indi' || !this.rotatorDriver) {
+                const rotatorNames = new Set(this.rotatorIndiDevices.map(d => d.name));
+                if (this.equipRotatorChoice && !rotatorNames.has(this.equipRotatorChoice)) {
+                    this.equipRotatorChoice = '';
+                }
+                if (!this.equipRotatorChoice && this.rotator?.connected
+                    && rotatorNames.has(this.rotator.name)) {
+                    this.equipRotatorChoice = this.rotator.name;
+                }
+            }
         },
 
         // --- Camera ---
@@ -50033,6 +50046,9 @@ function ninaApp() {
                     moving: eq.rotator.moving,
                     reversed: eq.rotator.reversed
                 };
+                if (!this.equipRotatorChoice && eq.rotator.connected && eq.rotator.name) {
+                    this.equipRotatorChoice = eq.rotator.name;
+                }
             }
             if (eq.powerBox) {
                 this.powerBox = {
