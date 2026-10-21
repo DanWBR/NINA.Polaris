@@ -43067,8 +43067,11 @@ function ninaApp() {
         get rotatorDriverInfo() {
             return this.rotatorDrivers.find(d => d.id === this.rotatorDriver) || null;
         },
+        // INDI devices for the rotator slot: those advertising the rotator
+        // interface, plus untyped ones that publish no DRIVER_INTERFACE
+        // (the backend accepts those too).
         get rotatorIndiDevices() {
-            return (this.devices || []).filter(d => (d.roles || []).includes('rotator'));
+            return (this.devices || []).filter(d => !(d.roles || []).length || d.roles.includes('rotator'));
         },
         get focuserDriverInfo() {
             return this.focuserDrivers.find(d => d.id === this.focuserDriver) || null;

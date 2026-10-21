@@ -929,6 +929,15 @@ public class IndiClient : IDisposable {
 
     public IEnumerable<string> GetDeviceNames() => Devices.Keys;
 
+    /// <summary>The DRIVER_INFO/DRIVER_INTERFACE bitmask a device advertises
+    /// (the *_INTERFACE bits of INDI's basedevice.h), or null when it has not
+    /// published one.</summary>
+    public int? DriverInterface(string device)
+        => GetProperty(device, "DRIVER_INFO") is IndiTextProperty tp
+           && tp.Values.TryGetValue("DRIVER_INTERFACE", out var s)
+           && int.TryParse(s?.Trim(), out var mask) && mask > 0
+            ? mask : null;
+
     private void OnPropertyDefined(IndiProperty prop) {
         var deviceProps = Devices.GetOrAdd(prop.Device, _ => new());
         bool isNew = !Devices.ContainsKey(prop.Device);

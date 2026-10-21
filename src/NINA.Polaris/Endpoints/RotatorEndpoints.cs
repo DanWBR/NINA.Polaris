@@ -51,8 +51,12 @@ public static class RotatorEndpoints {
             if (!RotatorRange.Allows(request.Angle, maxAngle))
                 return Results.BadRequest(new { error = RotatorRange.Error(maxAngle) });
 
-            await equip.Rotator.MoveToAsync(request.Angle);
-            return Results.Ok(new { status = "moving", target = request.Angle });
+            try {
+                await equip.Rotator.MoveToAsync(request.Angle);
+            } catch (Exception ex) when (ex is InvalidOperationException or TimeoutException) {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+            return Results.Ok(new { status = "moving", device = equip.Rotator.DeviceName, target = request.Angle });
         });
 
         group.MapPost("/reverse", async (EquipmentManager equip, ReverseRequest request) => {
@@ -83,7 +87,7 @@ public static class RotatorEndpoints {
         group.MapGet("/discover", (EquipmentManager equip, string? driver) => {
             var d = (driver ?? "indi").Trim().ToLowerInvariant();
             if (d == "alpaca") return Results.Ok(equip.GetDiscoveredRotatorsFor("alpaca"));
-            return Results.Ok(equip.GetDeviceNames().Select(n => new DiscoveredCamera(n, n, n)).ToList());
+            return Results.Ok(equip.GetIndiRotatorNames().Select(n => new DiscoveredCamera(n, n, n)).ToList());
         });
 
         group.MapGet("/drivers", (EquipmentManager equip) => {

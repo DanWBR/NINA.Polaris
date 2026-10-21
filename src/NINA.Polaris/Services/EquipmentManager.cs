@@ -112,6 +112,10 @@ public class EquipmentManager : IDisposable {
 
     public IEnumerable<string> GetDeviceNames() => _indiClient.GetDeviceNames();
 
+    /// <summary>INDI devices that may be bound to the rotator slot.</summary>
+    public IEnumerable<string> GetIndiRotatorNames()
+        => GetDeviceNames().Where(n => IndiRotator.NotARotator(_indiClient, n) == null);
+
     /// <summary>Legacy entry-point, assumes the INDI driver. Kept
     /// for backwards compatibility with the existing capture-endpoint
     /// route <c>POST /api/camera/select/{deviceName}</c>.</summary>
@@ -984,7 +988,8 @@ public class EquipmentManager : IDisposable {
 
     public IRotator SelectRotator(string driver, string deviceId) {
         driver = (driver ?? "indi").Trim().ToLowerInvariant();
-        if (driver == "indi") ValidateIndiRotatorRole(deviceId);
+        if (driver == "indi" && IndiRotator.NotARotator(_indiClient, deviceId) is string notRotator)
+            throw new InvalidOperationException(notRotator);
         var previousRotator = Rotator;
         Rotator = driver switch {
             "indi" => new IndiRotator(_indiClient, deviceId),
@@ -996,21 +1001,6 @@ public class EquipmentManager : IDisposable {
         RotatorDriver = driver;
         _logger.LogInformation("Rotator selected: driver={Driver}, id={DeviceId}", driver, deviceId);
         return Rotator;
-    }
-
-    /// <summary>Reject a device that explicitly identifies itself as some
-    /// other INDI interface. Untyped devices remain allowed for compatibility
-    /// with older third-party drivers that omit DRIVER_INTERFACE.</summary>
-    private void ValidateIndiRotatorRole(string deviceId) {
-        if (_indiClient.GetProperty(deviceId, "DRIVER_INFO") is not NINA.INDI.Protocol.IndiTextProperty info ||
-            !info.Values.TryGetValue("DRIVER_INTERFACE", out var raw)) {
-            return;
-        }
-        var roles = IndiInterfaceRoles.Decode(raw);
-        if (roles.Count > 0 && !roles.Contains("rotator")) {
-            throw new InvalidOperationException(
-                $"INDI device '{deviceId}' is not a rotator (DRIVER_INTERFACE={raw}).");
-        }
     }
 
     public IndiFlatDevice SelectFlatDevice(string deviceName) {

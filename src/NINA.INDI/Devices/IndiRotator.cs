@@ -19,11 +19,23 @@ using NINA.Image.Interfaces;
 namespace NINA.INDI.Devices;
 
 public class IndiRotator : IRotator, IDisposable {
+    /// <summary>ROTATOR_INTERFACE in INDI's basedevice.h.</summary>
+    public const int RotatorInterface = 0x1000;
+
     private readonly IndiClient _client;
 
     public string DeviceName { get; }
-    public bool IsConnected => _client.IsConnected &&
-        _client.GetSwitch(DeviceName, "CONNECTION", "CONNECT");
+    public bool IsConnected => _client.IsConnected
+        && _client.GetSwitch(DeviceName, "CONNECTION", "CONNECT");
+
+    /// <summary>Why <paramref name="device"/> cannot be a rotator, or null
+    /// when it can. Only a device that advertises its interface bits and
+    /// leaves out the rotator one is refused; an untyped device is let
+    /// through.</summary>
+    public static string? NotARotator(IndiClient client, string device)
+        => client.DriverInterface(device) is int mask && (mask & RotatorInterface) == 0
+            ? $"'{device}' is not a rotator: its INDI driver does not advertise the rotator interface."
+            : null;
 
     public double Position => _client.GetNumber(DeviceName, "ABS_ROTATOR_ANGLE", "ANGLE");
 
@@ -63,6 +75,9 @@ public class IndiRotator : IRotator, IDisposable {
             throw new InvalidOperationException(
                 $"INDI device '{DeviceName}' does not expose ABS_ROTATOR_ANGLE.ANGLE.");
         }
+
+        if (!IsConnected)
+            throw new InvalidOperationException($"Rotator '{DeviceName}' is not connected.");
 
         // INDIROB-1: ack-based. Rotator rejects are common (limit
         // switches, mechanical end-stops, calibration drift) and need

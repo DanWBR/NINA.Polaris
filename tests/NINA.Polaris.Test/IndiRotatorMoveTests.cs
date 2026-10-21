@@ -56,6 +56,7 @@ public class IndiRotatorMoveTests {
         using var server = new FakeIndiServer(replyToMove: true);
         using var client = new IndiClient("127.0.0.1", server.Port);
         await client.ConnectAsync();
+        SeedConnection(client, Rotator, connected: true);
         SeedAngle(client, Rotator, 0);
         using var rotator = new IndiRotator(client, Rotator);
 
@@ -73,12 +74,68 @@ public class IndiRotatorMoveTests {
             DefaultAckTimeout = TimeSpan.FromMilliseconds(100)
         };
         await client.ConnectAsync();
+        SeedConnection(client, Rotator, connected: true);
         SeedAngle(client, Rotator, 0);
         using var rotator = new IndiRotator(client, Rotator);
 
         var ex = Assert.ThrowsAsync<TimeoutException>(() => rotator.MoveToAsync(47));
 
         Assert.That(ex!.Message, Does.Contain("did not acknowledge"));
+    }
+
+    [Test]
+    public async Task MoveTo_WhenRotatorIsDisconnected_FailsBeforeWriting() {
+        using var server = new FakeIndiServer(replyToMove: true);
+        using var client = new IndiClient("127.0.0.1", server.Port);
+        await client.ConnectAsync();
+        SeedConnection(client, Rotator, connected: false);
+        SeedAngle(client, Rotator, 0);
+        using var rotator = new IndiRotator(client, Rotator);
+
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(() => rotator.MoveToAsync(37));
+
+        Assert.That(ex!.Message, Does.Contain("not connected"));
+        Assert.That(server.Received, Does.Not.Contain("ABS_ROTATOR_ANGLE"));
+    }
+
+    [Test]
+    public async Task MoveTo_WhenDriverRejects_ReportsTheDriverMessage() {
+        using var server = new FakeIndiServer(replyToMove: true, replyState: "Alert", replyMessage: "limit reached");
+        using var client = new IndiClient("127.0.0.1", server.Port);
+        await client.ConnectAsync();
+        SeedConnection(client, Rotator, connected: true);
+        SeedAngle(client, Rotator, 0);
+        using var rotator = new IndiRotator(client, Rotator);
+
+        var ex = Assert.ThrowsAsync<InvalidOperationException>(() => rotator.MoveToAsync(37));
+
+        Assert.That(ex!.Message, Does.Contain("limit reached"));
+    }
+
+    [Test]
+    public void OnlyRotatorsAndUntypedDevicesFitTheRotatorSlot() {
+        using var client = new IndiClient();
+        SeedDriverInterface(client, Rotator, IndiRotator.RotatorInterface);
+        SeedDriverInterface(client, "Telescope Simulator", 0x0001);
+        SeedDriverInterface(client, "Focuser+Rotator", 0x0008 | IndiRotator.RotatorInterface);
+        SeedConnection(client, "Untyped", connected: true);
+
+        Assert.Multiple(() => {
+            Assert.That(IndiRotator.NotARotator(client, Rotator), Is.Null);
+            Assert.That(IndiRotator.NotARotator(client, "Focuser+Rotator"), Is.Null);
+            Assert.That(IndiRotator.NotARotator(client, "Untyped"), Is.Null);
+            Assert.That(IndiRotator.NotARotator(client, "Telescope Simulator"), Does.Contain("not a rotator"));
+        });
+    }
+
+    private static void SeedDriverInterface(IndiClient client, string device, int mask) {
+        var property = new IndiTextProperty {
+            Device = device,
+            Name = "DRIVER_INFO",
+            State = IndiPropertyState.Ok,
+            Values = new Dictionary<string, string> { ["DRIVER_INTERFACE"] = mask.ToString() }
+        };
+        SeedProperty(client, device, property);
     }
 
     private static void SeedConnection(IndiClient client, string device, bool connected) {
@@ -116,14 +173,18 @@ public class IndiRotatorMoveTests {
         private readonly TcpListener _listener;
         private readonly CancellationTokenSource _cts = new();
         private readonly bool _replyToMove;
+        private readonly string _replyState;
+        private readonly string? _replyMessage;
         private readonly StringBuilder _received = new();
         private readonly object _sync = new();
 
         public int Port { get; }
         public string Received { get { lock (_sync) return _received.ToString(); } }
 
-        public FakeIndiServer(bool replyToMove) {
+        public FakeIndiServer(bool replyToMove, string replyState = "Busy", string? replyMessage = null) {
             _replyToMove = replyToMove;
+            _replyState = replyState;
+            _replyMessage = replyMessage;
             _listener = new TcpListener(IPAddress.Loopback, 0);
             _listener.Start();
             Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
@@ -151,7 +212,8 @@ public class IndiRotatorMoveTests {
 
                     replied = true;
                     var xml =
-                        $"<setNumberVector device='{Rotator}' name='ABS_ROTATOR_ANGLE' state='Busy'>" +
+                        $"<setNumberVector device='{Rotator}' name='ABS_ROTATOR_ANGLE' state='{_replyState}'" +
+                        (_replyMessage != null ? $" message='{_replyMessage}'" : "") + ">" +
                         "<oneNumber name='ANGLE'>37</oneNumber></setNumberVector>\n";
                     var bytes = Encoding.UTF8.GetBytes(xml);
                     await stream.WriteAsync(bytes, _cts.Token);
