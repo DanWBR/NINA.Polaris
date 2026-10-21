@@ -8641,7 +8641,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         :disabled="rotatorSelecting">
                                     <option value="" x-text="rotatorIndiDevices.length ? 'Select rotator' : 'No INDI rotators, start a rotator driver in the INDI panel'"></option>
                                     <template x-for="dev in rotatorIndiDevices" :key="'rot-'+dev.name">
-                                        <option :value="dev.name" x-text="dev.name + (dev.driver ? ' (' + dev.driver + ')' : '')"></option>
+                                        <option :value="dev.name" :selected="equipRotatorChoice === dev.name"
+                                                x-text="dev.name + (dev.driver ? ' (' + dev.driver + ')' : '')"></option>
                                     </template>
                                 </select>
                                 <select class="equip-select" x-show="rotatorDriver !== 'indi'"
@@ -25434,7 +25435,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261021-rotsel2"></script>
+    <script src="/js/app.js?v=20261021-rotsync"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
