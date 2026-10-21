@@ -27518,6 +27518,21 @@ function ninaApp() {
                     this.equipFilterChoice = this.selectedFilterWheel;
                 }
             }
+            // Rotator. A choice whose device is listed but is not eligible for
+            // the slot (a mount) is cleared; one whose driver has not defined
+            // its device yet is kept, so the saved rig shows once it appears.
+            // An empty choice takes the rotator the backend has connected.
+            if (this.rotatorDriver === 'indi' || !this.rotatorDriver) {
+                const eligible = new Set(this.rotatorIndiDevices.map(d => d.name));
+                if (this.equipRotatorChoice && names.has(this.equipRotatorChoice)
+                    && !eligible.has(this.equipRotatorChoice)) {
+                    this.equipRotatorChoice = '';
+                }
+                if (!this.equipRotatorChoice && this.rotator?.connected
+                    && eligible.has(this.rotator.name)) {
+                    this.equipRotatorChoice = this.rotator.name;
+                }
+            }
         },
 
         // --- Camera ---
