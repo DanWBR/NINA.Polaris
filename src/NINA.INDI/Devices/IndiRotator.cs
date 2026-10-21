@@ -19,10 +19,23 @@ using NINA.Image.Interfaces;
 namespace NINA.INDI.Devices;
 
 public class IndiRotator : IRotator, IDisposable {
+    /// <summary>ROTATOR_INTERFACE in INDI's basedevice.h.</summary>
+    public const int RotatorInterface = 0x1000;
+
     private readonly IndiClient _client;
 
     public string DeviceName { get; }
-    public bool IsConnected => _client.IsConnected;
+    public bool IsConnected => _client.IsConnected
+        && _client.GetSwitch(DeviceName, "CONNECTION", "CONNECT");
+
+    /// <summary>Why <paramref name="device"/> cannot be a rotator, or null
+    /// when it can. Only a device that advertises its interface bits and
+    /// leaves out the rotator one is refused; an untyped device is let
+    /// through.</summary>
+    public static string? NotARotator(IndiClient client, string device)
+        => client.DriverInterface(device) is int mask && (mask & RotatorInterface) == 0
+            ? $"'{device}' is not a rotator: its INDI driver does not advertise the rotator interface."
+            : null;
 
     public double Position => _client.GetNumber(DeviceName, "ABS_ROTATOR_ANGLE", "ANGLE");
 
@@ -52,6 +65,20 @@ public class IndiRotator : IRotator, IDisposable {
         => _client.DisconnectDeviceAsync(DeviceName, ct);
 
     public async Task MoveToAsync(double degrees, CancellationToken ct = default) {
+        // A device name alone does not make an INDI rotator. In particular,
+        // the equipment picker used to leave the previously-selected mount
+        // bound here, so ABS_ROTATOR_ANGLE was sent to the telescope and the
+        // INDI server silently discarded it. Fail before writing unless the
+        // selected device actually publishes the standard rotator vector.
+        if (_client.GetProperty(DeviceName, "ABS_ROTATOR_ANGLE") is not IndiNumberProperty angle ||
+            !angle.Values.ContainsKey("ANGLE")) {
+            throw new InvalidOperationException(
+                $"INDI device '{DeviceName}' does not expose ABS_ROTATOR_ANGLE.ANGLE.");
+        }
+
+        if (!IsConnected)
+            throw new InvalidOperationException($"Rotator '{DeviceName}' is not connected.");
+
         // INDIROB-1: ack-based. Rotator rejects are common (limit
         // switches, mechanical end-stops, calibration drift) and need
         // to surface as toasts rather than silent no-ops.
@@ -63,6 +90,10 @@ public class IndiRotator : IRotator, IDisposable {
                 : ack.AlertMessage;
             throw new InvalidOperationException(
                 $"Rotator '{DeviceName}' rejected move to {degrees:F2}°: {detail}");
+        }
+        if (ack.TimedOut) {
+            throw new TimeoutException(
+                $"Rotator '{DeviceName}' did not acknowledge ABS_ROTATOR_ANGLE for {degrees:F2}°.");
         }
     }
 

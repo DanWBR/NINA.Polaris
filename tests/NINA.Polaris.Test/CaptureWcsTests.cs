@@ -205,6 +205,50 @@ public class CaptureWcsTests {
     }
 
     [Test]
+    public void RotatorDisconnect_DoesNotReuseWcsWithUnknownAngle() {
+        var rotator = new Mock<IRotator>();
+        rotator.SetupGet(r => r.IsConnected).Returns(true);
+        rotator.SetupGet(r => r.Position).Returns(0);
+        SetEquipment("Rotator", rotator.Object);
+        Calibrate();
+        rotator.SetupGet(r => r.IsConnected).Returns(false);
+
+        Assert.That(_writer.WithCaptureWcs(Frame(), "LIGHT", false, null).Properties.Wcs, Is.Null);
+    }
+
+    [TestCase(0, 0.099, true)]
+    [TestCase(42, 42.1, true)]
+    [TestCase(0, 0.101, false)]
+    [TestCase(359.95, 0.02, true)]
+    [TestCase(359.95, 0.05, true)]
+    [TestCase(359.95, 0.06, false)]
+    [TestCase(0.02, 359.95, true)]
+    public void RotatorJitter_UsesPointOneDegreeCircularTolerance(double solvedAngle, double currentAngle, bool reusable) {
+        var rotator = new Mock<IRotator>();
+        rotator.SetupGet(r => r.IsConnected).Returns(true);
+        rotator.SetupGet(r => r.Position).Returns(solvedAngle);
+        SetEquipment("Rotator", rotator.Object);
+        Calibrate();
+        rotator.SetupGet(r => r.Position).Returns(currentAngle);
+
+        var wcs = _writer.WithCaptureWcs(Frame(), "LIGHT", false, null).Properties.Wcs;
+        Assert.That(wcs != null, Is.EqualTo(reusable));
+    }
+
+    [Test]
+    public void RotatorDrift_IsComparedWithTheSolveAngle() {
+        var rotator = new Mock<IRotator>();
+        rotator.SetupGet(r => r.IsConnected).Returns(true);
+        rotator.SetupGet(r => r.Position).Returns(0);
+        SetEquipment("Rotator", rotator.Object);
+        Calibrate();
+        rotator.SetupGet(r => r.Position).Returns(0.08);
+        Assert.That(_writer.WithCaptureWcs(Frame(), "LIGHT", false, null).Properties.Wcs, Is.Not.Null);
+        rotator.SetupGet(r => r.Position).Returns(0.16);
+        Assert.That(_writer.WithCaptureWcs(Frame(), "LIGHT", false, null).Properties.Wcs, Is.Null);
+    }
+
+    [Test]
     public void CroppedFrameAndOtherCamera_CannotSeedCaptureCalibration() {
         var cropped = new BaseImageData(new ushort[20 * 15],
             new ImageProperties { Width = 20, Height = 15, BitDepth = 16 }, Frame().MetaData);

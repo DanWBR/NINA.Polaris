@@ -44,13 +44,19 @@ public static class RotatorEndpoints {
         group.MapPost("/move", async (EquipmentManager equip, ProfileService profiles, MoveRotatorRequest request) => {
             if (equip.Rotator == null)
                 return Results.BadRequest(new { error = "No rotator selected" });
+            if (!equip.Rotator.IsConnected)
+                return Results.BadRequest(new { error = $"Rotator '{equip.Rotator.DeviceName}' is not connected" });
             var maxAngle = RotatorRange.NormalizeMaximum(
                 profiles.ActiveEquipmentProfile?.RotatorMaxAngle ?? 360);
             if (!RotatorRange.Allows(request.Angle, maxAngle))
                 return Results.BadRequest(new { error = RotatorRange.Error(maxAngle) });
 
-            await equip.Rotator.MoveToAsync(request.Angle);
-            return Results.Ok(new { status = "moving", target = request.Angle });
+            try {
+                await equip.Rotator.MoveToAsync(request.Angle);
+            } catch (Exception ex) when (ex is InvalidOperationException or TimeoutException) {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+            return Results.Ok(new { status = "moving", device = equip.Rotator.DeviceName, target = request.Angle });
         });
 
         group.MapPost("/reverse", async (EquipmentManager equip, ReverseRequest request) => {
@@ -73,7 +79,7 @@ public static class RotatorEndpoints {
             try {
                 equip.SelectRotator(driver ?? "indi", deviceName);
                 return Results.Ok(new { selected = deviceName, driver = driver ?? "indi" });
-            } catch (NotSupportedException ex) {
+            } catch (Exception ex) when (ex is NotSupportedException or InvalidOperationException) {
                 return Results.BadRequest(new { error = ex.Message });
             }
         });
@@ -81,7 +87,7 @@ public static class RotatorEndpoints {
         group.MapGet("/discover", (EquipmentManager equip, string? driver) => {
             var d = (driver ?? "indi").Trim().ToLowerInvariant();
             if (d == "alpaca") return Results.Ok(equip.GetDiscoveredRotatorsFor("alpaca"));
-            return Results.Ok(equip.GetDeviceNames().Select(n => new DiscoveredCamera(n, n, n)).ToList());
+            return Results.Ok(equip.GetIndiRotatorNames().Select(n => new DiscoveredCamera(n, n, n)).ToList());
         });
 
         group.MapGet("/drivers", (EquipmentManager equip) => {

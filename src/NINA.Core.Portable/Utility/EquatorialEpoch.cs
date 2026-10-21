@@ -34,6 +34,7 @@ namespace NINA.Core.Utility;
 /// is then commanded in, so centering converges regardless.</para>
 /// </summary>
 public static class EquatorialEpoch {
+    // TODO: Investigate nutation and annual aberration in mount coordinate conversions: https://github.com/DanWBR/NINA.Polaris/issues/46
     /// <summary>J2000 to the mean equator and equinox of <paramref name="atUtc"/>.
     /// RA in hours [0, 24), Dec in degrees. NaN stays NaN.</summary>
     public static (double RaHours, double DecDeg) J2000ToJNow(double raHours, double decDeg, DateTime atUtc)

@@ -1410,6 +1410,7 @@ function ninaApp() {
         rotatorDrivers: [],
         rotatorVendorDevices: [],
         rotatorDiscovering: false,
+        rotatorSelecting: false,
         equipFlatChoice: '',
         equipDomeChoice: '',
         equipWeatherChoice: '',
@@ -43532,6 +43533,12 @@ function ninaApp() {
         get rotatorDriverInfo() {
             return this.rotatorDrivers.find(d => d.id === this.rotatorDriver) || null;
         },
+        // INDI devices for the rotator slot: those advertising the rotator
+        // interface, plus untyped ones that publish no DRIVER_INTERFACE
+        // (the backend accepts those too).
+        get rotatorIndiDevices() {
+            return (this.devices || []).filter(d => !(d.roles || []).length || d.roles.includes('rotator'));
+        },
         get focuserDriverInfo() {
             return this.focuserDrivers.find(d => d.id === this.focuserDriver) || null;
         },
@@ -43553,6 +43560,32 @@ function ninaApp() {
         },
 
         // --- Rotator ---
+        async equipSelectRotator() {
+            if (!this.equipRotatorChoice) return;
+            this.rotatorSelecting = true;
+            // Do not leave controls for the old backend selection live while
+            // the new selection request is in flight.
+            this.rotator = { connected: false, name: '', position: null, moving: false, reversed: false };
+            try {
+                const qs = this.rotatorDriver && this.rotatorDriver !== 'indi'
+                    ? `?driver=${encodeURIComponent(this.rotatorDriver)}` : '';
+                await this.apiPost(`/api/rotator/select/${encodeURIComponent(this.equipRotatorChoice)}${qs}`);
+                const status = await this.apiGet('/api/rotator/status');
+                this.rotator = {
+                    connected: !!status.connected,
+                    name: status.name || this.equipRotatorChoice,
+                    position: status.position,
+                    moving: !!status.moving,
+                    reversed: !!status.reversed
+                };
+                this._persistRigSelection({ rotator: this.equipRotatorChoice,
+                    rotatorDriver: this.rotatorDriver || 'indi' });
+            } catch (e) {
+                this.toastFail('Rotator selection failed', e);
+            } finally {
+                this.rotatorSelecting = false;
+            }
+        },
         async equipConnectRotator() {
             if (!this.equipRotatorChoice) return;
             try {
