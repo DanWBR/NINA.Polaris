@@ -43087,6 +43087,23 @@ function ninaApp() {
         },
 
         // --- Rotator ---
+        // INDI devices for the rotator slot: those advertising the rotator
+        // interface, plus untyped ones that publish no DRIVER_INTERFACE.
+        indiRotatorDevices() {
+            return (this.devices || []).filter(d => !(d.roles || []).length || d.roles.includes('rotator'));
+        },
+        // A new pick while a rotator is connected rebinds the backend at once,
+        // so the card never names one device while Move drives another.
+        async equipRotatorRebind(choice) {
+            this.equipRotatorChoice = choice;
+            if (!choice || !this.rotator?.connected || choice === this.rotator.name) return;
+            await this.equipConnectRotator();
+            try {
+                const s = await this.apiGet('/api/rotator/status');
+                this.rotator = { ...this.rotator, connected: !!s.connected, name: s.name || '' };
+                if (s.name && s.name !== choice) this.equipRotatorChoice = s.name;
+            } catch (_) { }
+        },
         async equipConnectRotator() {
             if (!this.equipRotatorChoice) return;
             try {

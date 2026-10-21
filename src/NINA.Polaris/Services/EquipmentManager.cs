@@ -112,6 +112,10 @@ public class EquipmentManager : IDisposable {
 
     public IEnumerable<string> GetDeviceNames() => _indiClient.GetDeviceNames();
 
+    /// <summary>INDI devices that may be bound to the rotator slot.</summary>
+    public IEnumerable<string> GetIndiRotatorNames()
+        => GetDeviceNames().Where(n => IndiRotator.NotARotator(_indiClient, n) == null);
+
     /// <summary>Legacy entry-point, assumes the INDI driver. Kept
     /// for backwards compatibility with the existing capture-endpoint
     /// route <c>POST /api/camera/select/{deviceName}</c>.</summary>
@@ -984,6 +988,8 @@ public class EquipmentManager : IDisposable {
 
     public IRotator SelectRotator(string driver, string deviceId) {
         driver = (driver ?? "indi").Trim().ToLowerInvariant();
+        if (driver == "indi" && IndiRotator.NotARotator(_indiClient, deviceId) is string notRotator)
+            throw new InvalidOperationException(notRotator);
         var previousRotator = Rotator;
         Rotator = driver switch {
             "indi" => new IndiRotator(_indiClient, deviceId),

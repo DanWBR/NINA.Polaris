@@ -47,7 +47,11 @@ public class IndiClient : IDisposable {
 
     public string Host { get; }
     public int Port { get; }
-    public bool IsConnected => _tcp?.Connected == true && _stream != null;
+    public bool IsConnected => SendOverride != null || (_tcp?.Connected == true && _stream != null);
+
+    /// <summary>Test seam: when set, every outgoing XML message goes here
+    /// instead of the socket, and the client counts as connected.</summary>
+    internal Func<byte[], CancellationToken, Task>? SendOverride { get; set; }
 
     public TimeSpan ConnectTimeout { get; set; } = TimeSpan.FromSeconds(10);
     public TimeSpan SendTimeout { get; set; } = TimeSpan.FromSeconds(5);
@@ -380,6 +384,7 @@ public class IndiClient : IDisposable {
     }
 
     public async Task SendAsync(byte[] data, CancellationToken ct = default) {
+        if (SendOverride != null) { await SendOverride(data, ct); return; }
         if (_stream == null) throw new InvalidOperationException("Not connected to INDI server");
 
         if (!await _sendLock.WaitAsync(SendTimeout, ct)) {
@@ -928,6 +933,15 @@ public class IndiClient : IDisposable {
     }
 
     public IEnumerable<string> GetDeviceNames() => Devices.Keys;
+
+    /// <summary>The DRIVER_INFO/DRIVER_INTERFACE bitmask a device advertises
+    /// (the *_INTERFACE bits of INDI's basedevice.h), or null when it has not
+    /// published one.</summary>
+    public int? DriverInterface(string device)
+        => GetProperty(device, "DRIVER_INFO") is IndiTextProperty tp
+           && tp.Values.TryGetValue("DRIVER_INTERFACE", out var s)
+           && int.TryParse(s?.Trim(), out var mask) && mask > 0
+            ? mask : null;
 
     private void OnPropertyDefined(IndiProperty prop) {
         var deviceProps = Devices.GetOrAdd(prop.Device, _ => new());

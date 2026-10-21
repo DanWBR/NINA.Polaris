@@ -8635,14 +8635,15 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 </select>
                             </div>
                             <div class="equip-select-row">
-                                <select class="equip-select" x-show="rotatorDriver === 'indi'" x-model="equipRotatorChoice">
-                                    <option value="" x-text="devices.length ? 'Select device' : 'No INDI devices, start drivers in the INDI panel'"></option>
-                                    <template x-for="dev in devices" :key="'rot-'+dev.name">
+                                <select class="equip-select" x-show="rotatorDriver === 'indi'" x-model="equipRotatorChoice"
+                                        @change="equipRotatorRebind($event.target.value)">
+                                    <option value="" x-text="indiRotatorDevices().length ? 'Select device' : (devices.length ? 'No INDI rotator, start its driver in the INDI panel' : 'No INDI devices, start drivers in the INDI panel')"></option>
+                                    <template x-for="dev in indiRotatorDevices()" :key="'rot-'+dev.name">
                                         <option :value="dev.name" x-text="dev.name + (dev.driver ? ' (' + dev.driver + ')' : '')"></option>
                                     </template>
                                 </select>
                                 <select class="equip-select" x-show="rotatorDriver !== 'indi'"
-                                        @change="equipRotatorChoice = $event.target.value" :disabled="rotatorDiscovering">
+                                        @change="equipRotatorRebind($event.target.value)" :disabled="rotatorDiscovering">
                                     <option value="" x-text="rotatorDiscovering ? 'Detecting…' : (rotatorVendorDevices.length ? 'Select rotator' : 'No devices found')"></option>
                                     <template x-for="r in rotatorVendorDevices" :key="r.id">
                                         <option :value="r.id" :selected="equipRotatorChoice === r.id"
@@ -25429,7 +25430,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261020-filerot"></script>
+    <script src="/js/app.js?v=20261021-rotsel"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
