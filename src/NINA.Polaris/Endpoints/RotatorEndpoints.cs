@@ -44,16 +44,16 @@ public static class RotatorEndpoints {
         group.MapPost("/move", async (EquipmentManager equip, ProfileService profiles, MoveRotatorRequest request) => {
             if (equip.Rotator == null)
                 return Results.BadRequest(new { error = "No rotator selected" });
+            if (!equip.Rotator.IsConnected)
+                return Results.BadRequest(new { error = $"Rotator '{equip.Rotator.DeviceName}' is not connected" });
             var maxAngle = RotatorRange.NormalizeMaximum(
                 profiles.ActiveEquipmentProfile?.RotatorMaxAngle ?? 360);
             if (!RotatorRange.Allows(request.Angle, maxAngle))
                 return Results.BadRequest(new { error = RotatorRange.Error(maxAngle) });
-            if (!equip.Rotator.IsConnected)
-                return Results.BadRequest(new { error = $"Rotator '{equip.Rotator.DeviceName}' is not connected" });
 
             try {
                 await equip.Rotator.MoveToAsync(request.Angle);
-            } catch (InvalidOperationException ex) {
+            } catch (Exception ex) when (ex is InvalidOperationException or TimeoutException) {
                 return Results.BadRequest(new { error = ex.Message });
             }
             return Results.Ok(new { status = "moving", device = equip.Rotator.DeviceName, target = request.Angle });

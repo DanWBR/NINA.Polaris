@@ -65,17 +65,23 @@ public class IndiRotator : IRotator, IDisposable {
         => _client.DisconnectDeviceAsync(DeviceName, ct);
 
     public async Task MoveToAsync(double degrees, CancellationToken ct = default) {
-        // INDIROB-1: ack-based. Rotator rejects are common (limit
-        // switches, mechanical end-stops, calibration drift) and need
-        // to surface as toasts rather than silent no-ops. A write the
-        // driver cannot take (device not connected, no ABS_ROTATOR_ANGLE)
-        // is refused before it is sent: indiserver drops it without a word.
+        // A device name alone does not make an INDI rotator. In particular,
+        // the equipment picker used to leave the previously-selected mount
+        // bound here, so ABS_ROTATOR_ANGLE was sent to the telescope and the
+        // INDI server silently discarded it. Fail before writing unless the
+        // selected device actually publishes the standard rotator vector.
+        if (_client.GetProperty(DeviceName, "ABS_ROTATOR_ANGLE") is not IndiNumberProperty angle ||
+            !angle.Values.ContainsKey("ANGLE")) {
+            throw new InvalidOperationException(
+                $"INDI device '{DeviceName}' does not expose ABS_ROTATOR_ANGLE.ANGLE.");
+        }
+
         if (!IsConnected)
             throw new InvalidOperationException($"Rotator '{DeviceName}' is not connected.");
-        if (_client.GetProperty(DeviceName, "ABS_ROTATOR_ANGLE") is not IndiNumberProperty angle
-                || !angle.Values.ContainsKey("ANGLE"))
-            throw new InvalidOperationException(
-                $"'{DeviceName}' does not expose ABS_ROTATOR_ANGLE.ANGLE; is it a rotator?");
+
+        // INDIROB-1: ack-based. Rotator rejects are common (limit
+        // switches, mechanical end-stops, calibration drift) and need
+        // to surface as toasts rather than silent no-ops.
         var ack = await _client.SetNumberAsyncAck(DeviceName, "ABS_ROTATOR_ANGLE",
             new Dictionary<string, double> { ["ANGLE"] = degrees }, ct: ct);
         if (ack.Rejected) {
@@ -85,9 +91,10 @@ public class IndiRotator : IRotator, IDisposable {
             throw new InvalidOperationException(
                 $"Rotator '{DeviceName}' rejected move to {degrees:F2}°: {detail}");
         }
-        if (ack.TimedOut)
-            throw new InvalidOperationException(
-                $"Rotator '{DeviceName}' did not acknowledge the move to {degrees:F2}°.");
+        if (ack.TimedOut) {
+            throw new TimeoutException(
+                $"Rotator '{DeviceName}' did not acknowledge ABS_ROTATOR_ANGLE for {degrees:F2}°.");
+        }
     }
 
     public async Task ReverseAsync(bool reversed, CancellationToken ct = default) {

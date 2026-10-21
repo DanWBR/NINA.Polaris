@@ -8635,15 +8635,18 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 </select>
                             </div>
                             <div class="equip-select-row">
-                                <select class="equip-select" x-show="rotatorDriver === 'indi'" x-model="equipRotatorChoice"
-                                        @change="equipRotatorRebind($event.target.value)">
-                                    <option value="" x-text="indiRotatorDevices().length ? 'Select device' : (devices.length ? 'No INDI rotator, start its driver in the INDI panel' : 'No INDI devices, start drivers in the INDI panel')"></option>
-                                    <template x-for="dev in indiRotatorDevices()" :key="'rot-'+dev.name">
+                                <select class="equip-select" x-show="rotatorDriver === 'indi'"
+                                        x-model="equipRotatorChoice"
+                                        @change="equipRotatorChoice = $event.target.value; equipSelectRotator()"
+                                        :disabled="rotatorSelecting">
+                                    <option value="" x-text="rotatorIndiDevices.length ? 'Select rotator' : 'No INDI rotators, start a rotator driver in the INDI panel'"></option>
+                                    <template x-for="dev in rotatorIndiDevices" :key="'rot-'+dev.name">
                                         <option :value="dev.name" x-text="dev.name + (dev.driver ? ' (' + dev.driver + ')' : '')"></option>
                                     </template>
                                 </select>
                                 <select class="equip-select" x-show="rotatorDriver !== 'indi'"
-                                        @change="equipRotatorRebind($event.target.value)" :disabled="rotatorDiscovering">
+                                        @change="equipRotatorChoice = $event.target.value; equipSelectRotator()"
+                                        :disabled="rotatorDiscovering || rotatorSelecting">
                                     <option value="" x-text="rotatorDiscovering ? 'Detecting…' : (rotatorVendorDevices.length ? 'Select rotator' : 'No devices found')"></option>
                                     <template x-for="r in rotatorVendorDevices" :key="r.id">
                                         <option :value="r.id" :selected="equipRotatorChoice === r.id"
@@ -8653,7 +8656,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <label class="equip-toggle" :aria-disabled="(!rotator.connected && !equipRotatorChoice).toString()"
                                        :title="rotator.connected ? 'Disconnect rotator' : 'Connect rotator'">
                                     <input type="checkbox" :checked="!!rotator.connected"
-                                           :disabled="!rotator.connected && !equipRotatorChoice"
+                                           :disabled="rotatorSelecting || (!rotator.connected && !equipRotatorChoice)"
                                            @change="$event.target.checked ? equipConnectRotator() : equipDisconnectRotator()">
                                     <span class="equip-toggle-track"></span><span class="equip-toggle-thumb"></span>
                                 </label>
@@ -8681,7 +8684,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         <input type="number" x-model.number="equipRotatorTarget" step="0.1" min="0" :max="rotatorMaxAngle" class="input-sm">
                                         <span>°</span>
                                     </label>
-                                    <button class="btn btn-sm" @click="rotatorMoveTo()">Move</button>
+                                    <button class="btn btn-sm" @click="rotatorMoveTo()"
+                                            :disabled="rotatorSelecting || !rotator.connected">Move</button>
                                     <button class="btn btn-sm" @click="rotatorAbort()" :disabled="!rotator.moving">Abort</button>
                                     <button class="btn btn-sm" @click="rotatorToggleReverse()"
                                             :class="rotator.reversed ? 'btn-active' : ''"
@@ -25430,7 +25434,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261021-rotsel"></script>
+    <script src="/js/app.js?v=20261021-rotsel2"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
