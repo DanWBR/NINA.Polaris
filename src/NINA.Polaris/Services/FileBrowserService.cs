@@ -61,8 +61,9 @@ public class FileBrowserService {
         "/proc", "/sys", "/dev", "/boot", "/root",
         "/etc/shadow", "/etc/sudoers", "/etc/ssh"
     ];
-    // Suffix-based extras (matched against the *final* path segment, not
-    // a prefix). Catches user-home-relative secrets that vary by user.
+    // Segment-based extras: an entry matches as a whole run of path
+    // segments at any depth (with or without its leading dot), not as a
+    // prefix. Catches user-home-relative secrets that vary by user.
     private static readonly string[] DangerousSuffixes = [
         ".ssh", ".aws", ".gnupg", ".config/gh"
     ];
