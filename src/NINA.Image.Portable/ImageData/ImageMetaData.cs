@@ -124,8 +124,15 @@ public class ImageMetaData {
         public string OpticalTube { get; set; } = string.Empty;
         public double FocalLength { get; set; }
         public double FocalRatio { get; set; }
-        public double RightAscension { get; set; }
-        public double Declination { get; set; }
+        /// <summary>Mount RA in hours, J2000. Assigning it (or
+        /// <see cref="Declination"/>) marks the position known.</summary>
+        public double RightAscension { get => _ra; set { _ra = value; HasCoordinates = true; } }
+        public double Declination { get => _dec; set { _dec = value; HasCoordinates = true; } }
+        /// <summary>Whether RightAscension / Declination hold a real mount
+        /// position. False (the default) is "unknown", which RA 0h, Dec 0°
+        /// can not stand for: that is a real place on the sky.</summary>
+        public bool HasCoordinates { get; set; }
+        private double _ra, _dec;
         public double Altitude { get; set; }
         public double Azimuth { get; set; }
         public PierSide SideOfPier { get; set; } = PierSide.pierUnknown;
@@ -139,8 +146,14 @@ public class ImageMetaData {
 
     public class TargetInfo {
         public string Name { get; set; } = string.Empty;
-        public double RightAscension { get; set; }
-        public double Declination { get; set; }
+        /// <summary>Target RA in hours, J2000. Assigning it (or
+        /// <see cref="Declination"/>) marks the coordinates known.</summary>
+        public double RightAscension { get => _ra; set { _ra = value; HasCoordinates = true; } }
+        public double Declination { get => _dec; set { _dec = value; HasCoordinates = true; } }
+        /// <summary>Whether RightAscension / Declination were set. See
+        /// <see cref="TelescopeInfo.HasCoordinates"/>.</summary>
+        public bool HasCoordinates { get; set; }
+        private double _ra, _dec;
         public double Rotation { get; set; }
     }
 

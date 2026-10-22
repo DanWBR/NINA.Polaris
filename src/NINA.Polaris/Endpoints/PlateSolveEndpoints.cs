@@ -607,7 +607,7 @@ public static class PlateSolveEndpoints {
                     if (hdr.TryGetValue("NAXIS2", out var n2)) int.TryParse(n2.Value, out height);
                     if (!hintRa.HasValue && hdr.TryGetValue("RA", out var raC)
                         && double.TryParse(raC.Value, System.Globalization.NumberStyles.Float,
-                            System.Globalization.CultureInfo.InvariantCulture, out var raV) && raV != 0)
+                            System.Globalization.CultureInfo.InvariantCulture, out var raV) && double.IsFinite(raV))
                         hintRa = raV / 15.0;
                     if (!hintDec.HasValue && hdr.TryGetValue("DEC", out var decC)
                         && double.TryParse(decC.Value, System.Globalization.NumberStyles.Float,
@@ -740,7 +740,7 @@ public static class PlateSolveEndpoints {
                         && double.TryParse(raCard.Value,
                             System.Globalization.NumberStyles.Float,
                             System.Globalization.CultureInfo.InvariantCulture,
-                            out var raVal) && raVal != 0) {
+                            out var raVal) && double.IsFinite(raVal)) {
                     // RA header is in degrees; convert to hours
                     hintRa = raVal / 15.0;
                 }

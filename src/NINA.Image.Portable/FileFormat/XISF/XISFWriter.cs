@@ -277,8 +277,7 @@ public static class XISFWriter {
                 WriteFitsKeyword(xw, "FOCALLEN", Fmt(meta.Telescope.FocalLength), "Focal length (mm)");
             if (meta.Telescope.FocalRatio > 0)
                 WriteFitsKeyword(xw, "FOCRATIO", Fmt(meta.Telescope.FocalRatio), "Focal ratio (f/N)");
-            // TODO: Distinguish missing coordinates from the valid RA=0, Dec=0 position: https://github.com/DanWBR/NINA.Polaris/issues/45
-            bool hasMountPosition = meta.Telescope.RightAscension != 0 || meta.Telescope.Declination != 0;
+            bool hasMountPosition = meta.Telescope.HasCoordinates;
             if (hasMountPosition) {
                 WriteFitsKeyword(xw, "RA", Fmt(meta.Telescope.RightAscension * 15.0), "Mount RA (deg)");
                 WriteFitsKeyword(xw, "DEC", Fmt(meta.Telescope.Declination), "Mount Dec (deg)");
@@ -341,8 +340,10 @@ public static class XISFWriter {
 
             if (!string.IsNullOrEmpty(meta.Target.Name)) {
                 WriteFitsKeyword(xw, "OBJECT", meta.Target.Name, null);
-                WriteFitsKeyword(xw, "OBJCTRA", Fmt(meta.Target.RightAscension * 15.0), null);
-                WriteFitsKeyword(xw, "OBJCTDEC", Fmt(meta.Target.Declination), null);
+                if (meta.Target.HasCoordinates) {
+                    WriteFitsKeyword(xw, "OBJCTRA", Fmt(meta.Target.RightAscension * 15.0), null);
+                    WriteFitsKeyword(xw, "OBJCTDEC", Fmt(meta.Target.Declination), null);
+                }
             }
 
             if (wcs != null) {

@@ -43,18 +43,48 @@ public class EquatorialEpochTests {
     /// θ Persei (with its proper motion applied) precessed to 2028 Nov 13.19.</summary>
     [Test]
     public void MatchesMeeusExample21b() {
-        var (ra, dec) = EquatorialEpoch.J2000ToJNow(41.054063 / 15.0, 49.227750, FromJd(2462088.69));
+        var (ra, dec) = EquatorialEpoch.J2000ToMeanOfDate(41.054063 / 15.0, 49.227750, FromJd(2462088.69));
         Assert.Multiple(() => {
             Assert.That(ra * 15.0, Is.EqualTo(41.547214).Within(2e-5));
             Assert.That(dec, Is.EqualTo(49.348483).Within(2e-5));
         });
     }
 
+    /// <summary>Meeus example 23.a, the same star and date as 21.b carried on
+    /// to its apparent place: nutation +15.843″ / +6.218″ and aberration
+    /// +30.045″ / +6.697″ on top of precession, giving 2h46m14.390s
+    /// +49°21′07.45″ (issue #46).</summary>
+    [Test]
+    public void MatchesMeeusExample23a() {
+        var (ra, dec) = EquatorialEpoch.J2000ToJNow(41.054063 / 15.0, 49.227750, FromJd(2462088.69));
+        double raSec = (ra - 2 - 46 / 60.0) * 3600.0;
+        double decArcsec = (dec - 49 - 21 / 60.0) * 3600.0;
+        Assert.Multiple(() => {
+            Assert.That(raSec, Is.EqualTo(14.390).Within(0.005), "RA seconds");
+            Assert.That(decArcsec, Is.EqualTo(7.45).Within(0.1), "Dec arcseconds");
+        });
+    }
+
+    /// <summary>Nutation and aberration together never move a star more
+    /// than about 40″, and the conversion stays well defined at the pole.</summary>
+    [TestCase(20.690532, 45.280339)]
+    [TestCase(6.0, 23.4393)]
+    [TestCase(2.53, 89.26)]
+    [TestCase(14.0, 89.999)]
+    [TestCase(18.0, -89.999)]
+    public void ApparentPlace_IsWithinFortyArcsecondsOfTheMeanPlace(double ra, double dec) {
+        var t = new DateTime(2026, 10, 14, 3, 0, 0, DateTimeKind.Utc);
+        var mean = EquatorialEpoch.J2000ToMeanOfDate(ra, dec, t);
+        var apparent = EquatorialEpoch.J2000ToJNow(ra, dec, t);
+        double arcsec = Sep(mean.RaHours, mean.DecDeg, apparent.RaHours, apparent.DecDeg) * 3600;
+        Assert.That(arcsec, Is.GreaterThan(1).And.LessThan(42));
+    }
+
     [Test]
     public void AgreesWithThePolarAlignmentPrecession() {
         var t = new DateTime(2026, 10, 14, 3, 0, 0, DateTimeKind.Utc);
         foreach (var (ra, dec) in new[] { (20.69, 45.28), (5.92, 7.41), (0.05, -60.0), (12.0, 0.0) }) {
-            var a = EquatorialEpoch.J2000ToJNow(ra, dec, t);
+            var a = EquatorialEpoch.J2000ToMeanOfDate(ra, dec, t);
             var b = PolarAlignmentMath.PrecessJ2000ToDate(ra, dec, t);
             Assert.That(Sep(a.RaHours, a.DecDeg, b.raHours, b.decDeg), Is.LessThan(1e-9));
         }
@@ -71,6 +101,9 @@ public class EquatorialEpochTests {
         var back = EquatorialEpoch.JNowToJ2000(now.RaHours, now.DecDeg, t);
         Assert.That(Sep(ra, dec, back.RaHours, back.DecDeg), Is.LessThan(1e-9));
         Assert.That(back.RaHours, Is.GreaterThanOrEqualTo(0).And.LessThan(24));
+        var mean = EquatorialEpoch.J2000ToMeanOfDate(ra, dec, t);
+        var meanBack = EquatorialEpoch.MeanOfDateToJ2000(mean.RaHours, mean.DecDeg, t);
+        Assert.That(Sep(ra, dec, meanBack.RaHours, meanBack.DecDeg), Is.LessThan(1e-9));
     }
 
     /// <summary>Precession turns the sky about the ecliptic pole, so a point
@@ -79,17 +112,20 @@ public class EquatorialEpochTests {
     [Test]
     public void In2026_APointOnTheEcliptic_MovesAboutAThirdOfADegree() {
         var t = new DateTime(2026, 10, 14, 3, 0, 0, DateTimeKind.Utc);
-        var now = EquatorialEpoch.J2000ToJNow(6.0, 23.4393, t);
+        var now = EquatorialEpoch.J2000ToMeanOfDate(6.0, 23.4393, t);
         Assert.That(Sep(6.0, 23.4393, now.RaHours, now.DecDeg), Is.EqualTo(0.374).Within(0.01));
-        var deneb = EquatorialEpoch.J2000ToJNow(20.690532, 45.280339, t);
+        var deneb = EquatorialEpoch.J2000ToMeanOfDate(20.690532, 45.280339, t);
         Assert.That(Sep(20.690532, 45.280339, deneb.RaHours, deneb.DecDeg), Is.EqualTo(0.19).Within(0.02));
     }
 
     [Test]
     public void AtJ2000_TheFramesAgree() {
         var j2000 = new DateTime(2000, 1, 1, 12, 0, 0, DateTimeKind.Utc);
+        var mean = EquatorialEpoch.J2000ToMeanOfDate(5.5, 22.0, j2000);
+        Assert.That(Sep(5.5, 22.0, mean.RaHours, mean.DecDeg), Is.LessThan(1e-4));
+        // The apparent place still differs by that day's nutation and aberration.
         var now = EquatorialEpoch.J2000ToJNow(5.5, 22.0, j2000);
-        Assert.That(Sep(5.5, 22.0, now.RaHours, now.DecDeg), Is.LessThan(1e-4));
+        Assert.That(Sep(5.5, 22.0, now.RaHours, now.DecDeg) * 3600, Is.LessThan(42));
     }
 
     [Test]
