@@ -136,6 +136,14 @@ public class FileBrowserServiceTests {
     }
 
     [Test]
+    public void IsBlocked_GhCliCredentialsPath_True() {
+        var p = OperatingSystem.IsWindows()
+            ? @"C:\Users\dan\.config\gh\hosts.yml"
+            : "/home/dan/.config/gh/hosts.yml";
+        Assert.That(FileBrowserService.IsBlocked(p), Is.True);
+    }
+
+    [Test]
     public void ResolveSafe_DotDotEscape_NormalisedThenChecked() {
         // ../../../etc/shadow from a deep cwd would resolve to a real
         // sensitive path. Path.GetFullPath collapses the .., then the

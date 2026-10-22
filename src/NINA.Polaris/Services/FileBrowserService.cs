@@ -61,8 +61,9 @@ public class FileBrowserService {
         "/proc", "/sys", "/dev", "/boot", "/root",
         "/etc/shadow", "/etc/sudoers", "/etc/ssh"
     ];
-    // Suffix-based extras (matched against the *final* path segment, not
-    // a prefix). Catches user-home-relative secrets that vary by user.
+    // Segment-based extras: an entry matches as a whole run of path
+    // segments at any depth (with or without its leading dot), not as a
+    // prefix. Catches user-home-relative secrets that vary by user.
     private static readonly string[] DangerousSuffixes = [
         ".ssh", ".aws", ".gnupg", ".config/gh"
     ];
@@ -577,13 +578,13 @@ public class FileBrowserService {
             if (fullPath.StartsWith(prefix + Path.DirectorySeparatorChar, cmp)) return true;
             if (fullPath.StartsWith(prefix + "/", cmp)) return true;
         }
-        // Suffix-based: walk segments and reject if any matches a known
-        // sensitive name. Catches per-user secrets at any depth.
-        var segments = fullPath.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries);
-        foreach (var seg in segments) {
-            foreach (var bad in DangerousSuffixes) {
-                if (seg.Equals(bad.TrimStart('.'), cmp) || seg.Equals(bad, cmp)) return true;
-            }
+        // Match path segments and segment sequences at any depth, including
+        // multi-segment paths such as the GitHub CLI credentials directory.
+        var normalised = "/" + fullPath.Replace('\\', '/').Trim('/') + "/";
+        foreach (var bad in DangerousSuffixes) {
+            var path = "/" + bad.Replace('\\', '/').TrimStart('/') + "/";
+            var withoutLeadingDot = "/" + bad.TrimStart('.').Replace('\\', '/').TrimStart('/') + "/";
+            if (normalised.Contains(path, cmp) || normalised.Contains(withoutLeadingDot, cmp)) return true;
         }
         return false;
     }
