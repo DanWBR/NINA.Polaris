@@ -146,8 +146,10 @@ public static class FITSWriter {
         // ---- Target ----
         if (!string.IsNullOrEmpty(meta.Target.Name)) {
             AddStr(cards, "OBJECT", meta.Target.Name);
-            Add(cards, "OBJCTRA", Fmt(RaToDeg(meta.Target.RightAscension)), "Target RA (deg)");
-            Add(cards, "OBJCTDEC", Fmt(meta.Target.Declination), "Target Dec (deg)");
+            if (meta.Target.HasCoordinates) {
+                Add(cards, "OBJCTRA", Fmt(RaToDeg(meta.Target.RightAscension)), "Target RA (deg)");
+                Add(cards, "OBJCTDEC", Fmt(meta.Target.Declination), "Target Dec (deg)");
+            }
             if (Math.Abs(meta.Target.Rotation) > 0.001)
                 Add(cards, "OBJCTROT", Fmt(meta.Target.Rotation), "Planned rotation (deg)");
         }
@@ -193,7 +195,7 @@ public static class FITSWriter {
         if (meta.Telescope.FocalRatio > 0)
             Add(cards, "FOCRATIO", Fmt(meta.Telescope.FocalRatio), "Focal ratio (f/N)");
         // RA/DEC are hours / degrees in our ImageMetaData
-        if (meta.Telescope.RightAscension != 0 || meta.Telescope.Declination != 0) {
+        if (meta.Telescope.HasCoordinates) {
             Add(cards, "RA", Fmt(RaToDeg(meta.Telescope.RightAscension)), "Mount RA (deg)");
             Add(cards, "DEC", Fmt(meta.Telescope.Declination), "Mount Dec (deg)");
             // The mount reports J2000 (ITelescope), like the target and every solve.

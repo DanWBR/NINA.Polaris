@@ -346,8 +346,14 @@ public static class FITSReader {
         meta.Telescope.Name = GetStringHeader(headers, "TELESCOP", "");
         meta.Telescope.OpticalTube = GetStringHeader(headers, "OTA", "");
         meta.Telescope.FocalLength = GetDoubleHeader(headers, "FOCALLEN", 0);
-        meta.Telescope.RightAscension = GetDoubleHeader(headers, "RA", 0);
-        meta.Telescope.Declination = GetDoubleHeader(headers, "DEC", 0);
+        // RA is written in degrees; the metadata holds hours. Only a header
+        // that carries both keywords has a mount position at all.
+        double ra = GetDoubleHeader(headers, "RA", double.NaN);
+        double dec = GetDoubleHeader(headers, "DEC", double.NaN);
+        if (double.IsFinite(ra) && double.IsFinite(dec) && Math.Abs(dec) <= 90) {
+            meta.Telescope.RightAscension = ra / 15.0;
+            meta.Telescope.Declination = dec;
+        }
 
         meta.Observer.Latitude = GetDoubleHeader(headers, "SITELAT", 0);
         meta.Observer.Longitude = GetDoubleHeader(headers, "SITELONG", 0);

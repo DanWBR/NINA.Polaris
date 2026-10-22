@@ -615,8 +615,11 @@ public class ImageWriterService {
             if (focalLength > 0 && profile.SensorWidthMm > 0)
                 m.Telescope.FocalRatio = focalLength /
                     Math.Max(profile.SensorWidthMm, 1);
-            m.Telescope.RightAscension = Safe(_equip.Telescope.RightAscension);
-            m.Telescope.Declination = Safe(_equip.Telescope.Declination);
+            double ra = _equip.Telescope.RightAscension, dec = _equip.Telescope.Declination;
+            if (double.IsFinite(ra) && double.IsFinite(dec)) {
+                m.Telescope.RightAscension = ra;
+                m.Telescope.Declination = dec;
+            }
             var (scopeAlt, scopeAz) = MountHorizontal.Of(_equip.Telescope,
                 _profile.Active.Latitude, _profile.Active.Longitude, DateTime.UtcNow);
             m.Telescope.Altitude = Safe(scopeAlt);
@@ -670,9 +673,9 @@ public class ImageWriterService {
         if (!string.IsNullOrEmpty(targetName)) {
             m.Target.Name = targetName;
             // If telescope is slewed to a target, use its current coords as planned
-            if (m.Telescope.RightAscension != 0 || m.Telescope.Declination != 0) {
-                if (m.Target.RightAscension == 0) m.Target.RightAscension = m.Telescope.RightAscension;
-                if (m.Target.Declination == 0) m.Target.Declination = m.Telescope.Declination;
+            if (m.Telescope.HasCoordinates && !m.Target.HasCoordinates) {
+                m.Target.RightAscension = m.Telescope.RightAscension;
+                m.Target.Declination = m.Telescope.Declination;
             }
         }
     }
