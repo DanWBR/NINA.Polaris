@@ -142,9 +142,8 @@
        The managed SDK projects deliberately carry no <Content> for the native
        lib (content from a ProjectReference does not flow to the app output),
        so a plain `dotnet build` / F5 debug run dropped nothing next to the
-       exe and the native SVBony / ZWO / Player One drivers never appeared —
-       SvbonyRegistry / ZwoRegistry / PlayerOneRegistry could not resolve the
-       lib. The app project's own Content DOES reach the output, so bundle the
+       exe and the native SVBony / ZWO / Player One / ToupTek / Altair drivers
+       never appeared, because their registries could not resolve the lib. The app project's own Content DOES reach the output, so bundle the
        x64 DLLs here. Fires for a plain build/debug on a Windows host (empty
        RID) or an explicit win-x64 publish; it must NOT fire for a linux-* /
        win-arm64 cross-publish done from a Windows host, hence the RID guard
@@ -163,6 +162,20 @@
     <None Include="$(MSBuildThisFileDirectory)..\..\camera_sdk\PlayerOne\Windows_v3.10.1\lib\x64\PlayerOneCamera.dll"
           Condition="Exists('$(MSBuildThisFileDirectory)..\..\camera_sdk\PlayerOne\Windows_v3.10.1\lib\x64\PlayerOneCamera.dll')">
       <Link>PlayerOneCamera.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <!-- ToupTek / Altair: the SDK 60 libraries that match the bindings compiled
+         into NINA.Camera.ToupTekSdk / NINA.Camera.AltairSdk. Next to the exe
+         they win over an older toupcam.dll a vendor ASCOM installer left in
+         the ASCOM Platform folder (NativeSdkProbe.Dirs probes that last). -->
+    <None Include="$(MSBuildThisFileDirectory)..\..\camera_sdk\ToupTek\win\x64\toupcam.dll"
+          Condition="Exists('$(MSBuildThisFileDirectory)..\..\camera_sdk\ToupTek\win\x64\toupcam.dll')">
+      <Link>toupcam.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="$(MSBuildThisFileDirectory)..\..\camera_sdk\Altair\win\x64\altaircam.dll"
+          Condition="Exists('$(MSBuildThisFileDirectory)..\..\camera_sdk\Altair\win\x64\altaircam.dll')">
+      <Link>altaircam.dll</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
