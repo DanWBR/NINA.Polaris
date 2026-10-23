@@ -75,6 +75,14 @@ public sealed class AscomComCamera : ICamera, IDisposable {
     // mono-vs-colour; see ICamera.IsColorSensor.
     private bool _sensorTypeKnown;
 
+    // Has CameraState answered on this connection? Then a read that throws
+    // is the driver failing, not a property it leaves out.
+    private volatile bool _stateAnswered;
+
+    // The cooler as Polaris last set it, restored after a reconnect.
+    private bool? _coolerWanted;
+    private double? _coolerSetpoint;
+
     public AscomComCamera(string progId) {
         _progId = progId ?? throw new ArgumentNullException(nameof(progId));
         _disp = new AscomComStaDispatcher($"ASCOM-Camera-{progId}");
@@ -98,8 +106,10 @@ public sealed class AscomComCamera : ICamera, IDisposable {
             // ICameraV3.CameraState: 0=Idle, 1=Waiting, 2=Exposing,
             // 3=Reading, 4=Download, 5=Error. Map to Polaris's
             // CameraStates which mirrors that enum exactly.
-            var v = _disp.Invoke<int>(() => SafeGet<int>(() => (int)_driver!.CameraState, 0))
-                .GetAwaiter().GetResult();
+            var v = _disp.Invoke<int>(() => {
+                try { var s = (int)_driver!.CameraState; _stateAnswered = true; return s; }
+                catch { return 0; }
+            }).GetAwaiter().GetResult();
             return v switch {
                 0 => CameraStates.Idle,
                 1 => CameraStates.Waiting,
@@ -182,6 +192,7 @@ public sealed class AscomComCamera : ICamera, IDisposable {
         // crash, and leaves a synchronously-flushed breadcrumb around the two
         // calls a real driver can die in (activation, then Connected=true).
         _driver = AscomComActivation.Create(_progId);
+        _stateAnswered = false;
         AscomComActivation.Note($"camera about to set Connected=true progId={_progId}");
         try { _driver!.Connected = true; }
         catch (Exception ex) { throw AscomComActivation.ConnectFailed(_progId, ex); }
@@ -333,14 +344,46 @@ public sealed class AscomComCamera : ICamera, IDisposable {
         // entire exposure and made every status read time out, so the
         // browser UI went dark at end-of-exposure. On a 2 s shot with a
         // 10 s download (8 MP OSC) the user saw ~12 s of zero updates.
-        var deadline = DateTime.UtcNow.AddSeconds(exposureSeconds + 120);
+        //
+        // ImageReady alone cannot tell a long readout from a driver that has
+        // given up, so CameraState is read once a second as well and
+        // AscomExposureWatch decides when to stop waiting. A failed exposure
+        // is aborted and the driver reconnected before the error goes up, so
+        // the caller's retry starts from a fresh connection.
+        var started = DateTime.UtcNow;
+        var deadline = started.AddSeconds(exposureSeconds + 120);
+        var watch = new AscomExposureWatch(exposureSeconds, _stateAnswered);
+        var nextStateRead = DateTime.MinValue;
         while (true) {
             ct.ThrowIfCancellationRequested();
-            var ready = await _disp.Invoke(() => SafeGet<bool>(() => (bool)_driver!.ImageReady));
-            if (ready) break;
-            if (DateTime.UtcNow > deadline)
+            bool readState = DateTime.UtcNow >= nextStateRead;
+            if (readState) nextStateRead = DateTime.UtcNow.AddSeconds(1);
+            var poll = await _disp.Invoke(() => {
+                bool ready = false, readyThrew = false;
+                string? readyError = null, stateError = null;
+                int? state = null;
+                try { ready = (bool)_driver!.ImageReady; }
+                catch (Exception ex) { readyThrew = true; readyError = DriverMessage(ex); }
+                if (!ready && readState) {
+                    try { state = (int)_driver!.CameraState; _stateAnswered = true; }
+                    catch (Exception ex) { stateError = DriverMessage(ex); }
+                }
+                return (ready, readyThrew, readyError, state, stateError);
+            });
+            if (poll.ready) break;
+            if (readState || poll.readyThrew) {
+                var failure = watch.Observe((DateTime.UtcNow - started).TotalSeconds,
+                    poll.readyThrew, poll.readyError, poll.state, poll.stateError);
+                if (failure != null)
+                    throw new InvalidOperationException(
+                        $"ASCOM exposure failed: {failure}.{await RecoverAfterFailedExposureAsync()}");
+            }
+            if (DateTime.UtcNow > deadline) {
+                var detail = watch.LastDriverError is { Length: > 0 } e ? $" Last driver error: {e}." : "";
                 throw new TimeoutException(
-                    $"ASCOM ImageReady didn't go true within {exposureSeconds + 120} s.");
+                    $"ASCOM ImageReady didn't go true within {exposureSeconds + 120} s.{detail}"
+                    + await RecoverAfterFailedExposureAsync());
+            }
             try { await Task.Delay(100, ct); }
             catch (OperationCanceledException) {
                 if (_canAbort) {
@@ -482,13 +525,55 @@ public sealed class AscomComCamera : ICamera, IDisposable {
             if (!_canCool || _driver == null) return;
             SafeSet(() => _driver!.SetCCDTemperature = temperature);
             SafeSet(() => _driver!.CoolerOn = true);
+            _coolerSetpoint = temperature;
+            _coolerWanted = true;
         });
 
     public Task SetCoolerAsync(bool on, CancellationToken ct = default)
         => _disp.Invoke(() => {
             if (!_canCool || _driver == null) return;
             SafeSet(() => _driver!.CoolerOn = on);
+            _coolerWanted = on;
         });
+
+    /// <summary>After an exposure that will not finish: abort it, then cycle
+    /// Connected so the next StartExposure meets a driver that has
+    /// re-initialised the camera, with the cooler as it was. Returns a
+    /// sentence for the error message saying how that went.</summary>
+    private async Task<string> RecoverAfterFailedExposureAsync() {
+        try {
+            return await _disp.Invoke(() => {
+                var drv = _driver;
+                if (drv is null) return "";
+                if (_canAbort) { try { drv.AbortExposure(); } catch { } }
+                bool cooler = _canCool && (_coolerWanted ?? SafeGet<bool>(() => (bool)drv.CoolerOn));
+                double setpoint = _coolerSetpoint ?? SafeGet<double>(() => (double)drv.SetCCDTemperature, double.NaN);
+                AscomComActivation.Note($"camera exposure failed, reconnecting progId={_progId}");
+                try { drv.Connected = false; } catch { }
+                try { drv.Connected = true; }
+                catch (Exception ex) {
+                    AscomComActivation.Note($"camera reconnect failed progId={_progId}: {DriverMessage(ex)}");
+                    return $" Reconnecting the driver failed: {DriverMessage(ex)}";
+                }
+                _stateAnswered = false;
+                if (cooler) {
+                    if (double.IsFinite(setpoint)) SafeSet(() => drv.SetCCDTemperature = setpoint);
+                    SafeSet(() => drv.CoolerOn = true);
+                }
+                AscomComActivation.Note($"camera reconnected progId={_progId}");
+                return " The driver was reconnected for the next frame.";
+            });
+        } catch (Exception ex) {
+            return $" Reconnecting the driver failed: {DriverMessage(ex)}";
+        }
+    }
+
+    /// <summary>The driver's own message: late-bound calls wrap it in a
+    /// TargetInvocationException.</summary>
+    private static string DriverMessage(Exception ex) {
+        while (ex is System.Reflection.TargetInvocationException { InnerException: { } inner }) ex = inner;
+        return ex.Message;
+    }
 
     public Task SetIsoAsync(int iso, CancellationToken ct = default) => Task.CompletedTask;
 
