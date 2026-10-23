@@ -1130,6 +1130,62 @@ button,
     display: flex;
     justify-content: space-between;
 }
+/* LIVE overlay: tonight from now to sunrise. Twilight bands from dark to
+   light, a translucent stripe where the moon is up, event icons above. */
+.live-night {
+    padding: 4px 2px 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.live-night .ln-head {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-bottom: 14px;
+}
+.live-night .ln-bar {
+    position: relative;
+    height: 10px;
+    border-radius: 5px;
+    overflow: hidden;
+    background: #161d38;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+.live-night .ln-bar i {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+}
+.live-night .ln-night { background: #161d38; }
+.live-night .ln-astro { background: #1d2a52; }
+.live-night .ln-nautical { background: #34508f; }
+.live-night .ln-civil { background: #6b8fd1; }
+.live-night .ln-day { background: #e8c46a; }
+.live-night .ln-bar .ln-moon {
+    top: auto;
+    height: 3px;
+    background: rgba(230, 230, 210, 0.85);
+}
+.live-night .ln-ticks {
+    position: relative;
+    height: 0;
+}
+.live-night .ln-ticks span {
+    position: absolute;
+    top: -28px;
+    transform: translateX(-50%);
+    font-size: 12px;
+    line-height: 1;
+    cursor: default;
+}
+.live-night .ln-scale {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 3px;
+    font-size: 10px;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
 /* SNR-7: top-of-overlay "stack quality" widget. Three big numbers
    side by side (SNR / Frames / ETA) plus a tiny target input. */
 .live-stack-quality {

@@ -319,6 +319,17 @@
     .basic-shell .bs-temp .bs-tcool:first-of-type{display:none}
 }
 
+/* LIVE: next sun / moon event chip, and the four events when tapped. */
+.basic-shell .bs-skychip{display:flex; align-items:center; gap:6px; margin-top:4px; padding:0; border:0;
+    background:none; color:var(--bs-muted); font:inherit; font-size:12px; white-space:nowrap; cursor:pointer}
+.basic-shell .bs-skychip b{color:var(--bs-accent2); font-weight:700}
+.basic-shell .bs-skylist{margin-top:6px; padding-top:6px; border-top:1px solid var(--bs-border);
+    display:flex; flex-direction:column; gap:3px; font-size:12px}
+.basic-shell .bs-skyrow{display:grid; grid-template-columns:auto auto auto; gap:10px; color:var(--bs-muted); white-space:nowrap}
+.basic-shell .bs-skyrow span:nth-child(2){color:var(--text)}
+.basic-shell .bs-skyrow b{color:var(--bs-accent2); font-weight:700; text-align:right}
+.basic-shell .bs-skymoon{color:var(--bs-muted); font-size:11px; margin-top:2px}
+
 /* LIVE: one line of counts instead of the quality card. */
 .basic-shell .bs-lhud.bs-lhud-min{width:auto; padding:6px 12px; border-radius:16px}
 .basic-shell .bs-lhud.bs-lhud-min .bs-lrow{margin-top:0; gap:12px; white-space:nowrap}
