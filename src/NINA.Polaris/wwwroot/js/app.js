@@ -4824,6 +4824,13 @@ function ninaApp() {
         // liveOverlayVisible, so the button looked dead and the panel could not
         // be brought back for the rest of the session (field report 2026-09-05).
         liveHudDismissed: false,
+        // Tonight's sun and moon for the LIVE screens: the next-event chip in
+        // the field UI, the night timeline on the LIVE overlay and the warning
+        // before astronomical dawn. Recomputed every 30 s from the site in
+        // Settings by _refreshSkyNight(); null without SunCalc or a location.
+        skyNight: null,
+        skyNightOpen: false,
+        _skyDawnWarned: 0,
         showCrosshair: false,
         showGrid: false,
         showPixelReadout: false,
@@ -5226,6 +5233,10 @@ function ninaApp() {
         init() {
             this.updateClock();
             setInterval(() => this.updateClock(), 1000);
+            // Sun / moon for the LIVE screens. 30 s is finer than the minute
+            // the countdowns show, and picks up the site once Settings load.
+            this._refreshSkyNight();
+            setInterval(() => this._refreshSkyNight(), 30000);
             this._initAssistant();
             this.initBattery();
             // loadDeviceName() runs post-auth in _initCore: the endpoint is
@@ -45340,6 +45351,130 @@ function ninaApp() {
             return !this.liveHudDismissed
                 && ((this.liveOverlayVisible && this.imageHistory.length > 0)
                     || !!this.liveStackStatus?.isRunning);
+        },
+
+        // ---- Tonight's sun and moon (LIVE chip, timeline, dawn warning) ----
+
+        _refreshSkyNight() {
+            if (typeof SunCalc === 'undefined') return;
+            const lat = Number(this.settings.latitude), lng = Number(this.settings.longitude);
+            // 0/0 is the unset default, not an observing site.
+            if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) {
+                this.skyNight = null;
+                return;
+            }
+            this.skyNight = this._skyNightAt(new Date(), lat, lng);
+            this._maybeWarnDawn();
+        },
+
+        /// Everything the three LIVE widgets show, for one instant. The four
+        /// events are the next of each; the timeline runs from now to the next
+        /// sunrise and is built from sampled sun and moon altitudes, so it
+        /// stays right where SunCalc has no event that day (high latitudes).
+        _skyNightAt(now, lat, lng) {
+            const DAY = 86400000, t0 = now.getTime();
+            const nextSun = (key) => {
+                // SunCalc's day is noon-based, so yesterday's call can hold
+                // tonight's dawn; ascending days give ascending times.
+                for (let d = -1; d <= 2; d++) {
+                    const t = SunCalc.getTimes(new Date(t0 + d * DAY), lat, lng)[key];
+                    if (t instanceof Date && !isNaN(t) && t.getTime() > t0) return t;
+                }
+                return null;
+            };
+            const nextMoon = (key) => {
+                for (let d = 0; d <= 2; d++) {
+                    const t = SunCalc.getMoonTimes(new Date(t0 + d * DAY), lat, lng)[key];
+                    if (t instanceof Date && !isNaN(t) && t.getTime() > t0) return t;
+                }
+                return null;
+            };
+            const fmtIn = (t) => t ? this._fmtCountdown(t.getTime() - t0) : '';
+            const ev = (key, icon, label, t, none) => ({
+                key, icon, label, at: t ? t.getTime() : null,
+                time: t ? this._fmtLocalTime(t) : none, in: fmtIn(t),
+            });
+            const events = [
+                ev('dawn', '🌄', 'Astro dawn', nextSun('nightEnd'), 'no dark night'),
+                ev('sunrise', '☀️', 'Sunrise', nextSun('sunrise'), 'sun stays up or down'),
+                ev('moonrise', '🌙', 'Moonrise', nextMoon('rise'), 'not today'),
+                ev('moonset', '🌘', 'Moonset', nextMoon('set'), 'not today'),
+            ];
+            const dated = events.filter(e => e.at != null).sort((a, b) => a.at - b.at);
+
+            const RAD = 180 / Math.PI;
+            const sunAlt = (ms) => SunCalc.getPosition(new Date(ms), lat, lng).altitude * RAD;
+            const moonAlt = (ms) => SunCalc.getMoonPosition(new Date(ms), lat, lng).altitude * RAD;
+            const illum = SunCalc.getMoonIllumination(now).fraction;
+            const moonUp = moonAlt(t0) > 0;
+
+            // Timeline: now -> next sunrise (at most a day; 12 h if the sun
+            // does not rise), sampled every 5 min.
+            const sunrise = events[1].at;
+            const t1 = sunrise ? Math.min(sunrise, t0 + DAY) : t0 + DAY / 2;
+            const STEP = 5 * 60000, span = t1 - t0;
+            const kindOf = (a) => a > 0 ? 'day' : a > -6 ? 'civil' : a > -12 ? 'nautical' : a > -18 ? 'astro' : 'night';
+            const sun = [], moon = [];
+            let darkMs = 0, moonlessMs = 0;
+            for (let t = t0; t < t1; t += STEP) {
+                const w = Math.min(STEP, t1 - t);
+                const k = kindOf(sunAlt(t)), up = moonAlt(t) > 0;
+                const last = sun[sun.length - 1];
+                if (last && last.kind === k) last.ms += w; else sun.push({ kind: k, start: t, ms: w });
+                const lm = moon[moon.length - 1];
+                if (up) { if (lm && lm.end === t) { lm.end = t + w; } else moon.push({ start: t, end: t + w }); }
+                if (k === 'night') { darkMs += w; if (!up) moonlessMs += w; }
+            }
+            const pct = (ms) => Math.max(0, Math.min(100, ms / span * 100));
+            // Events within 3 % of each other share one marker (a moonset four
+            // minutes before dawn drew one icon over the other).
+            const ticks = [];
+            for (const e of dated.filter(e => e.at <= t1)) {
+                const left = pct(e.at - t0), prev = ticks[ticks.length - 1];
+                if (prev && left - prev.left < 3) {
+                    prev.icon += e.icon;
+                    prev.title += ' · ' + e.label + ' ' + e.time;
+                } else {
+                    ticks.push({ key: e.key, icon: e.icon, left, title: e.label + ' ' + e.time });
+                }
+            }
+            const summary = darkMs >= 60000
+                ? 'Dark sky left ' + this._fmtCountdown(darkMs) + (moonlessMs >= 60000
+                    ? ' · moonless ' + this._fmtCountdown(moonlessMs)
+                    : ' · moon up until it ends')
+                : (sunAlt(t0) < -18 ? 'Dark sky ends now' : 'No dark sky before sunrise');
+
+            return {
+                events, next: dated[0] || null,
+                moonText: 'Moon ' + Math.round(illum * 100) + '% lit, ' + (moonUp ? 'above' : 'below') + ' the horizon',
+                span: span > 0 ? {
+                    sun: sun.map(s => ({ kind: s.kind, left: pct(s.start - t0), width: pct(s.ms) })),
+                    moon: moon.map(m => ({ left: pct(m.start - t0), width: pct(m.end - m.start) })),
+                    ticks, summary,
+                    endLabel: this._fmtLocalTime(new Date(t1)),
+                } : null,
+            };
+        },
+
+        /// "38 min", "2h14", "now".
+        _fmtCountdown(ms) {
+            const min = Math.round(ms / 60000);
+            if (min < 1) return 'now';
+            if (min < 60) return min + ' min';
+            const h = Math.floor(min / 60), m = min % 60;
+            return h + 'h' + String(m).padStart(2, '0');
+        },
+
+        /// Once per dawn, 15 min ahead, while a live stack is running: the
+        /// frames that follow brighten the stack.
+        _maybeWarnDawn() {
+            const dawn = this.skyNight?.events?.[0]?.at;
+            if (!dawn || !this.liveStackStatus?.isRunning) return;
+            const left = dawn - Date.now();
+            if (left > 15 * 60000 || left <= 0 || this._skyDawnWarned === dawn) return;
+            this._skyDawnWarned = dawn;
+            this.toast('Astronomical dawn in ' + this._fmtCountdown(left)
+                + ': frames from then on brighten the stack.', 'warn', 10000);
         },
 
         // One switch for the toolbar button, so it always does the opposite of
