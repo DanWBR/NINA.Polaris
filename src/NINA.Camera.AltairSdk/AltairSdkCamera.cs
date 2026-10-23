@@ -196,13 +196,28 @@ public sealed class AltairSdkCamera : ICamera {
                           || _tecVoltMax > 0;
     }
 
+    /// <summary>Whether the SDK's id and the requested one name the same
+    /// camera. On Windows the id is a device path (\\?\usb#vid_...); it
+    /// reaches the API as a route segment and its leading pair of backslashes
+    /// arrives as one, so runs of backslashes are compared as one.</summary>
+    internal static bool SameDeviceId(string? sdkId, string? requested)
+        => string.Equals(CollapseBackslashes(sdkId), CollapseBackslashes(requested),
+            StringComparison.OrdinalIgnoreCase);
+
+    private static string CollapseBackslashes(string? id)
+        => System.Text.RegularExpressions.Regex.Replace(id ?? "", @"\\+", @"\");
+
     public Task ConnectAsync(CancellationToken ct = default) => Task.Run(() => {
         // Find the model entry to read flags + pixel size before opening.
         ulong flag = 0;
         bool found = false;
+        int index = -1;
         try {
-            foreach (var d in Altaircam.EnumV2()) {
-                if (d.id == _camId) {
+            var devs = Altaircam.EnumV2();
+            for (int i = 0; i < devs.Length; i++) {
+                var d = devs[i];
+                if (SameDeviceId(d.id, _camId)) {
+                    index = i;
                     flag = d.model.flag;
                     _pixelSize = d.model.xpixsz;
                     if (!string.IsNullOrWhiteSpace(d.displayname)) DeviceName = d.displayname;
@@ -213,7 +228,8 @@ public sealed class AltairSdkCamera : ICamera {
         } catch { }
         if (found) CameraClaims.ThrowIfHeld(DeviceName, "Altair SDK");
 
-        var cam = Altaircam.Open(_camId);
+        // By index when the enumeration listed it, as the ToupTek driver does.
+        var cam = index >= 0 ? Altaircam.OpenByIndex((uint)index) : Altaircam.Open(_camId);
         if (cam == null) throw new InvalidOperationException(
             $"Failed to open the Altair camera '{_camId}'. The camera may already " +
             "be in use by another process. If an INDI driver for this camera is " +
