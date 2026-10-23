@@ -198,6 +198,17 @@ public sealed class ToupTekSdkCamera : ICamera {
                           || _tecVoltMax > 0;
     }
 
+    /// <summary>Whether the SDK's id and the requested one name the same
+    /// camera. On Windows the id is a device path (\\?\usb#vid_...); it
+    /// reaches the API as a route segment and its leading pair of backslashes
+    /// arrives as one, so runs of backslashes are compared as one.</summary>
+    internal static bool SameDeviceId(string? sdkId, string? requested)
+        => string.Equals(CollapseBackslashes(sdkId), CollapseBackslashes(requested),
+            StringComparison.OrdinalIgnoreCase);
+
+    private static string CollapseBackslashes(string? id)
+        => System.Text.RegularExpressions.Regex.Replace(id ?? "", @"\\+", @"\");
+
     public Task ConnectAsync(CancellationToken ct = default) => Task.Run(() => {
         // Find the model entry to read flags + pixel size before opening.
         ulong flag = 0;
@@ -210,7 +221,7 @@ public sealed class ToupTekSdkCamera : ICamera {
             var devs = NativeCallGuard.Run(ToupTekRegistry.GuardName, "listing cameras", Toupcam.EnumV2);
             for (int i = 0; i < devs.Length; i++) {
                 var d = devs[i];
-                if (d.id == _camId) {
+                if (SameDeviceId(d.id, _camId)) {
                     index = i;
                     flag = d.model.flag;
                     _pixelSize = d.model.xpixsz;
@@ -220,16 +231,17 @@ public sealed class ToupTekSdkCamera : ICamera {
             }
         } catch { }
 
-        // Off Windows the camera is opened by its index in the enumeration. The
-        // SDK 59 binding marshalled Open's id as UTF-16 unless compiled with
-        // LINUX, which the published library never was, so every Open failed.
-        // SDK 60's binding picks the encoding at runtime; opening by index stays
-        // because it passes no string at all.
+        // The camera is opened by its index in the enumeration. The SDK 59
+        // binding marshalled Open's id as UTF-16 unless compiled with LINUX,
+        // which the published library never was, so every Open failed off
+        // Windows; SDK 60's binding picks the encoding at runtime, and the
+        // index still passes no string at all. Open(id) is left for a Windows
+        // id the enumeration did not list.
         if (index < 0 && !OperatingSystem.IsWindows()) throw new InvalidOperationException(
             $"The ToupTek camera '{_camId}' is not connected. Check its USB cable and power, then refresh the camera list.");
         if (index >= 0) CameraClaims.ThrowIfHeld(DeviceName, "ToupTek SDK");
         var cam = NativeCallGuard.Run(ToupTekRegistry.GuardName, "opening the camera",
-            () => OperatingSystem.IsWindows() ? Toupcam.Open(_camId) : Toupcam.OpenByIndex((uint)index));
+            () => index >= 0 ? Toupcam.OpenByIndex((uint)index) : Toupcam.Open(_camId));
         if (cam == null) throw new InvalidOperationException(
             $"Failed to open the ToupTek camera '{_camId}'. The camera may already " +
             "be in use by another process. If an INDI driver for this camera is " +

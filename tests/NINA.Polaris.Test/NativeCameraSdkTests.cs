@@ -22,35 +22,46 @@ namespace NINA.Polaris.Test;
 /// managed surface behaves: the availability probes never throw (they
 /// swallow DllNotFound and return false), and discovery degrades to an
 /// empty list rather than crashing.
+///
+/// <para>A developer machine can have a vendor SDK installed (on Windows the
+/// ToupTek and SVBony ASCOM installers put theirs where the probe looks), so
+/// the probes are only required not to throw, and the empty-discovery checks
+/// stand aside when the SDK is there, as the QHY ones always did.</para>
 /// </summary>
 [TestFixture]
 public class NativeCameraSdkTests {
 
+    private static void SkipWhenInstalled(bool available, string sdk) {
+        if (available) Assert.Ignore($"The {sdk} SDK is installed on this host.");
+    }
+
     [Test]
     public void SvbonyRegistry_IsAvailable_DoesNotThrow() {
-        // No SVBCameraSDK native lib in the test output → must return false,
-        // never throw a DllNotFoundException up to the caller.
-        Assert.That(NINA.Camera.SvbonySdk.SvbonyRegistry.IsAvailable, Is.False);
+        // Without the SVBCameraSDK native lib this must return false, never
+        // throw a DllNotFoundException up to the caller.
+        Assert.That(() => NINA.Camera.SvbonySdk.SvbonyRegistry.IsAvailable, Throws.Nothing);
     }
 
     [Test]
     public void ZwoRegistry_IsAvailable_DoesNotThrow() {
-        Assert.That(NINA.Camera.ZwoSdk.ZwoRegistry.IsAvailable, Is.False);
+        Assert.That(() => NINA.Camera.ZwoSdk.ZwoRegistry.IsAvailable, Throws.Nothing);
     }
 
     [Test]
     public void SvbonyDiscovery_Enumerate_EmptyWhenUnavailable() {
+        SkipWhenInstalled(NINA.Camera.SvbonySdk.SvbonyRegistry.IsAvailable, "SVBony");
         Assert.That(NINA.Camera.SvbonySdk.SvbonyDiscovery.Enumerate(), Is.Empty);
     }
 
     [Test]
     public void ZwoDiscovery_Enumerate_EmptyWhenUnavailable() {
+        SkipWhenInstalled(NINA.Camera.ZwoSdk.ZwoRegistry.IsAvailable, "ZWO");
         Assert.That(NINA.Camera.ZwoSdk.ZwoDiscovery.Enumerate(), Is.Empty);
     }
 
     [Test]
     public void PlayerOneRegistry_IsAvailable_DoesNotThrow() {
-        Assert.That(NINA.Camera.PlayerOneSdk.PlayerOneRegistry.IsAvailable, Is.False);
+        Assert.That(() => NINA.Camera.PlayerOneSdk.PlayerOneRegistry.IsAvailable, Throws.Nothing);
     }
 
     [Test]
@@ -80,16 +91,18 @@ public class NativeCameraSdkTests {
 
     [Test]
     public void ToupTekRegistry_IsAvailable_DoesNotThrow() {
-        Assert.That(NINA.Camera.ToupTekSdk.ToupTekRegistry.IsAvailable, Is.False);
+        Assert.That(() => NINA.Camera.ToupTekSdk.ToupTekRegistry.IsAvailable, Throws.Nothing);
     }
 
     [Test]
     public void PlayerOneDiscovery_Enumerate_EmptyWhenUnavailable() {
+        SkipWhenInstalled(NINA.Camera.PlayerOneSdk.PlayerOneRegistry.IsAvailable, "PlayerOne");
         Assert.That(NINA.Camera.PlayerOneSdk.PlayerOneDiscovery.Enumerate(), Is.Empty);
     }
 
     [Test]
     public void ToupTekDiscovery_Enumerate_EmptyWhenUnavailable() {
+        SkipWhenInstalled(NINA.Camera.ToupTekSdk.ToupTekRegistry.IsAvailable, "ToupTek");
         Assert.That(NINA.Camera.ToupTekSdk.ToupTekDiscovery.Enumerate(), Is.Empty);
     }
 

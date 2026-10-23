@@ -33,12 +33,20 @@ public static class NativeSdkProbe {
 
     /// <summary>Directories to search for a bundled/downloaded native SDK lib,
     /// highest priority first: the app base directory (per-RID bundled Content),
-    /// then the host-exported pack directory. The OS loader default search path
-    /// is used by callers as a final fallback.</summary>
+    /// then the host-exported pack directory, then on Windows the ASCOM
+    /// Platform's shared library folder for this process's bitness, where the
+    /// ToupTek and SVBony ASCOM installers put toupcam.dll / svbonycam.dll.
+    /// The OS loader default search path is used by callers as a final
+    /// fallback.</summary>
     public static IEnumerable<string> Dirs() {
         yield return AppContext.BaseDirectory;
         var extra = Environment.GetEnvironmentVariable(EnvVar);
         if (!string.IsNullOrWhiteSpace(extra)) yield return extra;
+        if (OperatingSystem.IsWindows()) {
+            var common = Environment.GetFolderPath(Environment.SpecialFolder.CommonProgramFilesX86);
+            if (!string.IsNullOrEmpty(common))
+                yield return System.IO.Path.Combine(common, "ASCOM", Environment.Is64BitProcess ? "x64" : "x86");
+        }
     }
 
     /// <summary>Vendor library file names to try on the running OS. macOS was

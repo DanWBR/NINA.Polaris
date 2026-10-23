@@ -20,12 +20,23 @@ public class NativeSdkProbeTests {
     [TearDown]
     public void Clear() => Environment.SetEnvironmentVariable(NativeSdkProbe.EnvVar, null);
 
+    /// <summary>Windows also gets the ASCOM Platform's shared library folder,
+    /// last, where vendor ASCOM installers put toupcam.dll / svbonycam.dll.</summary>
+    private static readonly int AscomDirs = OperatingSystem.IsWindows() ? 1 : 0;
+
     [Test]
     public void Dirs_WithoutEnv_IsBaseDirectoryOnly() {
         Environment.SetEnvironmentVariable(NativeSdkProbe.EnvVar, null);
         var dirs = NativeSdkProbe.Dirs().ToList();
-        Assert.That(dirs, Has.Count.EqualTo(1));
+        Assert.That(dirs, Has.Count.EqualTo(1 + AscomDirs));
         Assert.That(dirs[0], Is.EqualTo(AppContext.BaseDirectory));
+    }
+
+    [Test]
+    public void OnWindows_TheAscomLibraryFolderIsProbedLast() {
+        if (!OperatingSystem.IsWindows()) Assert.Ignore("Windows only.");
+        var last = NativeSdkProbe.Dirs().Last();
+        Assert.That(last, Does.EndWith(Path.Combine("ASCOM", Environment.Is64BitProcess ? "x64" : "x86")));
     }
 
     [Test]
@@ -33,7 +44,7 @@ public class NativeSdkProbeTests {
         var packDir = Path.Combine(Path.GetTempPath(), "polaris-sdk-probe");
         Environment.SetEnvironmentVariable(NativeSdkProbe.EnvVar, packDir);
         var dirs = NativeSdkProbe.Dirs().ToList();
-        Assert.That(dirs, Has.Count.EqualTo(2));
+        Assert.That(dirs, Has.Count.EqualTo(2 + AscomDirs));
         Assert.That(dirs[0], Is.EqualTo(AppContext.BaseDirectory), "base dir must be probed first");
         Assert.That(dirs[1], Is.EqualTo(packDir));
     }
