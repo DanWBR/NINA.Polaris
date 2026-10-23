@@ -89,6 +89,13 @@ case "$first" in
   *--no-install-recommends*polaris-update.deb) ok "staged package installs without Recommends" ;;
   *) bad "first apt call: $first" ;;
 esac
+# An edited or deleted conffile must not stop the update at a dpkg question.
+case "$first" in
+  *--force-confdef*--force-confold*) ok "conffile questions are answered with the default" ;;
+  *) bad "no conffile policy on the staged install: $first" ;;
+esac
+grep -q "force-confold install -y --no-install-recommends ffmpeg" "$CALLS" \
+  && ok "the extras pass answers conffile questions too" || bad "extras installed without a conffile policy"
 grep -q "install -y --no-install-recommends ffmpeg" "$CALLS" && ok "missing ffmpeg is tried" || bad "ffmpeg not tried"
 grep -q " lsof$" "$CALLS" && bad "installed lsof was tried again" || ok "installed package skipped"
 grep -q "libraw" "$CALLS" && bad "satisfied alternative group was tried" || ok "alternative group satisfied by libraw20"

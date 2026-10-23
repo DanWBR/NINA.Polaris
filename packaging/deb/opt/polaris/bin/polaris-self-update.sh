@@ -23,6 +23,13 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 
+# A conffile the operator edited or deleted makes dpkg ask what to do about it,
+# and DEBIAN_FRONTEND does not cover that question: with nobody to answer, the
+# update stopped half-configured with Polaris down (a renamed watchdog drop-in
+# left an Orange Pi 4 Pro on "iU"). Take the default, keeping the operator's
+# version, as unattended-upgrades does.
+DPKG_OPTS="-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold"
+
 # --allow-downgrades so a user can also pin to an older release if needed.
 # --fix-missing: the SBC is often offline while updating (the .deb arrives
 # through the browser relay), so a dependency that cannot be fetched must not
@@ -34,7 +41,8 @@ export DEBIAN_FRONTEND=noninteractive
 # waiting long before dpkg ran. The upgrade itself goes first; the extras are
 # picked up afterwards, best effort, once the new version is already up.
 install_staged() {
-    apt-get install -y --allow-downgrades --fix-missing --no-install-recommends "$DEB" >> "$LOG" 2>&1
+    # shellcheck disable=SC2086  # DPKG_OPTS is a list of options
+    apt-get $DPKG_OPTS install -y --allow-downgrades --fix-missing --no-install-recommends "$DEB" >> "$LOG" 2>&1
     RC=$?
     echo "apt exit=$RC" >> "$LOG"
     rm -f "$DEB"
@@ -144,7 +152,8 @@ install_recommends() {
             if ! removes_nothing "$p"; then
                 echo "recommends: $p left out, it would remove $removed" >> "$LOG"; continue
             fi
-            if timeout 300 apt-get install -y --no-install-recommends "$p" >> "$LOG" 2>&1; then
+            # shellcheck disable=SC2086
+            if timeout 300 apt-get $DPKG_OPTS install -y --no-install-recommends "$p" >> "$LOG" 2>&1; then
                 echo "recommends: $p installed" >> "$LOG"; done_one=1; break
             fi
         done
