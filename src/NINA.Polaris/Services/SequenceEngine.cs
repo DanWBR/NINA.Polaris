@@ -83,6 +83,12 @@ public class SequenceEngine {
     public string? WaitingFor { get; private set; }
     public DateTime? StartedAt { get; private set; }
 
+    // Frames captured, and their exposure time, since StartedAt: what the ETA
+    // measures the per-frame overhead from. TotalFramesCompleted also counts a
+    // resumed run's earlier frames, which this run's clock never saw.
+    private int _runFrames;
+    private double _runExposureSeconds;
+
     /// <summary>Dither configuration. Default: disabled.</summary>
     public DitherSettings Dither { get; set; } = new();
 
@@ -268,6 +274,8 @@ public class SequenceEngine {
         _cts = new CancellationTokenSource();
         State = SequenceState.Running;
         StartedAt = DateTime.UtcNow;
+        _runFrames = 0;
+        _runExposureSeconds = 0;
         LastError = null;
         _framesSinceDither = 0;
         DithersIssued = 0;
@@ -325,6 +333,26 @@ public class SequenceEngine {
         _logger.LogInformation("Sequence stopped");
     }
 
+    /// <summary>Time left: each remaining frame's own exposure plus the
+    /// overhead per frame measured so far in this run (download, save, dither,
+    /// settle). An average over every frame taken put a 60 s card's pace on
+    /// the 180 s card after it and showed half the real time.</summary>
+    internal static double EstimateRemainingSeconds(IReadOnlyList<SequenceItem> items,
+            int currentItem, int frameInItem, double elapsedSeconds,
+            double exposureDoneSeconds, int framesDone) {
+        double overhead = framesDone > 0
+            ? Math.Max(0, (elapsedSeconds - exposureDoneSeconds) / framesDone)
+            : 0;
+        double total = 0;
+        for (int i = Math.Max(0, currentItem); i < items.Count; i++) {
+            var item = items[i];
+            if (!item.Enabled) continue;
+            int left = i == currentItem ? Math.Max(0, item.Count - frameInItem) : item.Count;
+            total += left * (Math.Max(0, item.Exposure) + overhead);
+        }
+        return total;
+    }
+
     /// <summary>Dismiss the last per-frame error banner. The run keeps going
     /// regardless; this only clears the surfaced message.</summary>
     public void ClearLastError() => LastError = null;
@@ -335,11 +363,10 @@ public class SequenceEngine {
         var totalFrames = Items.Where(i => i.Enabled).Sum(i => i.Count);
         var elapsed = StartedAt.HasValue ? DateTime.UtcNow - StartedAt.Value : TimeSpan.Zero;
 
-        double estimatedRemainingSeconds = 0;
-        if (TotalFramesCompleted > 0 && totalFrames > TotalFramesCompleted) {
-            var avgFrameTime = elapsed.TotalSeconds / TotalFramesCompleted;
-            estimatedRemainingSeconds = avgFrameTime * (totalFrames - TotalFramesCompleted);
-        }
+        double estimatedRemainingSeconds = State is SequenceState.Running or SequenceState.Paused
+            ? EstimateRemainingSeconds(Items, CurrentItemIndex, CurrentFrameInItem,
+                elapsed.TotalSeconds, _runExposureSeconds, _runFrames)
+            : 0;
 
         return new SequenceStatus {
             State = State.ToString().ToLowerInvariant(),
@@ -696,6 +723,8 @@ public class SequenceEngine {
 
                         CurrentFrameInItem = f + 1;
                         TotalFramesCompleted++;
+                        _runFrames++;
+                        _runExposureSeconds += item.Exposure;
                         frameOk = true;
                         // A good frame supersedes any earlier per-frame error so
                         // the banner clears itself once the run recovers.
@@ -735,6 +764,8 @@ public class SequenceEngine {
 
                                 CurrentFrameInItem = f + 1;
                                 TotalFramesCompleted++;
+                                _runFrames++;
+                                _runExposureSeconds += item.Exposure;
                                 frameOk = true;
                                 LastError = null;
                             }
