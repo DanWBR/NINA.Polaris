@@ -14,6 +14,7 @@
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 using Moq;
 using NUnit.Framework;
 using NINA.Polaris.Services;
@@ -190,6 +191,57 @@ public class PlateSolveServiceTests {
 
         Assert.That(result.Success, Is.False);
         Assert.That(result.Error, Does.Match("(?i)(not available|not configured|not found)"));
+    }
+
+    [Test]
+    public async Task SolveAsync_Cancel_KillsAstapProcess() {
+        if (OperatingSystem.IsWindows()) Assert.Ignore("Uses a POSIX shell script as a fake ASTAP executable.");
+
+        var astapPath = Path.Combine(_tempDir, "fake-astap");
+        var fitsPath = Path.Combine(_tempDir, "cancel.fits");
+        var pidPath = fitsPath + ".pid";
+        File.WriteAllText(fitsPath, "not a real FITS file; header probing falls back to the normal solve path");
+        File.WriteAllText(astapPath,
+            "#!/bin/sh\n" +
+            "fits=\n" +
+            "while [ $# -gt 0 ]; do\n" +
+            "  if [ \"$1\" = \"-f\" ]; then shift; fits=$1; fi\n" +
+            "  shift\n" +
+            "done\n" +
+            "printf '%s' \"$$\" > \"$fits.pid\"\n" +
+            "exec sleep 60\n");
+        File.SetUnixFileMode(astapPath,
+            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+
+        var solver = CreateAstap(astapPath);
+        using var cts = new CancellationTokenSource();
+        var solveTask = solver.SolveAsync(fitsPath, new PlateSolveOptions(), cts.Token);
+
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (!File.Exists(pidPath) && DateTime.UtcNow < deadline)
+            await Task.Delay(25);
+        Assert.That(File.Exists(pidPath), Is.True, "fake ASTAP should have started");
+        var pid = int.Parse(await File.ReadAllTextAsync(pidPath));
+
+        cts.Cancel();
+
+        Assert.ThrowsAsync<OperationCanceledException>(async () => await solveTask);
+        Assert.That(await IsProcessRunningAsync(pid), Is.False,
+            "the ASTAP process must be terminated when plate solving is cancelled");
+    }
+
+    private static async Task<bool> IsProcessRunningAsync(int pid) {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        do {
+            try {
+                using var process = Process.GetProcessById(pid);
+                if (process.HasExited) return false;
+            } catch (ArgumentException) {
+                return false;
+            }
+            await Task.Delay(25);
+        } while (DateTime.UtcNow < deadline);
+        return true;
     }
 
     // --- PlateSolveResult.Failed factory ---
