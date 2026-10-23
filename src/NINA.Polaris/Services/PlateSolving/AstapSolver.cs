@@ -149,23 +149,13 @@ public class AstapSolver : IPlateSolver {
         try { onLog?.Invoke($"$ {Path.GetFileName(SolverPath)} {args}"); } catch { }
 
         try {
+            ct.ThrowIfCancellationRequested();
             using var proc = StartProcess(SolverPath, args);
-            var stdout = await proc.StandardOutput.ReadToEndAsync(ct);
-            var stderr = await proc.StandardError.ReadToEndAsync(ct);
-
             var timeout = TimeSpan.FromSeconds(_config.GetValue("PlateSolve:TimeoutSeconds", 120));
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            cts.CancelAfter(timeout);
-
-            try { await proc.WaitForExitAsync(cts.Token); }
-            catch (OperationCanceledException) {
-                try { proc.Kill(entireProcessTree: true); } catch { }
-                // Only the CancelAfter above is a timeout; a trip of the CALLER's
-                // token means the operator cancelled. Rethrow so the endpoint
-                // answers 499 rather than reporting a bogus timeout.
-                ct.ThrowIfCancellationRequested();
-                return PlateSolveResult.Failed("ASTAP timed out");
-            }
+            var run = await RunAstapProcessAsync(proc, timeout, ct);
+            if (run.TimedOut) return PlateSolveResult.Failed("ASTAP timed out");
+            var stdout = run.Stdout;
+            var stderr = run.Stderr;
 
             _logger.LogDebug("ASTAP exit code: {Code}, stdout: {Out}", proc.ExitCode, stdout);
 
@@ -221,6 +211,40 @@ public class AstapSolver : IPlateSolver {
         var p = new Process { StartInfo = psi };
         p.Start();
         return p;
+    }
+
+    private sealed record AstapProcessResult(string Stdout, string Stderr, bool TimedOut);
+
+    private static async Task<AstapProcessResult> RunAstapProcessAsync(
+            Process proc, TimeSpan timeout, CancellationToken ct) {
+        // Drain both redirected pipes at the same time. Reading them one after
+        // another can deadlock if ASTAP fills stderr while stdout is being read.
+        // Do not pass the caller token to these reads: cancellation must reach
+        // WaitForExitAsync, where we can kill and reap ASTAP before returning.
+        var stdoutTask = proc.StandardOutput.ReadToEndAsync();
+        var stderrTask = proc.StandardError.ReadToEndAsync();
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(timeout);
+
+        var timedOut = false;
+        try {
+            await proc.WaitForExitAsync(cts.Token);
+        } catch (OperationCanceledException) {
+            try { proc.Kill(entireProcessTree: true); } catch { }
+
+            // Reap the child after killing it, but don't let a broken process
+            // implementation turn cancellation into an indefinitely stuck UI.
+            using var reapCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            try { await proc.WaitForExitAsync(reapCts.Token); } catch (OperationCanceledException) { }
+
+            // Only the linked timeout is translated to an ASTAP timeout. A
+            // caller cancellation must propagate so the API reports cancellation.
+            ct.ThrowIfCancellationRequested();
+            timedOut = true;
+        }
+
+        var output = await Task.WhenAll(stdoutTask, stderrTask);
+        return new AstapProcessResult(output[0], output[1], timedOut);
     }
 
     /// <summary>Public for unit-testing the CLI argument formatting.</summary>
@@ -796,26 +820,14 @@ public class AstapSolver : IPlateSolver {
             } catch { }
 
             try {
+                ct.ThrowIfCancellationRequested();
                 using var proc = StartProcess(SolverPath, args);
-                var stdout = await proc.StandardOutput.ReadToEndAsync(ct);
-                var stderr = await proc.StandardError.ReadToEndAsync(ct);
-
                 var timeout = TimeSpan.FromSeconds(
                     _config.GetValue("PlateSolve:TimeoutSeconds", 120));
-                using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                cts.CancelAfter(timeout);
-                try { await proc.WaitForExitAsync(cts.Token); }
-                catch (OperationCanceledException) {
-                    try { proc.Kill(entireProcessTree: true); } catch { }
-                    // Only the CancelAfter above is a timeout; a trip of the
-                    // CALLER's token means the operator cancelled. Rethrow so the
-                    // endpoint answers 499 rather than reporting a bogus timeout.
-                    // (FIELD5-1 claimed "ASTAP x2" but only patched SolveOnceAsync;
-                    // this proxy path — taken for every NAXIS3>1 frame, i.e. RGB
-                    // masters and OSC — kept lying "timed out" on cancel.)
-                    ct.ThrowIfCancellationRequested();
-                    return PlateSolveResult.Failed("ASTAP timed out");
-                }
+                var run = await RunAstapProcessAsync(proc, timeout, ct);
+                if (run.TimedOut) return PlateSolveResult.Failed("ASTAP timed out");
+                var stdout = run.Stdout;
+                var stderr = run.Stderr;
 
                 if (onLog != null) {
                     foreach (var line in (stdout ?? "").Replace("\r", "").Split('\n'))
