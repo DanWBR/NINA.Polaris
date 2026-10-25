@@ -592,6 +592,7 @@ builder.Services.AddSingleton<AltitudeService>();
 builder.Services.AddSingleton<CityGazetteer>();
 builder.Services.AddSingleton<GeocodingService>();
 builder.Services.AddSingleton<WeatherForecastService>();
+builder.Services.AddSingleton<CloudForecastService>();
 builder.Services.AddSingleton<CelestialImageService>();
 builder.Services.AddSingleton<CometEphemerisService>();
 builder.Services.AddSingleton<CometElementsUpdater>();

@@ -2528,6 +2528,9 @@ function ninaApp() {
         wxSat: { zoom: 6, sat: null, latest: null, loadedAt: 0, frames: [], index: 0, playing: false,
                  loading: false, error: '', layers: [], ref: [] },
         _wxSatTimer: null,
+        // SKY > Weather: Open-Meteo hourly cloud forecast (/api/weather/clouds)
+        // for tonight and tomorrow night. model is remembered per browser.
+        cloudHourly: { model: 'best_match', data: null, loading: false, error: '' },
         _weatherLastKey: '',
 
         // Studio (post-processing), ST-1 frame browser + ST-2 viewer
@@ -17804,10 +17807,121 @@ function ninaApp() {
             return 'https://www.windy.com/?satellite,' + lat.toFixed(3) + ',' + lng.toFixed(3) + ',7';
         },
 
+        // ─── Hourly clouds (Open-Meteo via /api/weather/clouds) ───────────
+
+        async loadCloudHourly(force = false) {
+            const lat = Number(this.settings.latitude), lng = Number(this.settings.longitude);
+            if (!Number.isFinite(lat) || !Number.isFinite(lng) || (Math.abs(lat) < 0.01 && Math.abs(lng) < 0.01)) return;
+            if (!this._cloudModelRestored) {
+                this._cloudModelRestored = true;
+                try { const m = localStorage.getItem('polaris.cloudModel'); if (m) this.cloudHourly.model = m; } catch (e) { /* default */ }
+            }
+            const key = lat.toFixed(2) + ',' + lng.toFixed(2) + ',' + this.cloudHourly.model;
+            if (!force && key === this._cloudHourlyKey && this.cloudHourly.data
+                && Date.now() - this._cloudHourlyAt < 30 * 60000) return;
+            this._cloudHourlyKey = key;
+            this.cloudHourly.loading = true;
+            this.cloudHourly.error = '';
+            try {
+                const r = await this.apiGet('/api/weather/clouds?lat=' + lat + '&lon=' + lng
+                    + '&model=' + encodeURIComponent(this.cloudHourly.model));
+                if (r?.available) {
+                    this.cloudHourly.data = r;
+                    this._cloudHourlyAt = Date.now();
+                } else {
+                    this.cloudHourly.data = null;
+                    this.cloudHourly.error = r?.error || 'Hourly forecast unavailable';
+                }
+            } catch (e) {
+                this.cloudHourly.data = null;
+                this.cloudHourly.error = 'Could not reach the hourly forecast service';
+            } finally {
+                this.cloudHourly.loading = false;
+            }
+        },
+
+        setCloudModel(model) {
+            this.cloudHourly.model = model;
+            try { localStorage.setItem('polaris.cloudModel', model); } catch (e) { /* session only */ }
+            this.loadCloudHourly(true);
+        },
+
+        /// The night under way (or the next one) and the one after, each from
+        /// sunset to sunrise, with the forecast hours that fall in it.
+        cloudNights() {
+            const d = this.cloudHourly.data;
+            if (!d?.hours?.length || typeof SunCalc === 'undefined') return [];
+            const lat = Number(this.settings.latitude), lng = Number(this.settings.longitude);
+            const DAY = 86400000, now = Date.now(), nights = [];
+            const ok = (t) => t instanceof Date && !isNaN(t);
+            for (let k = -1; k <= 2 && nights.length < 2; k++) {
+                const day = new Date(now + k * DAY);
+                const eve = SunCalc.getTimes(day, lat, lng);
+                const morn = SunCalc.getTimes(new Date(day.getTime() + DAY), lat, lng);
+                if (!ok(eve.sunset) || !ok(morn.sunrise) || morn.sunrise.getTime() <= now) continue;
+                nights.push(this._cloudNight(eve.sunset, morn.sunrise,
+                    ok(eve.night) ? eve.night : null, ok(morn.nightEnd) ? morn.nightEnd : null,
+                    d.hours, nights.length === 0 ? 'Tonight' : 'Tomorrow night'));
+            }
+            return nights;
+        },
+
+        _cloudNight(sunset, sunrise, dusk, dawn, hours, label) {
+            const HOUR = 3600000, now = Date.now();
+            const from = Math.floor(sunset.getTime() / HOUR) * HOUR, to = sunrise.getTime();
+            const pct = (v) => v == null ? null : Math.round(v);
+            const cells = hours
+                .map(h => ({ h, t: Date.parse(h.utcStart) }))
+                .filter(x => x.t >= from && x.t < to)
+                .map(({ h, t }) => {
+                    const total = pct(h.cloudCover);
+                    const spread = (h.temperature != null && h.dewPoint != null) ? h.temperature - h.dewPoint : null;
+                    const mid = t + HOUR / 2;
+                    const dark = !!(dusk && dawn && mid >= dusk.getTime() && mid <= dawn.getTime());
+                    const cls = total == null ? 'cx' : total <= 20 ? 'c0' : total <= 40 ? 'c1' : total <= 60 ? 'c2' : total <= 80 ? 'c3' : 'c4';
+                    const title = this._fmtLocalTime(new Date(t)) + ': clouds ' + (total ?? '?') + '%'
+                        + ' (low ' + (pct(h.low) ?? '?') + ', mid ' + (pct(h.mid) ?? '?') + ', high ' + (pct(h.high) ?? '?') + ')'
+                        + (h.precipProbability != null ? ' · rain ' + pct(h.precipProbability) + '%' : '')
+                        + (h.humidity != null ? ' · humidity ' + pct(h.humidity) + '%' : '')
+                        + (spread != null ? ' · dew spread ' + spread.toFixed(1) + ' °C' : '')
+                        + (h.windSpeed != null ? ' · wind ' + Math.round(h.windSpeed) + ' km/h' : '');
+                    return {
+                        key: t, t, hour: new Date(t).toLocaleTimeString(undefined, { hour: '2-digit' }),
+                        total, low: pct(h.low), mid: pct(h.mid), high: pct(h.high),
+                        rain: pct(h.precipProbability), dew: spread != null && spread <= 2,
+                        dark, now: now >= t && now < t + HOUR, cls, title,
+                    };
+                });
+
+            // Longest clear stretch (≤ 25 %) inside the dark hours.
+            let best = null, run = null;
+            for (const c of cells) {
+                if (c.dark && c.total != null && c.total <= 25) {
+                    run = run ? { ...run, end: c.t + HOUR } : { start: c.t, end: c.t + HOUR };
+                    if (!best || run.end - run.start > best.end - best.start) best = run;
+                } else run = null;
+            }
+            const parts = [];
+            if (best) parts.push('clear ' + this._fmtLocalTime(new Date(best.start)) + ' to '
+                + this._fmtLocalTime(new Date(best.end)) + ' (' + this._fmtCountdown(best.end - best.start) + ')');
+            else if (cells.some(c => c.dark)) parts.push('no clear stretch in the dark hours');
+            const dew = cells.find(c => c.dew);
+            if (dew) parts.push('dew risk from ' + this._fmtLocalTime(new Date(dew.t)));
+            const rain = Math.max(0, ...cells.map(c => c.rain || 0));
+            if (rain >= 30) parts.push('rain chance up to ' + rain + '%');
+            return {
+                key: label + sunset.getTime(), label, cells,
+                dateLabel: sunset.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }),
+                summary: parts.join(' · ') || 'forecast hours not available yet',
+                darkLabel: dusk && dawn ? 'astro dark ' + this._fmtLocalTime(dusk) + ' to ' + this._fmtLocalTime(dawn) : '',
+            };
+        },
+
         // ─── Weather forecast (7Timer via /api/weather/forecast) ──────────
 
         async loadWeatherForecast(force = false) {
             this.loadWxSatellite(force);
+            this.loadCloudHourly(force);
             const lat = this.settings.latitude;
             const lng = this.settings.longitude;
             if (lat == null || lng == null

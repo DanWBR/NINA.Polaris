@@ -96,6 +96,25 @@ public static class WeatherEndpoints {
             var forecast = await svc.GetForecastAsync(la, lo, ct);
             return Results.Ok(forecast);
         });
+
+        // Open-Meteo hourly cloud cover (total / low / mid / high, humidity,
+        // dew point, wind, rain chance) for planning a night hour by hour.
+        // model: best_match (default), ecmwf_ifs025, gfs_seamless or
+        // icon_seamless. Cached per site and model for 30 minutes.
+        group.MapGet("/clouds", async (
+            CloudForecastService svc,
+            ProfileService profile,
+            double? lat,
+            double? lon,
+            string? model,
+            CancellationToken ct) => {
+            var la = lat ?? profile.Active.Latitude;
+            var lo = lon ?? profile.Active.Longitude;
+            if (la is < -90 or > 90 || lo is < -180 or > 180) {
+                return Results.BadRequest(new { error = "lat must be in [-90, 90] and lon in [-180, 180]" });
+            }
+            return Results.Ok(await svc.GetAsync(la, lo, model, ct));
+        });
     }
 
     static double? Safe(double v) => double.IsNaN(v) || double.IsInfinity(v) ? null : v;
