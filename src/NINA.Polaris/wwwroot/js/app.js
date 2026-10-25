@@ -41928,7 +41928,9 @@ function ninaApp() {
         },
 
         storageDiskLabel(d) {
-            const gb = d.sizeBytes > 0 ? (d.sizeBytes / 1e9).toFixed(0) + ' GB' : '';
+            // GiB, the unit lsblk, Proxmox and Windows show: in decimal GB a
+            // 128 GiB virtual disk read 137 GB and looked like the wrong disk.
+            const gb = d.sizeBytes > 0 ? (d.sizeBytes / 2 ** 30).toFixed(0) + ' GiB' : '';
             return [d.model || d.device, gb].filter(Boolean).join(' · ');
         },
 
@@ -41961,7 +41963,7 @@ function ninaApp() {
         },
 
         storageLabel(c) {
-            const gb = c.sizeBytes > 0 ? (c.sizeBytes / 1e9).toFixed(0) + ' GB' : '';
+            const gb = c.sizeBytes > 0 ? (c.sizeBytes / 2 ** 30).toFixed(0) + ' GiB' : '';
             const bits = [c.model || c.device, gb, c.fsType].filter(Boolean);
             if (c.label) bits.push('"' + c.label + '"');
             return bits.join(' · ');

@@ -4128,7 +4128,7 @@
   "use strict": "use strict",
   "Use the GPU to speed up image math (stacking/stretch) when an OpenCL device is available.": "Nutzen Sie die GPU, um Bildberechnungen (Stapeln und Dehnen) zu beschleunigen, wenn ein OpenCL-Gerät verfügbar ist.",
   "Use the Polaris Relay": "Verwenden Sie das Polaris-Relais",
-  "Use the SSD for your captures": "Nutze die SSD für deine Aufnahmen",
+  "Use the second disk for your captures": "Nutze die zweite Festplatte für deine Aufnahmen",
   "Use this disk": "Diese Platte verwenden",
   "Use this disk for captures?": "Diese Platte für Aufnahmen verwenden?",
   "Use when the driver loses CONNECT writes during USB enumeration": "Zu verwenden, wenn der Treiber während der USB-Enumeration CONNECT-Schreibvorgänge verliert",
