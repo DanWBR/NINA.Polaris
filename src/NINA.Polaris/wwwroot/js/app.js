@@ -4666,9 +4666,13 @@ function ninaApp() {
         // STORAGE-1: capture-disk suggestion. `suggest` is only true when a
         // usable data disk exists AND the captures are still on the boot disk,
         // and the operator can silence it per disk.
+        // Settings > Capture disk reads the same survey on demand: surveyed /
+        // supported / onBootDisk describe the last answer, checking is the
+        // button's own spinner.
         storage: {
             suggest: false, busy: false, error: '',
-            candidates: [], formattable: [], pick: '', moveExisting: false, captureRoot: ''
+            candidates: [], formattable: [], pick: '', moveExisting: false, captureRoot: '',
+            surveyed: false, supported: true, onBootDisk: false, checking: false
         },
 
         // WAVE-3: per-layer wavelets. Five layers is what planetary work uses
@@ -42351,21 +42355,45 @@ function ninaApp() {
         // are true: a data disk is present and the captures are still on the
         // disk the system boots from. Anything less and the card would be
         // noise on a host that is already set up correctly.
-        async storageSurvey() {
+        // manual: asked from Settings > Capture disk. Every disk is offered
+        // there whatever "Not now" said on Home, and Home's card is left alone.
+        async storageSurvey(opts = {}) {
+            const manual = !!opts.manual;
             try {
                 const s = await this.apiGet('/api/storage/survey');
+                this.storage.surveyed = true;
+                this.storage.supported = !!s?.supported;
                 if (!s || !s.supported) return;
                 this.storage.captureRoot = s.captureRoot || '';
+                this.storage.onBootDisk = !!s.captureRootOnBootDisk;
                 this.storage.candidates = (s.candidates || []).filter(c => c.uuid);
                 // STORAGE-2: a disk with nothing on it and nothing mounted. An
                 // NVMe out of its bag looks exactly like this, and the v1 had
                 // no answer for it beyond "go format it yourself".
                 this.storage.formattable = (s.formattable || []).filter(d => d.device && !d.inUse);
+                if (manual) {
+                    const all = this.storageOptions();
+                    if (!all.some(o => o.key === this.storage.pick)) this.storage.pick = all.length ? all[0].key : '';
+                    return;
+                }
                 const dismissed = this._storageDismissed();
                 const fresh = this.storageOptions().filter(o => !dismissed.includes(o.key));
                 this.storage.pick = fresh.length ? fresh[0].key : '';
                 this.storage.suggest = s.captureRootOnBootDisk && fresh.length > 0;
-            } catch (e) { /* a host that cannot answer simply gets no card */ }
+            } catch (e) {
+                // Home: a host that cannot answer simply gets no card. Settings
+                // was asked outright, so it says the check failed.
+                if (manual) this.storage.error = this._t('Could not read the disks from Polaris.');
+            }
+        },
+
+        /// Settings > Capture disk: look again, with nothing hidden.
+        async storageCheck() {
+            if (this.storage.checking) return;
+            this.storage.checking = true;
+            this.storage.error = '';
+            try { await this.storageSurvey({ manual: true }); }
+            finally { this.storage.checking = false; }
         },
 
         // One list, two kinds. A disk that already carries a filesystem is
@@ -42394,7 +42422,9 @@ function ninaApp() {
         },
 
         storageDiskLabel(d) {
-            const gb = d.sizeBytes > 0 ? (d.sizeBytes / 1e9).toFixed(0) + ' GB' : '';
+            // GiB, the unit lsblk, Proxmox and Windows show: in decimal GB a
+            // 128 GiB virtual disk read 137 GB and looked like the wrong disk.
+            const gb = d.sizeBytes > 0 ? (d.sizeBytes / 2 ** 30).toFixed(0) + ' GiB' : '';
             return [d.model || d.device, gb].filter(Boolean).join(' · ');
         },
 
@@ -42427,7 +42457,7 @@ function ninaApp() {
         },
 
         storageLabel(c) {
-            const gb = c.sizeBytes > 0 ? (c.sizeBytes / 1e9).toFixed(0) + ' GB' : '';
+            const gb = c.sizeBytes > 0 ? (c.sizeBytes / 2 ** 30).toFixed(0) + ' GiB' : '';
             const bits = [c.model || c.device, gb, c.fsType].filter(Boolean);
             if (c.label) bits.push('"' + c.label + '"');
             return bits.join(' · ');
@@ -42481,6 +42511,8 @@ function ninaApp() {
                 const j = await r.json();
                 if (!r.ok) { this.storage.error = j.error || 'Setup failed.'; return; }
                 this.storage.suggest = false;
+                this.storage.captureRoot = j.captureDir || this.storage.captureRoot;
+                this.storage.onBootDisk = false;
                 this.toast(this._t('Captures now go to {dir}', { dir: j.captureDir }), 'ok', 6000);
                 try { await this.loadSettingsFromServer?.(); } catch (e) {}
             } catch (e) {

@@ -3566,7 +3566,7 @@
   "use strict": "",
   "Use the GPU to speed up image math (stacking/stretch) when an OpenCL device is available.": "",
   "Use the Polaris Relay": "",
-  "Use the SSD for your captures": "Use the SSD for your captures",
+  "Use the second disk for your captures": "Use the second disk for your captures",
   "Use this disk": "",
   "Use this disk for captures?": "",
   "Use your device's GPS / Wi-Fi positioning": "",

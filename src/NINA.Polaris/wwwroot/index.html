@@ -1043,7 +1043,7 @@
                     <div class="storage-card">
                         <span class="storage-icon" aria-hidden="true">💽</span>
                         <div class="storage-text">
-                            <strong>Use the SSD for your captures</strong>
+                            <strong>Use the second disk for your captures</strong>
                             <p x-text="storageSuggestText()"></p>
                         </div>
                         <div class="storage-actions">
@@ -15973,6 +15973,52 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </div>
                 </div>
 
+                <!-- Capture disk: where captures go, and the same disk setup the
+                     Home card offers, on demand. Home's card is a one-time
+                     suggestion that "Not now" silences per browser; this is
+                     the way back to it. -->
+                <div class="settings-section" id="capture-disk-card">
+                    <h3 data-tour="set-capture-disk"><span class="settings-card-icon">💽</span>Capture disk</h3>
+                    <p class="hint" style="margin-top:0">
+                        Where new photos and videos are saved. Polaris can mount a second disk,
+                        or format a new one, and send the captures there instead of the disk
+                        the system runs on.
+                    </p>
+                    <p class="hint" x-show="storage.surveyed && storage.supported && storage.captureRoot">
+                        Captures go to <code x-text="storage.captureRoot"></code><span class="text-warn"
+                            x-show="storage.onBootDisk">, on the disk the system runs on</span>.
+                    </p>
+                    <div class="storage-actions">
+                        <button class="btn btn-sm" @click="storageCheck()" :disabled="storage.checking || storage.busy"
+                                x-text="storage.checking ? 'Checking…' : 'Check disks'"></button>
+                        <template x-if="storage.surveyed && storage.supported && storageOptions().length">
+                            <span class="storage-actions">
+                                <select x-model="storage.pick" class="input-sm">
+                                    <template x-for="o in storageOptions()" :key="'cd-' + o.key">
+                                        <option :value="o.key" x-text="o.text"></option>
+                                    </template>
+                                </select>
+                                <label class="storage-move"
+                                       title="Copies what is already in the current capture folder. The originals are kept.">
+                                    <input type="checkbox" x-model="storage.moveExisting"> Copy existing
+                                </label>
+                                <button class="btn btn-sm"
+                                        :class="storagePicked()?.kind === 'format' ? 'btn-danger' : 'btn-primary'"
+                                        :disabled="storage.busy || !storage.pick"
+                                        @click="storageUse()" x-text="storageActionLabel()"></button>
+                            </span>
+                        </template>
+                    </div>
+                    <p class="hint" x-show="storage.surveyed && storage.supported && !storageOptions().length">
+                        No other disk to set up. Plug one in and check again; a disk that already
+                        holds other data is not offered, so nothing on it can be erased from here.
+                    </p>
+                    <p class="hint" x-show="storage.surveyed && !storage.supported">
+                        Disk setup is available when Polaris runs on Linux.
+                    </p>
+                    <p class="storage-err" x-show="storage.error" x-text="storage.error"></p>
+                </div>
+
                 <!-- Auto-push captured images to network storage (SMB / SFTP /
                      mounted path). Mirrors the capture folder tree onto the
                      target; the local copy is kept. -->
@@ -25857,7 +25903,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261024-cloudhourly"></script>
+    <script src="/js/app.js?v=20261025-capturedisk"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
