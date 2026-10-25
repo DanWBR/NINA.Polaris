@@ -1707,6 +1707,117 @@ body.link-offline .preview-pane::after {
    narrow) → legend. Each card carries a 8-slot grid (3-hour buckets)
    colour-coded by composite observation score. */
 
+/* SKY > Weather: infrared satellite clouds around the site. */
+.wx-sat {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.wx-sat-head {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 13px;
+}
+.wx-sat-head .muted { font-size: 12px; }
+.wx-sat-btns {
+    margin-left: auto;
+    display: flex;
+    gap: 4px;
+}
+.wx-sat-map {
+    position: relative;
+    height: 360px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #05070d;
+    border: 1px solid var(--border);
+}
+.wx-sat-layer {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 0;
+    height: 0;
+}
+.wx-sat-layer img {
+    position: absolute;
+    max-width: none;
+    user-select: none;
+    pointer-events: none;
+}
+.wx-sat-site {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 14px;
+    height: 14px;
+    margin: -7px 0 0 -7px;
+    border: 2px solid #ff5252;
+    border-radius: 50%;
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.6);
+}
+.wx-sat-slider { width: 100%; }
+
+/* SKY > Weather: hourly clouds, one grid per night. */
+.wx-hourly { display: flex; flex-direction: column; gap: 6px; }
+.wx-night > summary {
+    cursor: pointer;
+    font-size: 13px;
+    padding: 4px 0;
+}
+.wx-night > summary .muted { margin: 0 4px; }
+.wx-night-dark { font-size: 11px; margin: 0 0 4px; }
+.wx-hgrid-wrap { overflow-x: auto; }
+.wx-hgrid {
+    display: grid;
+    gap: 2px;
+    min-width: max-content;
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+}
+.wx-hl {
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    position: sticky;
+    left: 0;
+    background: var(--bg-primary, #0d1117);
+    z-index: 1;
+}
+.wx-hh {
+    text-align: center;
+    color: var(--text-secondary);
+    border-bottom: 2px solid transparent;
+    padding-bottom: 1px;
+}
+.wx-hh.dark { color: var(--text-primary); border-bottom-color: #5c7cfa; }
+.wx-hh.now { color: #ffd54f; }
+.wx-ht {
+    text-align: center;
+    border-radius: 3px;
+    padding: 3px 0;
+    font-weight: 600;
+    color: #0b0f17;
+}
+.wx-ht.c0 { background: #4caf50; }
+.wx-ht.c1 { background: #9ccc65; }
+.wx-ht.c2 { background: #ffd54f; }
+.wx-ht.c3 { background: #ff8a65; }
+.wx-ht.c4 { background: #e57373; }
+.wx-ht.cx { background: rgba(255, 255, 255, 0.08); color: var(--text-secondary); }
+.wx-ht.now { outline: 2px solid #ffd54f; outline-offset: -2px; }
+.wx-hb {
+    height: 12px;
+    border-radius: 2px;
+    background: rgba(205, 214, 235, calc(var(--v, 0) * 0.9));
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+.wx-hx { text-align: center; color: var(--text-secondary); min-height: 14px; }
+.wx-sat-note { font-size: 12px; color: #ffb74d; }
+.wx-sat-credit { font-size: 11px; }
+
 .weather-panel {
     padding: 16px;
     overflow-y: auto;

@@ -46,7 +46,7 @@
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20261023-skynight">
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20261009-floatbtn">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260731-videonudge">
-    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20261015-expwidth">
+    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20261024-cloudhourly">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20261011-kblift">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20261016-bincap">
     <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20261015-checks">
@@ -11725,6 +11725,104 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <span x-text="weatherForecast.error"></span>
                     <button class="btn btn-sm" x-show="weatherForecast.errorCard" x-cloak
                             @click="openSettingsCard(weatherForecast.errorCard)">Open Settings</button>
+                </div>
+
+                <!-- Clouds now: infrared satellite around the site, last two hours. -->
+                <div class="wx-sat" x-show="wxSat.sat || wxSat.error">
+                    <div class="wx-sat-head">
+                        <strong>Clouds now</strong>
+                        <span class="muted" x-text="wxSat.loading ? 'loading…' : wxSatCaption()"></span>
+                        <span class="wx-sat-btns">
+                            <button class="btn btn-sm" @click="wxSatZoom(-1)" :disabled="wxSat.zoom <= 3 || !wxSat.frames.length" title="Zoom out">−</button>
+                            <button class="btn btn-sm" @click="wxSatZoom(1)" :disabled="wxSat.zoom >= 8 || !wxSat.frames.length" title="Zoom in">+</button>
+                            <button class="btn btn-sm" @click="wxSatTogglePlay()" :disabled="wxSat.frames.length < 2"
+                                    :title="wxSat.playing ? 'Pause' : 'Play the last two hours'"
+                                    x-text="wxSat.playing ? '⏸' : '▶'"></button>
+                            <a class="btn btn-sm" :href="wxSatWindyUrl()" target="_blank" rel="noopener"
+                               title="Open windy.com on the satellite layer at this site">Open in Windy</a>
+                        </span>
+                    </div>
+                    <div class="wx-sat-map" x-show="wxSat.frames.length">
+                        <template x-for="f in wxSat.layers" :key="f.key">
+                            <div class="wx-sat-layer" x-show="f.i === wxSat.index">
+                                <template x-for="t in f.tiles" :key="t.key">
+                                    <img :src="t.src" :style="t.style" alt="" draggable="false" @error="$el.style.visibility = 'hidden'">
+                                </template>
+                            </div>
+                        </template>
+                        <div class="wx-sat-layer wx-sat-ref">
+                            <template x-for="t in wxSat.ref" :key="t.key">
+                                <img :src="t.src" :style="t.style" alt="" draggable="false" @error="$el.style.visibility = 'hidden'">
+                            </template>
+                        </div>
+                        <div class="wx-sat-site" title="Your site"></div>
+                    </div>
+                    <input type="range" class="wx-sat-slider" min="0" :max="Math.max(0, wxSat.frames.length - 1)"
+                           x-model.number="wxSat.index" x-show="wxSat.frames.length > 1 && wxSat.layers.length > 1">
+                    <div class="wx-sat-note" x-show="wxSat.error" x-text="wxSat.error"></div>
+                    <div class="wx-sat-credit muted">Infrared band 13 from NASA GIBS. Cold, high cloud tops show bright or coloured; clear sky shows the warm ground.</div>
+                </div>
+
+                <!-- Hourly clouds for tonight and tomorrow night (Open-Meteo). -->
+                <div class="wx-hourly" x-show="cloudHourly.data || cloudHourly.error || cloudHourly.loading">
+                    <div class="wx-sat-head">
+                        <strong>Clouds hour by hour</strong>
+                        <span class="muted" x-text="cloudHourly.loading ? 'loading…' : 'Open-Meteo'"></span>
+                        <span class="wx-sat-btns">
+                            <select class="input-sm" :value="cloudHourly.model" @change="setCloudModel($event.target.value)"
+                                    title="Forecast model">
+                                <option value="best_match">Best match</option>
+                                <option value="ecmwf_ifs025">ECMWF</option>
+                                <option value="gfs_seamless">GFS</option>
+                                <option value="icon_seamless">ICON</option>
+                            </select>
+                        </span>
+                    </div>
+                    <div class="wx-sat-note" x-show="cloudHourly.error" x-text="cloudHourly.error"></div>
+                    <template x-for="(night, ni) in cloudNights()" :key="night.key">
+                        <details class="wx-night" :open="ni === 0">
+                            <summary>
+                                <b x-text="night.label"></b>
+                                <span class="muted" x-text="night.dateLabel"></span>
+                                <span x-text="'· ' + night.summary"></span>
+                            </summary>
+                            <div class="wx-night-dark muted" x-show="night.darkLabel" x-text="night.darkLabel"></div>
+                            <div class="wx-hgrid-wrap">
+                                <div class="wx-hgrid" :style="'grid-template-columns:48px repeat(' + night.cells.length + ', minmax(30px, 1fr))'">
+                                    <div class="wx-hl">Hour</div>
+                                    <template x-for="c in night.cells" :key="'h' + c.key">
+                                        <div class="wx-hh" :class="{ dark: c.dark, now: c.now }" x-text="c.hour"></div>
+                                    </template>
+                                    <div class="wx-hl">Clouds</div>
+                                    <template x-for="c in night.cells" :key="'t' + c.key">
+                                        <div class="wx-ht" :class="[c.cls, c.now ? 'now' : '']" :title="c.title"
+                                             x-text="c.total == null ? '-' : c.total"></div>
+                                    </template>
+                                    <div class="wx-hl">High</div>
+                                    <template x-for="c in night.cells" :key="'hi' + c.key">
+                                        <div class="wx-hb" :style="'--v:' + ((c.high || 0) / 100)" :title="'High ' + (c.high ?? '?') + '%'"></div>
+                                    </template>
+                                    <div class="wx-hl">Mid</div>
+                                    <template x-for="c in night.cells" :key="'mi' + c.key">
+                                        <div class="wx-hb" :style="'--v:' + ((c.mid || 0) / 100)" :title="'Mid ' + (c.mid ?? '?') + '%'"></div>
+                                    </template>
+                                    <div class="wx-hl">Low</div>
+                                    <template x-for="c in night.cells" :key="'lo' + c.key">
+                                        <div class="wx-hb" :style="'--v:' + ((c.low || 0) / 100)" :title="'Low ' + (c.low ?? '?') + '%'"></div>
+                                    </template>
+                                    <div class="wx-hl">Rain</div>
+                                    <template x-for="c in night.cells" :key="'r' + c.key">
+                                        <div class="wx-hx" x-text="c.rain >= 10 ? c.rain : ''"></div>
+                                    </template>
+                                    <div class="wx-hl">Dew</div>
+                                    <template x-for="c in night.cells" :key="'d' + c.key">
+                                        <div class="wx-hx" :title="c.dew ? 'Temperature within 2 °C of the dew point' : ''" x-text="c.dew ? '💧' : ''"></div>
+                                    </template>
+                                </div>
+                            </div>
+                        </details>
+                    </template>
+                    <div class="wx-sat-credit muted">Cloud cover in %, hour by hour from sunset to sunrise; the highlighted hours are astronomical night. Tap or hover an hour for humidity, dew spread and wind.</div>
                 </div>
 
                 <!-- Best windows tonight callout -->
@@ -25759,7 +25857,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261023-skynight"></script>
+    <script src="/js/app.js?v=20261024-cloudhourly"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
