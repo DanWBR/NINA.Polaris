@@ -1707,6 +1707,61 @@ body.link-offline .preview-pane::after {
    narrow) → legend. Each card carries a 8-slot grid (3-hour buckets)
    colour-coded by composite observation score. */
 
+/* SKY > Weather: infrared satellite clouds around the site. */
+.wx-sat {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.wx-sat-head {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 13px;
+}
+.wx-sat-head .muted { font-size: 12px; }
+.wx-sat-btns {
+    margin-left: auto;
+    display: flex;
+    gap: 4px;
+}
+.wx-sat-map {
+    position: relative;
+    height: 360px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #05070d;
+    border: 1px solid var(--border);
+}
+.wx-sat-layer {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 0;
+    height: 0;
+}
+.wx-sat-layer img {
+    position: absolute;
+    max-width: none;
+    user-select: none;
+    pointer-events: none;
+}
+.wx-sat-site {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 14px;
+    height: 14px;
+    margin: -7px 0 0 -7px;
+    border: 2px solid #ff5252;
+    border-radius: 50%;
+    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.6);
+}
+.wx-sat-slider { width: 100%; }
+.wx-sat-note { font-size: 12px; color: #ffb74d; }
+.wx-sat-credit { font-size: 11px; }
+
 .weather-panel {
     padding: 16px;
     overflow-y: auto;

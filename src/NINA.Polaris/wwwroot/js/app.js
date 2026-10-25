@@ -2522,6 +2522,12 @@ function ninaApp() {
         // `this.weather = { ...station fields... }` wiped the fetched
         // forecast on the next tick.
         weatherForecast: { forecast: null, loading: false, error: '', errorCard: '', lastFetched: null },
+        // SKY > Weather: clouds now, from a geostationary satellite's infrared
+        // channel (NASA GIBS tiles, fetched by the browser). zoom 7-8 enlarge
+        // the level-6 imagery; frames are the last two hours, 10 min apart.
+        wxSat: { zoom: 6, sat: null, latest: null, loadedAt: 0, frames: [], index: 0, playing: false,
+                 loading: false, error: '', layers: [], ref: [] },
+        _wxSatTimer: null,
         _weatherLastKey: '',
 
         // Studio (post-processing), ST-1 frame browser + ST-2 viewer
@@ -17666,9 +17672,142 @@ function ninaApp() {
             }
         },
 
+        // ─── Satellite clouds (NASA GIBS infrared, browser-fetched) ───────
+        //
+        // Band 13 (10.3 µm, "clean" infrared) of the geostationary satellite
+        // over the site: cloud tops by temperature, day and night alike, a
+        // frame every 10 min about an hour behind real time. GIBS is free and
+        // keyless, and answers a tile requested at time "default" with the
+        // latest frame, naming it in the Layer-Time-Actual header (CORS-exposed),
+        // so no capabilities document has to be read. A small tile viewer of
+        // our own rather than a map library: one centred view is all this is.
+
+        _wxSatPick(lng) {
+            const lon = ((lng + 540) % 360) - 180;
+            if (lon >= -110 && lon <= -15) return { id: 'GOES-East_ABI_Band13_Clean_Infrared', name: 'GOES-East' };
+            if (lon < -110 || lon > 165) return { id: 'GOES-West_ABI_Band13_Clean_Infrared', name: 'GOES-West' };
+            if (lon >= 70 && lon <= 165) return { id: 'Himawari_AHI_Band13_Clean_Infrared', name: 'Himawari' };
+            return null;
+        },
+
+        _wxSatUrl(layer, time, matrix, z, x, y) {
+            const t = time ? time + '/' : '';
+            return 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/' + layer + '/default/'
+                + t + matrix + '/' + z + '/' + y + '/' + x + '.png';
+        },
+
+        async loadWxSatellite(force = false) {
+            const lat = Number(this.settings.latitude), lng = Number(this.settings.longitude);
+            if (!Number.isFinite(lat) || !Number.isFinite(lng) || (Math.abs(lat) < 0.01 && Math.abs(lng) < 0.01)) return;
+            const sat = this._wxSatPick(lng);
+            this.wxSat.sat = sat;
+            if (!sat) {
+                this.wxSat.error = 'No geostationary infrared satellite with 10-minute frames covers this longitude in NASA GIBS. Open it in Windy instead.';
+                this.wxSat.frames = []; this.wxSat.layers = []; this.wxSat.ref = [];
+                return;
+            }
+            if (!force && this.wxSat.latest && Date.now() - this.wxSat.loadedAt < 10 * 60000) return;
+            this.wxSat.loading = true;
+            this.wxSat.error = '';
+            try {
+                // Any tile will do to learn the latest time; zoom 0 is the smallest.
+                const r = await fetch(this._wxSatUrl(sat.id, 'default', 'GoogleMapsCompatible_Level6', 0, 0, 0), { cache: 'no-store' });
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                const latest = Date.parse(r.headers.get('layer-time-actual') || '');
+                if (!Number.isFinite(latest)) throw new Error('no frame time');
+                this.wxSat.latest = latest;
+                this.wxSat.loadedAt = Date.now();
+                this.wxSat.frames = Array.from({ length: 12 }, (_, i) => latest - (11 - i) * 600000);
+                this.wxSat.index = this.wxSat.frames.length - 1;
+                this._wxSatBuild();
+            } catch (e) {
+                this.wxSat.error = 'Satellite images could not be loaded. They come straight from NASA, so this browser needs internet.';
+            } finally {
+                this.wxSat.loading = false;
+            }
+        },
+
+        /// Tiles for one layer around the site, as positioned <img> specs.
+        /// Zoom levels past the layer's own enlarge its tiles instead.
+        _wxSatTiles(layer, time, matrix, maxZ) {
+            const lat = Number(this.settings.latitude), lng = Number(this.settings.longitude);
+            const tz = Math.min(this.wxSat.zoom, maxZ), scale = 2 ** (this.wxSat.zoom - tz);
+            const n = 2 ** tz, world = 256 * n;
+            const s = Math.sin(Math.max(-85, Math.min(85, lat)) * Math.PI / 180);
+            const cx = (lng + 180) / 360 * world;
+            const cy = (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * world;
+            // Covers a view up to 1100 x 440 px; the frame clips the rest.
+            const halfW = 550 / scale, halfH = 220 / scale, out = [];
+            for (let j = Math.floor((cy - halfH) / 256); j <= Math.floor((cy + halfH) / 256); j++) {
+                if (j < 0 || j >= n) continue;
+                for (let i = Math.floor((cx - halfW) / 256); i <= Math.floor((cx + halfW) / 256); i++) {
+                    // Whole pixels, or fractional edges leave hairline seams.
+                    const x = ((i % n) + n) % n, size = 256 * scale;
+                    const left = Math.round((i * 256 - cx) * scale), top = Math.round((j * 256 - cy) * scale);
+                    out.push({
+                        key: tz + '/' + i + '/' + j,
+                        src: this._wxSatUrl(layer, time, matrix, tz, x, j),
+                        style: 'left:' + left + 'px;top:' + top + 'px;width:' + size + 'px;height:' + size + 'px',
+                    });
+                }
+            }
+            return out;
+        },
+
+        /// Satellite frames are built lazily: the latest at once, the rest
+        /// only when the animation is played (12 frames of tiles is a few MB).
+        _wxSatBuild() {
+            const sat = this.wxSat.sat;
+            if (!sat || !this.wxSat.frames.length) return;
+            const all = this.wxSat.playing || this.wxSat.layers.length > 1;
+            this.wxSat.layers = this.wxSat.frames
+                .map((t, i) => ({ i, t }))
+                .filter(f => all || f.i === this.wxSat.frames.length - 1)
+                .map(f => ({
+                    i: f.i, key: f.t + '@' + this.wxSat.zoom,
+                    tiles: this._wxSatTiles(sat.id, new Date(f.t).toISOString().replace('.000Z', 'Z'),
+                        'GoogleMapsCompatible_Level6', 6),
+                }));
+            // Coastlines only: GIBS's Reference_Features_15m (borders) came
+            // back opaque black on some tiles and hid the satellite under it.
+            this.wxSat.ref = this._wxSatTiles('Coastlines_15m', null, 'GoogleMapsCompatible_Level13', 13);
+        },
+
+        wxSatZoom(delta) {
+            this.wxSat.zoom = Math.max(3, Math.min(8, this.wxSat.zoom + delta));
+            this._wxSatBuild();
+        },
+
+        wxSatTogglePlay() {
+            this.wxSat.playing = !this.wxSat.playing;
+            clearInterval(this._wxSatTimer);
+            this._wxSatTimer = null;
+            if (!this.wxSat.playing) return;
+            this._wxSatBuild();
+            this._wxSatTimer = setInterval(() => {
+                // Stop on its own once the panel is left.
+                if (this.tab !== 'weather') { this.wxSatTogglePlay(); return; }
+                const n = this.wxSat.frames.length;
+                if (n) this.wxSat.index = (this.wxSat.index + 1) % n;
+            }, 600);
+        },
+
+        wxSatCaption() {
+            const t = this.wxSat.frames[this.wxSat.index];
+            if (!t || !this.wxSat.sat) return '';
+            return this.wxSat.sat.name + ' infrared · ' + this._fmtLocalTime(new Date(t))
+                + ' (' + this._fmtCountdown(Date.now() - t) + ' ago)';
+        },
+
+        wxSatWindyUrl() {
+            const lat = Number(this.settings.latitude) || 0, lng = Number(this.settings.longitude) || 0;
+            return 'https://www.windy.com/?satellite,' + lat.toFixed(3) + ',' + lng.toFixed(3) + ',7';
+        },
+
         // ─── Weather forecast (7Timer via /api/weather/forecast) ──────────
 
         async loadWeatherForecast(force = false) {
+            this.loadWxSatellite(force);
             const lat = this.settings.latitude;
             const lng = this.settings.longitude;
             if (lat == null || lng == null

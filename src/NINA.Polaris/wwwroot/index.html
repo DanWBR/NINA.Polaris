@@ -46,7 +46,7 @@
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20261023-skynight">
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20261009-floatbtn">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20260731-videonudge">
-    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20261015-expwidth">
+    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20261024-wxsat">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20261011-kblift">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20261016-bincap">
     <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20261015-checks">
@@ -11402,6 +11402,42 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <span x-text="weatherForecast.error"></span>
                     <button class="btn btn-sm" x-show="weatherForecast.errorCard" x-cloak
                             @click="openSettingsCard(weatherForecast.errorCard)">Open Settings</button>
+                </div>
+
+                <!-- Clouds now: infrared satellite around the site, last two hours. -->
+                <div class="wx-sat" x-show="wxSat.sat || wxSat.error">
+                    <div class="wx-sat-head">
+                        <strong>Clouds now</strong>
+                        <span class="muted" x-text="wxSat.loading ? 'loading…' : wxSatCaption()"></span>
+                        <span class="wx-sat-btns">
+                            <button class="btn btn-sm" @click="wxSatZoom(-1)" :disabled="wxSat.zoom <= 3 || !wxSat.frames.length" title="Zoom out">−</button>
+                            <button class="btn btn-sm" @click="wxSatZoom(1)" :disabled="wxSat.zoom >= 8 || !wxSat.frames.length" title="Zoom in">+</button>
+                            <button class="btn btn-sm" @click="wxSatTogglePlay()" :disabled="wxSat.frames.length < 2"
+                                    :title="wxSat.playing ? 'Pause' : 'Play the last two hours'"
+                                    x-text="wxSat.playing ? '⏸' : '▶'"></button>
+                            <a class="btn btn-sm" :href="wxSatWindyUrl()" target="_blank" rel="noopener"
+                               title="Open windy.com on the satellite layer at this site">Open in Windy</a>
+                        </span>
+                    </div>
+                    <div class="wx-sat-map" x-show="wxSat.frames.length">
+                        <template x-for="f in wxSat.layers" :key="f.key">
+                            <div class="wx-sat-layer" x-show="f.i === wxSat.index">
+                                <template x-for="t in f.tiles" :key="t.key">
+                                    <img :src="t.src" :style="t.style" alt="" draggable="false" @error="$el.style.visibility = 'hidden'">
+                                </template>
+                            </div>
+                        </template>
+                        <div class="wx-sat-layer wx-sat-ref">
+                            <template x-for="t in wxSat.ref" :key="t.key">
+                                <img :src="t.src" :style="t.style" alt="" draggable="false" @error="$el.style.visibility = 'hidden'">
+                            </template>
+                        </div>
+                        <div class="wx-sat-site" title="Your site"></div>
+                    </div>
+                    <input type="range" class="wx-sat-slider" min="0" :max="Math.max(0, wxSat.frames.length - 1)"
+                           x-model.number="wxSat.index" x-show="wxSat.frames.length > 1 && wxSat.layers.length > 1">
+                    <div class="wx-sat-note" x-show="wxSat.error" x-text="wxSat.error"></div>
+                    <div class="wx-sat-credit muted">Infrared band 13 from NASA GIBS. Cold, high cloud tops show bright or coloured; clear sky shows the warm ground.</div>
                 </div>
 
                 <!-- Best windows tonight callout -->
@@ -25474,7 +25510,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261023-skynight"></script>
+    <script src="/js/app.js?v=20261024-wxsat"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
