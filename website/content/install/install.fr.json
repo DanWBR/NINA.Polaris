@@ -117,22 +117,22 @@
         "badge": "arm64",
         "color": "#ff7a18",
         "os": "Armbian 25.5.1 XFCE (Ubuntu 24.04, noyau 6.12.23)",
-        "polaris": "0.98.211 (2026-10-19)",
+        "polaris": "0.98.222 (2026-10-23)",
         "size": "2.53 GB (.7z)",
         "access": "https://orangepizero3.local:5000/",
         "note": "L'entrée de gamme la moins chère. Avec 1,5 Go de RAM elle assure l'acquisition, l'autoguidage et l'astrométrie ; le live stacking d'un grand capteur et les outils IA mettront votre patience à l'épreuve. Cette carte n'a pas d'accélération GPU, l'IA tourne donc sur le processeur. Extrayez le .7z et écrivez le .img sur une carte SD avec HDD Raw Copy Tool, balenaEtcher ou Rufus. Mot de passe : polaris.",
-        "url": "https://drive.google.com/uc?export=download&id=1qEqoT_V4j00GF89hZVO4c-vk2xqO0MNM"
+        "url": "https://drive.google.com/uc?export=download&id=14_ebPBanBcDxvrMhsq4jRlfuWm-_dLfQ"
       },
       {
         "device": "Orange Pi 4 Pro",
         "badge": "arm64",
         "color": "#ff7a18",
         "os": "Ubuntu 22.04 (arm64)",
-        "polaris": "0.98.211 (2026-10-19)",
+        "polaris": "0.98.222 (2026-10-23)",
         "size": "2.53 GB (.7z)",
         "access": "https://polaris-opi4pro-1.local:5000/",
         "note": "Celle à prendre en cas de doute. Environ 50 US$, nettement plus rapide qu'une Pi 4, et le meilleur rapport prix/capacité de cette liste. Extrayez le .7z et écrivez le .img sur le stockage interne de la carte avec HDD Raw Copy Tool, balenaEtcher ou Rufus. Mot de passe : polaris.",
-        "url": "https://drive.google.com/uc?export=download&id=1IxvS1wpj5fgBcrzWMn_iyuUU7G3Znmbs"
+        "url": "https://drive.google.com/uc?export=download&id=1GGhW3W_lvVMU265lpgts-tcszt7KO74T"
       },
       {
         "device": "Orange Pi 5 Pro",
