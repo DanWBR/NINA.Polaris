@@ -36691,9 +36691,8 @@ function ninaApp() {
                 this._asterionPoll = null;
                 const st = r.status || {};
                 if (st.phase === 'done') {
-                    this.toast(st.switchedPrimary
-                        ? 'Asterion installed and set as the solver. ASTAP stays as its fallback.'
-                        : 'Asterion catalog ' + (st.catalog || '') + ' installed.', 'ok', 8000);
+                    this.toast('Asterion catalog ' + (st.catalog || '') + ' installed. Pick Asterion as the solver '
+                        + 'above to use it; ASTAP stays its fallback.', 'ok', 8000);
                     this.loadPlateSolveConfig();
                 } else if (st.phase === 'error') {
                     this.toast('Asterion install failed: ' + (st.error || 'unknown error'), 'error', 10000);

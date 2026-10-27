@@ -54,14 +54,12 @@ public sealed class AsterionInstallService {
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromMinutes(20) };
 
     private readonly string _root;
-    private readonly ProfileService _profiles;
     private readonly ILogger<AsterionInstallService> _logger;
     private readonly object _lock = new();
     private CancellationTokenSource? _cts;
     private volatile AsterionInstallStatus _status = new();
 
     public AsterionInstallService(ProfileService profiles, ILogger<AsterionInstallService> logger) {
-        _profiles = profiles;
         _logger = logger;
         _root = Path.Combine(profiles.DataDir, "solvers", "asterion");
     }
@@ -152,9 +150,7 @@ public sealed class AsterionInstallService {
 
             if (!SolverInstalled) await InstallSolverAsync(asset, ct);
             await InstallCatalogAsync(catalog, ct);
-            var switched = MakePrimaryIfDefault();
             _logger.LogInformation("Asterion {Version} installed with catalog {Catalog}", Version, catalog);
-            lock (_lock) _status = _status with { SwitchedPrimary = switched };
             Finish(null);
         } catch (OperationCanceledException) {
             Finish("cancelled");
@@ -249,20 +245,6 @@ public sealed class AsterionInstallService {
         }
     }
 
-    /// <summary>Set Asterion as the primary solver when the profile still has
-    /// the stock ASTAP, so installing it is all it takes to use it. A choice of
-    /// anything else is left alone. True when the setting changed.</summary>
-    private bool MakePrimaryIfDefault() {
-        bool switched = false;
-        _profiles.UpdateSettings(p => {
-            if (string.IsNullOrWhiteSpace(p.PlateSolvePrimary) || p.PlateSolvePrimary == "astap") {
-                p.PlateSolvePrimary = "asterion";
-                switched = true;
-            }
-        });
-        return switched;
-    }
-
     /// <summary>"&lt;sha256&gt;  &lt;file&gt;" per line, as sha256sum writes it.</summary>
     internal static Dictionary<string, string> ParseChecksums(string text) {
         var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -328,7 +310,6 @@ public sealed record AsterionInstallStatus {
     public long BytesDownloaded { get; init; }
     public long BytesTotal { get; init; }
     public string? Error { get; init; }
-    public bool SwitchedPrimary { get; init; }
     public DateTime? StartedAt { get; init; }
     public DateTime? FinishedAt { get; init; }
     public bool Supported { get; init; }
