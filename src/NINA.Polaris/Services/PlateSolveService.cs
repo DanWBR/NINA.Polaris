@@ -22,7 +22,9 @@ namespace NINA.Polaris.Services;
 ///
 /// Selection priority:
 ///   1. Primary solver: <c>PlateSolve:PrimarySolver</c> (default "astap")
-///   2. If primary fails AND <c>PlateSolve:UseBlindFallback</c> is true,
+///   2. If the primary is Asterion and it fails or is missing, ASTAP (the
+///      solver it replaces, and still the most proven local one)
+///   3. If that fails AND <c>PlateSolve:UseBlindFallback</c> is true,
 ///      try <c>PlateSolve:BlindSolver</c> (default "astrometry-net-online")
 ///
 /// All implementations live under <see cref="PlateSolving"/>; this class is
@@ -38,16 +40,18 @@ public class PlateSolveService {
     public PlateSolveService(IConfiguration config, ILogger<PlateSolveService> logger,
         AstapSolver astap, PlateSolve3Solver ps3,
         AstrometryNetOnlineSolver netOnline, AstrometryNetLocalSolver netLocal,
-        ProfileService? profiles = null) {
+        AsterionSolver? asterion, ProfileService? profiles = null) {
         _config = config;
         _logger = logger;
         _profiles = profiles;
-        _solvers = new Dictionary<string, IPlateSolver>(StringComparer.OrdinalIgnoreCase) {
+        var solvers = new Dictionary<string, IPlateSolver>(StringComparer.OrdinalIgnoreCase) {
             [astap.Id] = astap,
             [ps3.Id] = ps3,
             [netOnline.Id] = netOnline,
             [netLocal.Id] = netLocal
         };
+        if (asterion != null) solvers[asterion.Id] = asterion;
+        _solvers = solvers;
     }
 
     /// <summary>Backwards-compat constructor for tests that only need ASTAP.</summary>
@@ -56,7 +60,8 @@ public class PlateSolveService {
               new AstapSolver(config, new Microsoft.Extensions.Logging.Abstractions.NullLogger<AstapSolver>()),
               new PlateSolve3Solver(config, new Microsoft.Extensions.Logging.Abstractions.NullLogger<PlateSolve3Solver>()),
               new AstrometryNetOnlineSolver(config, new Microsoft.Extensions.Logging.Abstractions.NullLogger<AstrometryNetOnlineSolver>()),
-              new AstrometryNetLocalSolver(config, new Microsoft.Extensions.Logging.Abstractions.NullLogger<AstrometryNetLocalSolver>())) { }
+              new AstrometryNetLocalSolver(config, new Microsoft.Extensions.Logging.Abstractions.NullLogger<AstrometryNetLocalSolver>()),
+              null) { }
 
     public IEnumerable<IPlateSolver> AllSolvers => _solvers.Values;
 
@@ -116,6 +121,16 @@ public class PlateSolveService {
         } else {
             primaryError = $"{primary.DisplayName} not available at {(primary as AstapSolver)?.SolverPath ?? "(unknown path)"}";
             _logger.LogInformation("Primary solver {Name} not available", primary.DisplayName);
+        }
+
+        // Asterion stands in for ASTAP, so ASTAP is its first fallback, before
+        // any blind solver: still local, and proven over years of frames.
+        if (primary is AsterionSolver && _solvers.TryGetValue("astap", out var astap) && astap.IsAvailable) {
+            _logger.LogInformation("Asterion did not solve; trying ASTAP");
+            try { onLog?.Invoke($"== fallback: {astap.DisplayName} =="); } catch { }
+            var astapResult = await astap.SolveAsync(fitsPath, options, ct, onLog);
+            if (astapResult.Success) { RecordSolve(astapResult, options.CaptureContext); return astapResult; }
+            primaryError = $"{primaryError}; {astap.DisplayName}: {astapResult.Error}";
         }
 
         var blind = BlindSolver;

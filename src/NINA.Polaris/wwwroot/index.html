@@ -49,7 +49,7 @@
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20261024-cloudhourly">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20261011-kblift">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20261016-bincap">
-    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20261015-checks">
+    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20261027-asterion">
     <link rel="stylesheet" href="/css/parts/09-mobile.css?v=20260801-hscroll">
     <link rel="stylesheet" href="/css/parts/10-density.css?v=20260728-slimaddr">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
@@ -16998,6 +16998,49 @@ Windows  winget install Rclone.Rclone</code></pre>
                         <span x-show="psSelectedSolver?.path" class="text-muted"> · <code x-text="psSelectedSolver?.path"></code></span>
                     </p>
 
+                    <!-- Asterion: a blind solver that finishes in tens of milliseconds.
+                         Installed from here (binary + one catalog) as an extra
+                         option: picking it as the solver is the operator's call,
+                         and ASTAP stays its fallback. -->
+                    <div class="asterion-box" x-show="asterion.status && asterion.status.supported">
+                        <div style="font-size:12px">
+                            <strong>Asterion</strong>
+                            <span class="text-muted" x-text="'v' + asterion.version"></span>
+                            <span class="text-muted">· a blind solver that usually finishes in well under a second</span>
+                        </div>
+                        <div class="text-muted" style="font-size:11px; margin-top:2px">
+                            <span x-show="asterion.status?.solverInstalled && asterion.status?.installedCatalogs?.length"
+                                  x-text="'Installed, catalogs: ' + (asterion.status?.installedCatalogs || []).join(', ')"></span>
+                            <span x-show="asterion.status?.solverInstalled && !asterion.status?.installedCatalogs?.length">Installed, but no catalog yet: add one below.</span>
+                            <span x-show="!asterion.status?.solverInstalled">Not installed. Pick a catalog for your field and install.</span>
+                            <span x-show="asterion.shortSideDeg > 0"
+                                  x-text="' · field ' + asterion.shortSideDeg.toFixed(2) + '° on its shorter side'"></span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px; margin-top:6px; flex-wrap:wrap"
+                             x-show="!asterion.status?.running">
+                            <select class="input-sm" style="flex:1; min-width:220px" x-model="asterion.pick">
+                                <template x-for="c in asterion.catalogs" :key="'ast-' + c.name">
+                                    <option :value="c.name" x-text="asterionCatalogLabel(c)"></option>
+                                </template>
+                            </select>
+                            <button class="btn btn-sm btn-primary" @click="asterionInstall()"
+                                    :disabled="!asterion.pick || (asterion.status?.installedCatalogs || []).includes(asterion.pick)"
+                                    x-text="asterion.status?.solverInstalled ? 'Add catalog' : 'Install Asterion'"></button>
+                        </div>
+                        <div style="margin-top:6px" x-show="asterion.status?.running" x-cloak>
+                            <div style="display:flex; align-items:center; gap:8px">
+                                <span style="font-size:12px; flex:1" x-text="asterionPhaseText()"></span>
+                                <button class="btn btn-sm btn-danger" @click="asterionCancel()">Cancel</button>
+                            </div>
+                            <div class="af-progress-bar" style="margin-top:6px" x-show="asterionPercent() != null">
+                                <div class="af-progress-fill" :style="'width: ' + (asterionPercent() || 0) + '%'"></div>
+                            </div>
+                        </div>
+                        <p class="text-danger" style="font-size:11px; margin:6px 0 0"
+                           x-show="asterion.status?.phase === 'error' && asterion.status?.error"
+                           x-text="asterion.status?.error"></p>
+                    </div>
+
                     <label style="display:flex; align-items:center; gap:12px; max-width:600px; margin-top:10px">
                         <span style="min-width:120px">Downsample</span>
                         <select class="input-sm" style="flex:1"
@@ -25903,7 +25946,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261025-capturedisk"></script>
+    <script src="/js/app.js?v=20261027-asterion2"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

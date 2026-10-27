@@ -1263,6 +1263,14 @@ label:has(> input[type="radio"]:not(.checkbox-native):disabled) {
    than the global select floor. The cap is the global one. */
 .storage-actions select.input-sm { min-width: 260px; }
 .storage-move { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.asterion-box {
+    max-width: 600px;
+    margin-top: 10px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.02);
+}
 .storage-err { margin: 8px 2px 0; font-size: 12px; color: var(--danger, #e66); }
 
 /* INDIAUTO: the note shown only when the equipment dialog opened by itself.
