@@ -194,6 +194,45 @@ public static class PlateSolveEndpoints {
             return Results.BadRequest(new { error = "target must be 'astap' or 'astrometry'." });
         });
 
+        // Asterion: what is installed, which catalog the rig's field needs, and
+        // the install in flight. The field's SHORTER side picks the catalog,
+        // the way Asterion's own table is written.
+        group.MapGet("/asterion", (AsterionInstallService asterion, ProfileService profiles, EquipmentManager equip) => {
+            var rig = profiles.ActiveEquipmentProfile;
+            var cam = equip.Camera;
+            var camPixel = cam?.PixelSizeY > 0 ? cam.PixelSizeY : (cam?.PixelSizeX ?? 0);
+            var pixelUm = camPixel > 0 ? camPixel : rig.CameraPixelSizeUm;
+            var sensorX = cam?.MaxX > 0 ? cam.MaxX : rig.CameraMaxX;
+            var sensorY = cam?.MaxY > 0 ? cam.MaxY : rig.CameraMaxY;
+            var scale = SolverDatabaseAdvisor.PixelScale(pixelUm, rig.FocalLengthMm);
+            var shortSide = scale > 0 && sensorX > 0 && sensorY > 0
+                ? Math.Min(sensorX, sensorY) * scale / 3600.0 : 0;
+            return Results.Ok(new {
+                version = AsterionInstallService.Version,
+                shortSideDeg = Math.Round(shortSide, 3),
+                catalogs = AsterionInstallService.Catalogs,
+                recommended = AsterionInstallService.Recommend(shortSide),
+                status = asterion.GetStatus()
+            });
+        });
+
+        // Install the solver (when missing) and one catalog, in the background.
+        group.MapPost("/asterion/install", (AsterionInstallRequest req, AsterionInstallService asterion) => {
+            if (!asterion.Supported)
+                return Results.BadRequest(new { error = "Asterion publishes no build for this platform." });
+            var catalog = (req.Catalog ?? "").Trim().ToLowerInvariant();
+            if (!AsterionInstallService.Catalogs.Any(c => c.Name == catalog))
+                return Results.BadRequest(new { error = $"Unknown Asterion catalog '{req.Catalog}'." });
+            return asterion.Start(catalog)
+                ? Results.Ok(new { started = true, catalog })
+                : Results.Conflict(new { error = "An Asterion install is already running." });
+        });
+
+        group.MapPost("/asterion/cancel", (AsterionInstallService asterion) => {
+            asterion.Cancel();
+            return Results.Ok(new { cancelled = true });
+        });
+
         // Progress of the in-flight install, for the card's bar.
         group.MapGet("/databases/status", (SolverDatabaseService dbs) => Results.Ok(dbs.State));
 
@@ -1100,6 +1139,7 @@ public static class PlateSolveEndpoints {
     /// <c>Target</c> is "astap" (then <c>Id</c> names the database) or
     /// "astrometry" (then <c>Scales</c> lists the index bands).</summary>
     public record SolverDbInstallRequest(string? Target, string? Id = null, List<int>? Scales = null);
+    public record AsterionInstallRequest(string? Catalog);
 
     /// <summary>Marker type for the ILogger&lt;T&gt; category --
     /// the static endpoint class itself can't be used as a generic

@@ -1545,6 +1545,10 @@ function ninaApp() {
         // backends (from /api/platesolve/solvers); psConfig is the editable
         // settings persisted via PUT /api/platesolve/config.
         psSolvers: [],
+        // Asterion block of the plate-solving card: catalogs, the rig's recommendation
+        // and the install in flight (/api/platesolve/asterion).
+        asterion: { version: '', catalogs: [], recommended: '', shortSideDeg: 0, status: null, pick: '' },
+        _asterionPoll: null,
         psConfig: {
             primary: 'astap', downsample: 2, searchRadiusDeg: 30,
             useBlindFallback: true, astapPath: '', astapDataDir: '',
@@ -36627,6 +36631,98 @@ function ninaApp() {
             return s === 'downloading' || s === 'installing';
         },
 
+        // ─── Asterion (fast blind solver, installed from this card) ───────
+
+        async loadAsterion() {
+            try {
+                const r = await this.apiGet('/api/platesolve/asterion');
+                if (!r) return;
+                const keep = this.asterion.pick;
+                this.asterion = { ...this.asterion, ...r };
+                const installed = r.status?.installedCatalogs || [];
+                const names = (r.catalogs || []).map(c => c.name);
+                this.asterion.pick = names.includes(keep) ? keep
+                    : (installed.includes(r.recommended) ? (names.find(n => !installed.includes(n)) || r.recommended) : r.recommended);
+                if (r.status?.running) this._asterionPollStart();
+            } catch (e) { /* the card simply shows no Asterion block */ }
+        },
+
+        asterionCatalogLabel(c) {
+            const st = this.asterion.status || {};
+            const tags = [];
+            if (c.name === this.asterion.recommended) tags.push('recommended for this rig');
+            if ((st.installedCatalogs || []).includes(c.name)) tags.push('installed');
+            return c.name + ' · ' + (c.indexBytes / 1e9).toFixed(1) + ' GB · fields from '
+                + (c.minFieldDeg >= 1 ? c.minFieldDeg + '°' : Math.round(c.minFieldDeg * 60) + '′')
+                + (tags.length ? ' (' + tags.join(', ') + ')' : '');
+        },
+
+        async asterionInstall() {
+            const c = (this.asterion.catalogs || []).find(x => x.name === this.asterion.pick);
+            if (!c) return;
+            const st = this.asterion.status || {};
+            const what = (st.solverInstalled ? '' : 'Asterion ' + this.asterion.version + ' (about 33 MB) and ')
+                + 'the ' + c.name + ' catalog (' + (c.downloadBytes / 1e9).toFixed(1) + ' GB to download, '
+                + (c.indexBytes / 1e9).toFixed(1) + ' GB on disk)';
+            const ok = await this._confirmAsync('Polaris will download ' + what + '. It keeps running while that happens.',
+                { title: 'Install Asterion?', okLabel: 'Download' });
+            if (!ok) return;
+            try {
+                await this.apiPost('/api/platesolve/asterion/install', { catalog: c.name });
+                this._asterionPollStart();
+            } catch (e) {
+                this.toastFail('Could not start the Asterion install', e);
+            }
+        },
+
+        async asterionCancel() {
+            try { await this.apiPost('/api/platesolve/asterion/cancel', {}); } catch (e) { /* the poll shows the outcome */ }
+        },
+
+        _asterionPollStart() {
+            if (this._asterionPoll) return;
+            this._asterionPoll = setInterval(async () => {
+                let r;
+                try { r = await this.apiGet('/api/platesolve/asterion'); } catch (e) { return; }
+                if (!r) return;
+                this.asterion = { ...this.asterion, ...r, pick: this.asterion.pick };
+                if (r.status?.running) return;
+                clearInterval(this._asterionPoll);
+                this._asterionPoll = null;
+                const st = r.status || {};
+                if (st.phase === 'done') {
+                    this.toast(st.switchedPrimary
+                        ? 'Asterion installed and set as the solver. ASTAP stays as its fallback.'
+                        : 'Asterion catalog ' + (st.catalog || '') + ' installed.', 'ok', 8000);
+                    this.loadPlateSolveConfig();
+                } else if (st.phase === 'error') {
+                    this.toast('Asterion install failed: ' + (st.error || 'unknown error'), 'error', 10000);
+                }
+            }, 1000);
+        },
+
+        asterionPhaseText() {
+            const st = this.asterion.status || {};
+            const mb = (b) => Math.round((b || 0) / 1e6);
+            switch (st.phase) {
+                case 'starting': return 'Starting…';
+                case 'downloading-solver': return 'Downloading Asterion ' + this.asterion.version
+                    + (st.bytesTotal ? ' · ' + mb(st.bytesDownloaded) + ' of ' + mb(st.bytesTotal) + ' MB' : '');
+                case 'verifying': return 'Checking the download against its published checksum…';
+                case 'extracting': return 'Unpacking…';
+                case 'catalog': return 'Installing the ' + (st.catalog || '') + ' catalog'
+                    + (st.step ? ' · ' + st.step : '') + (st.bytesDownloaded ? ' · ' + mb(st.bytesDownloaded) + ' MB' : '');
+                default: return '';
+            }
+        },
+
+        asterionPercent() {
+            const st = this.asterion.status || {};
+            if (st.phase === 'catalog' && st.fraction != null) return Math.round(st.fraction * 100);
+            if (st.phase === 'downloading-solver' && st.bytesTotal > 0) return Math.round(st.bytesDownloaded / st.bytesTotal * 100);
+            return null;
+        },
+
         async loadPlateSolveConfig() {
             this.psLoading = true;
             try {
@@ -36653,6 +36749,7 @@ function ninaApp() {
                     };
                 }
                 this.loadSolverDatabases();
+                this.loadAsterion();
             } catch (e) {
                 this.toastFail('Failed to load plate solve settings', e);
             } finally {

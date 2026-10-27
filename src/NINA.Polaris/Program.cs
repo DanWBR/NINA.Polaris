@@ -338,6 +338,8 @@ builder.Services.AddSingleton<NINA.Polaris.Services.PlateSolving.AstapSolver>();
 builder.Services.AddSingleton<NINA.Polaris.Services.PlateSolving.PlateSolve3Solver>();
 builder.Services.AddSingleton<NINA.Polaris.Services.PlateSolving.AstrometryNetOnlineSolver>();
 builder.Services.AddSingleton<NINA.Polaris.Services.PlateSolving.AstrometryNetLocalSolver>();
+builder.Services.AddSingleton<NINA.Polaris.Services.PlateSolving.AsterionInstallService>();
+builder.Services.AddSingleton<NINA.Polaris.Services.PlateSolving.AsterionSolver>();
 builder.Services.AddSingleton<PlateSolveService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.PlateSolving.PlateSolveProgressService>();
 // Server-authoritative current-exposure tracker so the per-frame countdown

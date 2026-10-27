@@ -35,11 +35,19 @@ public class AstapSolver : IPlateSolver {
         _profiles = profiles;
     }
 
-    public string Id => "astap";
-    public string DisplayName => "ASTAP";
+    public virtual string Id => "astap";
+    public virtual string DisplayName => "ASTAP";
     public bool SupportsBlindSolve => true;
 
-    public string SolverPath {
+    /// <summary>Words in front of ASTAP's own arguments, for a solver that
+    /// speaks ASTAP's command line under another executable
+    /// (<see cref="AsterionSolver"/> runs <c>asterion astap ...</c>).</summary>
+    protected virtual string CommandPrefix => "";
+
+    /// <summary>Last say over the process, e.g. an environment variable.</summary>
+    protected virtual void ConfigureProcess(ProcessStartInfo psi) { }
+
+    public virtual string SolverPath {
         get {
             // A path set in the UI (profile) wins, then appsettings config.
             var fromProfile = _profiles?.Active.AstapPath;
@@ -53,11 +61,11 @@ public class AstapSolver : IPlateSolver {
         }
     }
 
-    public bool IsAvailable => !string.IsNullOrEmpty(SolverPath) && File.Exists(SolverPath);
+    public virtual bool IsAvailable => !string.IsNullOrEmpty(SolverPath) && File.Exists(SolverPath);
 
     public async Task<PlateSolveResult> SolveAsync(string fitsPath, PlateSolveOptions options,
             CancellationToken ct = default, Action<string>? onLog = null) {
-        if (!IsAvailable) return PlateSolveResult.Failed("ASTAP not found at: " + SolverPath);
+        if (!IsAvailable) return PlateSolveResult.Failed(DisplayName + " not found at: " + SolverPath);
         if (!File.Exists(fitsPath)) return PlateSolveResult.Failed("FITS file not found: " + fitsPath);
 
         var result = await SolveOnceAsync(fitsPath, options, ct, onLog);
@@ -145,15 +153,15 @@ public class AstapSolver : IPlateSolver {
         }
 
         var args = BuildArgs(fitsPath, options);
-        _logger.LogInformation("Plate solving {File} with ASTAP: {Args}", fitsPath, args);
-        try { onLog?.Invoke($"$ {Path.GetFileName(SolverPath)} {args}"); } catch { }
+        _logger.LogInformation("Plate solving {File} with {Solver}: {Args}", fitsPath, DisplayName, args);
+        try { onLog?.Invoke($"$ {Path.GetFileName(SolverPath)} {CommandPrefix}{args}"); } catch { }
 
         try {
             ct.ThrowIfCancellationRequested();
-            using var proc = StartProcess(SolverPath, args);
+            using var proc = StartSolverProcess(args);
             var timeout = TimeSpan.FromSeconds(_config.GetValue("PlateSolve:TimeoutSeconds", 120));
             var run = await RunAstapProcessAsync(proc, timeout, ct);
-            if (run.TimedOut) return PlateSolveResult.Failed("ASTAP timed out");
+            if (run.TimedOut) return PlateSolveResult.Failed(DisplayName + " timed out");
             var stdout = run.Stdout;
             var stderr = run.Stderr;
 
@@ -184,7 +192,7 @@ public class AstapSolver : IPlateSolver {
                            : "(no output)";
                 return new PlateSolveResult {
                     Success = false, SolverUsed = Id, Output = output,
-                    Error = $"ASTAP failed (exit {proc.ExitCode}): {detail}"
+                    Error = $"{DisplayName} failed (exit {proc.ExitCode}): {detail}"
                 };
             }
 
@@ -199,15 +207,16 @@ public class AstapSolver : IPlateSolver {
         }
     }
 
-    private static Process StartProcess(string fileName, string args) {
+    private Process StartSolverProcess(string args) {
         var psi = new ProcessStartInfo {
-            FileName = fileName,
-            Arguments = args,
+            FileName = SolverPath,
+            Arguments = CommandPrefix + args,
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             CreateNoWindow = true
         };
+        ConfigureProcess(psi);
         var p = new Process { StartInfo = psi };
         p.Start();
         return p;
@@ -821,11 +830,11 @@ public class AstapSolver : IPlateSolver {
 
             try {
                 ct.ThrowIfCancellationRequested();
-                using var proc = StartProcess(SolverPath, args);
+                using var proc = StartSolverProcess(args);
                 var timeout = TimeSpan.FromSeconds(
                     _config.GetValue("PlateSolve:TimeoutSeconds", 120));
                 var run = await RunAstapProcessAsync(proc, timeout, ct);
-                if (run.TimedOut) return PlateSolveResult.Failed("ASTAP timed out");
+                if (run.TimedOut) return PlateSolveResult.Failed(DisplayName + " timed out");
                 var stdout = run.Stdout;
                 var stderr = run.Stderr;
 
