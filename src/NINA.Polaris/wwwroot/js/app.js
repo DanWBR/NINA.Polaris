@@ -4858,6 +4858,9 @@ function ninaApp() {
         // Settings by _refreshSkyNight(); null without SunCalc or a location.
         skyNight: null,
         skyNightOpen: false,
+        // HOME "Tonight" card (_homeNightAt), refreshed with skyNight and
+        // whenever the hourly cloud forecast arrives.
+        homeNight: null,
         _skyDawnWarned: 0,
         showCrosshair: false,
         showGrid: false,
@@ -17881,6 +17884,7 @@ function ninaApp() {
                 if (r?.available) {
                     this.cloudHourly.data = r;
                     this._cloudHourlyAt = Date.now();
+                    this._refreshHomeNight();
                 } else {
                     this.cloudHourly.data = null;
                     this.cloudHourly.error = r?.error || 'Hourly forecast unavailable';
@@ -46212,6 +46216,10 @@ function ninaApp() {
             }
             this.skyNight = this._skyNightAt(new Date(), lat, lng);
             this._maybeWarnDawn();
+            // HOME's card needs the hourly clouds; cached for 30 min here and
+            // on the host, so asking every 30 s costs nothing.
+            this.loadCloudHourly();
+            this._refreshHomeNight();
         },
 
         /// Everything the three LIVE widgets show, for one instant. The four
@@ -46259,19 +46267,8 @@ function ninaApp() {
             // does not rise), sampled every 5 min.
             const sunrise = events[1].at;
             const t1 = sunrise ? Math.min(sunrise, t0 + DAY) : t0 + DAY / 2;
-            const STEP = 5 * 60000, span = t1 - t0;
-            const kindOf = (a) => a > 0 ? 'day' : a > -6 ? 'civil' : a > -12 ? 'nautical' : a > -18 ? 'astro' : 'night';
-            const sun = [], moon = [];
-            let darkMs = 0, moonlessMs = 0;
-            for (let t = t0; t < t1; t += STEP) {
-                const w = Math.min(STEP, t1 - t);
-                const k = kindOf(sunAlt(t)), up = moonAlt(t) > 0;
-                const last = sun[sun.length - 1];
-                if (last && last.kind === k) last.ms += w; else sun.push({ kind: k, start: t, ms: w });
-                const lm = moon[moon.length - 1];
-                if (up) { if (lm && lm.end === t) { lm.end = t + w; } else moon.push({ start: t, end: t + w }); }
-                if (k === 'night') { darkMs += w; if (!up) moonlessMs += w; }
-            }
+            const span = t1 - t0;
+            const { sun, moon, darkMs, moonlessMs } = this._sampleNight(t0, t1, lat, lng);
             const pct = (ms) => Math.max(0, Math.min(100, ms / span * 100));
             // Events within 3 % of each other share one marker (a moonset four
             // minutes before dawn drew one icon over the other).
@@ -46301,6 +46298,116 @@ function ninaApp() {
                     endLabel: this._fmtLocalTime(new Date(t1)),
                 } : null,
             };
+        },
+
+        /// Sun and moon over [t0, t1), sampled every 5 min: runs of twilight
+        /// kind (day, civil, nautical, astro, night), stretches with the moon
+        /// up, and how much of the astronomical night is dark and moonless.
+        /// Sampled rather than read from SunCalc's events so it stays right
+        /// where a day has none (high latitudes).
+        _sampleNight(t0, t1, lat, lng) {
+            const RAD = 180 / Math.PI, STEP = 5 * 60000;
+            const kindOf = (a) => a > 0 ? 'day' : a > -6 ? 'civil' : a > -12 ? 'nautical' : a > -18 ? 'astro' : 'night';
+            const sun = [], moon = [];
+            let darkMs = 0, moonlessMs = 0;
+            for (let t = t0; t < t1; t += STEP) {
+                const w = Math.min(STEP, t1 - t);
+                const k = kindOf(SunCalc.getPosition(new Date(t), lat, lng).altitude * RAD);
+                const up = SunCalc.getMoonPosition(new Date(t), lat, lng).altitude > 0;
+                const last = sun[sun.length - 1];
+                if (last && last.kind === k) last.ms += w; else sun.push({ kind: k, start: t, ms: w });
+                const lm = moon[moon.length - 1];
+                if (up) { if (lm && lm.end === t) { lm.end = t + w; } else moon.push({ start: t, end: t + w }); }
+                if (k === 'night') { darkMs += w; if (!up) moonlessMs += w; }
+            }
+            return { sun, moon, darkMs, moonlessMs };
+        },
+
+        /// HOME "Tonight" card: the night under way (or the next one) from
+        /// sunset to sunrise, with the moon and the hourly cloud forecast on
+        /// the same time axis and a one-line verdict. Null without SunCalc,
+        /// a site, or a sunset in the next two days.
+        _homeNightAt(now, lat, lng, clouds) {
+            const DAY = 86400000, HOUR = 3600000, t0 = now.getTime();
+            const ok = (t) => t instanceof Date && !isNaN(t);
+            let from = null, to = null;
+            for (let k = -1; k <= 2 && from == null; k++) {
+                const day = new Date(t0 + k * DAY);
+                const eve = SunCalc.getTimes(day, lat, lng);
+                const morn = SunCalc.getTimes(new Date(day.getTime() + DAY), lat, lng);
+                if (!ok(eve.sunset) || !ok(morn.sunrise) || morn.sunrise.getTime() <= t0) continue;
+                from = eve.sunset.getTime(); to = morn.sunrise.getTime();
+            }
+            if (from == null || to <= from) return null;
+            const span = to - from, fmt = (t) => this._fmtLocalTime(new Date(t));
+            const pct = (ms) => Math.max(0, Math.min(100, ms / span * 100));
+            const s = this._sampleNight(from, to, lat, lng);
+            const illum = Math.round(SunCalc.getMoonIllumination(new Date(Math.min(Math.max(t0, from), to))).fraction * 100);
+
+            const EDGE = 10 * 60000;
+            let moonLabel = 'no moon tonight';
+            if (s.moon.length) {
+                const first = s.moon[0], last = s.moon[s.moon.length - 1];
+                const a = first.start <= from + EDGE ? null : first.start;
+                const b = last.end >= to - EDGE ? null : last.end;
+                moonLabel = a == null && b == null ? 'moon up all night'
+                    : a == null ? 'moon sets ' + fmt(b)
+                    : b == null ? 'moon rises ' + fmt(a)
+                    : 'moon up ' + fmt(a) + ' to ' + fmt(b);
+            }
+
+            const night = s.sun.filter(x => x.kind === 'night');
+            const darkFrom = night.length ? night[0].start : null;
+            const darkTo = night.length ? night[night.length - 1].start + night[night.length - 1].ms : null;
+            const cls = (v) => v == null ? 'cx' : v <= 20 ? 'c0' : v <= 40 ? 'c1' : v <= 60 ? 'c2' : v <= 80 ? 'c3' : 'c4';
+            const cells = (clouds?.hours || [])
+                .map(h => ({ h, t: Date.parse(h.utcStart) }))
+                .filter(x => x.t + HOUR > from && x.t < to)
+                .map(({ h, t }) => {
+                    const a = Math.max(t, from), b = Math.min(t + HOUR, to);
+                    const v = h.cloudCover == null ? null : Math.round(h.cloudCover);
+                    const mid = t + HOUR / 2;
+                    return { key: t, t, v, cls: cls(v), left: pct(a - from), width: pct(b - a),
+                             dark: darkFrom != null && mid >= darkFrom && mid <= darkTo,
+                             title: fmt(t) + ': clouds ' + (v ?? '?') + '%' };
+                });
+
+            let verdict;
+            const darkCells = cells.filter(c => c.dark && c.v != null);
+            if (darkFrom == null) verdict = 'No astronomical dark tonight';
+            else if (!darkCells.length) verdict = 'Dark ' + fmt(darkFrom) + ' to ' + fmt(darkTo);
+            else {
+                let best = null, run = null;
+                for (const c of darkCells) {
+                    if (c.v <= 25) {
+                        run = run ? { start: run.start, end: c.t + HOUR, n: run.n + 1 } : { start: c.t, end: c.t + HOUR, n: 1 };
+                        if (!best || run.n > best.n) best = run;
+                    } else run = null;
+                }
+                const mean = darkCells.reduce((a, c) => a + c.v, 0) / darkCells.length;
+                verdict = best && best.n === darkCells.length ? 'Clear all night'
+                    : best ? 'Clear ' + fmt(Math.max(best.start, darkFrom)) + ' to ' + fmt(Math.min(best.end, darkTo))
+                    : mean >= 60 ? 'Cloudy tonight' : 'Patchy cloud tonight';
+            }
+
+            return {
+                verdict,
+                dark: s.darkMs >= 60000 ? this._fmtCountdown(s.darkMs) : 'none',
+                moonless: s.moonlessMs >= 60000 ? this._fmtCountdown(s.moonlessMs) : 'none',
+                moonPct: illum,
+                sun: s.sun.map(x => ({ kind: x.kind, left: pct(x.start - from), width: pct(x.ms) })),
+                moon: s.moon.map(m => ({ left: pct(m.start - from), width: pct(m.end - m.start) })),
+                clouds: cells,
+                nowPct: t0 >= from && t0 <= to ? pct(t0 - from) : null,
+                sunsetLabel: fmt(from), sunriseLabel: fmt(to), moonLabel,
+            };
+        },
+
+        _refreshHomeNight() {
+            if (typeof SunCalc === 'undefined') return;
+            const lat = Number(this.settings.latitude), lng = Number(this.settings.longitude);
+            if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) { this.homeNight = null; return; }
+            this.homeNight = this._homeNightAt(new Date(), lat, lng, this.cloudHourly.data);
         },
 
         /// "38 min", "2h14", "now".
