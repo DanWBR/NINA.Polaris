@@ -90,6 +90,15 @@ public class CustomSolverTests {
             "solve", "/frames/my frame.fits", "--min-fov", "1.4", "--max-fov", "2.6", "--wcs", "/tmp/out.wcs" }));
     }
 
+    [Test]
+    public void TimeoutComesInSecondsAndMilliseconds() {
+        var args = CustomCommandSolver.BuildArguments("solve {image} --t {timeout} --deadline-ms {timeout_ms} --wcs {wcs}",
+            Values(new PlateSolveOptions()), out var error);
+        Assert.That(error, Is.Null);
+        Assert.That(args![3], Is.EqualTo("180"));
+        Assert.That(args[5], Is.EqualTo("180000"));
+    }
+
     // --- validation ---
 
     [Test]

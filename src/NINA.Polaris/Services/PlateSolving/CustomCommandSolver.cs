@@ -53,7 +53,7 @@ public class CustomCommandSolver : IPlateSolver {
     public static readonly string[] Placeholders = {
         "image", "wcs", "ra", "ra_hours", "dec", "radius",
         "fov", "fov_min", "fov_max", "scale", "scale_min", "scale_max",
-        "downsample", "timeout"
+        "downsample", "timeout", "timeout_ms"
     };
 
     public string Id => SolverId;
@@ -231,6 +231,7 @@ public class CustomCommandSolver : IPlateSolver {
             ["scale_max"] = scale ? F(options.ScaleArcsecPerPixel * 1.2) : null,
             ["downsample"] = Math.Max(1, options.Downsample).ToString(CultureInfo.InvariantCulture),
             ["timeout"] = timeoutSeconds.ToString(CultureInfo.InvariantCulture),
+            ["timeout_ms"] = (timeoutSeconds * 1000L).ToString(CultureInfo.InvariantCulture),
         };
     }
 
