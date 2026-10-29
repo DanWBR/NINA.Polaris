@@ -2343,6 +2343,7 @@ function ninaApp() {
         rotatorStepSlow: 1,
         rotatorStepFast: 10,
         rotatorGotoTarget: 0,
+        _rotatorGotoSeeded: false,
         rotatorGroupOpenFocus: true,
         rotatorGroupOpenVideo: false,
 
@@ -50705,6 +50706,16 @@ function ninaApp() {
                     moving: eq.rotator.moving,
                     reversed: eq.rotator.reversed
                 };
+                // Seed GoTo once per connection so VIDEO/FOCUS angle fields
+                // open on the live position instead of 0°.
+                if (eq.rotator.connected && typeof eq.rotator.position === 'number') {
+                    if (!this._rotatorGotoSeeded) {
+                        this.rotatorGotoTarget = Math.round(eq.rotator.position * 10) / 10;
+                        this._rotatorGotoSeeded = true;
+                    }
+                } else {
+                    this._rotatorGotoSeeded = false;
+                }
             }
             if (eq.powerBox) {
                 this.powerBox = {

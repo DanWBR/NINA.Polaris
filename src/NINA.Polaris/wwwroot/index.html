@@ -4436,6 +4436,22 @@
                                     :disabled="!focusJogConnected"
                                     @click="focusAbort()" title="Stop the focuser now. Cancels a hold-to-repeat nudge as well as a move already running.">&#9632;</button>
                             </div>
+                            <!-- Absolute go-to: same row as PREVIEW so the
+                                 operator can type a position without leaving
+                                 VIDEO for the FOCUS tab. -->
+                            <div class="control-row preview-focus-goto-row" style="display:flex; flex-direction:row; align-items:center; gap:6px; margin-top:4px; flex-wrap:nowrap">
+                                <span class="text-muted" style="font-size:12px; flex:0 0 auto; white-space:nowrap">GoTo Position</span>
+                                <input type="number" min="0" step="1"
+                                       class="input-sm focus-goto-inline" style="flex:1 1 auto; min-width:40px"
+                                       x-model.number="focusGotoTarget"
+                                       :disabled="!focusJogConnected || focusMoving"
+                                       @keydown.enter.prevent="focusMoveTo(focusGotoTarget)"
+                                       title="Type an absolute focuser position">
+                                <button class="btn btn-sm" style="flex:0 0 auto"
+                                        :disabled="!focusJogConnected || focusMoving"
+                                        @click="focusMoveTo(focusGotoTarget)"
+                                        title="Go to the entered position">Go</button>
+                            </div>
                         </details>
 
                         <!-- Rotator, same shape as the focus group above it:
@@ -4475,6 +4491,19 @@
                             <button class="btn btn-sm btn-danger focus-stop" style="flex:0 0 auto"
                                     :disabled="!rotator.connected"
                                     @click="rotatorAbort()" title="Stop the rotator now. Cancels a hold-to-repeat nudge as well as a move already running.">&#9632;</button>
+                            </div>
+                            <div class="control-row preview-focus-goto-row" style="display:flex; flex-direction:row; align-items:center; gap:6px; margin-top:4px; flex-wrap:nowrap">
+                                <span class="text-muted" style="font-size:12px; flex:0 0 auto; white-space:nowrap">GoTo Angle</span>
+                                <input type="number" min="0" max="360" step="0.1"
+                                       class="input-sm focus-goto-inline" style="flex:1 1 auto; min-width:40px"
+                                       x-model.number="rotatorGotoTarget"
+                                       :disabled="!rotator.connected || rotator.moving"
+                                       @keydown.enter.prevent="rotatorMoveToAngle(rotatorGotoTarget)"
+                                       title="Type an absolute rotator angle in degrees">
+                                <button class="btn btn-sm" style="flex:0 0 auto"
+                                        :disabled="!rotator.connected || rotator.moving"
+                                        @click="rotatorMoveToAngle(rotatorGotoTarget)"
+                                        title="Go to the entered angle">Go</button>
                             </div>
                         </details>
 
