@@ -53,3 +53,51 @@ Once that returns, the new entity is:
 
 Failures are isolated: if one plugin throws during load or `Register`,
 it's logged and skipped, and the rest of the host keeps running.
+
+## Contributing a plate solver
+
+A plugin can also add a plate solver. Implement
+`NINA.Polaris.Services.PlateSolving.IPlateSolver` and register an
+instance from `Register`:
+
+```csharp
+public void Register(IPluginRegistry registry) {
+    registry.RegisterPlateSolver(new MySolver());
+}
+```
+
+The solver then:
+
+- Appears in `GET /api/platesolve/solvers` and in the Solver list of
+  Settings > Plate solving.
+- Can be picked as the primary solver, and as the blind solver when
+  `SupportsBlindSolve` is true.
+- Runs through the same dispatcher as the built-in solvers, so the
+  fallbacks, the progress log, the timeout and the Cancel button work
+  the same way.
+
+The contract:
+
+- `Id` is what the profile stores, so keep it stable across versions.
+  Built-in ids (`astap`, `asterion`, `custom` and the others) and an id
+  another plugin already registered are refused with
+  `InvalidOperationException`.
+- `IsAvailable` is read every time the solver list is shown or a solve
+  starts. Keep it cheap: a file-exists check, not a test run.
+- `SolveAsync` gets a FITS path and returns a `PlateSolveResult` with RA
+  (hours and degrees), Dec, pixel scale and rotation for the field
+  centre. Fill the CD matrix and `CrPix1/2` when the solver reports them:
+  they carry the mirror flip that the rotation alone cannot. Return
+  `PlateSolveResult.Failed(...)` for a solver-level failure instead of
+  throwing.
+- Honour the cancellation token, and kill any process you start
+  (`Process.Kill(entireProcessTree: true)`), so a cancelled solve leaves
+  nothing running.
+
+On a Polaris rig the plugin folder is `/opt/polaris/plugins`. An apt
+upgrade only replaces the files the package owns, so a plugin there
+survives updates. Restart Polaris after adding or removing one.
+
+A solver that only needs a command line and writes a FITS WCS file does
+not need a plugin: Settings > Plate solving > Custom solver runs it from
+an executable path and an argument template.

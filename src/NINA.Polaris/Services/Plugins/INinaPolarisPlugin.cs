@@ -12,6 +12,7 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using NINA.Polaris.Services.PlateSolving;
 using NINA.Polaris.Services.Sequencer;
 
 namespace NINA.Polaris.Services.Plugins;
@@ -23,9 +24,10 @@ namespace NINA.Polaris.Services.Plugins;
 /// reference <c>NINA.Polaris.dll</c> at compile time and are loaded
 /// at app startup via an isolated <see cref="System.Runtime.Loader.AssemblyLoadContext"/>.
 ///
-/// V1 capability: contribute custom sequencer entities (instructions,
-/// containers, conditions, triggers) into the palette + JSON converter.
-/// Future versions may add device-driver and UI-panel hooks.
+/// Capabilities: contribute custom sequencer entities (instructions,
+/// containers, conditions, triggers) into the palette + JSON converter, and
+/// plate solvers into the solver list. Future versions may add device-driver
+/// and UI-panel hooks.
 /// </summary>
 public interface INinaPolarisPlugin {
     /// <summary>Human-readable plugin name shown in the admin UI.</summary>
@@ -49,9 +51,9 @@ public interface INinaPolarisPlugin {
 }
 
 /// <summary>
-/// Surface the plugin uses to extend the host. Today the only extension
-/// point is the sequencer entity registry; the interface lives in its
-/// own type so we can add more without breaking existing plugins.
+/// Surface the plugin uses to extend the host: sequencer entities and plate
+/// solvers. The interface lives in its own type so we can add more without
+/// breaking existing plugins.
 /// </summary>
 public interface IPluginRegistry {
     /// <summary>
@@ -66,4 +68,18 @@ public interface IPluginRegistry {
 
     /// <summary>Same as above but with an explicit CLR type for runtime registration.</summary>
     void RegisterSequencerEntity(Type entityType, string category);
+
+    /// <summary>
+    /// Add a plate solver. It then appears in <c>/api/platesolve/solvers</c>,
+    /// can be picked as the primary solver (and as the blind fallback when
+    /// <see cref="IPlateSolver.SupportsBlindSolve"/> is true), and is called
+    /// through the same dispatcher, timeout and cancellation as the built-in
+    /// ones. The <see cref="IPlateSolver.Id"/> is what the profile stores, so
+    /// keep it stable across versions. Built-in ids and an id another plugin
+    /// already took are refused with <see cref="InvalidOperationException"/>.
+    /// <see cref="IPlateSolver.SolveAsync"/> must honour its cancellation token
+    /// and kill any process it started; <see cref="IPlateSolver.IsAvailable"/>
+    /// is read often, so keep it cheap.
+    /// </summary>
+    void RegisterPlateSolver(IPlateSolver solver);
 }

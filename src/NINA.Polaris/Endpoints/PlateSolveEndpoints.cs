@@ -45,6 +45,12 @@ public static class PlateSolveEndpoints {
 
         // List every plate-solving backend with its install status, so the
         // Settings card can show what's available and let the user pick one.
+        // Whether the custom solver can run as configured, and why not.
+        group.MapGet("/custom/check", (CustomCommandSolver custom) => {
+            var problem = custom.Validate();
+            return Results.Ok(new { ok = problem == null, problem });
+        });
+
         group.MapGet("/solvers", (PlateSolveService solver) => {
             return Results.Ok(solver.AllSolvers.Select(s => new {
                 id = s.Id,
@@ -260,12 +266,18 @@ public static class PlateSolveEndpoints {
                 downsample = p.PlateSolveDownsample,
                 searchRadiusDeg = p.PlateSolveSearchRadiusDeg,
                 useBlindFallback = p.PlateSolveUseBlindFallback,
+                blindSolver = p.PlateSolveBlindSolver,
                 astapPath = p.AstapPath,
                 astapDataDir = p.AstapDataDir,
                 astrometryApiKey = p.AstrometryApiKey,
                 solveFieldPath = p.SolveFieldPath,
                 useWsl = p.PlateSolveUseWsl,
-                wslDistro = p.PlateSolveWslDistro
+                wslDistro = p.PlateSolveWslDistro,
+                customName = p.CustomSolverName,
+                customPath = p.CustomSolverPath,
+                customArgs = p.CustomSolverArgs,
+                customBlind = p.CustomSolverBlind,
+                customPlaceholders = CustomCommandSolver.Placeholders
             });
         });
 
@@ -276,6 +288,7 @@ public static class PlateSolveEndpoints {
                 if (update.Downsample.HasValue) p.PlateSolveDownsample = Math.Clamp(update.Downsample.Value, 0, 4);
                 if (update.SearchRadiusDeg.HasValue) p.PlateSolveSearchRadiusDeg = Math.Clamp(update.SearchRadiusDeg.Value, 1, 180);
                 if (update.UseBlindFallback.HasValue) p.PlateSolveUseBlindFallback = update.UseBlindFallback.Value;
+                if (update.BlindSolver != null) p.PlateSolveBlindSolver = string.IsNullOrWhiteSpace(update.BlindSolver) ? null : update.BlindSolver.Trim();
                 // Empty string clears the override (back to auto-detect); null leaves as-is.
                 if (update.AstapPath != null) p.AstapPath = string.IsNullOrWhiteSpace(update.AstapPath) ? null : update.AstapPath.Trim();
                 if (update.AstapDataDir != null) p.AstapDataDir = string.IsNullOrWhiteSpace(update.AstapDataDir) ? null : update.AstapDataDir.Trim();
@@ -283,6 +296,10 @@ public static class PlateSolveEndpoints {
                 if (update.SolveFieldPath != null) p.SolveFieldPath = string.IsNullOrWhiteSpace(update.SolveFieldPath) ? null : update.SolveFieldPath.Trim();
                 if (update.UseWsl.HasValue) p.PlateSolveUseWsl = update.UseWsl.Value;
                 if (update.WslDistro != null) p.PlateSolveWslDistro = string.IsNullOrWhiteSpace(update.WslDistro) ? null : update.WslDistro.Trim();
+                if (update.CustomName != null) p.CustomSolverName = string.IsNullOrWhiteSpace(update.CustomName) ? null : update.CustomName.Trim();
+                if (update.CustomPath != null) p.CustomSolverPath = string.IsNullOrWhiteSpace(update.CustomPath) ? null : update.CustomPath.Trim();
+                if (update.CustomArgs != null) p.CustomSolverArgs = string.IsNullOrWhiteSpace(update.CustomArgs) ? null : update.CustomArgs.Trim();
+                if (update.CustomBlind.HasValue) p.CustomSolverBlind = update.CustomBlind.Value;
             });
             return Results.Ok(new { message = "Plate solve settings saved" });
         });
@@ -1133,7 +1150,12 @@ public static class PlateSolveEndpoints {
         string? AstrometryApiKey = null,
         string? SolveFieldPath = null,
         bool? UseWsl = null,
-        string? WslDistro = null);
+        string? WslDistro = null,
+        string? BlindSolver = null,
+        string? CustomName = null,
+        string? CustomPath = null,
+        string? CustomArgs = null,
+        bool? CustomBlind = null);
 
     /// <summary>POST body for <c>/api/platesolve/databases/install</c>.
     /// <c>Target</c> is "astap" (then <c>Id</c> names the database) or

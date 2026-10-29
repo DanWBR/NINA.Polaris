@@ -36,14 +36,17 @@ public class PlateSolveService {
     private readonly ILogger<PlateSolveService> _logger;
     private readonly ProfileService? _profiles;
     private readonly IReadOnlyDictionary<string, IPlateSolver> _solvers;
+    private readonly PlateSolverRegistry? _plugins;
 
     public PlateSolveService(IConfiguration config, ILogger<PlateSolveService> logger,
         AstapSolver astap, PlateSolve3Solver ps3,
         AstrometryNetOnlineSolver netOnline, AstrometryNetLocalSolver netLocal,
-        AsterionSolver? asterion, ProfileService? profiles = null) {
+        AsterionSolver? asterion, ProfileService? profiles = null,
+        CustomCommandSolver? custom = null, PlateSolverRegistry? plugins = null) {
         _config = config;
         _logger = logger;
         _profiles = profiles;
+        _plugins = plugins;
         var solvers = new Dictionary<string, IPlateSolver>(StringComparer.OrdinalIgnoreCase) {
             [astap.Id] = astap,
             [ps3.Id] = ps3,
@@ -51,6 +54,7 @@ public class PlateSolveService {
             [netLocal.Id] = netLocal
         };
         if (asterion != null) solvers[asterion.Id] = asterion;
+        if (custom != null) solvers[custom.Id] = custom;
         _solvers = solvers;
     }
 
@@ -63,7 +67,13 @@ public class PlateSolveService {
               new AstrometryNetLocalSolver(config, new Microsoft.Extensions.Logging.Abstractions.NullLogger<AstrometryNetLocalSolver>()),
               null) { }
 
-    public IEnumerable<IPlateSolver> AllSolvers => _solvers.Values;
+    /// <summary>The host's solvers, then the ones plugins registered.</summary>
+    public IEnumerable<IPlateSolver> AllSolvers =>
+        _plugins == null ? _solvers.Values : _solvers.Values.Concat(_plugins.Solvers);
+
+    /// <summary>A solver by id, built-in or from a plugin.</summary>
+    public IPlateSolver? FindSolver(string id) =>
+        _solvers.TryGetValue(id, out var s) ? s : _plugins?.Find(id);
 
     /// <summary>The most recent successful solve (coords + when), shared so the
     /// capture pipeline can name the saved-frame folder from the actual sky
@@ -87,7 +97,7 @@ public class PlateSolveService {
             var id = !string.IsNullOrWhiteSpace(_profiles?.Active.PlateSolvePrimary)
                 ? _profiles!.Active.PlateSolvePrimary
                 : _config.GetValue("PlateSolve:PrimarySolver", "astap")!;
-            return _solvers.TryGetValue(id, out var s) ? s : _solvers["astap"];
+            return FindSolver(id) ?? _solvers["astap"];
         }
     }
 
@@ -97,8 +107,11 @@ public class PlateSolveService {
                 ? _profiles.Active.PlateSolveUseBlindFallback
                 : _config.GetValue("PlateSolve:UseBlindFallback", true);
             if (!useBlind) return null;
-            var id = _config.GetValue("PlateSolve:BlindSolver", "astrometry-net-online")!;
-            return _solvers.TryGetValue(id, out var s) && s.SupportsBlindSolve ? s : null;
+            var id = !string.IsNullOrWhiteSpace(_profiles?.Active.PlateSolveBlindSolver)
+                ? _profiles!.Active.PlateSolveBlindSolver!
+                : _config.GetValue("PlateSolve:BlindSolver", "astrometry-net-online")!;
+            var s = FindSolver(id);
+            return s != null && s.SupportsBlindSolve ? s : null;
         }
     }
 
@@ -119,7 +132,9 @@ public class PlateSolveService {
             primaryError = result.Error;
             _logger.LogWarning("Primary solver {Name} failed: {Err}", primary.DisplayName, result.Error);
         } else {
-            primaryError = $"{primary.DisplayName} not available at {(primary as AstapSolver)?.SolverPath ?? "(unknown path)"}";
+            primaryError = primary is CustomCommandSolver custom
+                ? $"{custom.DisplayName} not available: {custom.Validate()}"
+                : $"{primary.DisplayName} not available at {(primary as AstapSolver)?.SolverPath ?? "(unknown path)"}";
             _logger.LogInformation("Primary solver {Name} not available", primary.DisplayName);
         }
 

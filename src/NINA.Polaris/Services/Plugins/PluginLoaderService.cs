@@ -14,6 +14,7 @@
 
 using System.Reflection;
 using System.Runtime.Loader;
+using NINA.Polaris.Services.PlateSolving;
 using NINA.Polaris.Services.Sequencer;
 
 namespace NINA.Polaris.Services.Plugins;
@@ -31,11 +32,14 @@ namespace NINA.Polaris.Services.Plugins;
 public class PluginLoaderService : IHostedService {
     private readonly IConfiguration _config;
     private readonly ILogger<PluginLoaderService> _logger;
+    private readonly PlateSolverRegistry _solvers;
     private readonly List<LoadedPlugin> _loaded = new();
 
-    public PluginLoaderService(IConfiguration config, ILogger<PluginLoaderService> logger) {
+    public PluginLoaderService(IConfiguration config, ILogger<PluginLoaderService> logger,
+                               PlateSolverRegistry? solvers = null) {
         _config = config;
         _logger = logger;
+        _solvers = solvers ?? new PlateSolverRegistry();
     }
 
     public IReadOnlyList<LoadedPlugin> LoadedPlugins => _loaded;
@@ -75,16 +79,18 @@ public class PluginLoaderService : IHostedService {
                 try {
                     var plugin = (INinaPolarisPlugin?)Activator.CreateInstance(t)
                         ?? throw new InvalidOperationException("Activator returned null");
-                    var registry = new PluginRegistry(plugin.Name, _logger);
+                    var registry = new PluginRegistry(plugin.Name, _logger, _solvers);
                     plugin.Register(registry);
                     _loaded.Add(new LoadedPlugin {
                         Name = plugin.Name, Version = plugin.Version,
                         Description = plugin.Description, Author = plugin.Author,
                         Assembly = Path.GetFileName(path),
-                        EntityDiscriminators = registry.RegisteredDiscriminators.ToArray()
+                        EntityDiscriminators = registry.RegisteredDiscriminators.ToArray(),
+                        PlateSolverIds = registry.RegisteredSolvers.ToArray()
                     });
-                    _logger.LogInformation("Loaded plugin '{Name}' v{Version} from {Asm} ({Count} entities)",
-                        plugin.Name, plugin.Version, Path.GetFileName(path), registry.RegisteredDiscriminators.Count);
+                    _logger.LogInformation("Loaded plugin '{Name}' v{Version} from {Asm} ({Count} entities, {Solvers} solvers)",
+                        plugin.Name, plugin.Version, Path.GetFileName(path), registry.RegisteredDiscriminators.Count,
+                        registry.RegisteredSolvers.Count);
                 } catch (Exception ex) {
                     _logger.LogError(ex, "Plugin type {Type} in {Path} failed to register", t.FullName, path);
                 }
@@ -99,11 +105,14 @@ public class PluginLoaderService : IHostedService {
     private class PluginRegistry : IPluginRegistry {
         private readonly string _pluginName;
         private readonly ILogger _logger;
+        private readonly PlateSolverRegistry _solvers;
         public List<string> RegisteredDiscriminators { get; } = new();
+        public List<string> RegisteredSolvers { get; } = new();
 
-        public PluginRegistry(string pluginName, ILogger logger) {
+        public PluginRegistry(string pluginName, ILogger logger, PlateSolverRegistry solvers) {
             _pluginName = pluginName;
             _logger = logger;
+            _solvers = solvers;
         }
 
         public void RegisterSequencerEntity<TEntity>(string category) where TEntity : ISequenceEntity, new() {
@@ -115,6 +124,14 @@ public class PluginLoaderService : IHostedService {
             RegisteredDiscriminators.Add(discriminator);
             _logger.LogInformation("  [{Plugin}] +entity '{Disc}' → {Category}", _pluginName, discriminator, category);
         }
+
+        public void RegisterPlateSolver(IPlateSolver solver) {
+            var refused = _solvers.Add(solver, $"plugin '{_pluginName}'");
+            if (refused != null)
+                throw new InvalidOperationException($"Plate solver refused: {refused}.");
+            RegisteredSolvers.Add(solver.Id);
+            _logger.LogInformation("  [{Plugin}] +plate solver '{Id}' ({Name})", _pluginName, solver.Id, solver.DisplayName);
+        }
     }
 }
 
@@ -125,6 +142,7 @@ public class LoadedPlugin {
     public string Author { get; set; } = "";
     public string Assembly { get; set; } = "";
     public string[] EntityDiscriminators { get; set; } = Array.Empty<string>();
+    public string[] PlateSolverIds { get; set; } = Array.Empty<string>();
 }
 
 /// <summary>
