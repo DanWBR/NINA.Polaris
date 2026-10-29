@@ -17211,7 +17211,8 @@ Windows  winget install Rclone.Rclone</code></pre>
                             <template x-for="(ph, i) in psCustomPlaceholders" :key="'ph-' + ph">
                                 <span><code x-text="'{' + ph + '}'"></code><span x-show="i < psCustomPlaceholders.length - 1">, </span></span>
                             </template>.
-                            RA, Dec, radius and FOV are in degrees, scale in arcsec per pixel.
+                            RA, Dec, radius and FOV are in degrees, scale in arcsec per pixel,
+                            <code>{timeout}</code> in seconds and <code>{timeout_ms}</code> in milliseconds.
                             Put flags that need a hint in square brackets, like
                             <code>[--ra {ra} --dec {dec} --radius {radius}]</code>: the group is left out
                             when the solve has no hint. Double quotes keep text with spaces together.
