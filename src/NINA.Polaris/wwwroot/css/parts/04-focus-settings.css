@@ -1420,6 +1420,69 @@
         rgba(5, 8, 16, 0.00) 100%);
 }
 .home-hero-text {  }
+/* HOME "Tonight" card, right of the hero text; drops below it on narrow
+   screens. Night bar colours match the LIVE overlay's (.live-night). */
+/* flex-shrink: the panel is a flex column, and a hero allowed to shrink
+   stayed at its min-height while the card spilled over the status cards. */
+.home-hero { gap: 24px; flex-wrap: wrap; justify-content: space-between; flex-shrink: 0; }
+.home-hero .home-hero-text { flex: 1 1 340px; min-width: 0; }
+.home-tonight {
+    flex: 0 1 360px;
+    max-width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 14px;
+    text-align: left;
+    color: var(--text-primary);
+    font: inherit;
+    background: rgba(8, 12, 24, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 12px;
+    cursor: pointer;
+}
+.home-tonight:hover { border-color: rgba(255, 255, 255, 0.22); }
+.home-tonight .ht-eyebrow {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-secondary);
+}
+.home-tonight .ht-verdict { font-size: 16px; font-weight: 600; }
+.home-tonight .ht-stats { display: flex; gap: 14px; font-size: 12px; color: var(--text-secondary); }
+.home-tonight .ht-stats b { color: var(--text-primary); font-weight: 600; }
+.home-tonight .ht-bar,
+.home-tonight .ht-clouds {
+    position: relative;
+    display: block;
+    border-radius: 5px;
+    overflow: hidden;
+}
+.home-tonight .ht-bar { height: 12px; margin-top: 4px; background: #161d38; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14); }
+.home-tonight .ht-clouds { height: 8px; background: rgba(255, 255, 255, 0.06); }
+.home-tonight .ht-bar i,
+.home-tonight .ht-clouds i { position: absolute; top: 0; bottom: 0; }
+.home-tonight .ln-night { background: #161d38; }
+.home-tonight .ln-astro { background: #1d2a52; }
+.home-tonight .ln-nautical { background: #34508f; }
+.home-tonight .ln-civil { background: #6b8fd1; }
+.home-tonight .ln-day { background: #e8c46a; }
+.home-tonight .ht-bar .ht-moon { top: auto; height: 4px; background: rgba(230, 230, 210, 0.85); }
+.home-tonight .ht-bar .ht-now { width: 2px; margin-left: -1px; background: #ffd54f; }
+.home-tonight .ht-clouds .c0 { background: #4caf50; }
+.home-tonight .ht-clouds .c1 { background: #9ccc65; }
+.home-tonight .ht-clouds .c2 { background: #ffd54f; }
+.home-tonight .ht-clouds .c3 { background: #ff8a65; }
+.home-tonight .ht-clouds .c4 { background: #e57373; }
+.home-tonight .ht-clouds .cx { background: transparent; }
+.home-tonight .ht-scale {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+}
 .home-eyebrow {
     /* Same brand wordmark as the header, no pill chrome. Children
        (.brand-name, .brand-tag, .brand-version) inherit their look
