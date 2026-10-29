@@ -1551,10 +1551,15 @@ function ninaApp() {
         _asterionPoll: null,
         psConfig: {
             primary: 'astap', downsample: 2, searchRadiusDeg: 30,
-            useBlindFallback: true, astapPath: '', astapDataDir: '',
+            useBlindFallback: true, blindSolver: '', astapPath: '', astapDataDir: '',
             astrometryApiKey: '',
-            solveFieldPath: '', useWsl: false, wslDistro: ''
+            solveFieldPath: '', useWsl: false, wslDistro: '',
+            customName: '', customPath: '', customArgs: '', customBlind: false
         },
+        // /api/platesolve/custom/check for the saved custom solver, and the
+        // placeholder names its template accepts.
+        psCustomCheck: null,
+        psCustomPlaceholders: [],
         psLoading: false,
         psSaving: false,
         // Native guider per-axis algorithm selection (PHD2 defaults:
@@ -36744,23 +36749,31 @@ function ninaApp() {
                 // Retried: same boot-burst dropped request as the optics
                 // catalogue, and this one toasted an error at the operator on
                 // the HOME screen before anything was even connected.
-                const [solvers, cfg] = await this._retryGet(() => Promise.all([
+                const [solvers, cfg, customCheck] = await this._retryGet(() => Promise.all([
                     this.apiGet('/api/platesolve/solvers'),
-                    this.apiGet('/api/platesolve/config')
+                    this.apiGet('/api/platesolve/config'),
+                    this.apiGet('/api/platesolve/custom/check')
                 ]), 3, 600, 'plate solve config');
                 this.psSolvers = solvers || [];
+                this.psCustomCheck = customCheck || null;
+                this.psCustomPlaceholders = cfg?.customPlaceholders || [];
                 if (cfg) {
                     this.psConfig = {
                         primary: cfg.primary || 'astap',
                         downsample: cfg.downsample ?? 2,
                         searchRadiusDeg: cfg.searchRadiusDeg ?? 30,
                         useBlindFallback: cfg.useBlindFallback !== false,
+                        blindSolver: cfg.blindSolver || '',
                         astapPath: cfg.astapPath || '',
                         astapDataDir: cfg.astapDataDir || '',
                         astrometryApiKey: cfg.astrometryApiKey || '',
                         solveFieldPath: cfg.solveFieldPath || '',
                         useWsl: !!cfg.useWsl,
-                        wslDistro: cfg.wslDistro || ''
+                        wslDistro: cfg.wslDistro || '',
+                        customName: cfg.customName || '',
+                        customPath: cfg.customPath || '',
+                        customArgs: cfg.customArgs || '',
+                        customBlind: !!cfg.customBlind
                     };
                 }
                 this.loadSolverDatabases();
@@ -36779,13 +36792,18 @@ function ninaApp() {
                     downsample: Number(this.psConfig.downsample),
                     searchRadiusDeg: Number(this.psConfig.searchRadiusDeg),
                     useBlindFallback: !!this.psConfig.useBlindFallback,
+                    blindSolver: this.psConfig.blindSolver || '',
                     // Empty string clears the override server-side (back to auto).
                     astapPath: this.psConfig.astapPath || '',
                     astapDataDir: this.psConfig.astapDataDir || '',
                     astrometryApiKey: this.psConfig.astrometryApiKey || '',
                     solveFieldPath: this.psConfig.solveFieldPath || '',
                     useWsl: !!this.psConfig.useWsl,
-                    wslDistro: this.psConfig.wslDistro || ''
+                    wslDistro: this.psConfig.wslDistro || '',
+                    customName: this.psConfig.customName || '',
+                    customPath: this.psConfig.customPath || '',
+                    customArgs: this.psConfig.customArgs || '',
+                    customBlind: !!this.psConfig.customBlind
                 });
                 this.toast('Plate solve settings saved', 'ok');
                 await this.loadPlateSolveConfig();

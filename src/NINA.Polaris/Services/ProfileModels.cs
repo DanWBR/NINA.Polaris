@@ -171,6 +171,9 @@ public class UserProfile {
     public double PlateSolveSearchRadiusDeg { get; set; } = 30;
     /// <summary>Fall back to a blind-capable solver if the primary fails.</summary>
     public bool PlateSolveUseBlindFallback { get; set; } = true;
+    /// <summary>Solver id the blind fallback uses. Empty = the
+    /// <c>PlateSolve:BlindSolver</c> setting (online astrometry.net).</summary>
+    public string? PlateSolveBlindSolver { get; set; }
     /// <summary>API key for the nova.astrometry.net online solver (free, from
     /// the site's Profile → API Key). Empty = the online solver stays disabled
     /// ("not installed" in the card).</summary>
@@ -188,6 +191,18 @@ public class UserProfile {
     /// <summary>Optional WSL distro name (wsl.exe -d &lt;distro&gt;). Empty =
     /// the default distro.</summary>
     public string? PlateSolveWslDistro { get; set; }
+    /// <summary>Name the custom solver shows in the solver list. Empty =
+    /// "Custom solver".</summary>
+    public string? CustomSolverName { get; set; }
+    /// <summary>Executable of the custom solver: an absolute path or a command
+    /// on the PATH. Empty = the custom solver is off.</summary>
+    public string? CustomSolverPath { get; set; }
+    /// <summary>Argument template for the custom solver, with placeholders such
+    /// as <c>{image}</c> and <c>{wcs}</c>; see <c>CustomCommandSolver</c>.</summary>
+    public string? CustomSolverArgs { get; set; }
+    /// <summary>The custom solver needs no RA/Dec hint, so it can serve as the
+    /// blind fallback.</summary>
+    public bool CustomSolverBlind { get; set; }
 
     // TLS-1: Let's Encrypt via DuckDNS DNS-01 challenge. Replaces the
     // self-signed cert with a real publicly-trusted cert when the user

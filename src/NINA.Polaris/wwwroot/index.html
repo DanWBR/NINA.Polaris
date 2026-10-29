@@ -16731,7 +16731,7 @@ Windows  winget install Rclone.Rclone</code></pre>
                                 @change="psConfig.primary = $event.target.value">
                             <template x-for="s in psSolvers" :key="s.id">
                                 <option :value="s.id" :selected="psConfig.primary === s.id"
-                                        x-text="s.name + (s.available ? '' : (s.id === 'astrometry-net-online' ? ' (needs API key)' : ' (not installed)'))"></option>
+                                        x-text="s.name + (s.available ? '' : (s.id === 'astrometry-net-online' ? ' (needs API key)' : s.id === 'custom' ? ' (not set up)' : ' (not installed)'))"></option>
                             </template>
                         </select>
                     </label>
@@ -16742,7 +16742,9 @@ Windows  winget install Rclone.Rclone</code></pre>
                         <span x-show="!psSelectedSolver?.available && psSelectedSolver?.id === 'astrometry-net-online'" class="text-warn">⚠ needs an API key (set below)</span>
                         <!-- Local solve-field on Windows usually means WSL: tell the user to enable it + Save. -->
                         <span x-show="!psSelectedSolver?.available && psSelectedSolver?.id === 'astrometry-net-local'" class="text-warn">⚠ not detected: enable "Run via WSL" (in advanced below) or set the solve-field path, then click <strong>Save</strong></span>
-                        <span x-show="!psSelectedSolver?.available && psSelectedSolver?.id !== 'astrometry-net-online' && psSelectedSolver?.id !== 'astrometry-net-local'" class="text-warn">⚠ not detected on this system</span>
+                        <span x-show="!psSelectedSolver?.available && psSelectedSolver?.id === 'custom'" class="text-warn"
+                              x-text="'⚠ ' + (psCustomCheck?.problem || 'not set up') + ' Set it up under Custom solver below.'"></span>
+                        <span x-show="!psSelectedSolver?.available && !['astrometry-net-online', 'astrometry-net-local', 'custom'].includes(psSelectedSolver?.id)" class="text-warn">⚠ not detected on this system</span>
                         <span x-show="psSelectedSolver?.path" class="text-muted"> · <code x-text="psSelectedSolver?.path"></code></span>
                     </p>
 
@@ -16812,6 +16814,18 @@ Windows  winget install Rclone.Rclone</code></pre>
                         <input type="checkbox" x-model="psConfig.useBlindFallback">
                         Blind fallback if primary fails
                     </label>
+                    <label style="display:flex; align-items:center; gap:12px; max-width:600px; margin-top:8px"
+                           x-show="psConfig.useBlindFallback" x-cloak>
+                        <span style="min-width:120px">Blind solver</span>
+                        <select class="input-sm" style="flex:1"
+                                @change="psConfig.blindSolver = $event.target.value">
+                            <option value="" :selected="!psConfig.blindSolver">Default (Astrometry.net online)</option>
+                            <template x-for="s in psSolvers.filter(x => x.supportsBlind)" :key="'blind-' + s.id">
+                                <option :value="s.id" :selected="psConfig.blindSolver === s.id"
+                                        x-text="s.name + (s.available ? '' : ' (not ready)')"></option>
+                            </template>
+                        </select>
+                    </label>
 
                     <!-- Online astrometry.net needs an API key. Surface it here
                          (not buried in advanced) whenever the online solver is the
@@ -16877,6 +16891,54 @@ Windows  winget install Rclone.Rclone</code></pre>
                             Polaris invokes <code>wsl.exe solve-field</code> and translates Windows paths to
                             <code>/mnt/&lt;drive&gt;/…</code> automatically. Install solve-field + index files in
                             the distro (e.g. <code>sudo apt install astrometry.net astrometry-data-tycho2</code>).
+                        </p>
+                    </details>
+
+                    <!-- Any command-line solver the operator installed: an
+                         executable plus an argument template. The solver must
+                         exit 0 and write a WCS file to {wcs}. -->
+                    <details style="margin-top:12px; max-width:600px" :open="psConfig.primary === 'custom'">
+                        <summary class="text-muted" style="cursor:pointer; font-size:12px">Custom solver (any command-line solver)</summary>
+                        <p class="text-muted" style="font-size:11px; margin:8px 0">
+                            Run a solver you installed yourself. Polaris starts it with the arguments
+                            below, without a shell, and reads the solution from the WCS file it writes to
+                            <code>{wcs}</code>: FITS header cards (as astrometry.net and ASTAP write them)
+                            or JSON with the same keywords. Exit code 0 means solved.
+                        </p>
+                        <label style="display:flex; align-items:center; gap:12px; margin-top:6px">
+                            <span style="min-width:120px">Name</span>
+                            <input type="text" class="input-sm" style="flex:1" maxlength="40"
+                                   x-model="psConfig.customName" placeholder="Custom solver">
+                        </label>
+                        <label style="display:flex; align-items:center; gap:12px; margin-top:8px">
+                            <span style="min-width:120px">Executable</span>
+                            <input type="text" class="input-sm" style="flex:1"
+                                   x-model="psConfig.customPath" placeholder="/opt/solvers/skyshot/skyshot">
+                        </label>
+                        <label style="display:flex; align-items:flex-start; gap:12px; margin-top:8px">
+                            <span style="min-width:120px; padding-top:4px">Arguments</span>
+                            <textarea class="input-sm" style="flex:1; min-height:52px; font-family:monospace; font-size:12px"
+                                      x-model="psConfig.customArgs"
+                                      placeholder="solve {image} --index /opt/solvers/skyshot/index --mode auto --wcs {wcs}"></textarea>
+                        </label>
+                        <p class="text-muted" style="font-size:11px; margin:6px 0 0 132px">
+                            Placeholders:
+                            <template x-for="(ph, i) in psCustomPlaceholders" :key="'ph-' + ph">
+                                <span><code x-text="'{' + ph + '}'"></code><span x-show="i < psCustomPlaceholders.length - 1">, </span></span>
+                            </template>.
+                            RA, Dec, radius and FOV are in degrees, scale in arcsec per pixel.
+                            Put flags that need a hint in square brackets, like
+                            <code>[--ra {ra} --dec {dec} --radius {radius}]</code>: the group is left out
+                            when the solve has no hint. Double quotes keep text with spaces together.
+                        </p>
+                        <label style="display:flex; align-items:center; gap:8px; margin:8px 0 0 132px">
+                            <input type="checkbox" x-model="psConfig.customBlind">
+                            <span>Solves without a hint (can be the blind fallback)</span>
+                        </label>
+                        <p style="font-size:11px; margin:8px 0 0 132px" x-show="psConfig.customPath || psConfig.customArgs">
+                            <span x-show="psCustomCheck?.ok" class="text-ok">✓ ready (saved settings)</span>
+                            <span x-show="psCustomCheck && !psCustomCheck.ok" class="text-warn"
+                                  x-text="'⚠ ' + (psCustomCheck?.problem || '') + ' (saved settings)'"></span>
                         </p>
                     </details>
 
@@ -25694,7 +25756,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261028-hometonight-site"></script>
+    <script src="/js/app.js?v=20261029-customsolver"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
