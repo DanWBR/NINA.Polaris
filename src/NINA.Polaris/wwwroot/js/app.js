@@ -5274,6 +5274,14 @@ function ninaApp() {
             window.addEventListener('resize', () => this._recomputeBasicMode());
             window.addEventListener('orientationchange', () => this._recomputeBasicMode());
             this.$watch('basicMode', (v) => { if (v) this._basicEnter(); else this._basicExit(); });
+            // A new site redraws LIVE's sun/moon and HOME's Tonight card at
+            // once; the debounce lets a typed coordinate settle first.
+            const siteChanged = () => {
+                clearTimeout(this._siteChangeTimer);
+                this._siteChangeTimer = setTimeout(() => this._refreshSkyNight(), 600);
+            };
+            this.$watch('settings.latitude', siteChanged);
+            this.$watch('settings.longitude', siteChanged);
             // Resume the deferred first-run WiFi prompt once the location modal closes.
             this.$watch('showLocationSetup', (v) => { if (!v && this._wifiSetupPending) { this._wifiSetupPending = false; this._maybeShowWifiSetup(); } });
             if (this.basicMode) this.$nextTick(() => this._basicEnter());
@@ -17836,8 +17844,11 @@ function ninaApp() {
             try {
                 const r = await this.apiGet('/api/weather/clouds?lat=' + lat + '&lon=' + lng
                     + '&model=' + encodeURIComponent(this.cloudHourly.model));
+                // The site or model changed while this one was in flight.
+                if (key !== this._cloudHourlyKey) return;
                 if (r?.available) {
                     this.cloudHourly.data = r;
+                    this._cloudHourlySite = lat.toFixed(2) + ',' + lng.toFixed(2);
                     this._cloudHourlyAt = Date.now();
                     this._refreshHomeNight();
                 } else {
@@ -17845,10 +17856,11 @@ function ninaApp() {
                     this.cloudHourly.error = r?.error || 'Hourly forecast unavailable';
                 }
             } catch (e) {
+                if (key !== this._cloudHourlyKey) return;
                 this.cloudHourly.data = null;
                 this.cloudHourly.error = 'Could not reach the hourly forecast service';
             } finally {
-                this.cloudHourly.loading = false;
+                if (key === this._cloudHourlyKey) this.cloudHourly.loading = false;
             }
         },
 
@@ -45746,6 +45758,7 @@ function ninaApp() {
             // 0/0 is the unset default, not an observing site.
             if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) {
                 this.skyNight = null;
+                this.homeNight = null;
                 return;
             }
             this.skyNight = this._skyNightAt(new Date(), lat, lng);
@@ -45941,7 +45954,10 @@ function ninaApp() {
             if (typeof SunCalc === 'undefined') return;
             const lat = Number(this.settings.latitude), lng = Number(this.settings.longitude);
             if (!Number.isFinite(lat) || !Number.isFinite(lng) || (lat === 0 && lng === 0)) { this.homeNight = null; return; }
-            this.homeNight = this._homeNightAt(new Date(), lat, lng, this.cloudHourly.data);
+            // Clouds fetched for an earlier site are dropped until the new
+            // site's forecast lands.
+            const clouds = this._cloudHourlySite === lat.toFixed(2) + ',' + lng.toFixed(2) ? this.cloudHourly.data : null;
+            this.homeNight = this._homeNightAt(new Date(), lat, lng, clouds);
         },
 
         /// "38 min", "2h14", "now".
