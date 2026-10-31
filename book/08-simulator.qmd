@@ -102,11 +102,13 @@ simulator running and the device checklist -->
    a camera, telescope, focuser, and the rest over a local Alpaca
    HTTP server; no ASCOM Platform install is required for the Alpaca
    side. Install to the default location
-   (`C:\Program Files\ASCOM\OmniSimulators\`) so Polaris can find it.
+   (`C:\Program Files\ASCOM\OmniSimulator\`) so Polaris can find it;
+   the older `OmniSimulators\` folder of earlier releases is found too.
 2. In SETTINGS, open **Equipment simulator** and click **Re-detect**;
    the status shows "Installed v1.x.x".
 3. Click **Launch simulators**. Polaris spawns
-   `AlpacaOmniSimulator.exe` minimized to the system tray, and within
+   the simulator (`ascom.alpaca.simulators.exe`, or
+   `AlpacaOmniSimulator.exe` on older releases) minimized to the system tray, and within
    about five seconds the chip flips to Running. The management
    endpoint (a status web address the simulator serves) at
    `http://localhost:32323/management/v1/configureddevices` returns
