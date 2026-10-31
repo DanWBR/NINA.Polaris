@@ -97,6 +97,10 @@ public sealed class ProcessingStatusContributor : IStatusContributor {
                 altErrorArcsec = polarAlign.CurrentJob.AltErrorArcsec,
                 totalErrorArcsec = polarAlign.CurrentJob.TotalErrorArcsec,
                 lastError = polarAlign.CurrentJob.LastError,
+                // Hand-turned sweep: the turn the operator is asked for.
+                manualRotation = polarAlign.CurrentJob.Options.ManualRotation,
+                rotateDirection = polarAlign.CurrentJob.RotateDirection,
+                rotateDegrees = polarAlign.CurrentJob.Options.SlewStepDegrees,
                 startedAt = polarAlign.CurrentJob.StartedAt,
                 completedAt = polarAlign.CurrentJob.CompletedAt,
                 // True only while the CONTINUOUS refine loop runs

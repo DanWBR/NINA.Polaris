@@ -51,7 +51,8 @@ public static class PolarAlignmentEndpoints {
                 ExposureSeconds: request?.ExposureSeconds ?? rig.PolarAlignExposureSec,
                 SettleSeconds:   request?.SettleSeconds   ?? rig.PolarAlignSettleSeconds,
                 Gain:            request?.Gain            ?? rig.PolarAlignGain,
-                Camera:          request?.Camera          ?? rig.PolarAlignCamera);
+                Camera:          request?.Camera          ?? rig.PolarAlignCamera,
+                ManualRotation:  request?.ManualRotation  ?? rig.PolarAlignManualRotation ?? false);
             try {
                 var job = svc.StartJob(opts);
                 return Results.Ok(new {
@@ -70,6 +71,17 @@ public static class PolarAlignmentEndpoints {
         group.MapPost("/abort", (PolarAlignmentService svc) => {
             svc.AbortCurrent();
             return Results.Ok(new { aborted = true });
+        });
+
+        // Hand-turned sweep: the operator has turned the RA axis, shoot
+        // the next point.
+        group.MapPost("/continue", (PolarAlignmentService svc) => {
+            try {
+                svc.ContinueManualRotation();
+                return Results.Ok(new { continued = true });
+            } catch (InvalidOperationException ex) {
+                return Results.Conflict(new { error = ex.Message });
+            }
         });
 
         group.MapPost("/refine/start", (PolarAlignmentService svc) => {
@@ -130,6 +142,8 @@ public static class PolarAlignmentEndpoints {
                 altErrorArcsec = j.AltErrorArcsec,
                 totalErrorArcsec = j.TotalErrorArcsec,
                 lastError = j.LastError,
+                manualRotation = j.Options.ManualRotation,
+                rotateDirection = j.RotateDirection,
                 startedAt = j.StartedAt,
                 completedAt = j.CompletedAt,
                 isActive = j.IsActive
@@ -213,4 +227,5 @@ public record StartPolarRequest(
     double? ExposureSeconds = null,
     int? SettleSeconds = null,
     int? Gain = null,
-    string? Camera = null);
+    string? Camera = null,
+    bool? ManualRotation = null);

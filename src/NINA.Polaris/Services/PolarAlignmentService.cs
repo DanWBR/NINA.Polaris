@@ -261,8 +261,8 @@ public class PolarAlignmentService {
             try { JobUpdated?.Invoke(job); } catch { }
 
             var camera = CameraFor(job);
-            var telescope = _equip.Telescope;
-            if (camera == null || telescope == null) {
+            var telescope = job.Options.ManualRotation ? null : _equip.Telescope;
+            if (camera == null || (telescope == null && !job.Options.ManualRotation)) {
                 job.LastError = $"Refresh: {CameraLabel(job.CameraSource).ToLowerInvariant()} or telescope disconnected.";
                 return false;
             }
@@ -281,8 +281,8 @@ public class PolarAlignmentService {
 
     private async Task RunRefinementAsync(PolarAlignmentJob job, CancellationToken ct) {
         var camera = CameraFor(job);
-        var telescope = _equip.Telescope;
-        if (camera == null || telescope == null) {
+        var telescope = job.Options.ManualRotation ? null : _equip.Telescope;
+        if (camera == null || (telescope == null && !job.Options.ManualRotation)) {
             _notify.Push("error", $"Refine: {CameraLabel(job.CameraSource).ToLowerInvariant()} or telescope disconnected.");
             return;
         }
@@ -326,7 +326,7 @@ public class PolarAlignmentService {
     /// OperationCanceledException propagates to the caller.</summary>
     private async Task<bool> RefineStepAsync(PolarAlignmentJob job,
             NINA.Image.Interfaces.ICamera camera,
-            NINA.Image.Interfaces.ITelescope telescope,
+            NINA.Image.Interfaces.ITelescope? telescope,
             UserProfile userProfile, CancellationToken ct) {
         // 1. Capture at the CURRENT mount position (no slew).
         IImageData image;
@@ -345,10 +345,13 @@ public class PolarAlignmentService {
             return false;
         }
 
-        // 2. Plate solve.
+        // 2. Plate solve. With no mount (hand-turned sweep) the anchor, or
+        //    failing that the last sweep point, is the position hint.
         PlateSolveResult solve;
         try {
-            solve = await SolveOnceAsync(job, image, telescope, ct);
+            solve = await SolveOnceAsync(job, image, telescope, ct,
+                telescope == null ? job.RefineTargetRaHours ?? job.Points.LastOrDefault()?.RaHours : null,
+                telescope == null ? job.RefineTargetDecDeg ?? job.Points.LastOrDefault()?.DecDeg : null);
         } catch (OperationCanceledException) { throw; }
         catch (Exception ex) {
             _logger.LogDebug(ex, "Refine: solve threw");
@@ -434,10 +437,14 @@ public class PolarAlignmentService {
             SetPhase(job, PolarAlignmentPhase.Preflight);
             _notify.Push("info", "Polar alignment starting…", 2500);
 
-            var telescope = _equip.Telescope;
+            // A hand-turned sweep uses no mount at all, even a connected one:
+            // the operator turns the RA axis, and the mount's readout would
+            // not follow a clutch turn anyway.
+            bool manual = job.Options.ManualRotation;
+            var telescope = manual ? null : _equip.Telescope;
             var camera = CameraFor(job);
-            if (telescope == null || !telescope.IsConnected) {
-                Fail(job, "Telescope not connected.");
+            if (!manual && (telescope == null || !telescope.IsConnected)) {
+                Fail(job, "Telescope not connected. For a star tracker or a mount Polaris cannot drive, tick \"Rotate RA by hand\".");
                 return;
             }
             if (camera == null || !camera.IsConnected) {
@@ -448,40 +455,46 @@ public class PolarAlignmentService {
                 Fail(job, busy);
                 return;
             }
-            if (!telescope.IsTracking) {
+            // The hand-turned sweep needs the site after point 1 already, to
+            // say which way to turn; don't make the operator turn twice first.
+            if (manual && _profiles.Active.Latitude == 0 && _profiles.Active.Longitude == 0) {
+                Fail(job, "Site latitude/longitude not set. Configure your location in Settings before running polar alignment.");
+                return;
+            }
+            if (telescope != null && !telescope.IsTracking) {
                 Fail(job, "Telescope must be tracking (sidereal) for TPPA. Enable tracking and retry.");
                 return;
             }
-            if (telescope.IsParked) {
+            if (telescope != null && telescope.IsParked) {
                 Fail(job, "Telescope is parked. Unpark before running polar alignment.");
                 return;
             }
-
-            // TPPA turns the RA axis alone, so the three points share one
-            // Dec in the mount's own frame, of date. The mount reports and
-            // takes J2000 (ITelescope); held constant in J2000, the Dec of
-            // date would shift with RA by up to ~0.1° and the mount would
-            // move its Dec axis between points. So ra0 / dec0 and the
-            // rotation are of date, and each slew converts back to J2000
-            // just before the call (SlewOfDateAsync).
-            (ra0, dec0) = NINA.Core.Utility.EquatorialEpoch.J2000ToJNow(
-                telescope.RightAscension, telescope.Declination, DateTime.UtcNow);
 
             // 2. Three solved points -----------------------------------------
             // Slew step measured in degrees; mount RA is in hours, so
             // convert via /15.
             double slewStepHours = job.Options.SlewStepDegrees / 15.0;
 
-            // Meridian-aware sweep direction: always slew AWAY from the
-            // meridian. A fixed +RA sweep could cross it mid-routine on a
-            // GEM, triggering a pier flip between points, cone error flips
-            // sign across the pier, which shifts the small-circle centre and
-            // silently corrupts the 3-point fit (and some mounts, e.g. the
-            // ZWO AM series over LX200, reject near-limit GoTos outright).
-            // Hour angle of the start position decides: pointing EAST of the
-            // meridian (HA <= 0), +RA moves further east; pointing WEST
-            // (HA > 0), -RA moves further west.
-            {
+            if (telescope != null) {
+                // TPPA turns the RA axis alone, so the three points share one
+                // Dec in the mount's own frame, of date. The mount reports and
+                // takes J2000 (ITelescope); held constant in J2000, the Dec of
+                // date would shift with RA by up to ~0.1° and the mount would
+                // move its Dec axis between points. So ra0 / dec0 and the
+                // rotation are of date, and each slew converts back to J2000
+                // just before the call (SlewOfDateAsync).
+                (ra0, dec0) = NINA.Core.Utility.EquatorialEpoch.J2000ToJNow(
+                    telescope.RightAscension, telescope.Declination, DateTime.UtcNow);
+
+                // Meridian-aware sweep direction: always slew AWAY from the
+                // meridian. A fixed +RA sweep could cross it mid-routine on a
+                // GEM, triggering a pier flip between points, cone error flips
+                // sign across the pier, which shifts the small-circle centre and
+                // silently corrupts the 3-point fit (and some mounts, e.g. the
+                // ZWO AM series over LX200, reject near-limit GoTos outright).
+                // Hour angle of the start position decides: pointing EAST of the
+                // meridian (HA <= 0), +RA moves further east; pointing WEST
+                // (HA > 0), -RA moves further west.
                 var siteProfile = _profiles.Active;
                 double lst = PolarAlignmentMath.LocalSiderealHours(
                     DateTime.UtcNow, siteProfile.Longitude);
@@ -499,21 +512,28 @@ public class PolarAlignmentService {
 
                 double targetRa = NormalizeRaHours(ra0 + i * slewStepHours);
 
-                // Slew. For i=0 this is usually a no-op (~0.01h drift
-                // during the brief preflight) but we still call it to
-                // make sure we know our exact pointing.
-                SetPhase(job, MovingPhaseFor(i));
-                _notify.Push("info", $"Polar align: slewing to point {i + 1}/3 (RA {targetRa:F3}h)", 2000);
-                await SlewOfDateAsync(telescope, targetRa, dec0, ct);
+                if (telescope != null) {
+                    // Slew. For i=0 this is usually a no-op (~0.01h drift
+                    // during the brief preflight) but we still call it to
+                    // make sure we know our exact pointing.
+                    SetPhase(job, MovingPhaseFor(i));
+                    _notify.Push("info", $"Polar align: slewing to point {i + 1}/3 (RA {targetRa:F3}h)", 2000);
+                    await SlewOfDateAsync(telescope, targetRa, dec0, ct);
 
-                // CRITICAL: SlewAsync only waits for the driver to ACK the
-                // coord write (slew accepted/started), NOT for the mount to
-                // arrive. Without blocking on IsSlewing the capture below
-                // fires mid-slew, the frame is trailed and the plate solve
-                // fails or solves a position that isn't the intended RA,
-                // which silently corrupts the 3-point fit. Wait for arrival,
-                // THEN settle.
-                await WaitForSlewCompleteAsync(telescope, ct);
+                    // CRITICAL: SlewAsync only waits for the driver to ACK the
+                    // coord write (slew accepted/started), NOT for the mount to
+                    // arrive. Without blocking on IsSlewing the capture below
+                    // fires mid-slew, the frame is trailed and the plate solve
+                    // fails or solves a position that isn't the intended RA,
+                    // which silently corrupts the 3-point fit. Wait for arrival,
+                    // THEN settle.
+                    await WaitForSlewCompleteAsync(telescope, ct);
+                } else if (i > 0) {
+                    // Hand-turned sweep: point 1 is wherever the camera
+                    // points; before points 2 and 3 the operator turns the
+                    // RA axis and presses Continue.
+                    await WaitForHandRotationAsync(job, i, ct);
+                }
 
                 // Settle, mount stops shaking, INDI driver finishes
                 // emitting EQUATORIAL_EOD_COORD updates.
@@ -531,7 +551,10 @@ public class PolarAlignmentService {
                     return;
                 }
 
-                var result = await SolveOnceAsync(job, image, telescope, ct);
+                // With no mount the previous point is the position hint;
+                // point 1 solves blind.
+                PolarPoint? prev = telescope == null && i > 0 ? job.Points[i - 1] : null;
+                var result = await SolveOnceAsync(job, image, telescope, ct, prev?.RaHours, prev?.DecDeg);
                 if (!result.Success) {
                     // One retry with doubled exposure, common rescue
                     // for marginal star count on the first attempt.
@@ -542,7 +565,7 @@ public class PolarAlignmentService {
                         PolarCaptureOptions(job),
                         ct);
                     if (retryImage != null && retryImage.Properties.Width > 0) {
-                        result = await SolveOnceAsync(job, retryImage, telescope, ct);
+                        result = await SolveOnceAsync(job, retryImage, telescope, ct, prev?.RaHours, prev?.DecDeg);
                     }
                 }
                 if (!result.Success) {
@@ -560,12 +583,34 @@ public class PolarAlignmentService {
                 var ptUtc = DateTime.UtcNow;
                 var (raDate, decDate) = PolarAlignmentMath.PrecessJ2000ToDate(
                     result.RaHours, result.DecDeg, ptUtc);
+
+                // A hand turn too short (or none at all) leaves the three
+                // points too close for the fit: say so, wait for a further
+                // turn and shoot this point again.
+                if (telescope == null && i > 0
+                        && HandRotationProblem(job.Points, raDate, decDate,
+                            MinHandRotationDeg(job.Options.SlewStepDegrees)) is { } shortTurn) {
+                    job.LastError = shortTurn;
+                    _logger.LogInformation("Polar align: point {N} not taken, {Why}", i + 1, shortTurn);
+                    i--;
+                    continue;
+                }
+                if (telescope == null) job.LastError = null;
+
                 job.Points.Add(new PolarPoint(
                     Index: i,
                     RaHours: raDate,
                     DecDeg: decDate,
                     RotationDeg: result.RotationDeg,
                     AtUtc: ptUtc));
+
+                // Hand-turned sweep: turn away from the meridian, for the
+                // same reason the slewed sweep does.
+                if (telescope == null && i == 0) {
+                    double lst = PolarAlignmentMath.LocalSiderealHours(ptUtc, _profiles.Active.Longitude);
+                    double haHours = ((lst - raDate + 12.0) % 24.0 + 24.0) % 24.0 - 12.0;
+                    job.RotateDirection = haHours > 0 ? "west" : "east";
+                }
 
                 // POLARUI2c field diagnostics. The 3-point fit is only
                 // valid if the mount rotated PURELY about its RA axis
@@ -576,10 +621,12 @@ public class PolarAlignmentService {
                 // at dec0 for all three points. Log both frames per point
                 // so a bad session can be diagnosed from the LOG panel.
                 double mntRa = double.NaN, mntDec = double.NaN;
-                try {
-                    (mntRa, mntDec) = NINA.Core.Utility.EquatorialEpoch.J2000ToJNow(
-                        telescope.RightAscension, telescope.Declination, DateTime.UtcNow);
-                } catch { }
+                if (telescope != null) {
+                    try {
+                        (mntRa, mntDec) = NINA.Core.Utility.EquatorialEpoch.J2000ToJNow(
+                            telescope.RightAscension, telescope.Declination, DateTime.UtcNow);
+                    } catch { }
+                }
                 mountDecReadings.Add(mntDec);
                 _logger.LogInformation(
                     "Polar align point {N}: mount reports RA {MRa}h Dec {MDec}° (commanded RA {CRa}h Dec {CDec}°); solved RA {SRa}h Dec {SDec}° (of-date)",
@@ -637,61 +684,75 @@ public class PolarAlignmentService {
             job.RefineTargetRaHours = null;
             job.RefineTargetDecDeg = null;
 
-            // 4. Cosmetic slew home -----------------------------------------
-            SetPhase(job, PolarAlignmentPhase.SlewingHome);
-            try {
-                await SlewOfDateAsync(telescope, ra0, dec0, ct);
-                await WaitForSlewCompleteAsync(telescope, ct);
-            } catch (OperationCanceledException) { throw; }
-            catch (Exception ex) {
-                // Don't fail the whole alignment if the home slew
-                // hiccups, the user already has their error vector.
-                _logger.LogWarning(ex, "Polar align: slew back to start failed");
-            }
-
-            // 4b. POLARUI2b: anchor the refinement target NOW, while the
-            //     job still owns the mount and the operator cannot have
-            //     touched the knobs yet. Anchoring lazily on the first
-            //     Refresh (previous behaviour) silently assumed the knobs
-            //     were untouched between TPPA and that refresh, an
-            //     operator who cranks the azimuth right after reading the
-            //     error and THEN hits Refresh got a stale target, and
-            //     walking the dot to that target parked the axis ~1× the
-            //     original error away while the readout showed arcseconds
-            //     (field session 2026-07-10: axis left ~10° off in az
-            //     after "converging" to 2″). One extra capture+solve at
-            //     the end of the sweep closes the race; if it fails we
-            //     fall back to first-Refresh anchoring and say so.
-            try {
-                await Task.Delay(
-                    TimeSpan.FromSeconds(Math.Max(1, job.Options.SettleSeconds)), ct);
-                var anchorImage = await CaptureFor(job, camera, job.Options.ExposureSeconds,
-                    PolarCaptureOptions(job),
-                    ct);
-                var anchorSolve = await SolveOnceAsync(job, anchorImage, telescope, ct);
-                if (anchorSolve.Success) {
-                    var tAnchor = DateTime.UtcNow;
-                    var (aRa, aDec) = PolarAlignmentMath.PrecessJ2000ToDate(
-                        anchorSolve.RaHours, anchorSolve.DecDeg, tAnchor);
-                    var (tRa, tDec) = PolarAlignmentMath.ComputeRefineTarget(
-                        aRa, aDec, tAnchor,
-                        job.AzErrorArcsec, job.AltErrorArcsec,
-                        userProfile.Latitude, userProfile.Longitude);
-                    job.RefineTargetRaHours = tRa;
-                    job.RefineTargetDecDeg = tDec;
-                    _logger.LogInformation(
-                        "Polar align: refine anchor set at sweep end, pointing {Ra}h/{Dec}° → target {TRa}h/{TDec}°",
-                        aRa.ToString("F4"), aDec.ToString("F4"),
-                        tRa.ToString("F4"), tDec.ToString("F4"));
-                } else {
-                    _logger.LogWarning(
-                        "Polar align: anchor solve failed ({Err}); will anchor on the first Refresh, do NOT adjust knobs before it",
-                        anchorSolve.Error);
+            if (telescope == null) {
+                // Hand-turned sweep: nothing to slew back to, and the camera
+                // still points at point 3 with the knobs untouched, so point 3
+                // is the refinement anchor (the slewed sweep shoots an extra
+                // frame for it, below).
+                var p3 = job.Points[2];
+                var (tRa, tDec) = PolarAlignmentMath.ComputeRefineTarget(
+                    p3.RaHours, p3.DecDeg, p3.AtUtc,
+                    job.AzErrorArcsec, job.AltErrorArcsec,
+                    userProfile.Latitude, userProfile.Longitude);
+                job.RefineTargetRaHours = tRa;
+                job.RefineTargetDecDeg = tDec;
+            } else {
+                // 4. Cosmetic slew home -----------------------------------------
+                SetPhase(job, PolarAlignmentPhase.SlewingHome);
+                try {
+                    await SlewOfDateAsync(telescope, ra0, dec0, ct);
+                    await WaitForSlewCompleteAsync(telescope, ct);
+                } catch (OperationCanceledException) { throw; }
+                catch (Exception ex) {
+                    // Don't fail the whole alignment if the home slew
+                    // hiccups, the user already has their error vector.
+                    _logger.LogWarning(ex, "Polar align: slew back to start failed");
                 }
-            } catch (OperationCanceledException) { throw; }
-            catch (Exception ex) {
-                _logger.LogWarning(ex,
-                    "Polar align: anchor capture failed; will anchor on the first Refresh");
+
+                // 4b. POLARUI2b: anchor the refinement target NOW, while the
+                //     job still owns the mount and the operator cannot have
+                //     touched the knobs yet. Anchoring lazily on the first
+                //     Refresh (previous behaviour) silently assumed the knobs
+                //     were untouched between TPPA and that refresh, an
+                //     operator who cranks the azimuth right after reading the
+                //     error and THEN hits Refresh got a stale target, and
+                //     walking the dot to that target parked the axis ~1× the
+                //     original error away while the readout showed arcseconds
+                //     (field session 2026-07-10: axis left ~10° off in az
+                //     after "converging" to 2″). One extra capture+solve at
+                //     the end of the sweep closes the race; if it fails we
+                //     fall back to first-Refresh anchoring and say so.
+                try {
+                    await Task.Delay(
+                        TimeSpan.FromSeconds(Math.Max(1, job.Options.SettleSeconds)), ct);
+                    var anchorImage = await CaptureFor(job, camera, job.Options.ExposureSeconds,
+                        PolarCaptureOptions(job),
+                        ct);
+                    var anchorSolve = await SolveOnceAsync(job, anchorImage, telescope, ct);
+                    if (anchorSolve.Success) {
+                        var tAnchor = DateTime.UtcNow;
+                        var (aRa, aDec) = PolarAlignmentMath.PrecessJ2000ToDate(
+                            anchorSolve.RaHours, anchorSolve.DecDeg, tAnchor);
+                        var (tRa, tDec) = PolarAlignmentMath.ComputeRefineTarget(
+                            aRa, aDec, tAnchor,
+                            job.AzErrorArcsec, job.AltErrorArcsec,
+                            userProfile.Latitude, userProfile.Longitude);
+                        job.RefineTargetRaHours = tRa;
+                        job.RefineTargetDecDeg = tDec;
+                        _logger.LogInformation(
+                            "Polar align: refine anchor set at sweep end, pointing {Ra}h/{Dec}° → target {TRa}h/{TDec}°",
+                            aRa.ToString("F4"), aDec.ToString("F4"),
+                            tRa.ToString("F4"), tDec.ToString("F4"));
+                    } else {
+                        _logger.LogWarning(
+                            "Polar align: anchor solve failed ({Err}); will anchor on the first Refresh, do NOT adjust knobs before it",
+                            anchorSolve.Error);
+                    }
+                } catch (OperationCanceledException) { throw; }
+                catch (Exception ex) {
+                    _logger.LogWarning(ex,
+                        "Polar align: anchor capture failed; will anchor on the first Refresh");
+                }
             }
 
             // With a >1.5° error the axis is far enough out that the
@@ -718,7 +779,7 @@ public class PolarAlignmentService {
             _notify.Push("warn", "Polar alignment cancelled.");
             // Best-effort slew home so the mount isn't stranded.
             try {
-                if (_equip.Telescope != null && ra0 > 0)
+                if (!job.Options.ManualRotation && _equip.Telescope != null && ra0 > 0)
                     await SlewOfDateAsync(_equip.Telescope, ra0, dec0, CancellationToken.None);
             } catch { /* shutdown, eat it */ }
         } catch (Exception ex) {
@@ -794,6 +855,54 @@ public class PolarAlignmentService {
         _logger.LogWarning("Polar align: slew did not complete within 5 minutes; proceeding anyway");
     }
 
+    /// <summary>Hand-turned sweep: park the job in AwaitingRotationN until
+    /// the operator has turned the RA axis and pressed Continue.</summary>
+    private async Task WaitForHandRotationAsync(PolarAlignmentJob job, int index, CancellationToken ct) {
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        job.RotationDone = done;
+        SetPhase(job, index == 1 ? PolarAlignmentPhase.AwaitingRotation2 : PolarAlignmentPhase.AwaitingRotation3);
+        _notify.Push("info",
+            $"Polar align: turn the RA axis about {job.Options.SlewStepDegrees}° to the {job.RotateDirection ?? "east"}, then press Continue.",
+            5000);
+        try {
+            await done.Task.WaitAsync(ct);
+        } finally {
+            job.RotationDone = null;
+        }
+    }
+
+    /// <summary>The operator has turned the RA axis: shoot the next point.</summary>
+    public void ContinueManualRotation() {
+        var done = CurrentJob?.RotationDone
+            ?? throw new InvalidOperationException("Polar alignment is not waiting for a hand turn.");
+        done.TrySetResult();
+    }
+
+    /// <summary>The shortest hand turn the sweep accepts: a third of the
+    /// asked-for turn, and never under 5°.</summary>
+    internal static double MinHandRotationDeg(int askedDeg) => Math.Max(5.0, askedDeg / 3.0);
+
+    /// <summary>Why a hand-turned point is too close to an earlier one, or
+    /// null when it is far enough from all of them. The turn is read from
+    /// the change in RA; within 10° of the pole a polar error of a few
+    /// degrees makes that a poor measure, so there only a field that has
+    /// not moved at all is refused.</summary>
+    internal static string? HandRotationProblem(IReadOnlyList<PolarPoint> earlier,
+            double raHours, double decDeg, double minDeg) {
+        foreach (var p in earlier) {
+            if (Math.Abs(decDeg) > 80 || Math.Abs(p.DecDeg) > 80) {
+                if (PolarAlignmentMath.AngularSeparationDeg(p.RaHours, p.DecDeg, raHours, decDeg) < 1.0)
+                    return $"The field has not moved since point {p.Index + 1}. Turn the RA axis and press Continue.";
+                continue;
+            }
+            double turned = Math.Abs(((raHours - p.RaHours) * 15.0 % 360.0 + 540.0) % 360.0 - 180.0);
+            if (turned < minDeg)
+                return $"The RA axis has turned only {turned:F0}° from point {p.Index + 1}; it needs at least {minDeg:F0}°. " +
+                       "Turn it further, the same way, and press Continue.";
+        }
+        return null;
+    }
+
     private static PolarAlignmentPhase MovingPhaseFor(int index) => index switch {
         0 => PolarAlignmentPhase.MovingToPoint1,
         1 => PolarAlignmentPhase.MovingToPoint2,
@@ -807,7 +916,7 @@ public class PolarAlignmentService {
     };
 
     /// <summary>Wrap an RA value back into [0, 24) hours. Adding
-    /// slewStepHours can push past 24h near RA=23h.</summary>
+    /// slewStepHours can push past 24h near RA=23h.</summary>
     /// <summary>Slew to a position given of date: TPPA computes its points
     /// in the mount's own frame and the mount interface takes J2000.</summary>
     private static Task SlewOfDateAsync(ITelescope telescope, double raOfDate, double decOfDate, CancellationToken ct) {

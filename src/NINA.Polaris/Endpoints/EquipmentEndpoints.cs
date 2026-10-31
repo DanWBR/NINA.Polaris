@@ -247,6 +247,8 @@ public static class EquipmentEndpoints {
                     r.PolarAlignGain = update.PolarAlignGain;
                 if (!string.IsNullOrWhiteSpace(update.PolarAlignCamera))
                     r.PolarAlignCamera = PolarAlignmentService.NormalizeCamera(update.PolarAlignCamera);
+                if (update.PolarAlignManualRotation.HasValue)
+                    r.PolarAlignManualRotation = update.PolarAlignManualRotation.Value;
                 // Slew & Center plate-solve tunables (per-rig).
                 if (update.SlewCenterExposureSec > 0)
                     r.SlewCenterExposureSec = update.SlewCenterExposureSec;
