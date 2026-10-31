@@ -713,6 +713,10 @@ public class EquipmentProfile {
     public int PolarAlignGain { get; set; } = 100;
     /// <summary>Camera for polar alignment: "main", "guide" or "imager:N".</summary>
     public string PolarAlignCamera { get; set; } = "main";
+    /// <summary>Turn the RA axis by hand between TPPA points (a star
+    /// tracker, or a mount Polaris cannot drive). Nullable per RIGPUT-1:
+    /// a PUT that omits it leaves it alone; null reads as false.</summary>
+    public bool? PolarAlignManualRotation { get; set; }
 
     // Slew & Center plate-solve tunables. Used by SKY tab "Go to",
     // meridian-flip recenter, and live-stack auto-recenter trigger.

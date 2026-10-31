@@ -476,6 +476,7 @@ public class ProfileService {
             PolarAlignSettleSeconds = src.PolarAlignSettleSeconds,
             PolarAlignGain = src.PolarAlignGain,
             PolarAlignCamera = src.PolarAlignCamera,
+            PolarAlignManualRotation = src.PolarAlignManualRotation,
             SlewCenterExposureSec = src.SlewCenterExposureSec,
             SlewCenterGain = src.SlewCenterGain,
             FocalLengthMm = src.FocalLengthMm,

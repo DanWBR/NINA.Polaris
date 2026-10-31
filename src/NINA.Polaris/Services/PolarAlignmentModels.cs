@@ -63,7 +63,11 @@ public record PolarAlignmentOptions(
     /// <summary>"main" (default), "guide" or "imager:N": which camera shoots. A
     /// guide scope or finder sees a wider field, which solves sooner near the
     /// pole and leaves the imaging camera and its train untouched.</summary>
-    string Camera = "main");
+    string Camera = "main",
+    /// <summary>The operator turns the RA axis by hand between points (a
+    /// star tracker, or a mount Polaris cannot drive). No mount is used;
+    /// SlewStepDegrees becomes how far to turn.</summary>
+    bool ManualRotation = false);
 
 /// <summary>One solved point in a TPPA run. The triple of these gets
 /// fed into PolarAlignmentMath.ComputeError to derive the mount's
@@ -123,6 +127,15 @@ public class PolarAlignmentJob {
     /// 20 entries in the service.</summary>
     public List<RudimentaryIteration> History { get; set; } = new();
 
+    /// <summary>Hand-turned sweep: which way to swing the camera for the
+    /// next point, "east" or "west" (away from the meridian). Set once
+    /// point 1 is solved; null otherwise.</summary>
+    public string? RotateDirection { get; set; }
+
+    /// <summary>Completed by the Continue call while the sweep waits for
+    /// the operator to turn the RA axis.</summary>
+    internal TaskCompletionSource? RotationDone { get; set; }
+
     /// <summary>True while RunAsync is still chewing through phases.
     /// Used by the second-StartJob guard.</summary>
     public bool IsActive => Phase != PolarAlignmentPhase.Idle
@@ -158,4 +171,8 @@ public enum PolarAlignmentPhase {
     RudimentarySlewing,
     RudimentaryCapturing,
     RudimentarySolving,
+    /// <summary>Hand-turned TPPA: waiting for the operator to turn the RA
+    /// axis before point 2 / point 3.</summary>
+    AwaitingRotation2,
+    AwaitingRotation3,
 }

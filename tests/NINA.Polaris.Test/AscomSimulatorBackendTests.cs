@@ -178,4 +178,12 @@ public class AscomSimulatorBackendTests {
         Assert.That(paths, Does.Contain(@"Program Files"));
         Assert.That(paths, Does.Contain(@"OmniSimulators"));
     }
+
+    /// <summary>Current installers: OmniSimulator\ascom.alpaca.simulators.exe.</summary>
+    [Test]
+    public void WindowsCandidatePaths_IncludeTheCurrentInstallersLayout() {
+        Assert.That(AscomSimulatorBackend.WindowsCandidatePaths,
+            Does.Contain(@"C:\Program Files\ASCOM\OmniSimulator\ascom.alpaca.simulators.exe"));
+        Assert.That(AscomSimulatorBackend.WindowsCandidatePaths, Does.Contain("ascom.alpaca.simulators.exe"));
+    }
 }

@@ -5066,7 +5066,16 @@ function ninaApp() {
             slewDeg: 30,
             exposureSec: 3.0,
             settleSec: 2,
-            gain: 100
+            gain: 100,
+            // Turn the RA axis by hand between points (star tracker, or a
+            // mount Polaris cannot drive). Per rig, like the fields above.
+            manualRotation: false,
+            // From the running job: was it hand-turned, and which way and
+            // how far the operator is asked to turn for the next point.
+            jobManual: false,
+            rotateDirection: null,
+            rotateDegrees: 30,
+            continueBusy: false
         },
         // Slew & Center plate-solve capture (per-rig). Defaults match
         // the previous SlewCenterService hardcoded values so existing
@@ -35178,12 +35187,30 @@ function ninaApp() {
                     exposureSeconds: this.polar.exposureSec,
                     settleSeconds: this.polar.settleSec,
                     gain: this.polar.gain,
-                    camera: this.polar.camera || 'main'
+                    camera: this.polar.camera || 'main',
+                    manualRotation: !!this.polar.manualRotation
                 });
                 this.toast('Polar alignment started', 'info');
             } catch (e) {
                 this.toastFail('Polar start failed', e);
             }
+        },
+
+        /// Hand-turned sweep: the RA axis has been turned, shoot the next point.
+        async polarContinue() {
+            if (this.polar.continueBusy) return;
+            this.polar.continueBusy = true;
+            try {
+                await this.apiPost('/api/polar/continue');
+            } catch (e) {
+                this.toastFail('Continue failed', e);
+            } finally {
+                this.polar.continueBusy = false;
+            }
+        },
+
+        polarAwaitingRotation() {
+            return this.polar.phase === 'AwaitingRotation2' || this.polar.phase === 'AwaitingRotation3';
         },
 
         async polarAbort() {
@@ -35418,7 +35445,8 @@ function ninaApp() {
                         polarAlignExposureSec: parseFloat(this.polar.exposureSec) || 3.0,
                         polarAlignSettleSeconds: parseInt(this.polar.settleSec) || 2,
                         polarAlignGain: parseInt(this.polar.gain) || 100,
-                        polarAlignCamera: this.polar.camera || 'main'
+                        polarAlignCamera: this.polar.camera || 'main',
+                        polarAlignManualRotation: !!this.polar.manualRotation
                     })
                 });
             } catch (e) {
@@ -35435,6 +35463,7 @@ function ninaApp() {
             if (rig.polarAlignSettleSeconds >= 0) this.polar.settleSec = rig.polarAlignSettleSeconds;
             if (rig.polarAlignGain > 0) this.polar.gain = rig.polarAlignGain;
             if (rig.polarAlignCamera) this.polar.camera = rig.polarAlignCamera;
+            this.polar.manualRotation = rig.polarAlignManualRotation === true;
             // Slew & Center capture (used by SKY "Go to" / meridian
             // flip recenter / live-stack recenter). Same hydrate path
             // because they share the per-rig profile.
@@ -35488,6 +35517,8 @@ function ninaApp() {
         polarPhaseLabel() {
             // Insert spaces for readability: MovingToPoint1 → Moving to point 1
             const p = this.polar.phase || '';
+            if (p === 'AwaitingRotation2') return 'Turn the RA axis for point 2';
+            if (p === 'AwaitingRotation3') return 'Turn the RA axis for point 3';
             return p.replace(/([A-Z])/g, ' $1').replace(/(\d)/g, ' $1').trim();
         },
 
@@ -35496,8 +35527,8 @@ function ninaApp() {
             // Rough linear mapping is good enough for a UX bar.
             const order = ['Preflight',
                 'MovingToPoint1', 'SolvingPoint1',
-                'MovingToPoint2', 'SolvingPoint2',
-                'MovingToPoint3', 'SolvingPoint3',
+                'AwaitingRotation2', 'MovingToPoint2', 'SolvingPoint2',
+                'AwaitingRotation3', 'MovingToPoint3', 'SolvingPoint3',
                 'Computing', 'SlewingHome', 'Ok'];
             const idx = order.indexOf(this.polar.phase);
             if (idx < 0) return 0;
@@ -51834,6 +51865,9 @@ function ninaApp() {
                     this.polar.totalErrorArcsec = pa.totalErrorArcsec || 0;
                     this.polar.lastError = pa.lastError || null;
                     this.polar.refineLoop = !!pa.refineLoop;
+                    this.polar.jobManual = !!pa.manualRotation;
+                    this.polar.rotateDirection = pa.rotateDirection || null;
+                    if (pa.rotateDegrees > 0) this.polar.rotateDegrees = pa.rotateDegrees;
                     // Trail for the POLAR-tab bullseye: record each new
                     // error fix (arcmin) so the operator sees the axis
                     // walking toward the pole as they adjust knobs.

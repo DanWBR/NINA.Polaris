@@ -53,9 +53,14 @@ public class AscomSimulatorBackend : ISimulatorBackend, IDisposable {
 
     /// <summary>Standard places to look for the Omni Sim binary.
     /// Order matters: PATH first (a power user who customised the
-    /// install), then the official installer locations.</summary>
+    /// install), then the official installer locations. Current
+    /// installers put ascom.alpaca.simulators.exe in OmniSimulator\;
+    /// older ones put AlpacaOmniSimulator.exe in OmniSimulators\.</summary>
     internal static readonly string[] WindowsCandidatePaths = [
         "AlpacaOmniSimulator.exe",                                              // PATH
+        "ascom.alpaca.simulators.exe",                                          // PATH
+        @"C:\Program Files\ASCOM\OmniSimulator\ascom.alpaca.simulators.exe",
+        @"C:\Program Files (x86)\ASCOM\OmniSimulator\ascom.alpaca.simulators.exe",
         @"C:\Program Files\ASCOM\OmniSimulators\AlpacaOmniSimulator.exe",
         @"C:\Program Files (x86)\ASCOM\OmniSimulators\AlpacaOmniSimulator.exe",
         @"C:\ProgramData\ASCOM\OmniSimulators\AlpacaOmniSimulator.exe",

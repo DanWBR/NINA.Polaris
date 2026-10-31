@@ -45,6 +45,36 @@ however, require a clear enough sky and a mount that can slew (move
 under motor power) through the 30-degree RA sweep, while still
 tracking, without hitting an obstruction.
 
+## TPPA with the RA axis turned by hand
+
+A star tracker (the SkyGuider Pro, Star Adventurer and their kind)
+tracks the sky but cannot be pointed by a computer, so Polaris cannot
+slew it through the sweep. Tick **Rotate RA by hand** under the TPPA
+parameters and you do the turning instead. No mount needs to be
+connected; the camera, the plate solver and your site location are
+enough.
+
+1. Point the camera roughly at the sky above the pole region, start
+   the tracker, and click **Start TPPA**. Polaris shoots and solves
+   point 1 wherever the camera points, with no position hint.
+2. The POLAR tab asks you to turn the RA axis. Unlock the RA clutch,
+   swing the camera about as far as the **RA turn by hand** field
+   says (30 degrees by default) toward the side it names, east or
+   west, away from the meridian (the north-south line through the
+   zenith), and lock it again. Turn the RA axis only: leave the ball
+   head and any Dec bracket alone, since the method relies on the
+   camera moving purely around the RA axis.
+3. Click **Continue**. Polaris shoots and solves point 2. If the turn
+   was too short (less than a third of the asked-for turn), it says
+   how far the axis actually moved and waits for you to turn further.
+4. Turn the same way again and click **Continue** for point 3.
+
+The error, the knob directions and refinement then work exactly as
+in the slewed sweep: the tracker keeps tracking, so **Refresh** and
+Auto re-measure as you turn the altitude and azimuth bolts. Polaris
+anchors the refinement on point 3, so start adjusting only after the
+result appears.
+
 ## Rudimentary alignment: single-target iterative
 
 Rudimentary alignment exists for the situations TPPA cannot handle:
@@ -55,7 +85,9 @@ Rudimentary alignment exists for the situations TPPA cannot handle:
   app on your phone, where you just want a one-target sanity check.
 - Manual mounts with no GoTo (no motors that can point the mount at
   coordinates on command): you point at the target by hand, and
-  Polaris only captures and solves.
+  Polaris only captures and solves. A star tracker with a ball head is
+  not a good fit here, because the camera's aim has nothing to do with
+  the polar axis; use TPPA with the RA axis turned by hand instead.
 
 The workflow mirrors what experienced operators of the ASIAIR (ZWO's
 popular all-in-one imaging controller) already do by hand.
@@ -156,6 +188,7 @@ of the sub-pane shows a check or cross for each prerequisite:
 |---|---|
 | Full view of the polar region, mount can slew 30 degrees in RA freely | **TPPA** (more rigorous, fewer iterations) |
 | Balcony, blocked polar view, or limited slew range | **Rudimentary** |
+| Star tracker, or a tracking mount Polaris cannot drive | **TPPA** with **Rotate RA by hand** |
 | Manual mount (no GoTo) | **Rudimentary** with **Use current position** |
 | First-night setup after assembly | **Rudimentary** for a fast initial check; follow up with TPPA if you have time |
 | Permanent observatory, periodic check | **TPPA** (cleaner result) |

@@ -2385,7 +2385,7 @@
                      changes POST to /api/equipment/rigs/{id} on blur. -->
                 <div class="quick-controls" style="margin-bottom: 12px">
                     <div class="control-row">
-                        <label>RA slew step (deg)
+                        <label><span x-text="polar.manualRotation ? 'RA turn by hand (deg)' : 'RA slew step (deg)'"></span>
                             <input type="number" class="input-sm" min="5" max="60" step="5"
                                    x-model.number="polar.slewDeg"
                                    @change="savePolarRigSettings()"
@@ -2423,6 +2423,18 @@
                                     @click="applyGainPreset('polar.gain', zwoPresetsForActiveCamera().H); savePolarRigSettings()">H</button>
                         </span>
                     </div>
+                    <!-- Hand-turned sweep: no mount is driven; the operator
+                         turns the RA axis between points (star trackers,
+                         or a mount Polaris cannot drive). -->
+                    <div class="control-row" style="margin-top: 4px">
+                        <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer; font-size: 13px"
+                               title="For a star tracker or a mount Polaris cannot drive. Polaris shoots point 1 where the camera points; before points 2 and 3 you turn the RA axis by hand and press Continue. The tracker keeps tracking throughout.">
+                            <input type="checkbox" x-model="polar.manualRotation"
+                                   @change="savePolarRigSettings()"
+                                   :disabled="polar.isActive">
+                            Rotate RA by hand <span class="hint" style="margin:0">(star tracker, no mount)</span>
+                        </label>
+                    </div>
                     <!-- TEMPORARY (field diagnosis): flip the displayed
                          azimuth direction while we confirm the convention
                          is oriented correctly. Client-only, no re-solve.
@@ -2437,7 +2449,7 @@
                     </div>
                     <div class="control-row actions">
                         <button class="btn btn-primary" @click="polarStart()"
-                                :disabled="polar.isActive || !selectedCamera || !mount?.connected">
+                                :disabled="polar.isActive || !selectedCamera || (!polar.manualRotation && !mount?.connected)">
                             ▶ Start TPPA
                         </button>
                         <button class="btn btn-danger" @click="polarAbort()"
@@ -2455,7 +2467,7 @@
                      existing slew + plate-solve + sync workflow. The
                      user then clicks Start TPPA from the new pointing. -->
                 <div class="polar-targets" style="margin-bottom: 12px"
-                     x-show="!polar.isActive && !polar.completedOk && polar.phase !== 'Refining'">
+                     x-show="!polar.manualRotation && !polar.isActive && !polar.completedOk && polar.phase !== 'Refining'">
                     <div class="polar-targets-header">
                         <strong>🎯 Best targets for TPPA now</strong>
                         <button class="btn btn-sm" @click="loadPolarTargets()"
@@ -2507,6 +2519,27 @@
                         <span x-show="polar.points.length > 0">
                             Solved: <strong x-text="polar.points.length + ' / 3'"></strong>
                         </span>
+                    </div>
+                </div>
+
+                <!-- Hand-turned sweep: the job waits here before points 2
+                     and 3 until the operator has turned the RA axis. -->
+                <div class="quick-controls" x-show="polarAwaitingRotation()" style="margin-bottom: 12px">
+                    <div style="font-size: 15px; margin-bottom: 6px">
+                        <strong x-text="'Point ' + (polar.points.length + 1) + ' of 3: turn the RA axis'"></strong>
+                    </div>
+                    <p style="margin: 0 0 8px">
+                        Unlock the RA clutch, swing the camera about
+                        <strong x-text="polar.rotateDegrees + '°'"></strong>
+                        to the <strong x-text="polar.rotateDirection || 'east'"></strong>
+                        by turning the RA axis only, and lock it again. Leave the
+                        ball head and the Dec axis alone, and keep the tracker running.
+                    </p>
+                    <p class="text-warn" x-show="polar.lastError" x-text="polar.lastError" style="margin: 0 0 8px"></p>
+                    <div class="control-row actions">
+                        <button class="btn btn-primary" @click="polarContinue()" :disabled="polar.continueBusy">
+                            ▶ Continue
+                        </button>
                     </div>
                 </div>
 
@@ -26071,7 +26104,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261029-videogoto"></script>
+    <script src="/js/app.js?v=20261031-handtppa"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
