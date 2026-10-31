@@ -16,7 +16,7 @@ No extra Polaris setup required beyond the INDI driver package.
 |---|---|---|
 | Sky-Watcher | AZ-GTi, AZ-EQ5, EQ5-Pro, HEQ5 Pro, EQ6-R Pro, EQ8-R Pro, AZ-EQ6, GoTo Dobsonians, AllView | `indi_skywatcherAltAzMount` / `indi_eqmod_telescope` |
 | Celestron | CGX, CGX-L, CGEM II, AVX, NexStar SE/Evolution, CPC, StarSense Explorer | `indi_celestron_aux` / `indi_celestron_gps` |
-| iOptron | CEM26, CEM40 (+EC), CEM70 (+EC), CEM120, HEM27, HEM44, HEM47, GEM28, GEM45, SkyTracker, SkyGuider Pro | `indi_ioptron_v3` |
+| iOptron | CEM26, CEM40 (+EC), CEM70 (+EC), CEM120, HEM27, HEM44, HEM47, GEM28, GEM45 | `indi_ioptron_v3` |
 | Meade | LX200 / LX200GPS, LX600, LX850 (with Stella Wi-Fi adapter) | `indi_lx200gps` / `indi_lx200_OnStep` |
 | Astro-Physics | 1100 GTO, 1600 GTO, Mach1, Mach2 | `indi_lx200_OnStep` (Keypad) / `indi_apgto` |
 | 10Micron | GM-1000, GM-2000, GM-3000, GM-4000, AZ-2000 | `indi_lx200_10micron` |
