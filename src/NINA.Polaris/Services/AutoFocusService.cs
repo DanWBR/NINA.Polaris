@@ -278,7 +278,6 @@ public class AutoFocusService {
                     _logger.LogInformation("AF reattempt {N}/{Max} (previous: {Reason})",
                         attempt, o.Attempts, lastReason);
                     await MoveWithBacklashAsync(focuser, startPosition, o, backlash, ct);
-                    tracker.Reset();
                 }
                 // Phase resets with the points: a reattempt after a refined
                 // attempt starts a fresh coarse sweep, and leaving the phase at
@@ -877,6 +876,13 @@ public class AutoFocusService {
 
         var stars = tracker.Filter(detected);
         if (stars.Count == 0) {
+            if (tracker.Anchors is { Count: > 0 } anchors) {
+                _logger.LogWarning(
+                    "AF: no star at the reference position {Anchors} ({Count} detected elsewhere), "
+                    + "frame not measured. Clouds, or an exposure too short for this filter",
+                    string.Join(", ", anchors.Select(a => $"({a.X * detScale + cropX:F0},{a.Y * detScale + cropY:F0})")),
+                    detected.Count);
+            }
             return new FrameMeasurement(0, 1000, detected.Count, 0, 0, frameW, frameH);
         }
 
