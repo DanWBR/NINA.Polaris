@@ -103,7 +103,7 @@ public class HeaderClockSourceTests {
 
     [Test]
     public void TheNewLabelsAreInEveryCatalogue() {
-        foreach (var lang in new[] { "_source", "de", "es", "fr", "pt-BR" }) {
+        foreach (var lang in new[] { "_source", "de", "es", "fr", "pt-BR", "ru" }) {
             var json = Read("src", "NINA.Polaris", "wwwroot", "data", "locales", lang + ".json");
             using var doc = JsonDocument.Parse(json);
             foreach (var key in new[] {

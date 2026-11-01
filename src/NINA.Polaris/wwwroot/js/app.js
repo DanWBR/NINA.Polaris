@@ -5958,7 +5958,7 @@ function ninaApp() {
             // the seed for a fresh browser — handled in loadSettings().
             try {
                 const langSaved = localStorage.getItem('nina-ui-lang');
-                const supported = (window.I18N && window.I18N.supported) || ['en','pt-BR','es','fr','de'];
+                const supported = (window.I18N && window.I18N.supported) || ['en','pt-BR','es','fr','de','ru'];
                 if (langSaved && supported.includes(langSaved)) this.uiLang = langSaved;
             } catch (_) { /* private mode */ }
             this.applyUiFont();
@@ -8632,7 +8632,7 @@ function ninaApp() {
         // the whole tree (incl. charts + WASM-derived UI) re-renders in the new
         // language via js/i18n.js. English = no catalog (identity).
         async applyUiLang() {
-            const supported = (window.I18N && window.I18N.supported) || ['en','pt-BR','es','fr','de'];
+            const supported = (window.I18N && window.I18N.supported) || ['en','pt-BR','es','fr','de','ru'];
             const v = supported.includes(this.uiLang) ? this.uiLang : 'en';
             try { localStorage.setItem('nina-ui-lang', v); } catch (_) { /* private mode */ }
             // Mirror to the profile via the dedicated endpoint (PUT /profile

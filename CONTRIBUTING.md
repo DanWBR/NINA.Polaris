@@ -229,9 +229,9 @@ than to retrofit:
   padding. Mirror the sibling sections rather than inventing spacing.
 - Label above the field, field full width. Grids stay single column
   unless the content genuinely pairs.
-- Every user-visible string is translated in the **same** change, in all
-  five files under `src/NINA.Polaris/wwwroot/data/locales/`
-  (`_source`, `pt-BR`, `es`, `fr`, `de`). The English text is the key.
+- Every user-visible string is translated in the **same** change, in the
+  catalog files under `src/NINA.Polaris/wwwroot/data/locales/`
+  (`_source`, `pt-BR`, `es`, `fr`, `de`, `ru`). The English text is the key.
   A half-translated dialog is worse than an untranslated one.
 - No em dashes or en dashes in user-facing text, in the keys or in the
   translations. A comma, a colon or a full stop reads better and

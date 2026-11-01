@@ -80,7 +80,7 @@ public class AutorunPauseDisplayTests {
             Assert.That(html, Does.Contain("autorunPausing() ? 'PAUSING' : seqState.toUpperCase()"));
             Assert.That(html, Does.Contain(@"x-show=""autorunPausing()"">Pausing once this exposure is saved<"));
         });
-        foreach (var lang in new[] { "_source", "de", "es", "fr", "pt-BR" })
+        foreach (var lang in new[] { "_source", "de", "es", "fr", "pt-BR", "ru" })
             Assert.That(Read("src", "NINA.Polaris", "wwwroot", "data", "locales", lang + ".json"),
                 Does.Contain("\"Pausing once this exposure is saved\""), lang);
     }

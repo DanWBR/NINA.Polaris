@@ -131,6 +131,32 @@
       "Gain": "Gain",
       "Sequence": "Sequenz",
       "Target": "Ziel"
+    },
+    "ru": {
+      "Mount": "Монтировка",
+      "Guider": "Гид",
+      "Focuser": "Фокусер",
+      "Filter Wheel": "Колесо фильтров",
+      "Camera": "Камера",
+      "Exposure": "Экспозиция",
+      "Gain": "Усиление",
+      "Offset": "Смещение",
+      "Binning": "Биннинг",
+      "Slew": "Наведение",
+      "Dither": "Дизеринг",
+      "Dithering": "Дизеринг",
+      "Guiding": "Гидирование",
+      "Plate solve": "Решение пластинки",
+      "Plate solving": "Решение пластинки",
+      "Live stacking": "Живое стекирование",
+      "Subframe": "Субкадр",
+      "Park": "Парковка",
+      "Unpark": "Снятие с парковки",
+      "Meridian flip": "Перекладка через меридиан",
+      "Seeing": "Сиинг",
+      "Sequence": "Последовательность",
+      "Target": "Цель",
+      "Settings": "Настройки"
     }
   }
 }
