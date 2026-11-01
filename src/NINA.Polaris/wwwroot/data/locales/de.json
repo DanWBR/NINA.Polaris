@@ -3560,7 +3560,7 @@
   "source repository": "Quellcode-Repository",
   "Source:": "Quelle:",
   "Source: DSS Color, STScI/NASA, HEALPixed by CDS Strasbourg.": "Quelle: DSS Color, STScI/NASA, HEALPixed vom CDS Straßburg.",
-  "Source: DSS Color, STScI/NASA, HEALPixed by CDS Strasbourg. Reload the SKY tab after a download to see the new detail.": "Quelle: DSS Color, STScI/NASA, HEALPixed vom CDS Straßburg. Laden Sie nach dem Herunterladen die Registerkarte „SKY“ neu, um die neuen Details zu sehen.",
+  "Source: DSS Color, STScI/NASA, HEALPixed by CDS Strasbourg (or its NASA/IPAC IRSA mirror when CDS does not answer). Reload the SKY tab after a download to see the new detail.": "Quelle: DSS Color, STScI/NASA, HEALPixed vom CDS Straßburg (oder von dessen Spiegel NASA/IPAC IRSA, wenn das CDS nicht antwortet). Laden Sie nach dem Herunterladen die Registerkarte „SKY“ neu, um die neuen Details zu sehen.",
   "South": "Süd",
   "South only": "Nur Süden",
   "Spawn a new phd2 process inside the running xpra session": "Einen neuen phd2-Prozess innerhalb der laufenden xpra-Sitzung starten",
@@ -5331,5 +5331,6 @@
   "▶ Continue": "▶ Weiter",
   "Continue failed": "Fortsetzen fehlgeschlagen",
   "Turn the RA axis for point 2": "RA-Achse für Punkt 2 drehen",
-  "Turn the RA axis for point 3": "RA-Achse für Punkt 3 drehen"
+  "Turn the RA axis for point 3": "RA-Achse für Punkt 3 drehen",
+  "Order {n} is incomplete: {have} of {total} tiles. Download it again to fetch the missing ones.": "Ordnung {n} ist unvollständig: {have} von {total} Kacheln. Laden Sie sie erneut herunter, um die fehlenden zu holen."
 }

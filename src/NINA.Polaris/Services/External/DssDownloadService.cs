@@ -24,19 +24,29 @@ namespace NINA.Polaris.Services.External;
 /// the higher orders (4 ~110 MB, 5 ~400 MB) from the Settings tab so the sky
 /// reaches ASIAIR-grade detail without committing hundreds of MB to git.
 ///
-/// Tiles are fetched from CDS Strasbourg into the same bundled directory the
-/// static file middleware serves (<c>wwwroot/sky/data/skydata/surveys/dss</c>),
-/// so the moment a tile lands the engine can use it on the next zoom. The
-/// download is resumable (existing non-empty tiles are skipped) and
-/// cancellable. Mirrors the standalone scripts/fetch-stellarium-dss.sh.
+/// Tiles are fetched from CDS Strasbourg, or from the NASA/IPAC IRSA mirror
+/// of the same survey when CDS does not answer, into the same bundled
+/// directory the static file middleware serves
+/// (<c>wwwroot/sky/data/skydata/surveys/dss</c>), so the moment a tile lands
+/// the engine can use it on the next zoom. The download is resumable
+/// (existing non-empty tiles are skipped) and cancellable. Mirrors the
+/// standalone scripts/fetch-stellarium-dss.sh.
 ///
 /// Attribution: DSS Color, STScI/NASA, HEALPixed by CDS Strasbourg.
 /// </summary>
 public sealed class DssDownloadService {
-    private const string Remote = "https://alasky.cds.unistra.fr/DSS/DSSColor";
+    // The same HiPS (ivo://CDS/P/DSS2/color), byte-identical tiles. The first
+    // one that answers the preflight serves the run; tiles that fail are
+    // retried against every mirror before the run gives up on them.
+    internal static readonly string[] Remotes = {
+        "https://alasky.cds.unistra.fr/DSS/DSSColor",
+        "https://irsa.ipac.caltech.edu/data/hips/CDS/DSS2/color",
+    };
     // Shared client: HiPS fetch is thousands of small GETs; reusing one
     // client (and its connection pool) avoids socket exhaustion.
-    private static readonly HttpClient Http = new() {
+    private static readonly HttpClient Http = new(new SocketsHttpHandler {
+        ConnectTimeout = TimeSpan.FromSeconds(15)
+    }) {
         Timeout = TimeSpan.FromSeconds(60)
     };
 
@@ -76,24 +86,54 @@ public sealed class DssDownloadService {
         return t;
     }
 
-    /// <summary>Highest contiguous order already present on disk (a Norder{n}
-    /// dir that holds at least one tile). -1 when nothing is bundled.</summary>
-    public int InstalledMaxOrder() {
-        int max = -1;
-        for (int o = 0; o <= 8; o++) {
-            bool has = HasTiles(Path.Combine(_dssDir, $"Norder{o}"))
-                    || HasTiles(Path.Combine(_bundledDir, $"Norder{o}"));
-            if (has) max = o; else break;
+    /// <summary>What is on disk: the highest order up to which every order
+    /// holds all of its tiles (-1 when nothing is), and the order above it
+    /// when that one is only partly there.</summary>
+    internal readonly record struct DiskScan(int InstalledOrder, int PartialOrder, long PartialTiles);
+
+    // Counting ~16k files on an SD card is not free and the Settings card
+    // polls every 1.5 s during a download, so a scan is reused for a while.
+    private DiskScan? _scan;
+    private DateTime _scanAt;
+
+    private DiskScan Scan() {
+        lock (_lock) {
+            if (_scan is { } s && DateTime.UtcNow - _scanAt < TimeSpan.FromSeconds(10)) return s;
         }
-        return max;
+        var fresh = ScanOrders(_dssDir, _bundledDir);
+        lock (_lock) { _scan = fresh; _scanAt = DateTime.UtcNow; }
+        return fresh;
     }
 
-    private static bool HasTiles(string dir) =>
-        Directory.Exists(dir) &&
-        Directory.EnumerateFiles(dir, "*.jpg", SearchOption.AllDirectories).Any();
+    /// <summary>Highest order up to which every order is complete on disk.
+    /// -1 when nothing is bundled.</summary>
+    public int InstalledMaxOrder() => Scan().InstalledOrder;
+
+    internal static DiskScan ScanOrders(string dssDir, string bundledDir) {
+        for (int o = 0; o <= 8; o++) {
+            long have = CountTiles(dssDir, bundledDir, o);
+            if (have >= TilesAt(o)) continue;
+            return new DiskScan(o - 1, have > 0 ? o : -1, have);
+        }
+        return new DiskScan(8, -1, 0);
+    }
+
+    /// <summary>Distinct non-empty tiles of one order across the writable
+    /// dir and the bundled baseline (a tile may live in either).</summary>
+    internal static long CountTiles(string dssDir, string bundledDir, int order) {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var root in new[] { dssDir, bundledDir }) {
+            var dir = new DirectoryInfo(Path.Combine(root, $"Norder{order}"));
+            if (!dir.Exists) continue;
+            foreach (var f in dir.EnumerateFiles("Npix*.jpg", SearchOption.AllDirectories))
+                if (f.Length > 0) seen.Add(f.Name);
+        }
+        return seen.Count;
+    }
 
     public DssDownloadStatus GetStatus() {
         var s = _status;
+        var disk = Scan();
         return new DssDownloadStatus {
             Running = s.Running,
             TargetOrder = s.TargetOrder,
@@ -101,7 +141,10 @@ public sealed class DssDownloadService {
             CompletedTiles = s.CompletedTiles,
             FailedTiles = s.FailedTiles,
             Error = s.Error,
-            InstalledOrder = InstalledMaxOrder(),
+            InstalledOrder = disk.InstalledOrder,
+            PartialOrder = disk.PartialOrder,
+            PartialTiles = disk.PartialTiles,
+            PartialTotal = disk.PartialOrder >= 0 ? TilesAt(disk.PartialOrder) : 0,
             StartedAt = s.StartedAt,
             FinishedAt = s.FinishedAt
         };
@@ -152,21 +195,33 @@ public sealed class DssDownloadService {
             }
 
             // Preflight 2: we need internet to fetch tiles. Probe a known
-            // order-4 tile fresh (bypassing the already-present check). This
-            // is the common field failure: downloading at the telescope with
-            // no connection, previously every tile failed silently and the
-            // job reported a misleading "success".
-            try {
-                using var probe = await Http.GetAsync($"{Remote}/Norder4/Dir0/Npix0.jpg", ct);
-                if (!probe.IsSuccessStatusCode)
-                    throw new Exception($"server returned HTTP {(int)probe.StatusCode}");
-            } catch (OperationCanceledException) {
-                throw;
-            } catch (Exception ex) {
-                Finish(0, 0, "Could not reach the sky imagery server, an internet connection is "
-                    + $"required to download (you can be offline afterwards). [{ex.Message}]");
+            // order-4 tile fresh (bypassing the already-present check) on
+            // each mirror in turn and use the first that answers. No answer
+            // at all is the common field failure: downloading at the
+            // telescope with no connection.
+            string? remote = null;
+            var probeErrors = new List<string>();
+            foreach (var candidate in Remotes) {
+                try {
+                    using var probeCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    probeCts.CancelAfter(TimeSpan.FromSeconds(20));
+                    using var probe = await Http.GetAsync($"{candidate}/Norder4/Dir0/Npix0.jpg", probeCts.Token);
+                    if (probe.IsSuccessStatusCode) { remote = candidate; break; }
+                    probeErrors.Add($"{new Uri(candidate).Host}: HTTP {(int)probe.StatusCode}");
+                } catch (OperationCanceledException) when (!ct.IsCancellationRequested) {
+                    probeErrors.Add($"{new Uri(candidate).Host}: timed out");
+                } catch (HttpRequestException ex) {
+                    probeErrors.Add($"{new Uri(candidate).Host}: {ex.Message}");
+                }
+            }
+            if (remote == null) {
+                Finish(0, 0, "Could not reach the sky imagery servers, an internet connection is "
+                    + $"required to download (you can be offline afterwards). [{string.Join("; ", probeErrors)}]");
                 return;
             }
+            if (remote != Remotes[0])
+                _logger.LogInformation("DSS download: {Primary} did not answer, using {Mirror}",
+                    new Uri(Remotes[0]).Host, new Uri(remote).Host);
 
             // Root metadata first (cheap, makes the survey self-describing).
             // Force these into the WRITABLE dir even if the bundled baseline
@@ -177,13 +232,21 @@ public sealed class DssDownloadService {
             // render nothing. A guaranteed local properties makes the offline
             // path deterministic.
             foreach (var meta in new[] { "properties", "Moc.fits" }) {
-                await FetchAsync($"{Remote}/{meta}", Path.Combine(_dssDir, meta), ct, forceLocal: true);
+                await FetchAsync($"{remote}/{meta}", Path.Combine(_dssDir, meta), ct, forceLocal: true);
             }
 
+            // Tiles that fail on the first pass, as paths relative to the
+            // survey root ("Norder5/Dir0/Npix123.jpg").
+            var failed = new ConcurrentBag<string>();
+            // A mirror that stops answering mid-run would make every tile wait
+            // out its timeout; after a run of straight failures the rest of
+            // the pass moves to the next mirror.
+            int streak = 0;
+            var switchLock = new object();
             using var gate = new SemaphoreSlim(8);
             for (int order = 0; order <= maxOrder; order++) {
                 if (order <= 3) {
-                    await FetchAsync($"{Remote}/Norder{order}/Allsky.jpg",
+                    await FetchAsync($"{remote}/Norder{order}/Allsky.jpg",
                         Path.Combine(_dssDir, $"Norder{order}", "Allsky.jpg"), ct);
                 }
                 long n = TilesAt(order);
@@ -191,15 +254,26 @@ public sealed class DssDownloadService {
                 for (long npix = 0; npix < n; npix++) {
                     ct.ThrowIfCancellationRequested();
                     long dir = (npix / 10000) * 10000;
-                    var url = $"{Remote}/Norder{order}/Dir{dir}/Npix{npix}.jpg";
-                    var outPath = Path.Combine(_dssDir, $"Norder{order}", $"Dir{dir}", $"Npix{npix}.jpg");
+                    var rel = $"Norder{order}/Dir{dir}/Npix{npix}.jpg";
                     await gate.WaitAsync(ct);
                     tasks.Add(Task.Run(async () => {
                         try {
-                            var r = await FetchAsync(url, outPath, ct);
+                            var used = remote;
+                            var r = await FetchAsync($"{used}/{rel}", Path.Combine(_dssDir, rel), ct);
                             if (r == FetchResult.Ok) Interlocked.Increment(ref ok);
                             else if (r == FetchResult.Missing) Interlocked.Increment(ref missing);
-                            else Interlocked.Increment(ref errors);
+                            else { Interlocked.Increment(ref errors); failed.Add(rel); }
+                            if (r != FetchResult.Error) Interlocked.Exchange(ref streak, 0);
+                            else if (Interlocked.Increment(ref streak) >= 40) {
+                                lock (switchLock) {
+                                    if (remote == used) {
+                                        remote = Remotes[(Array.IndexOf(Remotes, used) + 1) % Remotes.Length];
+                                        streak = 0;
+                                        _logger.LogWarning("DSS download: {Host} keeps failing, switching to {Next}",
+                                            new Uri(used).Host, new Uri(remote).Host);
+                                    }
+                                }
+                            }
                             UpdateProgress(Interlocked.Read(ref ok)
                                 + Interlocked.Read(ref missing)
                                 + Interlocked.Read(ref errors),
@@ -209,12 +283,42 @@ public sealed class DssDownloadService {
                 }
                 await Task.WhenAll(tasks);
             }
-            // If the connection dropped mid-run, nothing useful landed even
-            // though we got past the preflight, report that honestly rather
-            // than claiming success.
-            string? err = (ok == 0 && errors > 0)
-                ? "Download failed, the connection appears to have dropped (no tiles were saved)."
-                : null;
+
+            // Second chance for the failures, on every mirror in turn, with a
+            // pause so a server that was throttling us has time to recover.
+            for (int round = 0; round < 2 && !failed.IsEmpty; round++) {
+                await Task.Delay(TimeSpan.FromSeconds(5), ct);
+                var retry = failed.ToArray();
+                failed.Clear();
+                var tasks = retry.Select(async rel => {
+                    await gate.WaitAsync(ct);
+                    try {
+                        var r = FetchResult.Error;
+                        foreach (var mirror in Remotes.OrderBy(m => m == remote ? 0 : 1)) {
+                            r = await FetchAsync($"{mirror}/{rel}", Path.Combine(_dssDir, rel), ct);
+                            if (r != FetchResult.Error) break;
+                        }
+                        if (r == FetchResult.Error) { failed.Add(rel); return; }
+                        Interlocked.Decrement(ref errors);
+                        if (r == FetchResult.Ok) Interlocked.Increment(ref ok);
+                        else Interlocked.Increment(ref missing);
+                        UpdateProgress(Interlocked.Read(ref ok)
+                            + Interlocked.Read(ref missing)
+                            + Interlocked.Read(ref errors),
+                            Interlocked.Read(ref errors));
+                    } finally { gate.Release(); }
+                }).ToList();
+                await Task.WhenAll(tasks);
+            }
+
+            // Tiles that never arrived leave the order incomplete; the
+            // Settings card then shows it as partly installed, and pressing
+            // the button again fetches only what is missing.
+            string? err = null;
+            if (ok == 0 && errors > 0)
+                err = "Download failed, the connection appears to have dropped (no tiles were saved).";
+            else if (errors > 0)
+                err = $"{errors:N0} tiles could not be downloaded. Press the button again to fetch the missing ones.";
             Finish(ok + missing + errors, errors, err);
             _logger.LogInformation("DSS download done: order {Order}, {Ok} saved, {Missing} sparse, {Err} errors",
                 maxOrder, ok, missing, errors);
@@ -274,6 +378,7 @@ public sealed class DssDownloadService {
             s.Running = false;
             s.Error = error;
             s.FinishedAt = DateTime.UtcNow;
+            _scan = null;
         }
     }
 }
@@ -287,6 +392,11 @@ public sealed class DssDownloadStatus {
     public long FailedTiles { get; set; }
     public string? Error { get; set; }
     public int InstalledOrder { get; set; } = -1;
+    /// <summary>The order above <see cref="InstalledOrder"/> when some of its
+    /// tiles are on disk but not all; -1 otherwise.</summary>
+    public int PartialOrder { get; set; } = -1;
+    public long PartialTiles { get; set; }
+    public long PartialTotal { get; set; }
     public DateTime? StartedAt { get; set; }
     public DateTime? FinishedAt { get; set; }
 }

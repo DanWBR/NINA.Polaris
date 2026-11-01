@@ -118,8 +118,16 @@ Raspberry Pi):
 | 6 | ~65 500 | ~1.5 GB | overkill for framing |
 
 The easiest route is **Settings → Sky imagery (offline DSS)**, which
-downloads order 4 or 5 from inside the app. From a shell, the
-provisioning scripts do the same:
+downloads order 4 or 5 from inside the app. It fetches the tiles from
+CDS Strasbourg, or from the NASA/IPAC IRSA mirror (NASA's infrared
+science archive, which keeps an identical copy of the survey) when CDS
+does not answer. The card counts an order as installed only when every
+one of its tiles is on disk; after an interrupted download it shows the
+order as incomplete with a tile count, and pressing the button again
+fetches only the missing tiles. From a shell, the provisioning scripts
+do the same (set `DSS_REMOTE`, or `-Remote` on Windows, to
+`https://irsa.ipac.caltech.edu/data/hips/CDS/DSS2/color` to use the
+mirror):
 
 ```bash
 # Linux / macOS / Git-Bash  (args: MAX_ORDER [PARALLEL])

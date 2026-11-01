@@ -26,15 +26,20 @@
   Concurrent downloads (default 8). Requires PowerShell 7+ for
   ForEach-Object -Parallel; on Windows PowerShell 5.1 it runs serially.
 
+.PARAMETER Remote
+  HiPS base URL (default CDS Strasbourg). When CDS does not answer, the
+  NASA/IPAC IRSA mirror serves the same tiles:
+  https://irsa.ipac.caltech.edu/data/hips/CDS/DSS2/color
+
 .EXAMPLE
   pwsh scripts/fetch-stellarium-dss.ps1 -MaxOrder 4
 #>
 param(
     [int]$MaxOrder = 4,
-    [int]$Parallel = 8
+    [int]$Parallel = 8,
+    [string]$Remote = 'https://alasky.cds.unistra.fr/DSS/DSSColor'
 )
 $ErrorActionPreference = 'Stop'
-$remote = 'https://alasky.cds.unistra.fr/DSS/DSSColor'
 $dest = Join-Path $PSScriptRoot '..\src\NINA.Polaris\wwwroot\sky\data\skydata\surveys\dss'
 New-Item -ItemType Directory -Force -Path $dest | Out-Null
 Write-Host "DSS Color -> $dest  (max order $MaxOrder)"

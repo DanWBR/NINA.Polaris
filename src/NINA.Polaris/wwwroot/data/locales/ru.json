@@ -4628,7 +4628,7 @@
   "source repository": "исходный репозиторий",
   "Source:": "Источник:",
   "Source: DSS Color, STScI/NASA, HEALPixed by CDS Strasbourg.": "Источник: DSS Color, STScI/NASA, HEALPixed от CDS Strasbourg.",
-  "Source: DSS Color, STScI/NASA, HEALPixed by CDS Strasbourg. Reload the SKY tab after a download to see the new detail.": "Источник: DSS Color, STScI/NASA, HEALPixed от CDS Strasbourg. После загрузки перезагрузите вкладку НЕБО, чтобы увидеть новые детали.",
+  "Source: DSS Color, STScI/NASA, HEALPixed by CDS Strasbourg (or its NASA/IPAC IRSA mirror when CDS does not answer). Reload the SKY tab after a download to see the new detail.": "Источник: DSS Color, STScI/NASA, HEALPixed от CDS Strasbourg (или от его зеркала NASA/IPAC IRSA, когда CDS не отвечает). После загрузки перезагрузите вкладку НЕБО, чтобы увидеть новые детали.",
   "Sources (": "Источники (",
   "South": "Юг",
   "South only": "Только юг",
@@ -5658,5 +5658,6 @@
   "▶ Continue": "▶ Продолжить",
   "Continue failed": "Не удалось продолжить",
   "Turn the RA axis for point 2": "Поверните ось RA для точки 2",
-  "Turn the RA axis for point 3": "Поверните ось RA для точки 3"
+  "Turn the RA axis for point 3": "Поверните ось RA для точки 3",
+  "Order {n} is incomplete: {have} of {total} tiles. Download it again to fetch the missing ones.": "Порядок {n} загружен не полностью: {have} из {total} тайлов. Скачайте его ещё раз, чтобы получить недостающие."
 }

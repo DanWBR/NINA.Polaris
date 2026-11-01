@@ -885,7 +885,8 @@ function ninaApp() {
         // while a download runs. installedOrder = -1 means nothing on disk.
         dssDownload: {
             running: false, targetOrder: 0, totalTiles: 0, completedTiles: 0,
-            failedTiles: 0, installedOrder: -1, error: null
+            failedTiles: 0, installedOrder: -1, error: null,
+            partialOrder: -1, partialTiles: 0, partialTotal: 0
         },
         _dssPollTimer: null,
 
@@ -13907,6 +13908,8 @@ function ninaApp() {
                     this._reloadSkyFrame();
                 } else if (this.dssDownload.error !== 'cancelled') {
                     this.toast('Sky imagery download failed: ' + this.dssDownload.error, 'error');
+                    // Most tiles may still have landed; let the map use them.
+                    if (this.dssDownload.completedTiles > this.dssDownload.failedTiles) this._reloadSkyFrame();
                 }
             }
         },
