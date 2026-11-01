@@ -3106,7 +3106,7 @@
   "Source preview": "",
   "source repository": "",
   "Source:": "",
-  "Source: DSS Color, STScI/NASA, HEALPixed by CDS Strasbourg. Reload the SKY tab after a download to see the new detail.": "",
+  "Source: DSS Color, STScI/NASA, HEALPixed by CDS Strasbourg (or its NASA/IPAC IRSA mirror when CDS does not answer). Reload the SKY tab after a download to see the new detail.": "",
   "Sources (": "",
   "South": "",
   "South only": "",
@@ -4963,5 +4963,6 @@
   "▶ Continue": "",
   "Continue failed": "",
   "Turn the RA axis for point 2": "",
-  "Turn the RA axis for point 3": ""
+  "Turn the RA axis for point 3": "",
+  "Order {n} is incomplete: {have} of {total} tiles. Download it again to fetch the missing ones.": ""
 }

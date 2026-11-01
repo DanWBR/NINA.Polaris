@@ -30,13 +30,16 @@
 # order or recovers from an interrupted run. Source + attribution:
 #   DSS Color, STScI/NASA, HEALPixed by CDS Strasbourg
 #   https://alasky.cds.unistra.fr/DSS/DSSColor
+# When CDS does not answer, the NASA/IPAC IRSA mirror serves the same tiles:
+#   DSS_REMOTE=https://irsa.ipac.caltech.edu/data/hips/CDS/DSS2/color \
+#     scripts/fetch-stellarium-dss.sh 5
 # Licensed for non-commercial/research use; mirrored locally for offline
 # field use, same data the upstream engine already streams.
 set -euo pipefail
 
 MAX_ORDER="${1:-4}"
 PARALLEL="${2:-8}"
-REMOTE="https://alasky.cds.unistra.fr/DSS/DSSColor"
+REMOTE="${DSS_REMOTE:-https://alasky.cds.unistra.fr/DSS/DSSColor}"
 
 # Resolve repo root from this script's location so it works from anywhere.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

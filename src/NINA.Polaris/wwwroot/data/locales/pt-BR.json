@@ -3577,7 +3577,7 @@
   "source repository": "repositório de código-fonte",
   "Source:": "Fonte:",
   "Source: DSS Color, STScI/NASA, HEALPixed by CDS Strasbourg.": "Fonte: DSS Color, STScI/NASA, processado com HEALPix pelo CDS de Estrasburgo.",
-  "Source: DSS Color, STScI/NASA, HEALPixed by CDS Strasbourg. Reload the SKY tab after a download to see the new detail.": "Fonte: DSS Color, STScI/NASA, processado com HEALPix pelo CDS de Estrasburgo. Atualize a aba SKY após o download para ver os novos detalhes.",
+  "Source: DSS Color, STScI/NASA, HEALPixed by CDS Strasbourg (or its NASA/IPAC IRSA mirror when CDS does not answer). Reload the SKY tab after a download to see the new detail.": "Fonte: DSS Color, STScI/NASA, processado com HEALPix pelo CDS de Estrasburgo (ou pelo espelho NASA/IPAC IRSA quando o CDS não responde). Atualize a aba SKY após o download para ver os novos detalhes.",
   "South": "Sul",
   "South only": "Somente sul",
   "Spawn a new phd2 process inside the running xpra session": "Iniciar um novo processo phd2 dentro da sessão do xpra em execução",
@@ -5329,5 +5329,6 @@
   "▶ Continue": "▶ Continuar",
   "Continue failed": "Falha ao continuar",
   "Turn the RA axis for point 2": "Gire o eixo RA para o ponto 2",
-  "Turn the RA axis for point 3": "Gire o eixo RA para o ponto 3"
+  "Turn the RA axis for point 3": "Gire o eixo RA para o ponto 3",
+  "Order {n} is incomplete: {have} of {total} tiles. Download it again to fetch the missing ones.": "A ordem {n} está incompleta: {have} de {total} tiles. Baixe de novo para buscar os que faltam."
 }

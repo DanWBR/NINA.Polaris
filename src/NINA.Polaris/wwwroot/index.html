@@ -10301,9 +10301,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <div class="sky-toolbar">
                     <!-- Search collapses behind this button so the toolbar
                          fits one row; clicking it reveals + focuses the box,
-                         Enter runs the search, Esc closes it. -->
+                         Enter or a second click runs the search, Esc closes it. -->
                     <button class="btn btn-sm" :class="skySearchOpen ? 'btn-active' : ''" data-tour="sky-search"
-                            @click="skySearchOpen = !skySearchOpen; if (skySearchOpen) $nextTick(() => $refs.skySearchInput && $refs.skySearchInput.focus())"
+                            @click="skySearchButton()"
                             title="Search for an object by name (M31, NGC 7000, …)">🔍 Search</button>
                     <input type="text" class="search-input" x-ref="skySearchInput"
                            x-show="skySearchOpen" x-cloak
@@ -16694,6 +16694,9 @@ Windows  winget install Rclone.Rclone</code></pre>
                                           : ' (baseline)'))
                                     : 'none'"></strong>
                             </div>
+                            <div x-show="!dssDownload.running && dssDownload.partialOrder >= 0" class="text-warn">
+                                <span x-text="$t('Order {n} is incomplete: {have} of {total} tiles. Download it again to fetch the missing ones.', { n: dssDownload.partialOrder, have: (dssDownload.partialTiles || 0).toLocaleString(), total: (dssDownload.partialTotal || 0).toLocaleString() })"></span>
+                            </div>
                             <div x-show="dssDownload.running">
                                 Downloading order <span x-text="dssDownload.targetOrder"></span>:
                                 <strong x-text="dssDownload.completedTiles + ' / ' + dssDownload.totalTiles + ' tiles'"></strong>
@@ -16729,7 +16732,8 @@ Windows  winget install Rclone.Rclone</code></pre>
                            style="font-size:11px; margin-top:8px"
                            x-text="'⚠ ' + dssDownload.error"></p>
                         <p class="text-muted" style="font-size:11px; margin-top:8px">
-                            Source: DSS Color, STScI/NASA, HEALPixed by CDS Strasbourg.
+                            Source: DSS Color, STScI/NASA, HEALPixed by CDS Strasbourg
+                            (or its NASA/IPAC IRSA mirror when CDS does not answer).
                             Reload the SKY tab after a download to see the new detail.
                         </p>
                     </div>
@@ -26094,7 +26098,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261101-afbin"></script>
+    <script src="/js/app.js?v=20261101-skysearch"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
