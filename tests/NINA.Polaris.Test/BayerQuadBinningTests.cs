@@ -114,4 +114,37 @@ public class BayerQuadBinningTests {
         Assert.That(onBinned.Count, Is.GreaterThan(0),
             "the two planted stars have to survive the collapse");
     }
+
+    /// <summary>
+    /// A star at the bottom of the V on a colour camera, reading HFR about 1 in
+    /// the panel, is about 0.5 on the half-size grid. The stock floor of 0.5
+    /// grid pixels dropped it, and the sweep lost its star right at focus. Its
+    /// radius also hung on where it landed in the pixel: ~0 centred on one,
+    /// 0.7 straddling four.
+    /// </summary>
+    [Test]
+    public void AnInFocusStarSurvivesTheBinnedGrid() {
+        const int W = 160, H = 160;
+        var rng = new Random(99);
+        var mosaic = new ushort[W * H];
+        for (int i = 0; i < mosaic.Length; i++) mosaic[i] = (ushort)(500 + rng.Next(40));
+        // Gaussian star, sigma in frame pixels.
+        void Put(double cx, double cy, double sigma, double peak) {
+            for (int y = (int)cy - 6; y <= (int)cy + 6; y++)
+                for (int x = (int)cx - 6; x <= (int)cx + 6; x++) {
+                    double dx = x + 0.5 - cx, dy = y + 0.5 - cy;
+                    double f = Math.Exp(-(dx * dx + dy * dy) / (2 * sigma * sigma));
+                    mosaic[y * W + x] = (ushort)Math.Min(65535, mosaic[y * W + x] + peak * f);
+                }
+        }
+        Put(61, 61, 0.85, 20000);     // centred on one CFA quad
+        Put(102, 112, 0.85, 20000);   // straddling four
+
+        var (binned, bw, bh) = AutoFocusService.BinBayerQuads(mosaic, W, H);
+        var found = AutoFocusService.CreateDetector().Detect(binned, bw, bh);
+        Assert.That(found, Has.Count.EqualTo(2), "both in-focus stars must be detected");
+        double a = found.Single(s => s.X < 40).HFR, b = found.Single(s => s.X > 40).HFR;
+        Assert.That(Math.Min(a, b), Is.GreaterThan(0.3), $"HFR {a:F3} / {b:F3}: a real star never reads ~0");
+        Assert.That(Math.Abs(a - b), Is.LessThan(0.5), $"HFR {a:F3} / {b:F3}: the position in the pixel barely matters");
+    }
 }
