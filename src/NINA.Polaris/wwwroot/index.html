@@ -9978,9 +9978,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 <div class="sky-toolbar">
                     <!-- Search collapses behind this button so the toolbar
                          fits one row; clicking it reveals + focuses the box,
-                         Enter runs the search, Esc closes it. -->
+                         Enter or a second click runs the search, Esc closes it. -->
                     <button class="btn btn-sm" :class="skySearchOpen ? 'btn-active' : ''" data-tour="sky-search"
-                            @click="skySearchOpen = !skySearchOpen; if (skySearchOpen) $nextTick(() => $refs.skySearchInput && $refs.skySearchInput.focus())"
+                            @click="skySearchButton()"
                             title="Search for an object by name (M31, NGC 7000, …)">🔍 Search</button>
                     <input type="text" class="search-input" x-ref="skySearchInput"
                            x-show="skySearchOpen" x-cloak
@@ -25809,7 +25809,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261101-afbin"></script>
+    <script src="/js/app.js?v=20261101-skysearch"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

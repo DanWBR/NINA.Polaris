@@ -44882,6 +44882,13 @@ function ninaApp() {
         skyRecentBlur() {
             setTimeout(() => { this.skyRecentOpen = false; }, 180);
         },
+        // The toolbar Search button opens the box; with a query typed it runs
+        // the search like Enter does, and on an empty box it closes it.
+        skySearchButton() {
+            if (this.skySearchOpen && this.skySearch.trim()) { this.searchSky(); return; }
+            this.skySearchOpen = !this.skySearchOpen;
+            if (this.skySearchOpen) this.$nextTick(() => this.$refs.skySearchInput && this.$refs.skySearchInput.focus());
+        },
         skyRecentClear() {
             this.skyRecent = [];
             this.skyRecentOpen = false;
