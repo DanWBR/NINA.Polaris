@@ -252,6 +252,49 @@ public class AutoFocusDefocusMeasurementTests {
     }
 
     /// <summary>
+    /// Near focus the reference star dropped out of a frame (L-Ultimate, short
+    /// exposure). The tracker went to the nearest star anywhere in the field
+    /// and measured that one instead. A star missing from its position leaves
+    /// the frame unmeasured, and the anchor stays where it was.
+    /// </summary>
+    [Test]
+    public void SingleStarTracker_NeverSwitchesStar_WhenTheReferenceIsMissing() {
+        var tracker = new AfStarTracker(1);
+        tracker.Filter(new List<DetectedStar> {
+            new() { X = 100, Y = 100, HFR = 3.0, Flux = 9000 },   // reference
+            new() { X = 300, Y = 220, HFR = 3.1, Flux = 4000 },
+        });
+
+        var missing = tracker.Filter(new List<DetectedStar> {
+            new() { X = 300, Y = 220, HFR = 1.4, Flux = 6000 },
+            new() { X = 140, Y = 130, HFR = 1.2, Flux = 2000 },
+        });
+        Assert.That(missing, Is.Empty, "no other star may stand in for the reference");
+
+        var back = tracker.Filter(new List<DetectedStar> {
+            new() { X = 300, Y = 220, HFR = 1.5, Flux = 6000 },
+            new() { X = 101, Y = 102, HFR = 1.3, Flux = 8000 },
+        });
+        Assert.That(back, Has.Count.EqualTo(1));
+        Assert.That(back[0].X, Is.EqualTo(101), "the reference is picked up again at its own position");
+        Assert.That(tracker.Anchors![0], Is.EqualTo((100.0, 100.0)), "the anchor never moves");
+    }
+
+    /// <summary>A heavily defocused donut's centroid is loose, so its own HFR
+    /// widens the reach on top of the fixed radius.</summary>
+    [Test]
+    public void SingleStarTracker_ReachGrowsWithTheDonut() {
+        var tracker = new AfStarTracker(1);
+        tracker.Filter(new List<DetectedStar> { new() { X = 100, Y = 100, HFR = 2.0, Flux = 9000 } });
+
+        double off = AfStarTracker.MatchRadius + 10;
+        Assert.That(tracker.Filter(new List<DetectedStar> {
+            new() { X = 100 + off, Y = 100, HFR = 2.0, Flux = 9000 } }), Is.Empty);
+        Assert.That(tracker.Filter(new List<DetectedStar> {
+            new() { X = 100 + off, Y = 100, HFR = 12.0, Flux = 9000 } }), Has.Count.EqualTo(1));
+    }
+
+    /// <summary>
     /// The field failure of 30 Jul: tracking ONE star, the defocused ends of
     /// the sweep detect two to four stars, the old gate demanded MinStars (5),
     /// and both wings came back "stars=4 HFR=0.00" (soft-rejected). With no

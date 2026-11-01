@@ -387,7 +387,6 @@ function ninaApp() {
         liveStackColor: true,
         liveStackBinning: 0,        // 0 = auto (Polaris picks until the user chooses)
         liveStackBinOptions: [],    // [{bin, estimatedMB, fits, width, height}]
-        liveStackBinBudgetMB: 0,
         liveStackAutoBin: 0,        // what auto resolved to, for the hint
         liveStackColorActive: false,
         // Per-pixel kappa-sigma outlier rejection on the live stack. Mirrors
@@ -37391,7 +37390,6 @@ function ninaApp() {
                 const r = await this.apiGet('/api/livestack/binning-options');
                 if (!r) return;
                 this.liveStackBinOptions = r.options || [];
-                this.liveStackBinBudgetMB = r.budgetMB || 0;
                 if (this.liveStackBinning === 0) {
                     const fit = this.liveStackBinOptions.find(o => o.fits);
                     this.liveStackAutoBin = fit ? fit.bin : 0;
@@ -50841,6 +50839,17 @@ function ninaApp() {
                     // but no controls are known; no-ops forever for drivers
                     // that genuinely expose none (INDI/Alpaca/ASCOM).
                     this.camCtrlLoad();
+                }
+                // Capabilities (binning, bins, ROI, ISO) gate controls on every
+                // tab, FOCUS's Bin among them. They loaded on the PREVIEW and
+                // VIDEO buttons and on a connect made from this browser, so a
+                // camera already connected when the page opened left FOCUS
+                // with the defaults, binning false, and no Bin field. Load them
+                // whenever the connected main camera changes.
+                const camCapsKey = camConn ? (eq.camera.name || '1') : '';
+                if (camCapsKey !== this._camCapsKey) {
+                    this._camCapsKey = camCapsKey;
+                    if (camCapsKey) this.loadCameraCapabilities();
                 }
                 const prevIso = this.equipCameraInfo ? this.equipCameraInfo.supportsIso : false;
                 const prevCool = this.equipCameraInfo ? this.equipCameraInfo.supportsCooler : false;

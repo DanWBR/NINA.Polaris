@@ -270,6 +270,13 @@ public class StarDetector {
 
         // Curve-of-growth: collect (distance, flux) for positive-flux pixels,
         // plus flux-weighted second moments for eccentricity, in one pass.
+        // A small blob spreads each pixel's flux over sub-pixels. Taken as a
+        // point at its centre, a pixel holding half the flux puts the radius at
+        // that centre's distance from the centroid: an in-focus star landing on
+        // one pixel read HFR ~0, the same star straddling four read 0.7. Over
+        // its area the radius bottoms out near 0.4 whatever the star's position
+        // in the pixel. A big blob skips it, the difference there is nothing.
+        int sub = (x1 - x0 + 1) * (y1 - y0 + 1) <= 1024 ? 4 : 1;
         var samples = new List<(double dist, double flux)>();
         double total = 0, mxx = 0, myy = 0, mxy = 0;
         for (int y = y0; y <= y1; y++) {
@@ -278,7 +285,18 @@ public class StarDetector {
                 double f = data[row + x] - background;
                 if (f <= 0) continue;
                 double dx = x - cx, dy = y - cy;
-                samples.Add((Math.Sqrt(dx * dx + dy * dy), f));
+                if (sub == 1) {
+                    samples.Add((Math.Sqrt(dx * dx + dy * dy), f));
+                } else {
+                    double fs = f / (sub * sub);
+                    for (int j = 0; j < sub; j++) {
+                        double sy = dy + (j + 0.5) / sub - 0.5;
+                        for (int i = 0; i < sub; i++) {
+                            double sx = dx + (i + 0.5) / sub - 0.5;
+                            samples.Add((Math.Sqrt(sx * sx + sy * sy), fs));
+                        }
+                    }
+                }
                 total += f;
                 mxx += f * dx * dx; myy += f * dy * dy; mxy += f * dx * dy;
             }

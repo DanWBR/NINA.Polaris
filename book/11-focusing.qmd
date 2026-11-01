@@ -309,6 +309,16 @@ position. Polaris:
 5. moves to the parabola's vertex, the best focus;
 6. reverts to the start position on cancel or failure.
 
+With the HFR metric the sweep measures a reference star: by default
+one, the brightest in the first frame. Its position in the frame is
+fixed for the whole run, retries included. At every later sample
+Polaris measures the star at that spot and nothing else. If no star
+is found there, because a cloud crossed or the exposure is too short
+for the filter (narrowband filters dim stars a lot), that sample is
+left out of the fit and the log says so. Polaris never switches to
+another star partway through: a curve built from two different stars
+is not a focus curve.
+
 ### Parameters
 
 - **Steps** (3 to 25, odd): how many sample positions in the sweep.

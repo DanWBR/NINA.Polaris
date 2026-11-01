@@ -278,7 +278,6 @@ public class AutoFocusService {
                     _logger.LogInformation("AF reattempt {N}/{Max} (previous: {Reason})",
                         attempt, o.Attempts, lastReason);
                     await MoveWithBacklashAsync(focuser, startPosition, o, backlash, ct);
-                    tracker.Reset();
                 }
                 // Phase resets with the points: a reattempt after a refined
                 // attempt starts a fresh coarse sweep, and leaving the phase at
@@ -749,27 +748,6 @@ public class AutoFocusService {
     /// ROI isn't active, and the brightest-N tracker.</summary>
     private FrameMeasurement MeasureFrame(
             IImageData image, AutoFocusRunOptions o, AfStarTracker tracker) {
-        // FIELD2-1: tune the detector for autofocus, NOT the live-tracking
-        // case the defaults target. A heavily-defocused star is a big faint
-        // DONUT; EightConnected keeps the faint ring one blob (4-conn
-        // shatters it into arcs reading HFR~1), CurveOfGrowthHfr measures the
-        // 50%-enclosed-flux radius with local background subtracted so the
-        // donut's true (large) radius is reported, and the size/HFR ceilings
-        // are lifted so the shoulders of the V still register.
-        // FIELD9-1: MinStarSize is lowered too, not just the ceilings. The
-        // stock floor of 5 px is sized for live tracking, where a star that
-        // small is noise. A sweep is the opposite case: the whole point is to
-        // reach focus, and an IN-FOCUS star on a well-sampled rig covers very
-        // few pixels. The floor was therefore throwing away exactly the frames
-        // nearest the vertex, which is where the fit needs the most detail.
-        var detector = new StarDetector {
-            EightConnected   = true,
-            CurveOfGrowthHfr = true,
-            MinStarSize = 3,
-            MaxStarSize = 20000,
-            MaxHfr      = 200
-        };
-
         ushort[] data = image.Data;
         int width = image.Properties.Width;
         int height = image.Properties.Height;
@@ -851,7 +829,7 @@ public class AutoFocusService {
             return new FrameMeasurement(y, Math.Max(0.02 * y, 0.01), 0, 0, 0, frameW, frameH, contrast);
         }
 
-        var detected = detector.Detect(data, width, height);
+        var detected = CreateDetector().Detect(data, width, height);
 
         // The star-count gate asks "is this frame usable", so it counts what the
         // DETECTOR found. Applying it after the tracker made single-star mode
@@ -877,6 +855,13 @@ public class AutoFocusService {
 
         var stars = tracker.Filter(detected);
         if (stars.Count == 0) {
+            if (tracker.Anchors is { Count: > 0 } anchors) {
+                _logger.LogWarning(
+                    "AF: no star at the reference position {Anchors} ({Count} detected elsewhere), "
+                    + "frame not measured. Clouds, or an exposure too short for this filter",
+                    string.Join(", ", anchors.Select(a => $"({a.X * detScale + cropX:F0},{a.Y * detScale + cropY:F0})")),
+                    detected.Count);
+            }
             return new FrameMeasurement(0, 1000, detected.Count, 0, 0, frameW, frameH);
         }
 
@@ -908,6 +893,37 @@ public class AutoFocusService {
         // pixels would quietly halve all of those on colour cameras only.
         return new FrameMeasurement(mean * detScale, stdev * detScale,
                                     detected.Count, starX, starY, frameW, frameH);
+    }
+
+    /// <summary>The star detector tuned for a sweep.</summary>
+    internal static StarDetector CreateDetector() {
+        // FIELD2-1: tune the detector for autofocus, NOT the live-tracking
+        // case the defaults target. A heavily-defocused star is a big faint
+        // DONUT; EightConnected keeps the faint ring one blob (4-conn
+        // shatters it into arcs reading HFR~1), CurveOfGrowthHfr measures the
+        // 50%-enclosed-flux radius with local background subtracted so the
+        // donut's true (large) radius is reported, and the size/HFR ceilings
+        // are lifted so the shoulders of the V still register.
+        // FIELD9-1: MinStarSize is lowered too, not just the ceilings. The
+        // stock floor of 5 px is sized for live tracking, where a star that
+        // small is noise. A sweep is the opposite case: the whole point is to
+        // reach focus, and an IN-FOCUS star on a well-sampled rig covers very
+        // few pixels. The floor was therefore throwing away exactly the frames
+        // nearest the vertex, which is where the fit needs the most detail.
+        // The HFR floor sits below anything a real star can read. The stock
+        // 0.5 is in detection-grid pixels, and on a colour camera the grid is
+        // half size: an in-focus star reading HFR 1.0 in the panel was dropped
+        // right at the bottom of the V, and the sweep lost its star at focus.
+        // Measured over the pixel area, a star never reads below about 0.4;
+        // hot pixels stay out on MinStarSize.
+        return new StarDetector {
+            EightConnected   = true,
+            CurveOfGrowthHfr = true,
+            MinStarSize = 3,
+            MaxStarSize = 20000,
+            MaxHfr      = 200,
+            MinHfr      = 0.2
+        };
     }
 
     /// <summary>

@@ -5317,5 +5317,17 @@
   "Recent searches": "Buscas recentes",
   "Host clock": "Relógio do host",
   "of this device": "em relação a este dispositivo",
-  "Astronomical calculations use this clock.": "Os cálculos astronômicos usam este relógio."
+  "Astronomical calculations use this clock.": "Os cálculos astronômicos usam este relógio.",
+  "RA turn by hand (deg)": "Giro do RA à mão (graus)",
+  "For a star tracker or a mount Polaris cannot drive. Polaris shoots point 1 where the camera points; before points 2 and 3 you turn the RA axis by hand and press Continue. The tracker keeps tracking throughout.": "Para uma star tracker ou uma montagem que o Polaris não controla. O Polaris fotografa o ponto 1 onde a câmera estiver apontando; antes dos pontos 2 e 3 você gira o eixo RA à mão e aperta Continuar. A star tracker continua acompanhando o céu o tempo todo.",
+  "Rotate RA by hand": "Girar o RA à mão",
+  "(star tracker, no mount)": "(star tracker, sem montagem)",
+  "Point {n} of 3: turn the RA axis": "Ponto {n} de 3: gire o eixo RA",
+  "Unlock the RA clutch, swing the camera about {deg}° to the {dir} by turning the RA axis only, and lock it again. Leave the ball head and the Dec axis alone, and keep the tracker running.": "Destrave o RA, gire a câmera cerca de {deg}° para o {dir} girando só o eixo RA e trave de novo. Não mexa na cabeça esférica nem no eixo Dec, e mantenha a star tracker ligada.",
+  "east": "leste",
+  "west": "oeste",
+  "▶ Continue": "▶ Continuar",
+  "Continue failed": "Falha ao continuar",
+  "Turn the RA axis for point 2": "Gire o eixo RA para o ponto 2",
+  "Turn the RA axis for point 3": "Gire o eixo RA para o ponto 3"
 }
