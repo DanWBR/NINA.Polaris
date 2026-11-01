@@ -384,7 +384,6 @@ function ninaApp() {
         liveStackColor: true,
         liveStackBinning: 0,        // 0 = auto (Polaris picks until the user chooses)
         liveStackBinOptions: [],    // [{bin, estimatedMB, fits, width, height}]
-        liveStackBinBudgetMB: 0,
         liveStackAutoBin: 0,        // what auto resolved to, for the hint
         liveStackColorActive: false,
         // Per-pixel kappa-sigma outlier rejection on the live stack. Mirrors
@@ -37309,7 +37308,6 @@ function ninaApp() {
                 const r = await this.apiGet('/api/livestack/binning-options');
                 if (!r) return;
                 this.liveStackBinOptions = r.options || [];
-                this.liveStackBinBudgetMB = r.budgetMB || 0;
                 if (this.liveStackBinning === 0) {
                     const fit = this.liveStackBinOptions.find(o => o.fits);
                     this.liveStackAutoBin = fit ? fit.bin : 0;
