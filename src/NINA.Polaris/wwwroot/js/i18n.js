@@ -24,7 +24,7 @@
 (function () {
     'use strict';
 
-    var SUPPORTED = ['en', 'pt-BR', 'es', 'fr', 'de'];
+    var SUPPORTED = ['en', 'pt-BR', 'es', 'fr', 'de', 'ru'];
     var LS_KEY = 'nina-ui-lang';
 
     function readLang() {
