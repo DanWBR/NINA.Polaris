@@ -50374,6 +50374,17 @@ function ninaApp() {
                     // that genuinely expose none (INDI/Alpaca/ASCOM).
                     this.camCtrlLoad();
                 }
+                // Capabilities (binning, bins, ROI, ISO) gate controls on every
+                // tab, FOCUS's Bin among them. They loaded on the PREVIEW and
+                // VIDEO buttons and on a connect made from this browser, so a
+                // camera already connected when the page opened left FOCUS
+                // with the defaults, binning false, and no Bin field. Load them
+                // whenever the connected main camera changes.
+                const camCapsKey = camConn ? (eq.camera.name || '1') : '';
+                if (camCapsKey !== this._camCapsKey) {
+                    this._camCapsKey = camCapsKey;
+                    if (camCapsKey) this.loadCameraCapabilities();
+                }
                 const prevIso = this.equipCameraInfo ? this.equipCameraInfo.supportsIso : false;
                 const prevCool = this.equipCameraInfo ? this.equipCameraInfo.supportsCooler : false;
                 const isoNow = camConn
