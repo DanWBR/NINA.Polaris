@@ -146,7 +146,13 @@ The catalog is AAVSO's Photometric All-Sky Survey, APASS DR9
 under the Polaris install: about 600 MB at the default magnitude cap
 (V ≤ 13), roughly 5.3 million stars. The file does not ship inside
 Polaris releases, because of its size and the catalog's attribution
-requirement, so you populate it once on the host:
+requirement, so you populate it once. The easiest route is
+**Settings → Colour calibration data → Download**: Polaris fetches the
+catalog as one file of about 80 MB from its data pack on GitHub and
+builds the database on the host. If that file cannot be reached, it
+queries VizieR directly instead, which takes longer and needs the CDS
+servers in Strasbourg to answer. From a shell, the script does the
+VizieR route:
 
 ```bash
 python scripts/download-apass.py
@@ -372,7 +378,8 @@ the gains are fitted from real photometry.
   patch**: the patch landed on something that is not neutral (a
   colored star, a nebula edge). Pick a different patch and re-run.
 - **The catalog badge says "not installed" after deployment**: the
-  database is not part of the release package. Run
+  database is not part of the release package. Press **Download** in
+  Settings → Colour calibration data, or run
   `python scripts/download-apass.py` on the host; no redeploy is
   needed afterwards.
 

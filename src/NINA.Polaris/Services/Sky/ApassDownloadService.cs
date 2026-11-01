@@ -13,6 +13,7 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using System.Globalization;
+using System.IO.Compression;
 using Microsoft.Data.Sqlite;
 
 namespace NINA.Polaris.Services.Sky;
@@ -20,17 +21,27 @@ namespace NINA.Polaris.Services.Sky;
 /// <summary>
 /// In-app downloader for the APASS DR9 star catalog the Photometric Color
 /// Calibration (PCC/SPCC) workflow consumes, so users never have to run a
-/// script on the box. This is a C# port of <c>scripts/download-apass.py</c>:
-/// it streams the catalog from CDS/VizieR's TAP service one Dec stripe at a
-/// time and builds the same SQLite + R*tree schema <see cref="ApassCatalog"/>
-/// reads, into the always-writable data dir. Single-flight, cancellable,
-/// progress-reporting; writes to a temp file and atomically moves it into
-/// place so a partial download never shadows a good catalog.
+/// script on the box. It fetches the catalog as one gzipped TSV from the
+/// Polaris data-pack release, or, when that is unavailable, from
+/// CDS/VizieR's TAP service one Dec stripe at a time (the C# port of
+/// <c>scripts/download-apass.py</c>), and builds the same SQLite + R*tree
+/// schema <see cref="ApassCatalog"/> reads, into the always-writable data
+/// dir. Single-flight, cancellable, progress-reporting; writes to a temp
+/// file and atomically moves it into place so a partial download never
+/// shadows a good catalog.
 /// </summary>
 public class ApassDownloadService {
-    // CDS VizieR TAP endpoint serving APASS DR9 (II/336/apass9). Stable, free,
-    // no API key. Each ADQL query streams back as TSV.
-    private const string TapUrl = "https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync";
+    // The same APASS DR9 selection the TAP path makes (V <= 13), exported
+    // once as TSV with the TAP column order. One file from GitHub, so the
+    // download does not depend on CDS being reachable.
+    internal const string PackUrl =
+        "https://github.com/DanWBR/NINA.Polaris/releases/download/data-pack/polaris-apass9.tsv.gz";
+    // A pack with fewer rows than this is truncated or wrong; the TAP path
+    // runs instead. The full file holds 5,326,013.
+    internal long PackMinStars { get; set; } = 5_000_000;
+    // CDS VizieR TAP endpoint serving APASS DR9 (II/336/apass9). Free, no API
+    // key. Each ADQL query streams back as TSV.
+    internal const string TapUrl = "https://tapvizier.cds.unistra.fr/TAPVizieR/tap/sync";
     private const int MaxRec = 2_000_000;
     private const double MagLimit = 13.0;   // ~5.3M stars, ~80 MB (matches the script default)
     private const double StripeDeg = 5.0;
@@ -96,42 +107,9 @@ public class ApassDownloadService {
             var client = _http.CreateClient();
             client.Timeout = TimeSpan.FromMinutes(6);
 
-            using (var conn = new SqliteConnection($"Data Source={tmp}")) {
-                conn.Open();
-                using (var init = conn.CreateCommand()) {
-                    init.CommandText = @"
-                        CREATE TABLE stars (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            ra REAL NOT NULL, dec REAL NOT NULL,
-                            mag_v REAL, mag_b REAL, b_v REAL, source TEXT NOT NULL);
-                        CREATE VIRTUAL TABLE stars_idx USING rtree(
-                            id, min_ra, max_ra, min_dec, max_dec);";
-                    init.ExecuteNonQuery();
-                }
-
-                long total = 0;
-                long nextId = 1;
-                for (double decLo = -90.0; decLo < 90.0; decLo += StripeDeg) {
-                    ct.ThrowIfCancellationRequested();
-                    double decHi = Math.Min(90.0, decLo + StripeDeg);
-                    _progress = (decLo + 90.0) / 180.0;
-                    _message = $"Fetching declination {decLo:+0.#}° to {decHi:+0.#}°… {total:N0} stars so far";
-
-                    var tsv = await FetchStripeAsync(client, decLo, decHi, ct);
-                    int inserted = IngestStripe(conn, tsv, ref nextId);
-                    total += inserted;
-                }
-
-                ct.ThrowIfCancellationRequested();
-                _message = "Optimizing index…";
-                using (var analyze = conn.CreateCommand()) {
-                    analyze.CommandText = "ANALYZE";
-                    analyze.ExecuteNonQuery();
-                }
-                _stars = total;
-            }
-            // Release SQLite file handles/pool before the move.
-            SqliteConnection.ClearAllPools();
+            long total = await TryPackAsync(client, tmp, ct);
+            if (total == 0) total = await RunTapAsync(client, tmp, ct);
+            _stars = total;
 
             if (File.Exists(target)) File.Delete(target);
             File.Move(tmp, target);
@@ -151,6 +129,116 @@ public class ApassDownloadService {
             _logger.LogWarning(ex, "APASS catalog download failed");
             TryDelete(tmp);
         }
+    }
+
+    private static SqliteConnection CreateDb(string path) {
+        var conn = new SqliteConnection($"Data Source={path}");
+        conn.Open();
+        using var init = conn.CreateCommand();
+        init.CommandText = @"
+            CREATE TABLE stars (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ra REAL NOT NULL, dec REAL NOT NULL,
+                mag_v REAL, mag_b REAL, b_v REAL, source TEXT NOT NULL);
+            CREATE VIRTUAL TABLE stars_idx USING rtree(
+                id, min_ra, max_ra, min_dec, max_dec);";
+        init.ExecuteNonQuery();
+        return conn;
+    }
+
+    private void Optimize(SqliteConnection conn) {
+        _message = "Optimizing index…";
+        using var analyze = conn.CreateCommand();
+        analyze.CommandText = "ANALYZE";
+        analyze.ExecuteNonQuery();
+    }
+
+    /// <summary>Builds the catalog from the data-pack TSV. Returns the star
+    /// count, or 0 when the pack could not be used and the TAP path should
+    /// run instead (the temp files are gone by then).</summary>
+    private async Task<long> TryPackAsync(HttpClient client, string tmp, CancellationToken ct) {
+        var gz = tmp + ".tsv.gz";
+        try {
+            _message = "Downloading the catalog…";
+            using (var resp = await client.GetAsync(PackUrl, HttpCompletionOption.ResponseHeadersRead, ct)) {
+                resp.EnsureSuccessStatusCode();
+                long length = resp.Content.Headers.ContentLength ?? 0;
+                await using var src = await resp.Content.ReadAsStreamAsync(ct);
+                await using var dst = File.Create(gz);
+                var buf = new byte[1 << 16];
+                long done = 0;
+                int n;
+                while ((n = await src.ReadAsync(buf, ct)) > 0) {
+                    await dst.WriteAsync(buf.AsMemory(0, n), ct);
+                    done += n;
+                    if (length > 0) {
+                        _progress = 0.5 * done / length;
+                        _message = $"Downloading the catalog… {done / 1048576.0:0} of {length / 1048576.0:0} MB";
+                    }
+                }
+            }
+
+            long total = 0, nextId = 1;
+            using (var conn = CreateDb(tmp)) {
+                await using var file = File.OpenRead(gz);
+                using var reader = new StreamReader(new GZipStream(file, CompressionMode.Decompress));
+                var batch = new List<string>(200_000);
+                string? line;
+                while ((line = await reader.ReadLineAsync(ct)) != null) {
+                    batch.Add(line);
+                    if (batch.Count < batch.Capacity) continue;
+                    total += IngestLines(conn, batch, ref nextId);
+                    batch.Clear();
+                    _progress = 0.5 + 0.45 * file.Position / Math.Max(1, file.Length);
+                    _message = $"Building the catalog… {total:N0} stars";
+                }
+                total += IngestLines(conn, batch, ref nextId);
+                if (total < PackMinStars)
+                    throw new InvalidDataException($"the catalog file holds only {total:N0} stars");
+                ct.ThrowIfCancellationRequested();
+                Optimize(conn);
+            }
+            SqliteConnection.ClearAllPools();
+            TryDelete(gz);
+            return total;
+        } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
+            TryDelete(gz);
+            throw;
+        } catch (Exception ex) {
+            _logger.LogWarning("APASS: the catalog file from {Url} could not be used ({Error}), querying VizieR instead",
+                PackUrl, ex.Message);
+            TryDelete(gz);
+            TryDelete(tmp);
+            return 0;
+        }
+    }
+
+    /// <summary>Builds the catalog from CDS VizieR, one Dec stripe per TAP
+    /// query.</summary>
+    private async Task<long> RunTapAsync(HttpClient client, string tmp, CancellationToken ct) {
+        long total = 0, nextId = 1;
+        using (var conn = CreateDb(tmp)) {
+            for (double decLo = -90.0; decLo < 90.0; decLo += StripeDeg) {
+                ct.ThrowIfCancellationRequested();
+                double decHi = Math.Min(90.0, decLo + StripeDeg);
+                _progress = (decLo + 90.0) / 180.0;
+                _message = $"Fetching declination {decLo:+0.#}° to {decHi:+0.#}°… {total:N0} stars so far";
+
+                string tsv;
+                try {
+                    tsv = await FetchStripeAsync(client, decLo, decHi, ct);
+                } catch (HttpRequestException ex) when (total == 0) {
+                    throw new HttpRequestException(
+                        $"CDS VizieR ({new Uri(TapUrl).Host}) did not answer, try again later. [{ex.Message}]", ex);
+                }
+                total += IngestLines(conn, tsv.Split('\n'), ref nextId);
+            }
+            ct.ThrowIfCancellationRequested();
+            Optimize(conn);
+        }
+        // Release SQLite file handles/pool before the move.
+        SqliteConnection.ClearAllPools();
+        return total;
     }
 
     private static void TryDelete(string path) {
@@ -182,9 +270,7 @@ public class ApassDownloadService {
         return await resp.Content.ReadAsStringAsync(ct);
     }
 
-    private static int IngestStripe(SqliteConnection conn, string tsv, ref long nextId) {
-        if (string.IsNullOrEmpty(tsv)) return 0;
-        var lines = tsv.Split('\n');
+    internal static int IngestLines(SqliteConnection conn, IEnumerable<string> lines, ref long nextId) {
         int inserted = 0;
         using var tx = conn.BeginTransaction();
         using var star = conn.CreateCommand();
