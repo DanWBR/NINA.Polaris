@@ -364,7 +364,7 @@ itself the lookup key, and a per-language catalog at
 `wwwroot/data/locales/{lang}.json` maps
 `{ "English source": "Translation" }`. English is the identity
 language, with no catalog, no fetch, and no runtime overhead.
-Released languages are `en` plus `pt-BR`, `es`, `fr`, and `de`.
+Released languages are `en` plus `pt-BR`, `es`, `fr`, `de`, and `ru`.
 
 At runtime, `wwwroot/js/i18n.js` (loaded before Alpine) translates
 non-English UIs with a scoped `MutationObserver`, a browser

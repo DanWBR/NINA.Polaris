@@ -31,8 +31,8 @@ namespace NINA.Polaris.Services.Broadcast;
 /// </summary>
 public static class BroadcastStrings {
 
-    /// <summary>The five interface languages, matching the browser catalogues.</summary>
-    public static readonly string[] Languages = { "en", "pt", "es", "fr", "de" };
+    /// <summary>The interface languages, matching the browser catalogues.</summary>
+    public static readonly string[] Languages = { "en", "pt", "es", "fr", "de", "ru" };
 
     /// <summary>
     /// What the frame says before there is a picture to show.
@@ -47,19 +47,20 @@ public static class BroadcastStrings {
         "es" => "Esperando la primera imagen",
         "fr" => "En attente de la premiere image",
         "de" => "Warten auf das erste Bild",
+        "ru" => "Ожидание первого кадра",
         _ => "Waiting for the first image"
     };
 
     /// <summary>Caption over the second picture when it is the guide frame.</summary>
     public static string PipGuideLabel(string? language) => Normalise(language) switch {
-        "pt" => "Guiagem", "es" => "Guiado", "fr" => "Guidage", "de" => "Nachführung",
+        "pt" => "Guiagem", "es" => "Guiado", "fr" => "Guidage", "de" => "Nachführung", "ru" => "Гидирование",
         _ => "Guiding"
     };
 
     /// <summary>Caption when it is the auxiliary camera.</summary>
     public static string PipAuxLabel(string? language) => Normalise(language) switch {
         "pt" => "Câmera auxiliar", "es" => "Cámara auxiliar",
-        "fr" => "Caméra auxiliaire", "de" => "Hilfskamera",
+        "fr" => "Caméra auxiliaire", "de" => "Hilfskamera", "ru" => "Вспомогательная камера",
         _ => "Auxiliary camera"
     };
 
@@ -67,7 +68,7 @@ public static class BroadcastStrings {
     /// or one pointed at the rig. Deliberately generic: Polaris has no way to
     /// know what the camera is looking at.</summary>
     public static string PipCameraLabel(string? language) => Normalise(language) switch {
-        "pt" => "Ao vivo", "es" => "En vivo", "fr" => "En direct", "de" => "Live",
+        "pt" => "Ao vivo", "es" => "En vivo", "fr" => "En direct", "de" => "Live", "ru" => "Онлайн",
         _ => "Live"
     };
 
@@ -101,6 +102,13 @@ public static class BroadcastStrings {
             SizeLabel = "{0}'",
             ViaWikipedia = "via Wikipedia",
             UnknownObject = "Unbenanntes Ziel"
+        },
+        "ru" => new ObjectCardTemplates {
+            TypeInConstellation = "{0} в созвездии {1}",
+            MagnitudeLabel = "зв. вел. {0}",
+            SizeLabel = "{0}'",
+            ViaWikipedia = "из Википедии",
+            UnknownObject = "Объект без названия"
         },
         _ => new ObjectCardTemplates()
     };

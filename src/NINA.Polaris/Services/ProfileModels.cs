@@ -470,7 +470,7 @@ public class UserProfile {
 
     /// <summary>
     /// UI language for the web client (BCP-47-ish tag: "en", "pt-BR", "es",
-    /// "fr", "de"). The browser keeps its own per-device choice in
+    /// "fr", "de", "ru"). The browser keeps its own per-device choice in
     /// localStorage('nina-ui-lang') as the source of truth; this profile field
     /// is the seed a fresh browser / the Android wrapper inherits when it has
     /// no local choice yet. Empty/"en" = English (the source language, no

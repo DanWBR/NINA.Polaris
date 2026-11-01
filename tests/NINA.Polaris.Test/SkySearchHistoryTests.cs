@@ -134,7 +134,7 @@ public class SkySearchHistoryTests {
 
     [Test]
     public void TheNewLabelIsInEveryCatalogue() {
-        foreach (var lang in new[] { "_source", "de", "es", "fr", "pt-BR" }) {
+        foreach (var lang in new[] { "_source", "de", "es", "fr", "pt-BR", "ru" }) {
             var json = Read("src", "NINA.Polaris", "wwwroot", "data", "locales", lang + ".json");
             using var doc = JsonDocument.Parse(json);
             Assert.That(doc.RootElement.TryGetProperty("Recent searches", out var v), Is.True,

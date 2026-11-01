@@ -32,10 +32,10 @@ const DIR = resolve(ROOT, 'src/NINA.Polaris/wwwroot/data/locales');
 const SRC = resolve(DIR, '_source.json');
 const GLOSS = resolve(ROOT, 'scripts/i18n-glossary.json');
 
-const RELEASED = ['pt-BR', 'es', 'fr', 'de'];
+const RELEASED = ['pt-BR', 'es', 'fr', 'de', 'ru'];
 // Provider locale codes (DeepL uses EN->target; pt-BR => PT-BR).
-const DEEPL_CODE = { 'pt-BR': 'PT-BR', es: 'ES', fr: 'FR', de: 'DE' };
-const LT_CODE = { 'pt-BR': 'pt', es: 'es', fr: 'fr', de: 'de' };
+const DEEPL_CODE = { 'pt-BR': 'PT-BR', es: 'ES', fr: 'FR', de: 'DE', ru: 'RU' };
+const LT_CODE = { 'pt-BR': 'pt', es: 'es', fr: 'fr', de: 'de', ru: 'ru' };
 
 const args = process.argv.slice(2).filter((a) => RELEASED.includes(a));
 const langs = args.length ? args : RELEASED;
