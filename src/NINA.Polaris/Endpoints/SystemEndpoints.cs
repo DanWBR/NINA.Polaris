@@ -345,7 +345,7 @@ public static class SystemEndpoints {
         // browser / the Android wrapper.
         group.MapPut("/ui-language", (UiLanguageRequest req, ProfileService profiles) => {
             var lang = (req?.Language ?? "").Trim();
-            var allowed = new[] { "en", "pt-BR", "es", "fr", "de" };
+            var allowed = new[] { "en", "pt-BR", "es", "fr", "de", "ru" };
             if (!allowed.Contains(lang)) return Results.BadRequest(new { error = "unsupported language" });
             profiles.UpdateSettings(p => p.UiLanguage = lang);
             return Results.Ok(new { language = lang });

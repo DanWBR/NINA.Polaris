@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DIR = resolve(ROOT, 'src/NINA.Polaris/wwwroot/data/locales');
 const OV = JSON.parse(readFileSync(resolve(ROOT, 'scripts/i18n-overrides.json'), 'utf8'));
-const RELEASED = ['pt-BR', 'es', 'fr', 'de'];
+const RELEASED = ['pt-BR', 'es', 'fr', 'de', 'ru'];
 const all = OV.all || {};
 
 for (const lang of RELEASED) {
