@@ -310,7 +310,7 @@
   "After install, the cert SHA-1 fingerprint your browser": "Tras la instalación, la huella SHA-1 del certificado en tu navegador",
   "After it finishes, the page reloads and the first-run": "Una vez finalizado el proceso, la página se recarga y la primera ejecución",
   "After the night, STUDIO is your processing workspace. Let's walk through its tools, from raw frames to a finished image.": "Una vez terminada la noche, STUDIO se convierte en tu espacio de trabajo para el procesamiento. Repasemos sus herramientas, desde los fotogramas sin procesar hasta la imagen final.",
-  "After TPPA, a bullseye shows the pole at the centre and your mount's RA axis as a dot. Adjust the tripod knobs, then click": "Tras el TPPA, aparecerá una diana con el poste en el centro y el eje RA de tu montura representado por un punto. Ajusta las ruedas del trípode y, a continuación, haz clic.",
+  "After TPPA, a bullseye shows the pole at the centre and your mount's RA axis as a dot. Adjust the tripod knobs, then click": "Tras el TPPA, una diana muestra el polo en el centro y el eje RA de tu montura como un punto. Ajusta las perillas del trípode y luego haz clic en",
   "After TPPA, click": "Después de TPPA, haz clic en",
   "again →": "otra vez →",
   "Aggression update failed:": "Error al actualizar los datos sobre agresiones:",
@@ -5319,5 +5319,17 @@
   "Recent searches": "Búsquedas recientes",
   "Host clock": "Reloj del host",
   "of this device": "respecto a este dispositivo",
-  "Astronomical calculations use this clock.": "Los cálculos astronómicos usan este reloj."
+  "Astronomical calculations use this clock.": "Los cálculos astronómicos usan este reloj.",
+  "RA turn by hand (deg)": "Giro del RA a mano (grados)",
+  "For a star tracker or a mount Polaris cannot drive. Polaris shoots point 1 where the camera points; before points 2 and 3 you turn the RA axis by hand and press Continue. The tracker keeps tracking throughout.": "Para un star tracker o una montura que Polaris no puede controlar. Polaris toma el punto 1 donde apunta la cámara; antes de los puntos 2 y 3 giras el eje RA a mano y pulsas Continuar. El tracker sigue en seguimiento todo el tiempo.",
+  "Rotate RA by hand": "Girar el RA a mano",
+  "(star tracker, no mount)": "(star tracker, sin montura)",
+  "Point {n} of 3: turn the RA axis": "Punto {n} de 3: gira el eje RA",
+  "Unlock the RA clutch, swing the camera about {deg}° to the {dir} by turning the RA axis only, and lock it again. Leave the ball head and the Dec axis alone, and keep the tracker running.": "Suelta el bloqueo del RA, gira la cámara unos {deg}° hacia el {dir} moviendo solo el eje RA y vuelve a bloquearlo. No toques la rótula ni el eje Dec, y deja el tracker en marcha.",
+  "east": "este",
+  "west": "oeste",
+  "▶ Continue": "▶ Continuar",
+  "Continue failed": "Error al continuar",
+  "Turn the RA axis for point 2": "Gira el eje RA para el punto 2",
+  "Turn the RA axis for point 3": "Gira el eje RA para el punto 3"
 }

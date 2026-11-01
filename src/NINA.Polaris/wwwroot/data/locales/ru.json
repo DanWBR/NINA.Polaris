@@ -745,7 +745,6 @@
   "By frame count": "По количеству кадров",
   "by Stefan Berg and contributors (MPL-2.0).": "Stefan Berg и участники проекта (MPL-2.0).",
   "By time window": "По временному окну",
-  "by turning the RA axis only, and lock it again. Leave the ball head and the Dec axis alone, and keep the tracker running.": "поворачивая только ось RA, и снова зажмите. Не трогайте шарнирную головку и ось Dec и не останавливайте трекер.",
   "C1 (Ha+OIII+SII)": "C1 (Ha+OIII+SII)",
   "C2": "C2",
   "Cadence": "Периодичность",
@@ -3215,7 +3214,6 @@
   "Object-only": "Только объект",
   "Observatory": "Обсерватория",
   "observing location, and your preferences.": "место наблюдения и ваши параметры.",
-  "of 3: turn the RA axis": "из 3: поверните ось RA",
   "of best": "из лучших",
   "of inactivity": "бездействия",
   "of this device": "этого устройства",
@@ -5336,7 +5334,6 @@
   "Unlike TPPA, this works when the polar region": "В отличие от TPPA, это работает, когда область полюса",
   "Unlike TPPA, this works when the polar region is blocked (e.g. balcony with view to the south only). It also works on manual mounts when you pick": "В отличие от TPPA, это работает, когда полярная область закрыта (например, балкон с видом только на юг). Это также работает на ручных монтировках, когда вы выбираете",
   "Unlimited": "Без ограничений",
-  "Unlock the RA clutch, swing the camera about": "Ослабьте зажим RA, поверните камеру вокруг",
   "Unlock UI": "Разблокировать интерфейс",
   "Unpacking on the host. This part cannot be cancelled: a half-written database would load and then fail to solve.": "Распаковка на хосте. Этот этап нельзя отменить: наполовину записанная база данных загрузится и не сможет выполнить решение.",
   "Unpark": "Снятие с парковки",
@@ -5653,5 +5650,13 @@
   "Zoom to fit (whole frame)": "Вписать (весь кадр)",
   "ZWO ASI SDK": "ZWO ASI SDK",
   "ZWO preset gains": "Предустановленные усиления ZWO",
-  "ZWO preset gains, L=": "Предустановленные усиления ZWO, L="
+  "ZWO preset gains, L=": "Предустановленные усиления ZWO, L=",
+  "Point {n} of 3: turn the RA axis": "Точка {n} из 3: поверните ось RA",
+  "Unlock the RA clutch, swing the camera about {deg}° to the {dir} by turning the RA axis only, and lock it again. Leave the ball head and the Dec axis alone, and keep the tracker running.": "Ослабьте фиксатор RA, поверните камеру на {dir} примерно на {deg}°, вращая только ось RA, и снова зафиксируйте. Не трогайте шаровую головку и ось Dec, трекер не выключайте.",
+  "east": "восток",
+  "west": "запад",
+  "▶ Continue": "▶ Продолжить",
+  "Continue failed": "Не удалось продолжить",
+  "Turn the RA axis for point 2": "Поверните ось RA для точки 2",
+  "Turn the RA axis for point 3": "Поверните ось RA для точки 3"
 }

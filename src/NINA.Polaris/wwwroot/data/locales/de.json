@@ -310,7 +310,7 @@
   "After install, the cert SHA-1 fingerprint your browser": "Nach der Installation erkennt Ihr Browser den SHA-1-Fingerabdruck des Zertifikats",
   "After it finishes, the page reloads and the first-run": "Sobald der Vorgang abgeschlossen ist, wird die Seite neu geladen und die Erstausführung",
   "After the night, STUDIO is your processing workspace. Let's walk through its tools, from raw frames to a finished image.": "Nach der Nacht ist STUDIO Ihr Arbeitsbereich für die Bildbearbeitung. Lassen Sie uns die verschiedenen Werkzeuge durchgehen, vom Rohbild bis zum fertigen Bild.",
-  "After TPPA, a bullseye shows the pole at the centre and your mount's RA axis as a dot. Adjust the tripod knobs, then click": "Nach der TPPA-Einstellung zeigt ein Fadenkreuz die Mittelsäule in der Mitte und die RA-Achse Ihrer Montierung als Punkt an. Stellen Sie die Stativknöpfe ein und klicken Sie dann",
+  "After TPPA, a bullseye shows the pole at the centre and your mount's RA axis as a dot. Adjust the tripod knobs, then click": "Nach dem TPPA zeigt eine Zielscheibe den Pol in der Mitte und die RA-Achse Ihrer Montierung als Punkt. Stellen Sie die Stativknöpfe ein und klicken Sie dann auf",
   "After TPPA, click": "Klicken Sie nach „TPPA“ auf",
   "again →": "noch einmal →",
   "Aggression update failed:": "Aktualisierung der Aggressionsdaten fehlgeschlagen:",
@@ -5319,5 +5319,17 @@
   "Recent searches": "Letzte Suchen",
   "Host clock": "Uhr des Hosts",
   "of this device": "gegenüber diesem Gerät",
-  "Astronomical calculations use this clock.": "Die astronomischen Berechnungen verwenden diese Uhr."
+  "Astronomical calculations use this clock.": "Die astronomischen Berechnungen verwenden diese Uhr.",
+  "RA turn by hand (deg)": "RA-Drehung von Hand (Grad)",
+  "For a star tracker or a mount Polaris cannot drive. Polaris shoots point 1 where the camera points; before points 2 and 3 you turn the RA axis by hand and press Continue. The tracker keeps tracking throughout.": "Für einen Star Tracker oder eine Montierung, die Polaris nicht steuern kann. Polaris nimmt Punkt 1 dort auf, wohin die Kamera zeigt; vor den Punkten 2 und 3 drehen Sie die RA-Achse von Hand und drücken Weiter. Der Tracker führt die ganze Zeit nach.",
+  "Rotate RA by hand": "RA von Hand drehen",
+  "(star tracker, no mount)": "(Star Tracker, ohne Montierung)",
+  "Point {n} of 3: turn the RA axis": "Punkt {n} von 3: RA-Achse drehen",
+  "Unlock the RA clutch, swing the camera about {deg}° to the {dir} by turning the RA axis only, and lock it again. Leave the ball head and the Dec axis alone, and keep the tracker running.": "Lösen Sie die RA-Klemme, schwenken Sie die Kamera um etwa {deg}° nach {dir}, indem Sie nur die RA-Achse drehen, und klemmen Sie sie wieder fest. Kugelkopf und Dec-Achse bleiben unberührt, der Tracker läuft weiter.",
+  "east": "Osten",
+  "west": "Westen",
+  "▶ Continue": "▶ Weiter",
+  "Continue failed": "Fortsetzen fehlgeschlagen",
+  "Turn the RA axis for point 2": "RA-Achse für Punkt 2 drehen",
+  "Turn the RA axis for point 3": "RA-Achse für Punkt 3 drehen"
 }

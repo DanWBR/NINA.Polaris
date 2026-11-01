@@ -4733,7 +4733,6 @@
   "Blind solve fallback": "",
   "Blind solver": "",
   "Browsing": "",
-  "by turning the RA axis only, and lock it again. Leave the ball head and the Dec axis alone, and keep the tracker running.": "",
   "Calibrating": "",
   "Cam": "",
   "Camera SDK pack download failed:": "",
@@ -4847,7 +4846,6 @@
   "Not installed. Pick a catalog for your field and install.": "",
   "Not set": "",
   "not set up": "",
-  "of 3: turn the RA axis": "",
   "Offset write failed:": "",
   "Only FITS files can be loaded into LIVE": "",
   "Open full UI": "",
@@ -4949,7 +4947,6 @@
   "Type an absolute focuser position": "",
   "Type an absolute rotator angle in degrees": "",
   "unknown (shown in px)": "",
-  "Unlock the RA clutch, swing the camera about": "",
   "Use this when the camera has to go the other way round; the choice is kept with this rig": "",
   "View & install": "",
   "Visible": "",
@@ -4960,5 +4957,13 @@
   "WiFi management is not available on this host.": "",
   "X-Bge-Job-Id": "",
   "X-Bge-Tile": "",
-  "Your site": ""
+  "Your site": "",
+  "Point {n} of 3: turn the RA axis": "",
+  "Unlock the RA clutch, swing the camera about {deg}° to the {dir} by turning the RA axis only, and lock it again. Leave the ball head and the Dec axis alone, and keep the tracker running.": "",
+  "east": "",
+  "west": "",
+  "▶ Continue": "",
+  "Continue failed": "",
+  "Turn the RA axis for point 2": "",
+  "Turn the RA axis for point 3": ""
 }
