@@ -13,6 +13,7 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using NINA.Polaris.Services;
+using NINA.Polaris.Services.Mosaic;
 using NINA.Polaris.Services.Sequencer;
 
 namespace NINA.Polaris.Endpoints;
@@ -51,6 +52,41 @@ public static class MosaicEndpoints {
             } catch (Exception ex) {
                 return Results.BadRequest(new { error = ex.Message });
             }
+        });
+
+        // MOSAIC mode. The panel size of the connected camera and rig, so the
+        // tab can show how many panels a field needs before anything moves.
+        g.MapGet("/fov", (MosaicRunService runner) => {
+            var fov = runner.EstimatePanelFov();
+            return fov == null
+                ? Results.Ok(new { known = false })
+                : Results.Ok(new {
+                    known = true,
+                    widthDeg = fov.Value.widthDeg,
+                    heightDeg = fov.Value.heightDeg,
+                    scaleArcsec = fov.Value.scaleArcsec
+                });
+        });
+
+        g.MapGet("/run", (MosaicRunService runner) => Results.Ok(runner.Status()));
+
+        g.MapPost("/run", (MosaicRunRequest req, MosaicRunService runner) => {
+            var refusal = runner.Start(req);
+            return refusal == null
+                ? Results.Ok(runner.Status())
+                : Results.BadRequest(new { error = refusal });
+        });
+
+        g.MapPost("/run/stop", async (MosaicRunService runner) => {
+            await runner.StopAsync();
+            return Results.Ok(runner.Status());
+        });
+
+        // The composited view. The status carries a version; the tab asks
+        // for this again only when it changes.
+        g.MapGet("/run/canvas.jpg", (MosaicRunService runner) => {
+            var jpeg = runner.CanvasJpeg();
+            return jpeg == null ? Results.NotFound() : Results.File(jpeg, "image/jpeg");
         });
     }
 

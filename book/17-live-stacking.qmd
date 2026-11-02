@@ -35,6 +35,19 @@ the camera stream. While stacking is active, each incoming frame:
 
 The frame count and reference star count update every second.
 
+The alignment holds across the whole frame, not only near the centre.
+With a poorly polar-aligned mount the field slowly rotates through the
+session (field rotation), and a frame from late in the night is turned
+relative to the first one; Polaris fits that rotation using stars
+across the whole field, so stars at the corners stay as round as those
+in the middle. When the field also bends over the hours (the optics'
+distortion stays fixed while the stars turn through it, and a target
+low in the sky is squeezed by the atmosphere more at the bottom of the
+frame than at the top), Polaris switches that frame to a second-order
+warp, a gently curved version of the same mapping, but only when it
+clearly fits the stars better. The edges of a long session then show
+the rotated frame borders, while the stars stay sharp everywhere.
+
 ![LIVE stacking the Lagoon Nebula: the growing stack in the viewer,
 the histogram with its stretch handles below, capture inputs and the
 circular shutter counting down the current frame on the right, and

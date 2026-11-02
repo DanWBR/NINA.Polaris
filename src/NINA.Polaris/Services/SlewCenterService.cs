@@ -506,6 +506,9 @@ public class SlewCenterService {
                     job.TargetRa, job.TargetDec,
                     solveResult.RaHours, solveResult.DecDeg);
 
+                job.LastSolve = solveResult;
+                job.LastSolveWidth = imageData.Properties.Width;
+                job.LastSolveHeight = imageData.Properties.Height;
                 job.ActualRa = solveResult.RaHours;
                 job.ActualDec = solveResult.DecDeg;
                 job.ErrorArcsec = errorArcsec;
@@ -879,6 +882,12 @@ public class SlewCenterJob {
     public double? DerivedFocalLengthMm { get; set; }
     public string? Error { get; set; }
     public DateTime CreatedAt { get; set; }
+
+    /// <summary>The last successful solve and the size of the frame it came
+    /// from. MOSAIC reads the camera orientation (CD matrix) off it.</summary>
+    internal PlateSolveResult? LastSolve { get; set; }
+    internal int LastSolveWidth { get; set; }
+    internal int LastSolveHeight { get; set; }
 
     internal CancellationTokenSource? Cts { get; set; }
     internal Task? Task { get; set; }

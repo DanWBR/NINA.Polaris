@@ -121,12 +121,12 @@ adds no privileged rules for this feature.
 
 ## Self-update {#sec-self-update}
 
-On a Linux host installed from the `.deb` package (@sec-installation),
 Polaris updates itself from the project's GitHub releases with one
-click: no SSH, no `apt` command, no password. The feature exists
-only on `.deb` installs (the `/opt/polaris` layout managed by
-systemd, the Linux service manager); a Windows host or a
-development run shows no update badge.
+click: no SSH, no `apt` command, no password. This works on a Linux
+host installed from the `.deb` package (@sec-installation), the
+`/opt/polaris` layout managed by systemd (the Linux service
+manager), and on the portable Windows build (see "On Windows"
+below). A development run shows no update badge.
 
 Polaris checks GitHub for a newer release at startup and once an
 hour. When one exists for your host's processor architecture
@@ -161,6 +161,54 @@ unit so it survives the restart of the main Polaris service that
 the package itself triggers.] that authorizes only the update
 service. Your Polaris sign-in is the authorization.
 
+### On Windows
+
+The portable Windows build updates from the same badge, and the
+rollback list described below works there too. Polaris downloads
+`polaris-win-x64.zip` (or `polaris-win-arm64.zip`), checks it
+against the SHA-256 digest GitHub publishes for it, and hands it to
+`polaris-update.ps1`, a small PowerShell script (PowerShell is the
+scripting shell built into Windows) that ships in the zip. The
+script unpacks the new version next to the Polaris folder while
+Polaris keeps running, then stops Polaris, swaps the folders, and
+starts the new version the same way the old one was started: in a
+console window, or hidden if it ran without one. Polaris is offline
+for about ten seconds, and the modal reports each step.
+
+Your configuration travels with it. Values you changed in
+`appsettings.json` (the settings file next to `NINA.Polaris.exe`)
+are laid over the new release's copy, so new settings arrive and
+yours stay; any extra `appsettings.*.json` file you added is copied
+across. Profiles, downloaded catalogs, offline sky tiles and the
+HTTPS certificate live in `%LOCALAPPDATA%\NINA.Polaris` and are not
+touched.
+
+The version you replaced stays next to the new one as
+`<folder>.previous` until the next update. If the new version does
+not start and answer within three minutes, the script puts the old
+folder back, starts it again, and the modal says so; the files that
+failed stay in `<folder>.failed-<date>` for inspection. A problem
+found before Polaris is stopped (a bad download, a package that is
+not the expected version) changes nothing at all.
+
+- **Folder:** the Polaris folder, and the folder that contains it,
+  must be writable by your Windows user, because the swap happens
+  there. Documents or your user folder work; `C:\Program Files`
+  does not, and the modal says so before anything is downloaded.
+- **Normal program, not a service:** a service manager such as
+  NSSM restarts Polaris the moment it stops and would hold the files
+  being replaced, so Polaris running as a Windows service shows no
+  update badge. Stop the service and replace the folder by hand.
+- **First version:** the release that first ships
+  `polaris-update.ps1` has to be installed by hand once, like any
+  earlier portable release.
+- **Log:** each step is written to
+  `%LOCALAPPDATA%\NINA.Polaris\profiles\update\update.log`.
+
+The Windows flow is based on a community prototype by
+matteoconti92, who also found that the update modal could skip its
+own check for a running session.
+
 ### Updating when the host is offline
 
 In the field the host often has no internet while the phone in
@@ -189,18 +237,22 @@ GitHub's file host does not allow browsers on other sites to fetch
 the package bytes automatically; the version lookup and the
 checksum are automatic.
 
+This offline path installs a `.deb`, so it exists only on Linux. A
+Windows host needs its own internet connection to update.
+
 ### Rolling back
 
 If an update regresses something mid-trip, go back without SSH:
 **SETTINGS**, **Power**, **Roll back version**. Unlike the badge,
-this button is always present on a `.deb` install. The modal lists
+this button is always present wherever self-update works. The modal lists
 recent releases with your architecture's package resolved: the
 running version is badged **current**, older ones offer **Roll
 back**, newer ones **Switch**, and releases with no package for
 your architecture appear disabled. Pick one and confirm; the
 install reuses the same staging, helper service, and restart
 machinery, and downgrades are permitted because the helper installs
-with `apt-get install --allow-downgrades`.
+with `apt-get install --allow-downgrades` (on Windows the folder is
+simply swapped for the older release).
 
 One warning the modal also shows: settings or the database written
 by a newer version may not load cleanly on an older one. Export
@@ -218,8 +270,10 @@ update", the PolicyKit rule is missing; reinstalling the `.deb`
 restores it. If an update seems stuck, give it up to three minutes
 and then refresh manually; the install log is at
 `/tmp/polaris-update.log`. No badge at all means you are not on a
-`.deb` install, already current, or offline; the release check is
-cached for 30 minutes.
+`.deb` install or the portable Windows build, already current, or
+offline; the release check is
+cached for 30 minutes. On Windows, see "On Windows" above for the
+log and the requirements.
 
 ## The debug log panel {#sec-debug-log}
 

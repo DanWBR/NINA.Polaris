@@ -235,10 +235,11 @@ function ninaApp() {
         // UI), via the browser Battery Status API. supported stays false
         // on Firefox/Safari (no API) so the top-bar chip simply hides.
         battery: { supported: false, level: null, charging: false },
-        // Self-update (SBC .deb installs). Populated by checkUpdate() from
+        // Self-update (.deb installs and the portable Windows build). Populated by checkUpdate() from
         // /api/update/check; the badge + modal only surface when supported.
         update: {
             supported: false, available: false, modalOpen: false, checking: false,
+            platform: 'deb',   // 'deb' | 'windows': which install flow the host uses
             currentVersion: '', latestVersion: '', releaseName: '',
             releaseNotes: '', publishedAt: '', htmlUrl: '',
             commits: [],   // changelog: [{ sha, subject, body }] since installed version
@@ -2516,6 +2517,23 @@ function ninaApp() {
             },
             filterName: '',
             plan: null
+        },
+
+        // MOSAIC tab: a field larger than the camera's, shot in panels and
+        // composited on screen as they come in. The run lives on the host
+        // (/api/mosaic/run); this is the form and the last status.
+        mosaicRun: {
+            form: {
+                query: '', targetName: '', raHours: null, decDeg: null,
+                zoomX: 2, zoomY: 2, overlapPercent: 20,
+                exposureSeconds: 10, gain: null, binning: 1, saveFrames: true
+            },
+            fov: null,
+            status: null,
+            canvasUrl: '',
+            canvasVersion: -1,
+            busy: false,
+            timer: null
         },
 
         // Sky Atlas filters + altitude chart
@@ -5687,7 +5705,7 @@ function ninaApp() {
             try {
                 if (document.wasDiscarded) {
                     const saved = sessionStorage.getItem('polaris_tab');
-                    const valid = ['home','live','polar','focus','preview','video','guide',
+                    const valid = ['home','live','mosaic','polar','focus','preview','video','guide',
                         'equip','sky','tonight','weather','plan','sequence','seqadv',
                         'files','settings','help'];
                     if (saved && valid.includes(saved) && saved !== this.tab) {
@@ -5719,7 +5737,7 @@ function ninaApp() {
             // Self-update: check now (post-auth — the endpoint is gated) then
             // hourly. Runs here rather than in the pre-auth boot init so the
             // badge appears right after login instead of only after a manual
-            // refresh. No-ops off SBC .deb installs (supported:false → hidden).
+            // refresh. No-ops where self-update is unsupported (supported:false → hidden).
             this.checkUpdate();
             setInterval(() => this.checkUpdate(), 60 * 60 * 1000);
 
@@ -7133,6 +7151,8 @@ function ninaApp() {
                     this.loadTonightsBest && this.loadTonightsBest();
                 } else if (tabId === 'weather') {
                     this.loadWeatherForecast && this.loadWeatherForecast();
+                } else if (tabId === 'mosaic') {
+                    this.mosaicOnTabEnter();
                 }
             } catch (e) { /* best effort -- tab still switches */ }
         },
@@ -49618,7 +49638,7 @@ function ninaApp() {
             window.open(url, '_blank', 'noopener');
         },
 
-        // ─── Self-update (SBC .deb installs) ─────────────────────────────
+        // ─── Self-update (.deb installs and the portable Windows build) ──
         // Poll GitHub releases via the server; surface a status-bar badge +
         // modal when a newer .deb is available for this host's architecture.
         async checkUpdate(force) {
@@ -49627,6 +49647,7 @@ function ninaApp() {
                 if (!r.ok) return null;
                 const u = await r.json();
                 this.update.supported = !!u.supported;
+                this.update.platform = u.platform || 'deb';
                 this.update.available = !!u.updateAvailable;
                 this.update.currentVersion = u.currentVersion || '';
                 this.update.latestVersion = u.latestVersion || '';
@@ -49650,7 +49671,14 @@ function ninaApp() {
                 const u = await this.checkUpdate(true);
                 if (!u) { this.toast('Update check failed: offline or server error', 'error'); return; }
                 if (!u.supported) {
-                    this.toast('Self-update needs a Linux .deb install. Running v' + (u.currentVersion || '?'), 'info');
+                    this.toast('Self-update needs a Linux .deb install or the portable Windows build. Running v'
+                        + (u.currentVersion || '?'), 'info');
+                    return;
+                }
+                // The relay below sideloads a .deb, so on Windows a host that
+                // cannot reach GitHub just says so.
+                if (u.error && u.platform === 'windows') {
+                    this.toast('Update check failed: ' + u.error, 'error');
                     return;
                 }
                 // The SBC answered but couldn't reach GitHub (no internet on the
@@ -49814,10 +49842,25 @@ function ninaApp() {
                 // timeout — that abort was cancelling the install mid-download
                 // ("signal is aborted without reason" / server TaskCanceled).
                 // Allow up to 10 min, matching the server's download timeout.
-                // force: the confirm above already asked. Without it the server
-                // gate would reject the very install the operator just approved.
-                const r = await this.apiFetch('/api/update/install?force=true',
-                    { method: 'POST', timeout: 600000 });
+                // force only once the operator has agreed to interrupt what is
+                // running. Otherwise the server gate decides: if the activity
+                // question above could not be answered and something IS running,
+                // its 409 brings up the same confirmation instead of a restart.
+                const r = await this.apiFetch(force ? '/api/update/install?force=true' : '/api/update/install',
+                    { method: 'POST', timeout: 600000, expectStatuses: [409] });
+                if (r.status === 409) {
+                    let what = 'a running session';
+                    try { const j = await r.json(); if (j && j.running && j.running.length) what = j.running.join(', '); } catch (e) {}
+                    this.update.installing = false;
+                    this._updProgStop();
+                    const go = await this._confirmAsync(
+                        this._t('Installing restarts Polaris, which stops {what}. '
+                                + 'Frames already written to disk are safe.', { what }),
+                        { title: this._t('Update now and interrupt the session?'),
+                          okLabel: this._t('Update anyway'), danger: true });
+                    if (go) return this.installUpdate(true);
+                    return;
+                }
                 if (!r.ok) {
                     let msg = 'Install failed.';
                     try { const j = await r.json(); if (j && j.error) msg = j.error; } catch (e) {}
@@ -49852,8 +49895,29 @@ function ninaApp() {
                 this._updProgStop();
                 this.update.error = 'Polaris has not come back on the new version yet. '
                     + 'The install keeps running on the host: wait a minute and reload the page. '
-                    + 'If the old version is still running, check /tmp/polaris-update.log on the host.';
+                    + (this.update.platform === 'windows'
+                        ? 'If the old version is still running, check update\\update.log in the Polaris data folder (%LOCALAPPDATA%\\NINA.Polaris\\profiles).'
+                        : 'If the old version is still running, check /tmp/polaris-update.log on the host.');
                 return;
+            }
+            // Windows: the worker reports each phase, and a failure (with the
+            // old version back up) would otherwise look like a slow install
+            // until the timeout above.
+            if (this.update.platform === 'windows') {
+                try {
+                    const pr = await this.apiFetch('/api/update/progress', { timeout: 4000 });
+                    if (pr.ok) {
+                        const p = await pr.json();
+                        const fresh = p && p.at && Date.parse(p.at) >= startedAt - 5000;
+                        if (fresh && p.message) this.update.progress = p.message;
+                        if (fresh && (p.phase === 'failed' || p.phase === 'rolled-back')) {
+                            this.update.installing = false;
+                            this._updProgStop();
+                            this.update.error = p.message || 'The update did not complete.';
+                            return;
+                        }
+                    }
+                } catch (e) { /* server down mid-swap, keep polling */ }
             }
             try {
                 const r = await this.apiFetch('/api/system/status');
@@ -52606,6 +52670,217 @@ function ninaApp() {
             this.mosaicOpen = false;
             this.mosaicTiles = null;
             try { this._pushSkyFovOverlays(); } catch (_) { /* SKY engine may be idle */ }
+        },
+
+        // ---- MOSAIC tab ----
+
+        async mosaicOnTabEnter() {
+            const f = this.mosaicRun.form;
+            if (f.raHours == null && this.skyTarget) this.mosaicUseSkyTarget();
+            this.mosaicLoadFov();
+            await this.mosaicRefresh();
+        },
+
+        async mosaicLoadFov() {
+            try { this.mosaicRun.fov = await this.apiGet('/api/mosaic/fov'); }
+            catch (_) { this.mosaicRun.fov = null; }
+        },
+
+        // Same arithmetic as MosaicLayout on the host: N panels with overlap o
+        // cover N(1-o)+o panel widths.
+        mosaicGridPreview() {
+            const f = this.mosaicRun.form;
+            const o = Math.min(50, Math.max(5, +f.overlapPercent || 20)) / 100;
+            const zoom = z => Math.min(8, Math.max(1, +z || 1));
+            const count = z => z <= 1 + 1e-9 ? 1 : Math.ceil((z - o) / (1 - o) - 1e-9);
+            const zx = zoom(f.zoomX), zy = zoom(f.zoomY);
+            const cols = count(zx), rows = count(zy);
+            const fov = this.mosaicRun.fov;
+            const known = !!(fov && fov.known);
+            // Slew + settle + solve per panel, a rough 25 s on top of the
+            // exposure, plus the initial centring.
+            const minutes = (cols * rows * ((+f.exposureSeconds || 0) + 25) + 60) / 60;
+            return {
+                cols, rows, panels: cols * rows,
+                widthDeg: known ? fov.widthDeg * zx : null,
+                heightDeg: known ? fov.heightDeg * zy : null,
+                minutes
+            };
+        },
+
+        mosaicSummaryLine() {
+            const g = this.mosaicGridPreview();
+            return this._t('Grid: {cols} × {rows} panels', { cols: g.cols, rows: g.rows })
+                + (g.widthDeg ? ' · ' + g.widthDeg.toFixed(2) + '° × ' + g.heightDeg.toFixed(2) + '°' : '')
+                + ' · ~' + Math.ceil(g.minutes) + ' min';
+        },
+
+        mosaicUseSkyTarget() {
+            const t = this.skyTarget;
+            if (!t) { this.toast(this._t('Pick a target on the SKY map first'), 'warn'); return; }
+            const f = this.mosaicRun.form;
+            f.targetName = t.name || 'Target';
+            f.raHours = t.ra ?? t.raHours;
+            f.decDeg = t.dec ?? t.decDeg;
+        },
+
+        mosaicUseMount() {
+            const m = this.mount;
+            if (!m || !m.connected || !Number.isFinite(m.ra) || !Number.isFinite(m.dec)) {
+                this.toast(this._t('Connect the mount first'), 'warn');
+                return;
+            }
+            const f = this.mosaicRun.form;
+            f.targetName = this.formatRaDec(m.ra, m.dec);
+            f.raHours = m.ra;
+            f.decDeg = m.dec;
+        },
+
+        async mosaicFindTarget() {
+            const f = this.mosaicRun.form;
+            const q = (f.query || '').trim();
+            if (!q) return;
+            const coords = this.parseRaDecLine(q);
+            if (coords) {
+                f.targetName = this.formatRaDec(coords.raHours, coords.decDeg);
+                f.raHours = coords.raHours;
+                f.decDeg = coords.decDeg;
+                return;
+            }
+            try {
+                const data = await this.apiGet(`/api/sky/catalog/search?query=${encodeURIComponent(q)}`);
+                const hit = (data.results || [])[0];
+                if (!hit) { this.toast(this._t('No objects found for {q}', { q }), 'warn'); return; }
+                f.targetName = hit.name;
+                f.raHours = hit.ra;
+                f.decDeg = hit.dec;
+            } catch (e) { this.toastFail('Search', e); }
+        },
+
+        mosaicActive() {
+            const s = this.mosaicRun.status;
+            return !!s && ['Centering', 'Slewing', 'Exposing', 'Solving', 'Compositing'].includes(s.state);
+        },
+
+        async mosaicShutter() {
+            if (this.mosaicRun.busy) return;
+            if (this.mosaicActive()) { await this.mosaicStop(); return; }
+            await this.mosaicStart();
+        },
+
+        async mosaicStart() {
+            const f = this.mosaicRun.form;
+            if (f.raHours == null || f.decDeg == null) {
+                this.toast(this._t('Pick a target first'), 'warn');
+                return;
+            }
+            this.mosaicRun.busy = true;
+            try {
+                const gain = f.gain === '' || f.gain == null ? null : +f.gain;
+                this.mosaicRun.status = await this.apiPostJson('/api/mosaic/run', {
+                    targetName: f.targetName || 'Target',
+                    raHours: +f.raHours, decDeg: +f.decDeg,
+                    zoomX: +f.zoomX, zoomY: +f.zoomY, overlapPercent: +f.overlapPercent,
+                    exposureSeconds: +f.exposureSeconds, gain,
+                    binning: +f.binning || 1, saveFrames: !!f.saveFrames
+                });
+                this.mosaicRun.canvasVersion = -1;
+                this.mosaicRun.canvasUrl = '';
+                this._mosaicPoll(true);
+            } catch (e) {
+                this.toastFail('Mosaic', e);
+            } finally {
+                this.mosaicRun.busy = false;
+            }
+        },
+
+        async mosaicStop() {
+            this.mosaicRun.busy = true;
+            try { this.mosaicRun.status = await this.apiPostJson('/api/mosaic/run/stop'); }
+            catch (e) { this.toastFail('Mosaic', e); }
+            finally { this.mosaicRun.busy = false; }
+        },
+
+        async mosaicRefresh() {
+            let s;
+            try { s = await this.apiGet('/api/mosaic/run'); } catch (_) { return; }
+            this.mosaicRun.status = s;
+            if (s.canvasVersion !== this.mosaicRun.canvasVersion && s.canvasVersion > 0) {
+                this.mosaicRun.canvasVersion = s.canvasVersion;
+                this.mosaicRun.canvasUrl = this.authUrl('/api/mosaic/run/canvas.jpg?v=' + s.canvasVersion);
+            }
+            this._mosaicPoll(this.mosaicActive());
+        },
+
+        // Poll only while a run is going; one last refresh lands the final
+        // picture and state.
+        _mosaicPoll(on) {
+            if (on && !this.mosaicRun.timer) {
+                this.mosaicRun.timer = setInterval(() => this.mosaicRefresh(), 1500);
+            } else if (!on && this.mosaicRun.timer) {
+                clearInterval(this.mosaicRun.timer);
+                this.mosaicRun.timer = null;
+            }
+        },
+
+        mosaicStateLabel() {
+            const s = this.mosaicRun.status;
+            if (!s || s.state === 'Idle') return this._t('Idle');
+            return {
+                Centering: this._t('Centring'), Slewing: this._t('Slewing'),
+                Exposing: this._t('Exposing'), Solving: this._t('Solving'),
+                Compositing: this._t('Compositing'), Done: this._t('Done'),
+                Failed: this._t('Failed'), Cancelled: this._t('Stopped')
+            }[s.state] || s.state;
+        },
+
+        mosaicPanelsDone() {
+            const s = this.mosaicRun.status;
+            return s ? s.panels.filter(p => p.state === 'Done').length : 0;
+        },
+
+        // Shutter ring: the exposure in progress, or the share of panels done.
+        mosaicShutterDashoffset() {
+            const s = this.mosaicRun.status;
+            if (!s || !this.mosaicActive()) return 289;
+            let p;
+            if (s.state === 'Exposing' && s.exposureStartedAt && s.exposureSeconds > 0) {
+                p = (Date.now() - Date.parse(s.exposureStartedAt)) / 1000 / s.exposureSeconds;
+            } else {
+                p = s.panels.length ? this.mosaicPanelsDone() / s.panels.length : 0;
+            }
+            return 289 * (1 - Math.min(1, Math.max(0, p)));
+        },
+
+        // Panel outlines over the canvas, as one SVG string. Planned panels are
+        // dashed, the current one highlighted; a placed panel shows where it
+        // really landed (its solved footprint), amber when it was placed from
+        // the mount position because its solve failed.
+        mosaicOverlaySvg() {
+            const s = this.mosaicRun.status;
+            if (!s || !s.canvasWidth) return '';
+            const w = s.canvasWidth, h = s.canvasHeight;
+            const fs = Math.max(12, Math.round(Math.min(w, h) / 22));
+            const parts = [];
+            for (const p of s.panels) {
+                const current = p.index === s.currentPanel;
+                const cls = p.state === 'Done' ? (p.solved ? 'mz-done' : 'mz-mount')
+                          : p.state === 'Failed' ? 'mz-failed'
+                          : current ? 'mz-current' : 'mz-pending';
+                if (p.quad && p.state === 'Done') {
+                    const pts = p.quad.map(q => q[0].toFixed(1) + ',' + q[1].toFixed(1)).join(' ');
+                    parts.push(`<polygon class="${cls}" points="${pts}"/>`);
+                } else {
+                    parts.push(`<rect class="${cls}" x="${p.x0.toFixed(1)}" y="${p.y0.toFixed(1)}" `
+                        + `width="${(p.x1 - p.x0).toFixed(1)}" height="${(p.y1 - p.y0).toFixed(1)}"/>`);
+                }
+                if (p.state !== 'Done') {
+                    parts.push(`<text class="mz-label" x="${((p.x0 + p.x1) / 2).toFixed(1)}" `
+                        + `y="${((p.y0 + p.y1) / 2 + fs / 3).toFixed(1)}" font-size="${fs}">${p.index + 1}</text>`);
+                }
+            }
+            return `<svg class="mosaic-grid-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">`
+                + parts.join('') + '</svg>';
         },
 
         async updateMosaicPreview() {

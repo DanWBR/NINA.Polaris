@@ -103,4 +103,43 @@ public static class ImageResampler {
 
         return result;
     }
+
+    /// <summary>Same as <see cref="ApplyTransform(ushort[], int, int, AffineTransform, ushort[])"/>
+    /// for a <see cref="PolynomialWarp"/>, which already maps output to
+    /// source, so there is nothing to invert. Same bilinear sampling and the
+    /// same zero off-canvas.</summary>
+    public static ushort[] ApplyWarp(ushort[] source, int width, int height,
+            PolynomialWarp warp, ushort[] result) {
+        if (result.Length < width * height)
+            throw new ArgumentException("Destination buffer too small for declared dimensions.", nameof(result));
+        if (ReferenceEquals(result, source))
+            throw new ArgumentException("In-place resampling is not supported.", nameof(result));
+
+        double x0c = warp.X0, scale = warp.Scale;
+        Parallel.For(0, height, y => {
+            warp.Row(y, out double ax, out double bx, out double cx, out double ay, out double by, out double cy);
+            int rowOut = y * width;
+            for (int x = 0; x < width; x++) {
+                double u = (x - x0c) / scale;
+                double srcX = ax + (bx + cx * u) * u;
+                double srcY = ay + (by + cy * u) * u;
+
+                int x0 = (int)Math.Floor(srcX);
+                int y0 = (int)Math.Floor(srcY);
+                if (x0 < 0 || x0 >= width - 1 || y0 < 0 || y0 >= height - 1) {
+                    result[rowOut + x] = 0;
+                    continue;
+                }
+
+                double fx = srcX - x0;
+                double fy = srcY - y0;
+                int b = y0 * width + x0;
+                double val = source[b] * (1 - fx) * (1 - fy) + source[b + 1] * fx * (1 - fy)
+                           + source[b + width] * (1 - fx) * fy + source[b + width + 1] * fx * fy;
+                result[rowOut + x] = (ushort)Math.Clamp(val, 0, 65535);
+            }
+        });
+
+        return result;
+    }
 }

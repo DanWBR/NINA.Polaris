@@ -47,6 +47,7 @@ public class HostActivityService {
     private readonly AutoFocusService _autoFocus;
     private readonly NINA.Polaris.Services.Focus.FilterFocusSweepService _focusSweep;
     private readonly CameraStreamService _stream;
+    private readonly NINA.Polaris.Services.Mosaic.MosaicRunService? _mosaic;
 
     public HostActivityService(SequenceEngine sequence,
                                AdvancedSequenceEngine adv,
@@ -55,7 +56,8 @@ public class HostActivityService {
                                VideoRecordingService video,
                                AutoFocusService autoFocus,
                                NINA.Polaris.Services.Focus.FilterFocusSweepService focusSweep,
-                               CameraStreamService stream) {
+                               CameraStreamService stream,
+                               NINA.Polaris.Services.Mosaic.MosaicRunService? mosaic = null) {
         _sequence = sequence;
         _adv = adv;
         _liveCapture = liveCapture;
@@ -64,6 +66,7 @@ public class HostActivityService {
         _autoFocus = autoFocus;
         _focusSweep = focusSweep;
         _stream = stream;
+        _mosaic = mosaic;
     }
 
     /// <summary>Human-readable names of what is running right now, empty when
@@ -75,6 +78,7 @@ public class HostActivityService {
             if (_sequence.State != SequenceState.Idle) busy.Add("a sequence (AUTORUN)");
             // PLAN compiles down to the advanced engine, so this covers both.
             if (_adv.State != AdvancedSequenceState.Idle) busy.Add("a sequence (PLAN / ADV)");
+            if (_mosaic?.IsRunning == true) busy.Add("a mosaic (MOSAIC)");
             if (_liveCapture.IsRunning) busy.Add("the LIVE capture loop");
             if (_liveStack.IsRunning) busy.Add("live stacking");
             if (_autoFocus.State != AutoFocusState.Idle) busy.Add("auto-focus");

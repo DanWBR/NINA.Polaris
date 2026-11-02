@@ -62,6 +62,7 @@
    (≤900px) collapses back to the legacy single-column stack. */
 .tab-panel-live,
 .preview-tab-panel,
+.mosaic-tab-panel,
 .tab-panel-autorun {
     min-height: 0;
     overflow: hidden;
@@ -2163,3 +2164,44 @@ label select.input-sm.select-compact {
     color: var(--accent);
     opacity: 0.85;
 }
+
+/* MOSAIC tab: the composited picture with the panel grid drawn over it. The
+   image and the SVG fill the same box and both letterbox with "contain", so
+   the SVG's canvas-pixel coordinates land on the image's pixels. */
+.mosaic-area .mosaic-stage {
+    position: absolute;
+    inset: 0;
+}
+.mosaic-area .mosaic-canvas-img,
+.mosaic-area .mosaic-grid-host,
+.mosaic-area .mosaic-grid-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+.mosaic-area .mosaic-canvas-img { object-fit: contain; }
+.mosaic-grid-svg rect,
+.mosaic-grid-svg polygon {
+    fill: none;
+    stroke-width: 1.5;
+    vector-effect: non-scaling-stroke;
+}
+.mosaic-grid-svg .mz-pending { stroke: rgba(255, 255, 255, 0.35); stroke-dasharray: 6 5; }
+.mosaic-grid-svg .mz-current { stroke: var(--accent, #4fa3ff); stroke-width: 2.5; fill: rgba(79, 163, 255, 0.08); }
+.mosaic-grid-svg .mz-done { stroke: rgba(120, 220, 140, 0.45); }
+.mosaic-grid-svg .mz-mount { stroke: var(--warning, #e8b04a); stroke-dasharray: 3 3; }
+.mosaic-grid-svg .mz-failed { stroke: var(--danger, #e05555); stroke-dasharray: 3 3; }
+.mosaic-grid-svg .mz-label {
+    fill: rgba(255, 255, 255, 0.45);
+    text-anchor: middle;
+    font-weight: 600;
+}
+.mosaic-target .mosaic-target-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+}
+.mosaic-target .mosaic-target-row input { flex: 1; min-width: 0; }
+.mosaic-run-status { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.mosaic-summary-line { margin-top: 4px; }

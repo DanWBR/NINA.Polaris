@@ -736,7 +736,8 @@ structure is:
 
 ## Keeping Polaris up to date
 
-On a `.deb` install, Polaris updates itself. It checks GitHub for a
+On a `.deb` install or the portable Windows build, Polaris updates
+itself. It checks GitHub for a
 newer release on startup and once an hour, and when one exists for
 your host's architecture a green **Update** badge appears in the top
 status bar. One click downloads the architecture-matched `.deb`,
@@ -749,11 +750,13 @@ seconds to a couple of minutes on a Pi. The same machinery supports
 rolling back to any earlier release and even updating an offline host
 by relaying the download through your phone's connection.
 @sec-administration covers self-update, rollback, and the offline
-relay in detail. Note that the feature only exists on `.deb` installs
-(the `/opt/polaris` layout with systemd); there is no update badge on
-Windows or in a dev run, and the very first release that ships the
-updater must itself be installed manually with
-`sudo apt install ./polaris_<arch>.deb`.
+relay in detail. The portable Windows build updates the same way, swapping its own
+folder for the new release and keeping the old one beside it
+(@sec-self-update covers the details). There is no update badge in
+a dev run, and the very first release that ships the updater must
+itself be installed manually, with
+`sudo apt install ./polaris_<arch>.deb` on Linux or by unzipping it
+on Windows.
 
 The manual alternative on any Debian-based host is SSH:
 

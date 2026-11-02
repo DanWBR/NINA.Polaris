@@ -21,9 +21,10 @@ using System.Text.Json;
 namespace NINA.Polaris.Services.External;
 
 /// <summary>
-/// Self-update for SBC (.deb) installs. Checks the project's GitHub releases
-/// for a newer version, and — on the user's request, with their sudo password —
-/// downloads the architecture-matched .deb and installs it.
+/// Self-update for SBC (.deb) installs and the portable Windows build (see
+/// UpdateService.Windows.cs). Checks the project's GitHub releases for a newer
+/// version, and, on the user's request, downloads the architecture-matched
+/// package and installs it.
 ///
 /// <para>The install is the tricky part: the package's postinst restarts
 /// <c>polaris.service</c>, i.e. it kills the very process serving this request
@@ -33,17 +34,18 @@ namespace NINA.Polaris.Services.External;
 /// cgroup, unaffected when polaris.service restarts. The sudo password feeds
 /// that single command over stdin and is never logged or persisted.</para>
 ///
-/// <para>Only enabled on Linux .deb installs (the <c>/opt/polaris</c> layout).
-/// On Windows / dev runs <see cref="IsSupported"/> is false and the UI hides
-/// the feature.</para>
+/// <para>Enabled on Linux .deb installs (the <c>/opt/polaris</c> layout) and on
+/// the portable Windows zip, which ships the update worker script. In a dev run
+/// <see cref="IsSupported"/> is false and the UI hides the feature.</para>
 /// </summary>
-public class UpdateService {
+public partial class UpdateService {
     private const string Repo = "DanWBR/NINA.Polaris";
     private const string LatestReleaseApi = "https://api.github.com/repos/" + Repo + "/releases/latest";
 
     private readonly ILogger<UpdateService> _logger;
     private readonly IHttpClientFactory _httpFactory;
     private readonly ProfileService _profiles;
+    private readonly IConfiguration? _config;
 
     private readonly object _cacheLock = new();
     private UpdateCheckResult? _cached;
@@ -55,10 +57,11 @@ public class UpdateService {
     private static readonly TimeSpan CheckTimeout = TimeSpan.FromSeconds(30);
 
     public UpdateService(ILogger<UpdateService> logger, IHttpClientFactory httpFactory,
-            ProfileService profiles) {
+            ProfileService profiles, IConfiguration? config = null) {
         _logger = logger;
         _httpFactory = httpFactory;
         _profiles = profiles;
+        _config = config;
     }
 
     /// <summary>The active update channel: "preview" opts into pre-releases,
@@ -67,15 +70,20 @@ public class UpdateService {
         string.Equals(_profiles.Active.UpdateChannel?.Trim(), "preview", StringComparison.OrdinalIgnoreCase)
             ? "preview" : "stable";
 
-    /// <summary>True only on a Linux .deb install (systemd + /opt/polaris). The
-    /// self-update flow assumes the packaged layout + service.</summary>
-    public bool IsSupported =>
-        SupportedOverride ?? (OperatingSystem.IsLinux()
+    /// <summary>True on a Linux .deb install (systemd + /opt/polaris) and on the
+    /// portable Windows build. Each flow assumes its own packaged layout.</summary>
+    public bool IsSupported => SupportedOverride ?? (IsDebInstall || IsWindowsPortable);
+
+    private static bool IsDebInstall => OperatingSystem.IsLinux()
         && File.Exists("/opt/polaris/NINA.Polaris")
-        && Directory.Exists("/run/systemd/system"));
+        && Directory.Exists("/run/systemd/system");
 
     /// <summary>Tests only: pretend to be (or not be) a .deb install.</summary>
     internal bool? SupportedOverride { get; set; }
+
+    /// <summary>The architecture token release assets are matched on: the dpkg
+    /// name on Linux, the .NET runtime id on Windows.</summary>
+    public string AssetArch => IsWindowsPortable ? WinRid : DpkgArch;
 
     /// <summary>Running version as a comparable 4-part System.Version.</summary>
     public static Version CurrentVersion {
@@ -108,7 +116,7 @@ public class UpdateService {
     };
 
     /// <summary>Query GitHub releases (cached 30 min) and report whether a newer
-    /// version exists for this host's architecture. Never throws — network /
+    /// version exists for this host's architecture. Never throws, network /
     /// rate-limit errors return a result with <c>Error</c> set.</summary>
     public async Task<UpdateCheckResult> CheckAsync(bool force, CancellationToken ct) {
         if (!IsSupported)
@@ -127,7 +135,8 @@ public class UpdateService {
             Supported = true,
             Channel = channel,
             CurrentVersion = CurrentVersionShort,
-            Arch = DpkgArch
+            Arch = AssetArch,
+            Platform = IsWindowsPortable ? "windows" : "deb"
         };
         try {
             var http = _httpFactory.CreateClient();
@@ -159,11 +168,11 @@ public class UpdateService {
                 }
                 JsonElement? picked = null;
                 foreach (var rel in doc.RootElement.EnumerateArray()) {
-                    var (_, aUrl, _) = PickArchAsset(rel);
+                    var (_, aUrl, _, _) = PickArchAsset(rel);
                     if (!string.IsNullOrEmpty(aUrl)) { picked = rel.Clone(); break; }
                 }
                 if (picked == null) {
-                    result.Error = $"No preview build for {DpkgArch} yet";
+                    result.Error = $"No preview build for {AssetArch} yet";
                     return CacheAndReturn(result);
                 }
                 root = picked.Value;
@@ -181,11 +190,13 @@ public class UpdateService {
             result.PublishedAt = root.TryGetProperty("published_at", out var p) ? p.GetString() : null;
             result.HtmlUrl = root.TryGetProperty("html_url", out var h) ? h.GetString() : null;
 
-            // Find the .deb asset matching this architecture: polaris_*_<arch>.deb
-            var (assetName, assetUrl, assetSize) = PickArchAsset(root);
+            // Find the package matching this host: polaris_*_<arch>.deb, or
+            // polaris-win-<arch>.zip on Windows.
+            var (assetName, assetUrl, assetSize, assetSha) = PickArchAsset(root);
             result.AssetName = assetName;
             result.AssetUrl = assetUrl;
             result.AssetSize = assetSize;
+            result.AssetSha256 = assetSha;
 
             result.UpdateAvailable =
                 TryParseTagVersion(result.LatestVersion, out var latest)
@@ -247,23 +258,34 @@ public class UpdateService {
         return Version.TryParse(s, out version!);
     }
 
-    /// <summary>Pick the architecture-matched .deb asset (polaris_*_&lt;arch&gt;.deb)
-    /// from a GitHub release JSON element. Returns (null,null,0) when none.
+    /// <summary>Pick this host's package from a GitHub release JSON element: the
+    /// architecture-matched .deb (polaris_*_&lt;arch&gt;.deb), or on Windows the
+    /// portable zip (polaris-win-&lt;arch&gt;.zip). Returns nulls when none. The
+    /// SHA-256 is GitHub's own digest of the asset, null when GitHub has none.
     /// Shared by the latest-release check and the releases-list (rollback).</summary>
-    private static (string? name, string? url, long size) PickArchAsset(JsonElement release) {
+    internal (string? name, string? url, long size, string? sha256) PickArchAsset(JsonElement release) {
+        bool windows = IsWindowsPortable;
+        var zipName = $"polaris-{WinRid}.zip";
         if (release.TryGetProperty("assets", out var assets) && assets.ValueKind == JsonValueKind.Array) {
             foreach (var a in assets.EnumerateArray()) {
                 var name = a.TryGetProperty("name", out var an) ? an.GetString() : null;
                 if (string.IsNullOrEmpty(name)) continue;
-                if (name.EndsWith($"_{DpkgArch}.deb", StringComparison.OrdinalIgnoreCase)
-                        && name.StartsWith("polaris_", StringComparison.OrdinalIgnoreCase)) {
+                bool match = windows
+                    ? string.Equals(name, zipName, StringComparison.OrdinalIgnoreCase)
+                    : name.EndsWith($"_{DpkgArch}.deb", StringComparison.OrdinalIgnoreCase)
+                      && name.StartsWith("polaris_", StringComparison.OrdinalIgnoreCase);
+                if (match) {
                     var url = a.TryGetProperty("browser_download_url", out var u) ? u.GetString() : null;
                     var size = a.TryGetProperty("size", out var sz) ? sz.GetInt64() : 0;
-                    return (name, url, size);
+                    var digest = a.TryGetProperty("digest", out var d) && d.ValueKind == JsonValueKind.String
+                        ? d.GetString() : null;
+                    string? sha = digest != null && digest.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase)
+                        ? digest["sha256:".Length..].ToLowerInvariant() : null;
+                    return (name, url, size, sha);
                 }
             }
         }
-        return (null, null, 0);
+        return (null, null, 0, null);
     }
 
     private readonly object _releasesCacheLock = new();
@@ -306,7 +328,7 @@ public class UpdateService {
                 var rawTag = rel.TryGetProperty("tag_name", out var t) ? t.GetString() : null;
                 var tag = NormalizeTag(rawTag);
                 if (string.IsNullOrEmpty(tag)) continue;
-                var (assetName, assetUrl, assetSize) = PickArchAsset(rel);
+                var (assetName, assetUrl, assetSize, assetSha) = PickArchAsset(rel);
 
                 string relation = "older";
                 bool isCurrent = false;
@@ -327,6 +349,7 @@ public class UpdateService {
                     AssetName = assetName,
                     AssetUrl = assetUrl,
                     AssetSize = assetSize,
+                    AssetSha256 = assetSha,
                     Relation = relation,
                     IsCurrent = isCurrent,
                     Installable = !string.IsNullOrEmpty(assetUrl)
@@ -406,7 +429,7 @@ public class UpdateService {
             var message = c.TryGetProperty("commit", out var cm)
                 && cm.TryGetProperty("message", out var msg) ? (msg.GetString() ?? "") : "";
             if (string.IsNullOrWhiteSpace(message)) continue;
-            // Skip the automated "Bump version to x" commits — noise to the user.
+            // Skip the automated "Bump version to x" commits, noise to the user.
             if (message.StartsWith("Bump version to", StringComparison.OrdinalIgnoreCase)) continue;
 
             var lines = message.Replace("\r\n", "\n").Split('\n');
@@ -461,7 +484,11 @@ public class UpdateService {
             }
         }
 
-        var (dlOk, dlErr) = await DownloadAndStageAsync(check.AssetUrl!, check.AssetName, ct);
+        if (IsWindowsPortable)
+            return await InstallWindowsAsync(check.AssetUrl!, check.AssetName, check.AssetSize,
+                check.AssetSha256, check.LatestVersion, ct);
+
+        var (dlOk, dlErr) = await DownloadAndStageAsync(check.AssetUrl!, check.AssetName, DebStagePath, ct);
         if (!dlOk) return (false, dlErr);
 
         // Hand off to the on-demand updater unit (shared with the offline
@@ -470,7 +497,7 @@ public class UpdateService {
     }
 
     /// <summary>
-    /// Install a SPECIFIC release by tag — the rollback (or forward-reinstall)
+    /// Install a SPECIFIC release by tag, the rollback (or forward-reinstall)
     /// path. The asset URL is resolved server-side from the releases list (never
     /// taken from the caller), then downloaded + installed via the same machinery
     /// as <see cref="InstallAsync"/>. There is intentionally NO "must be newer"
@@ -488,9 +515,15 @@ public class UpdateService {
         if (target == null)
             return (false, $"Version {wanted} was not found in the recent releases.");
         if (string.IsNullOrEmpty(target.AssetUrl))
-            return (false, $"Version {wanted} has no {DpkgArch} package to install.");
+            return (false, $"Version {wanted} has no {AssetArch} package to install.");
 
-        var (dlOk, dlErr) = await DownloadAndStageAsync(target.AssetUrl!, target.AssetName, ct);
+        if (IsWindowsPortable) {
+            _logger.LogInformation("Rollback/reinstall: version {Tag} on Windows", wanted);
+            return await InstallWindowsAsync(target.AssetUrl!, target.AssetName, target.AssetSize,
+                target.AssetSha256, wanted, ct);
+        }
+
+        var (dlOk, dlErr) = await DownloadAndStageAsync(target.AssetUrl!, target.AssetName, DebStagePath, ct);
         if (!dlOk) return (false, dlErr);
 
         _logger.LogInformation("Rollback/reinstall: staging {Asset} for version {Tag}", target.AssetName, wanted);
@@ -499,17 +532,18 @@ public class UpdateService {
 
     /// <summary>Download a release asset to the fixed staging path the updater
     /// unit reads. Shared by the latest-update, version-targeted (rollback), and
-    /// — indirectly — offline paths.
+    ///, indirectly, offline paths.
     /// <para>The download is deliberately NOT tied to the request abort token: a
     /// multi-tens-of-MB .deb over a slow SBC/mobile link easily outlasts the
     /// browser's fetch timeout, and if the client aborts we do not want to kill
     /// an in-progress install (it left the staged .deb half-written). Bound it by
     /// its own 10-minute timeout instead.</para></summary>
-    private async Task<(bool ok, string? error)> DownloadAndStageAsync(string assetUrl, string? assetName, CancellationToken ct) {
+    private async Task<(bool ok, string? error)> DownloadAndStageAsync(string assetUrl, string? assetName,
+            string stagePath, CancellationToken ct) {
         using var dlCts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
         var dlToken = dlCts.Token;
         try {
-            Directory.CreateDirectory(CacheDir);
+            Directory.CreateDirectory(Path.GetDirectoryName(stagePath)!);
             var http = _httpFactory.CreateClient();
             http.Timeout = TimeSpan.FromMinutes(10);
             using var dl = new HttpRequestMessage(HttpMethod.Get, assetUrl);
@@ -517,14 +551,14 @@ public class UpdateService {
             using var resp = await http.SendAsync(dl, HttpCompletionOption.ResponseHeadersRead, dlToken);
             if (!resp.IsSuccessStatusCode)
                 return (false, $"Download failed: HTTP {(int)resp.StatusCode}");
-            await using (var fs = File.Create(DebStagePath))
+            await using (var fs = File.Create(stagePath))
                 await resp.Content.CopyToAsync(fs, dlToken);
             _logger.LogInformation("Update: downloaded {Asset} ({Bytes} bytes) to {Path}",
-                assetName, new FileInfo(DebStagePath).Length, DebStagePath);
+                assetName, new FileInfo(stagePath).Length, stagePath);
             return (true, null);
         } catch (Exception ex) {
             _logger.LogWarning(ex, "Update download failed");
-            try { File.Delete(DebStagePath); } catch { }
+            try { File.Delete(stagePath); } catch { }
             return (false, "Download failed: " + ex.Message);
         }
     }
@@ -550,8 +584,10 @@ public class UpdateService {
             Stream deb, long expectedSize, string? expectedSha256Hex, CancellationToken ct,
             bool allowDowngrade = false) {
         if (!IsSupported) return (false, "Self-update is only available on a Linux .deb install.");
+        if (IsWindowsPortable)
+            return (false, "Installing a package downloaded by the browser is only available on a Linux .deb install.");
         if (string.IsNullOrWhiteSpace(expectedSha256Hex))
-            return (false, "Missing the expected SHA-256 digest — cannot verify the package.");
+            return (false, "Missing the expected SHA-256 digest, cannot verify the package.");
 
         var wantHex = expectedSha256Hex.Trim();
         if (wantHex.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase))
@@ -596,7 +632,7 @@ public class UpdateService {
         if (!string.Equals(gotHex, wantHex, StringComparison.Ordinal)) {
             try { File.Delete(DebStagePath); } catch { }
             _logger.LogWarning("Update upload SHA-256 mismatch (got {Got}, want {Want})", gotHex, wantHex);
-            return (false, "Checksum mismatch — the uploaded package is corrupt or not the genuine release. Aborted.");
+            return (false, "Checksum mismatch, the uploaded package is corrupt or not the genuine release. Aborted.");
         }
 
         // 3. dpkg sanity: must be the 'polaris' package; version newer than ours
@@ -689,7 +725,7 @@ public class UpdateService {
                 var msg = (stderr ?? "").Contains("authentication", StringComparison.OrdinalIgnoreCase)
                     || (stderr ?? "").Contains("not authorized", StringComparison.OrdinalIgnoreCase)
                     ? "Not authorized to install the update. The PolicyKit rule "
-                        + "(50-polaris-update.rules) may be missing — reinstall the .deb."
+                        + "(50-polaris-update.rules) may be missing, reinstall the .deb."
                     : $"Install launch failed (exit {proc.ExitCode}). {stderr}".Trim();
                 _logger.LogWarning("Update install launch failed: {Err}", msg);
                 return (false, msg);
@@ -709,7 +745,8 @@ public class UpdateService {
     /// version, and the dpkg architecture to match the right release asset.
     /// Unlike <see cref="CheckAsync"/> this never touches the network.</summary>
     public UpdateLocalInfo LocalInfo() => new() {
-        Supported = IsSupported,
+        // The browser-relay flow sideloads a .deb, so it stays off on Windows.
+        Supported = IsSupported && !IsWindowsPortable,
         CurrentVersion = CurrentVersionShort,
         Arch = DpkgArch,
         Repo = Repo
@@ -742,9 +779,13 @@ public class UpdateCheckResult {
     public string? PublishedAt { get; set; }
     public string? HtmlUrl { get; set; }
     public string? Arch { get; set; }
+    /// <summary>"deb" or "windows": which install flow this host uses.</summary>
+    public string Platform { get; set; } = "deb";
     public string? AssetName { get; set; }
     public string? AssetUrl { get; set; }
     public long AssetSize { get; set; }
+    /// <summary>GitHub's SHA-256 of the asset (lowercase hex), null when absent.</summary>
+    public string? AssetSha256 { get; set; }
     public string? Error { get; set; }
     /// <summary>Commits between the installed version's tag and the release
     /// tag, newest first. The UI shows these as the changelog instead of the
@@ -771,6 +812,7 @@ public class UpdateRelease {
     public string? AssetName { get; set; }
     public string? AssetUrl { get; set; }
     public long AssetSize { get; set; }
+    public string? AssetSha256 { get; set; }
     public string Relation { get; set; } = "older";
     public bool IsCurrent { get; set; }
     public bool Installable { get; set; }
