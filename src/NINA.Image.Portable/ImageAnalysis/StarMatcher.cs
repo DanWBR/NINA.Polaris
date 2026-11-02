@@ -102,12 +102,89 @@ public static class StarMatcher {
         // is a degenerate RANSAC consensus on noise, not a real alignment.
         // Returning null forces the caller's "could not register" error
         // path instead of silently warping the output image.
-        double det = transform.M00 * transform.M11
-                   - transform.M01 * transform.M10;
-        if (Math.Abs(det - 1.0) > 0.05) return null;
-        if (Math.Abs(transform.M01) > 0.1 || Math.Abs(transform.M10) > 0.1) return null;
+        if (!IsRigidEnough(transform)) return null;
 
-        return transform;
+        // Field rotation. The pairing above happens around ONE translation
+        // with an 8 px window, so a star whose rotation offset exceeds that
+        // never enters the fit: on a 6224 px sensor 0.15 degrees already moves
+        // a corner 10 px. The fit then rests on the stars near the rotation
+        // centre, and its small error in the angle grows with distance from
+        // there. On a two-hour T Cep run (SQA55 + ATR2600C, 2026-11-01, 1.2
+        // degrees of rotation by the last frame) that left the centre sharp
+        // and the corners trailing by up to 11 px. Re-pairing through the
+        // fitted transform brings the edge stars in.
+        var refined = Refine(transform, referenceStars, currentStars);
+        return IsRigidEnough(refined) ? refined : transform;
+    }
+
+    private static bool IsRigidEnough(AffineTransform t) {
+        double det = t.M00 * t.M11 - t.M01 * t.M10;
+        return Math.Abs(det - 1.0) <= 0.05 && Math.Abs(t.M01) <= 0.1 && Math.Abs(t.M10) <= 0.1;
+    }
+
+    /// <summary>Pair every star through the current transform, refit on the
+    /// pairs, and tighten. Each pass sees the whole field, so the angle is
+    /// fitted across the full baseline. Keeps whichever transform puts the
+    /// most stars within 2 px, the smaller residual breaking a tie, so a pass
+    /// that does not help changes nothing.</summary>
+    private static AffineTransform Refine(AffineTransform t,
+            List<DetectedStar> refs, List<DetectedStar> curs) {
+        var best = t;
+        var bestScore = Score(t, refs, curs);
+        var current = t;
+        foreach (var tol in new[] { 6.0, 3.0, 2.0 }) {
+            var pairs = PairThrough(current, refs, curs, tol);
+            if (pairs.Count < 6) break;
+            var next = AffineTransform.FromPointPairs(
+                pairs.Select(p => (p.cur.X, p.cur.Y)).ToArray(),
+                pairs.Select(p => (p.refStar.X, p.refStar.Y)).ToArray());
+            if (next == null) break;
+            current = next;
+            var score = Score(current, refs, curs);
+            if (score.count > bestScore.count
+                    || (score.count == bestScore.count && score.rms < bestScore.rms)) {
+                best = current;
+                bestScore = score;
+            }
+        }
+        return best;
+    }
+
+    private static (int count, double rms) Score(AffineTransform t,
+            List<DetectedStar> refs, List<DetectedStar> curs) {
+        var pairs = PairThrough(t, refs, curs, 2.0);
+        if (pairs.Count == 0) return (0, double.MaxValue);
+        double sum = 0;
+        foreach (var (r, c) in pairs) {
+            var (x, y) = t.Apply(c.X, c.Y);
+            sum += (r.X - x) * (r.X - x) + (r.Y - y) * (r.Y - y);
+        }
+        return (pairs.Count, Math.Sqrt(sum / pairs.Count));
+    }
+
+    /// <summary>Each current star, mapped through <paramref name="t"/>, paired
+    /// with the nearest reference star within <paramref name="tol"/> px. A
+    /// reference star is taken at most once.</summary>
+    private static List<(DetectedStar refStar, DetectedStar cur)> PairThrough(
+            AffineTransform t, List<DetectedStar> refs, List<DetectedStar> curs, double tol) {
+        var pairs = new List<(DetectedStar, DetectedStar)>();
+        var taken = new HashSet<int>();
+        double tol2 = tol * tol;
+        foreach (var c in curs) {
+            var (x, y) = t.Apply(c.X, c.Y);
+            int bestIdx = -1;
+            double bestD2 = tol2;
+            for (int i = 0; i < refs.Count; i++) {
+                double dx = refs[i].X - x, dy = refs[i].Y - y;
+                double d2 = dx * dx + dy * dy;
+                if (d2 < bestD2 && !taken.Contains(i)) { bestD2 = d2; bestIdx = i; }
+            }
+            if (bestIdx >= 0) {
+                taken.Add(bestIdx);
+                pairs.Add((refs[bestIdx], c));
+            }
+        }
+        return pairs;
     }
 
     /// <summary>

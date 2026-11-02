@@ -155,6 +155,12 @@ public class LiveStackingService {
     /// Surfaced on the WS status payload + LIVE tab. Reset in
     /// <see cref="Reset"/>.</summary>
     public int MeridianFlipsHandled { get; private set; }
+    /// <summary>Register frames with a second-order warp when it fits the
+    /// stars clearly better than the affine (field rotation over hours, low
+    /// altitude). See <see cref="PolynomialWarp"/>.</summary>
+    public bool PolynomialAlignment { get; set; } = true;
+    /// <summary>Frames this session registered with the second-order warp.</summary>
+    public int PolynomialFrames { get; private set; }
     // Default: stacking is OFF. The session comes up disarmed so frames
     // flow through the relay (and are saved when SaveFramesToDisk is on)
     // without silently integrating into a stack the user never asked
@@ -920,6 +926,7 @@ public class LiveStackingService {
             _flipped = false;
             _referencePier = PierSide.pierUnknown;
             MeridianFlipsHandled = 0;
+            PolynomialFrames = 0;
             _frameCount = 0;
             _framesSavedToDisk = 0;
             _width = 0;
@@ -1304,6 +1311,9 @@ public class LiveStackingService {
             // (null for the reference frame / identity). In colour mode we
             // apply it per-debayered-plane instead of warping the raw CFA.
             AffineTransform? usedTransform = null;
+            // Second-order refinement of usedTransform, when it clearly fits
+            // the stars better (see PolynomialWarp); null = warp with the affine.
+            PolynomialWarp? usedWarp = null;
 
             lock (_lock) {
                 // "First frame" means the first frame THIS BRANCH sees, not
@@ -1436,7 +1446,8 @@ public class LiveStackingService {
                     bool flippedFirst = _flipped || pierFlipHint;
 
                     alignedData = TryAlignOriented(stars, data, flippedFirst,
-                        MayProbeFlipped(_referencePier, curPier, _flipped), out bool usedFlipped, out usedTransform);
+                        MayProbeFlipped(_referencePier, curPier, _flipped), out bool usedFlipped, out usedTransform,
+                        out usedWarp);
                     if (alignedData == null) {
                         RecordReject($"alignment failed ({stars.Count} stars detected)");
                         return;
@@ -1475,9 +1486,15 @@ public class LiveStackingService {
                         EnsureScratch(ref _warpR, pc);
                         EnsureScratch(ref _warpG, pc);
                         EnsureScratch(ref _warpB, pc);
-                        r = ImageResampler.ApplyTransform(r, _width, _height, usedTransform, _warpR!);
-                        g = ImageResampler.ApplyTransform(g, _width, _height, usedTransform, _warpG!);
-                        b = ImageResampler.ApplyTransform(b, _width, _height, usedTransform, _warpB!);
+                        if (usedWarp != null) {
+                            r = ImageResampler.ApplyWarp(r, _width, _height, usedWarp, _warpR!);
+                            g = ImageResampler.ApplyWarp(g, _width, _height, usedWarp, _warpG!);
+                            b = ImageResampler.ApplyWarp(b, _width, _height, usedWarp, _warpB!);
+                        } else {
+                            r = ImageResampler.ApplyTransform(r, _width, _height, usedTransform, _warpR!);
+                            g = ImageResampler.ApplyTransform(g, _width, _height, usedTransform, _warpG!);
+                            b = ImageResampler.ApplyTransform(b, _width, _height, usedTransform, _warpB!);
+                        }
                     }
                     int accN = Math.Min(r.Length, _stackR!.Length);
                     bool rej = SigmaRejection && _m2Buffer != null && _lumSumBuffer != null;
@@ -1697,9 +1714,10 @@ public class LiveStackingService {
     /// </summary>
     private ushort[]? TryAlignOriented(List<DetectedStar> stars, ushort[] data,
                                        bool flippedFirst, bool mayFlip, out bool usedFlipped,
-                                       out AffineTransform? used) {
+                                       out AffineTransform? used, out PolynomialWarp? warp) {
         usedFlipped = false;
         used = null;
+        warp = null;
         var order = !mayFlip ? new[] { false }
             : flippedFirst ? new[] { true, false } : new[] { false, true };
         foreach (var flip in order) {
@@ -1741,7 +1759,8 @@ public class LiveStackingService {
                     used = t;
                     _logger.LogDebug("Frame aligned (reference orientation): dx={Tx:F1} dy={Ty:F1}",
                         t.Tx, t.Ty);
-                    return Warp(data, t);
+                    warp = RefineWarp(stars, t);
+                    return Warp(data, t, warp);
                 }
             } else {
                 var rotStars = Rotate180Stars(stars, _width, _height);
@@ -1762,7 +1781,11 @@ public class LiveStackingService {
                     used = composed;
                     _logger.LogDebug("Frame aligned (flipped): residual dx={Tx:F1} dy={Ty:F1}",
                         t.Tx, t.Ty);
-                    return Warp(data, composed);
+                    // The composed transform takes the frame's own star
+                    // positions to the reference, so the refinement pairs
+                    // the unrotated stars through it.
+                    warp = RefineWarp(stars, composed);
+                    return Warp(data, composed, warp);
                 }
             }
         }
@@ -1772,7 +1795,20 @@ public class LiveStackingService {
     /// <summary>Affine warp + bilinear resample, on the GPU when available
     /// (<see cref="IGpuCompute"/>) and on the CPU otherwise. The CPU helper is
     /// the canonical fallback whenever the GPU declines.</summary>
-    private ushort[] Warp(ushort[] data, AffineTransform t) {
+    /// <summary>Second-order refinement of an affine match, or null to keep
+    /// the affine. Callers hold _lock.</summary>
+    private PolynomialWarp? RefineWarp(List<DetectedStar> stars, AffineTransform t) {
+        if (!PolynomialAlignment || _referenceStars == null) return null;
+        var w = PolynomialWarp.FromStars(_referenceStars, stars, t, _width, _height);
+        if (w != null) {
+            PolynomialFrames++;
+            _logger.LogDebug("Frame registered with a 2nd-order warp: {N} stars, residual {Rms:F2} px",
+                w.Pairs, w.RmsResidual);
+        }
+        return w;
+    }
+
+    private ushort[] Warp(ushort[] data, AffineTransform t, PolynomialWarp? warp = null) {
         // A CFA mosaic must not be resampled as one image: bilinear blending
         // mixes neighbours that are different colours, and the shift moves the
         // pattern off phase. The client is then told to debayer the result, so
@@ -1796,11 +1832,20 @@ public class LiveStackingService {
             EnsureScratch(ref _warpR, pc);
             EnsureScratch(ref _warpG, pc);
             EnsureScratch(ref _warpB, pc);
-            var wr = ImageResampler.ApplyTransform(_dbR!, _width, _height, t, _warpR!);
-            var wg = ImageResampler.ApplyTransform(_dbG!, _width, _height, t, _warpG!);
-            var wb = ImageResampler.ApplyTransform(_dbB!, _width, _height, t, _warpB!);
+            var wr = warp != null ? ImageResampler.ApplyWarp(_dbR!, _width, _height, warp, _warpR!)
+                                  : ImageResampler.ApplyTransform(_dbR!, _width, _height, t, _warpR!);
+            var wg = warp != null ? ImageResampler.ApplyWarp(_dbG!, _width, _height, warp, _warpG!)
+                                  : ImageResampler.ApplyTransform(_dbG!, _width, _height, t, _warpG!);
+            var wb = warp != null ? ImageResampler.ApplyWarp(_dbB!, _width, _height, warp, _warpB!)
+                                  : ImageResampler.ApplyTransform(_dbB!, _width, _height, t, _warpB!);
             EnsureScratch(ref _warpMono, pc);
             return BayerDebayer.Remosaic(wr, wg, wb, _width, _height, _bayerPattern, _warpMono!);
+        }
+        if (warp != null) {
+            // No GPU kernel for the quadratic; the CPU path is the same
+            // bilinear sampling.
+            EnsureScratch(ref _warpMono, _width * _height);
+            return ImageResampler.ApplyWarp(data, _width, _height, warp, _warpMono!);
         }
         if (_gpu.TryWarpAffine(data, _width, _height, t, out var warped)) return warped;
         // MEMOPT: the CPU-warped mono frame is only accumulated, never
