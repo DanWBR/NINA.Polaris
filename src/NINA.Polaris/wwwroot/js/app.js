@@ -49348,10 +49348,25 @@ function ninaApp() {
                 // timeout, that abort was cancelling the install mid-download
                 // ("signal is aborted without reason" / server TaskCanceled).
                 // Allow up to 10 min, matching the server's download timeout.
-                // force: the confirm above already asked. Without it the server
-                // gate would reject the very install the operator just approved.
-                const r = await this.apiFetch('/api/update/install?force=true',
-                    { method: 'POST', timeout: 600000 });
+                // force only once the operator has agreed to interrupt what is
+                // running. Otherwise the server gate decides: if the activity
+                // question above could not be answered and something IS running,
+                // its 409 brings up the same confirmation instead of a restart.
+                const r = await this.apiFetch(force ? '/api/update/install?force=true' : '/api/update/install',
+                    { method: 'POST', timeout: 600000, expectStatuses: [409] });
+                if (r.status === 409) {
+                    let what = 'a running session';
+                    try { const j = await r.json(); if (j && j.running && j.running.length) what = j.running.join(', '); } catch (e) {}
+                    this.update.installing = false;
+                    this._updProgStop();
+                    const go = await this._confirmAsync(
+                        this._t('Installing restarts Polaris, which stops {what}. '
+                                + 'Frames already written to disk are safe.', { what }),
+                        { title: this._t('Update now and interrupt the session?'),
+                          okLabel: this._t('Update anyway'), danger: true });
+                    if (go) return this.installUpdate(true);
+                    return;
+                }
                 if (!r.ok) {
                     let msg = 'Install failed.';
                     try { const j = await r.json(); if (j && j.error) msg = j.error; } catch (e) {}

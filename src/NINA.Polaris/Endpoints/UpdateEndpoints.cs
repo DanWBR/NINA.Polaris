@@ -28,6 +28,17 @@ public static class UpdateEndpoints {
         group.MapGet("/check", async (UpdateService svc, bool? force, CancellationToken ct) =>
             Results.Ok(await svc.CheckAsync(force ?? false, ct)));
 
+        // What an install would interrupt, asked by the modal before it commits.
+        // The client then sends force=true only after the operator agreed; while
+        // this route was missing the question 404ed, the client read that as
+        // "nothing running" and forced every install straight through the gate
+        // below (found by matteoconti92, #63).
+        group.MapGet("/activity", (HostActivityService activity) => Results.Ok(new {
+            busy = activity.IsBusy,
+            description = activity.Describe(),
+            running = activity.Current()
+        }));
+
         // Download + install the latest .deb. The privileged install runs via
         // the on-demand polaris-self-update.service unit, which the polaris user
         // is authorized to start passwordless (PolicyKit). Returns 200 once the
