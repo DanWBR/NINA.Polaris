@@ -17,8 +17,8 @@ using NINA.Polaris.Services.External;
 
 namespace NINA.Polaris.Endpoints;
 
-/// <summary>Self-update endpoints (SBC .deb installs). Check GitHub releases and,
-/// on request with the user's sudo password, download + install the new .deb.</summary>
+/// <summary>Self-update endpoints (.deb installs and the portable Windows build). Check GitHub releases and,
+/// on request, download and install the new package.</summary>
 public static class UpdateEndpoints {
     public static void MapUpdateEndpoints(this WebApplication app) {
         var group = app.MapGroup("/api/update");
@@ -92,6 +92,11 @@ public static class UpdateEndpoints {
                 ? Results.Ok(new { started = true })
                 : Results.BadRequest(new { error });
         });
+
+        // Windows: the update worker's last reported phase, so the modal can
+        // say what it is doing and why it stopped. {phase:"idle"} otherwise.
+        group.MapGet("/progress", (UpdateService svc) =>
+            svc.WindowsProgress() is { } p ? Results.Ok(p) : Results.Ok(new { phase = "idle" }));
 
         // Internet-free host facts (version + dpkg arch) the browser needs to
         // find the right release asset on GitHub for the offline-sideload flow.

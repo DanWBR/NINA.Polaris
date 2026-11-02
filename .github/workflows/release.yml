@@ -160,6 +160,9 @@ jobs:
             -p:DebugType=none -p:DebugSymbols=false `
             -p:Version="${{ steps.ver.outputs.version }}" `
             -o $outDir --nologo
+          # The self-update worker. Its presence is also what tells Polaris it
+          # is a portable release install (UpdateService.Windows.cs).
+          Copy-Item packaging/windows/polaris-update.ps1 $outDir/
           # Wrap output in named subdir so unzip is clean
           $staged = "build/$stage"
           if (Test-Path $staged) { Remove-Item -Recurse -Force $staged }
@@ -450,7 +453,8 @@ jobs:
 
             Download `polaris-win-x64.zip` (or `polaris-win-arm64.zip`),
             extract, and run `NINA.Polaris.exe`. Open
-            `http://localhost:5000` in any browser.
+            `http://localhost:5000` in any browser. Later versions install
+            in place from Settings → Software Update.
 
             **Native cameras work out of the box.** The x64 zip bundles the ZWO
             ASI, SVBony and Player One SDK DLLs, so those native drivers appear

@@ -609,7 +609,7 @@
                     @click="panicAbortRun()"
                     :title="'Abort the running ' + activeRunLabel() + ' immediately'"
                     x-text="'⛔ ' + $t('Abort') + ' ' + activeRunLabel()"></button>
-            <!-- Self-update badge (SBC .deb installs only). Shown when GitHub
+            <!-- Self-update badge (.deb installs and the portable Windows build). Shown when GitHub
                  has a newer release for this host's architecture; click opens
                  the update modal with release notes + the install button. -->
             <button class="status-update-btn" x-show="update.available" x-cloak

@@ -235,10 +235,11 @@ function ninaApp() {
         // UI), via the browser Battery Status API. supported stays false
         // on Firefox/Safari (no API) so the top-bar chip simply hides.
         battery: { supported: false, level: null, charging: false },
-        // Self-update (SBC .deb installs). Populated by checkUpdate() from
+        // Self-update (.deb installs and the portable Windows build). Populated by checkUpdate() from
         // /api/update/check; the badge + modal only surface when supported.
         update: {
             supported: false, available: false, modalOpen: false, checking: false,
+            platform: 'deb',   // 'deb' | 'windows': which install flow the host uses
             currentVersion: '', latestVersion: '', releaseName: '',
             releaseNotes: '', publishedAt: '', htmlUrl: '',
             commits: [],   // changelog: [{ sha, subject, body }] since installed version
@@ -5696,7 +5697,7 @@ function ninaApp() {
             // Self-update: check now (post-auth, the endpoint is gated) then
             // hourly. Runs here rather than in the pre-auth boot init so the
             // badge appears right after login instead of only after a manual
-            // refresh. No-ops off SBC .deb installs (supported:false → hidden).
+            // refresh. No-ops where self-update is unsupported (supported:false → hidden).
             this.checkUpdate();
             setInterval(() => this.checkUpdate(), 60 * 60 * 1000);
 
@@ -49152,7 +49153,7 @@ function ninaApp() {
             window.open(url, '_blank', 'noopener');
         },
 
-        // ─── Self-update (SBC .deb installs) ─────────────────────────────
+        // ─── Self-update (.deb installs and the portable Windows build) ──
         // Poll GitHub releases via the server; surface a status-bar badge +
         // modal when a newer .deb is available for this host's architecture.
         async checkUpdate(force) {
@@ -49161,6 +49162,7 @@ function ninaApp() {
                 if (!r.ok) return null;
                 const u = await r.json();
                 this.update.supported = !!u.supported;
+                this.update.platform = u.platform || 'deb';
                 this.update.available = !!u.updateAvailable;
                 this.update.currentVersion = u.currentVersion || '';
                 this.update.latestVersion = u.latestVersion || '';
@@ -49184,7 +49186,14 @@ function ninaApp() {
                 const u = await this.checkUpdate(true);
                 if (!u) { this.toast('Update check failed: offline or server error', 'error'); return; }
                 if (!u.supported) {
-                    this.toast('Self-update needs a Linux .deb install. Running v' + (u.currentVersion || '?'), 'info');
+                    this.toast('Self-update needs a Linux .deb install or the portable Windows build. Running v'
+                        + (u.currentVersion || '?'), 'info');
+                    return;
+                }
+                // The relay below sideloads a .deb, so on Windows a host that
+                // cannot reach GitHub just says so.
+                if (u.error && u.platform === 'windows') {
+                    this.toast('Update check failed: ' + u.error, 'error');
                     return;
                 }
                 // The SBC answered but couldn't reach GitHub (no internet on the
@@ -49401,8 +49410,29 @@ function ninaApp() {
                 this._updProgStop();
                 this.update.error = 'Polaris has not come back on the new version yet. '
                     + 'The install keeps running on the host: wait a minute and reload the page. '
-                    + 'If the old version is still running, check /tmp/polaris-update.log on the host.';
+                    + (this.update.platform === 'windows'
+                        ? 'If the old version is still running, check update\\update.log in the Polaris data folder (%LOCALAPPDATA%\\NINA.Polaris\\profiles).'
+                        : 'If the old version is still running, check /tmp/polaris-update.log on the host.');
                 return;
+            }
+            // Windows: the worker reports each phase, and a failure (with the
+            // old version back up) would otherwise look like a slow install
+            // until the timeout above.
+            if (this.update.platform === 'windows') {
+                try {
+                    const pr = await this.apiFetch('/api/update/progress', { timeout: 4000 });
+                    if (pr.ok) {
+                        const p = await pr.json();
+                        const fresh = p && p.at && Date.parse(p.at) >= startedAt - 5000;
+                        if (fresh && p.message) this.update.progress = p.message;
+                        if (fresh && (p.phase === 'failed' || p.phase === 'rolled-back')) {
+                            this.update.installing = false;
+                            this._updProgStop();
+                            this.update.error = p.message || 'The update did not complete.';
+                            return;
+                        }
+                    }
+                } catch (e) { /* server down mid-swap, keep polling */ }
             }
             try {
                 const r = await this.apiFetch('/api/system/status');
