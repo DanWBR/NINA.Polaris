@@ -416,7 +416,7 @@ Entry", "Right Ascension", "Declination") and plain ones ("name", "ra",
 are skipped, so re-importing a list you have curated does not duplicate
 it.
 
-## Slew & Center
+## Slew & Center {#sec-slew-center}
 
 The big workflow button. With a target selected, click **Slew &
 Center** and Polaris:
@@ -512,6 +512,63 @@ the grid efficiently. From there the sequencer takes
 over; see @sec-autorun. For multi-target scheduling across a whole
 night, the planner described in @sec-night-planner builds on the same
 target selection.
+
+## MOSAIC mode {#sec-mosaic}
+
+The planner above hands a mosaic to the sequencer to shoot later. The
+**MOSAIC** tab (in the left navigation, after LIVE) shoots one now and
+builds the picture on screen as the panels come in. It is marked
+experimental while it gathers field experience.
+
+Pick a target with **Find** (a catalogue name or coordinates), **SKY
+target** (whatever is selected on the sky map), or **Mount position**
+(where the telescope points now). Then set the field size the way a
+smart telescope does: **Width** and **Height** in camera fields, so 2.5
+by 1.6 means a field two and a half frames wide and 1.6 frames tall.
+With the **Overlap** you choose (20% by default), Polaris works out how
+many panels that takes and shows the grid, the field in degrees and an
+estimated time before anything moves. Exposure, gain and binning apply
+to every panel. Press the shutter to start; press it again to stop.
+
+What happens next:
+
+1. **Centring:** Slew & Center (@sec-slew-center) puts the target
+   in the middle of the frame. Its plate solve (working out exactly
+   where the camera points from the star pattern) also gives the
+   camera's angle on the sky, and the grid is laid out along the
+   sensor's edges, so the overlap stays even whatever the rotation.
+2. **Each panel:** the mount slews, waits two seconds to settle, takes
+   one exposure, and plate-solves it.
+3. **Placement:** each panel lands on the picture where its own plate
+   solve says it belongs, not where the mount was told to go, so
+   pointing errors, field rotation and a meridian flip are all taken
+   into account. Where panels overlap, each fades out toward its edge
+   so the seam does not show, and each panel's sky background is
+   levelled first so panels shot through different sky glow match.
+
+The picture fills in live: dashed outlines mark the panels still to
+come, the current one is highlighted, and a finished panel shows its
+real footprint. A panel whose plate solve fails is placed from the
+mount's reported position instead and outlined in amber; its edges may
+not line up exactly. With **Save the panel frames** on, every panel is
+saved as a normal light frame in a "Target mosaic" folder, and the
+finished picture is saved next to them as a JPEG.
+
+- **Resolution:** the on-screen picture is at most 2400 pixels on its
+  longest side. It is a preview of the field, not the final image:
+  stack and stitch the saved panels in your processing software for
+  full resolution.
+- **Guiding:** each panel is a slew, which loses the guide star, so
+  guiding pauses for the run. When the mosaic completes, Polaris picks
+  a new guide star and resumes guiding; after a failure or a stop it
+  stays off. Each panel is exposed on the mount's tracking alone, so
+  keep the exposures short enough for your mount to track unguided.
+- **Plate solver:** without one installed, every panel is placed from
+  the mount position and the grid is laid out north-up, because the
+  camera angle is unknown. The tab says so.
+- **Mount problems:** if the mount refuses a slew (tracking off, a
+  limit, a safety stop), the run stops there instead of trying the
+  remaining panels.
 
 ## Stellarium sync
 

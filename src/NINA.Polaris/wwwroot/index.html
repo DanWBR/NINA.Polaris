@@ -43,7 +43,7 @@
          significant (CSS cascade), keep these in sequence. All share the same
          ?v= cache-bust token, bumped together on every deploy. -->
     <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20261017-updatewhite">
-    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20261023-skynight">
+    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20261102-mosaic">
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20261009-floatbtn">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20261028-hometonight2">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20261024-cloudhourly">
@@ -903,6 +903,10 @@
             <button class="nav-btn" :class="{ active: tab === 'live' }" data-tour="nav-live" @click="tab = 'live'" title="Live View">
                 <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>
                 <span class="nav-label">Live</span>
+            </button>
+            <button class="nav-btn" :class="{ active: tab === 'mosaic' }" @click="tab = 'mosaic'; mosaicOnTabEnter()" title="Mosaic (a field larger than the camera's, shot in panels)">
+                <svg viewBox="0 0 24 24" width="22" height="22"><rect x="3" y="4" width="8" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect x="13" y="4" width="8" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect x="3" y="13" width="8" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect x="13" y="13" width="8" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="2 2"/></svg>
+                <span class="nav-label">Mosaic</span>
             </button>
             <button class="nav-btn" :class="{ active: tab === 'video' }" data-tour="nav-video" @click="tab = 'video'; loadCameraCapabilities()" title="Video (planetary capture + lucky imaging)">
                 <svg viewBox="0 0 24 24" width="22" height="22"><rect x="3" y="6" width="13" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 10l5-3v10l-5-3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
@@ -3779,6 +3783,168 @@
             </div>
 
             <!-- PREVIEW, snap test shots with optional save -->
+            <!-- MOSAIC: a field larger than the camera's, shot panel by panel
+                 and composited on screen as the panels come in. Each panel is
+                 placed by its own plate solve (Services/Mosaic). Same pane as
+                 PREVIEW: picture on the left, floating controls on the right. -->
+            <div x-show="tab === 'mosaic'" class="tab-panel mosaic-tab-panel">
+                <div class="panel-header">
+                    Mosaic <span style="font-size:11px; color:var(--text-muted); font-weight:400">(experimental)</span>
+                    <span class="status-indicator-sm"
+                          :class="mosaicActive() ? 'warn' : (mosaicRun.status?.state === 'Failed' ? 'error' : 'ok')"
+                          x-text="mosaicStateLabel()"></span>
+                </div>
+                <div class="preview-pane"
+                     :class="{ 'controls-collapsed': quickControlsCollapsed }">
+                <div class="preview-area mosaic-area">
+                    <div class="mosaic-stage" x-show="mosaicRun.status?.canvasWidth > 0">
+                        <img class="mosaic-canvas-img" :src="mosaicRun.canvasUrl" x-show="mosaicRun.canvasUrl" alt="">
+                        <div class="mosaic-grid-host" x-html="mosaicOverlaySvg()"></div>
+                    </div>
+                    <div class="preview-overlay" x-show="!(mosaicRun.status?.canvasWidth > 0)">
+                        <p x-text="mosaicActive()
+                                    ? _t('Centring on the target to read the camera angle…')
+                                    : _t('Pick a target and a field size, then press the shutter')"></p>
+                    </div>
+                </div>
+
+                <div class="quick-controls"
+                     :class="{ 'quick-controls--collapsed': quickControlsCollapsed }">
+                    <button class="quick-controls-toggle"
+                            @click="toggleQuickControls()"
+                            :title="quickControlsCollapsed ? 'Show controls' : 'Hide controls'"
+                            x-text="quickControlsCollapsed ? '◀' : '▶'"></button>
+                    <div class="quick-controls-resize" x-show="!quickControlsCollapsed"
+                         @pointerdown="startQcResize($event)"
+                         @dblclick="resetQcWidth()"
+                         title="Drag to resize · double-click to reset"></div>
+                    <div class="quick-controls-scroll">
+                    <div class="shutter-inputs">
+                        <div class="control-row mosaic-target">
+                            <label>Target</label>
+                            <div class="mosaic-target-row">
+                                <input type="text" class="input-sm" x-model="mosaicRun.form.query"
+                                       placeholder="M31, NGC 7000, 05:35 -05:23"
+                                       @keydown.enter.prevent="mosaicFindTarget()"
+                                       :disabled="mosaicActive()">
+                                <button class="btn btn-sm" @click="mosaicFindTarget()" :disabled="mosaicActive()">Find</button>
+                            </div>
+                            <div class="mosaic-target-row">
+                                <button class="btn btn-sm" @click="mosaicUseSkyTarget()" :disabled="mosaicActive()"
+                                        title="Use the target selected on the SKY map">SKY target</button>
+                                <button class="btn btn-sm" @click="mosaicUseMount()" :disabled="mosaicActive()"
+                                        title="Use where the mount points now">Mount position</button>
+                            </div>
+                            <div class="hint" x-show="mosaicRun.form.raHours != null">
+                                <strong x-text="mosaicRun.form.targetName"></strong>
+                                <span data-no-i18n x-text="mosaicRun.form.raHours != null ? ' · ' + formatRaDec(mosaicRun.form.raHours, mosaicRun.form.decDeg) : ''"></span>
+                            </div>
+                        </div>
+                        <table class="exp-gain-grid">
+                        <colgroup>
+                            <col style="width:50%">
+                            <col style="width:50%">
+                            <col style="width:auto">
+                        </colgroup>
+                        <tbody>
+                        <tr>
+                            <td><label title="Field width, in camera fields">Width (× FOV)</label></td>
+                            <td><input type="number" class="input-sm" min="1" max="8" step="0.1"
+                                       x-model.number="mosaicRun.form.zoomX" :disabled="mosaicActive()"></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td><label title="Field height, in camera fields">Height (× FOV)</label></td>
+                            <td><input type="number" class="input-sm" min="1" max="8" step="0.1"
+                                       x-model.number="mosaicRun.form.zoomY" :disabled="mosaicActive()"></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td><label>Overlap (%)</label></td>
+                            <td><input type="number" class="input-sm" min="5" max="50" step="1"
+                                       x-model.number="mosaicRun.form.overlapPercent" :disabled="mosaicActive()"></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td><label>Exposure (s)</label></td>
+                            <td><input type="number" class="input-sm" min="0" step="any" list="exposure-presets"
+                                       x-model.number="mosaicRun.form.exposureSeconds" :disabled="mosaicActive()"></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td><label title="Empty uses the camera's current gain">Gain</label></td>
+                            <td><input type="number" class="input-sm" step="1" placeholder="camera"
+                                       x-model="mosaicRun.form.gain" :disabled="mosaicActive()"></td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td><label>Bin</label></td>
+                            <td><select class="input-sm" x-model.number="mosaicRun.form.binning" :disabled="mosaicActive()">
+                                <option value="1">1×1</option>
+                                <option value="2">2×2</option>
+                            </select></td>
+                            <td></td>
+                        </tr>
+                        </tbody>
+                        </table>
+                        <div class="control-row">
+                            <label class="seq-dither-checkbox">
+                                <input type="checkbox" x-model="mosaicRun.form.saveFrames" :disabled="mosaicActive()">
+                                Save the panel frames
+                            </label>
+                        </div>
+                        <div class="hint mosaic-summary-line" data-no-i18n x-text="mosaicSummaryLine()"></div>
+                    </div>
+
+                    <div class="shutter-wrap">
+                        <div class="polaris-shutter"
+                             :class="{ 'shutter-active': mosaicActive() }"
+                             :aria-disabled="mosaicRun.busy"
+                             role="button"
+                             :aria-label="mosaicActive() ? 'Stop the mosaic' : 'Start the mosaic'"
+                             @click="mosaicShutter()">
+                            <svg class="shutter-svg" viewBox="0 0 100 100">
+                                <circle class="shutter-track" cx="50" cy="50" r="46"></circle>
+                                <circle class="shutter-progress" cx="50" cy="50" r="46"
+                                        :style="'stroke-dashoffset: ' + mosaicShutterDashoffset()"></circle>
+                            </svg>
+                            <span class="shutter-icon">
+                                <svg viewBox="0 0 24 24" x-show="!mosaicActive()">
+                                    <circle cx="12" cy="12" r="7"></circle>
+                                </svg>
+                                <svg viewBox="0 0 24 24" x-show="mosaicActive()">
+                                    <rect x="7" y="7" width="10" height="10" rx="1.5"></rect>
+                                </svg>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="shutter-secondary">
+                        <template x-if="mosaicRun.status && mosaicRun.status.state !== 'Idle'">
+                            <div class="mosaic-run-status">
+                                <div x-text="mosaicRun.status.message"></div>
+                                <div class="hint" x-show="mosaicRun.status.panels.length" data-no-i18n
+                                     x-text="$t('Panels done: {done} of {total}', { done: mosaicPanelsDone(), total: mosaicRun.status.panels.length })"></div>
+                                <template x-for="(w, i) in mosaicRun.status.warnings" :key="'mw' + i">
+                                    <div class="hint text-warn" x-text="w"></div>
+                                </template>
+                                <template x-for="p in mosaicRun.status.panels.filter(p => p.note)" :key="'mn' + p.index">
+                                    <div class="hint text-warn" x-text="$t('Panel {n}', { n: p.index + 1 }) + ': ' + p.note"></div>
+                                </template>
+                                <div class="hint" x-show="mosaicRun.status.outputPath"
+                                     x-text="$t('Saved to {path}', { path: mosaicRun.status.outputPath })"></div>
+                            </div>
+                        </template>
+                        <div class="hint">
+                            The run centres on the target once, then slews to each panel, takes one exposure
+                            and plate-solves it to place it on the picture. Guiding pauses for the run and resumes when it completes.
+                        </div>
+                    </div>
+                    </div><!-- /.quick-controls-scroll -->
+                </div>
+                </div><!-- /.preview-pane -->
+            </div>
+
             <div x-show="tab === 'preview'" class="tab-panel preview-tab-panel">
                 <div class="panel-header" data-tour="preview-actions">
                     Preview
@@ -25813,7 +25979,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261101-skysearch"></script>
+    <script src="/js/app.js?v=20261102-mosaic"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

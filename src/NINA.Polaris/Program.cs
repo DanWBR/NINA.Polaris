@@ -326,6 +326,7 @@ builder.Services.AddSingleton<NINA.Polaris.Services.Sequencer.SequenceTemplateSt
 builder.Services.AddSingleton<NINA.Polaris.Services.Workflow.WorkflowStore>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Sequencer.AdvancedSequenceEngine>();
 builder.Services.AddSingleton<MosaicPlannerService>();
+builder.Services.AddSingleton<NINA.Polaris.Services.Mosaic.MosaicRunService>();
 // PLAN mode: compiles ImagingPlans to sequence documents + a hosted runner that
 // schedules the start, enforces the end condition, and runs end actions.
 builder.Services.AddSingleton<NINA.Polaris.Services.Plan.PlanCompilerService>();
