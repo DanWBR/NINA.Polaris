@@ -5363,5 +5363,8 @@
   "Update check failed:": "Échec de la vérification des mises à jour :",
   "Use the target selected on the SKY map": "Utiliser la cible sélectionnée sur la carte SKY",
   "Use where the mount points now": "Utiliser la direction actuelle de la monture",
-  "Width (× FOV)": "Largeur (× FOV)"
+  "Width (× FOV)": "Largeur (× FOV)",
+  "Guide each panel": "Guiding sur chaque panneau",
+  "Stop guiding before each slew, pick a new guide star on the panel and wait for guiding to settle before the exposure. When off, guiding pauses for the run and resumes when it completes.": "Arrête le guiding avant chaque slew, choisit une nouvelle étoile guide sur le panneau et attend que le guiding se stabilise avant l'exposition. Désactivé, le guiding est suspendu pendant la séquence et reprend à la fin.",
+  "The run centres on the target once, then slews to each panel, takes one exposure and plate-solves it to place it on the picture.": "La séquence centre sur la cible une fois, puis fait un slew vers chaque panneau, prend une exposition et fait son plate solve pour la placer sur l'image."
 }

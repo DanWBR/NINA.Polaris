@@ -538,7 +538,9 @@ What happens next:
    camera's angle on the sky, and the grid is laid out along the
    sensor's edges, so the overlap stays even whatever the rotation.
 2. **Each panel:** the mount slews, waits two seconds to settle, takes
-   one exposure, and plate-solves it.
+   one exposure, and plate-solves it. With **Guide each panel** on,
+   guiding restarts on the panel and settles before the exposure (see
+   below).
 3. **Placement:** each panel lands on the picture where its own plate
    solve says it belongs, not where the mount was told to go, so
    pointing errors, field rotation and a meridian flip are all taken
@@ -558,11 +560,25 @@ finished picture is saved next to them as a JPEG.
   longest side. It is a preview of the field, not the final image:
   stack and stitch the saved panels in your processing software for
   full resolution.
-- **Guiding:** each panel is a slew, which loses the guide star, so
-  guiding pauses for the run. When the mosaic completes, Polaris picks
-  a new guide star and resumes guiding; after a failure or a stop it
-  stays off. Each panel is exposed on the mount's tracking alone, so
-  keep the exposures short enough for your mount to track unguided.
+- **Guiding:** each panel is a slew, and a slew carries the guide star
+  out of the guide camera's view, so guiding always stops before the
+  mount moves. What happens next depends on **Guide each panel**, which
+  appears when a guider is connected:
+  - **On:** after each slew Polaris picks a new guide star, starts
+    guiding and waits until it settles (the star held within 1.5 pixels
+    for 3 seconds) before the exposure. That usually takes a few
+    seconds. A panel whose guiding does not start or settle is still
+    shot, and the run lists it. When the mosaic completes, guiding
+    keeps running on the last panel.
+  - **Off:** guiding stays paused for the whole run and each panel is
+    exposed on the mount's tracking alone, so keep the exposures short
+    enough for your mount to track unguided. When the mosaic
+    completes, Polaris picks a new guide star and resumes guiding.
+
+  The option starts on when guiding is running and the exposure is 30
+  seconds or more, and off for shorter exposures, where restarting
+  guiding would take longer than the exposure itself; tick or clear it
+  to choose. After a failure or a stop, guiding stays off either way.
 - **Plate solver:** without one installed, every panel is placed from
   the mount position and the grid is laid out north-up, because the
   camera angle is unknown. The tab says so.

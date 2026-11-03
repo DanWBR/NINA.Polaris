@@ -3893,6 +3893,15 @@
                                 Save the panel frames
                             </label>
                         </div>
+                        <div class="control-row" x-show="guider.connected">
+                            <label class="seq-dither-checkbox"
+                                   title="Stop guiding before each slew, pick a new guide star on the panel and wait for guiding to settle before the exposure. When off, guiding pauses for the run and resumes when it completes.">
+                                <input type="checkbox" :checked="mosaicGuideEachPanel()"
+                                       @change="mosaicRun.form.guideEachPanel = $event.target.checked"
+                                       :disabled="mosaicActive()">
+                                Guide each panel
+                            </label>
+                        </div>
                         <div class="hint mosaic-summary-line" data-no-i18n x-text="mosaicSummaryLine()"></div>
                     </div>
 
@@ -3937,7 +3946,7 @@
                         </template>
                         <div class="hint">
                             The run centres on the target once, then slews to each panel, takes one exposure
-                            and plate-solves it to place it on the picture. Guiding pauses for the run and resumes when it completes.
+                            and plate-solves it to place it on the picture.
                         </div>
                     </div>
                     </div><!-- /.quick-controls-scroll -->
@@ -25979,7 +25988,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261102-mosaic"></script>
+    <script src="/js/app.js?v=20261102-mosaic-guide"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
