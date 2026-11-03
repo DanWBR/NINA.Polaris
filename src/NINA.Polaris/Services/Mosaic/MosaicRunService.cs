@@ -52,6 +52,21 @@ public sealed class MosaicRunService {
     /// <summary>Settle time after each slew, before the shutter opens.</summary>
     internal TimeSpan SettleAfterSlew { get; set; } = TimeSpan.FromSeconds(2);
 
+    /// <summary>Exposures this long are guided panel by panel unless the
+    /// operator says otherwise; shorter ones ride on the mount's tracking,
+    /// where restarting guiding would cost more than the exposure.</summary>
+    internal const double GuideEachPanelMinExposure = 30;
+
+    // Settle for the guiding restarted on each panel: the live stack's
+    // dither settle, since both wait on a fresh lock before a frame.
+    internal const double PanelSettlePixels = 1.5;
+    internal const int PanelSettleSeconds = 3;
+    internal const int PanelSettleTimeout = 60;
+
+    /// <summary>How long the guider may sit idle after a start before the
+    /// panel stops waiting for a settle that will not come.</summary>
+    internal TimeSpan GuideIdleGrace { get; set; } = TimeSpan.FromSeconds(10);
+
     public MosaicRunService(EquipmentManager equip, PlateSolveService solver,
             ProfileService profiles, SlewCenterService slewCenter, ImageWriterService writer,
             ILogger<MosaicRunService> logger,
@@ -139,6 +154,12 @@ public sealed class MosaicRunService {
         var req = run.Request;
         try {
             await StopGuidingAsync(run, ct);
+            run.GuidePanels = GuidesEachPanel(req.GuideEachPanel,
+                _guiders?.Active?.IsConnected == true, run.GuidingWasOn, req.ExposureSeconds);
+            if (run.GuidePanels)
+                run.Warn("Guiding restarts on a new guide star at each panel.");
+            else if (run.GuidingWasOn)
+                run.Warn("Guiding is paused for the mosaic and resumes when it completes.");
 
             // 1. Centre on the target. The solve gives the camera angle.
             run.Set(MosaicRunState.Centering, "Centring on the target");
@@ -178,6 +199,7 @@ public sealed class MosaicRunService {
 
             int placed = run.PlacedCount();
             if (placed == 0) {
+                await StopPanelGuidingAsync(run);
                 run.Finish(MosaicRunState.Failed, "No panel could be placed.");
                 return;
             }
@@ -195,30 +217,127 @@ public sealed class MosaicRunService {
             var summary = placed == total
                 ? $"Mosaic complete: {total} panels."
                 : $"Mosaic finished with {placed} of {total} panels.";
-            if (run.GuidingWasOn) summary += await ResumeGuidingAsync(ct);
+            if (run.GuidePanels && _guiders?.Active is { IsConnected: true, IsGuiding: true })
+                summary += " Guiding continues on the last panel.";
+            else if (run.GuidingWasOn) summary += await ResumeGuidingAsync(ct);
             run.Finish(MosaicRunState.Done, summary);
         } catch (OperationCanceledException) {
+            await StopPanelGuidingAsync(run);
             run.Finish(MosaicRunState.Cancelled, "Stopped.");
         } catch (MountFailedException ex) {
             _logger.LogWarning("MOSAIC stopped: {Error}", ex.Message);
+            await StopPanelGuidingAsync(run);
             run.Finish(MosaicRunState.Failed, ex.Message);
         } catch (Exception ex) {
             _logger.LogError(ex, "MOSAIC run failed");
+            await StopPanelGuidingAsync(run);
             run.Finish(MosaicRunState.Failed, ex.Message);
         }
     }
 
-    private async Task StopGuidingAsync(Run run, CancellationToken ct) {
-        // Every panel is a slew, so a guide star would be lost on each one.
+    /// <summary>Whether each panel gets its own guiding. Needs a connected
+    /// guider; then the operator's choice, else on when guiding was running
+    /// at the start and the exposures are long enough to need it.</summary>
+    internal static bool GuidesEachPanel(bool? requested, bool guiderConnected, bool guidingWasOn,
+            double exposureSeconds) {
+        if (!guiderConnected) return false;
+        return requested ?? (guidingWasOn && exposureSeconds >= GuideEachPanelMinExposure);
+    }
+
+    /// <summary>Stop guiding before a slew: the guide star leaves the guide
+    /// camera's field, and corrections sent during the move would fight it.
+    /// Returns true when guiding was running.</summary>
+    private async Task<bool> StopGuidingForSlewAsync(CancellationToken ct) {
         var guider = _guiders?.Active;
         try {
             if (guider is { IsConnected: true, IsGuiding: true }) {
                 await guider.StopAsync(ct);
-                run.GuidingWasOn = true;
-                run.Warn("Guiding is paused for the mosaic and resumes when it completes.");
+                return true;
             }
+        } catch (OperationCanceledException) {
+            throw;
         } catch (Exception ex) {
             _logger.LogWarning(ex, "MOSAIC: could not stop guiding (continuing)");
+        }
+        return false;
+    }
+
+    private async Task StopGuidingAsync(Run run, CancellationToken ct) {
+        if (await StopGuidingForSlewAsync(ct)) run.GuidingWasOn = true;
+    }
+
+    /// <summary>After a failure or a stop, guiding started for a panel is
+    /// stopped too, the same rule as the paused guiding staying off.</summary>
+    private async Task StopPanelGuidingAsync(Run run) {
+        if (!run.GuidePanels) return;
+        try { await StopGuidingForSlewAsync(CancellationToken.None); }
+        catch (Exception ex) { _logger.LogWarning(ex, "MOSAIC: could not stop guiding"); }
+    }
+
+    /// <summary>Guide this panel before the shutter opens: a new star in the
+    /// guide camera's new field, then wait for the guiding to settle. A panel
+    /// whose guiding does not start is shot on the mount's tracking and the
+    /// run says so; the mosaic carries on either way.</summary>
+    private async Task GuidePanelAsync(Run run, MosaicPanelPlan panel, CancellationToken ct) {
+        int n = panel.Index + 1;
+        var guider = _guiders?.Active;
+        if (guider is not { IsConnected: true }) {
+            run.Warn($"Panel {n}: the guider is disconnected; shot on tracking alone.");
+            return;
+        }
+        run.Set(MosaicRunState.Guiding, $"Panel {n}: guiding");
+        var warning = await StartAndSettleAsync(guider, n, PanelSettleTimeout, GuideIdleGrace, _logger, ct);
+        if (warning != null) run.Warn(warning);
+    }
+
+    /// <summary>Pick a star, start guiding and wait for the settle report.
+    /// Returns null when guiding settled, else the sentence for the run.</summary>
+    internal static async Task<string?> StartAndSettleAsync(IGuider guider, int panelNumber,
+            int settleTimeout, TimeSpan idleGrace, ILogger logger, CancellationToken ct) {
+        int n = panelNumber;
+        var settled = new TaskCompletionSource<SettleResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnSettled(SettleResult r) => settled.TrySetResult(r);
+        guider.Settled += OnSettled;
+        try {
+            try {
+                await guider.AutoSelectStarAsync(ct);
+            } catch (OperationCanceledException) {
+                throw;
+            } catch (Exception ex) {
+                // Starting guiding without a selection picks a star itself.
+                logger.LogInformation("MOSAIC panel {N}: star selection failed ({Error})", n, ex.Message);
+            }
+            await guider.StartGuidingAsync(PanelSettlePixels, PanelSettleSeconds, settleTimeout, ct: ct);
+
+            // Wait for the settle report. A backend that gave up without one
+            // (no star, no mount) goes idle, so stop waiting after a grace.
+            // Calibration does not count against the settle timeout.
+            var limit = TimeSpan.FromSeconds(settleTimeout + 5);
+            var deadline = DateTime.UtcNow + limit;
+            DateTime? idleSince = null;
+            while (!settled.Task.IsCompleted && DateTime.UtcNow < deadline) {
+                if (guider.IsCalibrating) deadline = DateTime.UtcNow + limit;
+                if (guider.IsGuiding || guider.IsCalibrating || guider.IsSettling) idleSince = null;
+                else if (DateTime.UtcNow - (idleSince ??= DateTime.UtcNow) > idleGrace) break;
+                await Task.Delay(100, ct);
+            }
+
+            var result = settled.Task.IsCompleted ? settled.Task.Result : null;
+            if (!guider.IsGuiding)
+                return $"Panel {n}: guiding did not start"
+                    + (result?.Error is { Length: > 0 } e ? $" ({e})" : "") + "; shot on tracking alone.";
+            if (result == null)
+                return $"Panel {n}: guiding had not settled after {settleTimeout} s; shot anyway.";
+            if (result.Status != 0)
+                return $"Panel {n}: guiding did not settle ({result.Error}); shot anyway.";
+            return null;
+        } catch (OperationCanceledException) {
+            throw;
+        } catch (Exception ex) {
+            logger.LogWarning(ex, "MOSAIC panel {N}: guiding failed", n);
+            return $"Panel {n}: guiding could not start ({ex.Message}); shot on tracking alone.";
+        } finally {
+            guider.Settled -= OnSettled;
         }
     }
 
@@ -279,6 +398,7 @@ public sealed class MosaicRunService {
         var req = run.Request;
         var scope = _equip.Telescope ?? throw new InvalidOperationException("Mount disconnected");
 
+        if (run.GuidePanels) await StopGuidingForSlewAsync(ct);
         run.Set(MosaicRunState.Slewing, $"Panel {panel.Index + 1}: slewing");
         try {
             await scope.SlewAsync(panel.RaHours, panel.DecDeg, ct);
@@ -289,6 +409,7 @@ public sealed class MosaicRunService {
         }
         for (int i = 0; i < 300 && scope.IsSlewing; i++) await Task.Delay(1000, ct);
         await Task.Delay(SettleAfterSlew, ct);
+        if (run.GuidePanels) await GuidePanelAsync(run, panel, ct);
 
         var camera = _equip.Camera ?? throw new InvalidOperationException("Camera disconnected");
         run.Set(MosaicRunState.Exposing, $"Panel {panel.Index + 1}: exposing {req.ExposureSeconds:0.#} s");
@@ -407,6 +528,8 @@ public sealed class MosaicRunService {
         public Task? Task { get; set; }
         public bool TrackingWasOn { get; set; }
         public bool GuidingWasOn { get; set; }
+        /// <summary>Guiding is restarted on each panel instead of paused for the run.</summary>
+        public bool GuidePanels { get; set; }
         public string? CenterJobId { get; set; }
         public DateTime? ExposureStartedAt {
             get { lock (_lock) return _exposureStartedAt; }
@@ -533,12 +656,15 @@ public sealed class MosaicRunRequest {
     public int? Gain { get; set; }
     public int Binning { get; set; } = 1;
     public bool SaveFrames { get; set; } = true;
+    /// <summary>Restart guiding on each panel. Null decides from the exposure
+    /// and whether guiding was running at the start.</summary>
+    public bool? GuideEachPanel { get; set; }
     /// <summary>Operator confirmed past the post-safety-stop home requirement.</summary>
     public bool Force { get; set; }
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
-public enum MosaicRunState { Idle, Centering, Slewing, Exposing, Solving, Compositing, Done, Failed, Cancelled }
+public enum MosaicRunState { Idle, Centering, Slewing, Guiding, Exposing, Solving, Compositing, Done, Failed, Cancelled }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum MosaicPanelState { Pending, Active, Done, Failed }

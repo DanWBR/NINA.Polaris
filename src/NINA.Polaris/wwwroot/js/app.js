@@ -2526,7 +2526,10 @@ function ninaApp() {
             form: {
                 query: '', targetName: '', raHours: null, decDeg: null,
                 zoomX: 2, zoomY: 2, overlapPercent: 20,
-                exposureSeconds: 10, gain: null, binning: 1, saveFrames: true
+                exposureSeconds: 10, gain: null, binning: 1, saveFrames: true,
+                // null until the operator ticks or clears it: then the
+                // default in mosaicGuideEachPanel decides.
+                guideEachPanel: null
             },
             fov: null,
             status: null,
@@ -52698,14 +52701,24 @@ function ninaApp() {
             const fov = this.mosaicRun.fov;
             const known = !!(fov && fov.known);
             // Slew + settle + solve per panel, a rough 25 s on top of the
-            // exposure, plus the initial centring.
-            const minutes = (cols * rows * ((+f.exposureSeconds || 0) + 25) + 60) / 60;
+            // exposure (15 s more to restart guiding), plus the initial centring.
+            const perPanel = (+f.exposureSeconds || 0) + 25 + (this.mosaicGuideEachPanel() ? 15 : 0);
+            const minutes = (cols * rows * perPanel + 60) / 60;
             return {
                 cols, rows, panels: cols * rows,
                 widthDeg: known ? fov.widthDeg * zx : null,
                 heightDeg: known ? fov.heightDeg * zy : null,
                 minutes
             };
+        },
+
+        // Guide each panel: the operator's choice once made, else on for
+        // exposures of 30 s or more while guiding runs (MosaicRunService's rule).
+        mosaicGuideEachPanel() {
+            if (!this.guider || !this.guider.connected) return false;
+            const f = this.mosaicRun.form;
+            if (f.guideEachPanel != null) return !!f.guideEachPanel;
+            return !!this.guider.guiding && (+f.exposureSeconds || 0) >= 30;
         },
 
         mosaicSummaryLine() {
@@ -52759,7 +52772,7 @@ function ninaApp() {
 
         mosaicActive() {
             const s = this.mosaicRun.status;
-            return !!s && ['Centering', 'Slewing', 'Exposing', 'Solving', 'Compositing'].includes(s.state);
+            return !!s && ['Centering', 'Slewing', 'Guiding', 'Exposing', 'Solving', 'Compositing'].includes(s.state);
         },
 
         async mosaicShutter() {
@@ -52782,7 +52795,8 @@ function ninaApp() {
                     raHours: +f.raHours, decDeg: +f.decDeg,
                     zoomX: +f.zoomX, zoomY: +f.zoomY, overlapPercent: +f.overlapPercent,
                     exposureSeconds: +f.exposureSeconds, gain,
-                    binning: +f.binning || 1, saveFrames: !!f.saveFrames
+                    binning: +f.binning || 1, saveFrames: !!f.saveFrames,
+                    guideEachPanel: this.guider && this.guider.connected ? this.mosaicGuideEachPanel() : null
                 });
                 this.mosaicRun.canvasVersion = -1;
                 this.mosaicRun.canvasUrl = '';
@@ -52827,7 +52841,7 @@ function ninaApp() {
             const s = this.mosaicRun.status;
             if (!s || s.state === 'Idle') return this._t('Idle');
             return {
-                Centering: this._t('Centring'), Slewing: this._t('Slewing'),
+                Centering: this._t('Centring'), Slewing: this._t('Slewing'), Guiding: this._t('Guiding'),
                 Exposing: this._t('Exposing'), Solving: this._t('Solving'),
                 Compositing: this._t('Compositing'), Done: this._t('Done'),
                 Failed: this._t('Failed'), Cancelled: this._t('Stopped')

@@ -4995,5 +4995,8 @@
   "Update check failed:": "",
   "Use the target selected on the SKY map": "",
   "Use where the mount points now": "",
-  "Width (× FOV)": ""
+  "Width (× FOV)": "",
+  "Guide each panel": "",
+  "Stop guiding before each slew, pick a new guide star on the panel and wait for guiding to settle before the exposure. When off, guiding pauses for the run and resumes when it completes.": "",
+  "The run centres on the target once, then slews to each panel, takes one exposure and plate-solves it to place it on the picture.": ""
 }

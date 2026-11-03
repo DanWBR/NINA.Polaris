@@ -5690,5 +5690,8 @@
   "Update check failed:": "Не удалось проверить обновления:",
   "Use the target selected on the SKY map": "Использовать цель, выбранную на карте НЕБО",
   "Use where the mount points now": "Использовать текущее наведение монтировки",
-  "Width (× FOV)": "Ширина (× FOV)"
+  "Width (× FOV)": "Ширина (× FOV)",
+  "Guide each panel": "Guiding на каждой панели",
+  "Stop guiding before each slew, pick a new guide star on the panel and wait for guiding to settle before the exposure. When off, guiding pauses for the run and resumes when it completes.": "Останавливает guiding перед каждым slew, выбирает новую гидирующую звезду на панели и ждёт, пока guiding установится, перед экспозицией. Если выключено, guiding приостанавливается на время съёмки и возобновляется после её завершения.",
+  "The run centres on the target once, then slews to each panel, takes one exposure and plate-solves it to place it on the picture.": "Сначала выполняется одно центрирование на цели, затем slew к каждой панели, одна экспозиция и plate solve, чтобы поместить её на изображение."
 }
