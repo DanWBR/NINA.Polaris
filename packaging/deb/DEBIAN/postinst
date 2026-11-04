@@ -60,6 +60,9 @@ RAMLOG
             systemctl daemon-reload 2>/dev/null || true
             systemctl start polaris-journal-to-card.service 2>/dev/null || true
             systemctl restart systemd-journald 2>/dev/null || true
+            # A restarted journald writes to /run until told to flush: it only
+            # goes back to /var/log/journal by itself at the next boot.
+            journalctl --flush 2>/dev/null || true
         fi
         # REBOOT ON HANG: reboot after a kernel panic from now on. The
         # hardware-watchdog drop-in (/etc/systemd/system.conf.d) is read at the
