@@ -53,6 +53,10 @@ the histogram with its stretch handles below, capture inputs and the
 circular shutter counting down the current frame on the right, and
 running statistics along the bottom.](images/live-view.jpg){#fig-live-stacking}
 
+The **▤** button in the frame toolbar hides the histogram panel to free
+the frame, and a second tap brings it back. The choice applies to LIVE,
+PREVIEW and AUTORUN together and is kept for the next session.
+
 ## Controls
 
 The right sidebar is split top to bottom: the capture inputs (Exp,

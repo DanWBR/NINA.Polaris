@@ -1213,6 +1213,7 @@
                         <button @click="_pzZoomButton('liveCanvas', 1.3)" title="Zoom in">＋</button>
                         <button @click="_pzZoomButton('liveCanvas', 1/1.3)" title="Zoom out">－</button>
                         <button @click="toggleAutoStretch()" :class="stretchAuto ? 'pz-active' : ''" title="Auto-stretch brightness">◐</button>
+                        <button @click="toggleHistogram()" :class="histoHidden ? '' : 'pz-active'" :title="histoHidden ? 'Show the histogram overlay' : 'Hide the histogram overlay'">▤</button>
                         <button @click="toggleAnnotate()" :class="annotate.active ? 'pz-active' : ''" :disabled="annotate.busy"
                                 title="Annotate: plate-solve and label DSOs in the frame">
                             <svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:middle"><circle cx="8" cy="16" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M11 13 L20 4 M15 4 h5 v5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -4010,6 +4011,7 @@
                         <button @click="_pzZoomButton('previewCanvas', 1.3)" title="Zoom in">＋</button>
                         <button @click="_pzZoomButton('previewCanvas', 1/1.3)" title="Zoom out">－</button>
                         <button @click="toggleAutoStretch()" :class="stretchAuto ? 'pz-active' : ''" title="Auto-stretch brightness">◐</button>
+                        <button @click="toggleHistogram()" :class="histoHidden ? '' : 'pz-active'" :title="histoHidden ? 'Show the histogram overlay' : 'Hide the histogram overlay'">▤</button>
                         <button @click="toggleAnnotate()" :class="annotate.active ? 'pz-active' : ''" :disabled="annotate.busy"
                                 title="Annotate: plate-solve and label DSOs in the frame">
                             <svg viewBox="0 0 24 24" width="15" height="15" style="vertical-align:middle"><circle cx="8" cy="16" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M11 13 L20 4 M15 4 h5 v5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -4461,9 +4463,13 @@
                      :class="{ 'controls-collapsed': quickControlsCollapsed,
                                'frame-controls-hidden': frameControlsHidden }">
                     <div class="preview-area">
+                        <!-- :style as an object: a string binding rewrites the
+                             whole style attribute on every status message
+                             (cameraStream is replaced each time) and wipes the
+                             pan/zoom transform _pzApply put there. -->
                         <canvas id="videoCaptureCanvas" class="preview-canvas"
                                 @click="videoCanvasClick($event)"
-                                :style="((video.roiSize > 0 || video.bahtinov.on) &amp;&amp; cameraStream.running) ? 'cursor: crosshair' : ''"></canvas>
+                                :style="{ cursor: ((video.roiSize > 0 || video.bahtinov.on) &amp;&amp; cameraStream.running) ? 'crosshair' : '' }"></canvas>
                         <!-- Bahtinov overlay. Same canvas pair pattern as the
                              LIVE and Manual Assist views: pointer-events none,
                              and _pzApply copies the pan/zoom transform onto it
@@ -13005,6 +13011,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <button @click="_pzZoomButton('autorunCanvas', 1.3)" title="Zoom in">＋</button>
                         <button @click="_pzZoomButton('autorunCanvas', 1/1.3)" title="Zoom out">－</button>
                         <button @click="toggleAutoStretch()" :class="stretchAuto ? 'pz-active' : ''" title="Auto-stretch brightness">◐</button>
+                        <button @click="toggleHistogram()" :class="histoHidden ? '' : 'pz-active'" :title="histoHidden ? 'Show the histogram overlay' : 'Hide the histogram overlay'">▤</button>
                     </div>
                     <div class="preview-overlay" x-show="!_lastRawFrame">
                         <p>The last captured frame of the running sequence appears here.</p>
@@ -25954,7 +25961,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                          time, before Alpine (deferred) walks the document, so no
                          Alpine.initTree call is needed. -->
                     <template id="tpl-histo-panel">
-                        <div class="histo-panel" x-show="selectedCamera || _lastRawFrame">
+                        <div class="histo-panel" x-show="(selectedCamera || _lastRawFrame) &amp;&amp; !histoHidden">
                             <div class="histo-stats">
                                 <div class="hs-cell"><span class="hs-v" x-text="histo.max"></span><span class="hs-l">Max</span></div>
                                 <div class="hs-cell"><span class="hs-v" x-text="histo.avg"></span><span class="hs-l">Avg</span></div>
@@ -26008,7 +26015,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261104-mosaicsky"></script>
+    <script src="/js/app.js?v=20261104-histotoggle"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
