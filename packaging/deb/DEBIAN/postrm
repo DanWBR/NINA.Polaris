@@ -18,6 +18,7 @@ case "$1" in
             systemctl disable polaris-sshkeys.service >/dev/null 2>&1 || true
             systemctl disable polaris-diagnostics.service >/dev/null 2>&1 || true
             systemctl disable polaris-indiweb.service >/dev/null 2>&1 || true
+            systemctl disable polaris-journal-to-card.service >/dev/null 2>&1 || true
             systemctl daemon-reload >/dev/null 2>&1 || true
         fi
 
@@ -61,6 +62,14 @@ case "$1" in
         # symlink would dangle.
         [ -L /usr/local/sbin/polaris-install-to-disk ] && \
             rm -f /usr/local/sbin/polaris-install-to-disk
+        # Hand the journal back to the RAM log sync. The postinst excluded it
+        # because polaris-journal-to-card.service bind-mounts it from the card,
+        # and that unit leaves with the package.
+        for ramlog_defaults in /etc/default/orangepi-ramlog /etc/default/armbian-ramlog; do
+            [ -f "$ramlog_defaults" ] || continue
+            sed -i -e '/^# Polaris (polaris-journal-to-card)/,/^XTRA_RSYNC_FROM+=(--exclude=\/journal)$/d' \
+                "$ramlog_defaults" 2>/dev/null || true
+        done
         ;;
 
     upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)

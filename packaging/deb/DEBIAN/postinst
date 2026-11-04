@@ -23,9 +23,46 @@ case "$1" in
         # effect once journald re-reads it. Only under a running systemd (not
         # in a chroot while an image is being built); the drop-in itself is
         # what makes the next boot persistent either way.
+        #
+        # On images whose /var/log is a RAM disk the journal must go to the
+        # card instead (polaris-journal-to-card.service, see its script).
+        # The ramlog sync must also leave it out: orangepi-ramlog rsyncs all
+        # of /var/log both ways, so without the excludes it copies the card's
+        # journal back into RAM at every boot. Seen 2026-11-04 on an Orange Pi
+        # 4 Pro: 44 MB of journal in a 47 MB zram, and rsyslog failing "No
+        # space left on device" from boot on. Both run outside the
+        # systemd-is-running guard so an image built in a chroot gets them.
+        for ramlog_defaults in /etc/default/orangepi-ramlog /etc/default/armbian-ramlog; do
+            [ -f "$ramlog_defaults" ] || continue
+            grep -q 'polaris-journal-to-card' "$ramlog_defaults" && continue
+            cat >> "$ramlog_defaults" <<'RAMLOG'
+
+# Polaris (polaris-journal-to-card): the persistent journal is bind-mounted
+# from the card, so the RAM log sync leaves it out in both directions.
+XTRA_RSYNC_TO+=(--exclude=/journal)
+XTRA_RSYNC_FROM+=(--exclude=/journal)
+RAMLOG
+            echo "polaris: $ramlog_defaults now keeps the journal out of the RAM log"
+        done
+        chmod 0755 /opt/polaris/bin/polaris-journal-to-card.sh 2>/dev/null || true
+        if command -v systemctl >/dev/null 2>&1; then
+            systemctl enable polaris-journal-to-card.service >/dev/null 2>&1 || true
+        fi
+        # Belt and braces for a chroot where systemctl cannot reach a bus:
+        # the symlink IS the enable.
+        if [ ! -e /etc/systemd/system/sysinit.target.wants/polaris-journal-to-card.service ]; then
+            mkdir -p /etc/systemd/system/sysinit.target.wants
+            ln -sf /lib/systemd/system/polaris-journal-to-card.service \
+                /etc/systemd/system/sysinit.target.wants/polaris-journal-to-card.service 2>/dev/null || true
+        fi
         if [ -d /run/systemd/system ]; then
             mkdir -p /var/log/journal 2>/dev/null || true
+            systemctl daemon-reload 2>/dev/null || true
+            systemctl start polaris-journal-to-card.service 2>/dev/null || true
             systemctl restart systemd-journald 2>/dev/null || true
+            # A restarted journald writes to /run until told to flush: it only
+            # goes back to /var/log/journal by itself at the next boot.
+            journalctl --flush 2>/dev/null || true
         fi
         # REBOOT ON HANG: reboot after a kernel panic from now on. The
         # hardware-watchdog drop-in (/etc/systemd/system.conf.d) is read at the

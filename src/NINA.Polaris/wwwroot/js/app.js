@@ -4908,6 +4908,9 @@ function ninaApp() {
         // 0 / 0.5 / 1 is the identity and Auto is simply these three values.
         // See _displayMap for why the stretch has two stages.
         stretchAuto: true,    // false once a handle has been touched
+        // The ▤ toolbar button folds the histogram panel away on LIVE,
+        // PREVIEW and AUTORUN alike; remembered across sessions.
+        histoHidden: false,
         stretchBlack: 0.0,    // clip below this screen level
         stretchWhite: 1.0,    // clip above this screen level
         stretchMid: 0.5,      // MTF midtone; 0.5 is the identity
@@ -6021,6 +6024,7 @@ function ninaApp() {
                 if ([2048, 4096, 0].includes(md)) this.previewMaxDim = md;
                 this.previewFullDebayer =
                     localStorage.getItem('nina-preview-fulldebayer') === '1';
+                this.histoHidden = localStorage.getItem('nina-histo-hidden') === '1';
             } catch { /* private mode: keep defaults */ }
             // Sync the restored Preview quality to the server so the COLOUR
             // live-stack JPEG honours it (best effort; server default 4096).
@@ -12889,6 +12893,15 @@ function ninaApp() {
                 'ok');
         },
 
+        // "Histogram" toolbar button: show / hide the histogram panel. The
+        // canvas is skipped by drawHistogram while hidden (zero size), so it
+        // is redrawn once it is back on screen.
+        toggleHistogram() {
+            this.histoHidden = !this.histoHidden;
+            try { localStorage.setItem('nina-histo-hidden', this.histoHidden ? '1' : '0'); } catch { }
+            if (!this.histoHidden) this.$nextTick(() => this.drawHistogram());
+        },
+
         // --- Preview render quality (UI settings card) ---
         // Persist to localStorage and re-render the cached frame so the
         // change is visible immediately without waiting for the next one.
@@ -12969,6 +12982,14 @@ function ninaApp() {
                 // double-tap reset — otherwise moving the slider drags the
                 // zoomed image underneath it. Bail before any pan/tap setup.
                 if (onOverlay) { s._dragging = false; return; }
+                // The second finger of a pinch lands well inside the
+                // double-tap window, and read as one it reset the zoom at
+                // the start of every pinch. Only the first pointer can tap.
+                if (!e.isPrimary) {
+                    s._lastTapTime = 0;
+                    s._tapCandidate = false;
+                    return;
+                }
                 s._tapX0 = e.clientX;
                 s._tapY0 = e.clientY;
                 s._suppressTap = false;
@@ -13071,6 +13092,8 @@ function ninaApp() {
                     s.scale = newScale;
                     s.tx = s._pinchMx0 - (s._pinchMx0 - s._pinchTx0) * r + (mx - s._pinchMx0);
                     s.ty = s._pinchMy0 - (s._pinchMy0 - s._pinchTy0) * r + (my - s._pinchMy0);
+                    // Like a wheel zoom or a pan, a pinch leaves any fit behind.
+                    s.mode = 'free';
                     self._pzClamp(s, rect.width, rect.height);
                     self._pzApply(canvasId);
                 }

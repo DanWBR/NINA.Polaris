@@ -126,7 +126,7 @@ jobs:
       - name: Installer guards and the SDK repair
         run: |
           fail=0
-          for t in sdk-symlinks-test.sh indi-install-test.sh self-update-test.sh; do
+          for t in sdk-symlinks-test.sh indi-install-test.sh self-update-test.sh journal-ramlog-test.sh; do
             echo "--- $t"
             bash "packaging/deb/tests/$t" || { echo "::error::$t failed"; fail=1; }
           done
