@@ -2845,9 +2845,12 @@
                             Sky map: target (green) vs solved (red)
                         </div>
                         <!-- FIELD-4: lazy iframe src; same fix as the
-                             main /sky/ iframe below. -->
+                             main /sky/ iframe below. A second sky engine,
+                             so it only boots once there is a solve to
+                             show (x-show alone would still load it with
+                             the page). -->
                         <iframe class="rudimentary-skymap"
-                                :src="(auth.authenticated || !auth.enabled) ? '/sky/' : 'about:blank'"
+                                :src="((auth.authenticated || !auth.enabled) && rudimentary.lastSolved) ? '/sky/' : 'about:blank'"
                                 referrerpolicy="no-referrer"
                                 @load="rudimentarySkyMapReady()"></iframe>
                     </div>
@@ -10353,9 +10356,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <!-- skySuspended: mobile hard-suspend, after minutes
                          away from SKY the engine iframe unloads entirely
                          (Android froze on return otherwise) and reboots
-                         fresh when the tab is reopened. -->
+                         fresh when the tab is reopened.
+                         skyEngineStarted: the engine boots the first time
+                         the Sky Map opens, not at page load. -->
                     <iframe id="skyFrame"
-                            :src="((auth.authenticated || !auth.enabled) && !skySuspended) ? '/sky/' : 'about:blank'"
+                            :src="((auth.authenticated || !auth.enabled) && (skyEngineStarted || tab === 'sky') && !skySuspended) ? '/sky/' : 'about:blank'"
                             class="sky-viewer sky-viewer-iframe"
                             style="border:0;"
                             sandbox="allow-scripts allow-same-origin"
@@ -25988,7 +25993,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261102-mosaic-guide"></script>
+    <script src="/js/app.js?v=20261104-sky-lazy"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

@@ -1548,10 +1548,9 @@
         var stel = window.__stel;
         switch (msg.type) {
             case 'set-render-paused':
-                // Mobile perf guard hook (see index.html inline script).
-                // Drops the engine's rAF loop to a keep-alive rate while
-                // the parent's SKY tab is hidden. No-op on desktop where
-                // the guard doesn't install itself.
+                // Perf guard hook (see index.html inline script). Drops
+                // the engine's rAF loop to a keep-alive rate while the
+                // parent's SKY tab is hidden, on every client.
                 if (typeof window.__skySetRenderIdle === 'function') {
                     window.__skySetRenderIdle(!!msg.paused);
                 }

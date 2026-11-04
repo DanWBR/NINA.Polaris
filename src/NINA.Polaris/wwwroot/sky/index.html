@@ -225,22 +225,24 @@
         // is ~4-9x the pixel work of a desktop view, and the long WASM
         // frames starve the WebView UI thread until Android decides
         // the app is not responding. Cap DPR + throttle the loop on
-        // mobile only — desktop behaviour is untouched. The parent app
-        // additionally drops the loop to a keep-alive rate while the
-        // SKY tab is not the active Polaris tab (via the bridge's
-        // 'set-render-paused' message → window.__skySetRenderIdle).
+        // mobile only; on desktop the map renders at full rate and
+        // resolution while it is shown. On every client the parent app
+        // drops the loop to a keep-alive rate while the SKY tab is not
+        // the active Polaris tab (via the bridge's 'set-render-paused'
+        // message → window.__skySetRenderIdle): a hidden map left at
+        // 60 fps on desktop is GPU and CPU that the rest of the app
+        // (and Safari) feels as lag.
         (function () {
             var ua = navigator.userAgent || '';
             var isMobile = /Android|iPhone|iPad|iPod/i.test(ua)
                 || (navigator.maxTouchPoints > 1 && /Mac/.test(ua)); // iPadOS lies
-            if (!isMobile) return;
 
-            // 1) Cap the backing-store resolution. The glue reads
+            // 1) Cap the backing-store resolution (mobile). The glue reads
             // window.devicePixelRatio on every frame, so a shadowing
-            // own property is enough — no engine rebuild needed.
+            // own property is enough, no engine rebuild needed.
             var DPR_CAP = 1.5;
             try {
-                if ((window.devicePixelRatio || 1) > DPR_CAP) {
+                if (isMobile && (window.devicePixelRatio || 1) > DPR_CAP) {
                     Object.defineProperty(window, 'devicePixelRatio', {
                         get: function () { return DPR_CAP; },
                         configurable: true
@@ -249,14 +251,14 @@
             } catch (e) { /* keep native DPR */ }
 
             // 2) Throttle every rAF consumer in this document (engine
-            // loop + bridge pan tween) to ~30 fps, and to ~0.5 fps
-            // while the parent reports the SKY tab inactive. Internal
-            // re-arms would break cancelAnimationFrame(id), so hand
-            // out ticket ids and translate them to the live native id
-            // on cancel.
+            // loop + bridge pan tween) to ~30 fps on mobile (every
+            // native frame on desktop), and to ~0.5 fps while the parent
+            // reports the SKY tab inactive. Internal re-arms would break
+            // cancelAnimationFrame(id), so hand out ticket ids and
+            // translate them to the live native id on cancel.
             var nRAF = window.requestAnimationFrame.bind(window);
             var nCAF = window.cancelAnimationFrame.bind(window);
-            var ACTIVE_MS = 33;   // ~30 fps while SKY is in use
+            var ACTIVE_MS = isMobile ? 33 : 0;   // ~30 fps on mobile while SKY is in use
             var IDLE_MS = 2000;   // keep-alive while another tab is shown
             var idle = false;
             // Very negative so the FIRST frame after boot always runs
