@@ -1050,6 +1050,12 @@ function ninaApp() {
         // it has to be prevented. Desktop never suspends.
         skySuspended: false,
         _skySuspendTimer: null,
+        // The SKY engine iframe boots the first time the Sky Map opens, not
+        // at page load: the WebGL/WASM engine is the heaviest thing in the
+        // app, and a session that never opens the map should not pay for
+        // it. Stays true afterwards (the hidden map is paused, see
+        // set-render-paused, not unloaded).
+        skyEngineStarted: false,
         // SKY coordinate-grid toggle: 'none' | 'altaz' | 'eq'. Cycled by the
         // toolbar button; pushed to the engine via the set-grid bridge msg
         // and re-applied whenever the engine (re)loads. Default = equatorial
@@ -5573,15 +5579,16 @@ function ninaApp() {
             // The restore itself happens in _initCore (post-auth), gated on
             // document.wasDiscarded so a manual reload keeps the default tab.
             try {
-                this.$watch('tab', v => {
+                this.$watch('tab', (v, old) => {
                     try { sessionStorage.setItem('polaris_tab', v); } catch (_) { /* private mode */ }
-                    // Mobile ANR guard: the SKY engine's WASM render loop
-                    // keeps burning the WebView main thread even while its
-                    // tab is display:none, which is what froze the Android
-                    // app ("Polaris isn't responding"). Drop it to a
+                    // Leaving SKY counts too: a page restored onto the SKY
+                    // tab never saw it change to 'sky'.
+                    if (v === 'sky' || old === 'sky') this.skyEngineStarted = true;
+                    // The SKY engine's WASM render loop keeps running even
+                    // while its tab is display:none: on Android that froze
+                    // the app ("Polaris isn't responding"), on desktop it
+                    // is GPU/CPU spent on a map nobody sees. Drop it to a
                     // keep-alive rate whenever SKY isn't the active tab.
-                    // No-op on desktop — the /sky/ perf guard only installs
-                    // itself on phones/tablets.
                     this._skySendMessage({ type: 'set-render-paused', paused: v !== 'sky' });
                     // Mobile hard-suspend (see skySuspended). The paused
                     // keep-alive above is enough for short hops between
@@ -7177,7 +7184,8 @@ function ninaApp() {
             this._skyWatchdogTimer = setTimeout(() => {
                 if (this._skyBridgeReady || this.tab !== 'sky') return;
                 const detail = 'sky bridge did not report ready within 20s'
-                    + ' (iframe src=' + (this.skySuspended ? 'about:blank (suspended)' : '/sky/')
+                    + ' (iframe src=' + (this.skySuspended ? 'about:blank (suspended)'
+                        : (this.skyEngineStarted || this.tab === 'sky') ? '/sky/' : 'about:blank (not started)')
                     + ', webgl2=' + this._skyWebgl2Support() + ')';
                 this._logFromClient('error', detail, { source: 'sky' });
                 this.toast('The sky map did not start. Open the LOG panel for the'
