@@ -181,6 +181,65 @@ grep -q "install -y --no-install-recommends indi-asi" "$CALLS" \
 grep -q "recommends: indi-asi left out, it would remove phd2 indi-bin" "$WORK/update.log" \
     && ok "the log names what would have gone" || bad "the skip is not explained: $(cat "$WORK/update.log")"
 
+# ---- fourth run: package lists damaged on disk ----------------------------
+# A power cut during `apt update` left two lists with garbage in them, and
+# every apt run stopped at "Problem with MergeList" before reading the
+# package. apt names one damaged list per run; each is a cache of a
+# repository index, so the script drops it and retries. A damaged dpkg status
+# file is the package database, outside the lists directory: never touched.
+echo
+echo "--- damaged package lists ---"
+: > "$CALLS"
+: > "$WORK/update.log"
+touch "$WORK/staged-once"
+mkdir -p "$WORK/lists" "$WORK/dpkg"
+export POLARIS_APT_LISTS="$WORK/lists"
+touch "$WORK/lists/jammy-security_main_Packages" "$WORK/lists/jammy-security_restricted_Packages" \
+      "$WORK/lists/jammy_main_Packages" "$WORK/dpkg/status"
+cat > "$BIN/dpkg-query" <<'STUB'
+#!/usr/bin/env bash
+exit 1
+STUB
+cat > "$BIN/apt-get" <<STUB
+#!/usr/bin/env bash
+echo "\$*" >> "$CALLS"
+case "\${@: -1}" in
+  *.deb)
+    for f in "$WORK/dpkg-status-damaged" "$WORK/lists/jammy-security_main_Packages" "$WORK/lists/jammy-security_restricted_Packages"; do
+      [ -e "\$f" ] || continue
+      [ "\$f" = "$WORK/dpkg-status-damaged" ] && f="$WORK/dpkg/status"
+      printf 'Reading package lists...\nE: Encountered a section with no Package: header\nE: Problem with MergeList %s\nE: The package lists or status file could not be parsed or opened.\n' "\$f"
+      exit 100
+    done
+    exit 0 ;;
+esac
+exit 0
+STUB
+chmod +x "$BIN/dpkg-query" "$BIN/apt-get"
+touch "$WORK/cache/polaris-update.deb"
+
+"$SCRIPT" >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 0 ] && ok "the update installs once the damaged lists are gone" || bad "script exit $rc: $(cat "$WORK/update.log")"
+[ "$(grep -c 'polaris-update.deb' "$CALLS")" -eq 3 ] && ok "one retry per damaged list" || bad "deb install calls: $(grep -c 'polaris-update.deb' "$CALLS")"
+[ ! -e "$WORK/lists/jammy-security_main_Packages" ] && [ ! -e "$WORK/lists/jammy-security_restricted_Packages" ] \
+    && ok "both damaged lists dropped" || bad "a damaged list is still there"
+[ -e "$WORK/lists/jammy_main_Packages" ] && ok "healthy lists left alone" || bad "a healthy list was removed"
+grep -q "dropped the damaged package list $WORK/lists/jammy-security_main_Packages" "$WORK/update.log" \
+    && ok "each drop is logged" || bad "drop not logged"
+
+# The package database itself reported damaged: nothing is removed, the run
+# fails after one attempt and says so.
+: > "$CALLS"
+: > "$WORK/update.log"
+touch "$WORK/dpkg-status-damaged" "$WORK/cache/polaris-update.deb"
+"$SCRIPT" >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 100 ] && ok "a damaged dpkg status still fails the update" || bad "script exit $rc"
+[ -e "$WORK/dpkg/status" ] && ok "the dpkg status file is never removed" || bad "dpkg status was removed"
+[ "$(grep -c 'polaris-update.deb' "$CALLS")" -eq 1 ] && ok "no retry when nothing could be dropped" || bad "retried without dropping anything"
+[ -f "$WORK/cache/polaris-update.deb" ] && bad "staged package left behind" || ok "staged package removed"
+rm -f "$WORK/dpkg-status-damaged"
+unset POLARIS_APT_LISTS
+
 # leave the stub in place: the harness owns PATH for the whole run.
 
 echo
