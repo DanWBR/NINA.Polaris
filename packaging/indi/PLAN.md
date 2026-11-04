@@ -15,6 +15,24 @@ diagnosis on a Pi 4 image confirmed:
 - The ASI SDK is present and correctly versioned:
   `/usr/lib/aarch64-linux-gnu/libASICamera2.so.1.41`.
 
+**Measured on the v0.98.211 / v0.98.222 images (2026-11-04), superseding the
+libindi line above.** All six ARM images run INDI core 2.2.2, in two kinds:
+
+| Images | OS | INDI core | Drivers |
+|--------|----|-----------|---------|
+| rpi4, rpi5 | Debian 13 | 2.2.2 built from source in `/usr`, owned by no package (`libindidriver.so.2`). The Debian `libindi* 1.9.9` packages are still installed, unused. | orphan `make install`; rpi5 also has Debian's old `indi-eqmod 1.0` package |
+| opi4pro, opizero3 | Ubuntu 22.04 | PPA `libindi1 2.2.2+202606010554` | PPA packages (`indi-eqmod`, `indi-asi`, ...) |
+| radxa-dragon-q6a | Ubuntu 24.04 | PPA `libindi1 2.2.2+202606010554` + `libindi-dev` | PPA packages |
+| opi5pro | Ubuntu 26.04 (Armbian) | PPA `libindi1 2.2.2` | PPA bundle `indi-3rdparty-drivers` |
+
+The PPA no longer publishes for 22.04 or 24.04 (both indexes are empty, and the
+old `.deb` files are gone), so only opi5pro can still update drivers with apt.
+Every other image needs a `.deb` from here, built per family: a Debian 13
+build that guards on the unowned `libindidriver.so.2` with `--require-file`,
+and Ubuntu 22.04 / 24.04 builds that depend on `libindi1 (>= 2.2.2)`. Build
+each in a chroot of the image itself (qemu-user under WSL), so it links what
+the image runs. First package done this way: `packages/indi-eqmod.conf`.
+
 So when DanWBR patches a driver (e.g. a BAYERPAT / readout fix in `indi-asi`),
 there is currently no way to push it to users, they would have to recompile.
 This plan makes a patched driver shippable as a `.deb` that:
@@ -38,9 +56,9 @@ all ~280 drivers. The unit of distribution is **one upstream package group**
 |------|-------------|
 | Drivers are orphan (`make install`) | First `.deb` install **overwrites the orphan files without a dpkg conflict** (dpkg only errors when a file is owned by *another* package). After that it is tracked → future updates are clean upgrades. |
 | Prefix `/usr` already | Build the `.deb` with `-DCMAKE_INSTALL_PREFIX=/usr` → zero duplicates, no `/usr/local` shadowing. A defensive `preinst` `rm` of `/usr/local/bin/<bins>` is kept as belt-and-suspenders. |
-| libindi `1.9.9` from apt | The `.deb` declares `Depends: libindidriver1, libindiclient1, libindialignmentdriver1`. The soname (`…driver1`) **pins the ABI**: if libindi ever bumps to soname 2, apt blocks the mismatched driver instead of letting it crash. |
+| libindi `1.9.9` from apt | The `.deb` declares `Depends: libindidriver1, libindiclient1, libindialignmentdriver1`. The soname (`…driver1`) **pins the ABI**: if libindi ever bumps to soname 2, apt blocks the mismatched driver instead of letting it crash. **Superseded:** the images run core 2.2.2 (soname 2), see the measured table above; pass the per-family Depends with `--depends`. |
 | SDK `libASICamera2` is orphan too | The driver `.deb` must carry the SDK `.so` (the upstream `indi-asi` bundles it via the `libasi` sub-build). Verify with `dpkg -S /usr/lib/aarch64-linux-gnu/libASICamera2.so.1.41`. |
-| cmake writes `install_manifest.txt` | **This is the file list for the `.deb`**, no hand-maintained allowlist. The packager reads it. |
+| cmake writes `install_manifest.txt` | **This is the file list for the `.deb`**, no hand-maintained allowlist. The packager reads it. `cmake --install` writes the paths without the DESTDIR prefix, so the packager reads each file from `--source`, never from the live path. |
 
 ## The build → `.deb` workflow (the part to get right)
 
