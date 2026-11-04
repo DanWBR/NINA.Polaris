@@ -211,6 +211,7 @@ function ninaApp() {
         // progress. Reset whenever the active item/frame changes.
         autorunFrameStart: 0,      // ms timestamp of current frame start
         autorunFrameKey: '',       // "itemIndex:frameInItem" change detector
+        _autorunFrameRun: 0,       // server capture runId the clock was taken from
         _shutterPressTimer: null,
         _shutterLongPressed: false,
         _shutterArmTimer: null,    // animates the arming ring at 60ms cadence
@@ -28621,32 +28622,40 @@ function ninaApp() {
                 if (this.autorunFrameKey !== '') {
                     this.autorunFrameKey = '';
                     this.autorunFrameStart = 0;
+                    this._autorunFrameRun = 0;
                 }
                 return;
             }
+            // The clock runs only while the server reports an AUTORUN /
+            // sequencer exposure open, and always from the server's own start,
+            // so a frame that began before this client (re)connected shows the
+            // real elapsed.
+            //
+            // The frame counter moves on the moment a frame is saved, and the
+            // dither, the meridian flip or the wait for the flip point come
+            // after that, before the next exposure opens. Starting the clock on
+            // the counter ran the bar through all of that (field report). Each
+            // exposure has its own runId, so the one just finished is never
+            // taken for the next, even from a status a tick old (the REST poll).
             const key = (seq.currentItemIndex || 0) + ':' + (seq.currentFrameInItem || 0);
+            const sc = this.serverCapture;
+            const exposing = !!(sc && sc.active && (sc.source === 'autorun' || sc.source === 'sequencer'));
             if (this.autorunFrameKey !== key) {
                 this.autorunFrameKey = key;
-                // Prefer the server's authoritative exposure start so a frame
-                // that began before this client (re)connected shows the real
-                // elapsed instead of restarting from full duration. Falls back
-                // to now when the server isn't reporting a sequencer/autorun
-                // exposure (e.g. between frames).
-                const sc = this.serverCapture;
-                this.autorunFrameStart =
-                    (sc && sc.active && (sc.source === 'autorun' || sc.source === 'sequencer'))
-                        ? sc.startedAtLocal
-                        : Date.now();
-            } else if (this.autorunFrameStart) {
-                // Same frame, but a reconnect may have just delivered the
-                // server's real start — adopt it if we'd drifted (e.g. our
-                // initial stamp assumed the frame just began).
-                const sc = this.serverCapture;
-                if (sc && sc.active
-                    && (sc.source === 'autorun' || sc.source === 'sequencer')
-                    && Math.abs(this.autorunFrameStart - sc.startedAtLocal) > 1500) {
+                this.autorunFrameStart = 0;
+            }
+            if (!exposing) return;
+            if (!this.autorunFrameStart) {
+                if (sc.runId !== this._autorunFrameRun) {
                     this.autorunFrameStart = sc.startedAtLocal;
+                    this._autorunFrameRun = sc.runId;
                 }
+            } else if (sc.runId !== this._autorunFrameRun
+                       || Math.abs(this.autorunFrameStart - sc.startedAtLocal) > 1500) {
+                // A retry of the same frame, or a reconnect that delivered the
+                // server's real start.
+                this.autorunFrameStart = sc.startedAtLocal;
+                this._autorunFrameRun = sc.runId;
             }
         },
 
@@ -51731,7 +51740,8 @@ function ninaApp() {
             }
             if (msg.sequence) {
                 this.seqStatus = msg.sequence;
-                this._autorunSyncFrame(msg.sequence);
+                // _autorunSyncFrame runs below, once this message's capture
+                // block is in: it reads whether an exposure is open.
                 var newState = msg.sequence.state || 'idle';
                 var oldState = this.seqState;
                 this.seqState = newState;
@@ -51798,6 +51808,7 @@ function ninaApp() {
             // null/stale). Pass the server "now" so elapsed is measured in
             // server time and re-based onto the local clock.
             this._absorbCaptureProgress(msg.capture, _serverNowMs);
+            if (msg.sequence) this._autorunSyncFrame(msg.sequence);
             this._absorbDslrFrameSource(msg.capture?.dslr);
             // Server-side classical-RL deconvolution progress + ETA. While a
             // server RL runs, mirror it into the AI-Sharpen modal's progress bar

@@ -136,4 +136,31 @@ public class NativeGuiderRecoveryTests {
             new List<DetectedStar>(), 500, 500, 150, 1000, 1000, 20, 65535);
         Assert.That(pick, Is.Null);
     }
+
+    /// <summary>Why a new guide star must reset the mass check. The check only
+    /// learns from frames it accepts, so a star well brighter than the one it
+    /// learned on is dropped on every frame, for as long as the session runs:
+    /// after a meridian flip the native guider kept the badge on Guiding while
+    /// the chart sat at zero and no correction went out.</summary>
+    [Test]
+    public void MassCheck_OnAnotherStar_DropsEveryFrameUntilReset() {
+        long t = 0;
+        var mc = new NINA.Guider.Portable.MassChecker(() => t);
+        for (int i = 0; i < 10; i++) { t += 2000; mc.AppendData(1000); }
+        for (int i = 0; i < 200; i++) {
+            t += 2000;
+            Assert.That(mc.CheckMass(3000), Is.True, $"frame {i} on the new star");
+        }
+        mc.Reset();
+        Assert.That(mc.CheckMass(3000), Is.False);
+    }
+
+    /// <summary>The safety net behind the reset on a new star: a run of drops
+    /// resets the check, a frame or two (a satellite, a gust) does not.</summary>
+    [Test]
+    public void MassGate_IsResetOnlyAfterARunOfDrops() {
+        Assert.That(NativeGuider.MassGateStuck(1), Is.False);
+        Assert.That(NativeGuider.MassGateStuck(NativeGuider.MassRejectResetFrames - 1), Is.False);
+        Assert.That(NativeGuider.MassGateStuck(NativeGuider.MassRejectResetFrames), Is.True);
+    }
 }

@@ -13268,7 +13268,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                                  + live seconds-remaining countdown. -->
                                             <span class="seq-item-frame-now"
                                                   x-show="seqState === 'running' && seqStatus?.currentItemIndex === i"
-                                                  x-text="item.exposure > 0
+                                                  x-text="item.exposure > 0 &amp;&amp; autorunFrameStart
                                                       ? ('frame ' + ((seqStatus?.items?.[i]?.completed || 0) + 1) + '/' + item.count + ' · ' + autorunFrameRemaining() + 's')
                                                       : ('frame ' + ((seqStatus?.items?.[i]?.completed || 0) + 1) + '/' + item.count)"></span>
                                         </div>
@@ -26300,7 +26300,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261104-histotoggle"></script>
+    <script src="/js/app.js?v=20261104-autorunbar"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

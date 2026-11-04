@@ -163,6 +163,9 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     private readonly MassChecker _massChecker = new();
     private readonly DistanceChecker _distanceChecker = new();
     private readonly CurrentErrorTracker _errorTracker = new();
+    // Consecutive frames the mass check has dropped. A dropped frame never
+    // reaches the checker's history, so on its own the band never moves.
+    private int _massRejectStreak;
     // Timestamp of the previous guide frame, for the predictor's frame interval.
     private long _lastGuideMs;
 
@@ -677,6 +680,7 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
             _lockX = best.X;
             _lockY = best.Y;
             _haveLock = true;
+            ResetFrameChecks();
             SetAppState("Selected");
             _logger.LogInformation("Native guide star locked at ({X:F1},{Y:F1})", _lockX, _lockY);
         } finally {
@@ -719,6 +723,7 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
         _lockY = best.Y;
         _haveLock = true;
         _multiStar.Clear();
+        ResetFrameChecks();
         SetAppState("Selected");
         BuildView(_lockX, _lockY, 0, true);
         _logger.LogInformation("Native guide star picked near ({Tx:F0},{Ty:F0}) -> ({X:F1},{Y:F1})",
