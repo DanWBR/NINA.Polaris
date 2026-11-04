@@ -43,7 +43,7 @@
          significant (CSS cascade), keep these in sequence. All share the same
          ?v= cache-bust token, bumped together on every deploy. -->
     <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20261017-updatewhite">
-    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20261102-mosaic">
+    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20261104-mosaicsky">
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20261009-floatbtn">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20261028-hometonight2">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20261024-cloudhourly">
@@ -3791,7 +3791,22 @@
                         <img class="mosaic-canvas-img" :src="mosaicRun.canvasUrl" x-show="mosaicRun.canvasUrl" alt="">
                         <div class="mosaic-grid-host" x-html="mosaicOverlaySvg()"></div>
                     </div>
-                    <div class="preview-overlay" x-show="!(mosaicRun.status?.canvasWidth > 0)">
+                    <!-- Sky preview until the first panel: a mini sky map at the
+                         target with the planned panels drawn on it. A second
+                         sky engine, so its src is only set while it is shown;
+                         x-effect redraws the grid on every form change. -->
+                    <div class="mosaic-sky-preview" x-show="mosaicSkyPreviewOn()"
+                         x-effect="mosaicSkyMapPush()">
+                        <iframe class="mosaic-skymap"
+                                :src="mosaicSkyPreviewOn() ? '/sky/' : 'about:blank'"
+                                sandbox="allow-scripts allow-same-origin"
+                                referrerpolicy="no-referrer"
+                                title="Sky preview"
+                                @load="if (!mosaicSkyPreviewOn()) mosaicRun.skyMapReady = false"></iframe>
+                        <div class="mosaic-sky-caption" x-text="mosaicSkyCaption()"></div>
+                    </div>
+                    <div class="preview-overlay"
+                         x-show="!(mosaicRun.status?.canvasWidth > 0) && !mosaicSkyPreviewOn()">
                         <p x-text="mosaicActive()
                                     ? _t('Centring on the target to read the camera angle…')
                                     : _t('Pick a target and a field size, then press the shutter')"></p>
@@ -26278,7 +26293,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261104-sky-lazy"></script>
+    <script src="/js/app.js?v=20261104-mosaicsky"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

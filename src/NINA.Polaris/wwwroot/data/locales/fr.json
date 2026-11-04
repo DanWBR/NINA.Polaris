@@ -5364,5 +5364,9 @@
   "Width (× FOV)": "Largeur (× FOV)",
   "Guide each panel": "Guiding sur chaque panneau",
   "Stop guiding before each slew, pick a new guide star on the panel and wait for guiding to settle before the exposure. When off, guiding pauses for the run and resumes when it completes.": "Arrête le guiding avant chaque slew, choisit une nouvelle étoile guide sur le panneau et attend que le guiding se stabilise avant l'exposition. Désactivé, le guiding est suspendu pendant la séquence et reprend à la fin.",
-  "The run centres on the target once, then slews to each panel, takes one exposure and plate-solves it to place it on the picture.": "La séquence centre sur la cible une fois, puis fait un slew vers chaque panneau, prend une exposition et fait son plate solve pour la placer sur l'image."
+  "The run centres on the target once, then slews to each panel, takes one exposure and plate-solves it to place it on the picture.": "La séquence centre sur la cible une fois, puis fait un slew vers chaque panneau, prend une exposition et fait son plate solve pour la placer sur l'image.",
+  "Connect the camera to draw the panels": "Connectez la caméra pour dessiner les panneaux",
+  "Planned panels, at the camera angle of the last plate solve": "Panneaux prévus, à l'angle de caméra du dernier plate solve",
+  "Planned panels, north up. The run reads the camera angle when it starts": "Panneaux prévus, nord en haut. La séquence lit l'angle de la caméra au démarrage",
+  "Sky preview": "Aperçu du ciel"
 }

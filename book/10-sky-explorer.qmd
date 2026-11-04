@@ -498,6 +498,15 @@ many panels that takes and shows the grid, the field in degrees and an
 estimated time before anything moves. Exposure, gain and binning apply
 to every panel. Press the shutter to start; press it again to stop.
 
+Until the first panel comes in, the picture area shows a small sky map
+around the target with the planned panels drawn on it in yellow,
+numbered in the order they will be shot. It redraws as you change the
+target, the field size or the overlap. The panels take the camera's
+angle from the last plate solve; with no solve yet they are drawn north
+up, and the run lays the real grid out along the camera's angle once it
+has centred. The panels only appear once the camera is connected,
+because their size comes from the camera and the rig.
+
 What happens next:
 
 1. **Centring:** Slew & Center (@sec-slew-center) puts the target
