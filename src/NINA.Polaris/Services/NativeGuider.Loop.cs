@@ -243,6 +243,15 @@ public sealed partial class NativeGuider {
             var lim = _massChecker.LastLimits;
             _logger.LogDebug("Frame dropped: star mass {Mass:F0} outside ({Low:F0}, {High:F0}), median {Med:F0}",
                              _lastFindMass, lim.Low, lim.High, lim.Median);
+            if (MassGateStuck(++_massRejectStreak)) {
+                _logger.LogWarning(
+                    "Native guide: {N} frames in a row dropped on star mass ({Mass:F0} against a median of {Med:F0}); "
+                    + "resetting the mass check to the star now being measured",
+                    _massRejectStreak, _lastFindMass, lim.Median);
+                RaiseAlert("Guide star brightness changed; the mass check now follows the new level.", "info");
+                _massChecker.Reset();
+                _massRejectStreak = 0;
+            }
             SetActivity(null);
             PushStep(new PortableGuideStep(NowMs(), 0, 0, 0, 0, 0, 0, snr, hfd, false));
             BuildView(curX, curY, snr, true);
@@ -251,6 +260,7 @@ public sealed partial class NativeGuider {
             return;
         }
         _massChecker.AppendData(_lastFindMass);
+        _massRejectStreak = 0;
 
         // The distance check drops an implausible jump while recovering from a
         // star loss. With PHD2's default (tolerate jumps off) the tolerance is
@@ -914,6 +924,7 @@ public sealed partial class NativeGuider {
             _lockY = pick.Value.Y;
             _haveLock = true;
             _starLostCount = 0;
+            ResetFrameChecks();
             if (AppState == "LostLock") SetAppState("Guiding");
             // The multi-star tracker's secondaries are relative to the old lock;
             // reseed them or it would keep voting for a field that moved.

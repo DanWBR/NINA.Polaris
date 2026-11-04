@@ -29,6 +29,29 @@ public sealed partial class NativeGuider {
         if (IsConnected) BuildAlgorithms();
     }
 
+    /// <summary>Forget what the frame gates learned about the previous star.
+    /// The mass check compares each frame against the median mass of the star
+    /// it has been watching; after a new star is chosen (a slew, a meridian
+    /// flip, a re-acquisition, a manual pick) that median belongs to another
+    /// star. A new star brighter or fainter than half again of it failed the
+    /// check on every frame, and since a dropped frame never joins the
+    /// history, it failed forever: zero on the chart, no corrections, and the
+    /// badge still on Guiding (field report, after a flip).</summary>
+    private void ResetFrameChecks() {
+        _massChecker.Reset();
+        _distanceChecker.Reset();
+        _errorTracker.Reset();
+        _massRejectStreak = 0;
+    }
+
+    /// <summary>Frames the mass check may drop in a row before it is reset. A
+    /// satellite or a gust is a frame or two; a whole run of drops means the
+    /// band no longer describes the star being measured, and holding it would
+    /// stop the corrections for good.</summary>
+    internal const int MassRejectResetFrames = 10;
+
+    internal static bool MassGateStuck(int rejectStreak) => rejectStreak >= MassRejectResetFrames;
+
     private void BuildAlgorithms() {
         // Per-axis algorithm selection (default hysteresis RA / resist-switch Dec,
         // PHD2's defaults). Lowpass/Lowpass2/Identity also available.
@@ -64,9 +87,7 @@ public sealed partial class NativeGuider {
             zfilterExpFactor: zExp);
         _raAlgo.Reset();
         _decAlgo.Reset();
-        _massChecker.Reset();
-        _distanceChecker.Reset();
-        _errorTracker.Reset();
+        ResetFrameChecks();
         _lastGuideMs = 0;
         // Dec backlash compensation: only when enabled on the rig AND the
         // calibration actually measured a backlash. Disabled by default
