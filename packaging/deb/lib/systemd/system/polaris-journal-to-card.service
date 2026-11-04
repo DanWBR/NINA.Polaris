@@ -1,0 +1,25 @@
+[Unit]
+# Puts the persistent journal on the card on images whose /var/log is a RAM
+# disk (orangepi-ramlog, armbian-ramlog, log2ram). See
+# /opt/polaris/bin/polaris-journal-to-card.sh for what it does and why; on a
+# board with /var/log on disk it exits at once.
+#
+# Ordering is the whole job. After the ramlog service, because before it
+# /var/log is still the card's directory and the RAM disk is mounted over it
+# later. Before systemd-journal-flush, because that is when journald opens
+# /var/log/journal and keeps its files open; after the flush, journald would go
+# on writing to the RAM files it already holds. This also stops the flush from
+# racing the ramlog mount, which the ramlog units do not order against.
+Description=Keep the persistent journal on the card when /var/log is in RAM
+DefaultDependencies=no
+After=orangepi-ramlog.service armbian-ramlog.service log2ram.service
+Before=systemd-journal-flush.service sysinit.target
+RequiresMountsFor=/var/log
+
+[Service]
+Type=oneshot
+ExecStart=/opt/polaris/bin/polaris-journal-to-card.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=sysinit.target

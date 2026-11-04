@@ -198,6 +198,7 @@ chmod 0644 "$BUILD_DIR/lib/systemd/system/polaris-diagnostics.service" 2>/dev/nu
 chmod 0644 "$BUILD_DIR/lib/systemd/system/polaris-solverdb.service" 2>/dev/null || true
 chmod 0644 "$BUILD_DIR/lib/systemd/system/polaris-storage-prep.service" 2>/dev/null || true
 chmod 0644 "$BUILD_DIR/lib/systemd/system/polaris-indiweb.service" 2>/dev/null || true
+chmod 0644 "$BUILD_DIR/lib/systemd/system/polaris-journal-to-card.service" 2>/dev/null || true
 chmod 0644 "$BUILD_DIR/opt/polaris/appsettings.json"
 chmod 0644 "$BUILD_DIR/usr/share/doc/polaris/README" \
            "$BUILD_DIR/usr/share/doc/polaris/copyright" \
@@ -253,6 +254,10 @@ fi
 # quietly reverts to being a child of polaris.service.
 if [ -f "$BUILD_DIR/opt/polaris/bin/polaris-indiweb.sh" ]; then
     chmod 0755 "$BUILD_DIR/opt/polaris/bin/polaris-indiweb.sh"
+fi
+# Journal placement on RAM-log images (polaris-journal-to-card.service).
+if [ -f "$BUILD_DIR/opt/polaris/bin/polaris-journal-to-card.sh" ]; then
+    chmod 0755 "$BUILD_DIR/opt/polaris/bin/polaris-journal-to-card.sh"
 fi
 find "$BUILD_DIR/opt/polaris/bin" -type d -exec chmod 0755 {} \; 2>/dev/null || true
 # All polkit files 0644: the JS .rules/ (honoured by polkit >= 0.106) and
