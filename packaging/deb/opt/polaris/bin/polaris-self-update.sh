@@ -40,11 +40,38 @@ DPKG_OPTS="-o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold
 # of MB of downloads in front of the Polaris upgrade, and the browser gave up
 # waiting long before dpkg ran. The upgrade itself goes first; the extras are
 # picked up afterwards, best effort, once the new version is already up.
+#
+# A package list damaged on disk stops every apt run at "Problem with
+# MergeList <file>", before the package is even read, and nothing in the app
+# can clear it: an Orange Pi 4 Pro failed three updates in a row on two lists
+# that a power cut during `apt update` had left with garbage where their data
+# should be. A list is only a cached copy of a repository index (the next
+# `apt update` fetches it again), so drop the ones apt names and retry. Only
+# files under the lists directory: a damaged /var/lib/dpkg/status is the
+# package database itself and is never touched here.
+APT_LISTS=${POLARIS_APT_LISTS:-/var/lib/apt/lists}
 install_staged() {
-    # shellcheck disable=SC2086  # DPKG_OPTS is a list of options
-    apt-get $DPKG_OPTS install -y --allow-downgrades --fix-missing --no-install-recommends "$DEB" >> "$LOG" 2>&1
-    RC=$?
-    echo "apt exit=$RC" >> "$LOG"
+    local tries=0 out bad f dropped
+    while :; do
+        out=$(mktemp)
+        # shellcheck disable=SC2086  # DPKG_OPTS is a list of options
+        apt-get $DPKG_OPTS install -y --allow-downgrades --fix-missing --no-install-recommends "$DEB" > "$out" 2>&1
+        RC=$?
+        cat "$out" >> "$LOG"
+        echo "apt exit=$RC" >> "$LOG"
+        bad=$(sed -n 's/^E: Problem with MergeList \(.*\)$/\1/p' "$out")
+        rm -f "$out"
+        [ "$RC" -ne 0 ] && [ -n "$bad" ] && [ "$tries" -lt 10 ] || break
+        dropped=0
+        for f in $bad; do
+            case "$f" in "$APT_LISTS"/*) ;; *) continue ;; esac
+            case "$f" in *..*) continue ;; esac
+            [ -f "$f" ] || continue
+            rm -f "$f" && echo "dropped the damaged package list $f, retrying" >> "$LOG" && dropped=1
+        done
+        [ "$dropped" -eq 1 ] || break
+        tries=$((tries + 1))
+    done
     rm -f "$DEB"
 }
 
