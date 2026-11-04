@@ -33,6 +33,24 @@ and Ubuntu 22.04 / 24.04 builds that depend on `libindi1 (>= 2.2.2)`. Build
 each in a chroot of the image itself (qemu-user under WSL), so it links what
 the image runs. First package done this way: `packages/indi-eqmod.conf`.
 
+`build-in-image.sh` does the whole round for one family: extracts the published
+archive, compiles the driver from the conf's `SRC_REPO` / `SRC_TAG` / `SRC_DIR`
+in a chroot of the image, packages it with `build-driver-deb.sh`, and
+install-tests the result on that image (the package owns every driver binary,
+the installed binaries are the new ones, ldd resolves, each driver answers
+`getProperties`). Root on Linux or WSL, with qemu-user-static and 7z:
+
+```bash
+C=packaging/indi/packages/indi-eqmod.conf
+sudo bash packaging/indi/build-in-image.sh --conf $C --image rpi4-polaris-v0.98.211.7z --family deb13
+sudo bash packaging/indi/build-in-image.sh --conf $C --image radxa-dragon-q6a-polaris-v0.98.211.7z \
+     --family ubuntu24.04 --export-libindi-dev /tmp/libindi-dev.tar
+sudo bash packaging/indi/build-in-image.sh --conf $C --image opizero3-polaris-v0.98.222.7z \
+     --family ubuntu22.04 --libindi-dev /tmp/libindi-dev.tar
+```
+
+The packages are published as assets of the `data-pack` release.
+
 So when DanWBR patches a driver (e.g. a BAYERPAT / readout fix in `indi-asi`),
 there is currently no way to push it to users, they would have to recompile.
 This plan makes a patched driver shippable as a `.deb` that:
