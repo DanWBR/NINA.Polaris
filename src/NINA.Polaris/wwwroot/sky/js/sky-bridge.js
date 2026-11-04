@@ -1257,11 +1257,14 @@
                         console.warn('[Sky] mosaic tile ' + i + ' has bad geometry', t);
                         return;
                     }
+                    // cd (optional): a plate-solve CD matrix, so the panels
+                    // take the camera's exact orientation like the mount box.
                     var obj = stel.createObj('geojson', {
                         data: skyFovGeoJson({
                             raDeg: t.raDeg, decDeg: t.decDeg,
                             widthDeg: t.widthDeg, heightDeg: t.heightDeg,
-                            rotationDeg: t.rotationDeg || 0, flipV: false
+                            rotationDeg: t.rotationDeg || 0, flipV: false,
+                            cd: t.cd || null
                         }, '#facc15', true, t.label ? ('Panel ' + t.label) : '')
                     });
                     __skyFovLayer.add(obj);
@@ -1596,6 +1599,17 @@
                 // optional mosaic grid (yellow). Each side is null to
                 // clear that overlay.
                 skySetFovOverlays(msg.mount || null, msg.target || null, msg.mosaic || null, msg.aux || null, msg.guide || null);
+                break;
+            case 'set-landscape':
+                // Ground panorama and its fog on/off. The MOSAIC preview turns
+                // them off so a target below the horizon still shows its stars.
+                try {
+                    var ls = stel.core && stel.core.landscapes;
+                    if (ls) {
+                        ls.visible = !!msg.visible;
+                        if ('fog_visible' in ls) ls.fog_visible = !!msg.visible;
+                    }
+                } catch (e) { console.warn('[Sky] landscape toggle failed:', e); }
                 break;
             case 'set-horizon':
                 // Custom horizon (az→alt visibility mask). Drawn in the engine's

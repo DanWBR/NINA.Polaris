@@ -2197,6 +2197,34 @@ label select.input-sm.select-compact {
     text-anchor: middle;
     font-weight: 600;
 }
+/* Sky preview before the first panel: the mini sky map fills the stage, the
+   caption floats over its bottom edge. */
+.mosaic-area .mosaic-sky-preview {
+    position: absolute;
+    inset: 0;
+    background: #000;
+}
+.mosaic-area .mosaic-skymap {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+}
+.mosaic-area .mosaic-sky-caption {
+    position: absolute;
+    left: 50%;
+    bottom: 12px;
+    transform: translateX(-50%);
+    max-width: calc(100% - 24px);
+    padding: 4px 10px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.6);
+    color: var(--text-muted, #9aa4b2);
+    font-size: 12px;
+    text-align: center;
+    pointer-events: none;
+}
 .mosaic-target .mosaic-target-row {
     display: flex;
     gap: 6px;

@@ -2531,7 +2531,9 @@ function ninaApp() {
             canvasUrl: '',
             canvasVersion: -1,
             busy: false,
-            timer: null
+            timer: null,
+            // The sky preview's engine has reported ready (mosaicSkyMapPush).
+            skyMapReady: false
         },
 
         // Sky Atlas filters + altitude chart
@@ -15572,6 +15574,13 @@ function ninaApp() {
                 // Only accept messages that came from our own bridge, by
                 // convention every bridge message carries __from === 'sky-bridge'.
                 if (msg.__from !== 'sky-bridge') return;
+                // ...and from the SKY tab's engine. The rudimentary polar
+                // alignment and MOSAIC mini maps run the same bridge; their
+                // 'ready' must not mark the SKY engine ready while it is still
+                // about:blank (its queued messages would be posted into
+                // nothing).
+                const skyFrame = document.getElementById('skyFrame');
+                if (!skyFrame || ev.source !== skyFrame.contentWindow) return;
 
                 switch (msg.type) {
                     case 'ready':
@@ -52192,6 +52201,7 @@ function ninaApp() {
         // ---- MOSAIC tab ----
 
         async mosaicOnTabEnter() {
+            this._mosaicSkyListen();
             const f = this.mosaicRun.form;
             if (f.raHours == null && this.skyTarget) this.mosaicUseSkyTarget();
             this.mosaicLoadFov();
@@ -52219,7 +52229,7 @@ function ninaApp() {
             const perPanel = (+f.exposureSeconds || 0) + 25 + (this.mosaicGuideEachPanel() ? 15 : 0);
             const minutes = (cols * rows * perPanel + 60) / 60;
             return {
-                cols, rows, panels: cols * rows,
+                cols, rows, panels: cols * rows, zoomX: zx, zoomY: zy,
                 widthDeg: known ? fov.widthDeg * zx : null,
                 heightDeg: known ? fov.heightDeg * zy : null,
                 minutes
@@ -52240,6 +52250,110 @@ function ninaApp() {
             return this._t('Grid: {cols} × {rows} panels', { cols: g.cols, rows: g.rows })
                 + (g.widthDeg ? ' · ' + g.widthDeg.toFixed(2) + '° × ' + g.heightDeg.toFixed(2) + '°' : '')
                 + ' · ~' + Math.ceil(g.minutes) + ' min';
+        },
+
+        // Sky preview. Until the first panel comes in there is no picture, so
+        // the stage shows the sky around the target in a mini sky map with the
+        // planned panels drawn on it. It is a second sky engine: loaded only
+        // while the tab is shown with a target set, and unloaded once the
+        // run's canvas takes over.
+        mosaicSkyPreviewOn() {
+            const f = this.mosaicRun.form;
+            return (this.auth.authenticated || !this.auth.enabled)
+                && this.tab === 'mosaic'
+                && !(this.mosaicRun.status?.canvasWidth > 0)
+                && Number.isFinite(f.raHours) && Number.isFinite(f.decDeg);
+        },
+
+        // The planned panels on the sky, the grid MosaicLayout builds on the
+        // host: offsets along the camera's own X/Y axes, serpentine from the
+        // top row, same numbering. The camera angle is the last plate solve's
+        // (solveCd); without one the run only learns it when it starts, so
+        // the preview assumes north up, east left.
+        mosaicPlannedTiles() {
+            const f = this.mosaicRun.form, fov = this.mosaicRun.fov;
+            if (!fov || !fov.known || !Number.isFinite(f.raHours) || !Number.isFinite(f.decDeg)) return [];
+            const g = this.mosaicGridPreview();
+            const sc = this.solveCd;
+            const cd = sc && [sc.cd11, sc.cd12, sc.cd21, sc.cd22].every(Number.isFinite)
+                ? { cd11: +sc.cd11, cd12: +sc.cd12, cd21: +sc.cd21, cd22: +sc.cd22 }
+                : { cd11: -1, cd12: 0, cd21: 0, cd22: -1 };
+            const xl = Math.hypot(cd.cd11, cd.cd21), yl = Math.hypot(cd.cd12, cd.cd22);
+            if (!(xl > 0) || !(yl > 0)) return [];
+            // Unit sky directions (east, north) of the sensor's +X and +Y.
+            const xE = cd.cd11 / xl, xN = cd.cd21 / xl, yE = cd.cd12 / yl, yN = cd.cd22 / yl;
+            const stepX = g.cols > 1 ? (g.zoomX - 1) / (g.cols - 1) : 0;
+            const stepY = g.rows > 1 ? (g.zoomY - 1) / (g.rows - 1) : 0;
+            const D = Math.PI / 180;
+            const a0 = f.raHours * 15 * D, d0 = f.decDeg * D;
+            const tiles = [];
+            for (let r = 0; r < g.rows; r++) {
+                for (let i = 0; i < g.cols; i++) {
+                    const c = (r & 1) ? g.cols - 1 - i : i;
+                    const ox = (c - (g.cols - 1) / 2) * stepX * fov.widthDeg;
+                    const oy = (r - (g.rows - 1) / 2) * stepY * fov.heightDeg;
+                    // Tangent-plane offsets, then the gnomonic (TAN) inverse.
+                    const xi = (ox * xE + oy * yE) * D, eta = (ox * xN + oy * yN) * D;
+                    const den = Math.cos(d0) - eta * Math.sin(d0);
+                    let ra = (a0 + Math.atan2(xi, den)) / D;
+                    ra = ((ra % 360) + 360) % 360;
+                    const dec = Math.atan2(Math.sin(d0) + eta * Math.cos(d0), Math.hypot(xi, den)) / D;
+                    tiles.push({ raDeg: ra, decDeg: dec, widthDeg: fov.widthDeg, heightDeg: fov.heightDeg,
+                                 cd, label: String(tiles.length + 1) });
+                }
+            }
+            return tiles;
+        },
+
+        // Push the target and the planned grid to the preview engine. Runs
+        // from an x-effect, so any change to the target, the field size, the
+        // overlap or the camera angle redraws it.
+        mosaicSkyMapPush() {
+            this._mosaicSkyListen();
+            const ready = this.mosaicRun.skyMapReady;
+            const f = this.mosaicRun.form;
+            const tiles = this.mosaicPlannedTiles();
+            const g = this.mosaicGridPreview();
+            const frame = document.querySelector('.mosaic-skymap');
+            if (!ready || !this.mosaicSkyPreviewOn() || !frame || !frame.contentWindow) return;
+            const post = m => {
+                try { frame.contentWindow.postMessage(JSON.parse(JSON.stringify(m)), '*'); } catch (_) { /* frame gone */ }
+            };
+            const lat = this.settings.latitude, lng = this.settings.longitude;
+            if (typeof lat === 'number' && typeof lng === 'number') post({ type: 'set-observer', lat, lng });
+            post({ type: 'set-time', utc: Date.now() });
+            // A target below the horizon still shows its stars.
+            post({ type: 'set-landscape', visible: false });
+            post({ type: 'set-fov-overlays', mount: null, target: null, mosaic: { tiles } });
+            const span = Math.max(g.widthDeg || 1, g.heightDeg || 1);
+            post({ type: 'look-at', raDeg: f.raHours * 15, decDeg: f.decDeg,
+                   fovDeg: Math.min(120, Math.max(0.5, span * 1.6)) });
+        },
+
+        _mosaicSkyListen() {
+            if (this._mosaicSkyListener) return;
+            this._mosaicSkyListener = ev => {
+                const frame = document.querySelector('.mosaic-skymap');
+                if (!frame || ev.source !== frame.contentWindow) return;
+                const m = ev.data;
+                if (!m || m.__from !== 'sky-bridge' || m.type !== 'ready') return;
+                this.mosaicRun.skyMapReady = true;
+                // The first push can land before the engine's survey pipeline
+                // honours it (see _skyForcedResync); repeat it twice.
+                this.mosaicSkyMapPush();
+                setTimeout(() => this.mosaicSkyMapPush(), 800);
+                setTimeout(() => this.mosaicSkyMapPush(), 2200);
+            };
+            window.addEventListener('message', this._mosaicSkyListener);
+        },
+
+        mosaicSkyCaption() {
+            if (this.mosaicActive()) return this._t('Centring on the target to read the camera angle…');
+            if (!this.mosaicRun.fov?.known) return this._t('Connect the camera to draw the panels');
+            const sc = this.solveCd;
+            return sc && Number.isFinite(sc.cd11)
+                ? this._t('Planned panels, at the camera angle of the last plate solve')
+                : this._t('Planned panels, north up. The run reads the camera angle when it starts');
         },
 
         mosaicUseSkyTarget() {
