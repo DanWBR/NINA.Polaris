@@ -5370,5 +5370,19 @@
   "Connect the camera to draw the panels": "Conecte a câmera para desenhar os painéis",
   "Planned panels, at the camera angle of the last plate solve": "Painéis planejados, no ângulo da câmera do último plate solve",
   "Planned panels, north up. The run reads the camera angle when it starts": "Painéis planejados, norte para cima. A execução lê o ângulo da câmera ao começar",
-  "Sky preview": "Prévia do céu"
+  "Sky preview": "Prévia do céu",
+  "Camera angle (°)": "Ângulo da câmera (°)",
+  "Planned panels, at the camera angle typed. The run reads the real one when it starts": "Painéis planejados, no ângulo da câmera digitado. A execução lê o ângulo real ao começar",
+  "Camera angle, as a plate solve reports it. Filled from the last plate solve; the grid and the panels turn with it, so a rotated camera keeps an even overlap.": "Ângulo da câmera, como o plate solve informa. Vem preenchido com o último plate solve; a grade e os painéis giram com ele, para que uma câmera girada mantenha a sobreposição uniforme.",
+  "Turns the planned panels on the map before any plate solve. The run itself reads the real camera angle from its first plate solve.": "Gira os painéis planejados no mapa antes de qualquer plate solve. A execução lê o ângulo real da câmera no primeiro plate solve.",
+  "Final width": "Largura final",
+  "Final height": "Altura final",
+  "Width of the final picture": "Largura da imagem final",
+  "Height of the final picture": "Altura da imagem final",
+  "{n} panel": "{n} painel",
+  "{n} panels": "{n} painéis",
+  "One panel: the field fits the camera": "Um painel: o campo cabe na câmera",
+  "Overlap, set automatically: {x} across": "Sobreposição, calculada automaticamente: {x} na horizontal",
+  "Overlap, set automatically: {y} down": "Sobreposição, calculada automaticamente: {y} na vertical",
+  "Overlap, set automatically: {x} across, {y} down": "Sobreposição, calculada automaticamente: {x} na horizontal, {y} na vertical"
 }

@@ -2507,7 +2507,7 @@ function ninaApp() {
                 targetName: 'Target', centreRaHours: 0, centreDecDeg: 0,
                 cols: 2, rows: 2,
                 panelFovWidthDeg: 1.0, panelFovHeightDeg: 1.0,
-                overlapPercent: 20, serpentine: true,
+                overlapPercent: 20, serpentine: true, rotationDeg: 0,
                 exposureSeconds: 60, exposureCount: 10,
                 slewOverheadSeconds: 30, plateSolveSeconds: 20, perFrameOverheadSeconds: 5
             },
@@ -2523,6 +2523,9 @@ function ninaApp() {
                 query: '', targetName: '', raHours: null, decDeg: null,
                 zoomX: 2, zoomY: 2, overlapPercent: 20,
                 exposureSeconds: 10, gain: null, binning: 1, saveFrames: true,
+                // Camera angle for the preview before any plate solve; the
+                // run reads the real one when it centres.
+                angleDeg: null,
                 // null until the operator ticks or clears it: then the
                 // default in mosaicGuideEachPanel decides.
                 guideEachPanel: null
@@ -52207,6 +52210,9 @@ function ninaApp() {
             // Auto-fill per-panel FOV from the active rig's FOV calculation (already on this.fov)
             this.mosaic.req.panelFovWidthDeg  = +(this.fov?.width  || 1).toFixed(3);
             this.mosaic.req.panelFovHeightDeg = +(this.fov?.height || 1).toFixed(3);
+            // Camera angle: the last plate solve's, else the SKY field's.
+            const rot = Number.isFinite(this.solveRotationDeg) ? this.solveRotationDeg : this.fov?.rotationDeg;
+            this.mosaic.req.rotationDeg = Number.isFinite(rot) ? +(+rot).toFixed(1) : 0;
             this.mosaic.plan = null;
             this.mosaicOpen = true;
             // Centre the SKY view on the mosaic centre so the yellow grid is
@@ -52256,6 +52262,9 @@ function ninaApp() {
             const count = z => z <= 1 + 1e-9 ? 1 : Math.ceil((z - o) / (1 - o) - 1e-9);
             const zx = zoom(f.zoomX), zy = zoom(f.zoomY);
             const cols = count(zx), rows = count(zy);
+            // The overlap the run will actually use: the panels spread evenly
+            // across the field (MosaicLayout.ActualOverlap).
+            const actual = (z, n) => n > 1 ? 1 - (z - 1) / (n - 1) : 0;
             const fov = this.mosaicRun.fov;
             const known = !!(fov && fov.known);
             // Slew + settle + solve per panel, a rough 25 s on top of the
@@ -52264,6 +52273,7 @@ function ninaApp() {
             const minutes = (cols * rows * perPanel + 60) / 60;
             return {
                 cols, rows, panels: cols * rows, zoomX: zx, zoomY: zy,
+                overlapX: actual(zx, cols), overlapY: actual(zy, rows),
                 widthDeg: known ? fov.widthDeg * zx : null,
                 heightDeg: known ? fov.heightDeg * zy : null,
                 minutes
@@ -52277,6 +52287,26 @@ function ninaApp() {
             const f = this.mosaicRun.form;
             if (f.guideEachPanel != null) return !!f.guideEachPanel;
             return !!this.guider.guiding && (+f.exposureSeconds || 0) >= 30;
+        },
+
+        // Slider readout: the size in degrees once the camera field is known
+        // (in camera fields before that), and the panels it takes.
+        mosaicSizeLabel(axis) {
+            const g = this.mosaicGridPreview();
+            const deg = axis === 'x' ? g.widthDeg : g.heightDeg;
+            const z = axis === 'x' ? g.zoomX : g.zoomY;
+            const n = axis === 'x' ? g.cols : g.rows;
+            const size = deg != null ? deg.toFixed(2) + '°' : z.toFixed(1) + '×';
+            return size + ' · ' + this._t(n === 1 ? '{n} panel' : '{n} panels', { n });
+        },
+
+        mosaicOverlapLine() {
+            const g = this.mosaicGridPreview();
+            if (g.cols === 1 && g.rows === 1) return this._t('One panel: the field fits the camera');
+            const pct = v => Math.round(v * 100) + '%';
+            if (g.rows === 1) return this._t('Overlap, set automatically: {x} across', { x: pct(g.overlapX) });
+            if (g.cols === 1) return this._t('Overlap, set automatically: {y} down', { y: pct(g.overlapY) });
+            return this._t('Overlap, set automatically: {x} across, {y} down', { x: pct(g.overlapX), y: pct(g.overlapY) });
         },
 
         mosaicSummaryLine() {
@@ -52303,15 +52333,14 @@ function ninaApp() {
         // host: offsets along the camera's own X/Y axes, serpentine from the
         // top row, same numbering. The camera angle is the last plate solve's
         // (solveCd); without one the run only learns it when it starts, so
-        // the preview assumes north up, east left.
+        // the preview uses the angle typed in the form, north up when empty.
         mosaicPlannedTiles() {
             const f = this.mosaicRun.form, fov = this.mosaicRun.fov;
             if (!fov || !fov.known || !Number.isFinite(f.raHours) || !Number.isFinite(f.decDeg)) return [];
             const g = this.mosaicGridPreview();
-            const sc = this.solveCd;
-            const cd = sc && [sc.cd11, sc.cd12, sc.cd21, sc.cd22].every(Number.isFinite)
-                ? { cd11: +sc.cd11, cd12: +sc.cd12, cd21: +sc.cd21, cd22: +sc.cd22 }
-                : { cd11: -1, cd12: 0, cd21: 0, cd22: -1 };
+            const cd = this.mosaicHasSolveAngle()
+                ? { cd11: +this.solveCd.cd11, cd12: +this.solveCd.cd12, cd21: +this.solveCd.cd21, cd22: +this.solveCd.cd22 }
+                : this._mosaicAngleCd(Number.isFinite(f.angleDeg) ? f.angleDeg : 0);
             const xl = Math.hypot(cd.cd11, cd.cd21), yl = Math.hypot(cd.cd12, cd.cd22);
             if (!(xl > 0) || !(yl > 0)) return [];
             // Unit sky directions (east, north) of the sensor's +X and +Y.
@@ -52384,10 +52413,25 @@ function ninaApp() {
         mosaicSkyCaption() {
             if (this.mosaicActive()) return this._t('Centring on the target to read the camera angle…');
             if (!this.mosaicRun.fov?.known) return this._t('Connect the camera to draw the panels');
-            const sc = this.solveCd;
-            return sc && Number.isFinite(sc.cd11)
-                ? this._t('Planned panels, at the camera angle of the last plate solve')
+            if (this.mosaicHasSolveAngle())
+                return this._t('Planned panels, at the camera angle of the last plate solve');
+            return Number.isFinite(this.mosaicRun.form.angleDeg) && this.mosaicRun.form.angleDeg !== 0
+                ? this._t('Planned panels, at the camera angle typed. The run reads the real one when it starts')
                 : this._t('Planned panels, north up. The run reads the camera angle when it starts');
+        },
+
+        mosaicHasSolveAngle() {
+            const sc = this.solveCd;
+            return !!sc && [sc.cd11, sc.cd12, sc.cd21, sc.cd22].every(Number.isFinite);
+        },
+
+        // A CD orientation for a camera angle typed by hand, in the convention
+        // the SKY map draws a rotated field with (the scalar rotation path of
+        // skyFovRect), so the preview matches the target box. 0 is north up,
+        // east left.
+        _mosaicAngleCd(deg) {
+            const t = deg * Math.PI / 180, c = Math.cos(t), s = Math.sin(t);
+            return { cd11: -c, cd12: s, cd21: -s, cd22: -c };
         },
 
         mosaicUseSkyTarget() {
@@ -52595,7 +52639,7 @@ function ninaApp() {
                 raDeg: p.raHours * 15, decDeg: p.decDeg,
                 widthDeg: plan.panelFovWidthDeg,
                 heightDeg: plan.panelFovHeightDeg,
-                rotationDeg: 0,
+                rotationDeg: plan.rotationDeg || 0,
                 label: ((p.index ?? 0) + 1).toString()  // 1-based slew order
             }));
             this._pushSkyFovOverlays();

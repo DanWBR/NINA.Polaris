@@ -144,6 +144,44 @@ public class MosaicPlannerTests {
     }
 
     [Test]
+    public void Plan_Rotated90_RowOfPanelsRunsNorthSouth() {
+        // At 90 degrees the panel width lies along declination, so a 3x1 row
+        // steps in dec and keeps its RA.
+        var plan = _planner.Plan(new MosaicRequest {
+            CentreRaHours = 12, CentreDecDeg = 0,
+            Cols = 3, Rows = 1,
+            PanelFovWidthDeg = 1.0, PanelFovHeightDeg = 0.5,
+            OverlapPercent = 0, Serpentine = false, RotationDeg = 90
+        });
+        foreach (var p in plan.Panels)
+            Assert.That(p.RaHours, Is.EqualTo(12).Within(1e-9));
+        var dec = plan.Panels.Select(p => p.DecDeg).OrderBy(d => d).ToArray();
+        Assert.That(dec[0], Is.EqualTo(-1).Within(1e-9));
+        Assert.That(dec[1], Is.EqualTo(0).Within(1e-9));
+        Assert.That(dec[2], Is.EqualTo(1).Within(1e-9));
+    }
+
+    [Test]
+    public void Plan_Rotated_KeepsPanelSpacingAlongTheCameraAxes() {
+        var plan = _planner.Plan(new MosaicRequest {
+            CentreRaHours = 6, CentreDecDeg = 0,
+            Cols = 2, Rows = 2,
+            PanelFovWidthDeg = 1.0, PanelFovHeightDeg = 0.6,
+            OverlapPercent = 20, Serpentine = false, RotationDeg = 30
+        });
+        Assert.That(plan.RotationDeg, Is.EqualTo(30));
+        // Neighbours in a row sit one step apart along the 30 degree axis.
+        var a = plan.Panels[0]; var b = plan.Panels[1];
+        double dE = (b.RaHours - a.RaHours) * 15, dN = b.DecDeg - a.DecDeg;
+        Assert.That(Math.Sqrt(dE * dE + dN * dN), Is.EqualTo(0.8).Within(1e-9));
+        Assert.That(Math.Atan2(dN, dE) * 180 / Math.PI, Is.EqualTo(30).Within(1e-9));
+
+        var doc = _planner.ToSequenceDocument(plan, 60, 1);
+        foreach (var item in ((SequentialContainer)doc.Root).Items)
+            Assert.That(((DeepSkyObjectContainer)item).Rotation, Is.EqualTo(30));
+    }
+
+    [Test]
     public void Plan_InvalidInput_Throws() {
         Assert.Throws<ArgumentException>(() => _planner.Plan(new MosaicRequest { Cols = 0, Rows = 1 }));
         Assert.Throws<ArgumentException>(() => _planner.Plan(new MosaicRequest { Cols = 1, Rows = 1, PanelFovWidthDeg = -1 }));

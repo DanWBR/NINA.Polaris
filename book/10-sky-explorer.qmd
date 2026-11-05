@@ -505,6 +505,13 @@ and the planner shows an
 estimated session time computed as panels times exposure times
 frames.
 
+**Camera angle** turns the grid for a camera that is not mounted
+square to north. It starts at the angle of the last plate solve (or
+the angle of the target box on the map), and the panels and the steps
+between them both follow it, so a rotated camera keeps an even overlap
+at the corners instead of leaving wedge-shaped gaps. The exported
+sequence carries the angle on every panel.
+
 **Add to Sequence** is how the plan leaves the map: it generates the
 AUTORUN rows for all panels, ordered in a serpentine slew pattern
 (back and forth, row by row, like mowing a lawn) so the mount walks
@@ -522,21 +529,24 @@ experimental while it gathers field experience.
 
 Pick a target with **Find** (a catalogue name or coordinates), **SKY
 target** (whatever is selected on the sky map), or **Mount position**
-(where the telescope points now). Then set the field size the way a
-smart telescope does: **Width** and **Height** in camera fields, so 2.5
-by 1.6 means a field two and a half frames wide and 1.6 frames tall.
-With the **Overlap** you choose (20% by default), Polaris works out how
-many panels that takes and shows the grid, the field in degrees and an
-estimated time before anything moves. Exposure, gain and binning apply
-to every panel. Press the shutter to start; press it again to stop.
+(where the telescope points now). Then set the size of the final
+picture the way a smart telescope does, with the **Final width** and
+**Final height** sliders: each runs from one camera field up to eight,
+and shows the size in degrees and the panels it takes. The overlap is
+set automatically: Polaris takes the fewest panels that overlap by at
+least 20% and spreads them evenly across the field, so the actual
+overlap (shown under the sliders) is 20% or a little more. The grid,
+the field in degrees and an estimated time appear before anything
+moves. Exposure, gain and binning apply to every panel. Press the
+shutter to start; press it again to stop.
 
 Until the first panel comes in, the picture area shows a small sky map
 around the target with the planned panels drawn on it in yellow,
 numbered in the order they will be shot. It redraws as you change the
-target, the field size or the overlap. The panels take the camera's
-angle from the last plate solve; with no solve yet they are drawn north
-up, and the run lays the real grid out along the camera's angle once it
-has centred. The panels only appear once the camera is connected,
+target or the field size. The panels take the camera's angle from the
+last plate solve. With no solve yet, a **Camera angle** field turns
+them to the angle you type (north up when empty); either way the run
+lays the real grid out along the camera's angle once it has centred. The panels only appear once the camera is connected,
 because their size comes from the camera and the rig.
 
 What happens next:

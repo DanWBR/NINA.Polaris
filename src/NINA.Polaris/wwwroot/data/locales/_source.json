@@ -5004,5 +5004,19 @@
   "Connect the camera to draw the panels": "",
   "Planned panels, at the camera angle of the last plate solve": "",
   "Planned panels, north up. The run reads the camera angle when it starts": "",
-  "Sky preview": ""
+  "Sky preview": "",
+  "Camera angle (°)": "",
+  "Planned panels, at the camera angle typed. The run reads the real one when it starts": "",
+  "Camera angle, as a plate solve reports it. Filled from the last plate solve; the grid and the panels turn with it, so a rotated camera keeps an even overlap.": "",
+  "Turns the planned panels on the map before any plate solve. The run itself reads the real camera angle from its first plate solve.": "",
+  "Final width": "",
+  "Final height": "",
+  "Width of the final picture": "",
+  "Height of the final picture": "",
+  "{n} panel": "",
+  "{n} panels": "",
+  "One panel: the field fits the camera": "",
+  "Overlap, set automatically: {x} across": "",
+  "Overlap, set automatically: {y} down": "",
+  "Overlap, set automatically: {x} across, {y} down": ""
 }

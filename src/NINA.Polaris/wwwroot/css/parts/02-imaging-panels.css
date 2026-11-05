@@ -2233,3 +2233,17 @@ label select.input-sm.select-compact {
 .mosaic-target .mosaic-target-row input { flex: 1; min-width: 0; }
 .mosaic-run-status { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
 .mosaic-summary-line { margin-top: 4px; }
+/* Final picture size: a label/value line over each full-width slider
+   (app.js wraps the range in .range-with-controls, [-] slider [+]). */
+.mosaic-size {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 6px 0 8px;
+    font-size: 12px;
+}
+.mosaic-size .mosaic-size-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.mosaic-size .mosaic-size-val { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mosaic-size .range-with-controls { display: flex; width: 100%; min-width: 0; margin-bottom: 4px; }
+.mosaic-size .range-with-controls > input[type="range"] { flex: 1 1 auto; min-width: 0; }
+.mosaic-size .mosaic-size-overlap { margin: 0; }

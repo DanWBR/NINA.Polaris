@@ -5370,5 +5370,19 @@
   "Connect the camera to draw the panels": "Kamera verbinden, um die Panels einzuzeichnen",
   "Planned panels, at the camera angle of the last plate solve": "Geplante Panels, im Kamerawinkel des letzten Plate solve",
   "Planned panels, north up. The run reads the camera angle when it starts": "Geplante Panels, Norden oben. Der Lauf liest den Kamerawinkel beim Start",
-  "Sky preview": "Himmelsvorschau"
+  "Sky preview": "Himmelsvorschau",
+  "Camera angle (°)": "Kamerawinkel (°)",
+  "Planned panels, at the camera angle typed. The run reads the real one when it starts": "Geplante Panels, im eingegebenen Kamerawinkel. Der Lauf liest den echten Winkel beim Start",
+  "Camera angle, as a plate solve reports it. Filled from the last plate solve; the grid and the panels turn with it, so a rotated camera keeps an even overlap.": "Kamerawinkel, wie ihn ein Plate Solve meldet. Vom letzten Plate Solve übernommen; Raster und Panels drehen sich mit, damit eine gedrehte Kamera eine gleichmäßige Überlappung behält.",
+  "Turns the planned panels on the map before any plate solve. The run itself reads the real camera angle from its first plate solve.": "Dreht die geplanten Panels auf der Karte vor jedem Plate Solve. Der Lauf selbst liest den echten Kamerawinkel aus seinem ersten Plate Solve.",
+  "Final width": "Endbreite",
+  "Final height": "Endhöhe",
+  "Width of the final picture": "Breite des fertigen Bildes",
+  "Height of the final picture": "Höhe des fertigen Bildes",
+  "{n} panel": "{n} Panel",
+  "{n} panels": "{n} Panels",
+  "One panel: the field fits the camera": "Ein Panel: das Feld passt in die Kamera",
+  "Overlap, set automatically: {x} across": "Überlappung, automatisch: {x} horizontal",
+  "Overlap, set automatically: {y} down": "Überlappung, automatisch: {y} vertikal",
+  "Overlap, set automatically: {x} across, {y} down": "Überlappung, automatisch: {x} horizontal, {y} vertikal"
 }

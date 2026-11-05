@@ -5370,5 +5370,19 @@
   "Connect the camera to draw the panels": "Connectez la caméra pour dessiner les panneaux",
   "Planned panels, at the camera angle of the last plate solve": "Panneaux prévus, à l'angle de caméra du dernier plate solve",
   "Planned panels, north up. The run reads the camera angle when it starts": "Panneaux prévus, nord en haut. La séquence lit l'angle de la caméra au démarrage",
-  "Sky preview": "Aperçu du ciel"
+  "Sky preview": "Aperçu du ciel",
+  "Camera angle (°)": "Angle de la caméra (°)",
+  "Planned panels, at the camera angle typed. The run reads the real one when it starts": "Panneaux prévus, à l'angle de caméra saisi. La séquence lit l'angle réel au démarrage",
+  "Camera angle, as a plate solve reports it. Filled from the last plate solve; the grid and the panels turn with it, so a rotated camera keeps an even overlap.": "Angle de la caméra, tel qu'un plate solve le donne. Rempli depuis le dernier plate solve ; la grille et les panneaux tournent avec lui, pour qu'une caméra tournée garde un recouvrement régulier.",
+  "Turns the planned panels on the map before any plate solve. The run itself reads the real camera angle from its first plate solve.": "Tourne les panneaux prévus sur la carte avant tout plate solve. La séquence lit l'angle réel de la caméra lors de son premier plate solve.",
+  "Final width": "Largeur finale",
+  "Final height": "Hauteur finale",
+  "Width of the final picture": "Largeur de l'image finale",
+  "Height of the final picture": "Hauteur de l'image finale",
+  "{n} panel": "{n} panneau",
+  "{n} panels": "{n} panneaux",
+  "One panel: the field fits the camera": "Un panneau : le champ tient dans la caméra",
+  "Overlap, set automatically: {x} across": "Recouvrement, calculé automatiquement : {x} en largeur",
+  "Overlap, set automatically: {y} down": "Recouvrement, calculé automatiquement : {y} en hauteur",
+  "Overlap, set automatically: {x} across, {y} down": "Recouvrement, calculé automatiquement : {x} en largeur, {y} en hauteur"
 }
