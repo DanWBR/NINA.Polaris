@@ -43,6 +43,21 @@ public class SvbonyControlsAuditTests {
         Assert.That(options, Is.EqualTo(new[] { "Low", "Medium" }));
     }
 
+    [TestCase((int)SVB_CONTROL_TYPE.SVB_WB_R, true)]
+    [TestCase((int)SVB_CONTROL_TYPE.SVB_WB_G, true)]
+    [TestCase((int)SVB_CONTROL_TYPE.SVB_WB_B, true)]
+    [TestCase((int)SVB_CONTROL_TYPE.SVB_GAMMA, true)]
+    [TestCase((int)SVB_CONTROL_TYPE.SVB_CONTRAST, true)]
+    [TestCase((int)SVB_CONTROL_TYPE.SVB_SATURATION, true)]
+    [TestCase((int)SVB_CONTROL_TYPE.SVB_GAIN, false)]
+    [TestCase((int)SVB_CONTROL_TYPE.SVB_EXPOSURE, false)]
+    [TestCase((int)SVB_CONTROL_TYPE.SVB_BLACK_LEVEL, false)]
+    [TestCase((int)SVB_CONTROL_TYPE.SVB_FLIP, false)]
+    [TestCase((int)SVB_CONTROL_TYPE.SVB_COOLER_ENABLE, false)]
+    public void ImageProcessingControlsResetAtConnect(int type, bool expected) {
+        Assert.That(SvbonySdkCamera.ResetsToDefaultAtConnect(type), Is.EqualTo(expected));
+    }
+
     [TestCase(18, 0, 1, "bool")]                                   // bad pixel correction
     [TestCase((int)SVB_CONTROL_TYPE.SVB_GAIN, 0, 720, "int")]
     [TestCase((int)SVB_CONTROL_TYPE.SVB_FLIP, 0, 9, "int")]        // a range it cannot name
