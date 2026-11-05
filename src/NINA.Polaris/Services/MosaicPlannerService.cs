@@ -55,22 +55,31 @@ public class MosaicPlannerService {
         var cosDec = Math.Cos(req.CentreDecDeg * Math.PI / 180);
         if (Math.Abs(cosDec) < 1e-6) cosDec = 1e-6;
 
+        // The grid runs along the camera's axes: columns along the panel
+        // width, rows along its height. At 0 the width points east and the
+        // height north; the angle turns both, in the convention the SKY map
+        // draws a camera field with, so the panels and the grid line up.
+        var rot = req.RotationDeg * Math.PI / 180;
+        double uE = Math.Cos(rot), uN = Math.Sin(rot);    // width axis
+        double vE = -Math.Sin(rot), vN = Math.Cos(rot);   // height axis
+
         var panels = new List<MosaicPanel>(req.Cols * req.Rows);
         // Build the grid centred on the requested coords. Rows go from top
-        // (highest dec) to bottom; cols go either left→right or right→left
-        // depending on the row index when serpentine is enabled, minimises
-        // slew distance across the whole session.
+        // to bottom; cols go either left→right or right→left depending on
+        // the row index when serpentine is enabled, minimises slew distance
+        // across the whole session.
         for (int r = 0; r < req.Rows; r++) {
-            // Row offset in declination (positive = north, top row is north-most)
+            // Row offset along the height axis (top row first)
             var rowOffsetDeg = (req.Rows - 1) / 2.0 * stepH - r * stepH;
-            var panelDec = req.CentreDecDeg + rowOffsetDeg;
 
             bool reversed = req.Serpentine && (r % 2 == 1);
             for (int cIdx = 0; cIdx < req.Cols; cIdx++) {
                 int c = reversed ? (req.Cols - 1 - cIdx) : cIdx;
                 var colOffsetDeg = c * stepW - (req.Cols - 1) / 2.0 * stepW;
+                var eastDeg = colOffsetDeg * uE + rowOffsetDeg * vE;
+                var panelDec = req.CentreDecDeg + colOffsetDeg * uN + rowOffsetDeg * vN;
                 // RA step needs cos(dec) correction (RA arcs shrink toward the pole)
-                var panelRaDeg = req.CentreRaHours * 15 + colOffsetDeg / cosDec;
+                var panelRaDeg = req.CentreRaHours * 15 + eastDeg / cosDec;
                 if (panelRaDeg < 0) panelRaDeg += 360;
                 if (panelRaDeg >= 360) panelRaDeg -= 360;
                 panels.Add(new MosaicPanel {
@@ -100,6 +109,7 @@ public class MosaicPlannerService {
             PanelFovWidthDeg = req.PanelFovWidthDeg, PanelFovHeightDeg = req.PanelFovHeightDeg,
             OverlapPercent = req.OverlapPercent,
             Serpentine = req.Serpentine,
+            RotationDeg = req.RotationDeg,
             Panels = panels,
             EstimatedTotalSeconds = totalSeconds
         };
@@ -122,6 +132,7 @@ public class MosaicPlannerService {
                 Target = panel.Name,
                 RaHours = panel.RaHours,
                 DecDeg = panel.DecDeg,
+                Rotation = plan.RotationDeg,
                 CenterOnStart = true,
                 Items = new() {
                     new TakeExposureInstruction {
@@ -168,6 +179,10 @@ public class MosaicRequest {
     /// <summary>If true, alternating rows reverse the column order to minimise slew distance.</summary>
     public bool Serpentine { get; set; } = true;
 
+    /// <summary>Camera angle in degrees, as a plate solve reports it. The grid
+    /// follows it, so a rotated camera gets even overlap at the corners.</summary>
+    public double RotationDeg { get; set; }
+
     // ---- Time-estimate inputs (used when producing a session estimate) ----
     public double ExposureSeconds { get; set; } = 60;
     public int ExposureCount { get; set; } = 10;
@@ -193,6 +208,7 @@ public class MosaicPlan {
     public double PanelFovHeightDeg { get; set; }
     public double OverlapPercent { get; set; }
     public bool Serpentine { get; set; }
+    public double RotationDeg { get; set; }
     public List<MosaicPanel> Panels { get; set; } = new();
     public double EstimatedTotalSeconds { get; set; }
 }

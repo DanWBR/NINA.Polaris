@@ -658,20 +658,41 @@ public sealed class SvbonySdkCamera : ICamera {
     /// still on (PHD2 forces every SVBony control to manual for this reason),
     /// and a control on auto overrides what Polaris writes in video mode: a
     /// ToupTek camera that came up that way ignored every exposure set in the
-    /// live view.</summary>
+    /// live view.
+    ///
+    /// The image-processing controls also go back to the SDK default, as PHD2
+    /// does. The camera keeps them between sessions and applies white balance
+    /// to RAW16: an SV605CC that came up at WB 220/128/227 delivered red 1.84x
+    /// and blue 1.68x what 128/128/128 gives, so every frame had strong
+    /// colours. Values set in the panel are re-applied after this.</summary>
     private void ReleaseAutoModes() {
         lock (_sdk) {
             if (SVBGetNumOfControls(_cameraId, out var nCtrl) != SVB_ERROR_CODE.SVB_SUCCESS) return;
             for (int i = 0; i < nCtrl; i++) {
                 var caps = new SVB_CONTROL_CAPS();
                 if (SVBGetControlCaps(_cameraId, i, ref caps) != SVB_ERROR_CODE.SVB_SUCCESS
-                    || caps.IsAutoSupported == 0 || caps.IsWritable == 0) continue;
+                    || caps.IsWritable == 0) continue;
                 var type = (SVB_CONTROL_TYPE)caps.ControlType;
+                if (ResetsToDefaultAtConnect(caps.ControlType)) {
+                    SVBSetControlValue(_cameraId, type, caps.DefaultValue, 0);
+                    continue;
+                }
+                if (caps.IsAutoSupported == 0) continue;
                 if (SVBGetControlValue(_cameraId, type, out var v, out var a) == SVB_ERROR_CODE.SVB_SUCCESS && a != 0)
                     SVBSetControlValue(_cameraId, type, v, 0);
             }
         }
     }
+
+    /// <summary>The controls that shape the image rather than the exposure:
+    /// gamma, contrast, sharpness, saturation and the white balance gains.</summary>
+    internal static bool ResetsToDefaultAtConnect(int controlType) => (SVB_CONTROL_TYPE)controlType switch {
+        SVB_CONTROL_TYPE.SVB_GAMMA or SVB_CONTROL_TYPE.SVB_GAMMA_CONTRAST
+            or SVB_CONTROL_TYPE.SVB_WB_R or SVB_CONTROL_TYPE.SVB_WB_G or SVB_CONTROL_TYPE.SVB_WB_B
+            or SVB_CONTROL_TYPE.SVB_CONTRAST or SVB_CONTROL_TYPE.SVB_SHARPNESS
+            or SVB_CONTROL_TYPE.SVB_SATURATION => true,
+        _ => false,
+    };
 
     internal static readonly string[] FlipOptions = { "None", "Horizontal", "Vertical", "Both" };
     internal static readonly string[] FrameSpeedOptions = { "Low", "Medium", "High" };
