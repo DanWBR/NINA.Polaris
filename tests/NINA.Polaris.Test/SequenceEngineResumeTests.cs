@@ -34,7 +34,7 @@ namespace NINA.Polaris.Test;
 [TestFixture]
 public class SequenceEngineResumeTests {
 
-    private (SequenceEngine engine, EquipmentManager equip) MakeEngine() {
+    private (SequenceEngine engine, EquipmentManager equip) MakeEngine(string imageOutputDir = "") {
         var indi = new IndiClient("localhost", 7624);
         var equip = new EquipmentManager(indi, NullLogger<EquipmentManager>.Instance,
             new NINA.Polaris.Services.Alpaca.AlpacaDiscoveryCache(),
@@ -55,7 +55,7 @@ public class SequenceEngineResumeTests {
         var profile = new ProfileService(profileConfig, NullLogger<ProfileService>.Instance);
         // No output dir → ImageWriterService.SaveImage no-ops, keeping the
         // test off the filesystem entirely.
-        profile.Active.ImageOutputDir = "";
+        profile.Active.ImageOutputDir = imageOutputDir;
         var stream = new CameraStreamService(equip, relay, NullLogger<CameraStreamService>.Instance,
             new CaptureProgressService());
         var slewCenter = new SlewCenterService(equip, plateSolve, profile, stream, NullLogger<SlewCenterService>.Instance);
@@ -139,5 +139,34 @@ public class SequenceEngineResumeTests {
         await WaitForIdleAsync(engine);
         Assert.That(engine.TotalFramesCompleted, Is.EqualTo(3),
             "restart after ResetProgress must capture the full item");
+    }
+
+    [Test]
+    public async Task ProcessCapturedFrame_SavesMetadataAndImage() {
+        var outputDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(),
+            "polaris-seqengine-output-" + System.Guid.NewGuid().ToString("N"));
+        try {
+            var (engine, equip) = MakeEngine(outputDir);
+            var cam = equip.SelectCamera("sim", "Simulator");
+            await cam.ConnectAsync();
+            var image = await cam.CaptureAsync(0);
+            var item = new SequenceItem {
+                Name = "Bias set",
+                ImageType = "BIAS",
+                Exposure = 0,
+                Count = 1,
+                Ra = 12.5,
+                Dec = -30
+            };
+
+            await engine.ProcessCapturedFrameAsync(image, item, "BIAS",
+                isCalibration: true, effectiveTargetName: item.Name, CancellationToken.None);
+
+            Assert.That(image.MetaData.Exposure.ImageType, Is.EqualTo("BIAS"));
+            Assert.That(image.MetaData.Target.RightAscension, Is.EqualTo(12.5));
+            Assert.That(Directory.GetFiles(outputDir, "*", SearchOption.AllDirectories), Is.Not.Empty);
+        } finally {
+            if (Directory.Exists(outputDir)) Directory.Delete(outputDir, recursive: true);
+        }
     }
 }
