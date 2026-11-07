@@ -69,10 +69,10 @@ to the same SQLite file:
 
     python scripts/build-dso-catalog.py     # deep sky, deletes + recreates
     python scripts/build-star-catalog.py    # HR / Star / WR, 9,368 rows
-    python scripts/build-named-objects.py   # Notable, 188 rows
+    python scripts/build-named-objects.py   # Notable, 609 rows + nicknames on NGC/IC/Sh2 rows
 
 Run this one on its own and the database loses every star and every
-notable object, which is 9,556 rows, and nothing says so: the build
+notable object, which is 9,977 rows, and nothing says so: the build
 prints a cheerful success and the file is a third smaller. Always run
 all three, and compare the row count per catalogue against the previous
 database before committing.

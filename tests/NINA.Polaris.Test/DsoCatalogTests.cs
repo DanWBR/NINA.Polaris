@@ -323,6 +323,21 @@ public class DsoCatalogTests {
     [TestCase("Wolf 359", "Wolf 359")]
     [TestCase("TRAPPIST-1", "TRAPPIST-1")]
     [TestCase("Hubble Ultra Deep Field", "Hubble Ultra Deep Field")]
+    [TestCase("Gaia BH3", "Gaia BH3")]
+    [TestCase("Hydra Cluster", "Hydra Cluster")]
+    [TestCase("Pillars of Creation", "Pillars of Creation")]
+    [TestCase("Westerlund 1", "Westerlund 1")]
+    [TestCase("Palomar 5", "Palomar 5")]
+    [TestCase("Vela Supernova Remnant", "Vela Supernova Remnant")]
+    [TestCase("Hand of God", "PSR B1509-58")]
+    [TestCase("Kepler-22", "Kepler-22")]
+    [TestCase("North Galactic Pole", "North Galactic Pole")]
+    // Nicknames stamped onto catalogue rows by the same script: no
+    // duplicate row, the NGC / IC / Sh2 object itself is the hit.
+    [TestCase("Elephant Trunk", "IC 1396")]
+    [TestCase("Pacman Nebula", "NGC 281")]
+    [TestCase("Tulip Nebula", "Sh2 101")]
+    [TestCase("Spaghetti Nebula", "Sh2 240")]
     public async Task SearchAsync_NamedObjects_AreFound(string query, string expectedName) {
         var hits = await _catalog.SearchAsync(query, 5);
         Assert.That(hits, Is.Not.Empty, query);
