@@ -70,7 +70,10 @@ public class TakeExposureInstruction : SequenceInstruction {
 
     public override IReadOnlyList<string> Validate() {
         var e = new List<string>();
-        if (ExposureSeconds <= 0) e.Add("Exposure must be positive");
+        // A bias is the shortest exposure the camera takes, which AUTORUN asks
+        // for as 0 s; every other frame type needs real exposure time.
+        bool bias = string.Equals(ImageType, "BIAS", StringComparison.OrdinalIgnoreCase);
+        if (ExposureSeconds < 0 || (ExposureSeconds == 0 && !bias)) e.Add("Exposure must be positive");
         if (Count <= 0) e.Add("Count must be positive");
         if (Binning <= 0) e.Add("Binning must be positive");
         return e;

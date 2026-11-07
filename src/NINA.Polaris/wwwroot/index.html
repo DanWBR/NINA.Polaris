@@ -43,9 +43,9 @@
          significant (CSS cascade), keep these in sequence. All share the same
          ?v= cache-bust token, bumped together on every deploy. -->
     <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20261017-updatewhite">
-    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20261105-mosaicsize">
+    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20261107-advexamples">
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20261009-floatbtn">
-    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20261028-hometonight2">
+    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20261107-advexamples">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20261024-cloudhourly">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20261011-kblift">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20261016-bincap">
@@ -12223,6 +12223,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <button class="btn" @click="openPlanViz()"
                             :disabled="!plan || planTargetCount() === 0"
                             title="Visualize the whole plan timeline (elevation + sub-intervals)">▦ View plan</button>
+                    <button class="btn" @click="planOpenInAdv()"
+                            :disabled="!plan || planTargetCount() === 0 || planIsRunning()"
+                            title="Open this plan as an Advanced Sequencer tree, to add steps PLAN does not offer. The plan itself stays as it is.">⇢ Open in ADV</button>
                     <!-- Three states, not two. When there is progress to
                          resume, this button DISCARDS it and starts over, and
                          it sits right next to Resume: labelling both "Start"
@@ -13399,6 +13402,50 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                 </div>
                 <!-- Toolbar -->
                 <div class="advseq-toolbar">
+                    <!-- New: blank tree or a ready-made example to start from. -->
+                    <div class="advseq-menu-wrap" @click.outside="advSeqMenu === 'new' && (advSeqMenu = null)">
+                        <button class="btn" @click="advSeqToggleMenu('new')"
+                                :disabled="advSeq.state === 'Running'"
+                                title="Start a new sequence, empty or from a ready-made example">📄 New ▾</button>
+                        <div class="advseq-menu" x-show="advSeqMenu === 'new'" x-cloak>
+                            <button class="advseq-menu-item" @click="advSeqNewBlank()">
+                                <strong>Empty sequence</strong>
+                                <span>A single empty block to build from scratch.</span>
+                            </button>
+                            <div class="advseq-menu-title">Examples</div>
+                            <template x-for="ex in advSeqExamples" :key="ex.id">
+                                <button class="advseq-menu-item" @click="advSeqNewFromExample(ex)">
+                                    <strong x-text="ex.title"></strong>
+                                    <span x-text="ex.summary"></span>
+                                </button>
+                            </template>
+                            <div class="advseq-menu-foot">
+                                Every block in an example says in its description why it sits where it does. A night built in PLAN opens here too, with Open in ADV.
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Templates: save the selected block, insert a saved one. -->
+                    <div class="advseq-menu-wrap" @click.outside="advSeqMenu === 'templates' && (advSeqMenu = null)">
+                        <button class="btn" @click="advSeqToggleMenu('templates')"
+                                title="Save the selected block as a template, or insert a saved one">📦 Templates ▾</button>
+                        <div class="advseq-menu" x-show="advSeqMenu === 'templates'" x-cloak>
+                            <button class="advseq-menu-item" @click="advSeqSaveTemplate()">
+                                <strong>Save selected block as template…</strong>
+                                <span x-text="advSeqSelectedNode()
+                                    ? $t('Saves the block {name} and everything inside it.', { name: advSeqSelectedNode().name || advSeqSelectedNode().type })
+                                    : $t('Saves the whole sequence.')"></span>
+                            </button>
+                            <div class="advseq-menu-title">Insert into the selected block</div>
+                            <template x-for="name in advSeqTemplates" :key="name">
+                                <button class="advseq-menu-item" @click="advSeqInsertTemplate(name)">
+                                    <strong x-text="name"></strong>
+                                </button>
+                            </template>
+                            <div class="advseq-menu-foot" x-show="advSeqTemplates.length === 0">
+                                No templates saved yet.
+                            </div>
+                        </div>
+                    </div>
                     <input type="text" x-model="advSeq.doc.name" placeholder="Sequence name" class="input-md">
                     <button class="btn btn-primary" @click="advSeqStart()" :disabled="advSeq.state === 'Running'">▶ Start</button>
                     <button class="btn" @click="advSeqStop()" :disabled="advSeq.state !== 'Running'">⏹ Stop</button>
@@ -13422,6 +13469,13 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <strong>Validation:</strong>
                     <ul style="margin:4px 0 0 18px;padding:0">
                         <template x-for="e in advSeq.errors" :key="e"><li x-text="e"></li></template>
+                    </ul>
+                </div>
+                <!-- Things to check: runs, but probably not the way you meant. -->
+                <div x-show="advSeq.warnings.length > 0" class="warn-banner advseq-warnings" style="margin-bottom:8px">
+                    <strong>Things to check:</strong>
+                    <ul style="margin:4px 0 0 18px;padding:0">
+                        <template x-for="w in advSeq.warnings" :key="w"><li x-text="w"></li></template>
                     </ul>
                 </div>
 
@@ -26025,7 +26079,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261105-mosaicsize"></script>
+    <script src="/js/app.js?v=20261107-advexamples"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

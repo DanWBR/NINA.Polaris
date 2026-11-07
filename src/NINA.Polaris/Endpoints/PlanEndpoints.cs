@@ -14,6 +14,7 @@
 
 using NINA.Polaris.Services;
 using NINA.Polaris.Services.Plan;
+using NINA.Polaris.Services.Sequencer;
 
 namespace NINA.Polaris.Endpoints;
 
@@ -98,5 +99,12 @@ public static class PlanEndpoints {
                 estimateSeconds = compiler.EstimateSeconds(plan)
             });
         });
+
+        // The posted plan as one ADV document (end-of-session block included),
+        // for "Open in ADV". Serialized through SequenceJson: Root is an
+        // interface, and the default serializer drops every concrete subtype
+        // property along with the $type the editor needs.
+        g.MapPost("/advanced-document", (ImagingPlan plan, PlanCompilerService compiler) =>
+            Results.Text(SequenceJson.Serialize(compiler.CompileForEditing(plan)), "application/json"));
     }
 }

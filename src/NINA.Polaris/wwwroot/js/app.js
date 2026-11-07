@@ -2478,6 +2478,9 @@ function ninaApp() {
             doc: { name: 'Untitled', root: null },
             state: 'Idle', lastError: null, abortReason: null,
             errors: [],
+            // Things people forget (SequenceAdvisor): shown with the errors,
+            // asked about once before Start, never blocking.
+            warnings: [],
             types: [],              // [{type, category, kind}]
             selectedId: null,
             // Server retains partial progress after a stopped run; drives
@@ -2486,6 +2489,11 @@ function ninaApp() {
         },
         advSeqDirty: false,
         advSeqResumePrompt: false,
+        // Toolbar menus: "New" (blank + built-in examples) and "Templates"
+        // (save the selected block, insert a saved one).
+        advSeqMenu: null,           // null | 'new' | 'templates'
+        advSeqExamples: [],         // [{id, title, summary}] from /api/sequencer/examples
+        advSeqTemplates: [],        // saved template names
 
         // Equipment source picker (INDI vs Alpaca/ASCOM)
         equipSource: 'indi',
@@ -51824,14 +51832,6 @@ function ninaApp() {
             }
             return { label: '', hint: '', warn: '' };
         },
-        // Blocks that repeat with nothing to end them.
-        _advSeqEndlessLoops(node, out = []) {
-            if (!node) return out;
-            if (node.isLoop && !(node.conditions && node.conditions.length))
-                out.push(node.name || node.type || 'block');
-            (node.items || []).forEach(c => this._advSeqEndlessLoops(c, out));
-            return out;
-        },
 
         advSeqEditableFields() {
             const n = this.advSeqSelectedNode();
@@ -51913,12 +51913,18 @@ function ninaApp() {
         // blocks skip, interrupted exposure sets pick up at the next frame.
         async _advSeqDoStart(resume) {
             this.advSeqResumePrompt = false;
-            const endless = this._advSeqEndlessLoops(this.advSeq.doc && this.advSeq.doc.root);
-            if (endless.length && !await this._confirmAsync(
-                'These blocks repeat until you stop the run, because "Repeat this block" is on '
-                + 'with no loop condition: ' + endless.join(', ') + '. Start anyway?',
-                { title: 'Sequence without an end', okLabel: 'Start anyway', cancelLabel: 'Cancel' })) return;
-            if (!resume) await this.advSeqSaveDoc();
+            if (!resume) {
+                await this.advSeqSaveDoc();
+                // The review covers what the old endless-loop prompt did
+                // (a repeating block with no condition) and the rest of
+                // what tends to be forgotten. Errors still stop the run
+                // server-side; warnings only ask.
+                const v = await this.apiPostJson('/api/sequencer/validate').catch(() => null);
+                this.advSeq.warnings = (v && v.warnings) || [];
+                if (this.advSeq.warnings.length && !await this._confirmAsync(
+                    this._t('Before you start, check these:') + '\n\n• ' + this.advSeq.warnings.join('\n• '),
+                    { title: this._t('Things to check'), okLabel: this._t('Start anyway'), cancelLabel: this._t('Cancel') })) return;
+            }
             const r = await this.apiPostJson('/api/sequencer/start' + (resume ? '?resume=1' : ''));
             this.advSeq.state = r.state;
             this.advSeq.lastError = r.error;
@@ -51929,15 +51935,21 @@ function ninaApp() {
             await this.apiPost('/api/sequencer/stop');
         },
         async advSeqValidate() {
+            // Validate checks the tree the engine holds, so push local
+            // edits first or the review would describe the previous tree.
+            if (this.advSeqDirty) await this.advSeqSaveDoc();
             const r = await this.apiPostJson('/api/sequencer/validate');
             this.advSeq.errors = r.errors || [];
-            this.toast(this.advSeq.errors.length === 0 ? 'No issues' : (this.advSeq.errors.length + ' issue(s)'),
-                this.advSeq.errors.length === 0 ? 'ok' : 'warn');
+            this.advSeq.warnings = r.warnings || [];
+            const ne = this.advSeq.errors.length, nw = this.advSeq.warnings.length;
+            if (ne === 0 && nw === 0) this.toast(this._t('No issues found'), 'ok');
+            else this.toast(this._t('{e} error(s), {w} thing(s) to check', { e: ne, w: nw }), ne ? 'error' : 'warn');
         },
         async advSeqSaveDoc() {
             const payload = this._advSeqPrepareForServer(this.advSeq.doc);
             const r = await this.apiPostJson('/api/sequencer/document', payload);
             this.advSeq.errors = r.validation || [];
+            this.advSeq.warnings = [];
             this.advSeqDirty = false;
         },
         _advSeqPrepareForServer(doc) {
@@ -51982,6 +51994,159 @@ function ninaApp() {
                 await this.loadAdvSeq();
             } catch (e) { this.toast(e.message, 'error'); }
             ev.target.value = '';
+        },
+
+        // ---- New / examples / templates ----
+        // A first sequence used to start from an empty root, and the order the
+        // pieces go in (where guiding starts, where the flip trigger sits, what
+        // ends a target) was left for the operator to work out. These menus
+        // start from a working tree instead.
+
+        async advSeqToggleMenu(which) {
+            this.advSeqMenu = this.advSeqMenu === which ? null : which;
+            try {
+                if (this.advSeqMenu === 'new' && !this.advSeqExamples.length)
+                    this.advSeqExamples = await this.apiGet('/api/sequencer/examples');
+                if (this.advSeqMenu === 'templates')
+                    this.advSeqTemplates = (await this.apiGet('/api/sequencer/templates')).templates || [];
+            } catch (e) { this.toastFail('Could not load the list', e); }
+        },
+
+        // Replacing the tree drops unsaved edits and cannot happen mid-run.
+        async _advSeqCanReplace() {
+            if (this.advSeq.state === 'Running') {
+                this.toast('Stop the running sequence first', 'warn');
+                return false;
+            }
+            if (this.advSeqDirty && !await this._confirmAsync(
+                'The current tree has edits that were not saved. Replace it anyway?',
+                { title: 'Replace sequence', okLabel: 'Replace', cancelLabel: 'Cancel' })) return false;
+            return true;
+        },
+
+        // Load a whole document (as JSON text) into the engine and the editor.
+        async _advSeqLoadText(text, okMessage) {
+            const r = await this.apiFetch('/api/sequencer/document/json', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: text
+            });
+            if (!r.ok) {
+                const j = await r.json().catch(() => ({}));
+                throw new Error(j.error || ('HTTP ' + r.status));
+            }
+            await this.loadAdvSeq();
+            this.advSeqDirty = false;
+            this.advSeq.selectedId = this.advSeq.doc.root?.id || null;
+            this.advSeq.errors = [];
+            this.advSeq.warnings = [];
+            this.toast(okMessage, 'ok');
+        },
+
+        async advSeqNewBlank() {
+            this.advSeqMenu = null;
+            if (!await this._advSeqCanReplace()) return;
+            const doc = { name: 'Untitled Sequence', root: { $type: 'Sequential', name: 'Sequence', items: [] } };
+            try { await this._advSeqLoadText(JSON.stringify(doc), 'New empty sequence'); }
+            catch (e) { this.toastFail('Could not create the sequence', e); }
+        },
+
+        async advSeqNewFromExample(ex) {
+            this.advSeqMenu = null;
+            if (!await this._advSeqCanReplace()) return;
+            try {
+                const r = await this.apiFetch('/api/sequencer/examples/' + encodeURIComponent(ex.id));
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                await this._advSeqLoadText(await r.text(),
+                    this._t('Loaded "{name}". Click a block to read what it does.', { name: this._t(ex.title) }));
+            } catch (e) { this.toastFail('Could not load the example', e); }
+        },
+
+        // Save the selected block as a template. An instruction on its own is
+        // wrapped in a Sequential block so the template always has a container
+        // root and inserts the same way as any other.
+        async advSeqSaveTemplate() {
+            this.advSeqMenu = null;
+            const node = this.advSeqSelectedNode() || this.advSeq.doc.root;
+            if (!node) return;
+            const name = ((await this._promptTextAsync({
+                title: 'Save as template',
+                message: this._t('Template name for "{name}":', { name: node.name || node.type }),
+                placeholder: node.name || 'my-template', okLabel: 'Save'
+            })) || '').trim();
+            if (!name) return;
+            const isContainer = ['Sequential', 'Parallel', 'Conditional', 'DeepSkyObject', 'Templated'].includes(node.type);
+            const root = isContainer ? node
+                : { $type: 'Sequential', type: 'Sequential', name: node.name || node.type, items: [node] };
+            const doc = this._advSeqPrepareForServer({ name, root });
+            try {
+                const r = await this.apiFetch('/api/sequencer/templates/' + encodeURIComponent(name), {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(doc)
+                });
+                if (!r.ok) {
+                    const j = await r.json().catch(() => ({}));
+                    throw new Error(j.error || ('HTTP ' + r.status));
+                }
+                this.toast(this._t('Template "{name}" saved', { name }), 'ok');
+            } catch (e) { this.toastFail('Could not save the template', e); }
+        },
+
+        // Insert a saved template into the selected container (the root when
+        // nothing, or a non-container, is selected). Copied in with fresh ids,
+        // so the same template can go in twice and each copy edits on its own.
+        async advSeqInsertTemplate(name) {
+            this.advSeqMenu = null;
+            try {
+                const tpl = await this.apiGet('/api/sequencer/templates/' + encodeURIComponent(name));
+                if (!tpl?.root) throw new Error('empty template');
+                const strip = (e) => {
+                    if (!e) return;
+                    delete e.id;
+                    (e.items || []).forEach(strip);
+                    (e.triggers || []).forEach(strip);
+                    (e.conditions || []).forEach(strip);
+                };
+                strip(tpl.root);
+                const holder = { root: tpl.root };
+                this._advSeqRehydrateInto(holder);
+                const target = this.advSeqSelectedIsContainer() ? this.advSeqSelectedNode() : this.advSeq.doc.root;
+                (target.items = target.items || []).push(holder.root);
+                this.advSeq.selectedId = holder.root.id;
+                this.advSeqDirty = true;
+                setTimeout(() => this._advSeqInitSortable(), 50);
+                this.toast(this._t('Inserted "{name}" into {block}', { name, block: target.name || target.type }), 'ok');
+            } catch (e) { this.toastFail('Could not insert the template', e); }
+        },
+
+        // Same $type -> type copy and id assignment as _advSeqRehydrate, on a
+        // detached subtree instead of the editor's document.
+        _advSeqRehydrateInto(holder) {
+            const fix = (e) => {
+                if (!e) return;
+                if (e['$type'] && !e.type) e.type = e['$type'];
+                if (!e.id) e.id = 'ent-' + Math.random().toString(36).slice(2);
+                (e.items || []).forEach(fix);
+                (e.triggers || []).forEach(fix);
+                (e.conditions || []).forEach(fix);
+            };
+            fix(holder.root);
+        },
+
+        // PLAN -> ADV: the plan compiled to one tree (end-of-session block
+        // included) and opened in the editor, so a night built in PLAN can be
+        // extended with what PLAN does not offer.
+        async planOpenInAdv() {
+            if (!this.plan) return;
+            if (!await this._advSeqCanReplace()) return;
+            try {
+                const r = await this.apiFetch('/api/plan/advanced-document', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.plan)
+                });
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                const text = await r.text();
+                this.tab = 'seqadv';
+                await this._advSeqLoadText(text,
+                    this._t('Plan "{name}" opened in ADV. Edits here do not change the plan.', { name: this.plan.name || 'Plan' }));
+            } catch (e) { this.toastFail('Could not open the plan in ADV', e); }
         },
 
         // ============================================================
