@@ -700,7 +700,11 @@ public class SequenceEngine {
                                     imageData = await CameraCaptureGate.RunAsync(
                                 () => retryCam.CaptureAsync(item.Exposure, capOpts, ct), ct);
 
-                                // Retries use the same metadata, save and relay path.
+                                // Same metadata, save and relay as the first attempt.
+                                // This used to relay only, so a frame that succeeded on
+                                // the retry was counted as done but never written to disk.
+                                // Preview routing as above: AUTORUN never feeds the
+                                // LIVE-tab stacking accumulator (FrameKind.Autorun).
                                 await ProcessCapturedFrameAsync(imageData, item, imageType,
                                     isCalibration, effectiveTargetName, ct);
 
@@ -775,25 +779,35 @@ public class SequenceEngine {
     internal async Task ProcessCapturedFrameAsync(
         NINA.Image.Interfaces.IImageData imageData, SequenceItem item, string imageType,
         bool isCalibration, string? effectiveTargetName, CancellationToken ct) {
-        // Populate exposure-level metadata before saving / relaying.
+        // Populate exposure-level metadata before saving / relaying
         imageData.MetaData.Exposure.ExposureTime = item.Exposure;
         imageData.MetaData.Exposure.ImageType = imageType;
-        // Only stamp a requested filter if its wheel is still connected; otherwise
-        // stale item settings could label a DSLR calibration frame incorrectly.
+        // The item's filter names the slot it asked for; it is
+        // only in the light path when a wheel is connected. An
+        // item saved with a wheel kept its filter after the wheel
+        // went, and stamped it on a DSLR dark (FILTER='G').
         if (!string.IsNullOrEmpty(item.Filter) && _equip.FilterWheel is { IsConnected: true })
             imageData.MetaData.Exposure.Filter = item.Filter;
-        // Leave LIGHT target names unset so SaveImage can resolve the object
-        // in the field of view; calibration sets retain their label.
+        // Leave a LIGHT frame's target name UNSET so SaveImage's
+        // FOV resolver fills it; a per-item name here would win over
+        // the resolver and re-introduce the per-item naming.
         if (effectiveTargetName != null)
             imageData.MetaData.Target.Name = effectiveTargetName;
         if (item.Ra.HasValue) imageData.MetaData.Target.RightAscension = item.Ra.Value;
         if (item.Dec.HasValue) imageData.MetaData.Target.Declination = item.Dec.Value;
 
-        // Save with the extended FITS headers and calibration/light folder layout.
+        // Persist to disk with extended FITS headers (no-op if no output dir).
+        // imageType controls the calibration/light subfolder split in BuildSubDir.
         var savedPath = _imageWriter.SaveImage(imageData, targetName: effectiveTargetName,
             imageType: imageType, gain: item.Gain);
 
-        // Auto-GraXpert runs asynchronously, and only for opted-in light frames.
+        // Auto-GraXpert BGE hook. Fire-and-forget so the
+        // next exposure doesn't wait on the ~10s BGE pass.
+        // Only LIGHT frames + only when the user opted in
+        // + only when GraXpert is actually installed. Decon
+        // and Denoise never auto-run, they hurt SNR on
+        // individual lights and are best on integrated
+        // masters; offered manually in STUDIO instead.
         if (EndActions.AutoGraXpert
             && !string.IsNullOrEmpty(savedPath)
             && !isCalibration
@@ -815,8 +829,25 @@ public class SequenceEngine {
             });
         }
 
-        // AUTORUN frames never feed the LIVE-tab stacking accumulator.
-        await _relay.RelayImageAsync(imageData, FrameKind.Autorun, ct);
+        // AUTORUN frames are saved to disk and shown in the
+        // preview, but are NOT fed into the LIVE-tab stacking
+        // accumulator. Live stacking is its own EAA loop driven
+        // by the LIVE tab; routing scheduled-capture frames into
+        // it would corrupt the stack and fire the live-stack
+        // triggers, and calibration frames (BIAS/DARK/FLAT) must
+        // never be stacked at all. Relay as Autorun so the frame
+        // lands on the AUTORUN preview only, never the LIVE canvas.
+        //
+        // A relay failure does not fail the frame: it is already on disk,
+        // and throwing here would send the caller into its retry, which
+        // captures and saves the same frame a second time.
+        try {
+            await _relay.RelayImageAsync(imageData, FrameKind.Autorun, ct);
+        } catch (OperationCanceledException) { throw; }
+        catch (Exception ex) {
+            _logger.LogWarning(ex, "AUTORUN preview relay failed for {Path}; the frame is saved",
+                savedPath ?? "(not saved)");
+        }
     }
 
     /// <summary>
