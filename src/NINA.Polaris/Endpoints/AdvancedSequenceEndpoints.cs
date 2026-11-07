@@ -91,8 +91,13 @@ public static class AdvancedSequenceEndpoints {
             return Results.Ok(new { state = engine.State.ToString() });
         });
 
+        // errors block Start; warnings are the things people forget (see
+        // SequenceAdvisor) and only ever ask before a run.
         g.MapPost("/validate", (AdvancedSequenceEngine engine) =>
-            Results.Ok(new { errors = engine.Validate() }));
+            Results.Ok(new {
+                errors = engine.Validate(),
+                warnings = SequenceAdvisor.Review(engine.Document.Root)
+            }));
 
         // ---- Palette ----
         // `defaults` carries the default scalar params of each entity so the
@@ -103,8 +108,18 @@ public static class AdvancedSequenceEndpoints {
             defaults = SequenceEntityJsonConverter.DefaultParams(t.Type)
         })));
 
+        // ---- Built-in examples ("New from example") ----
+        g.MapGet("/examples", () => Results.Ok(SequenceExamples.All));
+
+        g.MapGet("/examples/{id}", (string id) => {
+            var doc = SequenceExamples.Build(id);
+            return doc == null
+                ? Results.NotFound()
+                : Results.Text(SequenceJson.Serialize(doc), "application/json");
+        });
+
         // ---- Templates ----
-        g.MapGet("/templates", (SequenceTemplateStore store) => Results.Ok(new {
+        g.MapGet("/templates",(SequenceTemplateStore store) => Results.Ok(new {
             dir = store.Dir,
             templates = store.List().ToArray()
         }));

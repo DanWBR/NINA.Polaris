@@ -49,21 +49,79 @@ blue for running, red for errored. On the right, the **Properties
 panel** shows the selected item's numeric, text, and dropdown fields,
 driven by that item type's metadata.
 
-The toolbar offers **Start**, **Pause**, **Resume**, **Stop**,
-**Save JSON**, **Load JSON**, **Import Template**, **Export Template**,
-and **New Sequence**. JSON is a plain-text data format: **Save JSON**
-writes the whole tree to a single file you can back up, share, or edit
-by hand, and **Load JSON** reads one back in.
+The toolbar offers **New**, **Templates**, **Start**, **Stop**,
+**Validate**, **Save tree**, **Download JSON**, and **Upload JSON**.
+JSON is a plain-text data format: **Download JSON** writes the whole
+tree to a single file you can back up, share, or edit by hand, and
+**Upload JSON** reads one back in. **Save tree** sends your edits to
+the engine without starting a run; **Start** does that for you too.
 
 <!-- screenshot: ADV tri-pane editor with a running LRGB sequence tree -->
 
+## Starting from an example
+
+You rarely need to build a tree from an empty root. **New** offers an
+empty sequence and four ready-made examples:
+
+- **One target all night**: cool the camera, wait for dark, start
+  guiding, focus, then image one target until it sinks below 30°, and
+  park at the end.
+- **Two targets in one night**: the first target until it gets low,
+  then a wait for the second one to rise, then the second target.
+- **LRGB with refocus on filter change**: cycles the L, R, G, and B
+  filters on one target and refocuses after every filter swap.
+- **Darks and biases**: cools to the imaging temperature and takes a
+  library of darks and biases (dark frames record the sensor's own
+  signal with the shutter closed; biases are the shortest exposures it
+  can take). Cover the telescope first.
+
+The examples answer the question new users ask most: in what order do
+the pieces go? Click any block and its description, in the Properties
+panel, says why it sits where it does. The order they share is the one
+the engine was built around:
+
+1. **At the root, before any target:** unpark, cool, wait for dark,
+   start guiding, and focus once.
+2. **One DeepSkyObject block per target:** it slews and centres on its
+   own at the start (pausing guiding for the slew and restarting it
+   afterwards), so there is no separate Slew, Center, or Start Guiding
+   inside it.
+3. **Triggers on the target block:** the meridian flip, the dither
+   cadence, refocus, and restore guiding. A trigger attached there
+   watches every exposure inside that target.
+4. **A loop condition on the target block:** "Repeat this block" plus a
+   condition such as Loop Until Altitude is what ends a target. Without
+   the condition, the block repeats until you stop the run.
+5. **At the root, after the last target:** stop guiding, warm the
+   camera, and park. Stopping the run by hand skips these, so park
+   yourself if you stop early.
+
+Replace the example targets (M42 and M104, chosen because both
+hemispheres can reach them) with your own: change the name and
+coordinates on the target block, and the same coordinates on its
+Meridian Flip trigger and its Loop Until Altitude condition, which time
+themselves from them.
+
+## From a PLAN night
+
+A night built in the PLAN tab (@sec-night-planner) already compiles to
+this same kind of tree. **Open in ADV**, in the PLAN tab's bottom bar,
+opens that tree in the editor, so you can start from your PLAN night
+and add what PLAN does not offer, such as a dome, a flat panel, or a
+power-box step. The plan itself does not change. One difference: PLAN
+runs its end-of-session actions even after a stop at dawn, while in ADV
+they become an **End of session** block at the end of the tree, which
+a manual stop skips.
+
 ## Templates
 
-Any subtree can be saved as a template, for example an "M81 LRGB
-nightly" subtree carrying a specific filter plan, dither cadence, and
-AF triggers. Templates load into the palette and drag-drop into any new
-sequence. They are stored as
-`{AppData}/Polaris/sequencer/templates/*.json`.
+Any block can be saved as a template, for example an "M81 LRGB
+nightly" target block carrying a specific filter plan, dither cadence,
+and refocus triggers. Select the block and choose **Templates → Save
+selected block as template**. **Templates → Insert** copies a saved
+template into the selected block (or into the root when nothing, or an
+instruction, is selected); each copy edits independently. Templates are
+stored as `{AppData}/Polaris/sequencer/templates/*.json`.
 
 ## Available instructions
 
@@ -130,12 +188,32 @@ exhaustive.
 The auto-focus machinery these triggers invoke is described in
 @sec-focusing, and guiding in @sec-guiding.
 
-## Migrating from AUTORUN
+## Things to check
 
-Open an AUTORUN sequence and click **Convert to Advanced**. Polaris
-generates an equivalent tree with each AUTORUN row mapped to a
-DeepSkyObject container, which you can then extend with conditions and
-triggers.
+**Validate** reports two kinds of finding. **Errors** are values the
+engine cannot run, such as a negative exposure; a sequence with errors
+does not start. **Things to check** are trees that run but probably not
+the way you meant, the pieces people forget on a multi-target night:
+
+- a Meridian Flip trigger, Center After Drift trigger, or Loop Until
+  Altitude condition whose coordinates differ from its target's (the
+  usual result of changing a target in one place only);
+- one Meridian Flip trigger at the root shared by several targets,
+  timed off only one of them;
+- a target block with light frames and no Meridian Flip trigger
+  covering it;
+- a target block whose coordinates were never filled in;
+- "Repeat this block" with no loop condition (it never ends), or a
+  loop condition with "Repeat this block" off (the condition is
+  ignored);
+- dithering or Restore Guiding with no Start Guiding before the
+  exposures;
+- light frames before anything points the telescope;
+- a cooled camera never warmed, or a run that ends without parking.
+
+**Start** runs the same review and, when it finds something, lists it
+and asks once before starting. You can start anyway; nothing here
+blocks a run.
 
 ## Common pitfalls
 

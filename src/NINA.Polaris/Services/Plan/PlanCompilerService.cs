@@ -232,6 +232,28 @@ public class PlanCompilerService {
     }
 
     /// <summary>
+    /// The plan as ONE document for the ADV editor: <see cref="Compile"/> with
+    /// the end-of-session actions appended as a last "End of session" block.
+    ///
+    /// The runner keeps those actions in a separate document so they still run
+    /// after a stop at dawn. ADV runs one tree and nothing after it, so here
+    /// they become part of the tree: they run when the targets finish, not
+    /// when the operator stops the run. The block's description says so, since
+    /// that is the one way the copy behaves differently from the plan.
+    /// </summary>
+    public SequenceDocument CompileForEditing(ImagingPlan plan) {
+        var doc = Compile(plan);
+        var end = CompileEndActions(plan);
+        if (end?.Root is SequentialContainer endRoot && doc.Root is SequentialContainer root) {
+            endRoot.Description = "Runs after the last target finishes. Stopping the run skips it.";
+            root.Items.Add(endRoot);
+        }
+        doc.Description = $"Opened from the plan '{doc.Name}' in PLAN. "
+                        + "Edits here do not change the plan.";
+        return doc;
+    }
+
+    /// <summary>
     /// Rough session-time estimate in seconds (sum of per-target slew + solve +
     /// first-delay + exposures × (exposure + readout overhead)). Optimistic; it
     /// ignores meridian-flip / auto-focus interruptions.

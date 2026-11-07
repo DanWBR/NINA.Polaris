@@ -19,7 +19,9 @@ Under the hood a plan "compiles" to an Advanced Sequencer document and
 runs on the same engine as the ADV tab (@sec-adv-sequencer), so only
 one of the two can run at a time. PLAN refuses to start while a
 sequence is already running, and vice versa, with a clear message in
-both directions.
+both directions. **Open in ADV**, in the run bar, opens the compiled
+tree in the ADV editor when you want a step PLAN does not offer; the
+plan itself stays as it is.
 
 ![A target open in the PLAN editor: name and coordinates at the top,
 the elevation-tonight chart with draggable green handles setting the
