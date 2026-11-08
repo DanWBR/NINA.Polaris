@@ -44,10 +44,44 @@ target.
 The editor splits into three panes. On the left sits the **Palette** of
 available items, filterable by name; you drag items from it onto the
 tree. The center holds the **Tree view**, with drag-to-reorder,
-expand and collapse, and status colouring during runs: green for done,
-blue for running, red for errored. On the right, the **Properties
+expand and collapse, and status colouring during runs: a highlighted
+green row for the step running now, dimmed for done, red for errored.
+On the right, the **Properties
 panel** shows the selected item's numeric, text, and dropdown fields,
 driven by that item type's metadata.
+
+Every parameter of the item is listed, including optional ones left
+empty, and an empty optional field says what happens instead. On Take
+Exposure, an empty **Gain** keeps whatever gain the camera already
+has, which after a plate solve is usually the solve's gain, so set it
+on each exposure set whose gain matters; an empty **Offset** uses the
+rig's offset from RIGS.
+
+Coordinates (the RA and Dec of a target block, a Meridian Flip, Center
+After Drift or Loop Until Altitude) take either form: RA as
+`20:45:43.8`, `20h45m43.8s` or decimal hours (`20.7622`), Dec as
+`-05:23:28`, `-5°23'28"` or decimal degrees, all J2000 (the standard
+catalogue epoch). They are shown as HH:MM:SS and ±DD:MM:SS. When you
+change a target block's RA or Dec, its triggers and conditions that
+still held the old value follow it; **Copy coordinates to triggers**
+copies them into all of that target's triggers and conditions at once.
+
+### Following a run
+
+While a sequence runs, the **Now** bar above the tree shows the path
+of the running step (for example *Two targets › M42 › 120 s light*),
+the frame number within the current exposure set, the exposure's own
+progress as a thin bar along the bottom, and the time since the run
+started. A trigger that is firing, such as a meridian flip or an
+autofocus run, appears beside the path. The running step is
+highlighted in the tree, which scrolls to it as the run moves on, and
+each exposure set shows how many of its frames are done (*3/10*).
+After the run, the bar stays with how it ended.
+
+The **Last frame** panel, above the Properties panel, shows each frame
+the run captures, with the same zoom and stretch controls as the other
+image views. Hide it with ✕ when you need the room for editing, and
+bring it back with **Show last frame**.
 
 The toolbar offers **New**, **Templates**, **Start**, **Stop**,
 **Validate**, **Save tree**, **Download JSON**, and **Upload JSON**.

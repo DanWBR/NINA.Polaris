@@ -45,7 +45,7 @@
     <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20261017-updatewhite">
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20261107-advexamples">
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20261009-floatbtn">
-    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20261107-advexamples">
+    <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20261108-advprogress">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20261024-cloudhourly">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20261011-kblift">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20261016-bincap">
@@ -13479,6 +13479,28 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </ul>
                 </div>
 
+                <!-- Now: what the run is doing, from /progress + the server's
+                     exposure clock. Stays after the run with how it ended. -->
+                <div class="advseq-now" x-show="advSeq.startedAt" x-cloak
+                     :class="{ running: advSeq.state === 'Running' }">
+                    <span class="advseq-now-tag" x-text="advSeq.state === 'Running' ? $t('Now') : $t('Last run')"></span>
+                    <span class="advseq-now-path">
+                        <template x-for="(n, i) in advSeqRunningPath()" :key="n.id">
+                            <span><span x-show="i > 0" class="advseq-now-sep">›</span><span x-text="n.name || n.type"></span></span>
+                        </template>
+                        <template x-if="advSeqRunningTrigger()">
+                            <span class="advseq-now-trigger" x-text="'⚡ ' + (advSeqRunningTrigger().name || advSeqRunningTrigger().type)"></span>
+                        </template>
+                        <span x-show="advSeq.state !== 'Running'" class="muted"
+                              x-text="advSeq.lastError || advSeq.abortReason || $t('finished')"></span>
+                    </span>
+                    <span class="advseq-now-detail" x-text="advSeqNowDetail()"></span>
+                    <span class="advseq-now-elapsed" x-text="advSeqElapsed()" title="Time since the run started"></span>
+                    <div class="advseq-now-bar" x-show="advSeqNowFraction() > 0">
+                        <div :style="'width:' + Math.round(advSeqNowFraction() * 100) + '%'"></div>
+                    </div>
+                </div>
+
                 <!-- Main tri-pane -->
                 <div class="advseq-layout">
                     <!-- Palette -->
@@ -13509,9 +13531,35 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         </div>
                     </div>
 
+                    <!-- Right column: the last frame the run captured, over the
+                         properties of the selected block. -->
+                    <div class="advseq-side">
+                    <div class="advseq-frame" x-show="advSeqShowFrame">
+                        <div class="advseq-panel-title advseq-frame-title">
+                            <span>Last frame</span>
+                            <button class="advseq-link" @click="advSeqShowFrame = false" title="Hide the last frame">✕</button>
+                        </div>
+                        <div class="preview-area advseq-preview">
+                            <canvas id="advCanvas" class="preview-canvas"></canvas>
+                            <div class="pz-toolbar" @pointerdown.stop @dblclick.stop @wheel.stop>
+                                <button @click="_pzFit('advCanvas')" title="Zoom to fit (whole frame)">⊡</button>
+                                <button @click="_pzZoomButton('advCanvas', 1.3)" title="Zoom in">＋</button>
+                                <button @click="_pzZoomButton('advCanvas', 1/1.3)" title="Zoom out">－</button>
+                                <button @click="toggleAutoStretch()" :class="stretchAuto ? 'pz-active' : ''" title="Auto-stretch brightness">◐</button>
+                            </div>
+                            <div class="preview-overlay" x-show="!_lastRawFrame">
+                                <p>The last frame the sequence captures appears here.</p>
+                            </div>
+                        </div>
+                    </div>
                     <!-- Properties -->
                     <div class="advseq-props">
-                        <div class="advseq-panel-title">Properties</div>
+                        <div class="advseq-panel-title">
+                            Properties
+                            <button class="advseq-link advseq-frame-show" x-show="!advSeqShowFrame"
+                                    @click="advSeqShowFrame = true; $nextTick(() => _replayCachedFrame('advCanvas'))"
+                                    title="Show the last frame the run captured">Show last frame</button>
+                        </div>
                         <template x-if="advSeqSelectedNode()">
                             <div>
                                 <div class="prop-row">
@@ -13533,17 +13581,24 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                             <input type="checkbox" :checked="advSeqSelectedNode()[field.key]"
                                                    @change="advSeqSelectedNode()[field.key] = $event.target.checked; advSeqDirty = true">
                                         </template>
-                                        <template x-if="field.kind === 'number'">
-                                            <input type="number" step="any" :value="advSeqSelectedNode()[field.key]"
-                                                   @input="advSeqSelectedNode()[field.key] = Number($event.target.value); advSeqDirty = true">
+                                        <template x-if="field.kind === 'number' || field.kind === 'int'">
+                                            <input type="number" :step="field.kind === 'int' ? 1 : 'any'"
+                                                   :value="advSeqFieldValue(field)" :placeholder="field.placeholder"
+                                                   @change="advSeqSetField(field, $event.target.value)">
+                                        </template>
+                                        <!-- RA / Dec: sexagesimal or decimal, shown as HH:MM:SS / ±DD:MM:SS. -->
+                                        <template x-if="field.kind === 'ra' || field.kind === 'dec'">
+                                            <input type="text" class="advseq-coord" inputmode="decimal"
+                                                   :value="advSeqFieldValue(field)" :placeholder="field.placeholder"
+                                                   @change="advSeqSetField(field, $event.target.value); $event.target.value = advSeqFieldValue(field)">
                                         </template>
                                         <template x-if="field.kind === 'string'">
-                                            <input type="text" :value="advSeqSelectedNode()[field.key] || ''"
-                                                   @input="advSeqSelectedNode()[field.key] = $event.target.value; advSeqDirty = true">
+                                            <input type="text" :value="advSeqFieldValue(field)" :placeholder="field.placeholder"
+                                                   @input="advSeqSetField(field, $event.target.value)">
                                         </template>
                                         <template x-if="field.kind === 'enum'">
                                             <select class="input-sm"
-                                                    @change="advSeqSelectedNode()[field.key] = $event.target.value; advSeqDirty = true">
+                                                    @change="advSeqSetField(field, $event.target.value)">
                                                 <template x-for="opt in field.options" :key="opt">
                                                     <option :value="opt" :selected="(advSeqSelectedNode()[field.key] || '') === opt"
                                                             x-text="opt === '' ? '(current)' : opt"></option>
@@ -13556,6 +13611,12 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                              style="flex-basis:100%;font-size:11px;color:var(--warning, #f0b429);margin-top:2px"></div>
                                     </div>
                                 </template>
+                                <!-- The flip, re-centre and altitude limit keep their own
+                                     copy of the target's coordinates. -->
+                                <button class="btn btn-sm" x-show="advSeqSelectedNode().type === 'DeepSkyObject'"
+                                        @click="advSeqCopyTargetCoords()"
+                                        title="Copy this target's RA and Dec into its Meridian Flip, Center After Drift and Loop Until Altitude"
+                                        style="margin-top:8px">⇣ Copy coordinates to triggers</button>
                                 <hr style="margin:12px 0;border-color:var(--border)">
                                 <button class="btn btn-danger btn-sm" @click="advSeqDeleteSelected()"
                                         x-show="advSeq.selectedId !== advSeq.doc.root.id">🗑 Delete</button>
@@ -13565,6 +13626,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             Click a tree node to edit its properties.
                         </div>
                     </div>
+                    </div><!-- /.advseq-side -->
                 </div>
             </div>
 
@@ -26079,7 +26141,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261107-advexamples"></script>
+    <script src="/js/app.js?v=20261108-advprogress"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

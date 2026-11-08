@@ -2485,13 +2485,16 @@ function ninaApp() {
             selectedId: null,
             // Server retains partial progress after a stopped run; drives
             // the continue-vs-restart prompt on the next Start.
-            hasResumableProgress: false
+            hasResumableProgress: false,
+            // Run clock from /progress, for the "Now" bar.
+            startedAt: null, finishedAt: null
         },
         advSeqDirty: false,
         advSeqResumePrompt: false,
         // Toolbar menus: "New" (blank + built-in examples) and "Templates"
         // (save the selected block, insert a saved one).
         advSeqMenu: null,           // null | 'new' | 'templates'
+        advSeqShowFrame: true,      // "Last frame" panel over the properties
         advSeqExamples: [],         // [{id, title, summary}] from /api/sequencer/examples
         advSeqTemplates: [],        // saved template names
 
@@ -12533,7 +12536,9 @@ function ninaApp() {
                 // PLAN runs through the same engine and relays the same kind,
                 // so both canvases get the frame and whichever tab is open
                 // shows it.
-                case 5:  return ['autorunCanvas', 'planCanvas'];            // Autorun / Plan
+                // ADV has its own "Last frame" panel since the ADV tab had
+                // no canvas and its frames were only visible in AUTORUN.
+                case 5:  return ['autorunCanvas', 'planCanvas', 'advCanvas']; // Autorun / Plan / ADV
                 // Server live-stack OUTPUT (dedicated kind). Same canvas as
                 // Live, but while a server stack runs the client drops kind-0
                 // frames so ONLY the stack can paint the LIVE view.
@@ -13094,6 +13099,7 @@ function ninaApp() {
                 ['videoCaptureCanvas'],
                 ['autorunCanvas'],
                 ['planCanvas'],
+                ['advCanvas'],
                 ['focusCanvas'],          // FOCUS > Auto V-curve
                 ['manualFocusCanvas']     // FOCUS > Manual Assist
             ];
@@ -15033,7 +15039,7 @@ function ninaApp() {
                 focus: ['manualFocusCanvas', 'focusCanvas'],
                 video: ['videoCaptureCanvas'],
                 sequence: ['autorunCanvas'],
-                seqadv: ['autorunCanvas'],
+                seqadv: ['advCanvas', 'autorunCanvas'],
                 plan: ['planCanvas'],
                 files: ['#osd-viewer canvas'],
             };
@@ -15046,7 +15052,7 @@ function ninaApp() {
             }
             // Fallback: any visible imaging canvas currently holding a frame.
             for (const id of ['liveCanvas', 'previewCanvas', 'manualFocusCanvas', 'focusCanvas',
-                              'videoCaptureCanvas', 'autorunCanvas', 'planCanvas',
+                              'videoCaptureCanvas', 'autorunCanvas', 'planCanvas', 'advCanvas',
                               'slewPreviewCanvas']) {
                 const c = document.getElementById(id);
                 if (drawn(c)) return c;
@@ -51616,7 +51622,9 @@ function ninaApp() {
         // Fields shadowed in the entity JSON we don't want to expose in the
         // generic property editor (they're handled elsewhere or read-only).
         _advSeqHiddenFields: new Set(['id', '$type', 'type', 'name', 'description', 'items',
-                                       'triggers', 'conditions', 'status', 'error', 'startedAt', 'finishedAt']),
+                                       'triggers', 'conditions', 'status', 'error', 'startedAt', 'finishedAt',
+                                       // run progress and PLAN window bookkeeping, not parameters
+                                       'completedCount', 'windowEndUtc', 'nextTargetStartUtc', 'hasNextTarget']),
 
         async loadAdvSeq() {
             try {
@@ -51633,8 +51641,13 @@ function ninaApp() {
                 // Poll while running so the UI shows live status
                 if (this._advSeqPoll) clearInterval(this._advSeqPoll);
                 this._advSeqPoll = setInterval(() => this._advSeqRefresh(), 2000);
+                // Statuses of a run that already finished (or is running)
+                // come from /progress, not from the document.
+                this._advSeqRefresh();
                 // Init Sortable.js after the tree DOM lands (next tick)
                 setTimeout(() => this._advSeqInitSortable(), 100);
+                // A frame that arrived while another tab was open.
+                this.$nextTick(() => this._replayCachedFrame && this._replayCachedFrame('advCanvas'));
             } catch (e) { this.toastFail('Adv seq load failed', e); }
         },
 
@@ -51665,26 +51678,120 @@ function ninaApp() {
         async _advSeqRefresh() {
             if (this.tab !== 'seqadv') return;
             try {
-                const doc = await this.apiGet('/api/sequencer/document');
+                // Runtime state comes from /progress. The document JSON never
+                // carried it (status is [JsonIgnore] server-side), so the old
+                // merge from /document painted nothing and a running tree
+                // looked idle.
+                const [doc, prog] = await Promise.all([
+                    this.apiGet('/api/sequencer/document'),
+                    this.apiGet('/api/sequencer/progress')
+                ]);
                 this.advSeq.state = doc.state;
                 this.advSeq.lastError = doc.lastError;
                 this.advSeq.abortReason = doc.abortReason;
                 this.advSeq.hasResumableProgress = !!doc.hasResumableProgress;
-                // If the server is running, mirror its live status into the local tree
-                if (doc.state === 'Running' && doc.document?.root) {
-                    this._advSeqMergeStatus(this.advSeq.doc.root, doc.document.root);
+                this.advSeq.startedAt = prog.startedAt || null;
+                this.advSeq.finishedAt = prog.finishedAt || null;
+                const matched = this._advSeqApplyProgress(prog.entities || {});
+                // The engine is running a tree the editor does not hold (a
+                // PLAN run, or one started from another browser): show that
+                // one, unless there are local edits to lose.
+                if (doc.state === 'Running' && matched === 0 && !this.advSeqDirty && doc.document?.root) {
+                    this._advSeqRehydrate(doc.document);
+                    this._advSeqApplyProgress(prog.entities || {});
                 }
+                this._advSeqFollowRunning();
             } catch (e) { /* keep last state on transient errors */ }
         },
 
-        _advSeqMergeStatus(local, remote) {
-            if (!local || !remote) return;
-            local.status = remote.status; local.error = remote.error;
-            local.startedAt = remote.startedAt; local.finishedAt = remote.finishedAt;
-            if (local.items && remote.items) {
-                for (let i = 0; i < local.items.length && i < remote.items.length; i++)
-                    this._advSeqMergeStatus(local.items[i], remote.items[i]);
+        // Lay the server's runtime state over the editor's tree, by id
+        // (triggers and conditions included). Returns how many nodes matched.
+        _advSeqApplyProgress(entities) {
+            let matched = 0;
+            this.advSeqWalk(this.advSeq.doc.root, n => {
+                const s = entities[n.id];
+                if (!s) return;
+                matched++;
+                if (n.status !== s.status) n.status = s.status;
+                if (n.error !== (s.error || null)) n.error = s.error || null;
+                n.startedAt = s.startedAt || null;
+                n.finishedAt = s.finishedAt || null;
+                if (s.completedCount != null && n.completedCount !== s.completedCount) n.completedCount = s.completedCount;
+            });
+            return matched;
+        },
+
+        // Running nodes from the root down (the path), plus any trigger
+        // running right now (a flip, an autofocus) which sits beside it.
+        advSeqRunningPath() {
+            const path = [];
+            let n = this.advSeq.doc && this.advSeq.doc.root;
+            while (n && n.status === 'Running') {
+                path.push(n);
+                n = (n.items || []).find(c => c.status === 'Running');
             }
+            return path;
+        },
+        advSeqRunningTrigger() {
+            let hit = null;
+            this.advSeqWalk(this.advSeq.doc && this.advSeq.doc.root, n => {
+                if (!hit && n.status === 'Running' && this._advSeqKindOf(n) === 'Trigger') hit = n;
+            });
+            return hit;
+        },
+        _advSeqKindOf(n) {
+            const t = (this.advSeq.types || []).find(x => x.type === n.type);
+            return t ? t.kind : '';
+        },
+
+        // One line for the "Now" bar: what the leaf is doing.
+        advSeqNowDetail() {
+            const path = this.advSeqRunningPath();
+            const leaf = path[path.length - 1];
+            if (!leaf) return '';
+            const parts = [];
+            if (leaf.type === 'TakeExposure' && leaf.count > 0) {
+                const frame = Math.min((leaf.completedCount || 0) + 1, leaf.count);
+                parts.push(this._t('frame {k} of {n}', { k: frame, n: leaf.count }));
+            }
+            const sc = this.serverCapture;
+            if (sc && sc.active && sc.source === 'sequencer') {
+                const lbl = this.captureProgressLabel();
+                if (lbl) parts.push(lbl);
+            }
+            return parts.join(' · ');
+        },
+        advSeqNowFraction() {
+            const sc = this.serverCapture;
+            return (sc && sc.active && sc.source === 'sequencer') ? this.captureProgressFraction() : 0;
+        },
+        advSeqElapsed() {
+            // currentTime ticks every second (the header clock), so the
+            // elapsed time moves between exposures too.
+            // eslint-disable-next-line no-unused-expressions
+            this.currentTime;
+            if (!this.advSeq.startedAt) return '';
+            const end = (this.advSeq.state === 'Running' || !this.advSeq.finishedAt)
+                ? Date.now() : Date.parse(this.advSeq.finishedAt);
+            const s = Math.max(0, Math.floor((end - Date.parse(this.advSeq.startedAt)) / 1000));
+            const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, ss = s % 60;
+            return (h ? h + 'h ' : '') + String(m).padStart(h ? 2 : 1, '0') + 'm ' + String(ss).padStart(2, '0') + 's';
+        },
+
+        // Keep the running step in view: scroll the tree when the running
+        // leaf changes, not on every poll, so reading elsewhere in the tree
+        // during a long exposure is not interrupted.
+        _advSeqFollowRunning() {
+            if (this.advSeq.state !== 'Running') { this._advSeqFollowId = null; return; }
+            const path = this.advSeqRunningPath();
+            const leaf = path[path.length - 1];
+            if (!leaf || leaf.id === this._advSeqFollowId) return;
+            this._advSeqFollowId = leaf.id;
+            this.$nextTick(() => {
+                const el = document.querySelector('.advseq-tree [data-id="' + leaf.id + '"]');
+                if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                this._advSeqInitSortable();
+            });
         },
 
         _advSeqRehydrate(doc) {
@@ -51830,41 +51937,217 @@ function ninaApp() {
                     warn: endless ? 'No loop condition: this block repeats until you stop the run.' : ''
                 };
             }
+            const isExposure = node.type === 'TakeExposure' || node.type === 'TakeAuxExposure';
+            if (key === 'gain' && isExposure) return {
+                label: this._t('Gain'),
+                hint: this._t('Empty: the camera keeps the gain it already has, which is usually the plate solve\'s. Set it to fix the gain of these exposures.'),
+                placeholder: this._t('camera\'s current gain'), warn: ''
+            };
+            if (key === 'offset' && isExposure) return {
+                label: this._t('Offset'),
+                hint: this._t('Empty: the rig\'s offset (RIGS).'),
+                placeholder: this._t('rig offset'), warn: ''
+            };
+            if (key === 'raHours') return {
+                label: 'RA',
+                hint: this._t('Hours: 20:45:43.8, 20h45m43.8s or 20.7622 (J2000).'),
+                placeholder: 'HH:MM:SS', warn: ''
+            };
+            if (key === 'decDeg') return {
+                label: 'Dec',
+                hint: this._t('Degrees: -05:23:28, -5°23\'28" or -5.391 (J2000).'),
+                placeholder: '±DD:MM:SS', warn: ''
+            };
             return { label: '', hint: '', warn: '' };
         },
 
+        // The fields to edit come from the server's schema for the node's type
+        // (/types → fields), so a parameter shows up whether or not it has a
+        // value. Building them from the node's own JSON keys hid every
+        // optional parameter left empty, because the wire format drops nulls:
+        // TakeExposure's Gain never appeared, and exposures ran at whatever
+        // gain the camera last had, usually the plate solve's.
         advSeqEditableFields() {
             const n = this.advSeqSelectedNode();
             if (!n) return [];
+            const schema = ((this.advSeq.types || []).find(t => t.type === n.type) || {}).fields;
+            const raw = Array.isArray(schema) && schema.length
+                ? schema.map(f => ({ key: f.key, kind: f.kind, nullable: !!f.nullable, options: f.options || null }))
+                : Object.keys(n).filter(k => {
+                      const v = n[k];
+                      return !Array.isArray(v) && !(typeof v === 'object' && v !== null);
+                  }).map(k => ({
+                      key: k, nullable: false, options: null,
+                      kind: typeof n[k] === 'boolean' ? 'bool' : typeof n[k] === 'number' ? 'number' : 'string'
+                  }));
             const out = [];
-            for (const k of Object.keys(n)) {
-                if (this._advSeqHiddenFields.has(k)) continue;
-                const v = n[k];
-                if (Array.isArray(v)) continue;
-                if (typeof v === 'object' && v !== null) continue;
-                let kind = 'string';
-                if (typeof v === 'boolean') kind = 'bool';
-                else if (typeof v === 'number') kind = 'number';
-                // ErrorBehavior is a string enum on every instruction/container;
-                // render it as a dropdown instead of a free-text box.
-                let options = null;
-                if (k === 'errorBehavior') {
-                    kind = 'enum';
-                    options = ['AbortRun', 'ContinueOnError', 'SkipBlock'];
-                } else if (k === 'focuserTarget' || k === 'focuserSource') {
+            for (const f of raw) {
+                if (this._advSeqHiddenFields.has(f.key)) continue;
+                let { kind, options } = f;
+                const v = n[f.key];
+                if (f.key === 'raHours') kind = 'ra';
+                else if (f.key === 'decDeg') kind = 'dec';
+                else if (f.key === 'focuserTarget' || f.key === 'focuserSource') {
                     // Optical-train selector on the focuser / auto-focus
                     // instructions: main imaging train, aux, or guide.
                     kind = 'enum';
                     options = ['main', 'aux', 'guide'];
-                } else if ((k === 'filterName' || k === 'filter') && this.filterFieldIsSelect()) {
+                } else if ((f.key === 'filterName' || f.key === 'filter') && this.filterFieldIsSelect()) {
                     // SwitchFilter / TakeExposure filter: the wheel's own names.
                     kind = 'enum';
                     options = ['', ...this.filterChoices(typeof v === 'string' ? v : '')];
+                } else if (kind === 'enum' && f.nullable) {
+                    options = ['', ...(options || [])];
                 }
-                const meta = this._advSeqFieldMeta(k, n);
-                out.push({ key: k, kind, options, label: meta.label, hint: meta.hint, warn: meta.warn });
+                const meta = this._advSeqFieldMeta(f.key, n);
+                out.push({
+                    key: f.key, kind, options, nullable: f.nullable,
+                    label: meta.label || this._advSeqHumanize(f.key),
+                    hint: meta.hint, warn: meta.warn,
+                    placeholder: meta.placeholder || (f.nullable ? this._t('default') : '')
+                });
             }
             return out;
+        },
+
+        // "exposureSeconds" -> "Exposure seconds".
+        _advSeqHumanize(key) {
+            const s = String(key).replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/_/g, ' ').toLowerCase();
+            return s.charAt(0).toUpperCase() + s.slice(1);
+        },
+
+        // The value an input shows for a field.
+        advSeqFieldValue(field) {
+            const n = this.advSeqSelectedNode();
+            const v = n ? n[field.key] : null;
+            if (v == null) return '';
+            if (field.kind === 'ra') return this.formatSexagesimal(v, true);
+            if (field.kind === 'dec') return this.formatSexagesimal(v, false);
+            return v;
+        },
+
+        // Write an edited value back, with the type the server expects: an
+        // empty optional field is null (the instruction then uses the
+        // camera's or the rig's value), numbers are numbers, coordinates are
+        // parsed from either sexagesimal or decimal.
+        advSeqSetField(field, raw) {
+            const n = this.advSeqSelectedNode();
+            if (!n) return;
+            const text = typeof raw === 'string' ? raw.trim() : raw;
+            let value;
+            switch (field.kind) {
+                case 'bool':
+                    value = !!raw;
+                    break;
+                case 'int':
+                case 'number': {
+                    if (text === '') {
+                        if (!field.nullable) return;          // a required number keeps its value
+                        value = null;
+                        break;
+                    }
+                    const num = Number(String(text).replace(',', '.'));
+                    if (!isFinite(num)) { this.toast(this._t('Not a number: {v}', { v: text }), 'warn'); return; }
+                    value = field.kind === 'int' ? Math.round(num) : num;
+                    break;
+                }
+                case 'ra':
+                case 'dec': {
+                    const parsed = this.parseSexagesimal(text, field.kind === 'ra');
+                    if (parsed == null) {
+                        this.toast(field.kind === 'ra'
+                            ? this._t('RA not understood. Use 20:45:43.8, 20h45m43.8s or decimal hours.')
+                            : this._t('Dec not understood. Use -05:23:28, -5°23\'28" or decimal degrees.'), 'warn');
+                        return;
+                    }
+                    const old = n[field.key];
+                    value = parsed;
+                    n[field.key] = value;
+                    if (n.type === 'DeepSkyObject') this._advSeqSyncTargetCoords(n, field.key, old);
+                    this.advSeqDirty = true;
+                    return;
+                }
+                default:
+                    value = (text === '' && field.nullable) ? null : (typeof raw === 'string' ? raw : text);
+            }
+            n[field.key] = value;
+            this.advSeqDirty = true;
+        },
+
+        // A target block's flip, re-centre and altitude limit time themselves
+        // off their own copy of the coordinates. When the target's RA or Dec
+        // changes, the copies that still held the old value (or were never
+        // filled) follow it, so changing a target is one edit, not four.
+        _advSeqSyncTargetCoords(dso, key, oldValue) {
+            const tol = key === 'raHours' ? 0.0015 : 0.1;
+            let moved = 0;
+            for (const t of [...(dso.triggers || []), ...(dso.conditions || [])]) {
+                if (!(key in t) && !['MeridianFlip', 'CenterAfterDrift', 'LoopUntilAltitude'].includes(t.type)) continue;
+                const cur = t[key];
+                const unset = (t.raHours || 0) === 0 && (t.decDeg || 0) === 0;
+                if (unset) {
+                    t.raHours = dso.raHours; t.decDeg = dso.decDeg;
+                    moved++;
+                } else if (cur == null || (oldValue != null && Math.abs(cur - oldValue) <= tol)) {
+                    t[key] = dso[key];
+                    moved++;
+                }
+            }
+            if (moved) this.toast(this._t('Also updated in {n} trigger(s) or condition(s) of this target', { n: moved }), 'info', 2500);
+        },
+
+        // "Copy coordinates to triggers": every coordinate-bearing trigger
+        // and condition on the selected target takes the target's RA/Dec.
+        advSeqCopyTargetCoords() {
+            const n = this.advSeqSelectedNode();
+            if (!n || n.type !== 'DeepSkyObject') return;
+            let moved = 0;
+            for (const t of [...(n.triggers || []), ...(n.conditions || [])]) {
+                if (!['MeridianFlip', 'CenterAfterDrift', 'LoopUntilAltitude'].includes(t.type) && !('raHours' in t)) continue;
+                t.raHours = n.raHours; t.decDeg = n.decDeg;
+                moved++;
+            }
+            this.advSeqDirty = true;
+            this.toast(moved
+                ? this._t('Coordinates copied to {n} trigger(s) or condition(s)', { n: moved })
+                : this._t('This target has no trigger or condition with coordinates'), moved ? 'ok' : 'info');
+        },
+
+        // RA (hours) or Dec (degrees) from "20:45:43.8", "20 45 43.8",
+        // "20h45m43.8s", "-05°23'28\"", or a plain decimal. Null when the text
+        // is not a coordinate or is out of range.
+        parseSexagesimal(text, isRa) {
+            let s = String(text == null ? '' : text).trim().replace(/[−–]/g, '-').replace(',', '.');
+            if (!s) return null;
+            if (/^[+-]?\d+(\.\d+)?$/.test(s)) {
+                const v = Number(s);
+                return isRa ? (v >= 0 && v < 24 ? v : null) : (Math.abs(v) <= 90 ? v : null);
+            }
+            const neg = /^\s*-/.test(s);
+            s = s.replace(/^[+-]/, '').replace(/[hHdD°:'′"″mMsS]/g, ' ').trim();
+            const parts = s.split(/\s+/).filter(Boolean).map(Number);
+            if (parts.length < 2 || parts.length > 3 || parts.some(p => !isFinite(p) || p < 0)) return null;
+            const [a, m, sec = 0] = parts;
+            if (m >= 60 || sec >= 60) return null;
+            const v = a + m / 60 + sec / 3600;
+            if (isRa) return !neg && v < 24 ? v : null;
+            return v <= 90 ? (neg ? -v : v) : null;
+        },
+
+        // 20.7622 h -> "20:45:43.9"; -5.391° -> "-05:23:28".
+        formatSexagesimal(value, isRa) {
+            const v = Number(value);
+            if (!isFinite(v)) return '';
+            const neg = v < 0;
+            let total = Math.round(Math.abs(v) * 3600 * (isRa ? 10 : 1));   // tenths of a second for RA
+            const unit = isRa ? 10 : 1;
+            const sec = (total % (60 * unit)) / unit;
+            total = Math.floor(total / (60 * unit));
+            const min = total % 60;
+            const deg = Math.floor(total / 60);
+            const pad = (x, w) => String(x).padStart(w, '0');
+            const secTxt = isRa ? sec.toFixed(1).padStart(4, '0') : pad(sec, 2);
+            return (isRa ? '' : (neg ? '-' : '+')) + pad(deg, 2) + ':' + pad(min, 2) + ':' + secTxt;
         },
 
         advSeqRenderTree(node, depth) {
@@ -51881,12 +52164,20 @@ function ninaApp() {
                 <div class="tree-node ${sel} ${status}" data-id="${node.id}" onclick="event.stopPropagation(); window.__alpineRoot.advSeqSelect('${node.id}')">
                     <span class="tree-type-badge">${node.type}</span>
                     <span class="tree-name">${this._esc(node.name || node.type)}</span>
+                    ${this._advSeqCountBadge(node)}
                     ${errHtml}
                 </div>
                 ${trig}
                 ${cond}
                 ${kid ? `<div class="tree-children">${kid}</div>` : ''}
             `;
+        },
+        // "3/10" beside an exposure set once it has started, so the tree
+        // shows how far each set got, not only which one is running.
+        _advSeqCountBadge(n) {
+            if (n.type !== 'TakeExposure' || !(n.count > 0)) return '';
+            if (n.status !== 'Running' && !(n.completedCount > 0)) return '';
+            return `<span class="tree-count">${n.completedCount || 0}/${n.count}</span>`;
         },
         _advSeqLeaf(n) {
             const sel = n.id === this.advSeq.selectedId ? 'selected' : '';
@@ -51958,7 +52249,10 @@ function ninaApp() {
                 if (!e) return e;
                 const out = {};
                 for (const [k, v] of Object.entries(e)) {
-                    if (['type', 'status', 'error', 'startedAt', 'finishedAt'].includes(k)) continue;
+                    // completedCount is run progress laid over the tree from
+                    // /progress; sending it back would make a fresh run (or a
+                    // downloaded file) start part-way through an exposure set.
+                    if (['type', 'status', 'error', 'startedAt', 'finishedAt', 'completedCount'].includes(k)) continue;
                     if (Array.isArray(v)) {
                         out[k] = v.map(clean);
                     } else if (typeof v === 'object' && v !== null) {

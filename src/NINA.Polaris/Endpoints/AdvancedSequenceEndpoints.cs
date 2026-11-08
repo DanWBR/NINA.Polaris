@@ -105,8 +105,20 @@ public static class AdvancedSequenceEndpoints {
         // dropped (the editor derives its field list from the node's own keys).
         g.MapGet("/types", () => Results.Ok(SequenceEntityJsonConverter.KnownTypes.Select(t => new {
             type = t.Type, category = t.Category, kind = t.Class,
-            defaults = SequenceEntityJsonConverter.DefaultParams(t.Type)
+            defaults = SequenceEntityJsonConverter.DefaultParams(t.Type),
+            // Every editable parameter, including the optional ones the
+            // defaults above omit because they start empty.
+            fields = SequenceEntityJsonConverter.FieldSchema(t.Type)
         })));
+
+        // ---- Live progress ----
+        // Status is runtime state and stays out of the document JSON (it is
+        // [JsonIgnore] so a saved tree never carries a stale "Running"). That
+        // also kept it from ever reaching the editor, which polled /document
+        // and painted nothing: a running sequence looked idle. This sends the
+        // runtime state alone, keyed by entity id, for the editor to lay over
+        // its own copy of the tree.
+        g.MapGet("/progress", (AdvancedSequenceEngine engine) => Results.Ok(SequenceProgress.Snapshot(engine)));
 
         // ---- Built-in examples ("New from example") ----
         g.MapGet("/examples", () => Results.Ok(SequenceExamples.All));
