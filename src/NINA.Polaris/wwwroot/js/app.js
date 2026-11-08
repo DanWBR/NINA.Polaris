@@ -2738,8 +2738,16 @@ function ninaApp() {
             // way there instead of naming a page and leaving you to find it.
             errorCard: '',
             lastFetched: null, filter: 'all', fitsFovOnly: false,
+            // Rank emission nebulae as shot through a narrowband filter.
+            // null = whatever the host detects from the rig's filters.
+            narrowband: null,
             thumbs: {}      // { [name]: { url, title, credit, missing } }
         },
+
+        // The site's dark-sky brightness (Settings > Observatory), from
+        // /api/sky/sky-quality. sqm null = not set. meterSqm is what a
+        // connected SQM reads right now, offered but never adopted silently.
+        skyQuality: { sqm: null, bortle: null, meterSqm: null, sqmInput: '' },
 
         // Provenance of the comet orbital elements the ephemeris is using.
         // The bundled file is a build-time snapshot, so a comet discovered
@@ -20236,7 +20244,9 @@ function ninaApp() {
             this.tonight.error = '';
             this.tonight.errorCard = '';
             try {
-                const r = await this.apiGet('/api/sky/tonights-best?limit=120');
+                const nb = this.tonight.narrowband;
+                const r = await this.apiGet('/api/sky/tonights-best?limit=120'
+                    + (nb === null ? '' : '&narrowband=' + (nb ? 'true' : 'false')));
                 this.tonight.items = r.items || [];
                 this.tonight.envelope = r;
                 this.tonight.lastFetched = new Date();
@@ -20252,6 +20262,98 @@ function ninaApp() {
             } finally {
                 this.tonight.loading = false;
             }
+        },
+
+        // ─── Site sky (Bortle / SQM) ──────────────────────────────────────
+
+        async skyQualityLoad() {
+            try {
+                const r = await this.apiGet('/api/sky/sky-quality');
+                this._skyQualityApply(r);
+                this.skyQuality.meterSqm = r.meterSqm ?? null;
+            } catch (e) { /* the card still works; it just starts empty */ }
+        },
+
+        _skyQualityApply(r) {
+            this.skyQuality.sqm = r && r.sqm != null ? r.sqm : null;
+            this.skyQuality.bortle = r && r.bortle != null ? r.bortle : null;
+            this.skyQuality.sqmInput = this.skyQuality.sqm != null ? this.skyQuality.sqm.toFixed(2) : '';
+        },
+
+        // body: { bortle } or { sqm } or {} to clear.
+        async skyQualitySave(body) {
+            try {
+                const res = await this.apiPost('/api/sky/sky-quality', null, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const r = await res.json();
+                if (!res.ok) { this.toast(r.error || this._t('Could not save the sky quality'), 'warn'); return; }
+                this._skyQualityApply(r);
+                // The ranking on screen was made for the old sky.
+                if (this.tonight.items.length) this.loadTonightsBest(true);
+            } catch (e) {
+                this.toast(this._t('Could not save the sky quality'), 'warn');
+            }
+        },
+
+        skyQualitySetBortle(v) {
+            const b = parseInt(v, 10);
+            this.skyQualitySave(b >= 1 && b <= 9 ? { bortle: b } : {});
+        },
+
+        skyQualitySetSqm(text) {
+            const t = String(text ?? '').trim().replace(',', '.');
+            if (!t) { this.skyQualitySave({}); return; }
+            const v = parseFloat(t);
+            if (!isFinite(v) || v < 15 || v > 22.5) {
+                this.toast(this._t('SQM must be between 15 and 22.5 mag/arcsec²'), 'warn');
+                this.skyQuality.sqmInput = this.skyQuality.sqm != null ? this.skyQuality.sqm.toFixed(2) : '';
+                return;
+            }
+            this.skyQualitySave({ sqm: v });
+        },
+
+        // The line above Tonight's Best saying what sky it was ranked for.
+        tonightSkyLabel() {
+            const s = this.tonight.envelope && this.tonight.envelope.sky;
+            if (!s || s.sqm == null) return '';
+            let txt = this._t('Ranked for Bortle {b} ({sqm} mag/arcsec²)', { b: s.bortle, sqm: s.sqm.toFixed(2) });
+            if (s.moonIllumination >= 0.05)
+                txt += ' · ' + this._t('Moon {p}%', { p: Math.round(s.moonIllumination * 100) });
+            return txt;
+        },
+
+        tonightSkyUnset() {
+            const s = this.tonight.envelope && this.tonight.envelope.sky;
+            return !!s && s.sqm == null;
+        },
+
+        tonightNarrowbandOn() {
+            const s = this.tonight.envelope && this.tonight.envelope.sky;
+            return this.tonight.narrowband ?? (s ? !!s.narrowband : false);
+        },
+
+        tonightToggleNarrowband() {
+            this.tonight.narrowband = !this.tonightNarrowbandOn();
+            this.loadTonightsBest(true);
+        },
+
+        tonightSkyBadge(item) {
+            switch (item.skyRating) {
+                case 'great': return this._t('Great for your sky');
+                case 'good': return this._t('Good for your sky');
+                case 'fair': return this._t('Possible under your sky');
+                case 'hard': return this._t('Hard under your sky');
+                default: return '';
+            }
+        },
+
+        tonightSkyTitle(item) {
+            if (item.surfaceBrightness == null || item.skyBrightness == null) return '';
+            return this._t('Mean surface brightness {o} mag/arcsec², sky towards it at its peak {s} mag/arcsec² (higher is darker)',
+                { o: item.surfaceBrightness.toFixed(1), s: item.skyBrightness.toFixed(1) });
         },
 
         // --- FILES tab methods -----------------------------------------

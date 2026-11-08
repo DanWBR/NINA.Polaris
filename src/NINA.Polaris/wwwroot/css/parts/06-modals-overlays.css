@@ -378,6 +378,11 @@
 .tonight-badge--fits  { background: rgba(var(--success-rgb), 0.22); color: #c8e6c9; }
 .tonight-badge--big   { background: rgba(var(--warning-rgb), 0.22); color: #ffe0b2; }
 .tonight-badge--peak  { background: rgba(255, 255, 255, 0.06); color: var(--text-secondary); }
+/* How the target suits the site's sky (Tonight's Best, sky set). */
+.tonight-badge--sky-great { background: rgba(var(--success-rgb), 0.38); color: #e8f5e9; }
+.tonight-badge--sky-good { background: rgba(var(--success-rgb), 0.18); color: #c8e6c9; }
+.tonight-badge--sky-fair { background: rgba(var(--warning-rgb), 0.18); color: #ffe0b2; }
+.tonight-badge--sky-hard { background: rgba(239, 83, 80, 0.20); color: #ffcdd2; }
 
 .tonight-chart-cell {
     height: 78px;          /* bumped to fit the x-axis time ticks */

@@ -78,6 +78,12 @@ public class UserProfile {
     /// by the altitude chart, Tonight's Best, and the Sky map.</summary>
     public List<HorizonPoint> HorizonPoints { get; set; } = new();
 
+    /// <summary>The site's dark-sky zenith brightness, mag/arcsec² (an SQM
+    /// reading on a moonless night, or the typical value of the Bortle class
+    /// the operator picked). Null = not set: Tonight's Best then ranks
+    /// without the sky. Set through /api/sky/sky-quality.</summary>
+    public double? SkySqm { get; set; }
+
     // Camera optics (fallback only, live sensor dims come from the camera)
     public double SensorWidthMm { get; set; } = 23.5;
     public double SensorHeightMm { get; set; } = 15.7;

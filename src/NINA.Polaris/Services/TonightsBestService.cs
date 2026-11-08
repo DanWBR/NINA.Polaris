@@ -34,6 +34,9 @@ namespace NINA.Polaris.Services;
 ///   - Planet base: same formula but the planet's apparent magnitude
 ///   - Moon always present, base 50 + illumination bonus
 ///   - + (peakAlt / 90) * 20: rewards transit altitude
+///   - When the site's sky is set (UserProfile.SkySqm), DSOs lose points
+///     for being fainter than the sky towards them at their peak (site
+///     sky, airmass and Moon): see <see cref="Sky.SkyBrightness"/>.
 ///   - Filter: only keep things with peak altitude ≥ 30° during the
 ///     night window (10° for the Moon, it's always interesting),
 ///     and dimmer than mag 10 cuts.
@@ -65,7 +68,9 @@ public class TonightsBestService {
         _logger   = logger;
     }
 
-    public TonightsBestResult Compute(int limit = 30) {
+    /// <param name="narrowband">Rank emission nebulae as imaged through a
+    /// narrowband filter. Null = decide from the rig's filters.</param>
+    public TonightsBestResult Compute(int limit = 30, bool? narrowband = null) {
         var lat = _profile.Active.Latitude;
         var lng = _profile.Active.Longitude;
         var nowUtc = DateTime.UtcNow;
@@ -88,6 +93,13 @@ public class TonightsBestService {
         // it is, not for how it scores. Kept apart from the DSO pool so the
         // position de-dup cannot swallow the Crab Pulsar into M1.
         var notableItems = new List<TonightCandidate>();
+
+        // The site's sky, when the operator has set it, and the Moon.
+        var siteSqm = _profile.Active.SkySqm is { } q && Sky.SkyBrightness.IsValidSqm(q) ? q : (double?)null;
+        bool nbDetected = DetectNarrowband();
+        bool nb = narrowband ?? nbDetected;
+        var observer = new Observer(lat, lng, _profile.Active.Altitude);
+        var moon = new MoonSampler(observer);
 
         // --- DSOs ---
         foreach (var dso in _catalog.AllPlanningObjects) {
@@ -130,7 +142,15 @@ public class TonightsBestService {
                 ? (int)Math.Round((6 - Math.Clamp(dso.Magnitude, -2, 12)) * 8 + peakAlt / 90.0 * 20)
                 : (int)Math.Round(Math.Clamp(6.0 * Math.Log2(Math.Max(sizeArcmin, 5.0)), 10, 42)
                                   + peakAlt / 90.0 * 20);
-            (isNotable ? notableItems : items).Add(new TonightCandidate(
+            // Against the site's sky at the target's best hour: the faint,
+            // extended objects drop under a bright or moonlit sky, the compact
+            // and the bright ones keep their place.
+            var rated = !isNotable && siteSqm is { } sqm
+                ? RateAgainstSky(dso.Type, hasMag ? dso.Magnitude : null, sizeArcmin, peakAlt, peakUtc,
+                                 dso.Ra, dso.Dec, sqm, nb, moon)
+                : null;
+            if (rated != null) score -= rated.Value.Penalty;
+            var candidate = new TonightCandidate(
                 Category:        isNotable ? "Notable" : "Dso",
                 Name:            dso.Name,
                 CommonName:      dso.CommonName,
@@ -150,7 +170,15 @@ public class TonightsBestService {
                 CameraFovWidthArcmin:  fov?.WidthArcmin,
                 CameraFovHeightArcmin: fov?.HeightArcmin,
                 Catalog:         dso.Catalog
-            ));
+            );
+            if (rated is { } r)
+                candidate = candidate with {
+                    SkyBrightness = Math.Round(r.SkySb, 2),
+                    SurfaceBrightness = Math.Round(r.ObjectSb, 2),
+                    SkyRating = r.Rating,
+                    SkyPenalty = r.Penalty,
+                };
+            (isNotable ? notableItems : items).Add(candidate);
         }
 
         // Cross-catalogue de-dup: the same physical object is catalogued
@@ -161,7 +189,6 @@ public class TonightsBestService {
         items = DedupDsoByPosition(items);
 
         // --- Solar-system bodies via AstronomyEngine ---
-        var observer = new Observer(lat, lng, _profile.Active.Altitude);
         var time = new AstroTime(nowUtc);
 
         // Moon, always include if above horizon at peak.
@@ -265,7 +292,103 @@ public class TonightsBestService {
             ObserverLon:       lng,
             CameraFovWidthArcmin:  fov?.WidthArcmin,
             CameraFovHeightArcmin: fov?.HeightArcmin,
-            Items:             ordered);
+            Items:             ordered,
+            Sky: new TonightSky(
+                Sqm: siteSqm,
+                Bortle: siteSqm is { } s2 ? Sky.SkyBrightness.BortleForSqm(s2) : null,
+                Narrowband: nb,
+                NarrowbandDetected: nbDetected,
+                MoonIllumination: Math.Round(moon.Illumination, 2),
+                MoonPhaseAngleDeg: Math.Round(moon.PhaseAngleDeg, 1)));
+    }
+
+    /// <summary>The site sky against one DSO at its peak: the sky brightness
+    /// towards it (airmass and Moon included), its mean surface brightness,
+    /// and the score penalty. Null when the object has no size to spread its
+    /// light over, so its surface brightness is unknown.</summary>
+    private static (double SkySb, double ObjectSb, string Rating, int Penalty)? RateAgainstSky(
+            string? type, double? mag, double sizeArcmin, double peakAlt, DateTime peakUtc,
+            double ra, double dec, double siteSqm, bool narrowband, MoonSampler moon) {
+        var kind = Sky.SkyBrightness.KindOf(type);
+        if (Sky.SkyBrightness.Sensitivity(kind, narrowband) <= 0) return null;
+        double? sb = Sky.SkyBrightness.SurfaceBrightness(mag, sizeArcmin > 0 ? sizeArcmin : null,
+            kind == Sky.SkyBrightness.Kind.Galaxy && sizeArcmin > 0 ? sizeArcmin * Sky.SkyBrightness.GalaxyAxisRatio : null);
+        bool nebula = kind is Sky.SkyBrightness.Kind.Emission or Sky.SkyBrightness.Kind.Reflection or Sky.SkyBrightness.Kind.Dark;
+        // A measured magnitude that puts the mean above the faint-nebula
+        // level marks a bright nebula with a brilliant core (M42, Carina).
+        bool brightNebula = nebula && sb is { } measured && measured < Sky.SkyBrightness.FaintNebulaSb;
+        if (sb == null && mag == null && sizeArcmin >= 10 && nebula)
+            sb = Sky.SkyBrightness.FaintNebulaSb;
+        // A nebula's catalogue magnitude is often a nominal or photographic
+        // figure: IC 434 is "mag 11 over 90′", 29.4 mag/arcsec², which
+        // would rule the Horsehead out even from a Bortle 4 site where it
+        // comes out in three hours. Cap them at the faint-nebula value.
+        if (nebula && sb > Sky.SkyBrightness.FaintNebulaSb)
+            sb = Sky.SkyBrightness.FaintNebulaSb;
+        if (sb is not { } objectSb) return null;
+        // The object's own light is dimmed by the extra air at low altitude,
+        // on top of the brighter sky there: the two together are why a
+        // target near the horizon is hard even from a dark site.
+        double dimmed = objectSb + Sky.SkyBrightness.Extinction * (Sky.SkyBrightness.Airmass(peakAlt) - 1);
+        var (moonAlt, moonRa, moonDec) = moon.At(peakUtc);
+        double sep = SeparationDeg(ra, dec, moonRa, moonDec);
+        double skySb = Sky.SkyBrightness.AtTarget(siteSqm, peakAlt, moonAlt, moon.PhaseAngleDeg, sep);
+        var (penalty, rating, _) = Sky.SkyBrightness.Rate(dimmed, skySb, kind, narrowband, brightNebula);
+        return (skySb, objectSb, rating, penalty);
+    }
+
+    private static double SeparationDeg(double ra1h, double dec1, double ra2h, double dec2) {
+        const double d = Math.PI / 180;
+        double c = Math.Sin(dec1 * d) * Math.Sin(dec2 * d)
+                 + Math.Cos(dec1 * d) * Math.Cos(dec2 * d) * Math.Cos((ra1h - ra2h) * 15 * d);
+        return Math.Acos(Math.Clamp(c, -1, 1)) / d;
+    }
+
+    /// <summary>A narrowband or multi-band line filter on the active rig: the
+    /// fixed attached filter, a slot of the saved wheel names, or a slot of
+    /// the connected wheel.</summary>
+    private bool DetectNarrowband() {
+        try {
+            var rig = _profile.ActiveEquipmentProfile;
+            if (rig != null) {
+                if (Sky.SkyBrightness.IsNarrowbandFilter(rig.AttachedFilter)) return true;
+                if ((rig.FilterNames ?? Array.Empty<string>()).Any(Sky.SkyBrightness.IsNarrowbandFilter)) return true;
+            }
+            var fw = _equip.FilterWheel;
+            if (fw != null && fw.IsConnected
+                && (fw.FilterNames ?? Array.Empty<string>()).Any(Sky.SkyBrightness.IsNarrowbandFilter)) return true;
+        } catch { /* a wheel mid-reconnect: no filter known */ }
+        return false;
+    }
+
+    /// <summary>Moon altitude and position at the 30-minute peak times, which
+    /// many objects share, plus tonight's phase.</summary>
+    private sealed class MoonSampler {
+        private readonly Observer _observer;
+        private readonly Dictionary<DateTime, (double Alt, double Ra, double Dec)> _cache = new();
+        public double PhaseAngleDeg { get; } = 180;
+        public double Illumination { get; }
+
+        public MoonSampler(Observer observer) {
+            _observer = observer;
+            try {
+                var illum = Astronomy.Illumination(Body.Moon, new AstroTime(DateTime.UtcNow));
+                PhaseAngleDeg = illum.phase_angle;
+                Illumination = illum.phase_fraction;
+            } catch { /* keep "new": no Moon term */ }
+        }
+
+        public (double Alt, double Ra, double Dec) At(DateTime utc) {
+            if (_cache.TryGetValue(utc, out var v)) return v;
+            try {
+                var t = new AstroTime(utc);
+                var eq = Astronomy.Equator(Body.Moon, t, _observer, EquatorEpoch.OfDate, Aberration.Corrected);
+                var hor = Astronomy.Horizon(t, _observer, eq.ra, eq.dec, Refraction.Normal);
+                v = (hor.altitude, eq.ra, eq.dec);
+            } catch { v = (-90, 0, 0); }
+            _cache[utc] = v;
+            return v;
+        }
     }
 
     /// <summary>
@@ -553,7 +676,18 @@ public record TonightsBestResult(
     double ObserverLon,
     double? CameraFovWidthArcmin,
     double? CameraFovHeightArcmin,
-    IReadOnlyList<TonightCandidate> Items);
+    IReadOnlyList<TonightCandidate> Items,
+    TonightSky? Sky = null);
+
+/// <summary>The sky the list was ranked for. <c>Sqm</c> null = the site's
+/// sky is not set and the list ignores it.</summary>
+public record TonightSky(
+    double? Sqm,
+    int? Bortle,
+    bool Narrowband,
+    bool NarrowbandDetected,
+    double MoonIllumination,
+    double MoonPhaseAngleDeg);
 
 public record TonightCandidate(
     string Category,
@@ -574,4 +708,15 @@ public record TonightCandidate(
     bool? FitsCameraFov,
     double? CameraFovWidthArcmin,
     double? CameraFovHeightArcmin,
-    string? Catalog = null);
+    string? Catalog = null) {
+    /// <summary>Sky brightness towards the object at its peak, mag/arcsec²
+    /// (site sky, airmass and Moon). Null when the site sky is not set or the
+    /// object's surface brightness is unknown.</summary>
+    public double? SkyBrightness { get; init; }
+    /// <summary>Mean surface brightness, mag/arcsec².</summary>
+    public double? SurfaceBrightness { get; init; }
+    /// <summary>"great", "good", "fair" (possible) or "hard" for this sky.</summary>
+    public string? SkyRating { get; init; }
+    /// <summary>Points taken off the score for the sky.</summary>
+    public int? SkyPenalty { get; init; }
+}

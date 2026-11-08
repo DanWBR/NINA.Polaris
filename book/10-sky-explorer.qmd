@@ -287,6 +287,76 @@ because they lack a catalog brightness. A **Weather** view shows
 current conditions and the forecast for the observing site, so you
 can judge whether the plan survives the clouds.
 
+### Ranking for your sky: Bortle, SQM and the Moon
+
+A faint, sprawling galaxy that is an easy target from a dark site can
+be nearly invisible from a city, while a bright planetary nebula or a
+star cluster comes through almost any sky. Tonight's Best can rank for
+that if it knows how dark your sky is.
+
+Open **SETTINGS → Observatory → Sky quality** (🌃) and either pick the
+**Bortle class** (the 1 to 9 scale of sky darkness, where 1 is a
+remote desert site and 9 an inner city) or type an **SQM** value. SQM
+is the reading of a Sky Quality Meter, the sky's brightness in
+magnitudes per square arcsecond (mag/arcsec²): higher is darker, about
+21.9 at a truly dark site and 18 under a city. If an SQM meter is
+connected, the card shows what it reads now and offers **Use this
+reading**; use it only on a clear, moonless night, since a reading
+under the Moon or cloud is not your site's dark sky. If you do not know
+your Bortle class, a light pollution map such as
+[lightpollutionmap.app](https://lightpollutionmap.app/) shows it for
+your coordinates.
+
+With the sky set, each deep-sky object in the list is compared with
+the sky at the moment it rides highest:
+
+- **The object's surface brightness:** its magnitude spread over its
+  catalogued size, so a large object of a given magnitude is fainter
+  per square arcsecond than a small one. Nebulae catalogued with a size
+  but no magnitude (most Sharpless and LBN entries, and reflection
+  nebulae such as the Witch Head) are taken as faint, about 24
+  mag/arcsec².
+- **The sky towards it:** your site's sky, brighter towards the horizon
+  where the light crosses more air, plus the Moon's scattered light
+  from its phase and its distance to the target (the Krisciunas and
+  Schaefer model used by most planners).
+
+Objects much fainter than that sky lose points and drop down the list.
+Each card gets a tag; hover it for the two numbers:
+
+- **Great for your sky:** comes out easily, faint outskirts included.
+  Only a sky darker than about Bortle 5 gives this.
+- **Good for your sky:** comes out well; under a bright sky this is the
+  best there is.
+- **Possible under your sky:** needs a long integration.
+- **Hard under your sky:** out of reach in practice.
+
+The thresholds were set against real sessions from two sites. From a
+Bortle 4 site, the Horsehead, the Flame Nebula, Barnard's Loop and the
+Ghost of Cassiopeia show in minutes and are finished in three to four
+hours, so they are rated great there (good when low in the sky). From a
+Bortle 8 to 9 city those same nebulae are hard in broadband, while M31,
+M33, M42, the Pleiades, the Sculptor Galaxy (NGC 253), the Southern
+Pinwheel (M83), the Dumbbell (M27) and the Carina Nebula (even low in
+the sky) are good. Galaxies and bright nebulae such as M42 and Carina
+are judged by their bright inner parts, which carry most of their
+light, more than by their faint mean over the whole object. Star clusters are hurt far less
+than galaxies, since they are resolved stars rather than diffuse light.
+Planets, the Moon, comets and the Notable list are not affected.
+
+A narrowband or dual-band filter (Hα, OIII, SII, L-eXtreme, SV220 and
+similar) cuts most of the light pollution and keeps the light of
+emission nebulae. When the active rig has one, on the filter wheel or
+as its attached filter, the list ranks emission and planetary nebulae
+accordingly; the **Narrowband** chip shows this and turns it on or off
+for the view. Galaxies and reflection nebulae are not helped by such a
+filter and keep their place. From the same Bortle 8 to 9 city, the Veil,
+the Crescent Nebula and the Eagle's Pillars of Creation are hard in
+broadband and good through a narrowband filter.
+
+Without a sky set, the list ranks as before and says so above the
+cards, with a button to set it.
+
 ## Field-of-view overlays and framing
 
 Polaris draws the camera footprints directly on the map so you can

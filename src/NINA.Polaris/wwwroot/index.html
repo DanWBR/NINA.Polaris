@@ -11803,6 +11803,26 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <input type="checkbox" x-model="tonight.fitsFovOnly" :disabled="!tonightHasFovData()" style="display:none">
                         Fits my FOV
                     </label>
+                    <!-- Ranks emission nebulae as shot through a line filter,
+                         which cuts most of the light pollution. Starts from
+                         what the host finds on the rig (wheel or attached
+                         filter); a tap overrides it for this view. -->
+                    <button class="tonight-filter-chip tonight-filter-toggle"
+                            x-show="!tonightSkyUnset()"
+                            :class="{ active: tonightNarrowbandOn() }"
+                            :disabled="tonight.loading"
+                            @click="tonightToggleNarrowband()"
+                            :title="$t('Rank emission nebulae as imaged through a narrowband or dual-band filter')"
+                            x-text="$t('Narrowband')"></button>
+                </div>
+
+                <!-- The sky the list was ranked for, or how to give it one. -->
+                <div class="tonight-comet-note" x-show="!tonight.error && tonight.items.length && (tonightSkyLabel() || tonightSkyUnset())" x-cloak>
+                    <span x-show="tonightSkyLabel()" x-text="tonightSkyLabel()"></span>
+                    <span x-show="tonightSkyUnset()" class="stale"
+                          x-text="$t('Set your sky (Bortle or SQM) to rank the targets for it')"></span>
+                    <button class="btn btn-xs" @click="openSettingsCard('observatory-card')"
+                            x-text="tonightSkyUnset() ? $t('Set sky') : $t('Change')"></button>
                 </div>
 
                 <!-- Where the comet elements came from and how old they are.
@@ -11872,6 +11892,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                           x-text="'⊘ Larger than FOV'"></span>
                                     <span class="tonight-badge tonight-badge--peak"
                                           x-text="'Peak ' + item.peakAltDeg + '° @ ' + new Date(item.peakUtc).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})"></span>
+                                    <span class="tonight-badge"
+                                          x-show="item.skyRating"
+                                          :class="'tonight-badge--sky-' + item.skyRating"
+                                          :title="tonightSkyTitle(item)"
+                                          x-text="tonightSkyBadge(item)"></span>
                                 </div>
                             </div>
                             <div class="tonight-chart-cell">
@@ -18432,6 +18457,44 @@ Windows  winget install Rclone.Rclone</code></pre>
                         <input id="settings-alt" type="text" inputmode="decimal" class="input-md"
                                :value="settings.altitude"
                                @change="coordInput($event, settings, 'altitude', -500, 9000, 0)">
+                    </div>
+
+                    <!-- The site's dark-sky brightness. Tonight's Best ranks the
+                         targets against it: faint, extended objects drop under a
+                         bright sky, compact and bright ones keep their place. -->
+                    <div style="margin-top:16px" x-init="skyQualityLoad()">
+                        <h4 style="margin:0 0 4px"><span class="settings-card-icon">🌃</span><span x-text="$t('Sky quality')"></span></h4>
+                        <p class="hint" style="margin-top:0"
+                           x-text="$t('How dark the sky is here on a moonless night. Pick the Bortle class, or type an SQM reading if you have one. Tonight\'s Best uses it, with the Moon, to rank the targets for this sky.')"></p>
+                        <div class="coords-grid">
+                            <label for="settings-bortle" x-text="$t('Bortle class')"></label>
+                            <select id="settings-bortle" class="input-md"
+                                    :value="skyQuality.bortle ?? ''"
+                                    @change="skyQualitySetBortle($event.target.value)">
+                                <option value="" x-text="$t('Not set')"></option>
+                                <option value="1" x-text="'1 · ' + $t('Excellent dark site')"></option>
+                                <option value="2" x-text="'2 · ' + $t('Truly dark site')"></option>
+                                <option value="3" x-text="'3 · ' + $t('Rural sky')"></option>
+                                <option value="4" x-text="'4 · ' + $t('Rural/suburban transition')"></option>
+                                <option value="5" x-text="'5 · ' + $t('Suburban sky')"></option>
+                                <option value="6" x-text="'6 · ' + $t('Bright suburban sky')"></option>
+                                <option value="7" x-text="'7 · ' + $t('Suburban/urban transition')"></option>
+                                <option value="8" x-text="'8 · ' + $t('City sky')"></option>
+                                <option value="9" x-text="'9 · ' + $t('Inner-city sky')"></option>
+                            </select>
+                            <label for="settings-sqm" x-text="$t('SQM (mag/arcsec²)')"></label>
+                            <input id="settings-sqm" type="text" inputmode="decimal" class="input-md"
+                                   placeholder="e.g. 20.8"
+                                   x-model="skyQuality.sqmInput"
+                                   @change="skyQualitySetSqm($event.target.value)">
+                        </div>
+                        <div class="control-row" style="margin-top:6px;gap:8px;align-items:center;flex-wrap:wrap"
+                             x-show="skyQuality.meterSqm != null" x-cloak>
+                            <span class="muted" x-text="$t('Your SQM meter reads {v} now', { v: skyQuality.meterSqm?.toFixed(2) })"></span>
+                            <button class="btn btn-sm" @click="skyQualitySave({ sqm: skyQuality.meterSqm })"
+                                    :title="$t('Use only on a clear, moonless night: a reading under the Moon or cloud is not the site\'s dark sky')"
+                                    x-text="$t('Use this reading')"></button>
+                        </div>
                     </div>
 
                     <!-- Custom horizon: an azimuth/altitude mask of what the
