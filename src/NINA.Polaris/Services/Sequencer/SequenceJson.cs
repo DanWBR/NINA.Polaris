@@ -318,6 +318,59 @@ public class SequenceEntityJsonConverter : JsonConverter<ISequenceEntity> {
         return result;
     }
 
+    /// <summary>One editable parameter of an entity type, for the ADV editor.</summary>
+    /// <param name="Key">camelCase wire name.</param>
+    /// <param name="Kind">int, number, bool, string or enum.</param>
+    /// <param name="Nullable">True when leaving it empty is meaningful (the
+    /// instruction falls back to the camera's or the rig's value).</param>
+    /// <param name="Options">Enum member names, for <c>enum</c>.</param>
+    public sealed record FieldInfo(string Key, string Kind, bool Nullable, string[]? Options);
+
+    // Serialized, but not parameters a person sets: run progress, and the
+    // window bookkeeping the PLAN compiler writes on its target blocks.
+    private static readonly HashSet<string> _notEditable = new(StringComparer.OrdinalIgnoreCase) {
+        "completedCount", "windowEndUtc", "nextTargetStartUtc", "hasNextTarget"
+    };
+
+    /// <summary>
+    /// The editable scalar parameters of an entity type, nullable ones
+    /// included.
+    ///
+    /// The editor used to derive its fields from the keys of the node's JSON,
+    /// and the wire format drops null values. An optional parameter left
+    /// empty, which is how TakeExposure's Gain and Offset start, therefore had
+    /// no key and no field: the gain could not be set from the editor at all,
+    /// and the exposures ran at whatever gain the camera last had, usually the
+    /// plate solve's (Discord report, 2026-11-08). Sending the schema lets the
+    /// editor show every parameter whether or not it currently has a value.
+    /// </summary>
+    public static IReadOnlyList<FieldInfo> FieldSchema(string type) {
+        var clr = Resolve(type);
+        if (clr == null) return Array.Empty<FieldInfo>();
+        var naming = JsonNamingPolicy.CamelCase;
+        var list = new List<FieldInfo>();
+        foreach (var p in clr.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)) {
+            if (!p.CanRead || p.SetMethod is not { IsPublic: true }) continue;
+            if (p.GetCustomAttributes(typeof(JsonIgnoreAttribute), true).Length > 0) continue;
+            var key = naming.ConvertName(p.Name);
+            if (_nonParamKeys.Contains(key) || _notEditable.Contains(key)) continue;
+            var t = p.PropertyType;
+            var under = System.Nullable.GetUnderlyingType(t);
+            bool nullable = under != null || (t == typeof(string)
+                && new System.Reflection.NullabilityInfoContext().Create(p).WriteState == System.Reflection.NullabilityState.Nullable);
+            var core = under ?? t;
+            string? kind = core == typeof(int) || core == typeof(long) ? "int"
+                         : core == typeof(double) || core == typeof(float) || core == typeof(decimal) ? "number"
+                         : core == typeof(bool) ? "bool"
+                         : core == typeof(string) ? "string"
+                         : core.IsEnum ? "enum"
+                         : null;
+            if (kind == null) continue;   // nested objects and lists are not scalar fields
+            list.Add(new FieldInfo(key, kind, nullable, core.IsEnum ? Enum.GetNames(core) : null));
+        }
+        return list;
+    }
+
     internal static JsonSerializerOptions InnerOptions => _innerOptions;
 
     private static readonly (string Type, string Category, string Class)[] _known = new[] {

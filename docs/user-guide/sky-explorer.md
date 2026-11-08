@@ -128,7 +128,7 @@ R*tree-indexed bundle at `wwwroot/catalogs/dso/dso.db` (~2.6 MB,
 | **HCG**        | 100     | CDS Vizier `VII/213/groups` (Hickson 1982/89)            | Public domain  |
 | **AGC**        | 767     | CDS Vizier `VII/110A/table3` (Abell-Corwin-Olowin 1989)  | Public domain  |
 | **HR / Star / WR** | ~9400 | Bright Star Catalogue, IAU star names, Galactic Wolf-Rayet list (`scripts/build-star-catalog.py`) | Public domain |
-| **Notable**    | ~150    | Hand-curated famous objects: quasars and blazars, pulsars and magnetars, black holes, gravitational lenses, galaxy groups and clusters, dwarf galaxies, record stars, deep fields (`scripts/build-named-objects.py`) | Public domain |
+| **Notable**    | ~600    | Hand-curated famous objects: quasars and blazars, pulsars and magnetars, black holes and X-ray novae, gravitational lenses, galaxy groups and clusters, Local Group dwarfs, supernova remnants, named nebulae, Palomar and other odd clusters, record stars, exoplanet hosts, historical novae and supernovae, gamma-ray and fast radio bursts, deep fields, sky landmarks (`scripts/build-named-objects.py`) | Public domain |
 
 The Notable rows are the things people ask for by name that no NGC / IC /
 Messier number covers: Phoenix A, TON 618, 3C 273, the Vela pulsar,
@@ -140,6 +140,11 @@ Atlas filter as catalog "Notable" with their own types ("Quasar",
 "Pulsar", "Black Hole", "Gravitational Lens", "Dwarf Galaxy", ...).
 Tonight's Best lists them under their own **Notable** chip: every one
 that peaks above 30° tonight, with no brightness gate, ordered by score.
+
+The same script also stamps popular imaging nicknames onto NGC / IC / Sh2
+rows that the source catalogues list only by number, so "Elephant Trunk"
+finds IC 1396, "Pacman Nebula" finds NGC 281, "Tulip Nebula" finds Sh2 101
+and "Spaghetti Nebula" finds Sh2 240, and the map labels them that way.
 
 The AGC entry is magnitude-trimmed at m10 < 17 to keep the brightest
 ~30% of the 2712-cluster catalog - fainter clusters require deep
