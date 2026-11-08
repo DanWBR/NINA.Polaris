@@ -774,10 +774,48 @@ public static class SkyEndpoints {
         // Ranked list of objects best positioned for observation tonight
         // from the active profile's location. Includes DSOs (from the
         // local catalog) + Moon + visible planets.
-        group.MapGet("/tonights-best", (int? limit, TonightsBestService svc) => {
+        group.MapGet("/tonights-best", (int? limit, bool? narrowband, TonightsBestService svc) => {
             var n = Math.Clamp(limit ?? 30, 1, 100);
-            var result = svc.Compute(n);
+            var result = svc.Compute(n, narrowband);
             return Results.Ok(result);
+        });
+
+        // ---- The site's sky (Bortle / SQM) for Tonight's Best ----
+
+        // The saved dark-sky brightness, plus what a connected SQM meter reads
+        // right now (offered in the UI, never adopted silently: a reading
+        // under a Moon or cloud is not the site's dark sky).
+        group.MapGet("/sky-quality", (ProfileService profile, EquipmentManager equip) => {
+            var sqm = profile.Active.SkySqm;
+            double? meter = null;
+            try {
+                var w = equip.Weather;
+                if (w != null && w.IsConnected && NINA.Polaris.Services.Sky.SkyBrightness.IsValidSqm(w.SkyQuality))
+                    meter = Math.Round(w.SkyQuality, 2);
+            } catch { /* no meter */ }
+            return Results.Ok(new {
+                sqm,
+                bortle = sqm is { } s ? NINA.Polaris.Services.Sky.SkyBrightness.BortleForSqm(s) : (int?)null,
+                meterSqm = meter,
+            });
+        });
+
+        // Set it from a Bortle class (1..9) or an SQM value; both null clears it.
+        group.MapPut("/sky-quality", (SkyQualityRequest req, ProfileService profile) => {
+            double? sqm = null;
+            if (req?.Sqm is { } v) {
+                if (!NINA.Polaris.Services.Sky.SkyBrightness.IsValidSqm(v))
+                    return Results.BadRequest(new { error = "SQM must be between 15 and 22.5 mag/arcsec²" });
+                sqm = Math.Round(v, 2);
+            } else if (req?.Bortle is { } b) {
+                if (b < 1 || b > 9) return Results.BadRequest(new { error = "Bortle class must be 1 to 9" });
+                sqm = NINA.Polaris.Services.Sky.SkyBrightness.SqmForBortle(b);
+            }
+            profile.UpdateSettings(p => p.SkySqm = sqm);
+            return Results.Ok(new {
+                sqm,
+                bortle = sqm is { } s ? NINA.Polaris.Services.Sky.SkyBrightness.BortleForSqm(s) : (int?)null,
+            });
         });
 
         // GET /api/sky/nearest-planet?ra={raHours}&dec={decDeg}
@@ -898,4 +936,7 @@ public static class SkyEndpoints {
     /// <summary>PUT body for <c>/api/sky/horizon</c>: the full set of custom
     /// horizon points from the in-UI editor.</summary>
     public record HorizonRequest(List<HorizonPoint>? Points);
+
+    /// <summary>The site's sky: an SQM value (wins) or a Bortle class.</summary>
+    public record SkyQualityRequest(double? Sqm, int? Bortle);
 }

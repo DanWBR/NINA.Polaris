@@ -334,6 +334,29 @@ def maybe_float(s):
         return None
 
 
+def openngc_magnitude(row: dict, type_code: str):
+    """V magnitude, else B. For a galaxy whose two disagree impossibly, B.
+
+    OpenNGC carries a handful of galaxies whose V cannot belong with their
+    B: NGC 253 is B 7.94 and V 11.11 (B-V of -3.2; galaxies sit between
+    about 0.3 and 1.2), NGC 4945 is B 9.28 and V 11.86, IC 127 is B 14.83
+    and V 9.2. Taking V made the Sculptor Galaxy look like a magnitude 11
+    smudge, ranked far down Tonight's Best and rated out of reach from a
+    city where it is routinely imaged. B is the better measured of the two
+    for galaxies in OpenNGC (HyperLEDA), so it wins when they disagree.
+    Planetary nebulae and HII regions are left alone: their B and V
+    legitimately differ by emission lines.
+    """
+    v_mag = maybe_float(row.get("V-Mag"))
+    b_mag = maybe_float(row.get("B-Mag"))
+    if v_mag is None:
+        return b_mag
+    if (b_mag is not None and type_code in ("G", "GPair", "GTrpl", "GGroup")
+            and (v_mag - b_mag > 1.0 or b_mag - v_mag > 2.0)):
+        return b_mag
+    return v_mag
+
+
 def parse_sexagesimal_ra(s: str):
     """Parse 'HH MM SS.S' or 'HH:MM:SS' to decimal hours. None on fail."""
     if not s:
@@ -456,9 +479,7 @@ def ingest_openngc(csv_path: Path, rows: list) -> int:
             # Skip dup/non-existent entries — they pollute the search.
             if type_code in ("Dup", "NonEx"):
                 continue
-            v_mag = maybe_float(row.get("V-Mag"))
-            b_mag = maybe_float(row.get("B-Mag"))
-            mag = v_mag if v_mag is not None else b_mag
+            mag = openngc_magnitude(row, type_code)
             maj_ax = maybe_float(row.get("MajAx"))   # arcmin
             constellation = (row.get("Const") or "").strip() or None
             messier = (row.get("M") or "").strip()
@@ -550,9 +571,7 @@ def ingest_openngc_addendum(csv_path: Path, rows: list) -> int:
                 continue
 
             type_str = OPENNGC_TYPE_MAP.get(type_code, type_code or "Other")
-            v_mag = maybe_float(row.get("V-Mag"))
-            b_mag = maybe_float(row.get("B-Mag"))
-            mag = v_mag if v_mag is not None else b_mag
+            mag = openngc_magnitude(row, type_code)
             maj_ax = maybe_float(row.get("MajAx"))
             constellation = (row.get("Const") or "").strip() or None
             messier = (row.get("M") or "").strip()
