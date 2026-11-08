@@ -113,6 +113,7 @@ public sealed partial class NativeGuider {
             _settleActive = false;
             _settler = null;
             LastSettleStatus = null;
+            LastSettleAt = null;
             _settleErrPx = 0; _settleBelowSec = 0; _settleElapsedSec = 0;
         }
         _paused = false;
@@ -300,6 +301,17 @@ public sealed partial class NativeGuider {
         if (measuring) _errorTracker.Update(distPx, Math.Abs(raPx));
         else _errorTracker.Seed(distPx, Math.Abs(raPx));
 
+        // Did the last compensated Dec reversal overshoot? Halve the amount
+        // when it did, and stop compensating after repeated overshoots.
+        var blc = _backlashComp.Observe(decPx, Math.Max(0.3, Rig.NativeMinMoveDecPx));
+        if (blc == BacklashObservation.Reduced) {
+            _logger.LogInformation("Native guide: Dec backlash compensation overshot; reduced to {Ms} ms",
+                                   _backlashComp.AppliedMs);
+        } else if (blc == BacklashObservation.Disabled) {
+            _logger.LogWarning("Native guide: Dec backlash compensation kept overshooting; turned off for this session");
+            RaiseAlert("Dec backlash compensation kept overshooting; turned off for this session.");
+        }
+
         // Frame interval for the (time-aware) predictive algorithm; reactive
         // algorithms ignore it. First frame falls back to the exposure period.
         long nowMs = NowMs();
@@ -460,6 +472,7 @@ public sealed partial class NativeGuider {
             _settleActive = false;
             bool ok = state == GuidingSettler.State.Done;
             LastSettleStatus = ok ? "done" : "failed";
+            LastSettleAt = DateTime.UtcNow;
             // A dither just finished settling: drop the error history that
             // accumulated against the old lock so the RMS reflects only
             // post-dither guiding, not the dither excursion itself.

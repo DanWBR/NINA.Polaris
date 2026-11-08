@@ -538,6 +538,101 @@ public class NativeGuiderCoreTests {
             Is.EqualTo(slackSteps * (double)pulseMs).Within(2.0 * pulseMs));
     }
 
+    [Test]
+    public void CalibrationProcess_NoSlack_MeasuresNoBacklash() {
+        // The SV503 rig on 2026-11-01: 2000 ms steps moving the star ~2.7 px
+        // each on a ZWO AM5. With a 3 px catch the clearing took two steps of
+        // pure motion, which used to be recorded as 4000 ms of backlash.
+        const int pulseMs = 2000;
+        const double perStep = 2.734;
+        var proc = new CalibrationProcess(pulseMs, distThresholdPx: 25.0,
+            maxSteps: 80, declinationRad: 0.0, catchThresholdPx: 3.0);
+        double x = 100, y = 100;
+        CalibrationStep step = default;
+        for (int i = 0; i < 400; i++) {
+            step = proc.Tick(x, y);
+            if (step.Done || step.Failed) break;
+            if (!step.Pulse) continue;
+            switch (step.Direction) {
+                case GuideDirections.guideWest: x += perStep; break;
+                case GuideDirections.guideEast: x -= perStep; break;
+                case GuideDirections.guideSouth: y += perStep; break;
+                case GuideDirections.guideNorth: y -= perStep; break;
+            }
+        }
+        Assert.That(step.Done, Is.True);
+        Assert.That(proc.Result.BacklashMs, Is.Zero);
+    }
+
+    [TestCase(6000, 3.85, 0.001367, 2000, 3184)]   // part slack, part motion
+    [TestCase(4000, 5.47, 0.001367, 2000, 0)]      // all motion
+    [TestCase(1000, 3.0, 0.0, 1000, 0)]            // no rate: unknown
+    public void CalibrationProcess_SlackMs_SubtractsTheMotion(double clearMs, double movedPx, double rate, int pulseMs, double expected) {
+        Assert.That(CalibrationProcess.SlackMs(clearMs, movedPx, rate, pulseMs), Is.EqualTo(expected).Within(1));
+    }
+
+    [Test]
+    public void BacklashComp_OvershootHalvesTheAmount_AndRepeatedOvershootsTurnItOff() {
+        var bc = new BacklashComp(1200);
+        bc.Adjust(GuideDirections.guideNorth, 300);
+        Assert.That(bc.Adjust(GuideDirections.guideSouth, 300), Is.EqualTo(1500));
+        // Next frame the error needs NORTH again: the south pulse overshot.
+        Assert.That(bc.Observe(+0.8, 0.3), Is.EqualTo(BacklashObservation.Reduced));
+        Assert.That(bc.AppliedMs, Is.EqualTo(600));
+        bc.Adjust(GuideDirections.guideNorth, 300);   // compensated again (reversal)
+        Assert.That(bc.Observe(-0.8, 0.3), Is.EqualTo(BacklashObservation.Reduced));
+        bc.Adjust(GuideDirections.guideSouth, 300);
+        Assert.That(bc.Observe(+0.8, 0.3), Is.EqualTo(BacklashObservation.Disabled));
+        Assert.That(bc.Enabled, Is.False);
+        // Off: reversals pass through untouched.
+        Assert.That(bc.Adjust(GuideDirections.guideNorth, 300), Is.EqualTo(300));
+    }
+
+    [Test]
+    public void BacklashComp_SmallResidualOrNoPendingReversal_ChangesNothing() {
+        var bc = new BacklashComp(400);
+        Assert.That(bc.Observe(+2.0, 0.3), Is.EqualTo(BacklashObservation.None)); // nothing pending
+        bc.Adjust(GuideDirections.guideNorth, 300);
+        bc.Adjust(GuideDirections.guideSouth, 300);
+        Assert.That(bc.Observe(+0.1, 0.3), Is.EqualTo(BacklashObservation.None));  // within min move
+        Assert.That(bc.AppliedMs, Is.EqualTo(400));
+    }
+
+    [Test]
+    public void BacklashComp_Shortfall_GrowsTowardTheCeiling() {
+        var bc = new BacklashComp(1000, maxMs: 1000, prior: new BacklashComp(1000, maxMs: 1000));
+        var trimmed = new BacklashComp(1000, maxMs: 1000);
+        trimmed.Adjust(GuideDirections.guideNorth, 300);
+        trimmed.Adjust(GuideDirections.guideSouth, 300);
+        trimmed.Observe(+0.8, 0.3);                     // overshoot: 500
+        trimmed.Adjust(GuideDirections.guideNorth, 300);
+        // Still needs NORTH after the north pulse: fell short.
+        Assert.That(trimmed.Observe(+0.8, 0.3), Is.EqualTo(BacklashObservation.Increased));
+        Assert.That(trimmed.AppliedMs, Is.EqualTo(550));
+        Assert.That(bc.AppliedMs, Is.EqualTo(1000));
+    }
+
+    [Test]
+    public void BacklashComp_PriorWithSameMeasurement_KeepsWhatWasLearned() {
+        var first = new BacklashComp(1200, maxMs: 1250);
+        first.Adjust(GuideDirections.guideNorth, 300);
+        first.Adjust(GuideDirections.guideSouth, 300);
+        first.Observe(+0.8, 0.3);                       // 600
+        var next = new BacklashComp(1200, maxMs: 1250, prior: first);
+        Assert.That(next.AppliedMs, Is.EqualTo(600));
+        var recalibrated = new BacklashComp(800, maxMs: 1250, prior: first);
+        Assert.That(recalibrated.AppliedMs, Is.EqualTo(800));
+    }
+
+    [Test]
+    public void BacklashComp_Am5Calibration_StartsAtTheCeiling_NotTheFullMeasurement() {
+        // 6000 ms measured, Dec pulses limited to 2500: the guider passes half
+        // of that as the ceiling, so a reversal adds 1250, not 6000.
+        var bc = new BacklashComp(6000, maxMs: 2500 / 2);
+        bc.Adjust(GuideDirections.guideNorth, 400);
+        Assert.That(bc.Adjust(GuideDirections.guideSouth, 400), Is.EqualTo(1650));
+    }
+
     // ---- ZFilter algorithm (PHD2 port) ----
 
     [Test]
