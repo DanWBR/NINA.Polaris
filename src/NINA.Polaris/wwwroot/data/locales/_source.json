@@ -5080,5 +5080,10 @@
   "Time since the run started": "",
   "Copy this target's RA and Dec into its Meridian Flip, Center After Drift and Loop Until Altitude": "",
   "Switch star when guiding stalls": "",
-  "When guiding stalls (no correction for a minute), its offset freezes (a hot pixel or a repeated frame), or a very large star reports its own noise as error, guiding moves to another star by itself.": ""
+  "When guiding stalls (no correction for a minute), its offset freezes (a hot pixel or a repeated frame), or a very large star reports its own noise as error, guiding moves to another star by itself.": "",
+  "Match background": "",
+  "Weight frames by quality": "",
+  "Shift each frame's sky background to the reference frame's before stacking, so clouds, the moon or the hour do not leave bright or dark bands where the frames overlap differently. Applies on the next stack Reset.": "",
+  "Weight each frame by its signal-to-noise against the reference, so cloudy or hazy frames count for less than clear ones. Applies on the next stack Reset.": "",
+  "Saved: Reset the stack to apply": ""
 }

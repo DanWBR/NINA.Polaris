@@ -29,9 +29,11 @@ the camera stream. While stacking is active, each incoming frame:
 2. is aligned against the reference (the first frame's star pattern)
    with an affine transform, a shift-rotate-scale mapping that lays
    one frame precisely over another,
-3. accumulates into a running-mean buffer (the stack itself: the
-   average of every frame so far), and
-4. re-renders the stacked image to the canvas.
+3. has its sky background shifted to the reference frame's and gets a
+   weight from its quality (see below),
+4. accumulates into a weighted running-mean buffer (the stack itself:
+   the average of every frame so far), and
+5. re-renders the stacked image to the canvas.
 
 The frame count and reference star count update every second.
 
@@ -47,6 +49,41 @@ frame than at the top), Polaris switches that frame to a second-order
 warp, a gently curved version of the same mapping, but only when it
 clearly fits the stars better. The edges of a long session then show
 the rotated frame borders, while the stars stay sharp everywhere.
+
+Each frame is aligned starting from where the previous frame landed,
+so a field that drifts a long way over the night (poor polar
+alignment, or a mount that is not guided) keeps aligning frame after
+frame. A result that jumps far from the previous frame is checked
+again with a wider, stricter search before it is accepted. Without
+that, a frame more than 50 px out could be matched to the wrong stars
+by coincidence and leave a faint ghost copy of the field in the stack,
+seen as repeated stars arranged along an arc.
+
+### Changing skies: background matching and frame weights
+
+The sky behind the stars is not constant through a night. Thin cloud
+lit by city lights, the moon rising or setting, or simply the hour
+change its brightness, sometimes by several times. Two settings in the
+LIVE tab, both on by default, keep that out of the stack:
+
+- **Match background** shifts each frame's sky background to the
+  reference frame's before it is added, per colour channel, the way
+  Siril's `addscale` normalisation does. Without it, wherever the
+  field's drift leaves only some of the frames covering the edge of
+  the stack, that edge shows those frames' sky, and a session that
+  started under thin cloud gets bright bands along its edges.
+- **Weight frames by quality** gives each frame a weight from its
+  signal-to-noise against the reference: the background noise, and the
+  brightness of its brightest stars. A frame under cloud, with a
+  brighter and noisier sky and dimmer stars, counts for less than a
+  clear one instead of the same. Weights run from 0.05 to 4 times the
+  reference's; on a night that began under thin cloud, the cloudy
+  frames came out between about 0.2 and 0.5 and the clear ones between
+  1.2 and 1.6.
+
+Both take effect on the next **Reset**, like the other stacking
+options. Weighting adds one buffer of 4 bytes per pixel, which the
+automatic choice of stacking resolution accounts for.
 
 ![LIVE stacking the Lagoon Nebula: the growing stack in the viewer,
 the histogram with its stretch handles below, capture inputs and the
@@ -398,13 +435,16 @@ guider backend is active.
 
 ## Rejecting outliers (kappa-sigma)
 
-By default the live stack is a plain running mean: every frame's
-pixels are averaged in, with no per-pixel outlier rejection. That is
-fast, but a cosmic ray, a satellite or plane trail, or a hot pixel is
-averaged in too, just at reduced amplitude.
+Without rejection, the live stack averages every frame's pixels in, so
+a cosmic ray, a satellite or plane trail, or a warm pixel is averaged
+in too, just at reduced amplitude. On a session whose field drifts,
+each warm pixel lands somewhere new in every frame and draws a small
+coloured squiggle, the drift's own path, across the stack.
 
 The **Reject outliers (kappa-sigma)** checkbox in the LIVE tab, next
-to "Save each frame", adds per-pixel rejection. For each pixel,
+to "Save each frame", adds per-pixel rejection, and it is **on by
+default** since November 2026 (rigs saved before were switched on once
+when they were upgraded; turning it off afterwards sticks). For each pixel,
 Polaris tracks the running mean and spread of the frames seen so far,
 and a new sample more than k sigma away (more than k times the
 measured spread from the mean) is dropped instead of folded in. That
@@ -419,13 +459,14 @@ A few things to know about it:
   outlier that rejection then removes cleanly. Without dithering, a
   fixed hot pixel can land on the same sky spot repeatedly and look
   like signal.
-- The first few frames always seed the statistics; nothing is
-  rejected until a spread estimate exists, so give it five or more
-  frames.
-- It runs on the CPU and allocates one extra full-frame buffer, so it
-  costs a little more RAM and per-frame time than the plain mean. It
-  is off by default and opted into per rig, and it takes effect on the
-  next **Reset**, since the reference frame allocates the buffers.
+- The first ten frames always seed the statistics; nothing is
+  rejected until a spread estimate exists.
+- It runs on the CPU and allocates two extra full-frame buffers (8
+  bytes per pixel), which the automatic choice of stacking resolution
+  accounts for. It takes effect on the next **Reset**, since the
+  reference frame allocates the buffers. On a real 120-frame session it
+  dropped under 1% of the samples and removed both the warm-pixel
+  squiggles and a satellite trail.
 - The setting lives on `EquipmentProfile.LiveStackSigmaRejection` and
   `EquipmentProfile.LiveStackSigmaKappa`, per rig. Colour
   stacks reject on luminance (the overall brightness, ignoring

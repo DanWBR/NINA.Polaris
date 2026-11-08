@@ -5446,5 +5446,10 @@
   "Time since the run started": "Tiempo desde el inicio de la ejecución",
   "Copy this target's RA and Dec into its Meridian Flip, Center After Drift and Loop Until Altitude": "Copiar la AR y la Dec de este objetivo a su Meridian Flip, Center After Drift y Loop Until Altitude",
   "Switch star when guiding stalls": "Cambiar de estrella cuando el guiado se atasca",
-  "When guiding stalls (no correction for a minute), its offset freezes (a hot pixel or a repeated frame), or a very large star reports its own noise as error, guiding moves to another star by itself.": "Cuando el guiado se atasca (un minuto sin corrección), el desvío se congela (píxel caliente o imagen repetida) o una estrella muy grande reporta su propio ruido como error, el guiado pasa solo a otra estrella."
+  "When guiding stalls (no correction for a minute), its offset freezes (a hot pixel or a repeated frame), or a very large star reports its own noise as error, guiding moves to another star by itself.": "Cuando el guiado se atasca (un minuto sin corrección), el desvío se congela (píxel caliente o imagen repetida) o una estrella muy grande reporta su propio ruido como error, el guiado pasa solo a otra estrella.",
+  "Match background": "Igualar el fondo",
+  "Weight frames by quality": "Ponderar tomas por calidad",
+  "Shift each frame's sky background to the reference frame's before stacking, so clouds, the moon or the hour do not leave bright or dark bands where the frames overlap differently. Applies on the next stack Reset.": "Ajusta el fondo del cielo de cada toma al de la toma de referencia antes de apilar, para que las nubes, la luna o la hora no dejen franjas claras u oscuras donde las tomas se solapan de forma distinta. Se aplica desde el próximo Reset del apilado.",
+  "Weight each frame by its signal-to-noise against the reference, so cloudy or hazy frames count for less than clear ones. Applies on the next stack Reset.": "Da a cada toma un peso según su relación señal/ruido frente a la referencia, para que las tomas con nubes o bruma cuenten menos que las despejadas. Se aplica desde el próximo Reset del apilado.",
+  "Saved: Reset the stack to apply": "Guardado: haz Reset del apilado para aplicar"
 }

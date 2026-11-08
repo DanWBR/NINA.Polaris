@@ -241,7 +241,7 @@ public class LiveStackingService {
     /// pixels stay out of the integration. OFF (default) keeps the plain
     /// running-mean accumulate (GPU fast path). Pays off most WITH dithering.
     /// Set via PUT /api/livestack/sigma-rejection, persisted per-rig.</summary>
-    public bool SigmaRejection { get; set; } = false;
+    public bool SigmaRejection { get; set; } = true;
 
     /// <summary>Rejection threshold in sigmas (default 3.0). Lower = more
     /// aggressive clipping.</summary>
@@ -249,7 +249,33 @@ public class LiveStackingService {
 
     // Frames must build a spread estimate before any sample can be rejected,
     // so the first few always seed each pixel's statistics.
-    private const int SigmaMinFrames = 5;
+    private const int SigmaMinFrames = 10;
+
+    /// <summary>Shift each frame's background (per colour channel or CFA
+    /// site) to the reference frame's before integrating it, so a sky that
+    /// changes through the session (cloud, moon, the hour) does not leave
+    /// steps where the frames' coverage differs. See <see cref="LiveStackFrameNorm"/>.</summary>
+    public bool BackgroundNormalization { get; set; } = true;
+
+    /// <summary>Weight each frame by its signal-to-noise against the
+    /// reference, so a cloudy or hazy frame counts for less than a clear one
+    /// instead of the same. See <see cref="LiveStackFrameNorm"/>.</summary>
+    public bool FrameWeighting { get; set; } = true;
+
+    /// <summary>Weight the last integrated frame received (1 = the reference's).</summary>
+    public double LastFrameWeight { get; private set; } = 1;
+
+    // Reference frame's background (per plane / CFA site), noise and star
+    // signal, measured when the reference is taken.
+    private double[]? _refBackground;
+    private double _refNoise;
+    private double _refSignal;
+    // Per-pixel sum of weights, the mean's denominator while FrameWeighting is
+    // on (_countBuffer stays the number of frames, for rejection + coverage).
+    private float[]? _weightBuffer;
+    private ushort[]? _scratchNorm;
+    // Last reference-orientation alignment, the prediction for the next frame.
+    private AffineTransform? _lastAligned;
 
     // Welford M2 (sum of squared deviations) per pixel, allocated only while
     // SigmaRejection is on. Mono uses _stackBuffer as the running sum; colour
@@ -325,7 +351,17 @@ public class LiveStackingService {
                       && props.BayerPattern != BayerPatternEnum.None
                       && props.BayerPattern != BayerPatternEnum.Auto;
         long ram = GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;
-        return ResolveAutoBinning((long)props.Width * props.Height, colour, ram);
+        return ResolveAutoBinning((long)props.Width * props.Height, colour, ram, ExtraBytesPerPixel());
+    }
+
+    /// <summary>Per-pixel buffers on top of the measured base cost: the
+    /// rejection statistics (M2 + a luminance running sum, 8 B) and the frame
+    /// weights (4 B). The 96 B/px base was measured with neither.</summary>
+    internal long ExtraBytesPerPixel() {
+        var rig = _profiles?.ActiveEquipmentProfile;
+        bool rej = rig?.LiveStackSigmaRejection ?? SigmaRejection;
+        bool wt = rig?.LiveStackWeightFrames ?? FrameWeighting;
+        return (rej ? 8 : 0) + (wt ? 4 : 0);
     }
 
     /// <summary>Per-pixel working-set cost of a live-stack session, in bytes.
@@ -368,8 +404,8 @@ public class LiveStackingService {
     /// <summary>Peak working set a live-stack session would reach at this
     /// pixel count, in bytes. One place, so the estimate the UI shows and the
     /// rule that picks Auto can never drift apart.</summary>
-    internal static long EstimateStackBytes(long pixelCount, bool colour) =>
-        pixelCount <= 0 ? 0 : StackFloorBytes + (pixelCount * StackBytesPerPixel(colour));
+    internal static long EstimateStackBytes(long pixelCount, bool colour, long extraBytesPerPixel = 0) =>
+        pixelCount <= 0 ? 0 : StackFloorBytes + (pixelCount * (StackBytesPerPixel(colour) + extraBytesPerPixel));
 
     /// <summary>How much of the machine a live stack may claim.
     ///
@@ -415,7 +451,7 @@ public class LiveStackingService {
         long budget = StackBudgetBytes(ram);
         var list = new List<StackBinningOption>();
         foreach (var bin in new[] { 1, 2, 4 }) {
-            long cost = EstimateStackBytes(px / ((long)bin * bin), colour);
+            long cost = EstimateStackBytes(px / ((long)bin * bin), colour, ExtraBytesPerPixel());
             list.Add(new StackBinningOption(
                 Bin: bin,
                 EstimatedMB: (int)(cost / (1024 * 1024)),
@@ -429,14 +465,15 @@ public class LiveStackingService {
     public int StackBudgetMB =>
         (int)(StackBudgetBytes(GC.GetGCMemoryInfo().TotalAvailableMemoryBytes) / (1024 * 1024));
 
-    internal static int ResolveAutoBinning(long pixelCount, bool colour, long totalRamBytes) {
+    internal static int ResolveAutoBinning(long pixelCount, bool colour, long totalRamBytes,
+            long extraBytesPerPixel = 0) {
         if (pixelCount <= 0) return 1;
         // Same estimate and same budget the dropdown shows. This used to carry
         // its own copy of the per-pixel constant, so a correction in one place
         // would have left Auto picking against the old number.
         long budget = StackBudgetBytes(totalRamBytes);
         foreach (var bin in new[] { 1, 2, 4 }) {
-            if (EstimateStackBytes(pixelCount / ((long)bin * bin), colour) <= budget) return bin;
+            if (EstimateStackBytes(pixelCount / ((long)bin * bin), colour, extraBytesPerPixel) <= budget) return bin;
         }
         return 4;
     }
@@ -911,6 +948,13 @@ public class LiveStackingService {
             _stackB = null;
             _m2Buffer = null;
             _lumSumBuffer = null;
+            _weightBuffer = null;
+            _scratchNorm = null;
+            _lastAligned = null;
+            _refBackground = null;
+            _refNoise = 0;
+            _refSignal = 0;
+            LastFrameWeight = 1;
             _scratchCal = null;
             _scratchCosmetic = null;
             _dbR = null; _dbG = null; _dbB = null;
@@ -1314,6 +1358,9 @@ public class LiveStackingService {
             // Second-order refinement of usedTransform, when it clearly fits
             // the stars better (see PolynomialWarp); null = warp with the affine.
             PolynomialWarp? usedWarp = null;
+            // This frame starts the session: it sets the background and
+            // weight references and is never shifted or reweighted.
+            bool isReference = false;
 
             lock (_lock) {
                 // "First frame" means the first frame THIS BRANCH sees, not
@@ -1412,15 +1459,34 @@ public class LiveStackingService {
                     } else {
                         _stackBuffer = new float[pixelCount];
                     }
+                    // The rig's saved choices are the source of truth for a new
+                    // session. The rejection toggle used to reach the stacker only
+                    // when the operator clicked it, so after a restart the LIVE
+                    // tab showed it on while the stacker ran with it off.
+                    var rigLs = _profiles?.ActiveEquipmentProfile;
+                    if (rigLs != null) {
+                        SigmaRejection = rigLs.LiveStackSigmaRejection;
+                        SigmaKappa = rigLs.LiveStackSigmaKappa > 0 ? rigLs.LiveStackSigmaKappa : SigmaKappa;
+                        BackgroundNormalization = rigLs.LiveStackNormalizeBackground;
+                        FrameWeighting = rigLs.LiveStackWeightFrames;
+                    }
+                    isReference = true;
+                    _lastAligned = null;
+                    _refBackground = null;
+                    LastFrameWeight = 1;
+                    if (FrameWeighting) _weightBuffer = new float[pixelCount];
                     // Kappa-sigma rejection buffers (opt-in). Mono reuses
                     // _stackBuffer as the running sum + one M2 buffer; colour
                     // needs a separate luminance running sum since the channel
-                    // accumulators aren't a luminance. Allocated only when on.
+                    // accumulators aren't a luminance, and so does mono when
+                    // frames are weighted (the sum is then a weighted one).
                     if (SigmaRejection) {
                         _m2Buffer = new float[pixelCount];
-                        if (_colorActive) _lumSumBuffer = new float[pixelCount];
+                        if (_colorActive || FrameWeighting) _lumSumBuffer = new float[pixelCount];
                         _logger.LogInformation("Live stack: kappa-sigma rejection ON (k={K})", SigmaKappa);
                     }
+                    _logger.LogInformation("Live stack: background matching {Bg}, frame weighting {W}",
+                        BackgroundNormalization ? "ON" : "off", FrameWeighting ? "ON" : "off");
                     // Part B2: remember the pier side at the reference so a
                     // later change can hint a flip before alignment proves it.
                     _referencePier = _equipment?.Telescope?.SideOfPier ?? PierSide.pierUnknown;
@@ -1482,6 +1548,11 @@ public class LiveStackingService {
                     EnsureScratch(ref _dbB, pc);
                     BayerDebayer.Bilinear(data, _width, _height, _bayerPattern, _dbR!, _dbG!, _dbB!);
                     ushort[] r = _dbR!, g = _dbG!, b = _dbB!;
+                    // Background + noise on the unwarped planes (the warp's
+                    // empty border would bias them).
+                    var nst = (BackgroundNormalization || FrameWeighting)
+                        ? LiveStackFrameNorm.ForPlanes(new[] { r, g, b }, _width, _height) : null;
+                    double w = NoteFrameStats(nst, stars, isReference);
                     if (usedTransform != null) {
                         EnsureScratch(ref _warpR, pc);
                         EnsureScratch(ref _warpG, pc);
@@ -1496,8 +1567,15 @@ public class LiveStackingService {
                             b = ImageResampler.ApplyTransform(b, _width, _height, usedTransform, _warpB!);
                         }
                     }
+                    if (BackgroundNormalization && nst != null && _refBackground is { Length: 3 } rb && !isReference) {
+                        LiveStackFrameNorm.Subtract(r, nst.Background[0] - rb[0]);
+                        LiveStackFrameNorm.Subtract(g, nst.Background[1] - rb[1]);
+                        LiveStackFrameNorm.Subtract(b, nst.Background[2] - rb[2]);
+                    }
                     int accN = Math.Min(r.Length, _stackR!.Length);
                     bool rej = SigmaRejection && _m2Buffer != null && _lumSumBuffer != null;
+                    float wf = (float)w;
+                    var wbuf = _weightBuffer;
                     for (int i = 0; i < accN; i++) {
                         // Off-canvas after warp is 0 in all three planes.
                         if (r[i] > 0 || g[i] > 0 || b[i] > 0) {
@@ -1511,15 +1589,17 @@ public class LiveStackingService {
                                     RejectedPixels++;
                                     continue;
                                 }
-                                _stackR![i] += r[i];
-                                _stackG![i] += g[i];
-                                _stackB![i] += b[i];
+                                _stackR![i] += wf * r[i];
+                                _stackG![i] += wf * g[i];
+                                _stackB![i] += wf * b[i];
+                                if (wbuf != null) wbuf[i] += wf;
                                 // Update increments the shared count for us.
                                 KappaSigmaStack.Update(_lumSumBuffer!, _countBuffer!, _m2Buffer!, i, lum);
                             } else {
-                                _stackR![i] += r[i];
-                                _stackG![i] += g[i];
-                                _stackB![i] += b[i];
+                                _stackR![i] += wf * r[i];
+                                _stackG![i] += wf * g[i];
+                                _stackB![i] += wf * b[i];
+                                if (wbuf != null) wbuf[i] += wf;
                                 _countBuffer![i]++;
                             }
                         }
@@ -1527,8 +1607,59 @@ public class LiveStackingService {
                 } else {
                     // Mono: accumulate the aligned CFA/mono frame (running
                     // average), on the GPU when available, CPU otherwise.
+                    bool cfaMono = props.BayerPattern != BayerPatternEnum.None
+                                   && props.BayerPattern != BayerPatternEnum.Auto;
+                    var nst = (BackgroundNormalization || FrameWeighting)
+                        ? LiveStackFrameNorm.ForMosaic(data, _width, _height, cfaMono) : null;
+                    double w = NoteFrameStats(nst, stars, isReference);
+                    if (BackgroundNormalization && nst != null && _refBackground is { } rb
+                            && rb.Length == nst.Background.Length && !isReference) {
+                        var offs = nst.Background.Select((v, k) => v - rb[k]).ToArray();
+                        if (offs.Any(o => Math.Abs(o) >= 0.5)) {
+                            // Never shift the camera's own buffer, which the
+                            // relay and the writer still hold.
+                            if (ReferenceEquals(alignedData, imageData.Data)) {
+                                EnsureScratch(ref _scratchNorm, alignedData.Length);
+                                Array.Copy(alignedData, _scratchNorm!, alignedData.Length);
+                                alignedData = _scratchNorm!;
+                            }
+                            LiveStackFrameNorm.SubtractMosaic(alignedData, _width, _height, offs);
+                        }
+                    }
                     int accN = Math.Min(alignedData.Length, _stackBuffer!.Length);
-                    if (SigmaRejection && _m2Buffer != null) {
+                    float wf = (float)w;
+                    if (SigmaRejection && _m2Buffer != null && _lumSumBuffer != null) {
+                        // Weighted frames: the Welford statistics run on their
+                        // own running sum, since _stackBuffer is a weighted one.
+                        for (int i = 0; i < accN; i++) {
+                            ushort v = alignedData[i];
+                            if (v == 0) continue;
+                            if (!KappaSigmaStack.Accept(_lumSumBuffer, _countBuffer!, _m2Buffer,
+                                    i, v, SigmaMinFrames, SigmaKappa)) {
+                                RejectedPixels++;
+                                continue;
+                            }
+                            _stackBuffer[i] += wf * v;
+                            if (_weightBuffer != null) _weightBuffer[i] += wf;
+                            KappaSigmaStack.Update(_lumSumBuffer, _countBuffer!, _m2Buffer, i, v);
+                        }
+                    } else if (_weightBuffer != null) {
+                        // Weighted running mean on the CPU (the GPU kernel adds
+                        // whole frames with a count, not a weight).
+                        var wb = _weightBuffer;
+                        var sb = _stackBuffer;
+                        var cb = _countBuffer!;
+                        var ad = alignedData;
+                        Parallel.For(0, accN / 65536 + 1, part => {
+                            int a = part * 65536, e = Math.Min(accN, a + 65536);
+                            for (int i = a; i < e; i++) {
+                                if (ad[i] == 0) continue;
+                                sb[i] += wf * ad[i];
+                                wb[i] += wf;
+                                cb[i]++;
+                            }
+                        });
+                    } else if (SigmaRejection && _m2Buffer != null) {
                         // Kappa-sigma path: per-pixel Welford + reject before
                         // folding in (no GPU kernel; runs on CPU).
                         for (int i = 0; i < accN; i++) {
@@ -1734,7 +1865,36 @@ public class LiveStackingService {
                 // failure, retry once with the wide radius the flip path uses,
                 // gated on enough stars that the vote histogram stays trustworthy
                 // (a sparse field widened would invite a false match).
-                var t = StarMatcher.Match(_referenceStars!, stars);
+                // Predict from the last frame that aligned: carried through its
+                // transform, this frame's stars sit a frame's drift (plus a
+                // dither) from the reference stars, well inside the tight
+                // window however far the session has drifted overall.
+                AffineTransform? t = null;
+                var prior = _lastAligned;
+                if (prior != null) {
+                    var residual = StarMatcher.Match(_referenceStars!, TransformStars(stars, prior));
+                    if (residual != null) {
+                        t = AffineTransform.Compose(residual, prior);
+                        if (CentreShift(t, prior) > MaxPredictedJumpPx) t = null;
+                    }
+                }
+                if (t == null) {
+                    // From scratch against the reference. Once the drift is past
+                    // the 50 px window this search has no true votes left, and
+                    // three chance coincidences can carry a false solution that
+                    // still passes as rigid: on Abell 370 (2026-11-07) eight
+                    // frames 65 px out landed at dx=147 dy=-75, each a ghost copy
+                    // of the field in the stack. A result that far from the last
+                    // aligned frame goes to the wide search, which asks for more
+                    // agreement, instead of straight into the stack.
+                    t = StarMatcher.Match(_referenceStars!, stars);
+                    if (t != null && prior != null && CentreShift(t, prior) > MaxPredictedJumpPx) {
+                        _logger.LogInformation(
+                            "Live stack: tight match dx={Tx:F0} dy={Ty:F0} jumps {J:F0} px from the last aligned frame; "
+                            + "checking it with the wide search", t.Tx, t.Ty, CentreShift(t, prior));
+                        t = null;
+                    }
+                }
                 if (t == null
                         && stars.Count >= WideMatchMinStars
                         && (_referenceStars?.Count ?? 0) >= WideMatchMinStars) {
@@ -1757,6 +1917,7 @@ public class LiveStackingService {
                 if (t != null) {
                     usedFlipped = false;
                     used = t;
+                    _lastAligned = t;
                     _logger.LogDebug("Frame aligned (reference orientation): dx={Tx:F1} dy={Ty:F1}",
                         t.Tx, t.Ty);
                     warp = RefineWarp(stars, t);
@@ -1795,6 +1956,36 @@ public class LiveStackingService {
     /// <summary>Affine warp + bilinear resample, on the GPU when available
     /// (<see cref="IGpuCompute"/>) and on the CPU otherwise. The CPU helper is
     /// the canonical fallback whenever the GPU declines.</summary>
+    /// <summary>Record the reference's background, noise and star signal on
+    /// the reference frame, and return this frame's weight (1 for the
+    /// reference, or with weighting off). Callers hold _lock.</summary>
+    private double NoteFrameStats(LiveStackFrameNorm.Stats? st, List<DetectedStar> stars, bool isReference) {
+        double signal = FrameWeighting ? LiveStackFrameNorm.StarSignal(stars) : 0;
+        if (isReference || _refBackground == null) {
+            if (st != null) {
+                _refBackground = st.Background;
+                _refNoise = st.Noise;
+            }
+            _refSignal = signal;
+            LastFrameWeight = 1;
+            return 1;
+        }
+        double w = FrameWeighting && st != null
+            ? LiveStackFrameNorm.Weight(_refNoise, st.Noise, _refSignal, signal) : 1;
+        LastFrameWeight = w;
+        if (st != null && (w < 0.5 || _logger.IsEnabled(LogLevel.Debug))) {
+            var shift = string.Join("/", st.Background.Select((v, k) => (v - _refBackground[k]).ToString("F0")));
+            if (w < 0.5)
+                _logger.LogInformation(
+                    "Live stack: frame {N} weighted {W:F2} (noise {Noise:F1} vs {RefNoise:F1}, background shift {Shift})",
+                    _frameCount + 1, w, st.Noise, _refNoise, shift);
+            else
+                _logger.LogDebug("Live stack: frame {N} weight {W:F2}, background shift {Shift}",
+                    _frameCount + 1, w, shift);
+        }
+        return w;
+    }
+
     /// <summary>Second-order refinement of an affine match, or null to keep
     /// the affine. Callers hold _lock.</summary>
     private PolynomialWarp? RefineWarp(List<DetectedStar> stars, AffineTransform t) {
@@ -1854,6 +2045,32 @@ public class LiveStackingService {
         // buffer, changing IGpuCompute isn't worth it for that branch.)
         EnsureScratch(ref _warpMono, _width * _height);
         return ImageResampler.ApplyTransform(data, _width, _height, t, _warpMono!);
+    }
+
+    /// <summary>A predicted alignment may move the frame centre at most this
+    /// far from the last aligned frame's: a frame's tracking drift plus a
+    /// dither. Further than that is a new solution, not a prediction.</summary>
+    private const double MaxPredictedJumpPx = 50.0;
+
+    /// <summary>How far two alignments put the frame centre apart, in px.</summary>
+    private double CentreShift(AffineTransform a, AffineTransform b) {
+        double cx = _width / 2.0, cy = _height / 2.0;
+        var (ax, ay) = a.Apply(cx, cy);
+        var (bx, by) = b.Apply(cx, cy);
+        return Math.Sqrt((ax - bx) * (ax - bx) + (ay - by) * (ay - by));
+    }
+
+    private static List<DetectedStar> TransformStars(List<DetectedStar> stars, AffineTransform t) {
+        var result = new List<DetectedStar>(stars.Count);
+        foreach (var s in stars) {
+            var (x, y) = t.Apply(s.X, s.Y);
+            result.Add(new DetectedStar {
+                X = x, Y = y,
+                HFR = s.HFR, Peak = s.Peak, Flux = s.Flux, PixelCount = s.PixelCount,
+                Eccentricity = s.Eccentricity, OrientationRad = s.OrientationRad
+            });
+        }
+        return result;
     }
 
     private static List<DetectedStar> Rotate180Stars(List<DetectedStar> stars, int w, int h) {
@@ -1923,6 +2140,9 @@ public class LiveStackingService {
             if (_countBuffer == null) return 0;
             var n = _countBuffer.Length;
             var cb = _countBuffer;
+            // The mean's denominator: the summed weights when frames are
+            // weighted, the frame count otherwise.
+            var wbs = _weightBuffer;
             EnsureScratch(ref _scratchSnr, n);
             stacked = _scratchSnr!;
             if (_colorActive && _stackR != null && _stackG != null && _stackB != null) {
@@ -1934,7 +2154,7 @@ public class LiveStackingService {
                 var r = _stackR; var g = _stackG; var b = _stackB;
                 Parallel.ForEach(Partitioner.Create(0, n), range => {
                     for (int i = range.Item1; i < range.Item2; i++) {
-                        int c = cb[i];
+                        float c = wbs != null ? wbs[i] : cb[i];
                         stacked[i] = c > 0
                             ? (ushort)Math.Clamp(
                                 (0.299 * r[i] + 0.587 * g[i] + 0.114 * b[i]) / c, 0, 65535)
@@ -1945,8 +2165,9 @@ public class LiveStackingService {
                 var sb = _stackBuffer;
                 Parallel.ForEach(Partitioner.Create(0, n), range => {
                     for (int i = range.Item1; i < range.Item2; i++) {
-                        stacked[i] = cb[i] > 0
-                            ? (ushort)Math.Clamp(sb[i] / cb[i], 0, 65535)
+                        float d = wbs != null ? wbs[i] : cb[i];
+                        stacked[i] = d > 0
+                            ? (ushort)Math.Clamp(sb[i] / d, 0, 65535)
                             : (ushort)0;
                     }
                 });
@@ -1987,9 +2208,11 @@ public class LiveStackingService {
             if (_stackBuffer == null) return [];
 
             var result = new ushort[_stackBuffer.Length];
+            var wb = _weightBuffer;
             for (int i = 0; i < _stackBuffer.Length; i++) {
                 if (_countBuffer![i] > 0) {
-                    result[i] = (ushort)Math.Clamp(_stackBuffer[i] / _countBuffer[i], 0, 65535);
+                    float d = wb != null ? wb[i] : _countBuffer[i];
+                    if (d > 0) result[i] = (ushort)Math.Clamp(_stackBuffer[i] / d, 0, 65535);
                 }
             }
             return result;
@@ -2004,9 +2227,10 @@ public class LiveStackingService {
             if (_stackR == null || _stackG == null || _stackB == null) return [];
             int n = _stackR.Length;
             var result = new ushort[n * 3];
+            var wb = _weightBuffer;
             for (int i = 0; i < n; i++) {
-                int c = _countBuffer![i];
-                if (c > 0) {
+                float c = wb != null ? wb[i] : _countBuffer![i];
+                if (_countBuffer![i] > 0 && c > 0) {
                     result[i]         = (ushort)Math.Clamp(_stackR[i] / c, 0, 65535);
                     result[n + i]     = (ushort)Math.Clamp(_stackG[i] / c, 0, 65535);
                     result[2 * n + i] = (ushort)Math.Clamp(_stackB[i] / c, 0, 65535);

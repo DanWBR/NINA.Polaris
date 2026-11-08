@@ -392,9 +392,11 @@ function ninaApp() {
         // the LIVE tab toggle; PUT /api/livestack/sigma-rejection updates the
         // running flag + the active rig's LiveStackSigmaRejection/Kappa fields.
         // OFF by default; pays off most WITH dithering.
-        liveStackSigmaRejection: false,
+        liveStackSigmaRejection: true,
         liveStackCosmetic: true,
         liveStackSigmaKappa: 3.0,
+        liveStackNormalizeBackground: true,
+        liveStackWeightFrames: true,
 
         // LSTR-5: live-stack auto-refocus + auto-recenter triggers.
         // Mirror of EquipmentProfile.LiveStackTriggers, hydrated from
@@ -12084,6 +12086,29 @@ function ninaApp() {
                     : 'Outlier rejection off: Reset the stack to apply', 'ok');
             } catch (e) {
                 this.liveStackSigmaRejection = !this.liveStackSigmaRejection;
+                this.toastFail('Save failed', e);
+            }
+        },
+
+        // LIVE tab "Match background" + "Weight frames by quality". Same dual
+        // write as the others; both take effect on the next Reset.
+        async saveLiveStackNormalization() {
+            try {
+                await this.apiPost('/api/livestack/normalization', null, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        background: this.liveStackNormalizeBackground,
+                        weighting: this.liveStackWeightFrames
+                    })
+                });
+                const rig = this.rigs.find(r => r.id === this.activeRigId);
+                if (rig) {
+                    rig.liveStackNormalizeBackground = this.liveStackNormalizeBackground;
+                    rig.liveStackWeightFrames = this.liveStackWeightFrames;
+                }
+                this.toast(this._t('Saved: Reset the stack to apply'), 'ok');
+            } catch (e) {
                 this.toastFail('Save failed', e);
             }
         },
@@ -25480,10 +25505,14 @@ function ninaApp() {
             // back automatically). The per-rig LiveStackColor field is no longer
             // consulted and the toggle was removed.
             this.liveStackColor = true;
-            // Per-pixel kappa-sigma rejection (off by default on old rigs).
-            this.liveStackSigmaRejection = rig.liveStackSigmaRejection === true;
+            // Per-pixel kappa-sigma rejection, on by default.
+            this.liveStackSigmaRejection = rig.liveStackSigmaRejection !== false;
             this.liveStackSigmaKappa = (rig.liveStackSigmaKappa > 0)
                 ? rig.liveStackSigmaKappa : 3.0;
+            // Background matching + frame weighting, default ON (absent on an
+            // old rig means the C# initializer applied).
+            this.liveStackNormalizeBackground = rig.liveStackNormalizeBackground !== false;
+            this.liveStackWeightFrames = rig.liveStackWeightFrames !== false;
             // Per-sub cosmetic (hot/cold pixel) correction. Default ON for EAA,
             // absent on an old rig means the C# initializer (true) applied.
             this.liveStackCosmetic = rig.liveStackCosmetic !== false;

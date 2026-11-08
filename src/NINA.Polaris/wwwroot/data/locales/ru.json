@@ -5773,5 +5773,10 @@
   "Time since the run started": "Время с начала выполнения",
   "Copy this target's RA and Dec into its Meridian Flip, Center After Drift and Loop Until Altitude": "Скопировать RA и Dec этой цели в её Meridian Flip, Center After Drift и Loop Until Altitude",
   "Switch star when guiding stalls": "Сменить звезду, если гидирование зависло",
-  "When guiding stalls (no correction for a minute), its offset freezes (a hot pixel or a repeated frame), or a very large star reports its own noise as error, guiding moves to another star by itself.": "Если гидирование зависло (минуту без коррекций), смещение замерло (горячий пиксель или повторяющийся кадр) или очень крупная звезда выдаёт собственный шум за ошибку, гидирование само переходит на другую звезду."
+  "When guiding stalls (no correction for a minute), its offset freezes (a hot pixel or a repeated frame), or a very large star reports its own noise as error, guiding moves to another star by itself.": "Если гидирование зависло (минуту без коррекций), смещение замерло (горячий пиксель или повторяющийся кадр) или очень крупная звезда выдаёт собственный шум за ошибку, гидирование само переходит на другую звезду.",
+  "Match background": "Выравнивать фон",
+  "Weight frames by quality": "Взвешивать кадры по качеству",
+  "Shift each frame's sky background to the reference frame's before stacking, so clouds, the moon or the hour do not leave bright or dark bands where the frames overlap differently. Applies on the next stack Reset.": "Сдвигает фон неба каждого кадра к фону опорного кадра перед сложением, чтобы облака, луна или время суток не оставляли светлых или тёмных полос там, где кадры перекрываются по-разному. Действует после следующего сброса стека.",
+  "Weight each frame by its signal-to-noise against the reference, so cloudy or hazy frames count for less than clear ones. Applies on the next stack Reset.": "Задаёт каждому кадру вес по отношению сигнал/шум относительно опорного, чтобы кадры с облаками или дымкой учитывались меньше чистых. Действует после следующего сброса стека.",
+  "Saved: Reset the stack to apply": "Сохранено: сбросьте стек, чтобы применить"
 }
