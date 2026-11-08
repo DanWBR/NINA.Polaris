@@ -405,6 +405,7 @@ public static class EquipmentEndpoints {
                 if (update.NativeBacklashMaxMs >= 0)
                     r.NativeBacklashMaxMs = update.NativeBacklashMaxMs;
                 r.NativeMultiStar = update.NativeMultiStar;
+                r.NativeGuideAutoReselect = update.NativeGuideAutoReselect;
                 if (update.NativeMaxGuideStars > 0)
                     r.NativeMaxGuideStars = Math.Clamp(update.NativeMaxGuideStars, 1, 12);
                 if (!string.IsNullOrWhiteSpace(update.NativePierSideHandling))

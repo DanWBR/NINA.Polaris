@@ -166,6 +166,9 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     // Consecutive frames the mass check has dropped. A dropped frame never
     // reaches the checker's history, so on its own the band never moves.
     private int _massRejectStreak;
+    /// <summary>Stall / frozen-offset / big-star watch over the session (see
+    /// <see cref="GuidePerformanceMonitor"/>).</summary>
+    private readonly GuidePerformanceMonitor _perf = new();
     // Timestamp of the previous guide frame, for the predictor's frame interval.
     private long _lastGuideMs;
 
@@ -549,6 +552,8 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     public Task ResumeAsync(CancellationToken ct = default) {
         if (IsPaused) {
             _paused = false;
+            // A pause (a meridian flip) is not a stall.
+            _perf.Rearm(NowMs());
             SetAppState("Guiding");
         }
         return Task.CompletedTask;
@@ -630,33 +635,17 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
             int w = img.Properties.Width, h = img.Properties.Height;
             var stars = GuideStarDetector().Detect(img.Data, w, h);
 
-            // Brightest interior star, preferring an unsaturated one but
-            // taking a saturated one rather than refusing to guide: a flat top
-            // costs centroid precision, no star costs the session.
             int margin = StarEdgeMargin();
             double satGuard = SaturationLevelFor(img);
-            // Classic refuses a saturated star outright, as it did before
-            // 2026-09-14. With the classic level nothing reaches that test in
-            // practice, which is exactly the behaviour being restored.
             bool classic = IsClassicDetection(Rig);
-            bool allowSat = !classic && AllowSaturatedStars();
-            NINA.Image.ImageAnalysis.DetectedStar? best = null, bestSat = null;
-            double bestFlux = -1, bestSatFlux = -1;
-            int interior = 0, saturated = 0;
-            foreach (var s in stars) {
-                if (s.X < margin || s.Y < margin || s.X > w - margin || s.Y > h - margin) continue;
-                interior++;
-                if (!allowSat && IsSaturated(s, satGuard)) {
-                    saturated++;
-                    if (s.Flux > bestSatFlux) { bestSatFlux = s.Flux; bestSat = s; }
-                    continue;
-                }
-                if (s.Flux > bestFlux) { bestFlux = s.Flux; best = s; }
-            }
-            if (best == null && bestSat != null && !classic) {
-                best = bestSat;
+            var pick = PickGuideStar(stars, w, h, margin, satGuard,
+                                     allowSat: !classic && AllowSaturatedStars(), classic,
+                                     FrameMax(img.Data));
+            var best = pick.Star;
+            int interior = pick.Interior, saturated = pick.Saturated;
+            if (best != null && pick.SaturatedFallback) {
                 RaiseAlert($"Every star found is saturated; guiding on the brightest anyway "
-                    + $"(peak {bestSat.Peak:F0} of {satGuard:F0}). Lower the guide gain or exposure for better precision.");
+                    + $"(peak {best.Peak:F0} of {satGuard:F0}). Lower the guide gain or exposure for better precision.");
             }
             if (best == null) {
                 RaiseAlert(stars.Count == 0
@@ -668,15 +657,16 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
                 return;
             }
             _logger.LogInformation(
-                "Native auto-select: {N} stars ({Interior} interior, {Sat} saturated, level {Lvl}); "
-                + "best peak {Peak:F0} flux {Flux:F0}",
-                stars.Count, interior, saturated, satGuard, best.Peak, best.Flux);
+                "Native auto-select: {N} stars ({Interior} interior, {Sat} saturated, {Big} too large, level {Lvl}); "
+                + "best peak {Peak:F0} flux {Flux:F0} HFR {Hfr:F1} (field median {Med:F1})",
+                stars.Count, interior, saturated, pick.Big, satGuard, best.Peak, best.Flux, best.HFR, pick.MedianHfr);
             LastStarSelection = $"{stars.Count} found, {interior} usable"
-                + (saturated > 0 ? $", {saturated} saturated" : "");
+                + (saturated > 0 ? $", {saturated} saturated" : "")
+                + (pick.Big > 0 ? $", {pick.Big} too large" : "");
             _lockX = best.X;
             _lockY = best.Y;
             _haveLock = true;
-            ResetFrameChecks();
+            ResetFrameChecks(pick.StarIsBig);
             SetAppState("Selected");
             _logger.LogInformation("Native guide star locked at ({X:F1},{Y:F1})", _lockX, _lockY);
         } finally {
@@ -724,6 +714,86 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
         BuildView(_lockX, _lockY, 0, true);
         _logger.LogInformation("Native guide star picked near ({Tx:F0},{Ty:F0}) -> ({X:F1},{Y:F1})",
             targetX, targetY, _lockX, _lockY);
+    }
+
+    /// <summary>Outcome of <see cref="PickGuideStar"/>.</summary>
+    internal sealed record GuideStarPick(
+        NINA.Image.ImageAnalysis.DetectedStar? Star, bool StarIsBig, bool SaturatedFallback,
+        int Interior, int Saturated, int Big, double MedianHfr);
+
+    /// <summary>A star this much wider than the field's median (HFR) is "big".</summary>
+    internal const double BigStarHfrFactor = 1.8;
+    /// <summary>Or covering this many times the median star's pixel count.</summary>
+    internal const double BigStarAreaFactor = 4.0;
+
+    /// <summary>
+    /// The guide star to lock: the brightest interior star that is neither
+    /// saturated (when the full scale is known) nor much larger than the
+    /// field's typical star.
+    ///
+    /// <para>Brightest alone was the rule, and when the saturation level is
+    /// unknown (most drivers do not report a significant depth) the brightest
+    /// is routinely a bloated, clipped blob. Its centroid wanders with the
+    /// seeing across a flat top, so it reports large errors with nothing
+    /// moving, and every one of them is sent to the mount as a correction
+    /// (field report 2026-11-08). The size test needs no saturation level:
+    /// HFR and pixel count against the field's median, plus a peak at the
+    /// frame's own maximum on a star already wider than typical.</para>
+    ///
+    /// <para>Big stars stay as the fallback, and the saturated fallback is
+    /// unchanged, so a field with nothing better still guides. Classic
+    /// selection keeps its old rule. <paramref name="avoid"/> excludes a
+    /// region (the star being left behind on a re-selection).</para>
+    /// </summary>
+    internal static GuideStarPick PickGuideStar(
+            IReadOnlyList<NINA.Image.ImageAnalysis.DetectedStar> stars, int w, int h, int margin,
+            double satGuard, bool allowSat, bool classic, double frameMax,
+            (double X, double Y, double R)? avoid = null) {
+        var interior = new List<NINA.Image.ImageAnalysis.DetectedStar>();
+        var sat = new List<NINA.Image.ImageAnalysis.DetectedStar>();
+        foreach (var s in stars) {
+            if (s.X < margin || s.Y < margin || s.X > w - margin || s.Y > h - margin) continue;
+            if (avoid is { } a && (s.X - a.X) * (s.X - a.X) + (s.Y - a.Y) * (s.Y - a.Y) < a.R * a.R) continue;
+            if (!allowSat && IsSaturated(s, satGuard)) { sat.Add(s); continue; }
+            interior.Add(s);
+        }
+        int interiorCount = interior.Count + sat.Count;
+
+        double medHfr = Median(interior.Select(s => s.HFR).Where(v => v > 0));
+        double medArea = Median(interior.Select(s => (double)s.PixelCount).Where(v => v > 0));
+        bool IsBig(NINA.Image.ImageAnalysis.DetectedStar s) {
+            if (classic || interior.Count < 3) return false;
+            if (medHfr > 0 && s.HFR > BigStarHfrFactor * medHfr) return true;
+            if (medArea > 0 && s.PixelCount > BigStarAreaFactor * medArea) return true;
+            // Saturation level unknown: a star whose peak sits at the frame's
+            // own maximum and that is already wider than typical is clipped.
+            if (satGuard <= 1 && frameMax > 0 && s.Peak >= 0.98 * frameMax && medHfr > 0 && s.HFR > 1.3 * medHfr)
+                return true;
+            return false;
+        }
+
+        var ok = interior.Where(s => !IsBig(s)).OrderByDescending(s => s.Flux).FirstOrDefault();
+        int big = interior.Count(IsBig);
+        if (ok != null) return new GuideStarPick(ok, false, false, interiorCount, sat.Count, big, medHfr);
+        var anyBig = interior.OrderByDescending(s => s.Flux).FirstOrDefault();
+        if (anyBig != null) return new GuideStarPick(anyBig, IsBig(anyBig), false, interiorCount, sat.Count, big, medHfr);
+        // Every candidate saturated: the brightest anyway (not in classic,
+        // which refuses a saturated star outright).
+        var s0 = classic ? null : sat.OrderByDescending(s => s.Flux).FirstOrDefault();
+        return new GuideStarPick(s0, false, s0 != null, interiorCount, sat.Count, big, medHfr);
+    }
+
+    private static double Median(IEnumerable<double> values) {
+        var v = values.OrderBy(x => x).ToArray();
+        if (v.Length == 0) return 0;
+        return v.Length % 2 == 1 ? v[v.Length / 2] : (v[v.Length / 2 - 1] + v[v.Length / 2]) / 2;
+    }
+
+    internal static double FrameMax(ushort[]? data) {
+        if (data == null) return 0;
+        ushort max = 0;
+        foreach (var x in data) if (x > max) max = x;
+        return max;
     }
 
     /// <summary>What the last selection actually saw, for the GUIDE panel:

@@ -37,11 +37,13 @@ public sealed partial class NativeGuider {
     /// check on every frame, and since a dropped frame never joins the
     /// history, it failed forever: zero on the chart, no corrections, and the
     /// badge still on Guiding (field report, after a flip).</summary>
-    private void ResetFrameChecks() {
+    private void ResetFrameChecks(bool starIsBig = false) {
         _massChecker.Reset();
         _distanceChecker.Reset();
         _errorTracker.Reset();
         _massRejectStreak = 0;
+        // A new star: the performance monitor starts over on it.
+        _perf.Reset(NowMs(), starIsBig);
     }
 
     /// <summary>Frames the mass check may drop in a row before it is reset. A

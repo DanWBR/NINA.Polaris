@@ -122,6 +122,18 @@ When the trigger fires, Polaris walks through this workflow:
 A status banner shows the phase live: "Slewing", then "Centering", then
 "Resuming".
 
+A flip that does not happen is tried again, up to 15 times per flip.
+When the mount refuses the GoTo (a ZWO AM5 near its meridian limit
+does this without giving a reason), the next attempt comes a minute
+later. When the GoTo succeeds but the mount stays on the same side of
+the pier, the next attempt comes two minutes later. Either way, if the
+mount stopped tracking during the attempt, Polaris switches tracking
+back on so the target stays in the frame while it waits, and guiding
+resumes. Each attempt and its reason are in the log, and the flip
+status shows the last error with the time of the next try. This
+applies to the automatic flip in LIVE as well, which used to give up
+for the rest of the crossing after a refused GoTo.
+
 ## Sequence status over WebSocket
 
 If you build your own dashboard or automation, the running sequence

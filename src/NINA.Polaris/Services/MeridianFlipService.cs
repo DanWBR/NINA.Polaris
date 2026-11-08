@@ -54,13 +54,39 @@ public class MeridianFlipService {
     public string? LastFlipError { get; private set; }
     public int FlipsCompleted { get; private set; }
 
-    /// <summary>Set when the last flip's re-slew left the mount on the pier
-    /// side it started on: no new attempt before this time.</summary>
+    /// <summary>Set when the last flip did not happen (the re-slew failed, or
+    /// left the mount on the pier side it started on): no new attempt before
+    /// this time. Null once the attempts are used up, or after a success.</summary>
     public DateTime? RetryNotBefore { get; private set; }
 
     /// <summary>How long to wait before re-slewing again after a mount that
     /// stayed on its side of the pier.</summary>
-    internal static readonly TimeSpan StayedOnSideRetry = TimeSpan.FromMinutes(5);
+    internal static readonly TimeSpan StayedOnSideRetry = TimeSpan.FromMinutes(2);
+
+    /// <summary>How long to wait before trying again after a flip whose
+    /// re-slew failed (the mount refused the GoTo).</summary>
+    internal static readonly TimeSpan FailedFlipRetry = TimeSpan.FromMinutes(1);
+
+    /// <summary>Attempts at one flip before giving up and leaving it to the
+    /// operator (and to the safety guard's past-meridian limit).</summary>
+    internal const int MaxFlipAttempts = 15;
+
+    /// <summary>Consecutive attempts that did not flip, for the current flip.</summary>
+    public int FailedAttempts { get; private set; }
+    private DateTime? _lastFailureAt;
+
+    /// <summary>When to try again after an attempt that did not flip, or null
+    /// when the attempts are used up.
+    ///
+    /// <para>A failed re-slew used to end the flip for good: no retry time was
+    /// set, so the LIVE auto-flip marked the crossing as handled and never came
+    /// back to it. On a ZWO AM5 at five minutes past the meridian the GoTo was
+    /// refused, tracking stopped, guiding lost the star, and the session sat
+    /// past the meridian until the operator flipped by hand a few minutes later
+    /// (frames of 2026-11-05 and 2026-11-07, both at HA +5 min). The same flip
+    /// a few minutes on succeeded, so the answer is to keep trying.</para></summary>
+    internal static DateTime? NextAttemptAfter(int failedAttempts, DateTime nowUtc, TimeSpan wait)
+        => failedAttempts >= MaxFlipAttempts ? null : nowUtc + wait;
 
     public MeridianFlipService(EquipmentManager equip, ActiveGuiderProvider guiders, SlewCenterService slewCenter,
         AutoFocusService autoFocus, ProfileService profile, CaptureProgressService captureProgress,
@@ -352,6 +378,9 @@ public class MeridianFlipService {
                 return false;
             }
             _cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            // The attempt count belongs to one flip: an hour after the last
+            // failure this is another target or another night.
+            if (_lastFailureAt is { } lf && DateTime.UtcNow - lf > TimeSpan.FromHours(1)) FailedAttempts = 0;
             State = MeridianFlipState.Pausing;
             LastFlipError = null;
             RetryNotBefore = null;
@@ -361,6 +390,7 @@ public class MeridianFlipService {
         // backend even if the active rig were swapped mid-flip.
         var guider = _guiders.Active;
         bool wasGuiding = false;
+        bool? trackingBefore = null;
         try {
             // 1. Pause the active guider if guiding
             if (guider.IsConnected && guider.IsGuiding) {
@@ -384,19 +414,23 @@ public class MeridianFlipService {
             if (_equip.Telescope == null) throw new InvalidOperationException("Telescope disconnected");
 
             var pierBefore = ReadPierSide();
-            _logger.LogInformation("Meridian flip: re-slewing to RA={Ra:F4} Dec={Dec:F4} (pier side {Pier})",
-                targetRaHours, targetDecDeg, SideName(pierBefore));
+            trackingBefore = ReadTracking();
+            _logger.LogInformation("Meridian flip: re-slewing to RA={Ra:F4} Dec={Dec:F4} (pier side {Pier}, attempt {N})",
+                targetRaHours, targetDecDeg, SideName(pierBefore), FailedAttempts + 1);
             await _equip.Telescope.SlewAsync(targetRaHours, targetDecDeg, _cts!.Token);
             await WaitForSlewComplete(_cts.Token);
 
             var pierAfter = await PierSideAfterSlewAsync(pierBefore, _cts.Token);
             if (Judge(pierBefore, pierAfter) == FlipOutcome.StayedOnSide) {
-                var retryAt = DateTime.UtcNow + StayedOnSideRetry;
+                int attempts = FailedAttempts + 1;
+                var retryAt = NextAttemptAfter(attempts, DateTime.UtcNow, StayedOnSideRetry);
                 _logger.LogWarning(
-                    "Meridian flip: the mount is still on the {Pier} side of the pier after the re-slew; its driver " +
-                    "judged the target reachable without a flip. Imaging carries on and the flip is tried again in " +
-                    "{Min:F0} min. If this repeats, check the mount's meridian limit and its sync / alignment points.",
-                    SideName(pierAfter), StayedOnSideRetry.TotalMinutes);
+                    "Meridian flip: the mount is still on the {Pier} side of the pier after the re-slew (attempt {N}); its driver " +
+                    "judged the target reachable without a flip. Imaging carries on; {Next}. " +
+                    "If this repeats, check the mount's meridian limit and its sync / alignment points.",
+                    SideName(pierAfter), attempts,
+                    retryAt == null ? "no further automatic attempts" : $"the flip is tried again in {StayedOnSideRetry.TotalMinutes:F0} min");
+                await RestoreTrackingAsync(trackingBefore);
                 if (wasGuiding && guider.IsConnected) {
                     try { await guider.ResumeAsync(); } catch (Exception ex) {
                         _logger.LogWarning(ex, "Guider resume failed");
@@ -404,7 +438,11 @@ public class MeridianFlipService {
                 }
                 lock (_stateLock) {
                     State = MeridianFlipState.Idle;
-                    LastFlipError = $"The mount stayed on the {SideName(pierAfter)} side of the pier; trying again in {StayedOnSideRetry.TotalMinutes:F0} min";
+                    FailedAttempts = attempts;
+                    _lastFailureAt = DateTime.UtcNow;
+                    LastFlipError = retryAt == null
+                        ? $"The mount stayed on the {SideName(pierAfter)} side of the pier after {attempts} attempts; flip it by hand"
+                        : $"The mount stayed on the {SideName(pierAfter)} side of the pier; trying again in {StayedOnSideRetry.TotalMinutes:F0} min";
                     RetryNotBefore = retryAt;
                 }
                 return false;
@@ -468,6 +506,7 @@ public class MeridianFlipService {
                 State = MeridianFlipState.Idle;
                 LastFlipAt = DateTime.UtcNow;
                 FlipsCompleted++;
+                FailedAttempts = 0;
             }
             _logger.LogInformation("Meridian flip complete (pier side {Before} -> {After})",
                 SideName(pierBefore), SideName(pierAfter));
@@ -485,10 +524,22 @@ public class MeridianFlipService {
             }
             return false;
         } catch (Exception ex) {
-            _logger.LogError(ex, "Meridian flip failed");
+            int attempts = FailedAttempts + 1;
+            var retryAt = NextAttemptAfter(attempts, DateTime.UtcNow, FailedFlipRetry);
+            _logger.LogError(ex, "Meridian flip failed (attempt {N}); {Next}", attempts,
+                retryAt == null ? "no further automatic attempts" : $"trying again in {FailedFlipRetry.TotalMinutes:F0} min");
+            // A refused GoTo can leave the mount not tracking (a ZWO AM5 at its
+            // meridian limit), and the star then drifts off while we wait to
+            // try again. Put tracking back the way it was.
+            await RestoreTrackingAsync(trackingBefore);
             lock (_stateLock) {
                 State = MeridianFlipState.Idle;
-                LastFlipError = ex.Message;
+                FailedAttempts = attempts;
+                _lastFailureAt = DateTime.UtcNow;
+                LastFlipError = retryAt == null
+                    ? $"{ex.Message} (gave up after {attempts} attempts; flip it by hand)"
+                    : $"{ex.Message} (trying again in {FailedFlipRetry.TotalMinutes:F0} min)";
+                RetryNotBefore = retryAt;
             }
             if (wasGuiding && guider.IsConnected) {
                 try { await guider.ResumeAsync(); } catch { }
@@ -497,6 +548,26 @@ public class MeridianFlipService {
         } finally {
             _cts?.Dispose();
             _cts = null;
+        }
+    }
+
+    private bool? ReadTracking() {
+        try { return _equip.Telescope is { IsConnected: true } t ? t.IsTracking : null; }
+        catch { return null; }
+    }
+
+    /// <summary>After an attempt that did not flip: if the mount was tracking
+    /// before it and is not now, switch tracking back on.</summary>
+    private async Task RestoreTrackingAsync(bool? trackingBefore) {
+        if (trackingBefore != true) return;
+        var scope = _equip.Telescope;
+        if (scope == null || !scope.IsConnected) return;
+        try {
+            if (scope.IsTracking) return;
+            _logger.LogWarning("Meridian flip: the mount stopped tracking during the attempt; switching tracking back on");
+            await scope.SetTrackingAsync(true);
+        } catch (Exception ex) {
+            _logger.LogWarning(ex, "Meridian flip: could not switch tracking back on");
         }
     }
 
