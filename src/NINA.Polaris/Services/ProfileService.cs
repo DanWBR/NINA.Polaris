@@ -158,6 +158,10 @@ public class ProfileService {
         // that shadows the new single-star default forever. Re-seed once.
         MigrateAutoFocusSingleStar();
 
+        // Live-stack outlier rejection became the default; rigs saved before
+        // carry the old false. Re-seed once.
+        MigrateLiveStackRejectionOn();
+
         // Four per-panel offsets became one per rig. Carry whatever the
         // operator had already dialed in into the single field, rather than
         // silently reverting their sensor to the driver's pedestal.
@@ -623,6 +627,8 @@ public class ProfileService {
             LiveStackColor = src.LiveStackColor,
             LiveStackSigmaRejection = src.LiveStackSigmaRejection,
             LiveStackSigmaKappa = src.LiveStackSigmaKappa,
+            LiveStackNormalizeBackground = src.LiveStackNormalizeBackground,
+            LiveStackWeightFrames = src.LiveStackWeightFrames,
             LiveStackMaxDurationSeconds = src.LiveStackMaxDurationSeconds,
             TargetSnr = src.TargetSnr,
             // LSPP-3: per-frame pre-processing (calibration + BGE).
@@ -833,6 +839,26 @@ public class ProfileService {
             _logger.LogInformation(
                 "Guide exposure migration: re-seeded {N} rig(s) with sub-500ms guide exposure to 1s", fixedUp);
         }
+    }
+
+    /// <summary>One-time switch of live-stack outlier rejection to on. Every
+    /// rig saved while it was opt-in holds a false that would shadow the new
+    /// default forever; measured on a real session (Abell 370, 2026-11-07) it
+    /// is what removes the warm-pixel trails the drift draws across the stack
+    /// and the satellite trails. Runs once, so a rig turned off afterwards
+    /// stays off.</summary>
+    private void MigrateLiveStackRejectionOn() {
+        const int RejectionOnVersion = 3;
+        if (_activeProfile.SettingsMigration >= RejectionOnVersion) return;
+        var seeded = 0;
+        foreach (var rig in _activeProfile.EquipmentProfiles ?? new()) {
+            if (!rig.LiveStackSigmaRejection) { rig.LiveStackSigmaRejection = true; seeded++; }
+        }
+        _activeProfile.SettingsMigration = RejectionOnVersion;
+        Save();
+        _logger.LogInformation(
+            "Settings migration v{V}: live-stack outlier rejection switched on for {N} rig(s) (one-time)",
+            RejectionOnVersion, seeded);
     }
 
     /// <summary>One-time re-seed of the auto-focus star count. Every rig saved

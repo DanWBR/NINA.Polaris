@@ -5444,5 +5444,10 @@
   "Time since the run started": "Tempo desde o início da execução",
   "Copy this target's RA and Dec into its Meridian Flip, Center After Drift and Loop Until Altitude": "Copiar o RA e a Dec deste alvo para o Meridian Flip, o Center After Drift e o Loop Until Altitude dele",
   "Switch star when guiding stalls": "Trocar de estrela quando a guiagem travar",
-  "When guiding stalls (no correction for a minute), its offset freezes (a hot pixel or a repeated frame), or a very large star reports its own noise as error, guiding moves to another star by itself.": "Quando a guiagem trava (um minuto sem correção), o desvio congela (pixel quente ou frame repetido) ou uma estrela muito grande reporta o próprio ruído como erro, a guiagem passa sozinha para outra estrela."
+  "When guiding stalls (no correction for a minute), its offset freezes (a hot pixel or a repeated frame), or a very large star reports its own noise as error, guiding moves to another star by itself.": "Quando a guiagem trava (um minuto sem correção), o desvio congela (pixel quente ou frame repetido) ou uma estrela muito grande reporta o próprio ruído como erro, a guiagem passa sozinha para outra estrela.",
+  "Match background": "Igualar o fundo",
+  "Weight frames by quality": "Pesar frames pela qualidade",
+  "Shift each frame's sky background to the reference frame's before stacking, so clouds, the moon or the hour do not leave bright or dark bands where the frames overlap differently. Applies on the next stack Reset.": "Ajusta o fundo do céu de cada frame ao do frame de referência antes de empilhar, para que nuvens, a lua ou o horário não deixem faixas claras ou escuras onde os frames se sobrepõem de forma diferente. Vale a partir do próximo Reset do stack.",
+  "Weight each frame by its signal-to-noise against the reference, so cloudy or hazy frames count for less than clear ones. Applies on the next stack Reset.": "Dá a cada frame um peso pela relação sinal/ruído em relação à referência, para que frames com nuvem ou névoa contem menos que os limpos. Vale a partir do próximo Reset do stack.",
+  "Saved: Reset the stack to apply": "Salvo: faça Reset do stack para aplicar"
 }

@@ -5444,5 +5444,10 @@
   "Time since the run started": "Temps depuis le début de l'exécution",
   "Copy this target's RA and Dec into its Meridian Flip, Center After Drift and Loop Until Altitude": "Copier l'AD et la Dec de cette cible dans son Meridian Flip, son Center After Drift et son Loop Until Altitude",
   "Switch star when guiding stalls": "Changer d'étoile quand le guidage se bloque",
-  "When guiding stalls (no correction for a minute), its offset freezes (a hot pixel or a repeated frame), or a very large star reports its own noise as error, guiding moves to another star by itself.": "Quand le guidage se bloque (une minute sans correction), que l'écart se fige (pixel chaud ou image répétée) ou qu'une très grande étoile signale son propre bruit comme une erreur, le guidage passe de lui-même à une autre étoile."
+  "When guiding stalls (no correction for a minute), its offset freezes (a hot pixel or a repeated frame), or a very large star reports its own noise as error, guiding moves to another star by itself.": "Quand le guidage se bloque (une minute sans correction), que l'écart se fige (pixel chaud ou image répétée) ou qu'une très grande étoile signale son propre bruit comme une erreur, le guidage passe de lui-même à une autre étoile.",
+  "Match background": "Égaliser le fond",
+  "Weight frames by quality": "Pondérer les poses par qualité",
+  "Shift each frame's sky background to the reference frame's before stacking, so clouds, the moon or the hour do not leave bright or dark bands where the frames overlap differently. Applies on the next stack Reset.": "Ramène le fond de ciel de chaque pose à celui de la pose de référence avant l'empilement, pour que les nuages, la lune ou l'heure ne laissent pas de bandes claires ou sombres là où les poses se recouvrent différemment. S'applique au prochain Reset de l'empilement.",
+  "Weight each frame by its signal-to-noise against the reference, so cloudy or hazy frames count for less than clear ones. Applies on the next stack Reset.": "Donne à chaque pose un poids selon son rapport signal/bruit par rapport à la référence, pour que les poses nuageuses ou voilées comptent moins que les poses claires. S'applique au prochain Reset de l'empilement.",
+  "Saved: Reset the stack to apply": "Enregistré : faites un Reset de l'empilement pour appliquer"
 }

@@ -5444,5 +5444,10 @@
   "Time since the run started": "Zeit seit dem Start des Laufs",
   "Copy this target's RA and Dec into its Meridian Flip, Center After Drift and Loop Until Altitude": "RA und Dec dieses Ziels in seinen Meridian Flip, Center After Drift und Loop Until Altitude kopieren",
   "Switch star when guiding stalls": "Stern wechseln, wenn das Guiding hängt",
-  "When guiding stalls (no correction for a minute), its offset freezes (a hot pixel or a repeated frame), or a very large star reports its own noise as error, guiding moves to another star by itself.": "Wenn das Guiding hängt (eine Minute ohne Korrektur), die Abweichung einfriert (Hotpixel oder wiederholtes Bild) oder ein sehr großer Stern sein eigenes Rauschen als Fehler meldet, wechselt das Guiding selbstständig zu einem anderen Stern."
+  "When guiding stalls (no correction for a minute), its offset freezes (a hot pixel or a repeated frame), or a very large star reports its own noise as error, guiding moves to another star by itself.": "Wenn das Guiding hängt (eine Minute ohne Korrektur), die Abweichung einfriert (Hotpixel oder wiederholtes Bild) oder ein sehr großer Stern sein eigenes Rauschen als Fehler meldet, wechselt das Guiding selbstständig zu einem anderen Stern.",
+  "Match background": "Hintergrund angleichen",
+  "Weight frames by quality": "Bilder nach Qualität gewichten",
+  "Shift each frame's sky background to the reference frame's before stacking, so clouds, the moon or the hour do not leave bright or dark bands where the frames overlap differently. Applies on the next stack Reset.": "Verschiebt den Himmelshintergrund jedes Bildes vor dem Stacken auf den des Referenzbildes, damit Wolken, Mond oder Uhrzeit keine hellen oder dunklen Streifen hinterlassen, wo sich die Bilder unterschiedlich überlappen. Gilt ab dem nächsten Reset des Stacks.",
+  "Weight each frame by its signal-to-noise against the reference, so cloudy or hazy frames count for less than clear ones. Applies on the next stack Reset.": "Gewichtet jedes Bild nach seinem Signal-Rausch-Verhältnis gegenüber der Referenz, sodass bewölkte oder dunstige Bilder weniger zählen als klare. Gilt ab dem nächsten Reset des Stacks.",
+  "Saved: Reset the stack to apply": "Gespeichert: Stack zurücksetzen, um es anzuwenden"
 }

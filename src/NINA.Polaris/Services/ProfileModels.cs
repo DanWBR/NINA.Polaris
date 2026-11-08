@@ -1372,13 +1372,25 @@ public class EquipmentProfile {
     public int LiveStackBinning { get; set; } = 0;
 
     /// <summary>Per-pixel kappa-sigma outlier rejection on the live stack:
-    /// drop cosmic rays / plane trails / dithered hot pixels instead of
-    /// folding them into the running mean. Default OFF (extra CPU + a per-
-    /// pixel M2 buffer). Pays off most WITH dithering. Per-rig.</summary>
-    public bool LiveStackSigmaRejection { get; set; } = false;
+    /// drop cosmic rays, satellite and plane trails, and warm pixels that the
+    /// session's drift walks across the field instead of folding them into the
+    /// running mean. Default ON since 2026-11-08 (8 B/px of extra buffers,
+    /// counted by the auto working-resolution choice). Per-rig.</summary>
+    public bool LiveStackSigmaRejection { get; set; } = true;
 
     /// <summary>Rejection threshold in sigmas (default 3.0).</summary>
     public double LiveStackSigmaKappa { get; set; } = 3.0;
+
+    /// <summary>Shift each live-stack frame's background to the reference
+    /// frame's before integrating it, so a sky that changes during the
+    /// session (cloud, moon, the hour) leaves no steps where the frames'
+    /// coverage differs. Default on. Per-rig.</summary>
+    public bool LiveStackNormalizeBackground { get; set; } = true;
+
+    /// <summary>Weight each live-stack frame by its signal-to-noise against
+    /// the reference, so cloudy or hazy frames count for less. Default on.
+    /// Per-rig.</summary>
+    public bool LiveStackWeightFrames { get; set; } = true;
 
     /// <summary>Per-sub cosmetic correction on the live stack: remove fixed
     /// hot/cold sensor pixels at the SOURCE (before debayer + warp) so a single

@@ -424,6 +424,28 @@ public static class LiveStackEndpoints {
             return Results.Ok(new { saved = true, enabled = req.Enabled, kappa = k });
         });
 
+        // Background matching + frame weighting (see LiveStackFrameNorm).
+        // Same dual write as /sigma-rejection: runtime flags for the next
+        // reference frame (after a Reset) + persisted per-rig fields.
+        group.MapPut("/normalization", (NormalizationRequest req,
+                                        LiveStackingService stack,
+                                        ProfileService profiles) => {
+            if (req.Background is bool bg) stack.BackgroundNormalization = bg;
+            if (req.Weighting is bool wt) stack.FrameWeighting = wt;
+            var rig = profiles.ActiveEquipmentProfile;
+            if (rig != null) {
+                profiles.UpdateEquipmentProfile(rig.Id, r => {
+                    if (req.Background is bool b2) r.LiveStackNormalizeBackground = b2;
+                    if (req.Weighting is bool w2) r.LiveStackWeightFrames = w2;
+                });
+            }
+            return Results.Ok(new {
+                saved = true,
+                background = stack.BackgroundNormalization,
+                weighting = stack.FrameWeighting
+            });
+        });
+
         // Per-sub cosmetic correction (fixed hot/cold pixel removal). Per-rig,
         // read live by the stacker each frame, so it takes effect immediately
         // (no Reset needed) and complements sigma rejection.
@@ -543,6 +565,7 @@ public static class LiveStackEndpoints {
     /// <summary>Body of PUT /api/livestack/sigma-rejection. Mirrors the LIVE
     /// tab kappa-sigma toggle + threshold. Kappa null keeps the default (3).</summary>
     public record SigmaRejectionRequest(bool Enabled, double? Kappa = null);
+    public record NormalizationRequest(bool? Background = null, bool? Weighting = null);
 
     /// <summary>Body of PUT /api/livestack/cosmetic: per-sub hot/cold pixel removal.</summary>
     public record CosmeticRequest(bool Enabled);

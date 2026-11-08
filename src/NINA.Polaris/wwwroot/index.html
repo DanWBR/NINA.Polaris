@@ -1688,6 +1688,23 @@
                                 </span>
                             </template>
                         </label>
+                        <!-- Background matching + frame weighting: a sky that
+                             changes (cloud, moon) leaves no bands at the stack
+                             edges, and cloudy frames count for less. -->
+                        <label class="livestack-save-frames-label"
+                               :title="$t('Shift each frame\'s sky background to the reference frame\'s before stacking, so clouds, the moon or the hour do not leave bright or dark bands where the frames overlap differently. Applies on the next stack Reset.')">
+                            <input type="checkbox"
+                                   x-model="liveStackNormalizeBackground"
+                                   @change="saveLiveStackNormalization()">
+                            🌗 <span x-text="$t('Match background')"></span>
+                        </label>
+                        <label class="livestack-save-frames-label"
+                               :title="$t('Weight each frame by its signal-to-noise against the reference, so cloudy or hazy frames count for less than clear ones. Applies on the next stack Reset.')">
+                            <input type="checkbox"
+                                   x-model="liveStackWeightFrames"
+                                   @change="saveLiveStackNormalization()">
+                            ⚖️ <span x-text="$t('Weight frames by quality')"></span>
+                        </label>
                         <!-- Per-sub cosmetic correction: kills fixed hot/cold
                              sensor pixels at the source, before debayer + warp
                              smear a hot Bayer site into a wandering (green) trail
@@ -26432,7 +26449,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261108-guidemon"></script>
+    <script src="/js/app.js?v=20261108-lsnorm"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
