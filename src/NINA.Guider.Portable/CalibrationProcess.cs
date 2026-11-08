@@ -60,6 +60,7 @@ public sealed class CalibrationProcess {
     private int _decSteps;
     private int _backlashSteps;
     private double _xAngle, _xRate, _yAngle, _yRate, _backlashMs;
+    private double _clearMs, _clearMovedPx;  // Dec clearing: time spent, distance at the catch
 
     public GuideCalibration Result { get; private set; } = GuideCalibration.Invalid;
 
@@ -119,8 +120,10 @@ public sealed class CalibrationProcess {
                 _backlashSteps++;
                 double moved = Dist(curX, curY, _startX, _startY);
                 if (moved >= _catchThresholdPx) {
-                    // Star caught: slack is taken up. Backlash = clearing pulses so far.
-                    _backlashMs = _backlashSteps * (double)_pulseMs;
+                    // Star caught: slack is taken up. The backlash is worked out
+                    // once the Dec rate is known (see SlackMs).
+                    _clearMs = _backlashSteps * (double)_pulseMs;
+                    _clearMovedPx = moved;
                     _decStartX = curX; _decStartY = curY;
                     _stepCount = 0;
                     _phase = Phase.DecMeasure;
@@ -137,6 +140,7 @@ public sealed class CalibrationProcess {
                     _yAngle = Math.Atan2(curY - _decStartY, curX - _decStartX);
                     _yRate = d / (_stepCount * (double)_pulseMs);
                     _decSteps = _stepCount;
+                    _backlashMs = SlackMs(_clearMs, _clearMovedPx, _yRate, _pulseMs);
                     Result = new GuideCalibration(_xAngle, _yAngle, _xRate, _yRate, _decRad, true, _backlashMs);
                     _phase = Phase.Done;
                     return new CalibrationStep(false, GuideDirections.guideNorth, 0, true, false, "Done");
@@ -150,6 +154,21 @@ public sealed class CalibrationProcess {
             default:
                 return Fail("calibration failed");
         }
+    }
+
+    /// <summary>
+    /// Dec slack from the clearing phase: the time spent pulsing south until
+    /// the star had moved <c>movedPx</c>, less the time that movement itself
+    /// took at the measured Dec rate. The clearing time alone counted the
+    /// motion as slack: with 2000 ms steps moving 2.7 px each and a 3 px catch,
+    /// a mount with no backlash at all measured 4000 ms, and a ZWO AM5 came
+    /// out at 6000. Anything under half a step is below what the step size can
+    /// resolve and reads as none.
+    /// </summary>
+    public static double SlackMs(double clearMs, double movedPx, double decRatePxPerMs, int pulseMs) {
+        if (!(decRatePxPerMs > 0) || !(clearMs > 0)) return 0;
+        double slack = clearMs - Math.Max(0, movedPx) / decRatePxPerMs;
+        return slack < pulseMs / 2.0 ? 0 : Math.Round(slack);
     }
 
     private static double Dist(double ax, double ay, double bx, double by) {

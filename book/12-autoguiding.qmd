@@ -150,7 +150,18 @@ and restores as a legacy single slot until you recalibrate once.
   defaults.
 - **Dec backlash comp (auto-measured)**: applies the slack take-up
   measured during calibration whenever the Dec direction reverses.
-  Disabled if calibration did not measure a backlash.
+  Disabled if calibration did not measure a backlash. Backlash is the
+  play in the gears: after a reversal the motor turns for a moment
+  before the axis moves. Calibration measures it as the time spent
+  pulsing before the star starts to move, less the time the star's
+  own movement took. The amount applied starts at no more than half
+  the Dec pulse limit, and adapts: when the frame after a compensated
+  reversal shows the star went past the lock, the amount is halved,
+  and after repeated overshoots the compensation turns itself off for
+  the session with an alert. A strain-wave mount such as the ZWO AM5
+  has next to no backlash and is best guided with this off; an
+  over-large value makes Dec swing back and forth with a growing
+  amplitude after any disturbance, such as a passing cloud.
 - **Multi-star guiding**: tracks several stars and guides on their
   average, for a steadier centroid.
 - **On meridian flip**: what to do with the calibration after a pier

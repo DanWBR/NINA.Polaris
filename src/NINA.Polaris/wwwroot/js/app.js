@@ -2404,6 +2404,31 @@ function ninaApp() {
         // while guider.lastAlert equals this, so a stale WS re-broadcast of
         // the same message doesn't pop it back. A new alert text shows again.
         guideAlertDismissed: null,
+
+        // GUIDE status notices fade out on their own: an alert or a failed
+        // settle after 10 minutes, a "Settled" after 2. Each shows the time it
+        // was raised. A backend that sends no time keeps the old behaviour
+        // (shown until replaced or dismissed).
+        _guideNoticeFresh(at, minutes) {
+            if (!at) return true;
+            const t = Date.parse(at);
+            return !isFinite(t) || this._nowTick - t < minutes * 60000;
+        },
+        guideAlertShown() {
+            const g = this.guider;
+            return !!g.lastAlert && g.lastAlert !== this.guideAlertDismissed
+                && this._guideNoticeFresh(g.lastAlertAt, 10);
+        },
+        guideSettleShown(status) {
+            const g = this.guider;
+            return !g.settling && g.lastSettleStatus === status
+                && this._guideNoticeFresh(g.lastSettleAt, status === 'done' ? 2 : 10);
+        },
+        guideNoticeTime(at) {
+            if (!at) return '';
+            const d = new Date(at);
+            return isNaN(d) ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        },
         showCalReview: false,
         guiderHost: 'localhost',
         guiderPort: 4400,
@@ -51730,7 +51755,9 @@ function ninaApp() {
                         decGuideMode: g.decGuideMode ?? this.guider.decGuideMode ?? 'auto',
                         lastAlert: g.lastAlert || null,
                         lastAlertSeverity: g.lastAlertSeverity || 'warn',
+                        lastAlertAt: g.lastAlertAt || null,
                         lastSettleStatus: g.lastSettleStatus || null,
+                        lastSettleAt: g.lastSettleAt || null,
                         calProgress: g.calProgress || null,
                         calDetails: g.calDetails || null,
                         // Short-lived Loop/Auto-select phase ("Exposing"/"Selecting")

@@ -94,8 +94,16 @@ public sealed partial class NativeGuider {
         // Dec backlash compensation: only when enabled on the rig AND the
         // calibration actually measured a backlash. Disabled by default
         // because an over-large value oscillates worse than no comp.
+        // The amount starts at no more than half the Dec pulse limit unless the
+        // rig sets its own ceiling: a calibration that overestimated the slack
+        // (6000 ms on a strain-wave AM5) otherwise turned every reversal into a
+        // full-length pulse. Passing the previous instance keeps what this
+        // session learned (an amount halved or switched off for overshooting)
+        // across a stop/start or a settings change.
         double measuredBacklash = Rig.NativeBacklashComp ? _calibration.BacklashMs : 0;
-        _backlashComp = new BacklashComp(measuredBacklash, Rig.NativeBacklashMaxMs);
+        int backlashCap = Rig.NativeBacklashMaxMs > 0 ? Rig.NativeBacklashMaxMs
+                        : Rig.NativeMaxDecDurationMs > 0 ? Rig.NativeMaxDecDurationMs / 2 : 0;
+        _backlashComp = new BacklashComp(measuredBacklash, backlashCap, _backlashComp);
         _backlashComp.Reset();
     }
 

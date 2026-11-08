@@ -272,6 +272,7 @@ public sealed partial class NativeGuider : IGuider, IDisposable {
     public string? LastAlert { get; private set; }
     public DateTime? LastAlertAt { get; private set; }
     public string? LastSettleStatus { get; private set; }
+    public DateTime? LastSettleAt { get; private set; }
 
     public double RmsRA { get; private set; }
     public double RmsDec { get; private set; }

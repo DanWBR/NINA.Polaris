@@ -146,7 +146,11 @@ public sealed class GuidingStatusContributor : IStatusContributor {
                 stepCount = steps.Count,
                 lastAlert = activeGuider.LastAlert,
                 lastAlertSeverity = activeGuider.LastAlertSeverity,
+                // When each was raised, so the panel can show the time and
+                // let them fade out instead of standing all night.
+                lastAlertAt = activeGuider.LastAlertAt,
                 lastSettleStatus = activeGuider.LastSettleStatus,
+                lastSettleAt = activeGuider.LastSettleAt,
                 calProgress = activeGuider.CalibrationProgress,
                 calDetails = activeGuider.CalibrationDetails,
                 exposureMs = activeGuider.ExposureMs,

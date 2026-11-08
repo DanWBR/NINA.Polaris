@@ -81,6 +81,10 @@ public interface IGuider {
     /// (PHD2) keep their current red/amber callout without changes.</summary>
     string LastAlertSeverity => "warn";
     string? LastSettleStatus { get; }
+    /// <summary>When <see cref="LastSettleStatus"/> last became "done" or
+    /// "failed" (UTC), so the GUIDE panel can show and age it. Null when
+    /// the backend does not record it.</summary>
+    DateTime? LastSettleAt => null;
 
     /// <summary>Human-readable calibration step shown in the GUIDE UI while
     /// calibrating (e.g. "Dec (south): step 4, dist 12.3 px"). Null when not

@@ -56,6 +56,7 @@ public class PHD2Client : IGuider, IDisposable {
     public string? LastAlert { get; private set; }
     public DateTime? LastAlertAt { get; private set; }
     public string? LastSettleStatus { get; private set; }
+    public DateTime? LastSettleAt { get; private set; }
 
     /// <summary>Ring buffer of recent guide steps (last 5 min at 1Hz ≈ 300 samples).</summary>
     public List<GuideStep> RecentSteps { get; } = new();
@@ -295,6 +296,7 @@ public class PHD2Client : IGuider, IDisposable {
                     DroppedFrames = TryGetInt(msg, "DroppedFrames")
                 };
                 LastSettleStatus = statusCode == 0 ? "done" : "failed";
+                LastSettleAt = DateTime.UtcNow;
                 Settled?.Invoke(result);
                 break;
             }

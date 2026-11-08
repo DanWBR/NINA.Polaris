@@ -6160,10 +6160,12 @@
                             <div class="settle-sub muted" x-show="guider.settleProgress"
                                  x-text="'within tolerance ' + (guider.settleProgress?.belowSec||0).toFixed(0) + '/' + (guider.settleProgress?.settleSec||0).toFixed(0) + ' s · elapsed ' + (guider.settleProgress?.elapsedSec||0).toFixed(0) + '/' + (guider.settleProgress?.timeoutSec||0).toFixed(0) + ' s'"></div>
                         </div>
-                        <div class="info-row" x-show="!guider.settling && guider.lastSettleStatus === 'done'">
-                            <span class="text-ok">✓ Settled</span></div>
-                        <div class="info-row" x-show="!guider.settling && guider.lastSettleStatus === 'failed'">
-                            <span class="text-danger">Settle failed</span></div>
+                        <div class="info-row" x-show="guideSettleShown('done')">
+                            <span class="text-ok">✓ Settled</span>
+                            <span class="muted guide-notice-time" x-text="guideNoticeTime(guider.lastSettleAt)"></span></div>
+                        <div class="info-row" x-show="guideSettleShown('failed')">
+                            <span class="text-danger">Settle failed</span>
+                            <span class="muted guide-notice-time" x-text="guideNoticeTime(guider.lastSettleAt)"></span></div>
                         <!-- Alert with a dismiss ×. The backend clears the alert
                              when a fresh guiding run starts; the client guard
                              (guideAlertDismissed) hides one the user dismissed
@@ -6171,10 +6173,11 @@
                              while a genuinely NEW alert text still shows. -->
                         <div class="guide-alert"
                              :class="'guide-alert-' + (guider.lastAlertSeverity || 'warn')"
-                             x-show="guider.lastAlert && guider.lastAlert !== guideAlertDismissed">
+                             x-show="guideAlertShown()">
                             <span class="guide-alert-icon"
                                   x-text="guider.lastAlertSeverity === 'info' ? 'ⓘ' : '⚠'"></span>
                             <strong x-text="guider.lastAlert"></strong>
+                            <span class="muted guide-notice-time" x-text="guideNoticeTime(guider.lastAlertAt)"></span>
                             <button class="btn btn-sm btn-icon-only guide-alert-dismiss" title="Dismiss"
                                     @click="guideAlertDismissed = guider.lastAlert">&times;</button>
                         </div>
