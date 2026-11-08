@@ -6559,6 +6559,12 @@
                                @change="setNativeMultiStar($event.target.checked)">
                         <span style="font-size:12px">Multi-star guiding</span>
                     </label>
+                    <label class="equip-driver-row" style="margin-top:6px; gap:6px; cursor:pointer"
+                           title="When guiding stalls (no correction for a minute), its offset freezes (a hot pixel or a repeated frame), or a very large star reports its own noise as error, guiding moves to another star by itself.">
+                        <input type="checkbox" :checked="nativeGuideAutoReselect"
+                               @change="setNativeGuideAutoReselect($event.target.checked)">
+                        <span style="font-size:12px">Switch star when guiding stalls</span>
+                    </label>
                     <!-- Star selection. These are the detector's knobs, and
                          they are knobs because the defaults are tuned for
                          imaging frames: on a guide camera the same numbers can
@@ -26426,7 +26432,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261108-advprogress"></script>
+    <script src="/js/app.js?v=20261108-guidemon"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

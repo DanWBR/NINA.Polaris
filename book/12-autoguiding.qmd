@@ -260,6 +260,46 @@ unknown and nothing is called saturated, because inferring it from the
 frame's brightest pixel is circular and flags the brightest star in
 every frame, which is usually the one you were pointing at.
 
+Size is judged as well, and it needs no saturation level. With the
+tuned method, auto-select passes over a star that is much larger than
+the field's typical one: an HFR (half-flux radius, the radius holding
+half the star's light) more than 1.8 times the median of the stars
+found, more than four times the median star's area, or a peak at the
+frame's own maximum on a star already wider than typical. Such a star
+is bloated or clipped, and its centroid wanders with the seeing across
+the flat top, so it reports large errors while nothing moves and every
+one of them goes to the mount as a correction. Auto-select takes the
+brightest star of typical size instead, and falls back to the large
+one only when the field offers nothing else. The selection line counts
+them ("2 too large"). Classic keeps the old rule, the brightest star.
+
+### When guiding goes bad: switching stars
+
+**Switch star when guiding stalls**, on by default, watches the
+session for three failures that otherwise pass without a word while
+the badge keeps reading Guiding:
+
+- **Stalled:** no correction sent for a minute (or 15 guide
+  exposures, whichever is longer), because every frame lost the star
+  or was dropped by the mass and distance checks.
+- **Frozen:** the measured offset is exactly zero, or exactly the
+  same as the frame before, for 12 frames in a row. No real star does
+  that through the seeing; it is a hot pixel or the camera handing
+  back the same frame.
+- **Big star:** the star was flagged as large when it was picked, and
+  its error over the last 20 frames is above 1 guide pixel RMS (root
+  mean square, the typical size of the error).
+
+On any of these the guider takes a fresh full frame, picks another
+star with the same rule as auto-select while staying clear of the
+current one, and moves the lock there, so the switch itself sends no
+correction. It never acts while guiding is paused (a meridian flip),
+settling after a dither, or the mount is slewing, and the clocks
+restart when those end. Switches are at least two minutes apart and at
+most four in half an hour; past that it says so once and leaves the
+choice to you. Each switch is in the guide alerts and the log. This
+covers Polaris's own guider; PHD2 has its own star-loss handling.
+
 ### Live view, star profile, and graph
 
 The guide frame shows the lock crosshair and star markers. **Star

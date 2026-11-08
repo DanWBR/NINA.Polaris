@@ -535,6 +535,7 @@ public class ProfileService {
             NativeBacklashComp = src.NativeBacklashComp,
             NativeBacklashMaxMs = src.NativeBacklashMaxMs,
             NativeMultiStar = src.NativeMultiStar,
+            NativeGuideAutoReselect = src.NativeGuideAutoReselect,
             NativeMaxGuideStars = src.NativeMaxGuideStars,
             NativePierSideHandling = src.NativePierSideHandling,
             NativeReverseDecAfterFlip = src.NativeReverseDecAfterFlip,

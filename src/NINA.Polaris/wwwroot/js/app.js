@@ -1587,6 +1587,7 @@ function ninaApp() {
         nativeDecAlgorithm: 'resistswitch',
         nativeBacklashComp: false,
         nativeMultiStar: true,
+        nativeGuideAutoReselect: true,
         nativePierSideHandling: 'mirror',
         nativeReverseDecAfterFlip: false,
         // Calibration & correction tunables (ms).
@@ -25599,6 +25600,7 @@ function ninaApp() {
             this.nativeDecGuideMode = rig.nativeDecGuideMode || 'auto';
             this.nativeBacklashComp = !!rig.nativeBacklashComp;
             this.nativeMultiStar = rig.nativeMultiStar !== false;
+            this.nativeGuideAutoReselect = rig.nativeGuideAutoReselect !== false;
             this.nativeCalibrationStepMs = rig.nativeCalibrationStepMs || 1000;
             this.nativeMaxRaDurationMs = rig.nativeMaxRaDurationMs || 2500;
             this.nativeMaxDecDurationMs = rig.nativeMaxDecDurationMs || 2500;
@@ -37362,6 +37364,13 @@ function ninaApp() {
         setNativeMultiStar(enabled) {
             this.nativeMultiStar = !!enabled;
             this._persistRigSelection({ nativeMultiStar: this.nativeMultiStar });
+        },
+
+        // Guiding performance monitor: move to another star when guiding
+        // stalls, freezes, or a very large star reports noise as error.
+        setNativeGuideAutoReselect(enabled) {
+            this.nativeGuideAutoReselect = !!enabled;
+            this._persistRigSelection({ nativeGuideAutoReselect: this.nativeGuideAutoReselect });
         },
 
         // How the native guider reacts to a meridian flip (pier-side change).

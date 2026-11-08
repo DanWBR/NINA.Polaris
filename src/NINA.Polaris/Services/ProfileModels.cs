@@ -1098,6 +1098,12 @@ public class EquipmentProfile {
     /// the loss of any single star). On by default, matching PHD2.</summary>
     public bool NativeMultiStar { get; set; } = true;
 
+    /// <summary>Guiding performance monitor: when a session stalls (no
+    /// correction for a minute), its offset freezes (a hot pixel, a repeated
+    /// frame) or a very large star reports noise as error, guiding moves to
+    /// another star by itself. On by default.</summary>
+    public bool NativeGuideAutoReselect { get; set; } = true;
+
     /// <summary>Maximum number of guide stars to track when multi-star is on
     /// (primary + secondaries). Clamped to [1, 12].</summary>
     public int NativeMaxGuideStars { get; set; } = 8;

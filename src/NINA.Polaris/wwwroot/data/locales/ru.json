@@ -5771,5 +5771,7 @@
   "Show last frame": "Показать последний кадр",
   "Show the last frame the run captured": "Показать последний кадр, снятый при выполнении",
   "Time since the run started": "Время с начала выполнения",
-  "Copy this target's RA and Dec into its Meridian Flip, Center After Drift and Loop Until Altitude": "Скопировать RA и Dec этой цели в её Meridian Flip, Center After Drift и Loop Until Altitude"
+  "Copy this target's RA and Dec into its Meridian Flip, Center After Drift and Loop Until Altitude": "Скопировать RA и Dec этой цели в её Meridian Flip, Center After Drift и Loop Until Altitude",
+  "Switch star when guiding stalls": "Сменить звезду, если гидирование зависло",
+  "When guiding stalls (no correction for a minute), its offset freezes (a hot pixel or a repeated frame), or a very large star reports its own noise as error, guiding moves to another star by itself.": "Если гидирование зависло (минуту без коррекций), смещение замерло (горячий пиксель или повторяющийся кадр) или очень крупная звезда выдаёт собственный шум за ошибку, гидирование само переходит на другую звезду."
 }

@@ -5442,5 +5442,7 @@
   "Show last frame": "Letztes Bild zeigen",
   "Show the last frame the run captured": "Das letzte vom Lauf aufgenommene Bild zeigen",
   "Time since the run started": "Zeit seit dem Start des Laufs",
-  "Copy this target's RA and Dec into its Meridian Flip, Center After Drift and Loop Until Altitude": "RA und Dec dieses Ziels in seinen Meridian Flip, Center After Drift und Loop Until Altitude kopieren"
+  "Copy this target's RA and Dec into its Meridian Flip, Center After Drift and Loop Until Altitude": "RA und Dec dieses Ziels in seinen Meridian Flip, Center After Drift und Loop Until Altitude kopieren",
+  "Switch star when guiding stalls": "Stern wechseln, wenn das Guiding hängt",
+  "When guiding stalls (no correction for a minute), its offset freezes (a hot pixel or a repeated frame), or a very large star reports its own noise as error, guiding moves to another star by itself.": "Wenn das Guiding hängt (eine Minute ohne Korrektur), die Abweichung einfriert (Hotpixel oder wiederholtes Bild) oder ein sehr großer Stern sein eigenes Rauschen als Fehler meldet, wechselt das Guiding selbstständig zu einem anderen Stern."
 }

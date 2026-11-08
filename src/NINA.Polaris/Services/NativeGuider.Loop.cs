@@ -122,6 +122,7 @@ public sealed partial class NativeGuider {
         _slewHold = false;
         _starLostCount = 0;
         _haveLock = false;
+        _perf.Reset(NowMs());
         _calAnchorActive = false;
         _multiStar.Clear();
         ClearViewMarkers();
@@ -227,7 +228,8 @@ public sealed partial class NativeGuider {
 
         // React to a German-equatorial meridian flip (pier-side change) before
         // measuring, so this frame's correction uses the adjusted calibration.
-        if (await HandleMountSlewAsync(cam, mount, ct)) return;
+        // A slew is not a stall: restart the monitor's clock while it runs.
+        if (await HandleMountSlewAsync(cam, mount, ct)) { _perf.Rearm(NowMs()); return; }
 
         await HandlePierSideChangeAsync(cam, mount, ct);
 
@@ -266,6 +268,8 @@ public sealed partial class NativeGuider {
             // Do that automatically instead, once, after the widened search has had
             // its chance.
             await MaybeReacquireAsync(cam, ct);
+            _perf.NoteNotApplied(NowMs());
+            await CheckPerformanceAsync(cam, ct);
 
             // Back off while the star is gone so a long cloud-out doesn't spin
             // the loop at full tilt hammering captures (and, on short exposures,
@@ -302,6 +306,8 @@ public sealed partial class NativeGuider {
             BuildView(curX, curY, snr, true);
             _distanceChecker.Activate();
             await NoteRejectedWhileLostAsync(cam, ct);
+            _perf.NoteNotApplied(NowMs());
+            await CheckPerformanceAsync(cam, ct);
             return;
         }
         _massChecker.AppendData(_lastFindMass);
@@ -321,6 +327,8 @@ public sealed partial class NativeGuider {
             PushStep(new PortableGuideStep(NowMs(), 0, 0, 0, 0, 0, 0, snr, hfd, false));
             BuildView(curX, curY, snr, true);
             await NoteRejectedWhileLostAsync(cam, ct);
+            _perf.NoteNotApplied(NowMs());
+            await CheckPerformanceAsync(cam, ct);
             return;
         }
 
@@ -413,6 +421,10 @@ public sealed partial class NativeGuider {
 
         // Settle progress (dither / start).
         AdvanceSettle(Math.Sqrt(raPx * raPx + decPx * decPx));
+
+        // Performance watch: the camera-frame offset, before any correction.
+        _perf.NoteApplied(NowMs(), dx, dy);
+        await CheckPerformanceAsync(cam, ct);
 
         // Delay so the loop cadence ≈ exposure period (capture already
         // consumed most of it; the camera blocks for the exposure).
@@ -1068,6 +1080,80 @@ public sealed partial class NativeGuider {
             return (_lockX, _lockY, false, result.Snr, result.Hfd);
         }
         return (result.X, result.Y, true, result.Snr, result.Hfd);
+    }
+
+    /// <summary>Ask the performance monitor whether this session has gone bad
+    /// (stalled, frozen offset, big star reporting noise) and, if so, move to
+    /// another star. Never while paused, settling or dithering: those are not
+    /// failures, and the clocks restart when they end.</summary>
+    private async Task CheckPerformanceAsync(ICamera cam, CancellationToken ct) {
+        if (Rig?.NativeGuideAutoReselect == false) return;
+        long now = NowMs();
+        if (_paused || IsSettling || IsDithering || _stopping) { _perf.Rearm(now); return; }
+        if (AppState != "Guiding" && AppState != "LostLock") return;
+
+        var d = _perf.Evaluate(now, Math.Max(50, Rig?.NativeGuideExposureMs ?? 1000));
+        if (d.Verdict == GuidePerformanceMonitor.Verdict.None) return;
+
+        if (!_perf.TryConsumeReselect(now)) {
+            if (_perf.ShouldAlertLimit(now)) {
+                _logger.LogWarning("Native guide monitor: {Msg} Automatic re-selection is rate limited.", d.Message);
+                RaiseAlert(d.Message + " Automatic star re-selection is paused after several attempts; "
+                           + "pick a star by hand if this continues.");
+            }
+            _perf.Rearm(now);
+            return;
+        }
+        _logger.LogWarning("Native guide monitor: {Msg} Selecting another star.", d.Message);
+        RaiseAlert(d.Message + " Selecting another star.");
+        await ReselectStarAsync(cam, ct);
+    }
+
+    /// <summary>Move the session to another star: full-frame detection, the
+    /// same choice rule as auto-select (no saturated, no oversized stars), and
+    /// the current star's neighbourhood excluded so it is a different one.
+    /// The lock moves to the new star where it sits now, so nothing is
+    /// corrected for the change itself.</summary>
+    private async Task ReselectStarAsync(ICamera cam, CancellationToken ct) {
+        try {
+            try { await cam.SetSubframeAsync(0, 0, 0, 0, ct); } catch { }
+            var img = await CaptureFullAsync(cam, ct, "Exposing");
+            if (img == null) { _perf.Rearm(NowMs()); return; }
+            int w = img.Properties.Width, h = img.Properties.Height;
+            var stars = GuideStarDetector().Detect(img.Data, w, h);
+            bool classic = IsClassicDetection(Rig);
+            (double X, double Y, double R)? avoid = _haveLock ? (_lockX, _lockY, SearchRegion * 2.0) : null;
+            var pick = PickGuideStar(stars, w, h, StarEdgeMargin(), SaturationLevelFor(img),
+                                     allowSat: !classic && AllowSaturatedStars(), classic,
+                                     FrameMax(img.Data), avoid);
+            if (pick.Star == null) {
+                _logger.LogInformation("Native guide monitor: no other usable star in the frame ({N} detected)", stars.Count);
+                RaiseAlert("No other usable guide star in the frame; keeping the current one.", "info");
+                _perf.Rearm(NowMs());
+                return;
+            }
+            double moved = _haveLock
+                ? Math.Sqrt(Math.Pow(pick.Star.X - _lockX, 2) + Math.Pow(pick.Star.Y - _lockY, 2)) : 0;
+            _lastFrame = img; _lastFrameOriginX = 0; _lastFrameOriginY = 0;
+            _lockX = pick.Star.X;
+            _lockY = pick.Star.Y;
+            _haveLock = true;
+            _starLostCount = 0;
+            ResetFrameChecks(pick.StarIsBig);
+            if (AppState == "LostLock") SetAppState("Guiding");
+            // Secondaries are relative to the old primary.
+            await BuildMultiStarAsync(ct);
+            BuildView(_lockX, _lockY, 0, true);
+            _logger.LogInformation(
+                "Native guide monitor: guiding moved to ({X:F1},{Y:F1}), {D:F0}px from the previous star, HFR {Hfr:F1} (field median {Med:F1})",
+                _lockX, _lockY, moved, pick.Star.HFR, pick.MedianHfr);
+            RaiseAlert($"Guiding moved to another star ({moved:F0} px away).", "info");
+        } catch (OperationCanceledException) {
+            throw;
+        } catch (Exception ex) {
+            _logger.LogWarning(ex, "Native guide monitor: re-selection failed");
+            _perf.Rearm(NowMs());
+        }
     }
 
     // ----- Internals -----
