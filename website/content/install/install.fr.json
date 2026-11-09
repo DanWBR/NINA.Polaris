@@ -84,68 +84,68 @@
         "color": "#8b5cf6",
         "emoji": "🖥️",
         "os": "Ubuntu 24.04.4 LTS (x86-64)",
-        "polaris": "0.98.211 (2026-10-19)",
+        "polaris": "0.98.253 (2026-11-09)",
         "size": "3.18 GB (.7z)",
         "access": "https://polaris-linux.local:5000/",
         "note": "La façon la plus rapide d'utiliser Polaris, et gratuite si vous avez déjà un mini-PC ou un vieux portable qui dort. Extrayez le .7z, écrivez le .img sur une clé USB avec balenaEtcher ou Rufus, et démarrez dessus. Une fois lancé, sudo polaris-install-to-disk recopie le tout sur le disque interne et vous pouvez retirer la clé.",
-        "url": "https://drive.google.com/uc?export=download&id=1GovJEMegUXKAqx7UVxVqpQRQJ2gVdDFp"
+        "url": "https://drive.google.com/uc?export=download&id=1HrvOOUBt9S8UImJG-ToMsfq_EpIdF4O5"
       },
       {
         "device": "Raspberry Pi 4",
         "badge": "arm64",
         "color": "#e11d6b",
         "os": "Raspberry Pi OS 64 bits (Debian Trixie)",
-        "polaris": "0.98.211 (2026-10-19)",
+        "polaris": "0.98.253 (2026-11-09)",
         "size": "5.23 GB (.7z)",
         "access": "https://polaris-pi4-1.local:5000/",
         "note": "La carte la plus lente de cette page, et malgré tout suffisante pour une nuit normale : acquisition, autoguidage, astrométrie et live stacking fonctionnent. Ce sont les grands capteurs et les outils IA qui se font sentir. Extrayez le .7z et écrivez le .img avec Raspberry Pi Imager, balenaEtcher ou Rufus.",
-        "url": "https://drive.google.com/uc?export=download&id=1ELdbr1Yw8Fs4h-XBm95dPi-IWlg8cF-H"
+        "url": "https://drive.google.com/uc?export=download&id=1d_HrknU1a3BffT4lJuNv6U0_cnhILQJi"
       },
       {
         "device": "Raspberry Pi 5",
         "badge": "arm64",
         "color": "#e11d6b",
         "os": "Raspberry Pi OS 64 bits (Debian Trixie)",
-        "polaris": "0.98.211 (2026-10-19)",
-        "size": "7.75 GB (.7z)",
+        "polaris": "0.98.253 (2026-11-09)",
+        "size": "7.65 GB (.7z)",
         "access": "https://polaris-pi.local:5000/",
         "note": "Environ deux fois plus rapide que la Pi 4 et la plus facile à trouver en boutique. Un bon choix polyvalent si vous êtes déjà dans l'univers Raspberry Pi. Extrayez le .7z et écrivez le .img avec Raspberry Pi Imager, balenaEtcher ou Rufus.",
-        "url": "https://drive.google.com/uc?export=download&id=1mv5AlDUKS3vB_wvsZ_RMvfwlw9SvyMb2"
+        "url": "https://drive.google.com/uc?export=download&id=1ewE5gdYL2nVCwrdk3b8ZbmYI0zE9OJKr"
       },
       {
         "device": "Orange Pi Zero 3",
         "badge": "arm64",
         "color": "#ff7a18",
         "os": "Armbian 25.5.1 XFCE (Ubuntu 24.04, noyau 6.12.23)",
-        "polaris": "0.98.222 (2026-10-23)",
+        "polaris": "0.98.253 (2026-11-09)",
         "size": "2.53 GB (.7z)",
         "access": "https://orangepizero3.local:5000/",
         "note": "L'entrée de gamme la moins chère. Avec 1,5 Go de RAM elle assure l'acquisition, l'autoguidage et l'astrométrie ; le live stacking d'un grand capteur et les outils IA mettront votre patience à l'épreuve. Cette carte n'a pas d'accélération GPU, l'IA tourne donc sur le processeur. Extrayez le .7z et écrivez le .img sur une carte SD avec HDD Raw Copy Tool, balenaEtcher ou Rufus. Mot de passe : polaris.",
-        "url": "https://drive.google.com/uc?export=download&id=14_ebPBanBcDxvrMhsq4jRlfuWm-_dLfQ"
+        "url": "https://drive.google.com/uc?export=download&id=1BITy6O2bHgv99ze1KP_lCAkIaHbSoJZr"
       },
       {
         "device": "Orange Pi 4 Pro",
         "badge": "arm64",
         "color": "#ff7a18",
         "os": "Ubuntu 22.04 (arm64)",
-        "polaris": "0.98.222 (2026-10-23)",
-        "size": "2.53 GB (.7z)",
+        "polaris": "0.98.253 (2026-11-09)",
+        "size": "2.54 GB (.7z)",
         "access": "https://polaris-opi4pro-1.local:5000/",
         "note": "Celle à prendre en cas de doute. Environ 50 US$, nettement plus rapide qu'une Pi 4, et le meilleur rapport prix/capacité de cette liste. Extrayez le .7z et écrivez le .img sur le stockage interne de la carte avec HDD Raw Copy Tool, balenaEtcher ou Rufus. Mot de passe : polaris.",
-        "url": "https://drive.google.com/uc?export=download&id=1GGhW3W_lvVMU265lpgts-tcszt7KO74T"
+        "url": "https://drive.google.com/uc?export=download&id=1yY_EROXJftmglaSlKAsRcCCX3TpsYfXK"
       },
       {
         "device": "Orange Pi 5 Pro",
         "badge": "arm64",
         "color": "#ff7a18",
         "os": "Armbian 26.8.0 KDE (Ubuntu 26.04, noyau 6.1.115)",
-        "polaris": "0.98.211 (2026-10-19)",
+        "polaris": "0.98.253 (2026-11-09)",
         "size": "8.28 GB (.7z)",
         "access": "https://polaris-opi5pro-1.local:5000/",
         "note": "Deux fois et demie une Pi 4, avec accélération GPU pour les outils IA. L'investissement se justifie si le retrait de gradient, le débruitage et la déconvolution font partie de votre finition. Extrayez le .7z et écrivez le .img avec balenaEtcher ou Rufus.",
         "gpu": "oui",
         "npu": "oui",
-        "url": "https://drive.google.com/uc?export=download&id=1qKwu55YvLkywtU92UQOnbboqOjdskE7S"
+        "url": "https://drive.google.com/uc?export=download&id=1S3hehAq4VXa7JlAVKmBgY781KMRENBaA"
       },
       {
         "device": "Radxa Dragon Q6A",
@@ -153,13 +153,13 @@
         "color": "#10b981",
         "emoji": "🐉",
         "os": "Ubuntu 24.04 LTS (arm64)",
-        "polaris": "0.98.211 (2026-10-19)",
-        "size": "6.51 GB (.7z)",
+        "polaris": "0.98.253 (2026-11-09)",
+        "size": "6.55 GB (.7z)",
         "access": "https://radxa-dragon-q6a.local:5000/",
         "note": "La carte la plus rapide ici, avec accélération GPU et NPU. À choisir si vous vous appuyez sur les outils IA ou si vous empilez de grandes images pendant que vous photographiez encore. Extrayez le .7z et écrivez le .img avec balenaEtcher ou Rufus.",
         "gpu": "oui",
         "npu": "oui",
-        "url": "https://drive.google.com/uc?export=download&id=1NaEMGGloolW95eda-kAkSgURB12xHrAG"
+        "url": "https://drive.google.com/uc?export=download&id=1k2O9ARAAmV9OaX-H_k-__16s-lk_wEfa"
       }
     ],
     "update": {

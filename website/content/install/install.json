@@ -84,68 +84,68 @@
         "color": "#8b5cf6",
         "emoji": "🖥️",
         "os": "Ubuntu 24.04.4 LTS (x86-64)",
-        "polaris": "0.98.211 (2026-10-19)",
+        "polaris": "0.98.253 (2026-11-09)",
         "size": "3.18 GB (.7z)",
         "access": "https://polaris-linux.local:5000/",
         "note": "The fastest way to run Polaris, and free if you already have a mini PC or an old laptop lying around. Extract the .7z, write the .img to a USB stick with balenaEtcher or Rufus, and boot from it. Once it is running, sudo polaris-install-to-disk copies everything to the machine's internal drive so you can take the stick out.",
-        "url": "https://drive.google.com/uc?export=download&id=1GovJEMegUXKAqx7UVxVqpQRQJ2gVdDFp"
+        "url": "https://drive.google.com/uc?export=download&id=1HrvOOUBt9S8UImJG-ToMsfq_EpIdF4O5"
       },
       {
         "device": "Raspberry Pi 4",
         "badge": "arm64",
         "color": "#e11d6b",
         "os": "Raspberry Pi OS 64-bit (Debian Trixie)",
-        "polaris": "0.98.211 (2026-10-19)",
+        "polaris": "0.98.253 (2026-11-09)",
         "size": "5.23 GB (.7z)",
         "access": "https://polaris-pi4-1.local:5000/",
         "note": "The slowest board on this page, and still enough for a normal night: capture, guiding, plate solving and live stacking all work. Big sensors and the AI tools are where you feel it. Extract the .7z and write the .img with Raspberry Pi Imager, balenaEtcher or Rufus.",
-        "url": "https://drive.google.com/uc?export=download&id=1ELdbr1Yw8Fs4h-XBm95dPi-IWlg8cF-H"
+        "url": "https://drive.google.com/uc?export=download&id=1d_HrknU1a3BffT4lJuNv6U0_cnhILQJi"
       },
       {
         "device": "Raspberry Pi 5",
         "badge": "arm64",
         "color": "#e11d6b",
         "os": "Raspberry Pi OS 64-bit (Debian Trixie)",
-        "polaris": "0.98.211 (2026-10-19)",
-        "size": "7.75 GB (.7z)",
+        "polaris": "0.98.253 (2026-11-09)",
+        "size": "7.65 GB (.7z)",
         "access": "https://polaris-pi.local:5000/",
         "note": "Roughly twice as fast as the Pi 4 and the easiest board to find in a shop. A comfortable all-rounder if you already live in the Raspberry Pi world. Extract the .7z and write the .img with Raspberry Pi Imager, balenaEtcher or Rufus.",
-        "url": "https://drive.google.com/uc?export=download&id=1mv5AlDUKS3vB_wvsZ_RMvfwlw9SvyMb2"
+        "url": "https://drive.google.com/uc?export=download&id=1ewE5gdYL2nVCwrdk3b8ZbmYI0zE9OJKr"
       },
       {
         "device": "Orange Pi Zero 3",
         "badge": "arm64",
         "color": "#ff7a18",
         "os": "Armbian 25.5.1 XFCE (Ubuntu 24.04, kernel 6.12.23)",
-        "polaris": "0.98.222 (2026-10-23)",
+        "polaris": "0.98.253 (2026-11-09)",
         "size": "2.53 GB (.7z)",
         "access": "https://orangepizero3.local:5000/",
         "note": "The cheapest way in. With 1.5 GB of RAM it handles capture, guiding and plate solving fine; live stacking a large sensor and the AI tools will test your patience. There is no GPU acceleration on this board, so the AI tools run on the CPU. Extract the .7z and write the .img to an SD card with HDD Raw Copy Tool, balenaEtcher or Rufus. Login password: polaris.",
-        "url": "https://drive.google.com/uc?export=download&id=14_ebPBanBcDxvrMhsq4jRlfuWm-_dLfQ"
+        "url": "https://drive.google.com/uc?export=download&id=1BITy6O2bHgv99ze1KP_lCAkIaHbSoJZr"
       },
       {
         "device": "Orange Pi 4 Pro",
         "badge": "arm64",
         "color": "#ff7a18",
         "os": "Ubuntu 22.04 (arm64)",
-        "polaris": "0.98.222 (2026-10-23)",
-        "size": "2.53 GB (.7z)",
+        "polaris": "0.98.253 (2026-11-09)",
+        "size": "2.54 GB (.7z)",
         "access": "https://polaris-opi4pro-1.local:5000/",
         "note": "The one to buy if you are not sure. Around US$50, comfortably quicker than a Pi 4, and the best balance of price and capability here. Extract the .7z and write the .img to the board's internal storage with HDD Raw Copy Tool, balenaEtcher or Rufus. Login password: polaris.",
-        "url": "https://drive.google.com/uc?export=download&id=1GGhW3W_lvVMU265lpgts-tcszt7KO74T"
+        "url": "https://drive.google.com/uc?export=download&id=1yY_EROXJftmglaSlKAsRcCCX3TpsYfXK"
       },
       {
         "device": "Orange Pi 5 Pro",
         "badge": "arm64",
         "color": "#ff7a18",
         "os": "Armbian 26.8.0 KDE (Ubuntu 26.04, kernel 6.1.115)",
-        "polaris": "0.98.211 (2026-10-19)",
+        "polaris": "0.98.253 (2026-11-09)",
         "size": "8.28 GB (.7z)",
         "access": "https://polaris-opi5pro-1.local:5000/",
         "note": "Two and a half times a Pi 4, with GPU acceleration for the AI tools. Worth the money if background extraction, denoising and deconvolution are part of how you finish an image. Extract the .7z and write the .img with balenaEtcher or Rufus.",
         "gpu": "yes",
         "npu": "yes",
-        "url": "https://drive.google.com/uc?export=download&id=1qKwu55YvLkywtU92UQOnbboqOjdskE7S"
+        "url": "https://drive.google.com/uc?export=download&id=1S3hehAq4VXa7JlAVKmBgY781KMRENBaA"
       },
       {
         "device": "Radxa Dragon Q6A",
@@ -153,13 +153,13 @@
         "color": "#10b981",
         "emoji": "🐉",
         "os": "Ubuntu 24.04 LTS (arm64)",
-        "polaris": "0.98.211 (2026-10-19)",
-        "size": "6.51 GB (.7z)",
+        "polaris": "0.98.253 (2026-11-09)",
+        "size": "6.55 GB (.7z)",
         "access": "https://radxa-dragon-q6a.local:5000/",
         "note": "The fastest board here, with both GPU and NPU acceleration. Choose it if you lean on the AI tools or stack big frames while you are still shooting. Extract the .7z and write the .img with balenaEtcher or Rufus.",
         "gpu": "yes",
         "npu": "yes",
-        "url": "https://drive.google.com/uc?export=download&id=1NaEMGGloolW95eda-kAkSgURB12xHrAG"
+        "url": "https://drive.google.com/uc?export=download&id=1k2O9ARAAmV9OaX-H_k-__16s-lk_wEfa"
       }
     ],
     "update": {

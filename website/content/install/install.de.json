@@ -84,68 +84,68 @@
         "color": "#8b5cf6",
         "emoji": "🖥️",
         "os": "Ubuntu 24.04.4 LTS (x86-64)",
-        "polaris": "0.98.211 (2026-10-19)",
+        "polaris": "0.98.253 (2026-11-09)",
         "size": "3.18 GB (.7z)",
         "access": "https://polaris-linux.local:5000/",
         "note": "Der schnellste Weg zu Polaris, und kostenlos, wenn ohnehin ein Mini-PC oder ein altes Notebook herumliegt. Entpacken Sie das .7z, schreiben Sie das .img mit balenaEtcher oder Rufus auf einen USB-Stick und booten Sie davon. Läuft es, kopiert sudo polaris-install-to-disk alles auf die interne Platte und der Stick kann raus.",
-        "url": "https://drive.google.com/uc?export=download&id=1GovJEMegUXKAqx7UVxVqpQRQJ2gVdDFp"
+        "url": "https://drive.google.com/uc?export=download&id=1HrvOOUBt9S8UImJG-ToMsfq_EpIdF4O5"
       },
       {
         "device": "Raspberry Pi 4",
         "badge": "arm64",
         "color": "#e11d6b",
         "os": "Raspberry Pi OS 64-Bit (Debian Trixie)",
-        "polaris": "0.98.211 (2026-10-19)",
+        "polaris": "0.98.253 (2026-11-09)",
         "size": "5.23 GB (.7z)",
         "access": "https://polaris-pi4-1.local:5000/",
         "note": "Das langsamste Board auf dieser Seite und trotzdem genug für eine normale Nacht: Aufnahme, Guiding, Plate Solving und Live Stacking laufen. Spürbar wird es bei großen Sensoren und den KI-Werkzeugen. Entpacken Sie das .7z und schreiben Sie das .img mit Raspberry Pi Imager, balenaEtcher oder Rufus.",
-        "url": "https://drive.google.com/uc?export=download&id=1ELdbr1Yw8Fs4h-XBm95dPi-IWlg8cF-H"
+        "url": "https://drive.google.com/uc?export=download&id=1d_HrknU1a3BffT4lJuNv6U0_cnhILQJi"
       },
       {
         "device": "Raspberry Pi 5",
         "badge": "arm64",
         "color": "#e11d6b",
         "os": "Raspberry Pi OS 64-Bit (Debian Trixie)",
-        "polaris": "0.98.211 (2026-10-19)",
-        "size": "7.75 GB (.7z)",
+        "polaris": "0.98.253 (2026-11-09)",
+        "size": "7.65 GB (.7z)",
         "access": "https://polaris-pi.local:5000/",
         "note": "Etwa doppelt so schnell wie die Pi 4 und am leichtesten zu bekommen. Ein bequemer Allrounder, wenn Sie ohnehin in der Raspberry-Pi-Welt zu Hause sind. Entpacken Sie das .7z und schreiben Sie das .img mit Raspberry Pi Imager, balenaEtcher oder Rufus.",
-        "url": "https://drive.google.com/uc?export=download&id=1mv5AlDUKS3vB_wvsZ_RMvfwlw9SvyMb2"
+        "url": "https://drive.google.com/uc?export=download&id=1ewE5gdYL2nVCwrdk3b8ZbmYI0zE9OJKr"
       },
       {
         "device": "Orange Pi Zero 3",
         "badge": "arm64",
         "color": "#ff7a18",
         "os": "Armbian 25.5.1 XFCE (Ubuntu 24.04, Kernel 6.12.23)",
-        "polaris": "0.98.222 (2026-10-23)",
+        "polaris": "0.98.253 (2026-11-09)",
         "size": "2.53 GB (.7z)",
         "access": "https://orangepizero3.local:5000/",
         "note": "Der günstigste Einstieg. Mit 1,5 GB RAM reicht es für Aufnahme, Guiding und Plate Solving; Live Stacking eines großen Sensors und die KI-Werkzeuge strapazieren die Geduld. Dieses Board hat keine GPU-Beschleunigung, die KI läuft also auf der CPU. Entpacken Sie das .7z und schreiben Sie das .img mit HDD Raw Copy Tool, balenaEtcher oder Rufus auf eine SD-Karte. Login-Passwort: polaris.",
-        "url": "https://drive.google.com/uc?export=download&id=14_ebPBanBcDxvrMhsq4jRlfuWm-_dLfQ"
+        "url": "https://drive.google.com/uc?export=download&id=1BITy6O2bHgv99ze1KP_lCAkIaHbSoJZr"
       },
       {
         "device": "Orange Pi 4 Pro",
         "badge": "arm64",
         "color": "#ff7a18",
         "os": "Ubuntu 22.04 (arm64)",
-        "polaris": "0.98.222 (2026-10-23)",
-        "size": "2.53 GB (.7z)",
+        "polaris": "0.98.253 (2026-11-09)",
+        "size": "2.54 GB (.7z)",
         "access": "https://polaris-opi4pro-1.local:5000/",
         "note": "Das Board für den Zweifelsfall. Rund 50 US$, deutlich flotter als eine Pi 4 und das beste Verhältnis aus Preis und Leistung hier. Entpacken Sie das .7z und schreiben Sie das .img mit HDD Raw Copy Tool, balenaEtcher oder Rufus auf den internen Speicher. Login-Passwort: polaris.",
-        "url": "https://drive.google.com/uc?export=download&id=1GGhW3W_lvVMU265lpgts-tcszt7KO74T"
+        "url": "https://drive.google.com/uc?export=download&id=1yY_EROXJftmglaSlKAsRcCCX3TpsYfXK"
       },
       {
         "device": "Orange Pi 5 Pro",
         "badge": "arm64",
         "color": "#ff7a18",
         "os": "Armbian 26.8.0 KDE (Ubuntu 26.04, Kernel 6.1.115)",
-        "polaris": "0.98.211 (2026-10-19)",
+        "polaris": "0.98.253 (2026-11-09)",
         "size": "8.28 GB (.7z)",
         "access": "https://polaris-opi5pro-1.local:5000/",
         "note": "Zweieinhalbmal eine Pi 4, mit GPU-Beschleunigung für die KI-Werkzeuge. Lohnt sich, wenn Hintergrundextraktion, Entrauschen und Dekonvolution zu Ihrer Bildbearbeitung gehören. Entpacken Sie das .7z und schreiben Sie das .img mit balenaEtcher oder Rufus.",
         "gpu": "ja",
         "npu": "ja",
-        "url": "https://drive.google.com/uc?export=download&id=1qKwu55YvLkywtU92UQOnbboqOjdskE7S"
+        "url": "https://drive.google.com/uc?export=download&id=1S3hehAq4VXa7JlAVKmBgY781KMRENBaA"
       },
       {
         "device": "Radxa Dragon Q6A",
@@ -153,13 +153,13 @@
         "color": "#10b981",
         "emoji": "🐉",
         "os": "Ubuntu 24.04 LTS (arm64)",
-        "polaris": "0.98.211 (2026-10-19)",
-        "size": "6.51 GB (.7z)",
+        "polaris": "0.98.253 (2026-11-09)",
+        "size": "6.55 GB (.7z)",
         "access": "https://radxa-dragon-q6a.local:5000/",
         "note": "Das schnellste Board hier, mit GPU- und NPU-Beschleunigung. Nehmen Sie es, wenn Sie viel mit den KI-Werkzeugen arbeiten oder große Bilder stapeln, während Sie noch aufnehmen. Entpacken Sie das .7z und schreiben Sie das .img mit balenaEtcher oder Rufus.",
         "gpu": "ja",
         "npu": "ja",
-        "url": "https://drive.google.com/uc?export=download&id=1NaEMGGloolW95eda-kAkSgURB12xHrAG"
+        "url": "https://drive.google.com/uc?export=download&id=1k2O9ARAAmV9OaX-H_k-__16s-lk_wEfa"
       }
     ],
     "update": {
