@@ -5808,5 +5808,6 @@
   "Your SQM meter reads {v} now": "Ваш SQM-метр сейчас показывает {v}",
   "Use only on a clear, moonless night: a reading under the Moon or cloud is not the site's dark sky": "Используйте только в ясную безлунную ночь: показание при Луне или облаках не является тёмным небом места",
   "Use this reading": "Использовать это показание",
-  "Great for your sky": "Отлично для вашего неба"
+  "Great for your sky": "Отлично для вашего неба",
+  "Show more ({n} left)": "Показать ещё (осталось {n})"
 }

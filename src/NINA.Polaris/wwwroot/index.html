@@ -11528,7 +11528,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
 
                 <!-- Card list -->
                 <div class="tonight-list" x-show="!tonight.loading && tonightFiltered().length">
-                    <template x-for="item in tonightFiltered()" :key="item.category + '/' + item.name">
+                    <!-- A page at a time (tonightVisible): the full list runs
+                         to hundreds of cards, each with a chart and a thumbnail,
+                         and mounting them all at once froze a tablet. -->
+                    <template x-for="item in tonightVisible()" :key="item.category + '/' + item.name">
                         <div class="tonight-card" :class="'tonight-card--' + item.category.toLowerCase()">
                             <div class="tonight-thumb" :data-name="item.name">
                                 <!-- x-if (not x-show), only stamp the <img>
@@ -11611,6 +11614,12 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             </div>
                         </div>
                     </template>
+                    <!-- Scrolling near it adds the next page; the button is
+                         the same for browsers without IntersectionObserver. -->
+                    <div class="tonight-more" x-show="tonightMoreCount() > 0" x-init="_tonightObserveMore($el)">
+                        <button class="btn btn-sm" @click="tonightShowMore()"
+                                x-text="$t('Show more ({n} left)', { n: tonightMoreCount() })"></button>
+                    </div>
                 </div>
 
                 <div class="weather-message" x-show="!tonight.loading && tonight.items.length && !tonightFiltered().length">

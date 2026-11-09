@@ -1876,6 +1876,7 @@ public class LiveStackingService {
                     if (residual != null) {
                         t = AffineTransform.Compose(residual, prior);
                         if (CentreShift(t, prior) > MaxPredictedJumpPx) t = null;
+                        else t = Supported(t, stars, "predicted");
                     }
                 }
                 if (t == null) {
@@ -1894,6 +1895,7 @@ public class LiveStackingService {
                             + "checking it with the wide search", t.Tx, t.Ty, CentreShift(t, prior));
                         t = null;
                     }
+                    if (t != null) t = Supported(t, stars, "tight");
                 }
                 if (t == null
                         && stars.Count >= WideMatchMinStars
@@ -1905,6 +1907,7 @@ public class LiveStackingService {
                     foreach (var radius in WideMatchRadii) {
                         t = StarMatcher.Match(_referenceStars!, stars, maxSearchRadius: radius,
                             minVotes: WideMatchMinVotes);
+                        if (t != null) t = Supported(t, stars, "wide");
                         if (t != null) break;
                     }
                     if (t != null) {
@@ -1931,7 +1934,6 @@ public class LiveStackingService {
                 var t = StarMatcher.Match(_referenceStars!, rotStars, maxSearchRadius: 250.0,
                     minVotes: WideMatchMinVotes);
                 if (t != null) {
-                    usedFlipped = true;
                     // Single warp lands the (un-rotated) frame on the
                     // reference grid: rotate 180 then apply the residual
                     // match, composed into one transform.
@@ -1939,6 +1941,8 @@ public class LiveStackingService {
                         M00 = -1, M11 = -1, Tx = _width - 1, Ty = _height - 1
                     };
                     var composed = AffineTransform.Compose(t, rot180);
+                    if (Supported(composed, stars, "flipped") == null) continue;
+                    usedFlipped = true;
                     used = composed;
                     _logger.LogDebug("Frame aligned (flipped): residual dx={Tx:F1} dy={Ty:F1}",
                         t.Tx, t.Ty);
@@ -2051,6 +2055,59 @@ public class LiveStackingService {
     /// far from the last aligned frame's: a frame's tracking drift plus a
     /// dither. Further than that is a new solution, not a prediction.</summary>
     private const double MaxPredictedJumpPx = 50.0;
+
+    // An alignment must land this many of the frame's stars on reference
+    // stars, and this share of those it puts inside the reference frame.
+    internal const int MinAlignInliers = 6;
+    internal const double MinAlignInlierFraction = 0.25;
+    private const double AlignInlierTolPx = 3.0;
+
+    /// <summary>
+    /// How many of <paramref name="stars"/> the transform puts on a reference
+    /// star (within <see cref="AlignInlierTolPx"/>), and how many it puts
+    /// inside the reference frame at all.
+    /// </summary>
+    internal static (int Inliers, int Overlap) AlignmentSupport(List<DetectedStar> refStars,
+            List<DetectedStar> stars, AffineTransform t, int width, int height) {
+        int inliers = 0, overlap = 0;
+        double tol2 = AlignInlierTolPx * AlignInlierTolPx;
+        foreach (var s in stars) {
+            var (x, y) = t.Apply(s.X, s.Y);
+            if (x < 0 || y < 0 || x >= width || y >= height) continue;
+            overlap++;
+            foreach (var r in refStars) {
+                double dx = r.X - x, dy = r.Y - y;
+                if (dx * dx + dy * dy <= tol2) { inliers++; break; }
+            }
+        }
+        return (inliers, overlap);
+    }
+
+    /// <summary>Whether that support is a real alignment and not a handful of
+    /// chance coincidences.</summary>
+    internal static bool IsSupported(int inliers, int overlap) =>
+        inliers >= MinAlignInliers && inliers >= MinAlignInlierFraction * overlap;
+
+    /// <summary>
+    /// <paramref name="t"/> when it holds over the whole field, null otherwise.
+    ///
+    /// <para>The matcher accepts three agreeing stars, and three coincidences
+    /// are easy to find. On Abell 370 (2026-11-08) a cloud-dimmed frame went
+    /// in 60 px off, every frame after it was predicted from that error, and
+    /// the next one that matched did so on a chance trio 130 px from the
+    /// truth: seventeen frames whose stars landed on empty sky, where
+    /// rejection cut their cores and left rings. A true alignment puts a good
+    /// share of the field on reference stars; a coincidence puts a few.</para>
+    /// </summary>
+    private AffineTransform? Supported(AffineTransform t, List<DetectedStar> stars, string how) {
+        if (_referenceStars == null) return t;
+        var (inliers, overlap) = AlignmentSupport(_referenceStars, stars, t, _width, _height);
+        if (IsSupported(inliers, overlap)) return t;
+        _logger.LogInformation(
+            "Live stack: {How} alignment dx={Tx:F0} dy={Ty:F0} put only {In} of {Ov} stars on reference stars; not used",
+            how, t.Tx, t.Ty, inliers, overlap);
+        return null;
+    }
 
     /// <summary>How far two alignments put the frame centre apart, in px.</summary>
     private double CentreShift(AffineTransform a, AffineTransform b) {
