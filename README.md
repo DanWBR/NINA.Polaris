@@ -334,8 +334,23 @@ Replace `linux-arm64` with `linux-x64` for Intel/AMD 64-bit Linux.
 
 ### Windows Mini PC
 
-Download the portable zip from
-[GitHub Releases](https://github.com/DanWBR/NINA.Polaris/releases/latest):
+Download the installer from
+[GitHub Releases](https://github.com/DanWBR/NINA.Polaris/releases/latest)
+and run it:
+
+- x64 (most desktops/laptops): [`polaris-setup-win-x64.exe`](https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-setup-win-x64.exe)
+- ARM64 (Surface Pro X, some Copilot+ PCs): [`polaris-setup-win-arm64.exe`](https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-setup-win-arm64.exe)
+
+It installs for your Windows user only, with no administrator rights,
+into `%LOCALAPPDATA%\Programs\Polaris`, adds Polaris to the Start
+menu and opens it in the browser when it finishes. Its network option
+opens the firewall so phones and tablets can reach Polaris (Windows
+asks for administrator approval once for that), and another option
+starts Polaris at sign-in. Later versions install themselves from the
+**Update** badge in the app. The installer is not code-signed yet, so
+SmartScreen may ask you to confirm (More info → Run anyway).
+
+Prefer no installer? The portable zip is the same files:
 
 ```powershell
 # x64 (most desktops/laptops):
@@ -352,6 +367,7 @@ cd polaris-win-arm64
 ```
 
 Open `https://localhost:5000` (accept the self-signed cert once).
+The zip updates itself from the app too.
 
 For unattended Windows installs, wire your own service via `sc.exe`,
 NSSM, or a scheduled task. Build-from-source path:
