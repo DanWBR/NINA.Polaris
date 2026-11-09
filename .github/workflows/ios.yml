@@ -34,12 +34,18 @@ on:
 jobs:
   # ---- Unsigned build: the always-on CI gate (no secrets required) ----
   build:
-    runs-on: macos-14
+    # macos-14 is retired ("The configuration 'macos-14-arm64-us-default' is
+    # not supported"); same runner and Xcode as the ipa job below.
+    runs-on: macos-15
     defaults:
       run:
         working-directory: mobile
     steps:
       - uses: actions/checkout@v7
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
 
       - uses: actions/setup-node@v7
         with:
