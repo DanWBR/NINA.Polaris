@@ -21725,7 +21725,8 @@ function ninaApp() {
         // Only the cards on the page (`items`), and the bundled cutouts go in
         // as one reassignment: one per card re-rendered every card on the
         // list once per thumbnail.
-        async _kickTonightThumbs(items = this.tonightVisible()) {
+        async _kickTonightThumbs(items) {
+            items ??= this.tonightVisible();
             this._tonightThumbPending ??= new Set();
             const todo = items.filter(item => {
                 const th = this.tonight.thumbs[item.name];
