@@ -5347,6 +5347,7 @@ function ninaApp() {
         basicMode: false,
         basicModePref: (function () { try { return localStorage.getItem('polaris.basicMode') || 'auto'; } catch (e) { return 'auto'; } })(),
         basicScreen: 'preview',
+        _basicBeforeSky: null,       // screen the bottom-left Sky button left from
         // Basic-mode-only UI scale (independent of the Full-UI body zoom, which
         // is pinned to 1 in basic mode). Persisted, clamped to [0.7, 1.4].
         basicUiScale: (function () { try { const v = parseFloat(localStorage.getItem('polaris.basicUiScale')); return (v >= 0.7 && v <= 1.4) ? v : 1.0; } catch (e) { return 1.0; } })(),
@@ -31419,6 +31420,26 @@ function ninaApp() {
         },
         // Mode menu: Preview and Focus are curated field screens; the others jump
         // to the full UI on that tab until their own field screens are built.
+        // Bottom-left Sky button. Remembers the screen it left so a second tap
+        // on SKY goes back there.
+        basicSkyToggle() {
+            if (this.basicScreen === 'sky') {
+                const back = this._basicBeforeSky;
+                this.basicSetScreen(back && back !== 'sky' ? back : 'preview');
+                return;
+            }
+            this._basicBeforeSky = this.basicScreen;
+            this.basicSetScreen('sky');
+        },
+        basicSkyBackLabel() {
+            const names = { preview: 'Preview', focus: 'Focus', autorun: 'Autorun', guide: 'Guide', live: 'Live', video: 'Video', config: 'Setup' };
+            return names[this._basicBeforeSky] || 'Preview';
+        },
+        // The site is south of the equator: the Sky button draws the Southern
+        // Cross instead of the Big Dipper. An unset site (0) counts as north.
+        basicSouthSky() {
+            return (Number(this.settings && this.settings.latitude) || 0) < 0;
+        },
         basicGoMode(m) {
             if (['preview', 'focus', 'autorun', 'guide', 'live', 'video', 'sky', 'config'].includes(m)) { this.basicSetScreen(m); return; }
             const map = { plan: 'plan' };

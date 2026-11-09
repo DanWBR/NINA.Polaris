@@ -64,7 +64,7 @@
          Inert unless a manifest URL is configured (assistant-config.json). -->
     <link rel="stylesheet" href="/css/parts/13-assistant.css?v=20261109-badgex">
     <link rel="stylesheet" href="/css/parts/14-uiscale-text.css?v=20260707-hintsize">
-    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20261109-rails">
+    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20261109-skybtn">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -23727,6 +23727,28 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         </div>
 
         <div class="bs-bottom" x-show="basicScreen!=='autorun'">
+            <!-- Sky, one tap from every screen: the constellation the site can
+                 see (Big Dipper north of the equator, Southern Cross south of
+                 it). On SKY itself it goes back to the screen you came from. -->
+            <button class="bs-skybtn" :class="basicScreen==='sky' ? 'on' : ''" @click="basicSkyToggle()"
+                    :title="basicScreen==='sky' ? 'Back to ' + basicSkyBackLabel() : 'Sky'" aria-label="Sky">
+                <svg viewBox="0 0 40 24" aria-hidden="true">
+                    <!-- Northern site: the Big Dipper (Ursa Major) -->
+                    <g x-show="!basicSouthSky()">
+                        <polyline class="ln" points="3,5 10,4 16,7 22,10 33,8 33,17 23,17 22,10"/>
+                        <circle cx="3" cy="5" r="1.5"/><circle cx="10" cy="4" r="1.5"/><circle cx="16" cy="7" r="1.6"/>
+                        <circle cx="22" cy="10" r="1.1"/><circle cx="33" cy="8" r="1.7"/><circle cx="33" cy="17" r="1.5"/>
+                        <circle cx="23" cy="17" r="1.4"/>
+                    </g>
+                    <!-- Southern site: the Southern Cross (Crux) -->
+                    <g x-show="basicSouthSky()">
+                        <line class="ln" x1="20" y1="2" x2="19" y2="22"/>
+                        <line class="ln" x1="11" y1="10" x2="28" y2="9"/>
+                        <circle cx="20" cy="2" r="1.6"/><circle cx="19" cy="22" r="1.9"/><circle cx="11" cy="10" r="1.8"/>
+                        <circle cx="28" cy="9" r="1.4"/><circle cx="24" cy="15" r="1"/>
+                    </g>
+                </svg>
+            </button>
             <button class="bs-full" @click="basicSetPref('off')">Full Mode</button>
             <div class="bs-chip" x-show="basicScreen==='preview' || basicScreen==='live' || basicScreen==='video'" @click="basicChipInfo('Camera', selectedCamera, !!selectedCamera)"><span class="bs-dot" :class="selectedCamera ? '' : 'off'"></span><span class="bs-cico">&#128247;</span><span class="bs-name" x-text="selectedCamera || 'Cam'"></span></div>
             <div class="bs-chip" x-show="basicScreen==='preview' || basicScreen==='live' || basicScreen==='guide' || basicScreen==='video' || basicScreen==='sky'" @click="basicChipInfo('Mount', selectedTelescope, mount.connected)"><span class="bs-dot" :class="mount.connected ? '' : 'off'"></span><span class="bs-cico">&#128301;</span><span class="bs-name" x-text="selectedTelescope || 'Mount'"></span></div>
@@ -23738,7 +23760,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             <div class="bs-chip bs-num" x-show="basicScreen==='focus' && autoFocus.lastHfr" x-cloak>HFR <b x-text="autoFocus.lastHfr?.toFixed(2)"></b></div>
             <div class="bs-chip" x-show="basicScreen==='guide'" x-cloak><span class="bs-dot" :class="guider.guideCameraConnected ? '' : 'off'"></span><span class="bs-name" x-text="guider.guideCameraName || 'Guide cam'"></span></div>
             <div class="bs-mountacts" x-show="mount.connected && (basicScreen==='preview' || basicScreen==='live' || basicScreen==='guide' || basicScreen==='video' || basicScreen==='sky')" x-cloak>
-                <button class="bs-mbtn" :class="mountMenu ? 'on' : ''" @click="mountMenu = !mountMenu"><span class="bs-mico">&#128301; </span>Mount &#9662;</button>
+                <button class="bs-mbtn" :class="mountMenu ? 'on' : ''" @click="mountMenu = !mountMenu"><span class="bs-mico">&#128301; </span><span class="bs-mlbl">Mount </span>&#9662;</button>
                 <!-- Home and Park are full slews: one tap away from the bottom
                      bar they ended sessions by accident, so they sit behind
                      this menu and say so when a session is running. -->
@@ -23755,6 +23777,25 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
         <div class="bs-autobar" x-show="basicScreen==='autorun'" x-cloak>
             <div class="bs-pbar"><i :style="'width:' + (seqProgress ? seqProgress() : 0) + '%'"></i></div>
             <div class="bs-prow">
+                <button class="bs-skybtn" :class="basicScreen==='sky' ? 'on' : ''" @click="basicSkyToggle()"
+                        :title="basicScreen==='sky' ? 'Back to ' + basicSkyBackLabel() : 'Sky'" aria-label="Sky">
+                    <svg viewBox="0 0 40 24" aria-hidden="true">
+                        <!-- Northern site: the Big Dipper (Ursa Major) -->
+                        <g x-show="!basicSouthSky()">
+                            <polyline class="ln" points="3,5 10,4 16,7 22,10 33,8 33,17 23,17 22,10"/>
+                            <circle cx="3" cy="5" r="1.5"/><circle cx="10" cy="4" r="1.5"/><circle cx="16" cy="7" r="1.6"/>
+                            <circle cx="22" cy="10" r="1.1"/><circle cx="33" cy="8" r="1.7"/><circle cx="33" cy="17" r="1.5"/>
+                            <circle cx="23" cy="17" r="1.4"/>
+                        </g>
+                        <!-- Southern site: the Southern Cross (Crux) -->
+                        <g x-show="basicSouthSky()">
+                            <line class="ln" x1="20" y1="2" x2="19" y2="22"/>
+                            <line class="ln" x1="11" y1="10" x2="28" y2="9"/>
+                            <circle cx="20" cy="2" r="1.6"/><circle cx="19" cy="22" r="1.9"/><circle cx="11" cy="10" r="1.8"/>
+                            <circle cx="28" cy="9" r="1.4"/><circle cx="24" cy="15" r="1"/>
+                        </g>
+                    </svg>
+                </button>
                 <button class="bs-full" @click="basicSetPref('off')">Full Mode</button>
                 <div class="bs-pinfo bs-num" x-show="seqStatus && seqState!=='idle'">
                     Frame <b x-text="(seqStatus && seqStatus.totalFramesCompleted) || 0"></b> / <b x-text="(seqStatus && seqStatus.totalFrames) || 0"></b>
