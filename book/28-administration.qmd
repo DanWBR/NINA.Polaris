@@ -125,8 +125,8 @@ Polaris updates itself from the project's GitHub releases with one
 click: no SSH, no `apt` command, no password. This works on a Linux
 host installed from the `.deb` package (@sec-installation), the
 `/opt/polaris` layout managed by systemd (the Linux service
-manager), and on the portable Windows build (see "On Windows"
-below). A development run shows no update badge.
+manager), and on Windows, whether Polaris came from the installer or the
+portable zip (see "On Windows" below). A development run shows no update badge.
 
 Polaris checks GitHub for a newer release at startup and once an
 hour. When one exists for your host's processor architecture
@@ -170,7 +170,7 @@ zip, so both update the same way. Polaris downloads
 `polaris-win-x64.zip` (or `polaris-win-arm64.zip`), checks it
 against the SHA-256 digest GitHub publishes for it, and hands it to
 `polaris-update.ps1`, a small PowerShell script (PowerShell is the
-scripting shell built into Windows) that ships in the zip. The
+scripting shell built into Windows) that ships with Polaris. The
 script unpacks the new version next to the Polaris folder while
 Polaris keeps running, then stops Polaris, swaps the folders, and
 starts the new version the same way the old one was started: in a
@@ -195,8 +195,11 @@ not the expected version) changes nothing at all.
 
 - **Folder:** the Polaris folder, and the folder that contains it,
   must be writable by your Windows user, because the swap happens
-  there. Documents or your user folder work; `C:\Program Files`
-  does not, and the modal says so before anything is downloaded.
+  there. The installer's folder (`%LOCALAPPDATA%\Programs\Polaris`,
+  with Polaris itself in its `app` subfolder), Documents or your user
+  folder all work; `C:\Program Files` does not, and the modal says so
+  before anything is downloaded. After an update the installer's
+  entry under *Settings → Apps* shows the new version.
 - **Normal program, not a service:** a service manager such as
   NSSM restarts Polaris the moment it stops and would hold the files
   being replaced, so Polaris running as a Windows service shows no
@@ -272,7 +275,7 @@ update", the PolicyKit rule is missing; reinstalling the `.deb`
 restores it. If an update seems stuck, give it up to three minutes
 and then refresh manually; the install log is at
 `/tmp/polaris-update.log`. No badge at all means you are not on a
-`.deb` install or the portable Windows build, already current, or
+`.deb` install or a Windows install, already current, or
 offline; the release check is
 cached for 30 minutes. On Windows, see "On Windows" above for the
 log and the requirements.

@@ -325,7 +325,7 @@ airlock of a Mars colony.
 | **Raspberry Pi 3 (1 GB)** | Limited | The app runs, but the PHD2 GUI embed is auto-disabled (32-bit ARM gate). Host-side stacking is tight: the fixed floor alone takes about a third of the RAM, so expect Auto to choose 1:2 or 1:4, or use the client-side offload. |
 | **Raspberry Pi 2 (512 MB)** | Bare minimum | Sequencing works. Host-side live stacking is doubtful rather than confirmed: the fixed floor measured on a larger board is around 370 MB, which leaves very little for the stack itself, so use the client-side offload. STUDIO batch jobs are not realistic on the host. |
 | **Intel mini-PC (N100, J4125, and similar)** | Good | Headless Linux x64 publish. |
-| **Windows mini-PC / desktop / laptop** | Good | The win-x64 publish or `dotnet run`. The same feature set as Linux, plus the vendor DSLR drivers. |
+| **Windows mini-PC / desktop / laptop** | Good | The Windows installer (`polaris-setup-win-x64.exe`), the portable zip, or `dotnet run`. The same feature set as Linux, plus the vendor DSLR drivers. |
 | **macOS** | Untested | Should run via `dotnet run` on Apple Silicon; no publish target is shipped. |
 
 ### Sizing RAM for your camera
