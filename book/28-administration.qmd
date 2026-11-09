@@ -163,8 +163,10 @@ service. Your Polaris sign-in is the authorization.
 
 ### On Windows
 
-The portable Windows build updates from the same badge, and the
-rollback list described below works there too. Polaris downloads
+The Windows build updates from the same badge, whether it came from
+the installer or the portable zip, and the rollback list described
+below works there too. The installer lays out the same files as the
+zip, so both update the same way. Polaris downloads
 `polaris-win-x64.zip` (or `polaris-win-arm64.zip`), checks it
 against the SHA-256 digest GitHub publishes for it, and hands it to
 `polaris-update.ps1`, a small PowerShell script (PowerShell is the
