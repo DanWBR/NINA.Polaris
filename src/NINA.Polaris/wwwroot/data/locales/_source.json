@@ -5113,5 +5113,6 @@
   "Your SQM meter reads {v} now": "",
   "Use only on a clear, moonless night: a reading under the Moon or cloud is not the site's dark sky": "",
   "Use this reading": "",
-  "Great for your sky": ""
+  "Great for your sky": "",
+  "Show more ({n} left)": ""
 }

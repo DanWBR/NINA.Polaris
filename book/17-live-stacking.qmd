@@ -59,6 +59,18 @@ that, a frame more than 50 px out could be matched to the wrong stars
 by coincidence and leave a faint ghost copy of the field in the stack,
 seen as repeated stars arranged along an arc.
 
+Every alignment is also checked against the whole frame before it is
+used. Three or four stars can line up with reference stars by chance,
+for instance on a frame where cloud left only a handful of real stars
+and a scatter of bright blobs. So an alignment counts only if it puts
+at least 6 of the frame's stars, and at least a quarter of those that
+fall inside the reference field, within 3 px of a reference star.
+A frame that fails is skipped (the log says how many stars matched),
+and the next frame aligns from the last good one. Without this check
+one cloudy frame could shift the frames after it, and the outlier
+rejection then cut the misplaced star cores out, leaving rings or
+dots in the stack.
+
 ### Changing skies: background matching and frame weights
 
 The sky behind the stars is not constant through a night. Thin cloud

@@ -13,6 +13,7 @@
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
 using Microsoft.Extensions.Logging.Abstractions;
+using NINA.Image.ImageAnalysis;
 using NINA.Image.ImageData;
 using NINA.Image.Interfaces;
 using NINA.Polaris.Services;
@@ -85,5 +86,68 @@ public class LiveStackDriftAlignmentTests {
             Assert.That(a.Tx, Is.EqualTo(-(truth[k].dx - truth[0].dx)).Within(1.0), $"frame {k} x");
             Assert.That(a.Ty, Is.EqualTo(-(truth[k].dy - truth[0].dy)).Within(1.0), $"frame {k} y");
         }
+    }
+
+    /// <summary>
+    /// Abell 370, 2026-11-08: a cloud-dimmed frame went in 60 px off, the next
+    /// frames were predicted from that error, and a chance trio of stars put
+    /// seventeen of them 130 px from the truth. A frame whose alignment lands
+    /// only a few of its stars on reference stars is now dropped, and the
+    /// frames after it align where they are.
+    /// </summary>
+    [Test]
+    public async Task CloudFrame_WithFewTrueStars_IsDropped_AndTheNextFramesAlignTrue() {
+        var relay = new ImageRelayService(NullLogger<ImageRelayService>.Instance);
+        var svc = new LiveStackingService(relay, NullLogger<LiveStackingService>.Instance) {
+            PolynomialAlignment = false, SigmaRejection = false
+        };
+        var aligned = new List<LiveFrameAlignment>();
+        svc.FrameAligned += a => aligned.Add(a);
+        svc.Start();
+
+        var stars = Field(42, 140);
+        var truth = new List<(double dx, double dy)>();
+        for (int k = 0; k < 12; k++) truth.Add((4.5 * k, 1.5 * k));
+        for (int k = 0; k < 12; k++) {
+            if (k == 6) {
+                // Cloud: four field stars get through, plus a dozen bright
+                // blobs of cloud lit by the town that match nothing.
+                var rnd = new Random(7);
+                var cloud = stars.OrderByDescending(s => s.amp).Take(4)
+                    .Concat(Enumerable.Range(0, 14).Select(_ =>
+                        (rnd.NextDouble() * W, rnd.NextDouble() * H, 4000 + rnd.NextDouble() * 3000)))
+                    .ToArray();
+                await svc.AddFrameAsync(Frame(cloud, truth[k].dx, truth[k].dy, 100 + k));
+                Assert.That(svc.FrameCount, Is.EqualTo(6), "the cloud frame is not stacked");
+                continue;
+            }
+            await svc.AddFrameAsync(Frame(stars, truth[k].dx, truth[k].dy, 100 + k));
+        }
+
+        Assert.That(svc.FrameCount, Is.EqualTo(11));
+        var kept = Enumerable.Range(0, 12).Where(k => k != 6).ToList();
+        for (int j = 1; j < kept.Count; j++) {
+            int k = kept[j];
+            Assert.That(aligned[j].Tx, Is.EqualTo(-truth[k].dx).Within(1.0), $"frame {k} x");
+            Assert.That(aligned[j].Ty, Is.EqualTo(-truth[k].dy).Within(1.0), $"frame {k} y");
+        }
+    }
+
+    [Test]
+    public void AlignmentSupport_TellsTheFieldFromACoincidence() {
+        var rnd = new Random(3);
+        var refStars = Enumerable.Range(0, 50)
+            .Select(_ => new DetectedStar { X = rnd.NextDouble() * W, Y = rnd.NextDouble() * H }).ToList();
+        // The frame is the reference shifted by (+20, -10); the true transform
+        // takes it back.
+        var cur = refStars.Select(s => new DetectedStar { X = s.X + 20, Y = s.Y - 10 }).ToList();
+        var truthT = new AffineTransform { M00 = 1, M11 = 1, Tx = -20, Ty = 10 };
+        var (inTrue, ovTrue) = LiveStackingService.AlignmentSupport(refStars, cur, truthT, W, H);
+        Assert.That(LiveStackingService.IsSupported(inTrue, ovTrue), Is.True, $"{inTrue} of {ovTrue}");
+
+        // 130 px off, as on the night: a few stars at most land by chance.
+        var wrong = new AffineTransform { M00 = 1, M11 = 1, Tx = -20 + 40, Ty = 10 - 124 };
+        var (inWrong, ovWrong) = LiveStackingService.AlignmentSupport(refStars, cur, wrong, W, H);
+        Assert.That(LiveStackingService.IsSupported(inWrong, ovWrong), Is.False, $"{inWrong} of {ovWrong}");
     }
 }

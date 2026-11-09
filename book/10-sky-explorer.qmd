@@ -221,6 +221,14 @@ peaks above 30 degrees tonight, ordered by score. Half of them are
 targets for a photograph of a position rather than of a shape, which is
 its own kind of observing.
 
+With the Notables and the comets the list can run to several hundred
+entries, so it shows 30 cards at a time. Scrolling near the end adds
+the next 30, as does the **Show more** button below the last card.
+Each card's altitude chart and thumbnail load only when the card is
+shown, one chart at a time, so a tablet or a small host is not asked
+to draw hundreds of charts at once. Changing the filter starts again
+from the first 30.
+
 The AGC entry is magnitude-trimmed at m10 < 17, keeping the brightest
 roughly 30% of the 2712-cluster catalog; fainter clusters require
 deep imaging beyond typical amateur reach. Full attribution and

@@ -95,6 +95,8 @@ const EXPOSURE_PRESETS_ALL = [
 // uses cache: 'force-cache', which does not revalidate, so without a new URL
 // an edit reaches nobody who already loaded the old file.
 const CATALOGUE_VERSION = '20260912';
+// Tonight's Best cards added to the page at a time.
+const TONIGHT_PAGE = 30;
 // Offline world map state (outline rings, canvas, pointers); see mapPickOpen.
 const WM = { land: null, lakes: null, cities: [], citiesBox: null, handlers: [] };
 
@@ -2766,6 +2768,11 @@ function ninaApp() {
             // Rank emission nebulae as shot through a narrowband filter.
             // null = whatever the host detects from the rig's filters.
             narrowband: null,
+            // How many cards of the filtered list are on the page. The list
+            // runs to hundreds (every Notable and comet rides along), and each
+            // card carries a chart and a thumbnail, so it grows a page at a
+            // time as the operator scrolls.
+            shown: 30,
             thumbs: {}      // { [name]: { url, title, credit, missing } }
         },
 
@@ -5684,9 +5691,9 @@ function ninaApp() {
                     // otherwise leave stale values in the form).
                     if (v === 'focus') this.loadAfParams();
                 });
-                // Tonight's Best: the altitude charts must be redrawn whenever
-                // the filter or FOV toggle changes the shown set (Alpine remounts
-                // the canvases blank otherwise).
+                // Tonight's Best: a filter or FOV toggle changes the shown set,
+                // so the list starts again at its first page and draws the
+                // charts and thumbnails of the cards now on it.
                 this.$watch('tonight.filter', () => this._renderTonightChartsDeferred());
                 this.$watch('tonight.fitsFovOnly', () => this._renderTonightChartsDeferred());
             } catch (_) { /* $watch unavailable */ }
@@ -20275,12 +20282,11 @@ function ninaApp() {
                 this.tonight.items = r.items || [];
                 this.tonight.envelope = r;
                 this.tonight.lastFetched = new Date();
-                // Kick off thumbnail + per-card chart rendering after Alpine
-                // commits the DOM with the new template instances.
-                this.$nextTick(() => {
-                    this.tonight.items.forEach(i => this._renderTonightChart(i));
-                    this._kickTonightThumbs();
-                });
+                // A new list: drop the charts and altitude curves of the last
+                // one, then draw the first page once Alpine has mounted it.
+                this._tonightResetCharts();
+                this.tonight.shown = TONIGHT_PAGE;
+                this._tonightRenderVisible();
             } catch (e) {
                 this.tonight.error = 'Failed to load Tonight\'s Best: ' + (e.message || 'unknown error');
                 this.tonight.items = [];
@@ -21536,16 +21542,65 @@ function ninaApp() {
             return chips;
         },
 
-        // Re-draw the altitude charts for whatever the current filter shows.
-        // Alpine recreates the per-card <canvas> when tonightFiltered() changes
-        // (filter / FOV toggle), so the freshly-mounted canvases start blank;
-        // redraw them on the next tick. Without this, charts vanished after
-        // every filter click.
-        _renderTonightChartsDeferred() {
+        // The cards on the page: the first `shown` of the filtered list.
+        tonightVisible() {
+            return this.tonightFiltered().slice(0, this.tonight.shown);
+        },
+
+        tonightMoreCount() {
+            return Math.max(0, this.tonightFiltered().length - this.tonight.shown);
+        },
+
+        tonightShowMore() {
+            if (this.tonightMoreCount() <= 0) return;
+            this.tonight.shown += TONIGHT_PAGE;
+            this._tonightRenderVisible();
+        },
+
+        // Grow the list when the end of it scrolls near the view; the button
+        // under the list does the same where IntersectionObserver is missing.
+        _tonightObserveMore(el) {
+            if (typeof IntersectionObserver === 'undefined') return;
+            const io = new IntersectionObserver(entries => {
+                if (entries.some(e => e.isIntersecting)) this.tonightShowMore();
+            }, { rootMargin: '400px 0px' });
+            io.observe(el);
+        },
+
+        // Charts and thumbnails for the cards on the page, once Alpine has
+        // mounted them. Cards past the page get neither until they show.
+        _tonightRenderVisible() {
             this.$nextTick(() => {
-                try { this.tonightFiltered().forEach(i => this._renderTonightChart(i)); }
-                catch (_) { /* charts are best-effort */ }
+                try {
+                    const vis = this.tonightVisible();
+                    this._tonightQueueCharts(vis);
+                    this._kickTonightThumbs(vis);
+                } catch (_) { /* charts and thumbnails are best-effort */ }
             });
+        },
+
+        // A filter or FOV toggle: back to the first page of the new set.
+        // Alpine mounts the new cards' canvases blank, so they are drawn here.
+        _renderTonightChartsDeferred() {
+            this.tonight.shown = TONIGHT_PAGE;
+            this._tonightRenderVisible();
+        },
+
+        // One chart at a time, so a page never fires its altitude requests at
+        // the host all at once.
+        _tonightQueueCharts(items) {
+            const run = async () => {
+                for (const i of items) await this._renderTonightChart(i);
+            };
+            this._tonightChartChain = (this._tonightChartChain || Promise.resolve()).then(run, run);
+        },
+
+        _tonightResetCharts() {
+            for (const c of Object.values(this._tonightCharts || {})) {
+                try { c.destroy(); } catch {}
+            }
+            this._tonightCharts = {};
+            this._tonightAlt = {};
         },
 
         tonightHasFovData() {
@@ -21666,29 +21721,38 @@ function ninaApp() {
         // objects but doesn't reliably pick up additions of brand-new
         // keys to a plain {}. To force a render, we reassign the whole
         // `thumbs` object after each update so the template re-evaluates.
-        async _kickTonightThumbs() {
-            for (const item of this.tonight.items) {
-                if (this.tonight.thumbs[item.name]?.url || this.tonight.thumbs[item.name]?.missing) continue;
-
-                // Offline-first: the bundled DSO cache (DSS cutouts under
-                // /sky/data/skydata/dso-thumbs/) has full coverage of every
-                // catalogued object, works with no internet, and renders
-                // instantly with no network round-trip. Use it as the
-                // primary thumbnail; the NASA/Wikipedia lookup only runs
-                // (via tonightThumbFailed → _tonightLookupThumb) when a
-                // bundled thumb 404s — planets, comets, or objects outside
-                // the DSO set.
+        //
+        // Only the cards on the page (`items`), and the bundled cutouts go in
+        // as one reassignment: one per card re-rendered every card on the
+        // list once per thumbnail.
+        async _kickTonightThumbs(items = this.tonightVisible()) {
+            this._tonightThumbPending ??= new Set();
+            const todo = items.filter(item => {
+                const th = this.tonight.thumbs[item.name];
+                return !th?.url && !th?.missing && !this._tonightThumbPending.has(item.name);
+            });
+            // Offline-first: the bundled DSO cache (DSS cutouts under
+            // /sky/data/skydata/dso-thumbs/) has full coverage of every
+            // catalogued object, works with no internet, and renders
+            // instantly with no network round-trip. Use it as the
+            // primary thumbnail; the NASA/Wikipedia lookup only runs
+            // (via tonightThumbFailed → _tonightLookupThumb) when a
+            // bundled thumb 404s, planets, comets, or objects outside
+            // the DSO set.
+            const bundled = {};
+            const online = [];
+            for (const item of todo) {
                 const dso = this.dsoThumbUrl({ name: item.name });
-                if (dso) {
-                    this.tonight.thumbs = {
-                        ...this.tonight.thumbs,
-                        [item.name]: { url: dso, source: 'dso', missing: false }
-                    };
-                    continue;
-                }
-                // No catalogue slug (planet / comet / …): go straight to
-                // the online lookup.
-                await this._tonightLookupThumb(item);
+                if (dso) bundled[item.name] = { url: dso, source: 'dso', missing: false };
+                else online.push(item);
+            }
+            if (Object.keys(bundled).length)
+                this.tonight.thumbs = { ...this.tonight.thumbs, ...bundled };
+            // No catalogue slug (planet / comet / …): the online lookup.
+            online.forEach(i => this._tonightThumbPending.add(i.name));
+            for (const item of online) {
+                try { await this._tonightLookupThumb(item); }
+                finally { this._tonightThumbPending.delete(item.name); }
             }
         },
 
@@ -21817,15 +21881,26 @@ function ninaApp() {
             // refresh), tear it down before creating a new one, leaving
             // it leaks GPU contexts.
             this._tonightCharts ??= {};
-            if (this._tonightCharts[safe]) {
-                try { this._tonightCharts[safe].destroy(); } catch {}
+            const old = this._tonightCharts[safe];
+            if (old) {
+                // Still drawn on this very canvas: nothing to do.
+                if (old.canvas === canvas) return;
+                try { old.destroy(); } catch {}
                 delete this._tonightCharts[safe];
             }
             try {
-                const data = await this.apiGet(
-                    `/api/sky/altitude?ra=${item.raHours}&dec=${item.decDeg}&stepMinutes=30`);
+                // The curve is the same all night: fetch it once per list.
+                this._tonightAlt ??= {};
+                let samples = this._tonightAlt[safe];
+                if (!samples) {
+                    const data = await this.apiGet(
+                        `/api/sky/altitude?ra=${item.raHours}&dec=${item.decDeg}&stepMinutes=30`);
+                    samples = data.samples || [];
+                    this._tonightAlt[safe] = samples;
+                }
+                // The card may have left the page while the request ran.
+                if (!canvas.isConnected) return;
                 const t = this._chartTheme();
-                const samples = data.samples || [];
                 this._tonightCharts[safe] = new Chart(canvas, {
                     type: 'line',
                     plugins: [ this._nowLinePlugin(samples) ],
