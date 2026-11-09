@@ -12,6 +12,8 @@ name: Build and release Polaris packages
 #   polaris-linux-x64.tar.gz            Portable Linux x64 (manual systemd setup)
 #   polaris-win-x64.zip                 Portable Windows x64 (.exe + assets)
 #   polaris-win-arm64.zip               Portable Windows ARM64 (Surface Pro X etc)
+#   polaris-setup-win-x64.exe           Windows x64 installer (same files as the zip)
+#   polaris-setup-win-arm64.exe         Windows ARM64 installer
 #   polaris-osx-arm64.tar.gz            Portable macOS Apple Silicon
 #   polaris-osx-x64.tar.gz              Portable macOS Intel
 #
@@ -170,6 +172,24 @@ jobs:
           Compress-Archive -Path "$staged/*" -DestinationPath "$stage.zip" -Force
           Get-Item "$stage.zip" | Select-Object Name, Length
 
+      # The installer wraps the same files as the zip, polaris-update.ps1
+      # included, so an installed Polaris updates itself from the zip exactly
+      # like the portable one (packaging/windows/polaris.iss explains the layout).
+      - name: Build Windows installer
+        if: matrix.kind == 'zip'
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+            if ($LASTEXITCODE -ne 0) { throw "Inno Setup install failed" }
+          }
+          $arch = "${{ matrix.rid }}".Substring(4)
+          $src = (Resolve-Path "build/polaris-${{ matrix.target }}").Path
+          & $iscc /Q "/DAppVersion=${{ steps.ver.outputs.version }}" "/DArch=$arch" "/DSourceDir=$src" "/O$PWD" packaging/windows/polaris.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed ($LASTEXITCODE)" }
+          Get-Item "polaris-setup-win-$arch.exe" | Select-Object Name, Length
+
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
@@ -178,6 +198,7 @@ jobs:
             polaris_*.deb
             polaris-*.tar.gz
             polaris-*.zip
+            polaris-setup-*.exe
           if-no-files-found: error
           retention-days: 3
 
@@ -406,6 +427,7 @@ jobs:
             dist/*.deb
             dist/*.tar.gz
             dist/*.zip
+            dist/*.exe
             dist/*.pdf
             dist/*.apk
           fail_on_unmatched_files: true
@@ -448,6 +470,17 @@ jobs:
             ```
 
             Replace `linux-x64` with `linux-arm64` on ARM hosts.
+
+            ### Windows x64 / ARM64 (installer)
+
+            Download `polaris-setup-win-x64.exe` (or
+            `polaris-setup-win-arm64.exe`) and run it. It installs for your
+            user only, with no administrator rights, adds Polaris to the Start
+            menu and opens it in the browser. Ticking the network option asks
+            for administrator approval once, to open the firewall for phones
+            and tablets. Later versions install in place from Settings →
+            Software Update. Stable link:
+            https://github.com/${{ github.repository }}/releases/latest/download/polaris-setup-win-x64.exe
 
             ### Windows x64 / ARM64 (portable zip)
 

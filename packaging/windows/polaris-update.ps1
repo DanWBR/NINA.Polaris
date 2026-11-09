@@ -185,6 +185,20 @@ try {
         exit 1
     }
 
+    # Installed with polaris-setup-win-<arch>.exe: keep the version Windows
+    # shows under Installed apps in step with the one now running. The key is
+    # per user (the setup never needs administrator rights) and is only touched
+    # when it names this install's folder.
+    try {
+        $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{f4228c17-673e-4a65-8628-416979934996}_is1'
+        if (Test-Path -LiteralPath $key) {
+            $loc = [string](Get-ItemProperty -LiteralPath $key).InstallLocation
+            if ($loc.TrimEnd('\') -ieq (Split-Path -Parent $AppDir)) {
+                Set-ItemProperty -LiteralPath $key -Name DisplayVersion -Value $Version
+            }
+        }
+    } catch { Write-Log ('Could not update the installed-apps entry: ' + $_.Exception.Message) }
+
     Set-Status 'complete' "Polaris $Version is running. The previous version is kept in $previous."
     exit 0
 }

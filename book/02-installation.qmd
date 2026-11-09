@@ -559,9 +559,36 @@ stop with Ctrl-C.
 
 ## Windows
 
-The Windows build is portable, with no installer. The `win-x64` build
-covers Intel and AMD; a `win-arm64` build is also published for the
-Surface Pro X and some Copilot+ PCs.
+Download `polaris-setup-win-x64.exe` and run it. The `win-x64` build
+covers Intel and AMD; `polaris-setup-win-arm64.exe` is the same for
+the Surface Pro X and some Copilot+ PCs.
+
+```powershell
+Invoke-WebRequest -Uri "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-setup-win-x64.exe" -OutFile polaris-setup.exe
+.\polaris-setup.exe
+```
+
+The installer works for your Windows user only, so it needs no
+administrator rights. It puts Polaris in
+`%LOCALAPPDATA%\Programs\Polaris` (your own programs folder, which is
+what lets Polaris replace itself when it updates), adds it to the
+Start menu, and at the end starts it and opens it in the browser.
+Two options on its task page are worth a look:
+
+- **Network access:** lets phones, tablets and other computers on
+  your network reach Polaris by opening its ports in the Windows
+  firewall (the rules below). Changing the firewall is the one thing
+  that needs an administrator, so Windows asks for approval once.
+- **Start at sign-in:** starts Polaris, minimized, every time you
+  sign in to Windows.
+
+The Start menu entry **Open Polaris in the browser** starts Polaris
+if it is not running and opens the page. Uninstalling from
+*Settings → Apps* removes the program and the firewall rules; your
+profiles and images stay where they are.
+
+If you prefer a copy with no installer, the portable zip is still
+published:
 
 ```powershell
 Invoke-WebRequest -Uri "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-win-x64.zip" -OutFile polaris.zip
@@ -571,7 +598,8 @@ cd polaris-win-x64
 ```
 
 Open `https://localhost:5000` and accept the self-signed certificate
-once. Remember to open the firewall (rules below). On Windows you
+once. With the zip, remember to open the firewall yourself (rules
+below). On Windows you
 drive gear over ASCOM, the long-standing Windows astronomy driver
 standard, and Alpaca [@ascom_alpaca], its newer network-based flavor
 (or INDI via WSL2, Windows' built-in Linux environment), and you also
