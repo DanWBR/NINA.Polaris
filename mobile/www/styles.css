@@ -295,3 +295,33 @@ input[type="text"]:focus { outline: none; border-color: var(--accent); }
     animation: spin 0.8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Confirmation card for the tab bar's Reload and Close (connect.js
+   confirmDialog). Covers everything, the tab bar included. */
+.confirm-overlay {
+    position: fixed; inset: 0;
+    z-index: 2147483600;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+    background: rgba(5, 10, 25, 0.66);
+}
+.confirm-card {
+    width: 100%; max-width: 340px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px 18px 16px;
+}
+.confirm-title { font-size: 16px; font-weight: 700; color: var(--text); word-break: break-word; }
+.confirm-msg { margin-top: 8px; font-size: 13px; line-height: 1.5; color: var(--muted); }
+.confirm-actions { margin-top: 18px; display: flex; gap: 10px; justify-content: flex-end; }
+.confirm-cancel, .confirm-ok {
+    border-radius: 10px; padding: 10px 18px;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+    border: 1px solid var(--border);
+}
+.confirm-cancel { background: var(--bg2); color: var(--muted); }
+.confirm-ok {
+    background: linear-gradient(160deg, #1e3a8a, #2563eb);
+    color: #fff; border-color: transparent;
+}

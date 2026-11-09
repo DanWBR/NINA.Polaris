@@ -264,6 +264,12 @@ apparent size in arcminutes, an object-type badge (Galaxy, Nebula,
 Cluster, and so on), and the constellation. Click a result and it
 overlays on the map, centred and highlighted.
 
+When the box gets focus it lists your last 8 searches that found
+something, newest first; typing narrows the list, and tapping an entry
+runs that search again. The Sky screen of Basic mode shows the same
+list under its search box. **Clear** empties it. The list is kept in
+the browser (or app) you search from, not on the host.
+
 The **Filters** button toggles a panel to narrow the results:
 
 - **Catalog** dropdown, restricting to a single source. Hidden when

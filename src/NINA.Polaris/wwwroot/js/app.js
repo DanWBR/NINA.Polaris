@@ -5370,6 +5370,7 @@ function ninaApp() {
         basicMode: false,
         basicModePref: (function () { try { return localStorage.getItem('polaris.basicMode') || 'auto'; } catch (e) { return 'auto'; } })(),
         basicScreen: 'preview',
+        _basicBeforeSky: null,       // screen the bottom-left Sky button left from
         // Basic-mode-only UI scale (independent of the Full-UI body zoom, which
         // is pinned to 1 in basic mode). Persisted, clamped to [0.7, 1.4].
         basicUiScale: (function () { try { const v = parseFloat(localStorage.getItem('polaris.basicUiScale')); return (v >= 0.7 && v <= 1.4) ? v : 1.0; } catch (e) { return 1.0; } })(),
@@ -15321,7 +15322,10 @@ function ninaApp() {
                 // would sit 20/z px short of the edge, so anchor with 20/z here
                 // (z===1 keeps the plain CSS default).
                 if (z === 1) return {};
-                return { right: (20 / z) + 'px', bottom: (20 / z) + 'px' };
+                // Basic mode keeps the corner above its 48 px bottom bar and
+                // left of its 60 px right rail.
+                const right = this.basicMode ? 76 : 20, bottom = this.basicMode ? 60 : 20;
+                return { right: (right / z) + 'px', bottom: (bottom / z) + 'px' };
             }
             // asst.pos is stored in physical px (from clientX during drag); the
             // element lives in the zoomed frame, so divide to place it there.
@@ -15410,6 +15414,9 @@ function ninaApp() {
         },
         assistantDragStart(ev) {
             if (ev.button != null && ev.button !== 0) return; // primary / touch only
+            // A tap on the badge's dismiss x is never a drag: a finger that
+            // wobbled 5 px would move the badge and swallow the tap.
+            if (ev.target.closest && ev.target.closest('.assistant-badge-x')) return;
             const el = ev.currentTarget;
             const rect = el.getBoundingClientRect();
             const startX = ev.clientX, startY = ev.clientY;
@@ -31480,6 +31487,26 @@ function ninaApp() {
         },
         // Mode menu: Preview and Focus are curated field screens; the others jump
         // to the full UI on that tab until their own field screens are built.
+        // Bottom-left Sky button. Remembers the screen it left so a second tap
+        // on SKY goes back there.
+        basicSkyToggle() {
+            if (this.basicScreen === 'sky') {
+                const back = this._basicBeforeSky;
+                this.basicSetScreen(back && back !== 'sky' ? back : 'preview');
+                return;
+            }
+            this._basicBeforeSky = this.basicScreen;
+            this.basicSetScreen('sky');
+        },
+        basicSkyBackLabel() {
+            const names = { preview: 'Preview', focus: 'Focus', autorun: 'Autorun', guide: 'Guide', live: 'Live', video: 'Video', config: 'Setup' };
+            return names[this._basicBeforeSky] || 'Preview';
+        },
+        // The site is south of the equator: the Sky button draws the Southern
+        // Cross instead of the Big Dipper. An unset site (0) counts as north.
+        basicSouthSky() {
+            return (Number(this.settings && this.settings.latitude) || 0) < 0;
+        },
         basicGoMode(m) {
             if (['preview', 'focus', 'autorun', 'guide', 'live', 'video', 'sky', 'config'].includes(m)) { this.basicSetScreen(m); return; }
             const map = { plan: 'plan' };
