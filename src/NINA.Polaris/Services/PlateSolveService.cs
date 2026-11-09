@@ -148,11 +148,17 @@ public class PlateSolveService {
             primaryError = $"{primaryError}; {astap.DisplayName}: {astapResult.Error}";
         }
 
+        ct.ThrowIfCancellationRequested();
         var blind = BlindSolver;
-        if (blind != null && blind.IsAvailable && blind.Id != primary.Id) {
+        // ASTAP (and Asterion) already tried blind recovery inside SolveAsync.
+        // Other backends can use a same-backend retry when the first call was hinted.
+        var retrySameBackend = primary is not AstapSolver
+            && options.HintRa.HasValue && options.HintDec.HasValue;
+        if (blind != null && blind.IsAvailable
+                && (!string.Equals(blind.Id, primary.Id, StringComparison.OrdinalIgnoreCase) || retrySameBackend)) {
             _logger.LogInformation("Falling back to blind solver {Name}", blind.DisplayName);
             try { onLog?.Invoke($"== blind fallback: {blind.DisplayName} =="); } catch { }
-            var blindResult = await blind.SolveAsync(fitsPath, options, ct, onLog);
+            var blindResult = await blind.SolveAsync(fitsPath, options.ForBlindSolve(), ct, onLog);
             if (blindResult.Success) { RecordSolve(blindResult, options.CaptureContext); return blindResult; }
             return PlateSolveResult.Failed(
                 $"Primary ({primary.DisplayName}) failed: {primaryError}. " +
@@ -171,6 +177,17 @@ public class PlateSolveService {
 public sealed record LastSolveInfo(double RaHours, double DecDeg, DateTime WhenUtc);
 
 public class PlateSolveOptions {
+    /// <summary>Remove the failed pointing constraint for the dispatcher's blind
+    /// fallback, retaining optical/sampling hints and capture context without
+    /// mutating the caller's options.</summary>
+    internal PlateSolveOptions ForBlindSolve() {
+        var blind = (PlateSolveOptions)MemberwiseClone();
+        blind.HintRa = null;
+        blind.HintDec = null;
+        blind.SearchRadiusDeg = 180;
+        return blind;
+    }
+
     internal CaptureWcsContext? CaptureContext { get; set; }
     public double? HintRa { get; set; }
     public double? HintDec { get; set; }
