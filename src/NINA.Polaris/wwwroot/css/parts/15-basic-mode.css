@@ -534,3 +534,10 @@ body.basic-active .hostdlg-card{height:auto; max-height:100%}
     .basic-shell .bs-mlbl{display:none}
     .basic-shell .bs-skybtn svg{width:34px; height:20px}
 }
+
+/* Narrow screens (a phone upright): the target card (top right) and the
+   search box (top left, 250 px) meet, and the box hid the card's title.
+   The card starts under the search row instead. */
+@media (max-width: 480px){
+    .basic-shell .bs-tcard{top:96px}
+}
