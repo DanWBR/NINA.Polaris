@@ -194,14 +194,14 @@
             "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-linux-x64.tar.gz"
           },
           {
-            "label": "Windows x64 (.zip)",
+            "label": "Windows x64 (instalador)",
             "badge": "x64",
-            "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-win-x64.zip"
+            "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-setup-win-x64.exe"
           },
           {
-            "label": "Windows arm64 (.zip)",
+            "label": "Windows arm64 (instalador)",
             "badge": "arm64",
-            "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-win-arm64.zip"
+            "url": "https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-setup-win-arm64.exe"
           },
           {
             "label": "macOS Apple Silicon (.tar.gz)",
@@ -302,12 +302,12 @@
     },
     {
       "name": "Mini PC con Windows",
-      "badge": ".zip",
+      "badge": ".exe",
       "icon": "windows",
       "color": "#38bdf8",
-      "summary": "Portátil, sin instalador. También hay disponible una versión para ARM64 (polaris-win-arm64.zip) para Surface Pro X y algunos ordenadores con Copilot+.",
-      "steps": "Invoke-WebRequest -Uri \"https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-win-x64.zip\" -OutFile polaris.zip\nExpand-Archive polaris.zip\ncd polaris-win-x64\n.\\NINA.Polaris.exe",
-      "notes": "Abre https://localhost:5000 y acepta el certificado autofirmado una vez. Recuerda abrir el firewall (ver abajo). Para una cámara con su propio driver USB (ZWO ASI, ToupTek, Altair, SVBony, Player One), instala el driver del fabricante para Windows y Polaris la encontrará; las cámaras ASCOM e INDI no necesitan nada más."
+      "summary": "Instalador para tu usuario de Windows, sin derechos de administrador. Añade Polaris al menú Inicio y, a partir de ahí, Polaris se actualiza desde la propia app. También hay una versión ARM64 (polaris-setup-win-arm64.exe) para Surface Pro X y algunos ordenadores con Copilot+; el zip portátil (polaris-win-x64.zip) se sigue publicando.",
+      "steps": "Invoke-WebRequest -Uri \"https://github.com/DanWBR/NINA.Polaris/releases/latest/download/polaris-setup-win-x64.exe\" -OutFile polaris-setup.exe\n.\\polaris-setup.exe",
+      "notes": "Abre https://localhost:5000 y acepta el certificado autofirmado una vez. Para acceder desde un teléfono o una tableta, marca la opción de red en el instalador (pide aprobación de administrador una vez) o abre el firewall a mano (ver abajo). Para una cámara con su propio driver USB (ZWO ASI, ToupTek, Altair, SVBony, Player One), instala el driver del fabricante para Windows y Polaris la encontrará; las cámaras ASCOM e INDI no necesitan nada más."
     },
     {
       "name": "Mac (Apple Silicon / Intel)",
