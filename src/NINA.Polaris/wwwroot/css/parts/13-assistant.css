@@ -26,19 +26,37 @@
 }
 .assistant-badge:hover { border-color: var(--accent); }
 .assistant-badge-icon { font-size: 16px; line-height: 1; }
+/* The dismiss x. A 32 px target (40 px on touch screens) whose negative
+   margins eat into the badge padding, so the badge itself stays the same
+   size; the visible circle is drawn smaller inside it. */
 .assistant-badge-x {
-    margin-left: 4px;
-    width: 18px;
-    height: 18px;
+    position: relative;
+    flex: none;
+    margin: -8px -10px -8px 0;
+    width: 32px;
+    height: 32px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     border-radius: 50%;
     color: var(--text-secondary);
-    font-size: 15px;
+    font-size: 18px;
     line-height: 1;
+    touch-action: manipulation;
 }
-.assistant-badge-x:hover { background: rgba(255, 255, 255, 0.12); color: var(--text-primary); }
+.assistant-badge-x::before {
+    content: "";
+    position: absolute;
+    inset: 5px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.06);
+}
+.assistant-badge-x:hover::before { background: rgba(255, 255, 255, 0.14); }
+.assistant-badge-x:hover { color: var(--text-primary); }
+@media (pointer: coarse) {
+    .assistant-badge-x { width: 40px; height: 40px; margin: -12px -14px -12px 0; font-size: 20px; }
+    .assistant-badge-x::before { inset: 7px; }
+}
 
 /* --- floating action button (after opt-in) --- */
 .assistant-fab {
@@ -274,3 +292,17 @@
         border-radius: var(--radius, 10px) var(--radius, 10px) 0 0;
     }
 }
+
+/* Basic mode: the shell is a full-screen fixed layer at z-index 800, which
+   hid the badge, the button and the chat panel behind it. Lift them over the
+   shell but keep them under its own sheets (.bs-modal, 850) and the tour
+   (870+); the intro card sits above the sheets since it is opened on purpose. */
+body.basic-active .assistant-badge,
+body.basic-active .assistant-fab { z-index: 820; }
+body.basic-active .assistant-dock-preview { z-index: 829; }
+body.basic-active .assistant-panel { z-index: 830; }
+body.basic-active .assistant-intro-overlay { z-index: 860; }
+/* Default corner: above the 48 px bottom bar and left of the 60 px right rail,
+   so it covers neither (Save and the shutter sit at the foot of the rail). */
+body.basic-active .assistant-badge,
+body.basic-active .assistant-fab { right: 76px; bottom: calc(60px + env(safe-area-inset-bottom, 0px)); }

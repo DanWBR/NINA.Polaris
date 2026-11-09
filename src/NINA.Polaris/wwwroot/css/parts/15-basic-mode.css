@@ -27,7 +27,7 @@
     width:100% !important; height:100% !important; margin:0 !important}
 /* the zoomed-star inset defaults bottom-right (clashes with the rail/bottom bar);
    move it bottom-left, clear of the left rail. */
-.basic-shell #basicImageSlot .af-star-zoom{left:60px !important; bottom:56px !important;
+.basic-shell #basicImageSlot .af-star-zoom{left:calc(var(--bs-railw) + 16px) !important; bottom:56px !important;
     right:auto !important; top:auto !important; z-index:21}
 /* Strip the desktop preview chrome that rides along with the relocated area;
    keep the canvases and the centered empty-state (.preview-overlay) message. */
@@ -131,7 +131,7 @@
 
 /* EXP/GAIN inline stepper: tap the box to expand it (grows left over the image
    so it doesn't reflow the rail); tap the label to collapse. */
-.basic-shell .bs-expwrap{position:relative; width:56px}
+.basic-shell .bs-expwrap{position:relative; width:var(--bs-railw)}
 .basic-shell .bs-exp-open{position:absolute; top:0; right:0; width:210px; z-index:26; display:flex;
     flex-direction:column; gap:6px; background:var(--bs-panel); border:1px solid var(--bs-accent);
     border-radius:12px; padding:6px; backdrop-filter:blur(8px); box-shadow:0 8px 28px rgba(0,0,0,.5)}
@@ -154,7 +154,7 @@
     background:#1a2740; overflow:hidden; z-index:31}
 .basic-shell .bs-afprog i{display:block; height:100%; background:var(--bs-accent2); transition:width .2s}
 /* focus nudge: bottom-right, clear of the mount pad + right rail; compact */
-.basic-shell .bs-nudge{position:absolute; right:104px; bottom:56px; z-index:23;
+.basic-shell .bs-nudge{position:absolute; right:calc(var(--bs-railw) + 16px); bottom:56px; z-index:23;
     display:flex; align-items:center; gap:5px; background:var(--bs-panel); border:1px solid var(--bs-border);
     border-radius:14px; padding:6px 8px; backdrop-filter:blur(8px)}
 .basic-shell .bs-nudge button{min-width:36px; height:36px; border:0; border-radius:9px; background:var(--bs-chip);
@@ -169,13 +169,13 @@
 }
 .basic-shell .bs-nudgehide{min-width:26px !important; height:26px !important; background:transparent !important;
     color:var(--bs-muted) !important; font-size:15px !important; align-self:flex-start}
-.basic-shell .bs-focusreopen{position:absolute; right:104px; bottom:56px; z-index:23; height:32px; padding:0 14px;
+.basic-shell .bs-focusreopen{position:absolute; right:calc(var(--bs-railw) + 16px); bottom:56px; z-index:23; height:32px; padding:0 14px;
     border-radius:16px; background:var(--bs-panel); border:1px solid var(--bs-border); color:var(--text);
     font-size:12px; font-weight:600; backdrop-filter:blur(8px)}
 .basic-shell .bs-pos{min-width:58px; text-align:center}
 .basic-shell .bs-pos .bs-pk{font-size:9px; color:var(--bs-muted)}
 .basic-shell .bs-pos .bs-pv{font-size:14px; font-weight:700}
-.basic-shell #basicCurveSlot{position:absolute; left:60px; top:52px; width:200px; height:92px; z-index:22;
+.basic-shell #basicCurveSlot{position:absolute; left:calc(var(--bs-railw) + 16px); top:52px; width:200px; height:92px; z-index:22;
     background:var(--bs-panel); border:1px solid var(--bs-border); border-radius:12px; padding:6px; backdrop-filter:blur(8px)}
 .basic-shell #basicCurveSlot .af-chart{width:100%; height:100%; margin:0}
 .basic-shell #basicCurveSlot .chart-container{position:relative; width:100%; height:100%}
@@ -183,7 +183,7 @@
 .basic-shell .bs-chip b{color:var(--text); font-weight:700}
 
 /* ---- Autorun screen ---- */
-.basic-shell .bs-seqp{position:absolute; left:60px; top:52px; bottom:104px; width:340px; max-width:52vw; z-index:22;
+.basic-shell .bs-seqp{position:absolute; left:calc(var(--bs-railw) + 16px); top:52px; bottom:104px; width:340px; max-width:52vw; z-index:22;
     display:flex; flex-direction:column; background:var(--bs-panel); border:1px solid var(--bs-border);
     border-radius:14px; backdrop-filter:blur(8px); overflow:hidden}
 .basic-shell .bs-seqh{display:flex; align-items:center; justify-content:space-between; padding:9px 12px;
@@ -213,7 +213,7 @@
 .basic-shell .bs-seqauto{font-size:10px; padding:2px 6px; border-radius:8px; background:#0a1120; color:var(--bs-muted); border:1px solid transparent}
 .basic-shell .bs-seqauto.on{color:var(--bs-ok); border-color:var(--bs-ok)}
 .basic-shell .bs-seqhide{background:none; border:0; color:var(--bs-muted); font-size:15px; padding:0 6px 0 0; margin-right:2px}
-.basic-shell .bs-seqreopen{position:absolute; left:60px; top:52px; z-index:22; height:32px; padding:0 14px;
+.basic-shell .bs-seqreopen{position:absolute; left:calc(var(--bs-railw) + 16px); top:52px; z-index:22; height:32px; padding:0 14px;
     border-radius:17px; background:var(--bs-panel); border:1px solid var(--bs-border); color:var(--text);
     font-size:13px; font-weight:600; backdrop-filter:blur(8px)}
 .basic-shell .bs-seqcnt{display:flex; align-items:center; gap:4px; flex:none}
@@ -254,7 +254,7 @@
 /* ---- Guide screen ---- */
 .basic-shell #basicImageSlot .phd2-cam{position:absolute !important; inset:0 !important; width:100% !important; height:100% !important; margin:0 !important}
 .basic-shell #basicImageSlot .phd2-zoom-ctl, .basic-shell #basicImageSlot .guide-bc{display:none !important}
-.basic-shell #basicGuideGraphSlot{position:absolute; left:60px; right:80px; bottom:48px; height:110px; z-index:22;
+.basic-shell #basicGuideGraphSlot{position:absolute; left:calc(var(--bs-railw) + 16px); right:calc(var(--bs-railw) + 16px); bottom:48px; height:110px; z-index:22;
     background:linear-gradient(0deg, rgba(4,6,12,.94), rgba(4,6,12,.35)); border-radius:12px; padding:4px 8px}
 .basic-shell #basicGuideGraphSlot .phd2-graph{position:relative !important; width:100% !important; height:100% !important; margin:0 !important}
 .basic-shell #basicGuideGraphSlot .phd2-graph-canvas{width:100% !important; height:100% !important}
@@ -273,7 +273,7 @@
 /* ---- Live stacking screen ---- */
 .basic-shell .bs-lreset{margin-top:2px; height:32px; padding:0 12px; border-radius:16px; background:var(--bs-panel);
     border:1px solid var(--bs-border); color:var(--bs-muted); font-size:12px; font-weight:600; backdrop-filter:blur(8px)}
-.basic-shell .bs-lhud{position:absolute; left:60px; top:52px; width:200px; z-index:22; background:var(--bs-panel);
+.basic-shell .bs-lhud{position:absolute; left:calc(var(--bs-railw) + 16px); top:52px; width:200px; z-index:22; background:var(--bs-panel);
     border:1px solid var(--bs-border); border-radius:14px; padding:10px 12px; backdrop-filter:blur(8px)}
 .basic-shell .bs-lsnr{display:flex; align-items:baseline; gap:8px}
 .basic-shell .bs-lsnr .v{font-size:28px; font-weight:800; color:var(--bs-accent2)}
@@ -380,6 +380,10 @@
 .basic-shell .bs-skyres:last-child{border-bottom:0}
 .basic-shell .bs-skyres-nm{font-size:13px; font-weight:700; display:block}
 .basic-shell .bs-skyres-sub{font-size:11px; color:var(--bs-muted); display:block; margin-top:1px}
+.basic-shell .bs-skyrecent-head{display:flex; align-items:center; justify-content:space-between; padding:7px 11px 5px;
+    font-size:11px; color:var(--bs-muted); border-bottom:1px solid var(--bs-border)}
+.basic-shell .bs-skyrecent-clear{border:0; background:transparent; color:var(--bs-muted); font-size:11px; padding:2px 4px; font-family:inherit}
+.basic-shell .bs-skyrecent-icon{color:var(--bs-muted); font-weight:400}
 .basic-shell .bs-tcard{position:absolute; right:8px; top:52px; width:210px; max-width:64vw; z-index:24;
     background:var(--bs-panel); border:1px solid var(--bs-border); border-radius:14px; padding:10px 12px; backdrop-filter:blur(8px)}
 .basic-shell .bs-tnm{font-size:16px; font-weight:800}
@@ -467,3 +471,50 @@ body.basic-active .hostdlg-card{height:auto; max-height:100%}
    taps; it is the strip's first button now. Accent tint because it is an
    action, not a tab, and nothing ever marks it active. */
 .nav-btn.nav-field, .nav-btn.nav-field:hover{color:var(--accent)}
+
+/* ---- Side rails: every button one width ----
+   The left rail was 44 px, the right one mixed 56 (EXP/GAIN/BIN), 64 (guide),
+   73-92 (Save, Stream, Run AF). One width for all of them, the mount pad's
+   toggle and Track included; whatever sits beside a rail is offset from
+   --bs-railw. */
+.basic-shell{--bs-railw:60px}
+.basic-shell .bs-rail .bs-icn,
+.basic-shell .bs-rail .bs-exp:not(.bs-exp-open),
+.basic-shell .bs-rail .bs-lreset,
+.basic-shell .bs-rail .bs-af,
+.basic-shell .bs-rail .bs-gbtn,
+.basic-shell .bs-rail .bs-gmain,
+.basic-shell .bs-mount .bs-side > .bs-icn,
+.basic-shell .bs-mount .bs-side > .bs-pill{width:var(--bs-railw); min-width:0}
+.basic-shell .bs-rail{width:var(--bs-railw)}
+.basic-shell .bs-rail.left{align-items:center}
+/* the round shutter (66 px) overhangs the rail evenly instead of widening it,
+   so the column sits at the same x on every screen */
+.basic-shell .bs-rail .bs-shutter{flex:none}
+/* Save / Stream: icon and label on one line, rail width */
+.basic-shell .bs-rail .bs-lreset{display:flex; align-items:center; justify-content:center; gap:3px;
+    padding:0 4px; border-radius:12px; font-size:11px; white-space:nowrap; overflow:hidden}
+.basic-shell .bs-rail .bs-af{font-size:13px}
+.basic-shell .bs-mount .bs-side > .bs-icn{height:40px}
+/* Live stack actions: a column of icon-over-label buttons */
+.basic-shell .bs-rail .bs-lacts .bs-lreset{flex-direction:column; height:auto; min-height:40px; padding:5px 2px;
+    gap:2px; font-size:10px; line-height:1.1; white-space:normal}
+.basic-shell .bs-rail .bs-lacts .bs-lt{display:block}
+.basic-shell .bs-rail .bs-lacts .bs-li{font-size:15px}
+
+/* Short screens (a phone or tablet on its side): the rails get 40 px tall
+   buttons, the live actions move to a second column left of the right rail
+   (under the shutter there is no room left), and the five guide buttons
+   tighten to fit between the top and bottom bars. */
+@media (max-height: 560px){
+    .basic-shell .bs-rail .bs-icn{height:40px}
+    .basic-shell .bs-expcol{gap:6px}
+    .basic-shell .bs-rail .bs-shutter{margin-top:2px}
+    .basic-shell .bs-rail .bs-lreset{margin-top:0}
+    .basic-shell .bs-rail .bs-lacts{position:absolute; top:0; right:calc(100% + 6px); flex-direction:column; gap:6px}
+    .basic-shell .bs-rail .bs-lacts .bs-lreset{height:auto; padding:5px 2px}
+    .basic-shell .bs-gcol{gap:5px}
+    .basic-shell .bs-gbtn{padding:5px 2px; font-size:10px}
+    .basic-shell .bs-gbtn .bs-big{font-size:14px; margin-bottom:1px}
+    .basic-shell .bs-gmain{height:44px}
+}

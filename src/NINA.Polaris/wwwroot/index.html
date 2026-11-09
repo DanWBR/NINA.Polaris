@@ -62,9 +62,9 @@
     <link rel="stylesheet" href="/css/parts/12-tour.css?v=20260624-tour1">
     <!-- Optional external assistant module chrome (badge / FAB / iframe panel).
          Inert unless a manifest URL is configured (assistant-config.json). -->
-    <link rel="stylesheet" href="/css/parts/13-assistant.css?v=20260705-assist15">
+    <link rel="stylesheet" href="/css/parts/13-assistant.css?v=20261109-badgex">
     <link rel="stylesheet" href="/css/parts/14-uiscale-text.css?v=20260707-hintsize">
-    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20261023-skynight">
+    <link rel="stylesheet" href="/css/parts/15-basic-mode.css?v=20261109-rails">
     <!-- xterm.js terminal styles. Loaded eagerly so the SETTINGS
          "Remote terminal" section renders the right font + colors as
          soon as the user opens it. MIT, vendored under js/lib/xterm/. -->
@@ -23161,7 +23161,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
          same Alpine state. Only rendered on phones (basicMode); the live image
          is the real .preview-area relocated into #basicImageSlot. -->
     <template x-if="basicMode">
-    <div class="basic-shell" x-data="{ modeMenu:false, mountMenu:false, mountOpen:true, expandedField:null, editName:null, editExp:null, editGain:null, seqOpen:true, focusOpen:true }">
+    <div class="basic-shell" x-data="{ modeMenu:false, mountMenu:false, mountOpen:false, expandedField:null, editName:null, editExp:null, editGain:null, seqOpen:true, focusOpen:true }">
         <div id="basicImageSlot"></div>
         <div id="basicCurveSlot" x-show="basicScreen==='focus'" x-cloak></div>
         <div id="basicGuideGraphSlot" x-show="basicScreen==='guide'" x-cloak></div>
@@ -23488,8 +23488,30 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
              itself is the real #skyFrame iframe relocated into the image slot. -->
         <div class="bs-skysearch" x-show="basicScreen==='sky'" x-cloak>
             <input class="bs-skyinput" type="text" inputmode="search" placeholder="Search object (M42, NGC...)"
-                   x-model="skySearch" @keyup.enter="searchSky()">
+                   x-model="skySearch" @keyup.enter="searchSky()"
+                   @keyup.escape="skyRecentOpen = false; $el.blur()"
+                   @focus="skyRecentOpen = true"
+                   @blur="skyRecentBlur()"
+                   @input="skyShowResults = false; skyRecentOpen = true">
             <button class="bs-skygo" @click="searchSky()" title="Search">&#128269;</button>
+        </div>
+        <!-- Recent searches, the same list the full Sky tab keeps
+             (polaris.sky.recent): shown while the box has focus, narrowed by
+             what is typed, never together with the results. mousedown.prevent
+             keeps the input focused so the tap lands on the row. -->
+        <div class="bs-skyresults bs-skyrecent"
+             x-show="basicScreen==='sky' && skyRecentOpen && !skyShowResults && skyRecentShown().length" x-cloak>
+            <div class="bs-skyrecent-head">
+                <span x-text="$t('Recent searches')"></span>
+                <button type="button" class="bs-skyrecent-clear"
+                        @mousedown.prevent @click="skyRecentClear()"
+                        x-text="$t('Clear')"></button>
+            </div>
+            <template x-for="q in skyRecentShown()" :key="'bsrec-'+q">
+                <button type="button" class="bs-skyres" @mousedown.prevent @click="skyRecentPick(q)">
+                    <span class="bs-skyres-nm"><span class="bs-skyrecent-icon">&#8617;</span> <span x-text="q"></span></span>
+                </button>
+            </template>
         </div>
         <div class="bs-skyresults" x-show="basicScreen==='sky' && skyShowResults && skyResults.length" x-cloak>
             <template x-for="(obj, i) in skyResults.slice(0,7)" :key="obj.name + '|' + i">
@@ -23683,7 +23705,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
              rail so it never covers the sky. -->
         <div class="bs-mount" x-show="basicScreen==='preview' || basicScreen==='video' || basicScreen==='sky'" :class="{ 'mp-collapsed': !mountOpen }">
             <div class="bs-side">
-                <button class="bs-icn" style="width:38px;height:38px" @click="mountOpen=!mountOpen" title="Mount pad"><span class="bs-big">&#10530;</span></button>
+                <button class="bs-icn" :class="mountOpen ? 'on' : ''" @click="mountOpen=!mountOpen" title="Mount pad"><span class="bs-big">&#10530;</span></button>
                 <button class="bs-pill" :class="mount.tracking ? 'on' : ''" @click="toggleTracking()">Track</button>
                 <div class="bs-spd" x-show="mountOpen && (mount.slewRates || []).length" x-cloak>
                     <div class="bs-spdh"><span>Speed</span><b x-text="(mount.slewRates && mount.slewRates[mountSlewRateIndex]) ? mount.slewRates[mountSlewRateIndex].name : '--'"></b></div>
@@ -26267,7 +26289,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     @pointerdown="assistantDragStart($event)" :style="_assistantLauncherStyle()">
                 <span class="assistant-badge-icon" x-text="asst.manifest.product.iconEmoji || '✨'"></span>
                 <span x-text="(asst.manifest.badge && asst.manifest.badge.label) || asst.manifest.product.name"></span>
-                <span class="assistant-badge-x" @click.stop="assistantDismissBadge()" title="Dismiss">&times;</span>
+                <span class="assistant-badge-x" role="button" aria-label="Dismiss" title="Dismiss"
+                      @pointerdown.stop @click.stop="assistantDismissBadge()">&times;</span>
             </button>
 
             <!-- Intro / subscribe modal -->

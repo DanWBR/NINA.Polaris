@@ -15276,7 +15276,10 @@ function ninaApp() {
                 // would sit 20/z px short of the edge, so anchor with 20/z here
                 // (z===1 keeps the plain CSS default).
                 if (z === 1) return {};
-                return { right: (20 / z) + 'px', bottom: (20 / z) + 'px' };
+                // Basic mode keeps the corner above its 48 px bottom bar and
+                // left of its 60 px right rail.
+                const right = this.basicMode ? 76 : 20, bottom = this.basicMode ? 60 : 20;
+                return { right: (right / z) + 'px', bottom: (bottom / z) + 'px' };
             }
             // asst.pos is stored in physical px (from clientX during drag); the
             // element lives in the zoomed frame, so divide to place it there.
@@ -15365,6 +15368,9 @@ function ninaApp() {
         },
         assistantDragStart(ev) {
             if (ev.button != null && ev.button !== 0) return; // primary / touch only
+            // A tap on the badge's dismiss x is never a drag: a finger that
+            // wobbled 5 px would move the badge and swallow the tap.
+            if (ev.target.closest && ev.target.closest('.assistant-badge-x')) return;
             const el = ev.currentTarget;
             const rect = el.getBoundingClientRect();
             const startX = ev.clientX, startY = ev.clientY;

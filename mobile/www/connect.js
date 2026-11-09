@@ -755,6 +755,61 @@ function reloadTab(origin) {
   activateTab(origin);
 }
 
+// Ask before a tab-bar Reload or Close: both buttons sit a few pixels apart
+// on a narrow bar and a stray tap would drop the operator's view of a running
+// session. An in-shell card rather than window.confirm(), so it looks the same
+// on Android and iOS and cannot be suppressed by the WebView. Resolves true on
+// confirm, false on Cancel, a tap outside the card, or Escape.
+let _confirmOpen = null;
+function confirmDialog(title, message, okLabel) {
+  if (_confirmOpen) _confirmOpen(false);
+  return new Promise((resolve) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'confirm-overlay';
+    wrap.setAttribute('role', 'dialog');
+    wrap.setAttribute('aria-modal', 'true');
+    const card = document.createElement('div');
+    card.className = 'confirm-card';
+    const h = document.createElement('div');
+    h.className = 'confirm-title';
+    h.textContent = title;
+    const m = document.createElement('div');
+    m.className = 'confirm-msg';
+    m.textContent = message;
+    const actions = document.createElement('div');
+    actions.className = 'confirm-actions';
+    const cancel = document.createElement('button');
+    cancel.type = 'button';
+    cancel.className = 'confirm-cancel';
+    cancel.textContent = 'Cancel';
+    const ok = document.createElement('button');
+    ok.type = 'button';
+    ok.className = 'confirm-ok';
+    ok.textContent = okLabel;
+    actions.appendChild(cancel);
+    actions.appendChild(ok);
+    card.appendChild(h);
+    card.appendChild(m);
+    card.appendChild(actions);
+    wrap.appendChild(card);
+    const onKey = (e) => { if (e.key === 'Escape') done(false); };
+    const done = (v) => {
+      if (_confirmOpen !== done) return;
+      _confirmOpen = null;
+      document.removeEventListener('keydown', onKey);
+      wrap.remove();
+      resolve(v);
+    };
+    cancel.addEventListener('click', () => done(false));
+    ok.addEventListener('click', () => done(true));
+    wrap.addEventListener('click', (e) => { if (e.target === wrap) done(false); });
+    document.addEventListener('keydown', onKey);
+    _confirmOpen = done;
+    document.body.appendChild(wrap);
+    ok.focus();
+  });
+}
+
 function renderTabs() {
   const bar = els.tabBar;
   bar.innerHTML = '';
@@ -772,13 +827,25 @@ function renderTabs() {
     reload.type = 'button';
     reload.textContent = '⟳';
     reload.setAttribute('aria-label', 'Reload ' + inst.name);
-    reload.addEventListener('click', (e) => { e.stopPropagation(); reloadTab(origin); });
+    reload.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const name = inst.displayName || inst.name;
+      if (await confirmDialog(`Reload ${name}?`,
+            'The page reloads from the host. Anything typed but not saved on this tab is lost.',
+            'Reload')) reloadTab(origin);
+    });
     const close = document.createElement('button');
     close.className = 'tab-close';
     close.type = 'button';
     close.textContent = '×';
     close.setAttribute('aria-label', 'Close ' + inst.name);
-    close.addEventListener('click', (e) => { e.stopPropagation(); closeTab(origin); });
+    close.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const name = inst.displayName || inst.name;
+      if (await confirmDialog(`Close ${name}?`,
+            'Only the tab closes; the host keeps running whatever it is doing (capture, guiding, sequences).',
+            'Close tab')) closeTab(origin);
+    });
     tab.appendChild(label);
     tab.appendChild(reload);
     tab.appendChild(close);
