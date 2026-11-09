@@ -227,6 +227,7 @@ public class AstrometryNetLocalSolver : IPlateSolver {
     /// <c>--wcs</c> plus solve-field's default xylist/corr/match/rdls/solved
     /// outputs and the index xylist.</summary>
     internal static void CleanupSidecars(string fitsPath) {
+        var inputPath = Path.GetFullPath(fitsPath);
         var baseNoExt = Path.Combine(
             Path.GetDirectoryName(fitsPath) ?? ".",
             Path.GetFileNameWithoutExtension(fitsPath));
@@ -235,7 +236,11 @@ public class AstrometryNetLocalSolver : IPlateSolver {
                      ".solved", ".xyls", "-indx.xyls", ".new", ".ini" }) {
             try {
                 var p = baseNoExt + suffix;
-                if (File.Exists(p)) File.Delete(p);
+                // Star-list inputs such as .xyls overlap the output suffixes.
+                // Preserve case variants too, since the directory may be on a
+                // case-insensitive volume even on a non-Windows host.
+                if (!string.Equals(Path.GetFullPath(p), inputPath, StringComparison.OrdinalIgnoreCase)
+                        && File.Exists(p)) File.Delete(p);
             } catch { /* IO race / perms, best effort, mirrors AstapSolver */ }
         }
     }
