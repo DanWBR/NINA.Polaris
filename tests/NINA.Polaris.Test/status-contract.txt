@@ -316,6 +316,7 @@ meridianFlip.timeToMeridianHours
 meridianFlip.timeToMeridianMinutes
 meridianFlip.timeToSetHours
 meridianFlip.timeToSetMinutes
+mountSiteSync
 network
 network.autoHotspotFallback
 network.fallbackEngaged
