@@ -67,6 +67,7 @@ public static class MeridianFlipEndpoints {
                 flipsCompleted = mf.FlipsCompleted,
                 lastFlipAt = mf.LastFlipAt,
                 lastFlipError = mf.LastFlipError,
+                mountWarning = mf.MountMeridianWarning(),
                 lstHours = lst,
                 hourAngleHours = hourAngle,
                 timeToMeridianHours = timeToMeridianHours,

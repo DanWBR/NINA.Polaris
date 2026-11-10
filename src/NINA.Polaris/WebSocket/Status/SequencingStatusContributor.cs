@@ -100,6 +100,7 @@ public sealed class SequencingStatusContributor : IStatusContributor {
             flipsCompleted = meridianFlip.FlipsCompleted,
             lastFlipAt = meridianFlip.LastFlipAt,
             lastFlipError = meridianFlip.LastFlipError,
+            mountWarning = meridianFlip.MountMeridianWarning(),
             lstHours,
             hourAngleHours,
             timeToMeridianHours,

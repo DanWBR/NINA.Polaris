@@ -134,6 +134,19 @@ status shows the last error with the time of the next try. This
 applies to the automatic flip in LIVE as well, which used to give up
 for the rest of the crossing after a refused GoTo.
 
+Some mounts have a meridian limit of their own, in their driver. The
+ZWO AM5 and AM3 driver has two settings for it in RIGS → INDI Control
+Panel: **Meridian Limit**, in degrees past the meridian, and **After
+Meridian**, which says what the mount does at that limit: keep
+tracking (TRACK) or stop (STOP). With STOP and a limit of 0°, the
+mount stops at the meridian itself, the star drifts out of the guide
+camera, and the flip a few minutes later is refused. When a meridian
+flip is turned on, Polaris reads those two settings and warns, in the
+flip panel and with a message, if the mount would stop before the
+flip and its retries are done (the flip point plus 15 minutes). The
+fix is to set **After Meridian** to TRACK, or to raise the limit past
+that point.
+
 ## Sequence status over WebSocket
 
 If you build your own dashboard or automation, the running sequence

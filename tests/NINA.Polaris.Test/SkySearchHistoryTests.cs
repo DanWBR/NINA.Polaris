@@ -121,7 +121,7 @@ public class SkySearchHistoryTests {
     public void TheRowsSuppressTheBlurBeforeTheClick() {
         var html = Html();
         Assert.That(Regex.Matches(html, @"@mousedown\.prevent @click=""skyRecent").Count,
-            Is.EqualTo(2), "the rows and the Clear button both need it");
+            Is.EqualTo(4), "the rows and the Clear button both need it, in SKY and in Basic mode's Sky search");
     }
 
     /// <summary>Results and history never share the screen, and the history

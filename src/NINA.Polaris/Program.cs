@@ -576,6 +576,13 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<MountSafetyGuardSe
 // A mount that drops its plate-solve sync mid-session gets it back (AM3/AM5),
 // and the INDI mount driver keeps its own debug log so the next one can be traced.
 builder.Services.AddHostedService<PointingWatchdogService>();
+// The stacked field drifting steadily while guiding is on: the guider is
+// holding something that does not move with the sky.
+builder.Services.AddHostedService<GuideDriftWatchService>();
+// A guided mount whose reported RA keeps walking one way is falling behind
+// while it says it tracks (AM3): tracking is turned off and on again.
+builder.Services.AddSingleton<MountStallWatchService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<MountStallWatchService>());
 builder.Services.AddHostedService<MountDriverLogService>();
 
 // Wind guard: watches the guide stream for an error that has run away and is

@@ -250,6 +250,49 @@ public class MeridianFlipService {
         return minutesAfterMeridian / 60.0 - ha;
     }
 
+    /// <summary>Minutes past the flip point the mount has to keep tracking:
+    /// a refused flip is retried for several minutes (<see cref="RetryNotBefore"/>).</summary>
+    internal const double DriverLimitMarginMinutes = 15;
+
+    /// <summary>
+    /// A mount whose own driver stops tracking at its meridian limit before
+    /// Polaris gets to flip: the flip GoTo is then refused, the star drifts out
+    /// and guiding is lost (a ZWO AM5 with "After Meridian" = STOP and a 0°
+    /// limit, 2026-11-05 and 2026-11-07). Returns the warning to show, or null
+    /// when the driver keeps tracking long enough. The limit is in degrees of
+    /// hour angle past the meridian (4 min each).
+    /// </summary>
+    public static string? DriverStopsBeforeFlip(bool stopsAtLimit, double limitDeg,
+            double minutesAfterMeridian) {
+        if (!stopsAtLimit) return null;
+        if (limitDeg * 4.0 >= minutesAfterMeridian + DriverLimitMarginMinutes) return null;
+        return $"The mount's driver stops tracking {limitDeg:0.#}° past the meridian (\"After Meridian\" is STOP), "
+            + $"before the meridian flip at {minutesAfterMeridian:0.#} min past it, so the flip will be refused. "
+            + "Set \"After Meridian\" to TRACK in RIGS → INDI Control Panel.";
+    }
+
+    private string? _loggedMountWarning;
+
+    /// <summary>
+    /// <see cref="DriverStopsBeforeFlip"/> for the connected mount, when a
+    /// meridian flip is turned on (AUTORUN or LIVE). Null otherwise. Logged
+    /// once each time it changes.
+    /// </summary>
+    public string? MountMeridianWarning() {
+        string? warning = null;
+        if ((Settings.Enabled || Settings.AutoFlipDuringLiveStack)
+                && _equip.Telescope is NINA.INDI.Devices.IndiTelescope scope
+                && scope.IsConnected
+                && scope.DriverMeridianLimit is { } limit) {
+            warning = DriverStopsBeforeFlip(limit.StopsAtLimit, limit.LimitDeg, Settings.MinutesAfterMeridian);
+        }
+        if (warning != _loggedMountWarning) {
+            _loggedMountWarning = warning;
+            if (warning != null) _logger.LogWarning("Meridian flip: {Warning}", warning);
+        }
+        return warning;
+    }
+
     /// <summary>
     /// How long to hold before opening the shutter on an exposure of this
     /// length, so that it does not run past the flip point. Zero when it is

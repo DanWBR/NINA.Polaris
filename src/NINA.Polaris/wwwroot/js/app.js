@@ -5274,6 +5274,9 @@ function ninaApp() {
         mfState: 'idle',
         mfFlipsCompleted: 0,
         mfLastFlipError: null,
+        // The mount's driver stops tracking before the flip (an AM5 with
+        // "After Meridian" = STOP); from the status tick, null when fine.
+        mfMountWarning: null,
         mfTimeToMeridianMinutes: null,
         mfTimeToFlipMinutes: null,
         mfTimeToSetMinutes: null,
@@ -32513,13 +32516,20 @@ function ninaApp() {
             }
         },
 
-        async toggleTracking() {
-            const newState = !this.mount.tracking;
+        /// `toggle` is the mount card's checkbox. Its :checked binding only
+        /// re-runs when mount.tracking changes, so a click the driver never
+        /// acts on (rejected, ignored, request failed) would leave the switch
+        /// showing a state the mount is not in. Once the driver has had time
+        /// to echo, the switch is put back on the state it reports.
+        async toggleTracking(toggle) {
+            const newState = toggle ? !!toggle.checked : !this.mount.tracking;
             try {
                 await this.apiPost('/api/telescope/tracking', { enabled: newState });
                 this.toast('Tracking ' + (newState ? 'ON' : 'OFF'), 'info');
             } catch (e) {
                 this.toast('Tracking toggle failed: ' + this._mountErrorText(e), 'error');
+            } finally {
+                if (toggle) setTimeout(() => { toggle.checked = !!this.mount.tracking; }, 3000);
             }
         },
 
@@ -51225,6 +51235,9 @@ function ninaApp() {
                 this.mfState = mf.state || 'idle';
                 this.mfFlipsCompleted = mf.flipsCompleted || 0;
                 this.mfLastFlipError = mf.lastFlipError || null;
+                const mountWarning = mf.mountWarning || null;
+                if (mountWarning && mountWarning !== this.mfMountWarning) this.toast('⚠ ' + mountWarning, 'warn', 12000);
+                this.mfMountWarning = mountWarning;
                 this.mfLstHours = mf.lstHours;
                 this.mfHourAngleHours = mf.hourAngleHours;
                 this.mfTimeToMeridianMinutes = mf.timeToMeridianMinutes;

@@ -1774,6 +1774,9 @@
                         <div class="livestack-meridian-err text-err"
                              x-show="mfLastFlipError"
                              x-text="'Last flip error: ' + mfLastFlipError"></div>
+                        <div class="livestack-meridian-err text-warn"
+                             x-show="mfMountWarning && mfSettings.autoFlipDuringLiveStack"
+                             x-text="'⚠ ' + mfMountWarning"></div>
                     </div>
 
                     <!-- REFSUG-3: refocus-suggestion callout. Visible only
@@ -7895,7 +7898,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                            :title="mount.tracking ? 'Stop tracking' : 'Start tracking'">
                                         <input type="checkbox"
                                                :checked="!!mount.tracking"
-                                               @change="toggleTracking()">
+                                               @change="toggleTracking($event.target)">
                                         <span class="equip-toggle-track"></span>
                                         <span class="equip-toggle-thumb"></span>
                                     </label>
@@ -12592,6 +12595,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             (<span x-text="mfFlipsCompleted"></span> flipped)
                         </span>
                     </div>
+                    <div class="text-warn" style="font-size: 12px; margin: 4px 0;"
+                         x-show="mfMountWarning && mfSettings.enabled"
+                         x-text="'⚠ ' + mfMountWarning"></div>
                     <div class="seq-dither-body">
                         <div class="seq-dither-row">
                             <label>Min after meridian
@@ -26302,7 +26308,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261108-lsnorm"></script>
+    <script src="/js/app.js?v=20261109-trackfix"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
