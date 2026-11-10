@@ -29,8 +29,9 @@ public sealed class EquipmentStatusContributor : IStatusContributor {
     private readonly NetworkManagerService _network;
     private readonly NINA.Polaris.Services.Simulator.SimulatorService _simulator;
     private readonly UsbDriveWatcherService _usbWatcher;
+    private readonly MountSiteSyncService _siteSync;
 
-    public EquipmentStatusContributor(CameraStreamService cameraStream, EquipmentManager equip, EquipmentSnapshotService snapshot, NINA.Polaris.Services.Planetary.KeepCenteredService keepCentered, NetworkManagerService network, NINA.Polaris.Services.Simulator.SimulatorService simulator, UsbDriveWatcherService usbWatcher) {
+    public EquipmentStatusContributor(CameraStreamService cameraStream, EquipmentManager equip, EquipmentSnapshotService snapshot, NINA.Polaris.Services.Planetary.KeepCenteredService keepCentered, NetworkManagerService network, NINA.Polaris.Services.Simulator.SimulatorService simulator, UsbDriveWatcherService usbWatcher, MountSiteSyncService siteSync) {
         _cameraStream = cameraStream;
         _equip = equip;
         _snapshot = snapshot;
@@ -38,9 +39,10 @@ public sealed class EquipmentStatusContributor : IStatusContributor {
         _network = network;
         _simulator = simulator;
         _usbWatcher = usbWatcher;
+        _siteSync = siteSync;
     }
 
-    public IReadOnlyCollection<string> Keys { get; } = new[] { "equipment", "cameraStream", "keepCentered", "simulator", "network", "usbDrive", "usbRemoved" };
+    public IReadOnlyCollection<string> Keys { get; } = new[] { "equipment", "cameraStream", "keepCentered", "simulator", "network", "usbDrive", "usbRemoved", "mountSiteSync" };
 
     public void Contribute(StatusTick tick) {
         var cameraStream = _cameraStream;
@@ -174,6 +176,24 @@ public sealed class EquipmentStatusContributor : IStatusContributor {
             tick.Blocks["usbRemoved"] = usbWatcher.RevertPending is { } rp ? new {
                 label       = rp.RemovedLabel,
                 defaultPath = rp.DefaultPath
+            } : null;
+
+            // Once-a-night "sync the mount's date, time and location?"
+            // prompt; null when nothing is asked (or another client answered).
+            tick.Blocks["mountSiteSync"] = _siteSync.Pending is { } ss ? new {
+                id = ss.Id,
+                device = ss.Device,
+                polarisUtc = ss.PolarisUtc.ToString("o"),
+                offsetHours = ss.OffsetHours,
+                latitude = ss.Latitude,
+                longitude = ss.Longitude,
+                elevation = ss.Elevation,
+                locationConfigured = ss.LocationConfigured,
+                canSetTime = ss.CanSetTime,
+                canSetLocation = ss.CanSetLocation,
+                mountLatitude = ss.MountLatitude,
+                mountLongitude = ss.MountLongitude,
+                mountClockOffsetSeconds = ss.MountClockOffsetSeconds
             } : null;
 
             // BENCH: compact progress for the Settings card.

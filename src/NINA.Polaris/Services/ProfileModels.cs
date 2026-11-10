@@ -454,6 +454,14 @@ public class UserProfile {
     /// migration ran is never overwritten again.</summary>
     public int SettingsMigration { get; set; }
 
+    /// <summary>The observing night (local date the evening fell on,
+    /// yyyy-MM-dd) the operator last answered the mount time and location
+    /// prompt for, and what they chose: "both", "time", "location" or
+    /// "none". A mount that connects again the same night gets the same
+    /// choice without asking. See MountSiteSyncService.</summary>
+    public string? MountSiteSyncNight { get; set; }
+    public string? MountSiteSyncChoice { get; set; }
+
     /// <summary>Save a dedicated per-session guiding log under logs/guide/
     /// (ASIAIR-style). Native guider → a PHD2-compatible Guide Log; external
     /// PHD2 → a copy of PHD2's own guide log. Default on.</summary>
@@ -1597,11 +1605,10 @@ public class AutoFocusSettings {
     /// with the sky and one that spends most of its time moving frames over
     /// USB. It also rescues a short exposure on a faint field.</para>
     ///
-    /// <para>1 by default: it is the only value every camera treats the same,
-    /// and a binned frame has fewer samples across the disc, so on a
-    /// small-pixel sensor the HFR measurement itself starts to coarsen past
-    /// 2.</para></summary>
-    public int Binning { get; set; } = 1;
+    /// <para>2 by default. A camera that cannot bin sweeps at 1x1 instead,
+    /// and past 2 a binned frame has so few samples across the disc that on a
+    /// small-pixel sensor the HFR measurement itself starts to coarsen.</para></summary>
+    public int Binning { get; set; } = 2;
 
     /// <summary>Exposures averaged per sweep point (desktop
     /// AutoFocusNumberOfFramesPerPoint). 1 = fastest.</summary>
@@ -1651,12 +1658,12 @@ public class AutoFocusSettings {
     /// <summary>Track only the N brightest stars across the whole sweep
     /// (desktop AutoFocusUseBrightestStars). 0 = use all detected stars.
     ///
-    /// <para>Defaults to 1, one star, which is what ASIAIR does and what the
-    /// field report asked for: averaging the whole frame let the measurement
+    /// <para>Defaults to 3. Averaging the whole frame let the measurement
     /// follow whichever stars the detector happened to find at each position,
-    /// so the curve moved for reasons that had nothing to do with focus. The
-    /// setting stays open for anyone who wants several, or 0 for all.</para></summary>
-    public int UseBrightestStars { get; set; } = 1;
+    /// so the curve moved for reasons that had nothing to do with focus; a few
+    /// tracked stars keep that fix and are steadier than one. 1 follows a
+    /// single star, 0 uses all.</para></summary>
+    public int UseBrightestStars { get; set; } = 3;
 
     /// <summary>Backlash compensation when moving INWARD (position
     /// decreasing), in focuser steps.</summary>

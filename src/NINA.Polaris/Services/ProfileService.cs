@@ -162,6 +162,10 @@ public class ProfileService {
         // carry the old false. Re-seed once.
         MigrateLiveStackRejectionOn();
 
+        // Auto-focus defaults became 3 tracked stars and bin 2x2; rigs saved
+        // before carry the old 1 and 1. Re-seed once.
+        MigrateAutoFocusThreeStarsBin2();
+
         // Four per-panel offsets became one per rig. Carry whatever the
         // operator had already dialed in into the single field, rather than
         // silently reverting their sensor to the driver's pedestal.
@@ -839,6 +843,27 @@ public class ProfileService {
             _logger.LogInformation(
                 "Guide exposure migration: re-seeded {N} rig(s) with sub-500ms guide exposure to 1s", fixedUp);
         }
+    }
+
+    /// <summary>One-time move of the auto-focus defaults to 3 tracked stars
+    /// and 2x2 binning. Rigs that still hold the old defaults (1 star, 1x1)
+    /// take the new ones; any other value was chosen and stays. Runs once, so
+    /// a rig set back to 1 afterwards keeps it.</summary>
+    private void MigrateAutoFocusThreeStarsBin2() {
+        const int ThreeStarsBin2Version = 4;
+        if (_activeProfile.SettingsMigration >= ThreeStarsBin2Version) return;
+        var stars = 0;
+        var binned = 0;
+        foreach (var rig in _activeProfile.EquipmentProfiles ?? new()) {
+            if (rig.AutoFocus == null) continue;
+            if (rig.AutoFocus.UseBrightestStars == 1) { rig.AutoFocus.UseBrightestStars = 3; stars++; }
+            if (rig.AutoFocus.Binning == 1) { rig.AutoFocus.Binning = 2; binned++; }
+        }
+        _activeProfile.SettingsMigration = ThreeStarsBin2Version;
+        Save();
+        _logger.LogInformation(
+            "Settings migration v{V}: auto-focus set to 3 stars on {S} rig(s) and bin 2x2 on {B} rig(s) (one-time)",
+            ThreeStarsBin2Version, stars, binned);
     }
 
     /// <summary>One-time switch of live-stack outlier rejection to on. Every

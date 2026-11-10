@@ -152,6 +152,28 @@ estimated effort is about a day.
 | Linux / Mac, no `indiserver`, no ASCOM, just Polaris | **SynScan WiFi** today; **NexStar WiFi** / **LX200 TCP** when they land |
 | Anything else | INDI on the host, period |
 
+## Date, time and location on connect
+
+A mount works out where a target is in its own sky from its clock and
+its location (latitude, longitude, height). If either is wrong, a GoTo
+lands in the wrong place, and the mount's own meridian limit triggers
+at the wrong time.
+
+When the mount connects, Polaris asks whether to send it Polaris's date,
+time and location. The question shows what would be sent and, when the
+driver reports them, the mount's own clock (how far ahead or behind it
+is) and location. The choices are date, time and location; date and
+time only; location only; or leaving the mount as it is. Options the
+driver cannot accept are not offered, and location is only offered once
+it is set in Polaris's Settings.
+
+Polaris asks once a night (the night turns over at noon). The question
+shows on every open phone, tablet or browser, and the first answer
+closes it on all of them. If the mount drops and reconnects later the
+same night, for example after a USB reset, the same answer is applied
+again without asking. While the rig option **Sync the mount's time &
+location before every GoTo** is on, every GoTo still sends them first.
+
 ## Bluetooth: out of scope
 
 The current mount market is essentially WiFi-only. Bluetooth shipped

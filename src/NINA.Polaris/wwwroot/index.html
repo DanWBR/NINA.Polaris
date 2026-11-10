@@ -3374,7 +3374,7 @@
                              cannot bin, because an inert control reads as a
                              broken one. -->
                         <label x-show="cameraCaps.binning !== false" x-cloak
-                               title="Binning for the sweep frames only; the camera goes back to its normal mode when the run ends. 2x2 reads a quarter of the pixels and lifts the per-pixel signal, so the sweep spends less of the night moving frames over USB. Past 2 there are fewer samples across the star disc and the HFR reading itself coarsens.">Bin
+                               title="Binning for the sweep frames only (2x2 by default); the camera goes back to its normal mode when the run ends. 2x2 reads a quarter of the pixels and lifts the per-pixel signal, so the sweep spends less of the night moving frames over USB. Past 2 there are fewer samples across the star disc and the HFR reading itself coarsens.">Bin
                             <select class="input-sm" x-model.number="afParams.binning"
                                     :disabled="autoFocus.state === 'running'">
                                 <template x-for="b in binPresets()" :key="b">
@@ -3390,7 +3390,7 @@
                                 <option value="CONTRAST_SOBEL">Contrast (Sobel)</option>
                             </select>
                         </label>
-                        <label x-show="afParams.metric === 'HFR'" title="How many stars the sweep measures, tracked across every point so they are the SAME physical stars. 1 (default) follows the single brightest one, which is what ASIAIR does: the whole-frame average moves with whichever stars the detector finds at each position, not with the focus. 0 = use all detected stars.">Top stars
+                        <label x-show="afParams.metric === 'HFR'" title="How many stars the sweep measures, tracked across every point so they are the SAME physical stars. 3 (default) follows the three brightest: the whole-frame average moves with whichever stars the detector finds at each position, not with the focus. 1 = a single star, 0 = use all detected stars.">Top stars
                             <input type="number" x-model.number="afParams.useBrightestStars" min="0" max="50" step="1" class="input-sm"
                                    :disabled="autoFocus.state === 'running'">
                         </label>
@@ -26170,11 +26170,34 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
             <h3 class="confirm-modal-title" x-text="confirmModal.title"></h3>
             <p class="confirm-modal-message" x-text="confirmModal.message"></p>
             <div class="confirm-modal-actions">
-                <button class="btn btn-sm" @click="_confirmCancel()"
+                <button class="btn btn-sm" @click="_confirmCancel()" x-show="!confirmModal.alertOnly"
                         x-text="confirmModal.cancelLabel || 'Cancel'"></button>
                 <button class="btn btn-sm" :class="confirmModal.danger ? 'btn-danger' : 'btn-primary'"
                         @click="_confirmAccept()"
                         x-text="confirmModal.okLabel || 'OK'"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Once a night, when the mount connects: send it Polaris's date, time and
+         location? The question comes from the server (MountSiteSyncService),
+         so every open client shows it and the first answer closes it on all
+         of them. -->
+    <div class="confirm-modal-overlay" x-show="mountSiteSync" x-cloak>
+        <div class="confirm-modal-card" x-show="mountSiteSync">
+            <h3 class="confirm-modal-title">Sync the mount's date, time and location?</h3>
+            <p class="confirm-modal-message" x-text="mountSiteSyncText()"></p>
+            <div style="display:flex; flex-direction:column; gap:8px">
+                <button class="btn btn-sm btn-primary" :disabled="siteSyncBusy"
+                        x-show="mountSiteSync?.canSetTime && mountSiteSync?.canSetLocation && mountSiteSync?.locationConfigured"
+                        @click="answerMountSiteSync('both')">Date, time and location</button>
+                <button class="btn btn-sm" :disabled="siteSyncBusy" x-show="mountSiteSync?.canSetTime"
+                        @click="answerMountSiteSync('time')">Date and time only</button>
+                <button class="btn btn-sm" :disabled="siteSyncBusy"
+                        x-show="mountSiteSync?.canSetLocation && mountSiteSync?.locationConfigured"
+                        @click="answerMountSiteSync('location')">Location only</button>
+                <button class="btn btn-sm" :disabled="siteSyncBusy"
+                        @click="answerMountSiteSync('none')">Leave the mount as it is</button>
             </div>
         </div>
     </div>
@@ -26593,7 +26616,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261109-trackfix"></script>
+    <script src="/js/app.js?v=20261110-uvchip"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

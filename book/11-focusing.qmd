@@ -309,15 +309,16 @@ position. Polaris:
 5. moves to the parabola's vertex, the best focus;
 6. reverts to the start position on cancel or failure.
 
-With the HFR metric the sweep measures a reference star: by default
-one, the brightest in the first frame. Its position in the frame is
-fixed for the whole run, retries included. At every later sample
-Polaris measures the star at that spot and nothing else. If no star
-is found there, because a cloud crossed or the exposure is too short
-for the filter (narrowband filters dim stars a lot), that sample is
-left out of the fit and the log says so. Polaris never switches to
-another star partway through: a curve built from two different stars
-is not a focus curve.
+With the HFR metric the sweep measures reference stars: by default
+three, the brightest in the first frame (**Top stars** sets how many;
+1 follows a single star, 0 measures every star found). Their positions
+in the frame are fixed for the whole run, retries included. At every
+later sample Polaris measures the stars at those spots and nothing
+else. If none of them is found there, because a cloud crossed or the
+exposure is too short for the filter (narrowband filters dim stars a
+lot), that sample is left out of the fit and the log says so. Polaris
+never switches to other stars partway through: a curve built from
+different stars is not a focus curve.
 
 ### Parameters
 
@@ -334,6 +335,11 @@ is not a focus curve.
   500 ms.
 - **Min Stars**: the minimum star count for a valid HFR sample. 5 is
   sane; bump it to 20 in crowded fields where HFR gets noisy.
+- **Bin**: binning for the sweep frames only (binning adds up blocks
+  of pixels into one, here 2x2). 2x2 is the default: frames are
+  quicker to read and send, and stars stand out better on a short
+  exposure. The camera goes back to its normal mode when the run ends,
+  and a camera that cannot bin sweeps at 1x1.
 - **Backlash**: the overshoot in steps applied when reversing
   direction. Use 0 for belt-driven focusers, and your focuser's
   published backlash for geared ones.

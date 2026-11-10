@@ -584,6 +584,10 @@ builder.Services.AddHostedService<GuideDriftWatchService>();
 // while it says it tracks (AM3): tracking is turned off and on again.
 builder.Services.AddSingleton<MountStallWatchService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<MountStallWatchService>());
+// Once a night, when the mount connects, every client asks whether to send it
+// Polaris's date, time and location.
+builder.Services.AddSingleton<MountSiteSyncService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<MountSiteSyncService>());
 builder.Services.AddHostedService<MountDriverLogService>();
 
 // Wind guard: watches the guide stream for an error that has run away and is
