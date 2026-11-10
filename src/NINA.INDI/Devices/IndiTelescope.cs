@@ -95,6 +95,22 @@ public class IndiTelescope : ITelescope {
         }
     }
 
+    /// <summary>
+    /// What the mount's own driver does once the target passes its meridian
+    /// limit, for drivers that have such a setting (the ZWO AM5/AM3 driver:
+    /// <c>POST_MERIDIAN_TRACK</c> = TRACK or STOP, <c>MERIDIAN_LIMIT</c> in
+    /// degrees past the meridian). Null when the driver has neither.
+    /// Read-only.
+    /// </summary>
+    public (bool StopsAtLimit, double LimitDeg)? DriverMeridianLimit {
+        get {
+            if (_client.GetProperty(DeviceName, "POST_MERIDIAN_TRACK") == null) return null;
+            var stops = _client.GetSwitch(DeviceName, "POST_MERIDIAN_TRACK", "STOP");
+            var limit = _client.GetNumber(DeviceName, "MERIDIAN_LIMIT", "LIMIT");
+            return (stops, double.IsNaN(limit) ? 0 : limit);
+        }
+    }
+
     public IndiTelescope(IndiClient client, string deviceName) {
         _client = client;
         DeviceName = deviceName;

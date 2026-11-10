@@ -152,11 +152,24 @@ public class MountSafetyGuardService : BackgroundService {
     private bool _prevSlewing;
     public string? LastTrackingDrop { get; private set; }
 
+    // ---- tracking-off-while-capturing alert ----
+    // Polaris shows a warning when tracking is off while frames are being
+    // taken. The alert fires on the first tick tracking is seen off during a
+    // session and repeats every TrackingOffRepeat while it stays off.
+    private readonly NotificationService _notify;
+    private readonly MountStallWatchService _stallWatch;
+    internal static readonly TimeSpan TrackingOffRepeat = TimeSpan.FromMinutes(5);
+    private DateTime? _trackingOffAlertAt;
+    private bool _guardStoppedTracking;
+
     public MountSafetyGuardService(
             EquipmentManager equip, ProfileService profile, ActiveGuiderProvider guiders,
             SequenceEngine sequence, LiveCaptureService liveCapture, LiveStackingService liveStack,
             MeridianFlipService meridian, AdvancedSequenceEngine adv,
+            NotificationService notify, MountStallWatchService stallWatch,
             ILogger<MountSafetyGuardService> logger) {
+        _notify = notify;
+        _stallWatch = stallWatch;
         _equip = equip;
         _profile = profile;
         _guiders = guiders;
@@ -275,6 +288,7 @@ public class MountSafetyGuardService : BackgroundService {
 
         // Diagnostic: log a snapshot whenever tracking stops unexpectedly.
         CheckTrackingDropDiagnostic();
+        CheckTrackingOffWhileCapturing();
 
         var s = _meridian.Settings;
 
@@ -446,6 +460,7 @@ public class MountSafetyGuardService : BackgroundService {
         } catch (Exception ex) { _logger.LogWarning(ex, "Safety hold: guider stop failed"); }
         var scope = _equip.Telescope;
         if (scope != null && scope.IsConnected) {
+            _guardStoppedTracking = true;
             try { await scope.SetTrackingAsync(false, ct); }
             catch (Exception ex) { _logger.LogWarning(ex, "Safety hold: stop-tracking failed"); }
         }
@@ -485,7 +500,7 @@ public class MountSafetyGuardService : BackgroundService {
         //  • our own safety guard stopped it.
         if (slewing || prevSlewing) return;
         if (_meridian.State != MeridianFlipState.Idle) return;
-        if (Tripped) return;
+        if (Tripped || _stallWatch.Reengaging) return;
 
         double ra = scope.RightAscension, dec = scope.Declination;
         if (double.IsNaN(ra) || double.IsNaN(dec)) return;
@@ -505,6 +520,55 @@ public class MountSafetyGuardService : BackgroundService {
             "MOUNT TRACKING STOPPED unexpectedly (diagnostic — not a slew/flip/safety-stop): {Snap}. " +
             "Compare several of these: constant HA ⇒ meridian/tracking limit; constant Alt ⇒ altitude limit; " +
             "constant RA/pier ⇒ RA-axis travel limit or hardware.", snap);
+    }
+
+    /// <summary>Calibration frames that do not need the mount to track.</summary>
+    internal static bool FrameTypeNeedsTracking(string? imageType) =>
+        (imageType ?? "LIGHT").Trim().ToUpperInvariant() is not ("FLAT" or "DARK" or "BIAS" or "DARKFLAT" or "DARK FLAT");
+
+    /// <summary>Should the tracking-off warning be shown now? Only while
+    /// frames that need tracking are being taken, and not while tracking is off
+    /// for a reason Polaris knows about: a slew, a meridian flip, a park, or
+    /// Polaris's own safety stop. Repeats every <see cref="TrackingOffRepeat"/>.</summary>
+    internal static bool ShouldWarnTrackingOff(bool capturing, bool frameNeedsTracking, bool tracking,
+            bool slewing, bool parked, bool flipInProgress, bool stoppedBySafety,
+            DateTime? lastAlertAt, DateTime now) {
+        if (!capturing || !frameNeedsTracking || tracking) return false;
+        if (slewing || parked || flipInProgress || stoppedBySafety) return false;
+        return lastAlertAt == null || now - lastAlertAt.Value >= TrackingOffRepeat;
+    }
+
+    private void CheckTrackingOffWhileCapturing() {
+        var scope = _equip.Telescope;
+        if (scope == null || !scope.IsConnected || !scope.Capabilities.SupportsTrackingToggle) {
+            _trackingOffAlertAt = null;
+            return;
+        }
+        bool tracking = scope.IsTracking;
+        if (tracking) { _trackingOffAlertAt = null; _guardStoppedTracking = false; return; }
+
+        bool capturing = SessionActive;
+        if (!capturing) { _trackingOffAlertAt = null; return; }
+
+        string? imageType = null;
+        if (_sequence.State == SequenceState.Running) {
+            int i = _sequence.CurrentItemIndex;
+            var items = _sequence.Items;
+            if (i >= 0 && i < items.Count) imageType = items[i].ImageType;
+        }
+        bool parked;
+        try { parked = scope.IsParked; } catch { parked = false; }
+
+        var now = DateTime.UtcNow;
+        if (!ShouldWarnTrackingOff(capturing, FrameTypeNeedsTracking(imageType), tracking,
+                scope.IsSlewing, parked, _meridian.State != MeridianFlipState.Idle,
+                Tripped || _guardStoppedTracking || _stallWatch.Reengaging, _trackingOffAlertAt, now)) return;
+
+        _trackingOffAlertAt = now;
+        const string message = "Mount tracking is off while frames are being taken: stars will trail. "
+            + "Turn tracking on in the mount card.";
+        _logger.LogWarning("TRACKING OFF during capture: {Message}", message);
+        _notify.Push("warn", message, 30000);
     }
 
     /// <summary>
@@ -593,6 +657,7 @@ public class MountSafetyGuardService : BackgroundService {
         // 3. THE important one — turn tracking off so the RA axis stops winding.
         var scope = _equip.Telescope;
         if (scope != null && scope.IsConnected) {
+            _guardStoppedTracking = true;
             try { await scope.SetTrackingAsync(false, ct); }
             catch (Exception ex) { _logger.LogWarning(ex, "Safety: stop-tracking failed"); }
 

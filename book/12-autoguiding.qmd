@@ -311,6 +311,56 @@ most four in half an hour; past that it says so once and leaves the
 choice to you. Each switch is in the guide alerts and the log. This
 covers Polaris's own guider; PHD2 has its own star-loss handling.
 
+### Guiding that holds the wrong thing
+
+Guiding can look perfect, with a small error and a steady graph, while
+every star in the main camera comes out as a short streak. The guider
+is then holding something that does not move with the sky: a hot pixel
+or a reflection picked as a star, often because dew on the guide scope
+left only a handful of points to choose from, or a guide scope that is
+not rigid with the main one. It keeps pushing the mount against an
+error that never goes away, and the sky drifts across the main camera.
+
+The live stack sees this even when the guiding numbers do not: it
+measures where every frame sits against the first one. Between dithers
+a guided field should stay put, so when the field moves steadily in
+one direction over six frames, faster than 3 arcseconds a minute,
+while guiding is on, Polaris shows a warning with the drift rate and
+the camera axis it runs along, and writes it to the log. Dithers are
+single jumps in random directions and do not count. The warning
+repeats at most every 30 minutes. When it appears, check the guide
+scope for dew or anything in front of it, look at the guide image to
+see whether the locked star is really a star (select another one if it
+is not), and check that the guide scope cannot move against the main
+one. This works with Polaris's own guider and with PHD2.
+
+### A mount that falls behind while it says it tracks
+
+Some mounts lose their place in the sky now and then while their own
+firmware (the software inside the mount) keeps reporting that they are
+tracking. One ZWO AM3 did this after every meridian flip: the axis that
+follows the sky lost about a minute of arc every few tens of seconds.
+The guider caught each loss, but stars smeared in the main camera, and
+turning tracking off and on again cured it for a while.
+
+Polaris watches for this while guiding. Every correction the guider
+sends moves the mount, and the position the mount reports moves with
+it. On a mount that tracks properly the corrections go both ways, so
+that position stays almost still. When it keeps moving the same way, more
+than 6 seconds of right ascension (the sky's east-west coordinate) in
+about two minutes, the mount is falling behind and the guider is making
+up the difference. Polaris then turns tracking off and on again, writes
+it to the log and shows a notice, at most every 15 minutes, with how
+many times it happened. A sync after a plate solve or a manual move does
+not count. Without guiding, the position the mount reports gives nothing
+away, and this check stays silent.
+
+Tracking that is off while frames are being taken (in a live stack, a
+live capture or a sequence) gets a warning of its own, repeated every
+five minutes until tracking is back on. Slews, meridian flips, a parked
+mount, Polaris's own safety stop and calibration frames (flats, darks,
+bias) are left out.
+
 ### Live view, star profile, and graph
 
 The guide frame shows the lock crosshair and star markers. **Star
