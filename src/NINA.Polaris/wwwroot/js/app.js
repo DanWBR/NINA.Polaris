@@ -1708,6 +1708,10 @@ function ninaApp() {
         // button in PREVIEW; backend's CameraStreamService auto-picks
         // Settings > Image Output: removable drives mounted now (/api/usb/drives).
         usbDrives: { list: [], pick: '', loaded: false, busy: false },
+        // Once-a-night mount date/time/location prompt from the server
+        // (null when nothing is asked) and the in-flight answer.
+        mountSiteSync: null,
+        siteSyncBusy: false,
         // native CCD_VIDEO_STREAM vs server-loop based on camera
         // capabilities. Updated each second from /ws/status.
         cameraStream: {
@@ -2064,7 +2068,7 @@ function ninaApp() {
         // call site that previously used window.confirm() can switch to
         // `if (await this._confirmAsync('Title?')) { ... }`.
         confirmModal: { open: false, title: '', message: '',
-                        okLabel: 'OK', cancelLabel: 'Cancel', danger: false },
+                        okLabel: 'OK', cancelLabel: 'Cancel', danger: false, alertOnly: false },
         _confirmResolver: null,
         // Backdrop dismissal only counts when the press that STARTED the click
         // also landed on the backdrop. Several call sites open this modal from
@@ -5203,9 +5207,9 @@ function ninaApp() {
             exposureSeconds: 2.0,
             // Sweep binning, 1 to 4. An AF frame is measured and discarded, so
             // binning buys readout and transfer time and per-pixel signal at
-            // the cost of samples across the star disc. 1 by default: it is
-            // the mode every camera treats the same.
-            binning: 1,
+            // the cost of samples across the star disc. 2 by default; a camera
+            // that cannot bin sweeps at 1x1.
+            binning: 2,
             framesPerPoint: 1,
             method: 'TRENDHYPERBOLIC',
             // HFR (stars) or CONTRAST_LAPLACE / CONTRAST_SOBEL (edge detail of
@@ -5216,8 +5220,9 @@ function ninaApp() {
             backlashOut: 0,
             backlashModel: 'OVERSHOOT',
             innerCropRatio: 1.0,
-            // 1 = follow a single star, ASIAIR-style; 0 = every detected star.
-            useBrightestStars: 1,
+            // Stars tracked across the sweep: 3 by default, 1 = a single star,
+            // 0 = every detected star.
+            useBrightestStars: 3,
             // Second pass around the vertex. 0 for the step means "a quarter of
             // the coarse step", which is what the server computes when unset.
             refineNearVertex: true,
@@ -9134,6 +9139,20 @@ function ninaApp() {
         // ordered a beefier PSU doesn't keep getting nagged about
         // a past event across reloads.
         dismissedChips: new Set(),
+
+        /// The under-voltage chips are a word or two so they fit the bar on a
+        /// phone; a tap on one explains what it means and what to do.
+        showUnderVoltageInfo(now) {
+            const what = now
+                ? 'The Raspberry Pi is not getting enough power right now: its 5 V supply has dropped below what it needs.'
+                : 'The Raspberry Pi\'s 5 V supply dropped below what it needs at some point since it booted. It is fine right now, but it can happen again under load, for example a focuser move while the camera downloads a frame.';
+            this._confirmAsync(what
+                + '\n\nWhen the voltage drops, USB devices (camera, focuser, filter wheel, mount) can disconnect in the middle of a move or a download.'
+                + '\n\nWhat helps:'
+                + '\n• Plug the camera and the focuser into a powered USB hub (one with its own power adapter) instead of the Pi.'
+                + '\n• Use the official Raspberry Pi power supply for your model, or one rated as high, with a short, thick cable.',
+                { title: now ? 'Low voltage on the Pi' : 'Low voltage earlier on the Pi', alertOnly: true });
+        },
 
         dismissChip(id) {
             this.dismissedChips.add(id);
@@ -33783,7 +33802,9 @@ function ninaApp() {
                 message: message || '',
                 okLabel: opts.okLabel || 'OK',
                 cancelLabel: opts.cancelLabel || 'Cancel',
-                danger: !!opts.danger
+                danger: !!opts.danger,
+                // A message box: OK only.
+                alertOnly: !!opts.alertOnly
             };
             return new Promise(resolve => {
                 this._confirmResolver = resolve;
@@ -33882,6 +33903,59 @@ function ninaApp() {
                 this.toastFail('USB drive', e);
             } finally {
                 this._usbPromptBusy = false;
+            }
+        },
+        /// Body of the once-a-night mount sync prompt: what Polaris would send
+        /// and, where the driver reports them, the mount's own clock and site.
+        mountSiteSyncText() {
+            const s = this.mountSiteSync;
+            if (!s) return '';
+            const deg = v => (v >= 0 ? '+' : '') + Number(v).toFixed(4) + '°';
+            const off = Number(s.offsetHours) || 0;
+            const tz = 'UTC' + (off >= 0 ? '+' : '') + (Number.isInteger(off) ? off : off.toFixed(1));
+            let when = s.polarisUtc;
+            try { when = new Date(s.polarisUtc).toLocaleString(); } catch (_) {}
+            const lines = [(s.device || 'The mount') + ' just connected.', ''];
+            lines.push('Polaris: ' + when + ' (' + tz + ')');
+            lines.push(s.locationConfigured
+                ? 'Location: ' + deg(s.latitude) + ', ' + deg(s.longitude) + ', ' + Math.round(s.elevation) + ' m'
+                : 'Location: not set in Polaris (Settings), so only the time can be sent.');
+            const mount = [];
+            if (s.mountClockOffsetSeconds != null) {
+                const d = s.mountClockOffsetSeconds;
+                const a = Math.abs(d);
+                mount.push(a < 30 ? 'clock matches'
+                    : 'clock ' + (a < 5400 ? Math.round(a / 60) + ' min' : (a / 3600).toFixed(1) + ' h')
+                      + (d > 0 ? ' ahead' : ' behind'));
+            }
+            if (s.mountLatitude != null && s.mountLongitude != null)
+                mount.push('location ' + deg(s.mountLatitude) + ', ' + deg(s.mountLongitude));
+            if (mount.length) lines.push('Mount: ' + mount.join(', '));
+            lines.push('', 'Polaris asks once a night. If the mount reconnects later tonight, the same choice is applied again.');
+            return lines.join('\n');
+        },
+        async answerMountSiteSync(choice) {
+            const s = this.mountSiteSync;
+            if (!s || this.siteSyncBusy) return;
+            this.siteSyncBusy = true;
+            try {
+                const resp = await this.apiPost('/api/telescope/site-sync', { id: s.id, choice });
+                const r = await resp.json().catch(() => ({}));
+                this.mountSiteSync = null;
+                if (resp.ok) {
+                    const sent = [r.time === 'sent' ? 'date and time' : null,
+                                  r.location === 'sent' ? 'location' : null].filter(Boolean);
+                    const failed = [r.time && r.time !== 'sent' ? 'time: ' + r.time : null,
+                                    r.location && r.location !== 'sent' ? 'location: ' + r.location : null].filter(Boolean);
+                    if (sent.length) this.toast('Mount ' + sent.join(' and ') + ' set from Polaris', 'ok');
+                    if (failed.length) this.toast('Mount sync: ' + failed.join('; '), 'warn');
+                }
+            } catch (e) {
+                // 409: another client answered first; its answer stands.
+                if (e && e.status === 409) this.mountSiteSync = null;
+                else this.toastFail('Mount sync', e);
+            } finally {
+                this.siteSyncBusy = false;
             }
         },
         // The drive that held the capture home was unplugged: offer to revert the
@@ -35329,7 +35403,7 @@ function ninaApp() {
             this.afParams.offsetSteps = af.offsetSteps ?? 4;
             this.afParams.stepSize = af.stepSize ?? 50;
             this.afParams.exposureSeconds = af.exposureSeconds ?? 2.0;
-            this.afParams.binning = af.binning ?? 1;
+            this.afParams.binning = af.binning ?? 2;
             this.afParams.framesPerPoint = af.framesPerPoint ?? 1;
             this.afParams.method = af.method || 'TRENDHYPERBOLIC';
             this.afParams.metric = af.metric || 'HFR';
@@ -35338,7 +35412,7 @@ function ninaApp() {
             this.afParams.backlashOut = af.backlashOut ?? 0;
             this.afParams.backlashModel = af.backlashModel || 'OVERSHOOT';
             this.afParams.innerCropRatio = af.innerCropRatio ?? 1.0;
-            this.afParams.useBrightestStars = af.useBrightestStars ?? 1;
+            this.afParams.useBrightestStars = af.useBrightestStars ?? 3;
             this.afParams.refineNearVertex = af.refineNearVertex ?? true;
             this.afParams.refinePoints = af.refinePoints ?? 4;
             this.afParams.refineStepSize = af.refineStepSize ?? 0;
@@ -35349,7 +35423,7 @@ function ninaApp() {
                 offsetSteps: parseInt(this.afParams.offsetSteps) || 4,
                 stepSize: parseInt(this.afParams.stepSize) || 50,
                 exposureSeconds: parseFloat(this.afParams.exposureSeconds) || 2.0,
-                binning: Math.max(1, Math.min(4, parseInt(this.afParams.binning) || 1)),
+                binning: Math.max(1, Math.min(4, parseInt(this.afParams.binning) || 2)),
                 framesPerPoint: parseInt(this.afParams.framesPerPoint) || 1,
                 method: this.afParams.method || 'TRENDHYPERBOLIC',
                 metric: this.afParams.metric || 'HFR',
@@ -35361,7 +35435,7 @@ function ninaApp() {
                 // No `|| 1` fallback: 0 is a real choice (all stars), so the
                 // default only covers a blank or NaN field.
                 useBrightestStars: Number.isFinite(+this.afParams.useBrightestStars)
-                    ? Math.max(0, Math.round(+this.afParams.useBrightestStars)) : 1,
+                    ? Math.max(0, Math.round(+this.afParams.useBrightestStars)) : 3,
                 // `|| 0` would turn "off" into "server default" for the step, so
                 // both refinement numbers go through Number() and a NaN guard
                 // instead: 0 is a meaningful value here (derive from the coarse
@@ -47077,15 +47151,17 @@ function ninaApp() {
             if (this.host.underVoltageNow && !this.dismissedChips.has('uv-now')) {
                 out.push({
                     id: 'uv-now', icon: '⚡', kind: 'error',
-                    label: 'Under-voltage NOW: expect USB crashes',
-                    href: 'docs/user-guide/troubleshooting.md#usb-device-crashes-mid-operation-under-voltage',
+                    label: 'Low voltage',
+                    tooltip: 'The Pi power supply is too low right now. Tap for details.',
+                    onClick: () => this.showUnderVoltageInfo(true),
                     dismissable: true
                 });
             } else if (this.host.underVoltageOccurred && !this.dismissedChips.has('uv-past')) {
                 out.push({
                     id: 'uv-past', icon: '⚡', kind: 'warn',
-                    label: 'Pi was under-voltage since boot: use a powered USB hub',
-                    href: 'docs/user-guide/troubleshooting.md#usb-device-crashes-mid-operation-under-voltage',
+                    label: 'Low voltage earlier',
+                    tooltip: 'The Pi power supply dropped too low since boot. Tap for details.',
+                    onClick: () => this.showUnderVoltageInfo(false),
                     dismissable: true
                 });
             }
@@ -51730,6 +51806,8 @@ function ninaApp() {
             this._maybePromptUsbDrive(msg.usbDrive);
             // The drive holding the home was unplugged: offer to revert to default.
             this._maybePromptUsbRemoved(msg.usbRemoved);
+            // Mount connected: sync its date, time and location? (once a night)
+            if (msg.mountSiteSync !== undefined) this.mountSiteSync = msg.mountSiteSync;
             // FW-1: Flat Wizard tick. state + lastError always present;
             // progress is null when the wizard never ran (preserved as
             // null so the UI hides the progress block). When a run

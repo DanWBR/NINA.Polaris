@@ -111,6 +111,42 @@ public class IndiTelescope : ITelescope {
         }
     }
 
+    /// <summary>
+    /// The site and clock the mount's driver reports (<c>GEOGRAPHIC_COORD</c>,
+    /// <c>TIME_UTC</c>), so the operator can compare them with Polaris's before
+    /// syncing. Longitude is east-positive in -180..+180. Each part is null
+    /// when the driver does not report it; the clock is the driver's last
+    /// reading, which most drivers take at connect. Read-only.
+    /// </summary>
+    public (double? Lat, double? Lon, double? Elev, DateTime? Utc) DriverSite {
+        get {
+            double? lat = null, lon = null, elev = null;
+            if (_client.GetProperty(DeviceName, "GEOGRAPHIC_COORD") is Protocol.IndiNumberProperty geo) {
+                double? Find(params string[] keys) {
+                    foreach (var k in keys) {
+                        var hit = geo.Values.FirstOrDefault(
+                            e => string.Equals(e.Key, k, StringComparison.OrdinalIgnoreCase));
+                        if (hit.Value != null) return hit.Value.Value;
+                    }
+                    return null;
+                }
+                lat = Find("LAT", "LATITUDE");
+                lon = Find("LONG", "LON", "LONGITUDE");
+                elev = Find("ELEV", "ELEVATION", "HEIGHT");
+                if (lon is { } l) { while (l > 180) l -= 360; while (l < -180) l += 360; lon = l; }
+            }
+            DateTime? utc = null;
+            if (_client.GetProperty(DeviceName, "TIME_UTC") is Protocol.IndiTextProperty time
+                    && time.Values.TryGetValue("UTC", out var s)
+                    && DateTime.TryParse(s, System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.AdjustToUniversal
+                        | System.Globalization.DateTimeStyles.AssumeUniversal, out var parsed)) {
+                utc = DateTime.SpecifyKind(parsed, DateTimeKind.Utc);
+            }
+            return (lat, lon, elev, utc);
+        }
+    }
+
     public IndiTelescope(IndiClient client, string deviceName) {
         _client = client;
         DeviceName = deviceName;

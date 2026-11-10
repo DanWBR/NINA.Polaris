@@ -127,14 +127,20 @@ public class AutoFocusOptionsTests {
 
     // ---- sweep binning ----
 
-    /// <summary>1x1 unless somebody asks otherwise. Binning changes what the
-    /// camera hands back, so a default that quietly binned would change the
-    /// focus run of every existing rig on upgrade.</summary>
+    /// <summary>2x2 unless somebody asks otherwise; a camera that cannot bin
+    /// sweeps at 1x1. Existing rigs move over once, in the settings
+    /// migration.</summary>
     [Test]
-    public void Resolve_Binning_DefaultsToOne() {
-        Assert.That(new AutoFocusSettings().Binning, Is.EqualTo(1));
-        Assert.That(AutoFocusRunOptions.Resolve(null, null).Binning, Is.EqualTo(1));
-        Assert.That(AutoFocusRunOptions.Resolve(null, new AutoFocusSettings()).Binning, Is.EqualTo(1));
+    public void Resolve_Binning_DefaultsToTwo() {
+        Assert.That(new AutoFocusSettings().Binning, Is.EqualTo(2));
+        Assert.That(AutoFocusRunOptions.Resolve(null, null).Binning, Is.EqualTo(2));
+        Assert.That(AutoFocusRunOptions.Resolve(null, new AutoFocusSettings()).Binning, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void Resolve_TopStars_DefaultsToThree() {
+        Assert.That(new AutoFocusSettings().UseBrightestStars, Is.EqualTo(3));
+        Assert.That(AutoFocusRunOptions.Resolve(null, null).UseBrightestStars, Is.EqualTo(3));
     }
 
     [Test]
