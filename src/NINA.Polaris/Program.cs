@@ -464,6 +464,9 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<EquipmentSnapshotS
 // registration so the hosted StartAsync subscribes to IndiClient.BlobTimeout.
 builder.Services.AddSingleton<IndiDriverWatchdogService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<IndiDriverWatchdogService>());
+// An INDI filter wheel listing fewer names than slots gets a name per slot
+// (driver config rewritten, driver restarted, wheel reconnected).
+builder.Services.AddHostedService<FilterWheelNameFillService>();
 // Disconnects the INDI copy of a camera Polaris drives through a vendor SDK.
 // indi_asi_ccd publishes every ASI camera on the bus, so an INDI guide camera
 // drags the natively driven imaging camera in with it, and the two owners then

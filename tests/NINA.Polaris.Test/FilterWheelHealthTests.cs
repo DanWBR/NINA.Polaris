@@ -81,8 +81,8 @@ public class FilterWheelHealthTests {
         Assert.Multiple(() => {
             Assert.That(v.NamesShortOfSlots, Is.True);
             Assert.That(v.NeedsCalibration, Is.False);
-            Assert.That(v.Message, Does.Contain("Reconnect"),
-                "the first remedy is a reconnect, the saved config only if that fails");
+            Assert.That(v.Message, Does.Contain("restart the filter wheel driver"),
+                "a reconnect does not resize the driver's name list; a driver restart does");
         });
     }
 

@@ -4293,7 +4293,7 @@
   "the current network": true,
   "The detector found no stars in the last frame. Lower the sigma or the minimum size.": true,
   "the doc links inside.": true,
-  "The driver reports more slots than it published filter names for, so the list above is short. Reconnect the wheel; if it stays short, the driver's saved configuration is overriding the names and has to be purged.": true,
+  "The driver reports more slots than it published filter names for, so the list above is short. Polaris saves a name for every slot and restarts the wheel's driver to load them; if the list stays short, restart the filter wheel driver.": true,
   "the dropdown.": true,
   "the embedded view.": true,
   "The exposure picker goes below a millisecond, down to whatever your camera reports as its minimum, which is what the Sun and the Moon need at short focal ratios. There is a filter picker beside it, so a solar or narrowband run does not mean leaving the tab.": true,
