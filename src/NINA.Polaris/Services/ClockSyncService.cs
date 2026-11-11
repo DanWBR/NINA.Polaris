@@ -58,10 +58,11 @@ public class ClockSyncService {
     private readonly SemaphoreSlim _gate = new(1, 1);
 
     /// <summary>How long a second caller waits for the first to finish. The
-    /// whole operation is capped at 3s (set-ntp) + 5s (set-time), so this is
-    /// long enough to swallow a real overlap and short enough that a wedged
-    /// timedatectl does not hold the request open.</summary>
-    private static readonly TimeSpan GateWait = TimeSpan.FromSeconds(12);
+    /// whole operation is capped at 3s (show) + 3s (set-ntp off) + 5s
+    /// (set-time) + 3s (set-ntp back on), so this is long enough to swallow a
+    /// real overlap and short enough that a wedged timedatectl does not hold
+    /// the request open.</summary>
+    private static readonly TimeSpan GateWait = TimeSpan.FromSeconds(16);
 
     public ClockSyncService(ILogger<ClockSyncService> logger) {
         _logger = logger;
@@ -125,6 +126,58 @@ public class ClockSyncService {
         }
     }
 
+    /// <summary>Whether the host can keep its clock on internet time, whether
+    /// that is switched on, and whether it has reached a time server.</summary>
+    public async Task<NtpStatus> GetNtpStatusAsync(CancellationToken ct = default) {
+        if (!IsSupported) return NtpStatus.None;
+        try {
+            var r = await RunAsync("timedatectl", "show -p CanNTP -p NTP -p NTPSynchronized", ct,
+                ignoreExit: true, timeoutMs: 3_000);
+            return r.ExitCode == 0 ? ParseNtpShow(r.Stdout) : NtpStatus.None;
+        } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
+            throw;
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "timedatectl show failed");
+            return NtpStatus.None;
+        }
+    }
+
+    /// <summary>Reads the <c>KEY=yes|no</c> lines of <c>timedatectl show</c>.</summary>
+    internal static NtpStatus ParseNtpShow(string? stdout) {
+        var on = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var raw in (stdout ?? "").Split('\n')) {
+            var line = raw.Trim();
+            int eq = line.IndexOf('=');
+            if (eq > 0 && line[(eq + 1)..].Equals("yes", StringComparison.OrdinalIgnoreCase))
+                on.Add(line[..eq]);
+        }
+        return new NtpStatus(on.Contains("CanNTP"), on.Contains("NTP"), on.Contains("NTPSynchronized"));
+    }
+
+    /// <summary>Turn internet time on or off (<c>timedatectl set-ntp</c>).
+    /// Returns the status afterwards, or an error.</summary>
+    public async Task<(NtpStatus Status, string? Error)> SetNtpAsync(bool enable, CancellationToken ct = default) {
+        if (!IsSupported) return (NtpStatus.None, "Internet time can only be switched here on Linux hosts.");
+        if (!await _gate.WaitAsync(GateWait, ct))
+            return (await GetNtpStatusAsync(ct), "Another clock change is still running on the host. Try again in a few seconds.");
+        try {
+            var r = await RunAsync("timedatectl", enable ? "set-ntp true" : "set-ntp false", ct,
+                ignoreExit: true, timeoutMs: 5_000);
+            var status = await GetNtpStatusAsync(ct);
+            if (r.ExitCode != 0) {
+                var err = r.Stderr?.Trim();
+                _logger.LogWarning("timedatectl set-ntp {On} failed: {Err}", enable, err);
+                return (status, "timedatectl set-ntp failed: " + (string.IsNullOrEmpty(err) ? "unknown error" : err));
+            }
+            _logger.LogInformation("Internet time (NTP) turned {State} from Settings", enable ? "on" : "off");
+            return (status, null);
+        } catch (OperationCanceledException) when (!ct.IsCancellationRequested) {
+            return (await GetNtpStatusAsync(ct), "timedatectl did not answer in 5 s.");
+        } finally {
+            _gate.Release();
+        }
+    }
+
     /// <summary>The actual sync, run under <see cref="_gate"/>.</summary>
     private async Task<ClockSyncResult> SetUtcCoreAsync(DateTime clientUtc,
             string? clientTimeZone, CancellationToken ct) {
@@ -137,6 +190,32 @@ public class ClockSyncService {
         if (!string.IsNullOrWhiteSpace(clientTimeZone)) {
             appliedZone = await ApplyTimeZoneAsync(clientTimeZone.Trim(), ct);
         }
+
+        // A host already on internet time keeps it: a phone's clock is not
+        // better than a time server.
+        var ntp = await GetNtpStatusAsync(ct);
+        if (ntp.Enabled && ntp.Synchronized) {
+            return ClockSyncResult.Fail("The host clock follows internet time (NTP) and is in sync. "
+                + "Turn internet time off in Settings, Clock, to set it from this device instead.");
+        }
+        try {
+            return await SetClockAsync(clientUtc, appliedZone, ct);
+        } finally {
+            // set-time needs NTP off. Put it back when it was on, so a host
+            // that is only offline for now goes back to internet time.
+            if (ntp.Enabled) {
+                try {
+                    await RunAsync("timedatectl", "set-ntp true", CancellationToken.None,
+                        ignoreExit: true, timeoutMs: 3_000);
+                } catch (Exception ex) {
+                    _logger.LogWarning(ex, "clock sync: could not turn internet time back on");
+                }
+            }
+        }
+    }
+
+    private async Task<ClockSyncResult> SetClockAsync(DateTime clientUtc, string? appliedZone,
+            CancellationToken ct) {
 
         // IMPORTANT: `timedatectl set-time "YYYY-MM-DD HH:MM:SS"` parses
         // the wall-clock string in the machine's LOCAL timezone, NOT UTC
@@ -153,8 +232,8 @@ public class ClockSyncService {
             .ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
         try {
             // Two-step: NTP can hold the clock, so disable it first if
-            // running. Best-effort, ignore failure (most field Pis are
-            // offline and never had NTP active). 3s timeout: timedatectl
+            // running (SetUtcCoreAsync turns it back on afterwards when it
+            // was on). Best-effort, ignore failure. 3s timeout: timedatectl
             // either responds fast OR is blocked on PolicyKit, in which
             // case waiting longer just keeps the browser fetch hanging.
             await RunAsync("timedatectl", "set-ntp false", ct,
@@ -311,6 +390,13 @@ public class ClockSyncService {
     }
 
     private record ProcessResult(int ExitCode, string Stdout, string Stderr);
+}
+
+/// <summary>Internet time on the host: <c>Available</c> when an NTP service is
+/// installed, <c>Enabled</c> when it is switched on, <c>Synchronized</c> when it
+/// has reached a time server.</summary>
+public record NtpStatus(bool Available, bool Enabled, bool Synchronized) {
+    public static readonly NtpStatus None = new(false, false, false);
 }
 
 public record ClockSyncResult(

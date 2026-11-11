@@ -449,15 +449,29 @@ public static class SystemEndpoints {
         // clock via timedatectl (Linux only, polkit-allowed for the
         // polaris user). Both are gated by AuthMiddleware like every
         // other /api/* route.
-        group.MapGet("/clock", (ClockSyncService clock) => {
+        group.MapGet("/clock", async (ClockSyncService clock, CancellationToken ct) => {
+            var ntp = await clock.GetNtpStatusAsync(ct);
             return Results.Ok(new {
                 serverUtcNow = clock.ServerUtcNow().ToString("o"),
                 supported = clock.IsSupported,
                 // What the host thinks its timezone is. A stock image says
                 // "UTC", which is what made every saved FITS carry a DATE-LOC
                 // equal to DATE-UTC until the browser pushed its own zone.
-                timeZone = clock.CurrentTimeZoneId
+                timeZone = clock.CurrentTimeZoneId,
+                ntp = new { available = ntp.Available, enabled = ntp.Enabled, synchronized = ntp.Synchronized }
             });
+        });
+
+        // Internet time (NTP) on or off, from Settings, Clock.
+        group.MapPost("/clock/ntp", async (ClockSyncService clock, NtpRequest req, CancellationToken ct) => {
+            if (req?.Enabled == null) return Results.BadRequest(new { error = "enabled (true or false) is required" });
+            var (ntp, error) = await clock.SetNtpAsync(req.Enabled.Value, ct);
+            var body = new {
+                ok = error == null,
+                error,
+                ntp = new { available = ntp.Available, enabled = ntp.Enabled, synchronized = ntp.Synchronized }
+            };
+            return error == null ? Results.Ok(body) : Results.Json(body, statusCode: clock.IsSupported ? 500 : 501);
         });
 
         // Timezone on its own. Kept apart from /clock/sync because the two
@@ -730,6 +744,7 @@ public static class SystemEndpoints {
     record SaveAsRequest(string Name);
     record ClockSyncRequest(string ClientUtc, string? ClientTimeZone = null);
     record TimeZoneRequest(string? TimeZone);
+    record NtpRequest(bool? Enabled);
     record DeviceNameRequest(string? Name);
     record AutoStartRequest(bool Enable);
     record GpuToggleRequest(bool Enabled);

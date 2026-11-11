@@ -53,4 +53,25 @@ public class ClockSyncTimeZoneTests {
     public void PlausibleId_RejectsAnOverlongId() {
         Assert.That(ClockSyncService.IsPlausibleTimeZoneId(new string('a', 65)), Is.False);
     }
+
+    /// <summary>The SV503 rig on 2026-11-10: chrony installed, switched off
+    /// by an earlier sync from the browser.</summary>
+    [Test]
+    public void NtpShow_InstalledButOff() {
+        var s = ClockSyncService.ParseNtpShow("CanNTP=yes\nNTP=no\nNTPSynchronized=no\n");
+        Assert.That(s, Is.EqualTo(new NtpStatus(Available: true, Enabled: false, Synchronized: false)));
+    }
+
+    [Test]
+    public void NtpShow_OnAndInSync_ToleratesCrlfAndOrder() {
+        var s = ClockSyncService.ParseNtpShow("NTPSynchronized=yes\r\nNTP=yes\r\nCanNTP=yes\r\n");
+        Assert.That(s, Is.EqualTo(new NtpStatus(true, true, true)));
+    }
+
+    [TestCase(null)]
+    [TestCase("")]
+    [TestCase("Failed to connect to bus")]
+    public void NtpShow_NothingReadable_MeansNoNtp(string? stdout) {
+        Assert.That(ClockSyncService.ParseNtpShow(stdout), Is.EqualTo(NtpStatus.None));
+    }
 }

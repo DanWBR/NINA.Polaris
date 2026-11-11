@@ -218,8 +218,13 @@ per-panel. Expect to find:
 - **Remote terminal**: an embedded SSH terminal (a remote command
   line for the host machine) for managing a headless host, one with
   no monitor or keyboard, from the browser (@sec-administration).
-- **Clock sync**: push the browser's UTC time to a Pi without a
-  real-time clock (@sec-administration).
+- **Clock**: keep the host clock on internet time (NTP, the Network
+  Time Protocol, which sets the clock from a time server) when the rig
+  has internet, or push the browser's time to a Pi that has neither
+  internet nor a clock battery (@sec-administration). Pushing the
+  browser's time leaves internet time as it was; while the host is in
+  sync with a time server, the push is refused, because a time server
+  is more accurate than a phone.
 - **Equipment simulator**: the built-in fake rig that renders real
   stars (@sec-simulator).
 - **Benchmark**: synthetic workloads to compare hardware, with a

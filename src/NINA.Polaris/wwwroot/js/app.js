@@ -579,7 +579,11 @@ function ninaApp() {
             lastError: null,
             // Host IANA zone as reported on every status tick, so the UI can
             // show it and _maybePushTimeZone can spot a stock "UTC" image.
-            timeZone: null
+            timeZone: null,
+            // Internet time on the host, from GET /api/system/clock:
+            // { available, enabled, synchronized }, null until loaded.
+            ntp: null,
+            ntpBusy: false
         },
         // One timezone push per page load, whether or not it succeeded.
         _tzPushed: false,
@@ -7848,6 +7852,41 @@ function ninaApp() {
             this.clockSyncFromClient(true);
         },
 
+        async loadClockNtp() {
+            try {
+                const r = await this.apiFetch('/api/system/clock');
+                const j = await r.json();
+                this.clockSync.ntp = j.ntp || null;
+            } catch (_) { /* the Clock card just hides the switch */ }
+        },
+
+        async setHostNtp(on) {
+            if (this.clockSync.ntpBusy) return;
+            this.clockSync.ntpBusy = true;
+            try {
+                const r = await this.apiPost('/api/system/clock/ntp', { enabled: !!on }, { timeout: 15000 });
+                const j = await r.json();
+                if (j.ntp) this.clockSync.ntp = j.ntp;
+                if (j.ok) this.toast(on ? 'Internet time on: the host clock follows a time server'
+                                        : 'Internet time off', 'ok');
+                else this.toast(j.error || 'Could not change internet time', 'error');
+            } catch (e) {
+                let msg = null;
+                if (e && e.body) { try { msg = JSON.parse(e.body).error; } catch (_) {} }
+                this.toast(msg || 'Could not change internet time', 'error');
+                await this.loadClockNtp();
+            } finally {
+                this.clockSync.ntpBusy = false;
+            }
+        },
+
+        clockNtpLabel() {
+            const n = this.clockSync.ntp;
+            if (!n || !n.enabled) return this.$t('off');
+            return n.synchronized ? this.$t('in sync with a time server')
+                                  : this.$t('on, waiting for a time server (no internet?)');
+        },
+
         async clockSyncFromClient(auto = false) {
             if (this.clockSync.busy) return;
             this.clockSync.busy = true;
@@ -7869,8 +7908,9 @@ function ninaApp() {
                 const r = await this.apiPost('/api/system/clock/sync', {
                     clientUtc: new Date().toISOString(),
                     clientTimeZone: tz
-                }, { timeout: 20000 });
+                }, { timeout: 25000 });
                 const j = await r.json();
+                this.loadClockNtp();
                 if (j.ok) {
                     this.clockSync.lastSyncAt = new Date();
                     this.toast(auto
@@ -7895,7 +7935,7 @@ function ninaApp() {
                     try { msg = JSON.parse(e.body).error; } catch {}
                 }
                 if (!msg && e && e.message && e.message.includes('timed out')) {
-                    msg = 'Server did not respond in 20s. Most likely the '
+                    msg = 'Server did not respond in 25s. Most likely the '
                         + "polkit rule isn't installed -- check the Pi log "
                         + 'for "Not authorized" from timedatectl, or '
                         + 'reinstall the .deb package.';
@@ -33920,17 +33960,10 @@ function ninaApp() {
             lines.push(s.locationConfigured
                 ? 'Location: ' + deg(s.latitude) + ', ' + deg(s.longitude) + ', ' + Math.round(s.elevation) + ' m'
                 : 'Location: not set in Polaris (Settings), so only the time can be sent.');
-            const mount = [];
-            if (s.mountClockOffsetSeconds != null) {
-                const d = s.mountClockOffsetSeconds;
-                const a = Math.abs(d);
-                mount.push(a < 30 ? 'clock matches'
-                    : 'clock ' + (a < 5400 ? Math.round(a / 60) + ' min' : (a / 3600).toFixed(1) + ' h')
-                      + (d > 0 ? ' ahead' : ' behind'));
-            }
+            // No mount clock here: INDI's TIME_UTC is the last time sent, not
+            // a running clock, so it cannot say how far off the mount is.
             if (s.mountLatitude != null && s.mountLongitude != null)
-                mount.push('location ' + deg(s.mountLatitude) + ', ' + deg(s.mountLongitude));
-            if (mount.length) lines.push('Mount: ' + mount.join(', '));
+                lines.push('Mount: location ' + deg(s.mountLatitude) + ', ' + deg(s.mountLongitude));
             lines.push('', 'Polaris asks once a night. If the mount reconnects later tonight, the same choice is applied again.');
             return lines.join('\n');
         },
