@@ -51,8 +51,8 @@ public static class FilterWheelHealth {
 
     private const string NamesShort =
         "The driver reports more slots than it published filter names for, so the list "
-        + "above is short. Reconnect the wheel; if it stays short, the driver's saved "
-        + "configuration is overriding the names and has to be purged.";
+        + "above is short. Polaris saves a name for every slot and restarts the wheel's "
+        + "driver to load them; if the list stays short, restart the filter wheel driver.";
 
     /// <summary>
     /// <paramref name="position"/>, <paramref name="slotMin"/> and

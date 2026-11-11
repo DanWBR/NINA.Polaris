@@ -248,6 +248,70 @@ public class IndiFilterWheel : NINA.Image.Interfaces.IFilterWheel {
         => new(SupportsEditNames:
             _client.GetProperty(DeviceName, "FILTER_NAME") is Protocol.IndiTextProperty);
 
+    /// <summary>
+    /// Write one filter name per slot the wheel reports into the driver's
+    /// saved config, so the driver publishes every slot the next time its
+    /// process starts.
+    ///
+    /// <para>libindi 1.9's FilterInterface builds FILTER_NAME once, when the
+    /// driver process starts, with exactly as many entries as its saved config
+    /// holds; it only invents a name per slot when there is no config at all.
+    /// Neither a reconnect nor a CONFIG_LOAD resizes it. So a config saved while
+    /// the wheel was misreporting (SV550 rig, 2026-11-10: a jammed 8-position
+    /// EFW, 5 names saved, the .default copy too) keeps the list at 5 for good.
+    /// Measured on that rig: with 8 names in the config, a restart of the
+    /// driver and a reconnect gave all 8 slots.</para>
+    ///
+    /// <para>Existing names stay on their slots; new slots are "Filter N".
+    /// Only when indiserver runs on this machine, since the config lives in its
+    /// owner's ~/.indi, and only when the wheel knows where it is, since an
+    /// uncalibrated wheel's slot count is not to be believed. Returns the slot
+    /// count written, or 0 when nothing was written.</para>
+    /// </summary>
+    public int WriteNamesForAllSlots() {
+        var (min, max) = SlotRange;
+        var names = FilterNames;
+        if (max <= 0 || names.Length == 0 || names.Length >= max) return 0;
+        if (min > 0 && Position < min) return 0;
+        if (!IsLocalHost(_client.Host)) return 0;
+
+        var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".indi");
+        var file = Path.Combine(dir, DeviceName + "_config.xml");
+        var full = new string[max];
+        for (int i = 0; i < max; i++)
+            full[i] = i < names.Length && !string.IsNullOrWhiteSpace(names[i]) ? names[i] : $"Filter {i + 1}";
+        WriteFilterNamesToConfig(file, DeviceName, full);
+        var def = file + ".default";
+        if (File.Exists(def)) WriteFilterNamesToConfig(def, DeviceName, full);
+        return max;
+    }
+
+    internal static bool IsLocalHost(string? host) =>
+        (host ?? "").Trim().ToLowerInvariant() is "localhost" or "127.0.0.1" or "::1" or "[::1]";
+
+    /// <summary>Replace (or add) the FILTER_NAME vector in an INDI driver
+    /// config file, keeping everything else in it.</summary>
+    internal static void WriteFilterNamesToConfig(string file, string device, IReadOnlyList<string> names) {
+        System.Xml.Linq.XDocument doc;
+        if (File.Exists(file)) {
+            doc = System.Xml.Linq.XDocument.Load(file, System.Xml.Linq.LoadOptions.PreserveWhitespace);
+        } else {
+            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+            doc = new System.Xml.Linq.XDocument(new System.Xml.Linq.XElement("INDIDriver"));
+        }
+        var root = doc.Root!;
+        var vector = new System.Xml.Linq.XElement("newTextVector",
+            new System.Xml.Linq.XAttribute("device", device),
+            new System.Xml.Linq.XAttribute("name", "FILTER_NAME"));
+        for (int i = 0; i < names.Count; i++)
+            vector.Add(new System.Xml.Linq.XElement("oneText",
+                new System.Xml.Linq.XAttribute("name", $"FILTER_SLOT_NAME_{i + 1}"), names[i]));
+        var old = root.Elements("newTextVector")
+            .FirstOrDefault(e => (string?)e.Attribute("name") == "FILTER_NAME");
+        if (old != null) old.ReplaceWith(vector); else root.Add(vector);
+        doc.Save(file);
+    }
+
     /// <summary>Push a new filter-name set into the driver via INDI
     /// standard <c>FILTER_NAME</c>, then persist it (see the CONFIG_SAVE
     /// note at the end of this method -- writing the vector alone only
