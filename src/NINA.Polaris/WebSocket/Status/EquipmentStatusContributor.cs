@@ -192,8 +192,7 @@ public sealed class EquipmentStatusContributor : IStatusContributor {
                 canSetTime = ss.CanSetTime,
                 canSetLocation = ss.CanSetLocation,
                 mountLatitude = ss.MountLatitude,
-                mountLongitude = ss.MountLongitude,
-                mountClockOffsetSeconds = ss.MountClockOffsetSeconds
+                mountLongitude = ss.MountLongitude
             } : null;
 
             // BENCH: compact progress for the Settings card.

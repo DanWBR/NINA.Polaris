@@ -17865,14 +17865,33 @@ Windows  winget install Rclone.Rclone</code></pre>
                      instead of Polaris jumping the wall clock during
                      a running sequence. id="clock-card" so the
                      activity-bar chip can scrollIntoView() on click. -->
-                <div class="settings-section" id="clock-card">
+                <div class="settings-section" id="clock-card"
+                     x-init="if (tab === 'settings') loadClockNtp(); $watch('tab', t => { if (t === 'settings') loadClockNtp(); })">
                     <h3 data-tour="set-clock"><span class="settings-card-icon">⏰</span>Clock</h3>
                     <p class="text-muted" style="font-size:12px; max-width:560px; margin-top:4px">
-                        Sync the host's wall clock from this client device
-                        when the host is offline (no NTP) and has no
-                        RTC battery. Action is explicit so the wall
-                        clock never jumps during a running sequence.
+                        With internet, the host can keep its clock on
+                        internet time (NTP, the Network Time Protocol: the
+                        clock is set from a time server). Without it, and
+                        with no clock battery, sync the host clock from
+                        this client device. That sync runs when you press
+                        the button, or on its own only when the clock is
+                        more than an hour off.
                     </p>
+                    <!-- Internet time (NTP). Hidden when the host has no NTP
+                         service (Windows, or a Linux image without one). -->
+                    <div x-show="clockSync.ntp && clockSync.ntp.available"
+                         style="margin-top:10px; font-size:13px">
+                        <label style="display:flex; align-items:center; gap:8px; cursor:pointer">
+                            <input type="checkbox"
+                                   :checked="clockSync.ntp && clockSync.ntp.enabled"
+                                   :disabled="clockSync.ntpBusy"
+                                   @change="setHostNtp($event.target.checked)">
+                            <span>Keep the host clock on internet time (NTP)</span>
+                        </label>
+                        <div class="text-muted" style="font-size:12px; margin:4px 0 0 26px">
+                            Now: <span x-text="clockNtpLabel()"></span>
+                        </div>
+                    </div>
                     <div style="display:flex; flex-direction:column; gap:6px; margin-top:8px; font-size:12px">
                         <div>
                             Host UTC:
@@ -17903,7 +17922,8 @@ Windows  winget install Rclone.Rclone</code></pre>
                     <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:14px">
                         <button class="btn btn-sm btn-primary"
                                 @click="clockSyncFromClient()"
-                                :disabled="!clockSync.supported || clockSync.busy">
+                                :disabled="!clockSync.supported || clockSync.busy || !!(clockSync.ntp && clockSync.ntp.enabled && clockSync.ntp.synchronized)"
+                                :title="clockSync.ntp && clockSync.ntp.enabled && clockSync.ntp.synchronized ? 'The host clock follows internet time; turn it off above to set the clock from this device' : ''">
                             <span x-show="!clockSync.busy">⏱ Sync host clock from this client device</span>
                             <span x-show="clockSync.busy">Syncing…</span>
                         </button>
@@ -26616,7 +26636,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261110-uvchip"></script>
+    <script src="/js/app.js?v=20261111-ntp"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

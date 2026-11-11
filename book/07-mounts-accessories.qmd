@@ -161,8 +161,10 @@ at the wrong time.
 
 When the mount connects, Polaris asks whether to send it Polaris's date,
 time and location. The question shows what would be sent and, when the
-driver reports them, the mount's own clock (how far ahead or behind it
-is) and location. The choices are date, time and location; date and
+driver reports it, the mount's own location. It does not show the
+mount's clock: the time in the mount driver's panel (UTC) is the last
+time that was sent to it, not a clock that keeps running, so it cannot
+tell how far off the mount is. The choices are date, time and location; date and
 time only; location only; or leaving the mount as it is. Options the
 driver cannot accept are not offered, and location is only offered once
 it is set in Polaris's Settings.

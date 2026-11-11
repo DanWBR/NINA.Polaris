@@ -45,7 +45,7 @@ public sealed class MountSiteSyncService : BackgroundService {
         DateTime PolarisUtc, double OffsetHours,
         double Latitude, double Longitude, double Elevation, bool LocationConfigured,
         bool CanSetTime, bool CanSetLocation,
-        double? MountLatitude, double? MountLongitude, double? MountClockOffsetSeconds);
+        double? MountLatitude, double? MountLongitude);
 
     /// <summary>The open question, or null.</summary>
     public PendingPrompt? Pending { get; private set; }
@@ -104,19 +104,18 @@ public sealed class MountSiteSyncService : BackgroundService {
         if (!caps.SupportsSetSiteTime && !caps.SupportsSetSiteLocation) return;
 
         var utc = DateTime.UtcNow;
-        double? mountLat = null, mountLon = null, clockOffset = null;
+        double? mountLat = null, mountLon = null;
         if (scope is NINA.INDI.Devices.IndiTelescope indi) {
             var site = indi.DriverSite;
             mountLat = site.Lat;
             mountLon = site.Lon;
-            if (site.Utc is { } mountUtc) clockOffset = (mountUtc - utc).TotalSeconds;
         }
         lock (_gate) {
             Pending = new PendingPrompt(++_nextId, scope.DeviceName ?? "mount", night,
                 utc, TimeZoneInfo.Local.GetUtcOffset(utc).TotalHours,
                 p.Latitude, p.Longitude, p.Altitude, LocationConfigured(p),
                 caps.SupportsSetSiteTime, caps.SupportsSetSiteLocation,
-                mountLat, mountLon, clockOffset);
+                mountLat, mountLon);
         }
         _logger.LogInformation("Mount connected: asking whether to sync its date, time and location (night {Night})", night);
     }
