@@ -42,7 +42,7 @@
     <!-- app.css was split into ordered parts for readability. Load order is
          significant (CSS cascade), keep these in sequence. All share the same
          ?v= cache-bust token, bumped together on every deploy. -->
-    <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20261017-updatewhite">
+    <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20261112-navorder">
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20261107-advexamples">
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20261009-floatbtn">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20261112-afphone">
@@ -845,16 +845,16 @@
                  meant for Home and Rigs. Ahead of everything else it covers
                  nothing, and the strip scrolls sideways so it costs the other
                  tabs no room. -->
-            <button class="nav-btn nav-field" x-show="deviceIsPhone && !basicMode" x-cloak
+            <button class="nav-btn nav-field" style="order:-1" x-show="deviceIsPhone && !basicMode" x-cloak
                     @click="basicSetPref('auto')" title="Back to field mode">
                 <svg viewBox="0 0 24 24" width="22" height="22"><rect x="7" y="2" width="10" height="20" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M11 19h2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
                 <span class="nav-label">Field</span>
             </button>
-            <button class="nav-btn" :class="{ active: tab === 'home' }" @click="tab = 'home'" title="Home">
+            <button class="nav-btn" data-nav-id="home" :style="navBtnStyle('home')" :class="{ active: tab === 'home' }" @click="tab = 'home'" title="Home">
                 <svg viewBox="0 0 24 24" width="22" height="22"><path d="M3 12l9-9 9 9v9a2 2 0 01-2 2h-4v-7H10v7H6a2 2 0 01-2-2v-9z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
                 <span class="nav-label">Home</span>
             </button>
-            <button class="nav-btn" :class="{ active: tab === 'equip' }" @click="tab = 'equip'; loadOpticsCatalogue()" title="Equipment">
+            <button class="nav-btn" data-nav-id="equip" :style="navBtnStyle('equip')" :class="{ active: tab === 'equip' }" @click="tab = 'equip'; loadOpticsCatalogue()" title="Equipment">
                 <svg viewBox="0 0 24 24" width="22" height="22"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a3 3 0 0 1-4.2 4.2L7 20a2 2 0 0 1-2.8-2.8l10.3-10.3a3 3 0 0 1 4.2-4.2l-3.8 3.8z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 <span class="nav-label">Rigs</span>
             </button>
@@ -864,7 +864,7 @@
                  the night (Autorun) → watch frames land (Live) → record
                  planetary (Video) → advanced sequencing (Adv) → process
                  (Studio) → tweak config (Settings) → docs (Help). -->
-            <button class="nav-btn" :class="{ active: tab === 'polar' }"
+            <button class="nav-btn" data-nav-id="polar" :style="navBtnStyle('polar')" :class="{ active: tab === 'polar' }"
                     data-tour="nav-polar"
                     @click="tab = 'polar'; loadPolarTargets()"
                     title="Polar alignment (TPPA)">
@@ -874,45 +874,45 @@
             <!-- Sky group: this single button covers the Sky map,
                  Tonight's Best, and Weather sub-tabs (selectable
                  via the pill row at the top of each panel). -->
-            <button class="nav-btn" :class="{ active: tab === 'sky' || tab === 'tonight' || tab === 'weather' || tab === 'milkyway' }" @click="tab = 'sky'; $nextTick(() => initSkyViewer())" title="Sky Explorer (map · Tonight · Weather · Milky Way)">
+            <button class="nav-btn" data-nav-id="sky" :style="navBtnStyle('sky')" :class="{ active: tab === 'sky' || tab === 'tonight' || tab === 'weather' || tab === 'milkyway' }" @click="tab = 'sky'; $nextTick(() => initSkyViewer())" title="Sky Explorer (map · Tonight · Weather · Milky Way)">
                 <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><ellipse cx="12" cy="12" rx="10" ry="4" fill="none" stroke="currentColor" stroke-width="1.5"/><line x1="12" y1="2" x2="12" y2="22" stroke="currentColor" stroke-width="1.5"/></svg>
                 <span class="nav-label">Sky</span>
             </button>
-            <button class="nav-btn" :class="{ active: tab === 'focus' }" @click="tab = 'focus'" title="Focus">
+            <button class="nav-btn" data-nav-id="focus" :style="navBtnStyle('focus')" :class="{ active: tab === 'focus' }" @click="tab = 'focus'" title="Focus">
                 <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><line x1="12" y1="2" x2="12" y2="6" stroke="currentColor" stroke-width="2"/><line x1="12" y1="18" x2="12" y2="22" stroke="currentColor" stroke-width="2"/><line x1="2" y1="12" x2="6" y2="12" stroke="currentColor" stroke-width="2"/><line x1="18" y1="12" x2="22" y2="12" stroke="currentColor" stroke-width="2"/></svg>
                 <span class="nav-label">Focus</span>
             </button>
-            <button class="nav-btn" :class="{ active: tab === 'guide' }"
+            <button class="nav-btn" data-nav-id="guide" :style="navBtnStyle('guide')" :class="{ active: tab === 'guide' }"
                     @click="tab = 'guide'; if (guideTab === 'gui') { loadPhd2GuiStatus(); loadPhd2VncStatus(); }"
                     title="Guider">
                 <svg viewBox="0 0 24 24" width="22" height="22"><polygon points="12,2 15,10 23,10 17,15 19,23 12,18 5,23 7,15 1,10 9,10" fill="none" stroke="currentColor" stroke-width="2"/></svg>
                 <span class="nav-label">Guide</span>
             </button>
-            <button class="nav-btn" :class="{ active: tab === 'preview' }" @click="tab = 'preview'; loadCameraCapabilities()" title="Preview (snap test shots)">
+            <button class="nav-btn" data-nav-id="preview" :style="navBtnStyle('preview')" :class="{ active: tab === 'preview' }" @click="tab = 'preview'; loadCameraCapabilities()" title="Preview (snap test shots)">
                 <svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 7h3l2-3h6l2 3h3a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="12" cy="13" r="4" fill="none" stroke="currentColor" stroke-width="2"/></svg>
                 <span class="nav-label">Preview</span>
             </button>
-            <button class="nav-btn" :class="{ active: tab === 'sequence' }" @click="tab = 'sequence'; loadEndActions()" title="Autorun (shooting schedule)">
+            <button class="nav-btn" data-nav-id="sequence" :style="navBtnStyle('sequence')" :class="{ active: tab === 'sequence' }" @click="tab = 'sequence'; loadEndActions()" title="Autorun (shooting schedule)">
                 <svg viewBox="0 0 24 24" width="22" height="22"><rect x="3" y="3" width="18" height="4" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect x="3" y="10" width="18" height="4" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect x="3" y="17" width="18" height="4" rx="1" fill="none" stroke="currentColor" stroke-width="2"/></svg>
                 <span class="nav-label">Autorun</span>
             </button>
-            <button class="nav-btn" :class="{ active: tab === 'plan' }" data-tour="nav-plan" @click="tab = 'plan'; loadPlans()" title="Plan (multi-target night planner)">
+            <button class="nav-btn" data-nav-id="plan" :style="navBtnStyle('plan')" :class="{ active: tab === 'plan' }" data-tour="nav-plan" @click="tab = 'plan'; loadPlans()" title="Plan (multi-target night planner)">
                 <svg viewBox="0 0 24 24" width="22" height="22"><rect x="3" y="4" width="18" height="17" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3 9h18M8 2v4M16 2v4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M7.5 14l2 2 4-4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 <span class="nav-label">Plan</span>
             </button>
-            <button class="nav-btn" :class="{ active: tab === 'live' }" data-tour="nav-live" @click="tab = 'live'" title="Live View">
+            <button class="nav-btn" data-nav-id="live" :style="navBtnStyle('live')" :class="{ active: tab === 'live' }" data-tour="nav-live" @click="tab = 'live'" title="Live View">
                 <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>
                 <span class="nav-label">Live</span>
             </button>
-            <button class="nav-btn" :class="{ active: tab === 'mosaic' }" @click="tab = 'mosaic'; mosaicOnTabEnter()" title="Mosaic (a field larger than the camera's, shot in panels)">
+            <button class="nav-btn" data-nav-id="mosaic" :style="navBtnStyle('mosaic')" :class="{ active: tab === 'mosaic' }" @click="tab = 'mosaic'; mosaicOnTabEnter()" title="Mosaic (a field larger than the camera's, shot in panels)">
                 <svg viewBox="0 0 24 24" width="22" height="22"><rect x="3" y="4" width="8" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect x="13" y="4" width="8" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect x="3" y="13" width="8" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><rect x="13" y="13" width="8" height="7" rx="1" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="2 2"/></svg>
                 <span class="nav-label">Mosaic</span>
             </button>
-            <button class="nav-btn" :class="{ active: tab === 'video' }" data-tour="nav-video" @click="tab = 'video'; loadCameraCapabilities()" title="Video (planetary capture + lucky imaging)">
+            <button class="nav-btn" data-nav-id="video" :style="navBtnStyle('video')" :class="{ active: tab === 'video' }" data-tour="nav-video" @click="tab = 'video'; loadCameraCapabilities()" title="Video (planetary capture + lucky imaging)">
                 <svg viewBox="0 0 24 24" width="22" height="22"><rect x="3" y="6" width="13" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 10l5-3v10l-5-3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
                 <span class="nav-label">Video</span>
             </button>
-            <button class="nav-btn" :class="{ active: tab === 'seqadv' }" data-tour="nav-adv" @click="tab = 'seqadv'; loadAdvSeq()" title="Advanced Sequencer">
+            <button class="nav-btn" data-nav-id="seqadv" :style="navBtnStyle('seqadv')" :class="{ active: tab === 'seqadv' }" data-tour="nav-adv" @click="tab = 'seqadv'; loadAdvSeq()" title="Advanced Sequencer">
                 <svg viewBox="0 0 24 24" width="22" height="22"><path d="M3 4h6v6H3V4zm0 10h6v6H3v-6zm10-10h8m-8 4h6m-6 10h8m-8 4h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
                 <span class="nav-label">Adv</span>
             </button>
@@ -927,11 +927,11 @@
                  modal. Internally the tab token stays 'files' so
                  persisted localStorage keys, legacy bindings, and
                  filesInit() keep working without a migration. -->
-            <button class="nav-btn" :class="{ active: tab === 'files' }" data-tour="nav-studio" @click="tab = 'files'; filesInit()" title="Studio (browser + stack + editor)">
+            <button class="nav-btn" data-nav-id="files" :style="navBtnStyle('files')" :class="{ active: tab === 'files' }" data-tour="nav-studio" @click="tab = 'files'; filesInit()" title="Studio (browser + stack + editor)">
                 <svg viewBox="0 0 24 24" width="22" height="22"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
                 <span class="nav-label">Studio</span>
             </button>
-            <button class="nav-btn" :class="{ active: tab === 'settings' }" @click="tab = 'settings'" title="Settings">
+            <button class="nav-btn" data-nav-id="settings" :style="navBtnStyle('settings')" :class="{ active: tab === 'settings' }" @click="tab = 'settings'" title="Settings">
                 <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 1v3m0 16v3m-9-11h3m16 0h3m-3.3-7.7l-2.1 2.1M6.4 17.6l-2.1 2.1m0-15.4l2.1 2.1m11.2 11.2l2.1 2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
                 <span class="nav-label">Settings</span>
             </button>
@@ -939,7 +939,7 @@
                  first-night checklist + workflow paths + troubleshoot
                  FAQ). Last in the nav so it doesn't compete with the
                  daily-use tabs but stays discoverable. -->
-            <button class="nav-btn" :class="{ active: tab === 'help' }" data-tour="nav-help"
+            <button class="nav-btn" data-nav-id="help" :style="navBtnStyle('help')" :class="{ active: tab === 'help' }" data-tour="nav-help"
                     @click="tab = 'help'; helpOnTabEnter()" title="Help">
                 <svg viewBox="0 0 24 24" width="22" height="22">
                     <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/>
@@ -16781,6 +16781,41 @@ Windows  winget install Rclone.Rclone</code></pre>
                         the portrait strip. Persists per browser.
                     </p>
 
+                    <!-- NAVORDER: order of the nav rail buttons. Saved on the
+                         host (/api/ui-state), so it follows the operator to
+                         every browser. Arrows for touch, drag and drop with a
+                         mouse. -->
+                    <div style="margin-top:16px; max-width:560px">
+                        <span style="display:block; margin-bottom:6px">Menu order</span>
+                        <div class="nav-order-list">
+                            <template x-for="(item, idx) in navOrderItems()" :key="item.id">
+                                <div class="nav-order-row" draggable="true"
+                                     :class="{ dragging: _navDragId === item.id }"
+                                     @dragstart="_navDragId = item.id; $event.dataTransfer.effectAllowed = 'move'"
+                                     @dragend="_navDragId = null"
+                                     @dragover.prevent
+                                     @drop.prevent="navDrop(item.id)">
+                                    <span class="nav-order-grip" aria-hidden="true">⋮⋮</span>
+                                    <span class="nav-order-name" x-text="_t(item.label)"></span>
+                                    <button class="btn btn-sm" :disabled="idx === 0"
+                                            @click="navMove(item.id, -1)" title="Move up">▲</button>
+                                    <button class="btn btn-sm" :disabled="idx === navOrderItems().length - 1"
+                                            @click="navMove(item.id, 1)" title="Move down">▼</button>
+                                </div>
+                            </template>
+                        </div>
+                        <button class="btn btn-sm" style="margin-top:10px"
+                                :disabled="navOrderIsDefault()"
+                                @click="resetNavOrder()"
+                                title="Back to the default order">Reset</button>
+                    </div>
+                    <p class="text-muted" style="font-size: 12px; margin-top: 6px; max-width:560px">
+                        Order of the buttons in the navigation rail. On the rail itself,
+                        press and hold a button (touch or mouse) and drag it; here, use the
+                        arrows or drag a row. Saved on the host, so every browser and
+                        device that opens this Polaris shows the same order.
+                    </p>
+
                     <!-- Reduce motion: kill UI animations (panel fade, modal
                          zoom, spinners) for weak client devices or motion
                          sensitivity. Stamps <html data-reduce-motion>; the
@@ -26459,7 +26494,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261112-endact"></script>
+    <script src="/js/app.js?v=20261112-authboot"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

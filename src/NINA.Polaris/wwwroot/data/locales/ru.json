@@ -5836,5 +5836,8 @@
   "Park takes the place of home and stop tracking. Moving the mount or powering off stops the capture first. Before powering off, Polaris waits for the camera to warm up.": "Парковка заменяет возврат в домашнюю позицию и остановку ведения. Перемещение монтировки или выключение сначала останавливает съёмку. Перед выключением Polaris ждёт, пока камера прогреется.",
   "⚠ Set a time limit (Stop at) or turn on the target SNR stop, otherwise these do not run.": "⚠ Задайте лимит времени («Остановить на») или включите остановку по целевому SNR, иначе эти действия не выполнятся.",
   "Last step, and only when the run completes: a Stop or a failure leaves the host on": "Последний шаг и только при завершении прогона: остановка или сбой оставляют хост включённым",
-  "Power off runs last, and only when the run completes; a Stop or a failure leaves the host on.": "Выключение выполняется последним и только при завершении прогона; остановка или сбой оставляют хост включённым."
+  "Power off runs last, and only when the run completes; a Stop or a failure leaves the host on.": "Выключение выполняется последним и только при завершении прогона; остановка или сбой оставляют хост включённым.",
+  "Menu order": "Порядок меню",
+  "Back to the default order": "Вернуть порядок по умолчанию",
+  "Order of the buttons in the navigation rail. On the rail itself, press and hold a button (touch or mouse) and drag it; here, use the arrows or drag a row. Saved on the host, so every browser and device that opens this Polaris shows the same order.": "Порядок кнопок на панели навигации. На самой панели нажмите и удерживайте кнопку (касанием или мышью) и перетащите её; здесь используйте стрелки или перетащите строку. Сохраняется на хосте, поэтому каждый браузер и устройство, открывающие этот Polaris, показывают тот же порядок."
 }

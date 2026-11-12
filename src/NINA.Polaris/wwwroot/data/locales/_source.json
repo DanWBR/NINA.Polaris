@@ -5143,5 +5143,8 @@
   "Park takes the place of home and stop tracking. Moving the mount or powering off stops the capture first. Before powering off, Polaris waits for the camera to warm up.": "",
   "⚠ Set a time limit (Stop at) or turn on the target SNR stop, otherwise these do not run.": "",
   "Last step, and only when the run completes: a Stop or a failure leaves the host on": "",
-  "Power off runs last, and only when the run completes; a Stop or a failure leaves the host on.": ""
+  "Power off runs last, and only when the run completes; a Stop or a failure leaves the host on.": "",
+  "Menu order": "",
+  "Back to the default order": "",
+  "Order of the buttons in the navigation rail. On the rail itself, press and hold a button (touch or mouse) and drag it; here, use the arrows or drag a row. Saved on the host, so every browser and device that opens this Polaris shows the same order.": ""
 }
