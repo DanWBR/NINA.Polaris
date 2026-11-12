@@ -1087,3 +1087,41 @@ body.asst-dock-dragging {
 }
 .modal-card.update-modal [style*="opacity"] { opacity: 1 !important; }
 .modal-card.update-modal .update-error { color: var(--danger, #f87171); }
+
+/* NAVORDER: Settings list for reordering the nav rail buttons. */
+.nav-order-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-width: 320px;
+}
+.nav-order-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 6px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg-secondary);
+    cursor: grab;
+}
+.nav-order-row.dragging { opacity: 0.4; }
+.nav-order-grip { color: var(--text-muted); font-size: 11px; letter-spacing: -2px; }
+.nav-order-name { flex: 1 1 auto; }
+
+/* NAVORDER: long-press drag on the rail. The press must not select the
+   caption or open the iOS callout, and the lifted button follows the
+   pointer slot by slot. */
+.nav-btn[data-nav-id] {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+}
+.sidebar.nav-drag-mode { cursor: grabbing; }
+.nav-btn.nav-dragging {
+    color: var(--accent);
+    background: rgba(var(--accent-rgb), 0.18);
+    outline: 1px dashed var(--accent);
+    outline-offset: -2px;
+    transform: scale(1.06);
+}

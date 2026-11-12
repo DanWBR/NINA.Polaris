@@ -5508,5 +5508,8 @@
   "Park takes the place of home and stop tracking. Moving the mount or powering off stops the capture first. Before powering off, Polaris waits for the camera to warm up.": "Estacionar tem prioridade sobre voltar à posição inicial e parar o rastreamento. Mover a montagem ou desligar para a captura antes. Antes de desligar, o Polaris espera a câmera aquecer.",
   "⚠ Set a time limit (Stop at) or turn on the target SNR stop, otherwise these do not run.": "⚠ Defina um limite de tempo (Parar em) ou ligue a parada por SNR alvo; sem isso, estas ações não rodam.",
   "Last step, and only when the run completes: a Stop or a failure leaves the host on": "Último passo, e só quando o run termina: um Stop ou uma falha deixam o host ligado",
-  "Power off runs last, and only when the run completes; a Stop or a failure leaves the host on.": "O desligamento roda por último, e só quando o run termina; um Stop ou uma falha deixam o host ligado."
+  "Power off runs last, and only when the run completes; a Stop or a failure leaves the host on.": "O desligamento roda por último, e só quando o run termina; um Stop ou uma falha deixam o host ligado.",
+  "Menu order": "Ordem do menu",
+  "Back to the default order": "Voltar à ordem padrão",
+  "Order of the buttons in the navigation rail. On the rail itself, press and hold a button (touch or mouse) and drag it; here, use the arrows or drag a row. Saved on the host, so every browser and device that opens this Polaris shows the same order.": "Ordem dos botões da barra de navegação. Na própria barra, segure um botão (toque ou mouse) e arraste; aqui, use as setas ou arraste uma linha. Fica salva no host, então todo navegador e aparelho que abrir este Polaris mostra a mesma ordem."
 }

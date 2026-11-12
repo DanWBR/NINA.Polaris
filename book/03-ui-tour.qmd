@@ -112,6 +112,15 @@ and @sec-administration.
 checklist, troubleshooting, and a one-click problem report. More on it
 below.
 
+**Changing the order:** the order above is the default, and you can
+change it. Press and hold a button on the rail for half a second (a
+long press with a finger, or a long click with the mouse) until it
+lights up, then drag it to its new place; the other buttons make room
+as you go. **SETTINGS > Appearance > Menu order** lists the same buttons
+with up and down arrows, and its **Reset** button brings back the
+default. The order is saved on the host, not in the browser, so every
+phone, tablet and computer that opens this Polaris shows the same rail.
+
 ## The HOME dashboard
 
 HOME is the first thing a connecting browser sees. It shows a session

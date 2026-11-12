@@ -1009,6 +1009,12 @@ function ninaApp() {
         // localStorage('polaris.navPad') in init(); zero everywhere means
         // "unchanged", which is what every desktop browser wants.
         navPad: { left: 0, right: 0, top: 0, bottom: 0 },
+        // NAVORDER: the operator's order for the nav rail buttons, as a list
+        // of tab ids (Settings > Appearance). Empty = the default order.
+        // Kept on the host through /api/ui-state, so every browser that
+        // opens this Polaris sees the same rail.
+        navOrder: [],
+        _navDragId: null,
         // DIAG: host self-check (Settings > Diagnostics). Read-only.
         diag: { loading: false, report: null, error: '' },
         padScale: 100,   // control density %, applied (Settings → Appearance)
@@ -5418,6 +5424,7 @@ function ninaApp() {
             // Restore all resizable side-panel / column widths.
             this._restorePanelWidths();
             this._restoreNavPad();
+            this.$nextTick(() => this._initNavDrag());
 
             // Basic (phone-only) field mode. Recompute on every resize/rotate so
             // it engages on a phone in any orientation and never on tablet/desktop.
@@ -8788,6 +8795,153 @@ function ninaApp() {
             } catch (e) {
                 this.toastFail('Could not copy the report', e);
             }
+        },
+
+        // NAVORDER: the reorderable nav rail buttons in their default order.
+        // The Field shortcut (phones) is left out: it always comes first.
+        _navItems() {
+            return [
+                { id: 'home', label: 'Home' }, { id: 'equip', label: 'Rigs' },
+                { id: 'polar', label: 'Polar' }, { id: 'sky', label: 'Sky' },
+                { id: 'focus', label: 'Focus' }, { id: 'guide', label: 'Guide' },
+                { id: 'dither', label: 'Dither' },
+                { id: 'preview', label: 'Preview' }, { id: 'sequence', label: 'Autorun' },
+                { id: 'plan', label: 'Plan' }, { id: 'live', label: 'Live' },
+                { id: 'mosaic', label: 'Mosaic' }, { id: 'video', label: 'Video' },
+                { id: 'seqadv', label: 'Adv' }, { id: 'files', label: 'Studio' },
+                { id: 'settings', label: 'Settings' }, { id: 'help', label: 'Help' }
+            ];
+        },
+        // Saved order with unknown ids dropped and buttons added after the
+        // order was saved slotted in right after their default neighbour.
+        navOrderIds() {
+            const defaults = this._navItems().map(i => i.id);
+            const saved = Array.isArray(this.navOrder) ? this.navOrder : [];
+            const out = [];
+            for (const id of saved) {
+                if (defaults.includes(id) && !out.includes(id)) out.push(id);
+            }
+            defaults.forEach((id, i) => {
+                if (out.includes(id)) return;
+                const prev = i > 0 ? out.indexOf(defaults[i - 1]) : -1;
+                out.splice(prev + 1, 0, id);
+            });
+            return out;
+        },
+        navOrderItems() {
+            const byId = Object.fromEntries(this._navItems().map(i => [i.id, i]));
+            return this.navOrderIds().map(id => byId[id]);
+        },
+        // CSS flex order for one rail button; the markup keeps the default.
+        navBtnStyle(id) {
+            const i = this.navOrderIds().indexOf(id);
+            return { order: i < 0 ? 99 : i };
+        },
+        navOrderIsDefault() {
+            return this.navOrderIds().join() === this._navItems().map(i => i.id).join();
+        },
+        navMove(id, delta) {
+            const ids = this.navOrderIds();
+            const i = ids.indexOf(id), j = i + delta;
+            if (i < 0 || j < 0 || j >= ids.length) return;
+            [ids[i], ids[j]] = [ids[j], ids[i]];
+            this.navOrder = ids;
+        },
+        // Desktop drag and drop in the Settings list: the dragged button
+        // takes the place of the one it is dropped on.
+        navDrop(targetId) {
+            const from = this._navDragId;
+            this._navDragId = null;
+            if (!from || from === targetId) return;
+            const ids = this.navOrderIds().filter(x => x !== from);
+            const to = this.navOrderIds().indexOf(targetId);
+            ids.splice(to, 0, from);
+            this.navOrder = ids;
+        },
+        resetNavOrder() { this.navOrder = []; },
+        // NAVORDER: long press (touch) or long click (mouse) on a rail button,
+        // then drag it to a new place. Holding still for 450 ms arms the drag;
+        // moving before that is an ordinary scroll of the strip or a click.
+        // While dragging, the button takes the slot under the pointer at
+        // once (CSS order), and the release saves the order on the host.
+        _initNavDrag() {
+            const rail = document.querySelector('nav.sidebar');
+            if (!rail || rail._navDragWired) return;
+            rail._navDragWired = true;
+            const HOLD_MS = 450, SLOP = 8, EDGE = 36;
+            let st = null;   // { id, el, x, y, timer, active, pointerId }
+            const end = (commit) => {
+                if (!st) return;
+                clearTimeout(st.timer);
+                if (st.active) {
+                    st.el.classList.remove('nav-dragging');
+                    rail.classList.remove('nav-drag-mode');
+                    // The release also fires a click on the button; eat it.
+                    if (commit) this._navSuppressClick = true;
+                    setTimeout(() => { this._navSuppressClick = false; }, 400);
+                }
+                st = null;
+            };
+            rail.addEventListener('pointerdown', (e) => {
+                if (e.pointerType === 'mouse' && e.button !== 0) return;
+                const el = e.target.closest('.nav-btn[data-nav-id]');
+                if (!el) return;
+                st = { id: el.dataset.navId, el, x: e.clientX, y: e.clientY,
+                       active: false, pointerId: e.pointerId };
+                st.timer = setTimeout(() => {
+                    if (!st) return;
+                    st.active = true;
+                    st.el.classList.add('nav-dragging');
+                    rail.classList.add('nav-drag-mode');
+                    try { rail.setPointerCapture(st.pointerId); } catch (_) { }
+                    try { navigator.vibrate && navigator.vibrate(15); } catch (_) { }
+                }, HOLD_MS);
+            });
+            rail.addEventListener('pointermove', (e) => {
+                if (!st || e.pointerId !== st.pointerId) return;
+                if (!st.active) {
+                    if (Math.hypot(e.clientX - st.x, e.clientY - st.y) > SLOP) end(false);
+                    return;
+                }
+                e.preventDefault();
+                // Scroll the rail when the pointer reaches one of its ends.
+                const r = rail.getBoundingClientRect();
+                const horizontal = getComputedStyle(rail).flexDirection === 'row';
+                if (horizontal) {
+                    if (e.clientX < r.left + EDGE) rail.scrollLeft -= 8;
+                    else if (e.clientX > r.right - EDGE) rail.scrollLeft += 8;
+                } else {
+                    if (e.clientY < r.top + EDGE) rail.scrollTop -= 8;
+                    else if (e.clientY > r.bottom - EDGE) rail.scrollTop += 8;
+                }
+                const under = document.elementFromPoint(e.clientX, e.clientY);
+                const target = under && under.closest && under.closest('.nav-btn[data-nav-id]');
+                if (!target || target === st.el || !rail.contains(target)) return;
+                const ids = this.navOrderIds();
+                const to = ids.indexOf(target.dataset.navId);
+                const moved = ids.filter(x => x !== st.id);
+                moved.splice(to, 0, st.id);
+                this.navOrder = moved;
+            });
+            rail.addEventListener('pointerup', () => end(true));
+            rail.addEventListener('pointercancel', () => end(false));
+            // Touch: once the drag is armed, the finger must not scroll the
+            // strip. Non-passive so preventDefault is honoured.
+            rail.addEventListener('touchmove', (e) => {
+                if (st && st.active) e.preventDefault();
+            }, { passive: false });
+            // A long press opens the context menu on Android and the mouse
+            // right-click menu is unrelated; block only the long-press one.
+            rail.addEventListener('contextmenu', (e) => {
+                if (st) e.preventDefault();
+            });
+            rail.addEventListener('click', (e) => {
+                if (this._navSuppressClick) {
+                    this._navSuppressClick = false;
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            }, true);
         },
 
         resetNavPad() {
@@ -30189,7 +30343,9 @@ function ninaApp() {
                 // AFPORT and reload from the rig on FOCUS tab entry.
                 'afParams.focuserSource',
                 // Shared target name
-                'targetName'
+                'targetName',
+                // Nav rail button order (Settings > Appearance)
+                'navOrder'
             ];
         },
         _uiGetPath(path) {
