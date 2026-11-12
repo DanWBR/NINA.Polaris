@@ -18,7 +18,7 @@ using NINA.Polaris.Services.Plan;
 namespace NINA.Polaris.Services;
 
 /// <summary>
-/// Fires a rig teardown at a scheduled wall-clock time — the "fell asleep, forgot
+/// Fires a rig teardown at a scheduled wall-clock time, the "fell asleep, forgot
 /// the rig is running" safety net. When the time arrives it stops capture, stops
 /// guiding, parks the mount, gently warms the camera and turns cooling off, and
 /// optionally powers the host down.
@@ -95,80 +95,23 @@ public sealed class ScheduledShutdownService : BackgroundService {
         // Clear the persisted schedule up front so a crash mid-teardown doesn't
         // re-fire it on the next boot.
         _profiles.UpdateSettings(p => { p.ScheduledShutdownUtc = null; });
-        _notify.Push("info", "Scheduled shutdown reached — tearing the rig down.", 8000);
+        _notify.Push("info", "Scheduled shutdown reached, tearing the rig down.", 8000);
         _logger.LogInformation("Scheduled shutdown firing (host={Host})", host);
 
-        // Each step is best-effort and isolated: one failure must not stop the
-        // rest (a parked mount still matters even if cooling-off failed).
-        await Step("stop capture", StopCaptureAsync, ct);
-        await Step("stop guiding", StopGuidingAsync, ct);
-        await Step("park mount", ParkMountAsync, ct);
-        await Step("warm + cooler off", () => WarmAndCoolerOffAsync(host, ct), ct);
-
+        // The steps live in RigTeardownService, shared with the LIVE end
+        // actions. Each is best-effort and isolated there.
+        var teardown = _sp.GetService<RigTeardownService>();
+        var options = new RigTeardownOptions {
+            StopCapture = true, StopGuiding = true, ParkMount = true, WarmCamera = true,
+            ShutdownHost = host
+        };
         LastResult = $"Rig shut down at {DateTime.UtcNow:HH:mm} UTC" + (host ? " (host powering off)" : "");
-        _notify.Push("ok", LastResult, 10000);
-
-        if (host) {
-            try {
-                var power = _sp.GetService<PowerService>();
-                var r = power?.ScheduleShutdown();
-                _logger.LogInformation("Scheduled shutdown: host power-off requested ({Ok})", r?.Ok);
-            } catch (Exception ex) {
-                _logger.LogWarning(ex, "Scheduled shutdown: host power-off failed");
-            }
+        if (teardown != null) {
+            await teardown.RunAsync(options, "Scheduled shutdown", ct,
+                beforePowerOff: () => _notify.Push("ok", LastResult, 10000));
+        } else {
+            _logger.LogWarning("Scheduled shutdown: the teardown service is not available");
         }
         lock (_gate) Running = false;
-    }
-
-    private async Task Step(string name, Func<Task> action, CancellationToken ct) {
-        try { await action(); }
-        catch (Exception ex) {
-            _logger.LogWarning(ex, "Scheduled shutdown step '{Step}' failed", name);
-            _notify.Push("warn", $"Scheduled shutdown: '{name}' failed ({ex.Message})", 8000);
-        }
-    }
-
-    private Task StopCaptureAsync() {
-        try { _sp.GetService<SequenceEngine>()?.Stop(); } catch { }
-        try { _sp.GetService<PlanRunnerService>()?.StopPlan(); } catch { }
-        try { _sp.GetService<LiveCaptureService>()?.Stop(); } catch { }
-        var cam = _sp.GetService<EquipmentManager>()?.Camera;
-        if (cam is { IsConnected: true }) { try { return cam.AbortExposureAsync(); } catch { } }
-        return Task.CompletedTask;
-    }
-
-    private async Task StopGuidingAsync() {
-        var g = _sp.GetService<ActiveGuiderProvider>()?.Active;
-        if (g != null) await g.StopAsync();
-    }
-
-    private async Task ParkMountAsync() {
-        var scope = _sp.GetService<EquipmentManager>()?.Telescope;
-        if (scope is { IsConnected: true }) await scope.ParkAsync();
-    }
-
-    private async Task WarmAndCoolerOffAsync(bool waitForWarm, CancellationToken ct) {
-        var equip = _sp.GetService<EquipmentManager>();
-        var ramp = _sp.GetService<CoolingRampService>();
-        var cam = equip?.Camera;
-        if (cam is not { IsConnected: true }) return;
-        // Gentle warm-up (ramp the setpoint up, then cooler off) rather than an
-        // abrupt cut — protects the sensor from thermal shock/condensation.
-        if (ramp != null) {
-            var rate = _profiles.ActiveEquipmentProfile.CoolerRampDegPerMinute ?? 2.0;
-            ramp.Start(cam, targetC: 15.0, ratePerMinute: rate <= 0 ? 2.0 : rate,
-                       coolerOnFirst: false, coolerOffWhenDone: true, source: "scheduled-shutdown");
-            // Only wait for the ramp when we're about to cut host power — otherwise
-            // let it finish in the background so the teardown returns promptly.
-            if (waitForWarm) {
-                var deadline = DateTime.UtcNow.AddMinutes(20);
-                while (DateTime.UtcNow < deadline && !ct.IsCancellationRequested) {
-                    if (ramp.Snapshot()?.Running != true) break;
-                    await Task.Delay(2000, ct);
-                }
-            }
-        } else {
-            try { await cam.SetCoolerAsync(false, ct); } catch { }
-        }
     }
 }

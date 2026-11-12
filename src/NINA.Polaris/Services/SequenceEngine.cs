@@ -52,6 +52,8 @@ public class SequenceEngine {
     private readonly ProfileService _profile;
     private readonly ILogger<SequenceEngine> _logger;
     private readonly StoragePushService? _storagePush;
+    private readonly AutoFocusService? _autoFocus;
+    private readonly PowerService? _power;
 
     private CancellationTokenSource? _cts;
     private readonly SemaphoreSlim _pauseGate = new(1, 1);
@@ -127,7 +129,11 @@ public class SequenceEngine {
         ILogger<SequenceEngine> logger,
         StoragePushService? storagePush = null,
         GuideRunawayGuard? guideGuard = null,
-        NotificationService? notify = null) {
+        NotificationService? notify = null,
+        AutoFocusService? autoFocus = null,
+        PowerService? power = null) {
+        _autoFocus = autoFocus;
+        _power = power;
         _guideGuard = guideGuard;
         _notify = notify;
         _equip = equip;
@@ -496,6 +502,14 @@ public class SequenceEngine {
                         _equip.FilterWheel, _equip.Focuser,
                         _profile.ActiveEquipmentProfile?.FilterOffsets,
                         item.Filter, _filterState, _logger, ct);
+                }
+
+                // Auto-focus before the item's lights, once it is on target with
+                // its filter in. Skipped when the run resumes partway into this
+                // item: the focus it was taken with is still the one in place.
+                bool resumingThisItem = i == resumeItem && resumeFrame > 0;
+                if (imageType == "LIGHT" && EndActions.AutoFocusEachItem && !resumingThisItem) {
+                    await RunItemAutoFocusAsync(item, ct);
                 }
 
                 // FLAT + AutoExposure: ask the wizard to resolve the
@@ -905,6 +919,39 @@ public class SequenceEngine {
         }
     }
 
+    /// <summary>Auto-focus for one item. A failed or impossible run is logged
+    /// and the item is captured anyway: the focus from before is better than
+    /// losing the item.</summary>
+    private async Task RunItemAutoFocusAsync(SequenceItem item, CancellationToken ct) {
+        if (_autoFocus == null) return;
+        if (_equip.Focuser is not { IsConnected: true }) {
+            _logger.LogWarning("Auto-focus before '{Name}' skipped: the focuser is not connected", item.Name);
+            return;
+        }
+        _logger.LogInformation("Auto-focus before '{Name}'", item.Name);
+        WaitingFor = "Auto-focusing before the next item";
+        try {
+            _autoFocus.Start(new AutoFocusRequest { FocuserSource = "main" });
+            while (_autoFocus.State == AutoFocusState.Running) {
+                await Task.Delay(500, ct);
+            }
+            if (!string.IsNullOrEmpty(_autoFocus.LastError)) {
+                _logger.LogWarning("Auto-focus before '{Name}' failed: {Err}; capturing at the previous focus",
+                    item.Name, _autoFocus.LastError);
+                _notify?.Push("warn", $"Auto-focus before '{item.Name}' failed: {_autoFocus.LastError}. "
+                    + "The item is captured at the previous focus.", 12000);
+            }
+        } catch (OperationCanceledException) {
+            // A stop during the sweep stops the sweep too.
+            try { _autoFocus.Abort(); } catch { }
+            throw;
+        } catch (Exception ex) {
+            _logger.LogWarning(ex, "Auto-focus before '{Name}' could not run; capturing at the previous focus", item.Name);
+        } finally {
+            WaitingFor = null;
+        }
+    }
+
     /// <summary>
     /// Run the configured post-sequence actions. All failures are caught + logged;
     /// one broken action does not prevent the next from being tried. Uses a fresh
@@ -913,7 +960,8 @@ public class SequenceEngine {
     private async Task RunEndActionsAsync(bool triggeredByStop) {
         var ea = EndActions;
         if (ea == null) return;
-        if (!ea.ParkMount && !ea.StopTracking && !ea.WarmCamera && !ea.DisconnectGuider) return;
+        if (!ea.ParkMount && !ea.HomeMount && !ea.StopTracking && !ea.WarmCamera && !ea.DisconnectGuider
+            && !ea.ShutdownHost) return;
 
         _logger.LogInformation("Running end-of-sequence actions (triggeredByStop={Stop})", triggeredByStop);
         using var ct = new CancellationTokenSource(TimeSpan.FromMinutes(5));
@@ -927,12 +975,33 @@ public class SequenceEngine {
             } catch (Exception ex) {
                 _logger.LogWarning(ex, "End-action park failed");
             }
-        } else if (ea.StopTracking && _equip.Telescope != null) {
-            try {
-                _logger.LogInformation("End-action: stopping tracking");
-                await _equip.Telescope.SetTrackingAsync(false, ct.Token);
-            } catch (Exception ex) {
-                _logger.LogWarning(ex, "End-action stop-tracking failed");
+        } else if (_equip.Telescope is { } mount) {
+            // Home first, then tracking off: the home slew is a slew, and the
+            // mount goes on tracking from home unless told otherwise.
+            if (ea.HomeMount) {
+                try {
+                    if (!mount.Capabilities.SupportsFindHome) {
+                        _logger.LogWarning("End-action home skipped: this mount does not report a home command");
+                    } else if (mount.IsParked) {
+                        _logger.LogWarning("End-action home skipped: the mount is parked");
+                    } else {
+                        _logger.LogInformation("End-action: sending the mount home");
+                        await mount.FindHomeAsync(ct.Token);
+                        await NINA.Polaris.Services.Sequencer.Instructions.MountWaits.UntilAsync(() => mount.IsSlewing, TimeSpan.FromSeconds(3), ct.Token);
+                        if (!await NINA.Polaris.Services.Sequencer.Instructions.MountWaits.UntilAsync(() => !mount.IsSlewing, TimeSpan.FromSeconds(180), ct.Token))
+                            _logger.LogWarning("End-action home: the mount was still slewing after 180 s");
+                    }
+                } catch (Exception ex) {
+                    _logger.LogWarning(ex, "End-action home failed");
+                }
+            }
+            if (ea.StopTracking) {
+                try {
+                    _logger.LogInformation("End-action: stopping tracking");
+                    await mount.SetTrackingAsync(false, ct.Token);
+                } catch (Exception ex) {
+                    _logger.LogWarning(ex, "End-action stop-tracking failed");
+                }
             }
         }
 
@@ -952,6 +1021,25 @@ public class SequenceEngine {
                 await endGuider.StopAsync();
             } catch (Exception ex) {
                 _logger.LogWarning(ex, "End-action stop-guider failed");
+            }
+        }
+
+        // Last, and only for a run that completed: a Stop or a failure keeps the
+        // host up so the session can be looked at and resumed.
+        if (ea.ShutdownHost) {
+            if (triggeredByStop) {
+                _logger.LogWarning("End-action power off skipped: the run was stopped or failed");
+            } else if (_power == null) {
+                _logger.LogWarning("End-action power off skipped: the power service is not available");
+            } else {
+                var r = _power.ScheduleShutdown();
+                if (r.Ok) {
+                    _logger.LogWarning("End-action: powering the host off");
+                    _notify?.Push("ok", "Autorun complete. Powering the host off.", 12000);
+                } else {
+                    _logger.LogWarning("End-action power off refused: {Msg}", r.Message);
+                    _notify?.Push("warn", $"Autorun complete, but the host was not powered off ({r.Message}).", 12000);
+                }
             }
         }
     }

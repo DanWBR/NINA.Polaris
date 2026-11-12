@@ -190,6 +190,11 @@ exhaustive.
 - **Flow control**: Wait For Time, Wait Until Above Horizon, Wait For
   Altitude, Wait For Moon Below Horizon, Wait For Sun Below Horizon.
 - **External**: Run External Script, Send HTTP Request, Send Email.
+- **Host**: Shutdown Host powers the computer that runs Polaris off.
+  Put it last, after Park Mount and Warm Camera: the sequence ends
+  there. The run only reaches it when the instructions before it did
+  not abort the run, so a night that failed leaves the host on to be
+  looked at.
 
 ## Conditions
 

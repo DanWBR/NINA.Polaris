@@ -83,9 +83,20 @@ public class SequenceItem {
 /// </summary>
 public class SequenceEndActions {
     public bool ParkMount { get; set; }
+    /// <summary>Send the mount to its home position at the end. Park, when also
+    /// ticked, takes its place.</summary>
+    public bool HomeMount { get; set; }
     public bool StopTracking { get; set; }
+    /// <summary>Run auto-focus before each enabled LIGHT item, after its slew
+    /// and filter change. Not an end action either; it lives here so it is
+    /// saved with the rest of the Autorun options.</summary>
+    public bool AutoFocusEachItem { get; set; }
     public bool WarmCamera { get; set; }
     public bool DisconnectGuider { get; set; }
+    /// <summary>Power the host off after the other end actions. Only when the
+    /// run completes: a Stop or a failed run leaves the host up so the session
+    /// can be looked at and resumed, even with <see cref="RunOnStop"/>.</summary>
+    public bool ShutdownHost { get; set; }
     /// <summary>If true, end-actions also fire when the user hits Stop. Default false.</summary>
     public bool RunOnStop { get; set; }
 

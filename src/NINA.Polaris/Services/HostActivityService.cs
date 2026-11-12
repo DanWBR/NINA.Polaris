@@ -48,6 +48,7 @@ public class HostActivityService {
     private readonly NINA.Polaris.Services.Focus.FilterFocusSweepService _focusSweep;
     private readonly CameraStreamService _stream;
     private readonly NINA.Polaris.Services.Mosaic.MosaicRunService? _mosaic;
+    private readonly NINA.Polaris.Services.Plan.PlanRunnerService? _plan;
 
     public HostActivityService(SequenceEngine sequence,
                                AdvancedSequenceEngine adv,
@@ -57,7 +58,9 @@ public class HostActivityService {
                                AutoFocusService autoFocus,
                                NINA.Polaris.Services.Focus.FilterFocusSweepService focusSweep,
                                CameraStreamService stream,
-                               NINA.Polaris.Services.Mosaic.MosaicRunService? mosaic = null) {
+                               NINA.Polaris.Services.Mosaic.MosaicRunService? mosaic = null,
+                               NINA.Polaris.Services.Plan.PlanRunnerService? plan = null) {
+        _plan = plan;
         _sequence = sequence;
         _adv = adv;
         _liveCapture = liveCapture;
@@ -103,6 +106,42 @@ public class HostActivityService {
     }
 
     public bool IsBusy => Current().Count > 0;
+
+    /// <summary>The UI tab that shows what is running, so a client that opens
+    /// mid-session lands on it instead of the default screen. Null while the
+    /// host is idle. The order picks the activity that owns the session:
+    /// an auto-focus inside an AUTORUN run opens AUTORUN, not FOCUS.</summary>
+    public string? ActivePanel() {
+        try {
+            return PickPanel(
+                video: _video.IsRecording,
+                mosaic: _mosaic?.IsRunning == true,
+                plan: _plan?.IsRunning == true,
+                autorun: _sequence.State != SequenceState.Idle,
+                advanced: _adv.State != AdvancedSequenceState.Idle,
+                liveStack: _liveStack.IsRunning,
+                liveCapture: _liveCapture.IsRunning,
+                focus: _autoFocus.State != AutoFocusState.Idle
+                    || _focusSweep.State != NINA.Polaris.Services.Focus.FilterFocusSweepState.Idle);
+        } catch {
+            return null;
+        }
+    }
+
+    /// <summary>The ordering behind <see cref="ActivePanel"/>, kept apart so it
+    /// can be tested without the services. Tab ids are the client's.</summary>
+    internal static string? PickPanel(bool video, bool mosaic, bool plan, bool autorun,
+            bool advanced, bool liveStack, bool liveCapture, bool focus) {
+        if (video) return "video";
+        if (mosaic) return "mosaic";
+        // PLAN runs on the advanced engine, so it has to be asked first.
+        if (plan) return "plan";
+        if (autorun) return "sequence";
+        if (advanced) return "seqadv";
+        if (liveStack || liveCapture) return "live";
+        if (focus) return "focus";
+        return null;
+    }
 
     /// <summary>One sentence for a toast or an error body.</summary>
     public string Describe() {

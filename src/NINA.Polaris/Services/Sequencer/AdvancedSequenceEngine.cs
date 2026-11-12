@@ -256,7 +256,7 @@ public class AdvancedSequenceEngine {
             coolingRamp: _services.GetRequiredService<CoolingRampService>(),
             cameraReady: _services.GetRequiredService<CameraReadyGate>(),
             barrier: _services.GetRequiredService<DitherBarrier>(),
-            logger: _logger);
+            logger: _logger) { Services = _services };
     }
 
     private void HydrateTemplates(ISequenceEntity entity) {

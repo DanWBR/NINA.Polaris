@@ -69,6 +69,9 @@ public sealed class HostStatusContributor : IStatusContributor {
             tick.Blocks["hostActivity"] = new {
                 busy = activity.Count > 0,
                 activity,
+                // The tab that shows the running activity; a client opening
+                // mid-session starts there.
+                panel = _hostActivity.ActivePanel(),
                 // Null rather than a huge number before the first snapshot,
                 // so the client can tell "not yet" from "very old".
                 equipmentAgeMs = snapAge == TimeSpan.MaxValue

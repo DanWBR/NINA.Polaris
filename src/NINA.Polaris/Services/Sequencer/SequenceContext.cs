@@ -70,6 +70,10 @@ public class SequenceContext {
 
     public ILogger Logger { get; }
 
+    /// <summary>The app's services, for the rare instruction that needs one the
+    /// context does not carry (host power). Null in tests.</summary>
+    public IServiceProvider? Services { get; init; }
+
     /// <summary>Multi-camera synchronized-dither coordinator. Capture
     /// instructions park on it before a sub and report finished subs; the
     /// dither trigger/instruction defer to it when it owns dithering

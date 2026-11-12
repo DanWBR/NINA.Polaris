@@ -496,6 +496,18 @@ public static class LiveStackEndpoints {
             return Results.Ok(new { saved = true, seconds = secs });
         });
 
+        // End actions for a LIVE session (duration limit or target SNR reached).
+        // Saved on the active rig; LiveStackEndService reads them when it fires.
+        group.MapGet("/end-actions", (ProfileService profiles) =>
+            Results.Ok(profiles.ActiveEquipmentProfile?.LiveStackEndActions ?? new LiveStackEndActions()));
+        group.MapPut("/end-actions", (LiveStackEndActions actions, ProfileService profiles) => {
+            var rig = profiles.ActiveEquipmentProfile;
+            if (rig == null) return Results.BadRequest(new { error = "The active rig is not set" });
+            actions ??= new LiveStackEndActions();
+            profiles.UpdateEquipmentProfile(rig.Id, r => r.LiveStackEndActions = actions);
+            return Results.Ok(actions);
+        });
+
         // Client pushes its Appearance "Preview quality" (previewMaxDim) so the
         // COLOUR live-stack JPEG is rendered at that resolution (the colour
         // preview has no client-side raw render path). Not persisted server-side

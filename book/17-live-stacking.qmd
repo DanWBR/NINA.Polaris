@@ -127,6 +127,13 @@ The session readout and buttons:
   and frames discarded by the kappa-sigma quality gate. The integration
   timer counts only while actively stacking - it freezes on stop and at
   the duration cap, and resumes on Continue.
+- **Stop at N min total** limits the stack's total integration time.
+  It counts the whole stack since the last **Reset**: the time already
+  stacked counts, the time while stopped does not. So with 60 min set
+  and 45 min already stacked, the stack stops after 15 more minutes,
+  and the readout next to the box says "15 min left". 0 turns
+  the limit off. When the limit is reached, stacking stops (frames still arrive
+  and are saved if saving is on) and the end actions below run.
 - **Reset** discards the running stack and the reference; the next
   incoming frame becomes the new reference. This is the explicit "clear
   the accumulator" action.
@@ -343,6 +350,32 @@ curves show trouble: a per-frame SNR that falls away while HFR stays put
 means light is being lost (clouds or sky glow), and an HFR that climbs
 while the stack stops gaining SNR means the stars are bloating (focus
 drift). The alerts are throttled so a passing cloud does not spam you.
+
+## When the session ends
+
+The **When the session ends** box decides what happens when a LIVE
+session ends, that is when the stack reaches its **Stop at** limit or
+the target SNR stops the capture. It runs once per stack (a **Reset**
+starts a new one), and only for a stack fed by the LIVE capture loop;
+Autorun and Plan have their own end actions. The options, saved per
+rig:
+
+- **Save the stack** (on by default) writes the stack as a master FITS
+  into `integrated/{target}/`, the same as the **Save** button. A host
+  that powers off loses a stack that is only held in memory.
+- **Stop capturing** ends the LIVE capture loop.
+- **Stop guiding** stops the guider, Polaris's own or PHD2.
+- **Park mount**, or **Return mount to home** and **Stop tracking**.
+  Park takes the place of the other two.
+- **Warm camera (cooler off)** brings the sensor up to ambient slowly
+  before turning the cooler off, which avoids dew and thermal shock.
+- **Power off the host** turns off the computer that runs Polaris,
+  last. Polaris waits for the camera to warm up first.
+
+Moving the mount or powering off always stops the capture first, so
+the slew does not leave trailed frames in the folder. Without a time
+limit or the target SNR stop, a session does not end on its own, and
+the box warns that its actions will not run.
 
 ## Auto re-focus and re-center
 
