@@ -136,6 +136,15 @@ public class MdnsService : IHostedService, IDisposable {
                      || addr.AddressFamily == AddressFamily.InterNetworkV6)
                     && !System.Net.IPAddress.IsLoopback(addr))
                 .ToList();
+            // Leave out the addresses of virtual adapters (WSL / Hyper-V
+            // switches, Docker and VM bridges). A phone cannot reach them,
+            // and the app connects to the lowest advertised IPv4: on a
+            // Windows host with WSL that was 172.x, not the Wi-Fi address,
+            // and the app found the host but could not open it. Fall back
+            // to every address when the filter would leave none.
+            var virtualAddrs = VirtualAdapterAddresses();
+            var physical = addresses.Where(a => !virtualAddrs.Contains(a)).ToList();
+            if (physical.Count > 0) addresses = physical;
             foreach (var ip in addresses) {
                 if (ip.AddressFamily == AddressFamily.InterNetwork) {
                     profile.Resources.Add(new ARecord {
@@ -167,12 +176,34 @@ public class MdnsService : IHostedService, IDisposable {
         }
     }
 
-    /// <summary>
-    /// A short, stable, per-device id. Prefers the Raspberry Pi hardware
-    /// serial, then the primary MAC address, then a hash of the machine
-    /// name. Lowercase hex, 4 chars -- enough to disambiguate the handful
-    /// of Pis a hobbyist runs on one network while keeping the name short.
-    /// </summary>
+    private HashSet<System.Net.IPAddress> VirtualAdapterAddresses() {
+        var set = new HashSet<System.Net.IPAddress>();
+        try {
+            foreach (var ni in NetworkInterface.GetAllNetworkInterfaces()) {
+                if (!IsVirtualAdapter(ni.Name, ni.Description)) continue;
+                foreach (var u in ni.GetIPProperties().UnicastAddresses) set.Add(u.Address);
+            }
+        } catch (Exception ex) {
+            _logger.LogDebug(ex, "mDNS: could not list network adapters; advertising every address");
+        }
+        return set;
+    }
+
+    /// <summary>True for adapters a phone on the LAN cannot reach: Windows
+    /// Hyper-V / WSL switches ("vEthernet ..."), VirtualBox and VMware host
+    /// adapters, and Linux container / VM bridges. VPN adapters are kept,
+    /// since a phone on the same VPN can reach them.</summary>
+    internal static bool IsVirtualAdapter(string? name, string? description) {
+        var n = (name ?? "").ToLowerInvariant();
+        var d = (description ?? "").ToLowerInvariant();
+        string[] descMarks = { "hyper-v virtual", "virtualbox", "vmware", "wsl" };
+        foreach (var m in descMarks) if (d.Contains(m)) return true;
+        if (n.StartsWith("vethernet")) return true;
+        string[] namePrefixes = { "docker", "br-", "veth", "virbr", "lxcbr", "lxdbr",
+                                  "vboxnet", "vmnet", "cni", "flannel", "podman" };
+        foreach (var p in namePrefixes) if (n.StartsWith(p)) return true;
+        return false;
+    }
 
     private void Teardown() {
         try {
