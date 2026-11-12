@@ -297,6 +297,10 @@ builder.Services.AddSingleton<LiveStackCheckpointService>();
 // Watchdog: auto-stop at target SNR + cloud/focus-drift alerts, off the
 // frame stream. Subscribes at construction.
 builder.Services.AddSingleton<LiveStackWatchdogService>();
+builder.Services.AddSingleton<RigTeardownService>();
+// LIVE end actions: run the rig's end actions when the stack reaches its
+// duration limit or its target SNR.
+builder.Services.AddHostedService<LiveStackEndService>();
 // REFSUG-1: trend-based refocus suggestion. Listens to the same
 // FrameIntegrated event as LSTR-3 but only when RefocusEnabled is
 // OFF, covers manual-focuser users who cannot be auto-fired.

@@ -249,4 +249,20 @@ public class AutorunPersistenceTests {
         Assert.That(engine2.EndActions.ParkMount, Is.True);
         Assert.That(engine2.EndActions.WarmCamera, Is.True);
     }
+
+    [Test]
+    public void HomeAutoFocusAndPowerOff_Persist() {
+        var engine1 = MakeEngine(NewProfile());
+        engine1.LoadSequence(new List<SequenceItem> { new() { Name = "T", Count = 1 } });
+        engine1.EndActions = new SequenceEndActions { HomeMount = true, AutoFocusEachItem = true, ShutdownHost = true };
+        engine1.SaveSchedule();
+
+        var engine2 = MakeEngine(NewProfile());
+        Assert.Multiple(() => {
+            Assert.That(engine2.EndActions.HomeMount, Is.True);
+            Assert.That(engine2.EndActions.AutoFocusEachItem, Is.True);
+            Assert.That(engine2.EndActions.ShutdownHost, Is.True);
+            Assert.That(engine2.EndActions.ParkMount, Is.False);
+        });
+    }
 }

@@ -1369,6 +1369,11 @@ public class EquipmentProfile {
     /// preferred duration.</summary>
     public int LiveStackMaxDurationSeconds { get; set; }
 
+    /// <summary>What happens when a LIVE session ends: the duration above is
+    /// reached, or the target SNR stops the capture. Per-rig, like the
+    /// duration.</summary>
+    public LiveStackEndActions LiveStackEndActions { get; set; } = new();
+
     /// <summary>SNR-3: target signal-to-noise ratio used by the LIVE
     /// tab's "ETA to target SNR" widget to estimate remaining stack
     /// time. Per-rig so a planetary close-up (low target, fast) and a

@@ -10,6 +10,11 @@
 .af-bottom-row > .af-chart { flex: 1 1 0; min-width: 0; }
 @media (max-width: 900px) {
     .af-bottom-row { flex-direction: column; }
+    /* Stacked, flex-basis 0 is a HEIGHT and overrides the heights below:
+       the frame came out 1 px tall and the curve 0 on a phone, portrait or
+       landscape (the notch insets take an iPhone under 900 px). */
+    .af-bottom-row > .af-preview-area,
+    .af-bottom-row > .af-chart { flex: 0 0 auto; }
 }
 .af-preview-area {
     position: relative;

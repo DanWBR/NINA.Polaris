@@ -188,6 +188,9 @@ public class PlanRunnerService : IHostedService {
         }
     }
 
+    /// <summary>A plan is running (its main targets or its end actions).</summary>
+    public bool IsRunning { get { lock (_lock) return _active != null; } }
+
     public PlanStatus GetStatus() {
         lock (_lock) {
             var hold = _active != null && _phase == Phase.Main ? _engine.Hold : null;

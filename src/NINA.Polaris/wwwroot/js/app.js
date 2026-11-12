@@ -372,6 +372,13 @@ function ninaApp() {
         // Hydrated from the active rig on _applyRigToChoices and
         // persisted via PUT /api/livestack/max-duration.
         liveStackMaxMinutes: 0,
+        // What runs when a LIVE session ends (time limit or target SNR).
+        // Mirrors LiveStackEndActions on the rig.
+        liveStackEndActions: {
+            saveStack: true, stopCapture: false, stopGuiding: false,
+            parkMount: false, homeMount: false, stopTracking: false,
+            warmCamera: false, shutdownHost: false
+        },
         // Per-frame disk persistence toggle. Mirrors the LIVE tab
         // checkbox. PUT /api/livestack/save-frames updates both the
         // running service flag and the active rig's
@@ -5332,9 +5339,12 @@ function ninaApp() {
         // Mirrors the SequenceEndActions DTO on the server.
         endActions: {
             parkMount: false,
+            homeMount: false,
             stopTracking: false,
+            autoFocusEachItem: false,
             warmCamera: false,
             disconnectGuider: false,
+            shutdownHost: false,
             runOnStop: false,
             autoGraXpert: false
         },
@@ -7216,8 +7226,39 @@ function ninaApp() {
                     this.loadWeatherForecast && this.loadWeatherForecast();
                 } else if (tabId === 'mosaic') {
                     this.mosaicOnTabEnter();
+                } else if (tabId === 'sequence') {
+                    this.loadEndActions && this.loadEndActions();
+                } else if (tabId === 'plan') {
+                    this.loadPlans && this.loadPlans();
+                } else if (tabId === 'seqadv') {
+                    this.loadAdvSeq && this.loadAdvSeq();
+                } else if (tabId === 'video' || tabId === 'preview') {
+                    this.loadCameraCapabilities && this.loadCameraCapabilities();
                 }
             } catch (e) { /* best effort -- tab still switches */ }
+        },
+
+        // Open on what the host is doing. Runs once, on the first status after
+        // the page loads: a phone that opens during a live stack lands on LIVE,
+        // not on PREVIEW or HOME. Only replaces the default screen, never one
+        // the user already picked (or a tab restored after a discard).
+        _openedOnActivity: false,
+        _openOnActivePanel(panel) {
+            if (this._openedOnActivity) return;
+            this._openedOnActivity = true;
+            if (!panel) return;
+            try {
+                if (this.basicMode) {
+                    // Field screens that exist for an activity; PLAN, ADV and
+                    // MOSAIC do not have one, so those keep the default screen.
+                    const screen = { sequence: 'autorun', live: 'live', video: 'video', focus: 'focus' }[panel];
+                    if (screen && this.basicScreen === 'preview') this.basicSetScreen(screen);
+                    return;
+                }
+                if (this.tab !== 'home') return;
+                this.tab = panel;
+                this._applyTabSideEffects(panel);
+            } catch (e) { /* best effort: the default screen stays */ }
         },
 
         // The sky iframe can fail in ways that leave its own "Loading sky
@@ -12276,7 +12317,7 @@ function ninaApp() {
                 if (rig) rig.liveStackMaxDurationSeconds = secs;
                 this.toast(secs === 0
                     ? 'Live stacking will run until you reset it'
-                    : `Live stack will auto-pause after ${mins} min`, 'ok');
+                    : `Live stack will stop at ${mins} min of total integration`, 'ok');
             } catch (e) {
                 this.toastFail('Save failed', e);
             }
@@ -12286,6 +12327,37 @@ function ninaApp() {
         // under an hour) or "HH:MM" (when longer). Reads off
         // liveStackStatus.elapsedSeconds which the server updates
         // on every status broadcast (~1 Hz).
+        // "12 min left" next to the limit: the limit counts the whole stack
+        // since the last Reset, so the readout says how much of it remains.
+        liveStackTimeLeftText() {
+            const cap = (this.liveStackMaxMinutes || 0) * 60;
+            if (cap <= 0) return '';
+            const left = Math.max(0, cap - (this.liveStackStatus?.elapsedSeconds || 0));
+            const m = Math.ceil(left / 60);
+            const txt = m >= 60 ? Math.floor(m / 60) + ' h ' + (m % 60) + ' min' : m + ' min';
+            return this.$t('{t} left', { t: txt });
+        },
+
+        liveStackEndHasAny() {
+            const e = this.liveStackEndActions || {};
+            return !!(e.stopCapture || e.stopGuiding || e.parkMount || e.homeMount
+                || e.stopTracking || e.warmCamera || e.shutdownHost);
+        },
+
+        async saveLiveStackEndActions() {
+            try {
+                await this.apiPost('/api/livestack/end-actions', null, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.liveStackEndActions)
+                });
+                const rig = this.rigs.find(r => r.id === this.activeRigId);
+                if (rig) rig.liveStackEndActions = { ...this.liveStackEndActions };
+            } catch (e) {
+                this.toastFail('Save failed', e);
+            }
+        },
+
         formatLiveStackElapsed() {
             const s = Math.max(0, Math.floor(this.liveStackStatus?.elapsedSeconds || 0));
             if (s < 3600) {
@@ -25792,6 +25864,15 @@ function ninaApp() {
             // seconds. 0 = unlimited (default).
             this.liveStackMaxMinutes = Math.round(
                 (rig.liveStackMaxDurationSeconds || 0) / 60);
+            {
+                const e = rig.liveStackEndActions || {};
+                this.liveStackEndActions = {
+                    saveStack: e.saveStack !== false,
+                    stopCapture: !!e.stopCapture, stopGuiding: !!e.stopGuiding,
+                    parkMount: !!e.parkMount, homeMount: !!e.homeMount, stopTracking: !!e.stopTracking,
+                    warmCamera: !!e.warmCamera, shutdownHost: !!e.shutdownHost
+                };
+            }
             // VIDEO tab FOV / ROI hydration. Restore the last-picked
             // crop so opening VIDEO after a reload lands on the same
             // box around the planet, instead of forcing the user to
@@ -27899,9 +27980,12 @@ function ninaApp() {
                 if (data) {
                     this.endActions = {
                         parkMount: !!data.parkMount,
+                        homeMount: !!data.homeMount,
                         stopTracking: !!data.stopTracking,
+                        autoFocusEachItem: !!data.autoFocusEachItem,
                         warmCamera: !!data.warmCamera,
                         disconnectGuider: !!data.disconnectGuider,
+                        shutdownHost: !!data.shutdownHost,
                         runOnStop: !!data.runOnStop,
                         autoGraXpert: !!data.autoGraXpert
                     };
@@ -27930,9 +28014,13 @@ function ninaApp() {
             const ea = this.endActions || {};
             const parts = [];
             if (ea.parkMount) parts.push('park');
-            else if (ea.stopTracking) parts.push('stop tracking');
+            else {
+                if (ea.homeMount) parts.push('home');
+                if (ea.stopTracking) parts.push('stop tracking');
+            }
             if (ea.warmCamera) parts.push('warm camera');
             if (ea.disconnectGuider) parts.push('stop PHD2');
+            if (ea.shutdownHost) parts.push('power off host');
             if (!parts.length) return '';
             return parts.join(' · ') + (ea.runOnStop ? ' · also on stop' : '');
         },
@@ -27942,8 +28030,8 @@ function ninaApp() {
         // without re-running endActionsSummary's string formatter.
         endActionsHasAny() {
             const ea = this.endActions || {};
-            return !!(ea.parkMount || ea.stopTracking || ea.warmCamera
-                   || ea.disconnectGuider || ea.autoGraXpert);
+            return !!(ea.parkMount || ea.homeMount || ea.stopTracking || ea.warmCamera
+                   || ea.disconnectGuider || ea.shutdownHost || ea.autoGraXpert);
         },
 
         // Debounced PUT, fires 400ms after the last edit
@@ -51874,6 +51962,7 @@ function ninaApp() {
                     equipmentAgeMs: msg.hostActivity.equipmentAgeMs ?? null,
                     at: Date.now()
                 };
+                this._openOnActivePanel(msg.hostActivity.panel || null);
             }
             if (msg.focusSweep) {
                 const was = this.focusSweep.state;

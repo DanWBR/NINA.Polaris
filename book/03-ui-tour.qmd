@@ -169,6 +169,14 @@ other, and you can move between them mid-session without losing your
 place. A **Full Mode** button in the corner returns you to the full
 UI, and on a phone a **Field mode** pill brings you back here.
 
+Opened in the middle of a session, Polaris starts on what the rig is
+doing rather than on its default screen: a live stack opens LIVE, a
+running Autorun opens Autorun, a video recording opens Video, an
+auto-focus run opens Focus. The full interface does the same, and also
+opens Plan, Mosaic or the Advanced Sequencer when one of those is
+running. Field Mode does not have screens for those three, so it keeps
+Preview for them.
+
 The image fills the screen. A menu at the top moves between the
 screens you use at the scope: Preview, Focus, Sky, Autorun, Live, and
 Video. Two icons beside it jump straight to Guide and Setup. Each

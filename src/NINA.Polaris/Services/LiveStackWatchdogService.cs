@@ -54,6 +54,10 @@ public sealed class LiveStackWatchdogService : System.IDisposable {
         _profiles.EquipmentProfileActivated += _ => ResetState();
     }
 
+    /// <summary>Raised once when the target SNR stops the LIVE capture, after
+    /// the stop. <see cref="LiveStackEndService"/> runs the end actions on it.</summary>
+    public event Action? TargetSnrReached;
+
     public void ResetState() {
         _lastSeenFrame = 0;
         _autoStopped = false;
@@ -80,6 +84,8 @@ public sealed class LiveStackWatchdogService : System.IDisposable {
                     $"Live stack reached target SNR {_stack.TargetSnr.Value:0.#}, capture stopped.", 8000);
                 _logger.LogInformation("Live-stack watchdog: target SNR {Target:0.#} reached at frame {Frame}, capture stopped.",
                     _stack.TargetSnr.Value, info.FrameCount);
+                try { TargetSnrReached?.Invoke(); }
+                catch (System.Exception ex) { _logger.LogWarning(ex, "Live-stack watchdog: target-SNR handler failed"); }
             }
 
             // Quality alerts (clouds / focus drift), throttled per kind.

@@ -646,6 +646,16 @@ public class ProfileService {
             LiveStackNormalizeBackground = src.LiveStackNormalizeBackground,
             LiveStackWeightFrames = src.LiveStackWeightFrames,
             LiveStackMaxDurationSeconds = src.LiveStackMaxDurationSeconds,
+            LiveStackEndActions = new LiveStackEndActions {
+                SaveStack = src.LiveStackEndActions?.SaveStack ?? true,
+                StopCapture = src.LiveStackEndActions?.StopCapture ?? false,
+                StopGuiding = src.LiveStackEndActions?.StopGuiding ?? false,
+                ParkMount = src.LiveStackEndActions?.ParkMount ?? false,
+                HomeMount = src.LiveStackEndActions?.HomeMount ?? false,
+                StopTracking = src.LiveStackEndActions?.StopTracking ?? false,
+                WarmCamera = src.LiveStackEndActions?.WarmCamera ?? false,
+                ShutdownHost = src.LiveStackEndActions?.ShutdownHost ?? false
+            },
             TargetSnr = src.TargetSnr,
             // LSPP-3: per-frame pre-processing (calibration + BGE).
             // Clone the shape so the new rig inherits the source's

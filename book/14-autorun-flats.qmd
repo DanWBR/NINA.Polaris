@@ -61,6 +61,11 @@ A collapsible end-actions panel decides what happens when the sequence
 completes:
 
 - **Park mount** slews to the park position and disables tracking.
+- **Return mount to home** slews the mount to its home position (the
+  pose it starts from, with the counterweight down). Unlike park, the
+  mount stays ready to move. Tick **Stop tracking** as well if it should
+  not go on tracking from home. Park, when also ticked, takes the place
+  of both. A mount that does not have a home command skips this step.
 - **Warm camera** ramps the cooler gradually back to ambient, which
   protects the sensor.
 - **Stop PHD2** gracefully disconnects equipment and stops guiding
@@ -71,10 +76,22 @@ completes:
   GraXpert is a free tool that removes sky-glow gradients from images.
   The extraction runs on its own without holding anything else up, and
   the results land under `{rig}/bge/{target}/`.
-- **Shutdown server** powers the machine off after a delay by running
-  the Linux command `systemctl poweroff`. Linux only, and the Polaris
-  user needs a sudoers entry for it (permission to run that one command
-  as administrator without a password).
+- **Power off the host** turns off the computer that runs Polaris,
+  after the other end events. It only happens when the run completes:
+  after a Stop or a failure the host stays on, even with **Also run
+  when sequence is stopped** ticked, so the session can be looked at and
+  resumed.
+
+## Auto-focus between items
+
+The **Auto-focus** tab under **Advanced settings** has one option:
+**Auto-focus before each light item**. With it on, every enabled light
+item (a row of normal exposures of the target, not darks, bias or
+flats) starts with an auto-focus run, after the slew and the filter
+change, so each filter is focused through itself. The run uses the
+settings of the FOCUS tab. If it fails, the item is still captured at
+the focus from before and a notice says so. A run resumed partway into
+an item does not focus again for that item.
 
 ## Dithering
 

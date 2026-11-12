@@ -253,6 +253,7 @@ public class SequenceEntityJsonConverter : JsonConverter<ISequenceEntity> {
         // External
         "RunExternalScript" => typeof(RunExternalScriptInstruction),
         "SendHttpRequest"   => typeof(SendHttpRequestInstruction),
+        "ShutdownHost"      => typeof(ShutdownHostInstruction),
 
         // Conditions
         "LoopUntilTime"      => typeof(LoopUntilTimeCondition),
@@ -431,6 +432,7 @@ public class SequenceEntityJsonConverter : JsonConverter<ISequenceEntity> {
 
         ("RunExternalScript", "External", "Instruction"),
         ("SendHttpRequest", "External", "Instruction"),
+        ("ShutdownHost", "Host", "Instruction"),
 
         ("LoopUntilTime", "Conditions", "Condition"),
         ("LoopUntilAltitude", "Conditions", "Condition"),
