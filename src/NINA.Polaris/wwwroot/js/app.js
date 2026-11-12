@@ -6767,9 +6767,22 @@ function ninaApp() {
                 // to do with it.
                 const headers = this.auth.token
                     ? { Authorization: 'Bearer ' + this.auth.token } : {};
-                const r = await fetch('/api/auth/status',
-                    { cache: 'no-store', headers });
-                const s = await r.json();
+                // With a saved token, a failed request here is the host or
+                // the Wi-Fi still coming up, not a reason to ask for the
+                // password: retry for ~12 s before falling through to the
+                // "Cannot reach" login screen below.
+                let s = null;
+                for (let attempt = 0; ; attempt++) {
+                    try {
+                        const r = await fetch('/api/auth/status',
+                            { cache: 'no-store', headers });
+                        s = await r.json();
+                        break;
+                    } catch (e) {
+                        if (!this.auth.token || attempt >= 5) throw e;
+                        await new Promise(res => setTimeout(res, 2000));
+                    }
+                }
                 this.auth.configured = !!s.configured;
                 this.auth.enabled = !!s.enabled;
                 this.auth.authenticated = !!s.authenticated;

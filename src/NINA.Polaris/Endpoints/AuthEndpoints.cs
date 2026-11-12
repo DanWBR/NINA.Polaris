@@ -229,8 +229,14 @@ public static class AuthEndpoints {
         // (mirrors sessionStorage). The server-side session TTL
         // (AuthSessionTimeoutHours, sliding) is still the real auth gate;
         // a cookie that outlives its session just 401s into a re-login.
+        //
+        // Max-Age, not Expires: Expires is an absolute date from the HOST's
+        // clock, and a host that booted without network time can be months
+        // behind. The browser then received a cookie that had already
+        // expired and dropped it on arrival. Max-Age is counted by the
+        // browser from its own clock.
         if (persist)
-            opts.Expires = DateTimeOffset.UtcNow.AddDays(30);
+            opts.MaxAge = TimeSpan.FromDays(30);
         ctx.Response.Cookies.Append(AuthService.CookieName, token, opts);
     }
 

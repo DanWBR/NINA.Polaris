@@ -60,9 +60,16 @@ public class AuthService : IDisposable {
     private static readonly TimeSpan AttemptWindow = TimeSpan.FromMinutes(1);
     private static readonly TimeSpan MaxLockout = TimeSpan.FromHours(1);
 
-    public AuthService(ProfileService profile, ILogger<AuthService> logger) {
+    public AuthService(ProfileService profile, ILogger<AuthService> logger)
+        : this(profile, logger, null, null) { }
+
+    /// <summary>Test seam: fake wall and monotonic clocks.</summary>
+    internal AuthService(ProfileService profile, ILogger<AuthService> logger,
+            Func<DateTime>? wallClock, Func<long>? monotonicMs) {
         _profile = profile;
         _logger = logger;
+        _wallClock = wallClock ?? (() => DateTime.UtcNow);
+        _monotonicMs = monotonicMs ?? (() => Environment.TickCount64);
         _sessionStorePath = Path.Combine(profile.DataDir, "auth-sessions.json");
         // Restore sessions from disk so a `systemctl restart polaris`
         // doesn't invalidate every logged-in browser. Without this,
@@ -94,17 +101,82 @@ public class AuthService : IDisposable {
     private static readonly TimeSpan RememberTtl = TimeSpan.FromDays(30);
     private TimeSpan TtlForSession(SessionInfo s) => s.Remember ? RememberTtl : SessionTtl;
 
+    // ----- wall-clock jumps --------------------------------------------
+    //
+    // Session ages are wall-clock differences, and the hosts' wall clock
+    // jumps. A Raspberry Pi or Orange Pi without a battery-backed RTC boots
+    // with the time it had at shutdown (or older), and the clock is put
+    // right later, by NTP or by Polaris itself from the client's time.
+    // A session used in between was stamped with the stale time, so the
+    // correction made it look days or months old: a jump over the 30-day
+    // remember TTL expired every remembered session at once, and the app
+    // asked for the password again even with "remember" ticked.
+    //
+    // So every read of the clock is checked against the monotonic clock,
+    // which does not jump. When the wall clock moved more than
+    // JumpThreshold away from where the monotonic clock says it should be,
+    // the clock was set, and every session timestamp is shifted by the same
+    // amount. Time that really passed still ages a session; a clock
+    // correction does not.
+
+    private readonly Func<DateTime> _wallClock;
+    private readonly Func<long> _monotonicMs;
+    private readonly object _clockLock = new();
+    private DateTime _anchorWall;
+    private long _anchorMono;
+    private bool _anchored;
+    private static readonly TimeSpan JumpThreshold = TimeSpan.FromMinutes(2);
+
+    /// <summary>Current UTC, with any wall-clock jump since the last call
+    /// already applied to the session timestamps.</summary>
+    private DateTime Now() {
+        lock (_clockLock) {
+            var wall = _wallClock();
+            var mono = _monotonicMs();
+            if (_anchored) {
+                var expected = _anchorWall + TimeSpan.FromMilliseconds(mono - _anchorMono);
+                var jump = wall - expected;
+                if (jump.Duration() > JumpThreshold) ShiftForClockJump(jump, wall);
+            }
+            _anchorWall = wall;
+            _anchorMono = mono;
+            _anchored = true;
+            return wall;
+        }
+    }
+
+    private void ShiftForClockJump(TimeSpan jump, DateTime now) {
+        foreach (var s in _sessions.Values) {
+            // A session restored from disk and not used since keeps the
+            // timestamp of the previous run, which may already be ahead of
+            // the stale boot clock; the shift would push it past the
+            // corrected clock. Clamp it there: its age restarts at the jump.
+            s.LastActivityAt = Min(s.LastActivityAt + jump, now);
+            s.CreatedAt = Min(s.CreatedAt + jump, now);
+        }
+        // Failed-login windows and lockouts are wall-clock too; a backward
+        // jump would otherwise stretch a 1-minute lockout into months.
+        _attempts.Clear();
+        _logger.LogInformation(
+            "Auth: system clock jumped {Jump}; shifted {Count} session(s)",
+            jump, _sessions.Count);
+        PersistSessions();
+    }
+
+    private static DateTime Min(DateTime a, DateTime b) => a < b ? a : b;
+
     /// <summary>Validates a session token and bumps its activity timestamp.
     /// Returns false for unknown / expired tokens. Loopback bypass is
     /// the middleware's responsibility, not this method's.</summary>
     public bool ValidateToken(string? token) {
         if (string.IsNullOrEmpty(token)) return false;
         if (!_sessions.TryGetValue(token, out var s)) return false;
-        if (DateTime.UtcNow - s.LastActivityAt > TtlForSession(s)) {
+        var now = Now();
+        if (now - s.LastActivityAt > TtlForSession(s)) {
             _sessions.TryRemove(token, out _);
             return false;
         }
-        s.LastActivityAt = DateTime.UtcNow;
+        s.LastActivityAt = now;
         return true;
     }
 
@@ -203,10 +275,11 @@ public class AuthService : IDisposable {
 
     private string CreateSession(bool remember) {
         var token = NewToken();
+        var now = Now();
         _sessions[token] = new SessionInfo {
             Token = token,
-            CreatedAt = DateTime.UtcNow,
-            LastActivityAt = DateTime.UtcNow,
+            CreatedAt = now,
+            LastActivityAt = now,
             Remember = remember
         };
         PersistSessions();
@@ -243,11 +316,14 @@ public class AuthService : IDisposable {
             var json = File.ReadAllText(_sessionStorePath);
             var entries = JsonSerializer.Deserialize<List<SessionInfo>>(json);
             if (entries == null) return;
+            // Anchors the jump detector too, so a clock correction that
+            // lands before the first request is still noticed.
+            var now = Now();
             foreach (var s in entries) {
                 if (string.IsNullOrEmpty(s.Token)) continue;
                 // Per-session TTL: a remembered session survives a long
                 // idle gap, a normal one only the short default.
-                if (DateTime.UtcNow - s.LastActivityAt > TtlForSession(s)) continue;
+                if (now - s.LastActivityAt > TtlForSession(s)) continue;
                 _sessions[s.Token] = s;
             }
             _logger.LogInformation(
@@ -327,8 +403,9 @@ public class AuthService : IDisposable {
 
     private void SweepExpired() {
         bool removedAny = false;
+        var now = Now();
         foreach (var kv in _sessions.ToArray()) {
-            if (DateTime.UtcNow - kv.Value.LastActivityAt > TtlForSession(kv.Value)) {
+            if (now - kv.Value.LastActivityAt > TtlForSession(kv.Value)) {
                 if (_sessions.TryRemove(kv.Key, out _)) removedAny = true;
             }
         }
@@ -340,7 +417,7 @@ public class AuthService : IDisposable {
         PersistSessions();
         _ = removedAny;
         // Bucket cleanup, keep only the last hour's data.
-        var attemptCutoff = DateTime.UtcNow - MaxLockout;
+        var attemptCutoff = now - MaxLockout;
         foreach (var kv in _attempts.ToArray()) {
             if (kv.Value.LockedUntil < attemptCutoff && kv.Value.WindowStart < attemptCutoff) {
                 _attempts.TryRemove(kv.Key, out _);
@@ -351,15 +428,16 @@ public class AuthService : IDisposable {
     private bool IsRateLimited(string ipKey, out TimeSpan retryAfter) {
         retryAfter = TimeSpan.Zero;
         if (!_attempts.TryGetValue(ipKey, out var b)) return false;
-        if (b.LockedUntil > DateTime.UtcNow) {
-            retryAfter = b.LockedUntil - DateTime.UtcNow;
+        var now = Now();
+        if (b.LockedUntil > now) {
+            retryAfter = b.LockedUntil - now;
             return true;
         }
         return false;
     }
 
     private void RegisterFailure(string ipKey) {
-        var now = DateTime.UtcNow;
+        var now = Now();
         _attempts.AddOrUpdate(ipKey,
             _ => new AttemptBucket {
                 WindowStart = now, Failures = 1, LockedUntil = DateTime.MinValue
