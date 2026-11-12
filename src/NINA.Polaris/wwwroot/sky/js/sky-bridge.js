@@ -848,6 +848,22 @@
         }
     }
 
+    // Put a screen-anchored box on the centre of the CANVAS, which is the
+    // centre of the engine's projection and the point zoom keeps fixed.
+    // CSS left/top 50% centre it on the page instead, and the page is not
+    // always the canvas: skyApplyViewport sizes the canvas from what the
+    // parent reports, and in the Android app that was 64 px shorter than
+    // the frame (the area above the bottom toolbar). The box then sat 32 px
+    // below the projection centre, and the sky inside it slid away as the
+    // operator zoomed out.
+    function skyCentreOnCanvas(el, canvas) {
+        if (!el || !canvas) return;
+        var r = canvas.getBoundingClientRect();
+        if (!(r.width > 0) || !(r.height > 0)) return;
+        el.style.left = (r.left + window.scrollX + r.width / 2) + 'px';
+        el.style.top = (r.top + window.scrollY + r.height / 2) + 'px';
+    }
+
     function skyUpdateTargetFovBox(target) {
         __lastTargetFov = target || null;
         var el = document.getElementById('sky-target-fov');
@@ -921,6 +937,7 @@
         var rotDeg = cameraRollDeg + parallacticDeg;
         el.style.width = wPx + 'px';
         el.style.height = hPx + 'px';
+        skyCentreOnCanvas(el, canvas);
         // verticalFlipImage: mirror the rectangle top-for-bottom (scaleY
         // before rotate reverses the rotation sense too) so the red box
         // matches the vertically-flipped captured frame, like the blue box.
@@ -1117,6 +1134,7 @@
         var rotDeg = cameraRollDeg + parallacticDeg;
         el.style.width = (aux.widthDeg * pxPerDeg) + 'px';
         el.style.height = (aux.heightDeg * pxPerDeg) + 'px';
+        skyCentreOnCanvas(el, document.getElementById('stel-canvas'));
         var flipTf = aux.flipV ? ' scaleY(-1)' : '';
         el.style.transform = 'translate(-50%, -50%)' + flipTf
             + ' rotate(' + rotDeg.toFixed(2) + 'deg)';
@@ -1813,6 +1831,98 @@
         });
         canvas.addEventListener('pointerup', function () { tracking = false; });
         canvas.addEventListener('pointercancel', function () { tracking = false; });
+    })();
+
+    // Zoom about the view centre while the red target box is screen-anchored.
+    //
+    // The engine zooms about the point under the cursor (wheel) or between
+    // the fingers (pinch), which moves the view centre on every zoom. The
+    // red drag-to-frame box is pinned to the view centre, so the sky inside
+    // it changed as the operator zoomed: the box seemed to wander over the
+    // sky. While that box is up, the wheel and the two-finger pinch are
+    // taken over here and passed to the engine with the canvas centre as the
+    // zoom point. A celestial-anchored red rectangle (while imaging) is an
+    // engine geojson that zooms with the sky, so the engine's own behaviour
+    // stays in that case.
+    (function installCentredZoom() {
+        var canvas = document.getElementById('stel-canvas');
+        if (!canvas) return;
+
+        function boxIsScreenAnchored() {
+            var el = document.getElementById('sky-target-fov');
+            return !!(el && el.style.display === 'block');
+        }
+        function engineReady() {
+            var s = window.__stel;
+            return !!(s && typeof s._core_on_zoom === 'function');
+        }
+        function zoomAtCentre(k) {
+            var r = canvas.getBoundingClientRect();
+            window.__stel._core_on_zoom(k, r.width / 2, r.height / 2);
+        }
+
+        // Wheel: the engine listens to the legacy 'mousewheel' (Chrome,
+        // Safari) and 'DOMMouseScroll' (Firefox) events on the canvas. A
+        // capture listener on window runs first and keeps the event from
+        // reaching it. Same step as the engine: 1.05^(2 * notches).
+        function onWheel(e) {
+            if (e.target !== canvas || !boxIsScreenAnchored() || !engineReady()) return;
+            var delta = e.type === 'DOMMouseScroll' ? -(e.detail || 0) : (e.wheelDelta || 0) / 120;
+            e.preventDefault();
+            e.stopPropagation();
+            if (delta) zoomAtCentre(Math.pow(1.05, delta * 2));
+        }
+        window.addEventListener('mousewheel', onWheel, { capture: true, passive: false });
+        window.addEventListener('DOMMouseScroll', onWheel, { capture: true, passive: false });
+
+        // Pinch: once a second finger lands on the canvas, the gesture is
+        // ours until every finger is up. The engine already saw the first
+        // finger go down, so it is told that finger went up; otherwise it
+        // would pan from a stale position when the gesture ends.
+        var pinch = null;      // { d0, fov0 }
+        var owned = false;     // gesture taken over, block until all fingers up
+        function dist(t) {
+            var dx = t[0].clientX - t[1].clientX, dy = t[0].clientY - t[1].clientY;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+        function onTouchStart(e) {
+            if (owned) { e.stopPropagation(); return; }
+            if (e.target !== canvas || e.touches.length < 2) return;
+            if (!boxIsScreenAnchored() || !engineReady()) return;
+            var s = window.__stel, r = canvas.getBoundingClientRect();
+            for (var i = 0; i < e.touches.length; i++) {
+                var t = e.touches[i], isNew = false;
+                for (var j = 0; j < e.changedTouches.length; j++) {
+                    if (e.changedTouches[j].identifier === t.identifier) isNew = true;
+                }
+                if (!isNew && typeof s._core_on_mouse === 'function') {
+                    try { s._core_on_mouse(t.identifier, 0, t.pageX - r.left, t.pageY - r.top, 1); }
+                    catch (_) { /* engine ignores unknown touch ids */ }
+                }
+            }
+            owned = true;
+            pinch = { d0: dist(e.touches), fov0: s.core.fov };
+            e.stopPropagation();
+        }
+        function onTouchMove(e) {
+            if (!owned) return;
+            e.preventDefault();
+            e.stopPropagation();
+            if (!pinch || e.touches.length < 2 || !(pinch.d0 > 0)) return;
+            var s = window.__stel;
+            var target = pinch.fov0 * pinch.d0 / dist(e.touches);
+            if (isFinite(target) && target > 0) zoomAtCentre(s.core.fov / target);
+        }
+        function onTouchEnd(e) {
+            if (!owned) return;
+            e.stopPropagation();
+            if (e.touches.length < 2) pinch = null;
+            if (e.touches.length === 0) owned = false;
+        }
+        window.addEventListener('touchstart', onTouchStart, { capture: true, passive: true });
+        window.addEventListener('touchmove', onTouchMove, { capture: true, passive: false });
+        window.addEventListener('touchend', onTouchEnd, { capture: true, passive: true });
+        window.addEventListener('touchcancel', onTouchEnd, { capture: true, passive: true });
     })();
 
     document.addEventListener('click', function (ev) {
