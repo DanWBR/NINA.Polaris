@@ -787,6 +787,14 @@ public class EquipmentManager : IDisposable {
                 if (AuxCamera is { IsConnected: true } && AuxCameraDriver == driver && !string.IsNullOrEmpty(AuxCameraDeviceId))
                     liveIds.TryAdd(AuxCameraDeviceId, AuxCamera.DeviceName);
                 foreach (var kv in liveIds) NINA.Camera.ZwoSdk.ZwoDiscovery.Remember(kv.Key, kv.Value);
+                // The rig's saved ZWO cameras too, so the other picker offers its
+                // camera even when this process has not seen it on a full scan.
+                var zwoRig = _profiles?.ActiveEquipmentProfile;
+                if (zwoRig != null) {
+                    if (zwoRig.CameraDriver == driver) NINA.Camera.ZwoSdk.ZwoDiscovery.Remember(zwoRig.Camera ?? "", null);
+                    if (zwoRig.GuideCameraDriver == driver) NINA.Camera.ZwoSdk.ZwoDiscovery.Remember(zwoRig.GuideCamera ?? "", null);
+                    if (zwoRig.AuxCameraDriver == driver) NINA.Camera.ZwoSdk.ZwoDiscovery.Remember(zwoRig.AuxCamera ?? "", null);
+                }
                 return NINA.Camera.ZwoSdk.ZwoDiscovery.Enumerate()
                     .Select(e => new DiscoveredCamera(
                         e.Id, liveIds.TryGetValue(e.Id, out var liveName) ? liveName : e.Model,

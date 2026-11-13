@@ -72,6 +72,29 @@ public class ZwoDiscoveryMaskingTests {
         Assert.That(again.Select(e => e.Model), Is.EqualTo(new[] { "ASI2600MC Pro", "ASI120MM Mini" }));
     }
 
+    /// <summary>With a camera open the SDK's answer is partial and its ids are
+    /// positions. A masked scan that reports the open guide camera under the
+    /// main camera's id must not rename the main camera.</summary>
+    [Test]
+    public void AMaskedScan_DoesNotRenameAKnownCamera() {
+        ZwoDiscovery.Merge(new[] { Live(0, "ZWO ASI585MC Pro"), Live(1, "ZWO ASI120MM Mini") });
+        ZwoDiscovery.MarkOpen(1);
+        var masked = ZwoDiscovery.Merge(new[] { Live(0, "ZWO ASI120MM Mini") });
+        Assert.That(masked.Select(e => e.Model), Is.EquivalentTo(new[] { "ZWO ASI585MC Pro", "ZWO ASI120MM Mini" }));
+        ZwoDiscovery.MarkClosed(1);
+    }
+
+    /// <summary>The first camera opened in a process: the scan before the open
+    /// still sees the whole bus, and the second camera stays listed after.</summary>
+    [Test]
+    public void TheScanBeforeTheFirstOpen_KeepsTheSecondCamera() {
+        ZwoDiscovery.Merge(new[] { Live(0, "ZWO ASI585MC Pro"), Live(1, "ZWO ASI678MC") });
+        ZwoDiscovery.MarkOpen(1);
+        var all = ZwoDiscovery.Merge(new[] { Live(1, "ZWO ASI678MC") });
+        Assert.That(all.Select(e => (e.Id, e.Present)), Is.EqualTo(new[] { ("0", false), ("1", true) }));
+        ZwoDiscovery.MarkClosed(1);
+    }
+
     [Test]
     public void ACameraSeenBeforeAnOpen_SurvivesTheMasking() {
         var both = ZwoDiscovery.Merge(new[] {

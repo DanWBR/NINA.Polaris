@@ -55,7 +55,16 @@ public static class ZwoDiscovery {
 
     /// <summary>Forget the remembered cameras. For tests, and for a caller that
     /// wants a genuinely clean scan.</summary>
-    public static void ForgetSeen() => Seen.Clear();
+    public static void ForgetSeen() { Seen.Clear(); Open.Clear(); }
+
+    // Cameras this process holds open, by SDK id. While any is open the SDK's
+    // answer is partial, and its positional ids are not a safe key to rename
+    // a remembered camera by.
+    private static readonly ConcurrentDictionary<int, byte> Open = new();
+
+    /// <summary>Called by the camera on open and close.</summary>
+    public static void MarkOpen(int id) => Open[id] = 0;
+    public static void MarkClosed(int id) => Open.TryRemove(id, out _);
 
     /// <summary>Record a camera this process opened without ever scanning for
     /// it (a saved rig auto-connects by id at boot), so the union lists it
@@ -89,11 +98,23 @@ public static class ZwoDiscovery {
     /// <summary>Union a live scan with what this process has seen before. Pure,
     /// so the masking behaviour is testable without a camera attached.</summary>
     public static IReadOnlyList<ZwoCameraEntry> Merge(IReadOnlyList<ZwoCameraEntry> live) {
+        // With nothing open the scan is the whole bus and names every id. With a
+        // camera open it is partial: it can add an id this process has not seen,
+        // or name a placeholder, but it never renames a camera already known, so
+        // a masked scan cannot write the open camera's model over another id
+        // (two ZWO cameras, the second one vanishing from the picker).
+        bool partial = !Open.IsEmpty;
         foreach (var e in live) {
-            if (int.TryParse(e.Id, out var liveId)) Seen[liveId] = e.Model;
+            if (!int.TryParse(e.Id, out var liveId)) continue;
+            if (!partial) { Seen[liveId] = e.Model; continue; }
+            Seen.AddOrUpdate(liveId, e.Model,
+                (_, old) => old.StartsWith("ASI #", StringComparison.Ordinal) ? e.Model : old);
         }
         var present = live.Select(e => e.Id).ToHashSet(StringComparer.Ordinal);
-        var all = new List<ZwoCameraEntry>(live);
+        // The names come from the registry, so a partial scan cannot relabel a
+        // known camera in the list either.
+        var all = live.Select(e => int.TryParse(e.Id, out var i) && Seen.TryGetValue(i, out var m)
+            ? e with { Model = m, Info = m } : e).ToList();
         foreach (var kv in Seen) {
             var id = kv.Key.ToString();
             if (present.Contains(id)) continue;

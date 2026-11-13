@@ -161,12 +161,19 @@ public sealed class AsiSdkCamera : ICamera {
         int n = ASIGetNumOfConnectedCameras();
         var info = new ASI_CAMERA_INFO();
         bool found = false;
+        var seen = new List<ZwoDiscovery.ZwoCameraEntry>();
         for (int i = 0; i < n; i++) {
             var probe = new ASI_CAMERA_INFO();
-            if (ASIGetCameraProperty(ref probe, i) == ASI_ERROR_CODE.ASI_SUCCESS && probe.CameraID == _cameraId) {
-                info = probe; found = true; break;
-            }
+            if (ASIGetCameraProperty(ref probe, i) != ASI_ERROR_CODE.ASI_SUCCESS) continue;
+            var model = string.IsNullOrWhiteSpace(probe.Name) ? $"ASI #{probe.CameraID}" : probe.Name;
+            seen.Add(new ZwoDiscovery.ZwoCameraEntry(probe.CameraID.ToString(), model, model));
+            if (!found && probe.CameraID == _cameraId) { info = probe; found = true; }
         }
+        // The scan right before an open is the one place every path goes
+        // through (a click, the boot auto-connect, the guider), and for the
+        // first camera of the process it still sees the whole bus. Keeping it
+        // is what lets the other picker list the second camera afterwards.
+        try { ZwoDiscovery.Merge(seen); } catch { /* the picker list only */ }
         if (!found) throw new InvalidOperationException($"ASI camera id {_cameraId} not found.");
         CameraClaims.ThrowIfHeld(info.Name, "ZWO SDK");
 
@@ -177,6 +184,7 @@ public sealed class AsiSdkCamera : ICamera {
                 "The camera may already be in use by another process. If an INDI " +
                 "driver for this camera is connected, disconnect it (or remove it " +
                 "from the running indiserver profile) before using the native SDK backend.");
+        ZwoDiscovery.MarkOpen(_cameraId);
         Check(ASIInitCamera(_cameraId), "ASIInitCamera");
 
         if (!string.IsNullOrWhiteSpace(info.Name)) DeviceName = info.Name;
@@ -383,6 +391,7 @@ public sealed class AsiSdkCamera : ICamera {
     public Task DisconnectAsync(CancellationToken ct = default) => Task.Run(() => {
         try { StopStreamCore(); } catch { }
         if (_connected) { try { ASICloseCamera(_cameraId); } catch { } }
+        ZwoDiscovery.MarkClosed(_cameraId);
         _connected = false;
         // A disconnect the operator asked for is not news, so it clears the
         // reason rather than leaving the last unplug on the record.
