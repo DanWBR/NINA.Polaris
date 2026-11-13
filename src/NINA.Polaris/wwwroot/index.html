@@ -4344,7 +4344,7 @@
                                  'shutter-active': preview.busy || preview.looping,
                                  'shutter-arming': armingLoop
                              }"
-                             :aria-disabled="!selectedCamera || cameraStream.running"
+                             :aria-disabled="!previewSourceReady() || cameraStream.running"
                              role="button"
                              :aria-label="(preview.busy || preview.looping) ? 'Abort snap' : 'Take snap'"
                              @pointerdown="shutterPointerDown($event, previewShutterCtx())"
@@ -4401,7 +4401,7 @@
                                 + ' / tx ' + (cameraStream.transmitFps?.toFixed?.(1) || '0.0') + ' fps)'"></span>
                         </button>
                         <button class="btn" @click="openImageViewer()"
-                                :disabled="!selectedCamera"
+                                :disabled="!previewSourceReady()"
                                 title="Full-resolution zoom/pan viewer">⛶ View</button>
                         <!-- Continuous preview: re-snaps automatically after each
                              frame (same chain as the shutter long-press Loop).
@@ -4413,7 +4413,7 @@
                             <input type="checkbox"
                                    :checked="preview.looping"
                                    @change="previewToggleLoop()"
-                                   :disabled="!selectedCamera || cameraStream.running">
+                                   :disabled="!previewSourceReady() || cameraStream.running">
                             🔁 Continuous preview
                         </label>
                         <!-- FIELD4-4: one-shot plate solve of the currently
@@ -26832,7 +26832,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261113-powerbox"></script>
+    <script src="/js/app.js?v=20261113-previewsrc"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
