@@ -54,6 +54,8 @@ public class SequenceEngine {
     private readonly StoragePushService? _storagePush;
     private readonly AutoFocusService? _autoFocus;
     private readonly PowerService? _power;
+    private readonly NINA.Polaris.Services.Logging.SessionRunLogService? _runLogs;
+    private NINA.Polaris.Services.Logging.SessionRunLogService.Session? _runLog;
 
     private CancellationTokenSource? _cts;
     private readonly SemaphoreSlim _pauseGate = new(1, 1);
@@ -123,7 +125,9 @@ public class SequenceEngine {
         GuideRunawayGuard? guideGuard = null,
         NotificationService? notify = null,
         AutoFocusService? autoFocus = null,
-        PowerService? power = null) {
+        PowerService? power = null,
+        NINA.Polaris.Services.Logging.SessionRunLogService? runLogs = null) {
+        _runLogs = runLogs;
         _autoFocus = autoFocus;
         _power = power;
         _guideGuard = guideGuard;
@@ -293,6 +297,7 @@ public class SequenceEngine {
         _filterState.CurrentFilter = null;
         _filterState.AppliedOffset = 0;
         _imageWriter.ResetSessionCounter();
+        _runLog = _runLogs?.Begin("autorun", RunLogName(), DescribeItems());
 
         if (_pauseGate.CurrentCount == 0)
             _pauseGate.Release();
@@ -400,7 +405,31 @@ public class SequenceEngine {
         };
     }
 
+    /// <summary>The run log's name: the targets of the enabled items.</summary>
+    private string RunLogName() {
+        var names = Items.Where(i => i.Enabled && !string.IsNullOrWhiteSpace(i.Name))
+            .Select(i => i.Name.Trim()).Distinct().ToList();
+        return names.Count == 0 ? "" : string.Join("_", names.Take(3)) + (names.Count > 3 ? "_etc" : "");
+    }
+
+    private IEnumerable<string> DescribeItems() {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var flip = _meridianFlip.Settings.Enabled
+            ? $"on, {_meridianFlip.Settings.MinutesAfterMeridian:F0} min after" : "off";
+        yield return string.Create(inv,
+            $"Dither: {(Dither.Enabled ? $"every {Dither.EveryNFrames} frames, {Dither.Pixels} px" : "off")}, meridian flip: {flip}, "
+            + $"power off at the end: {(EndActions.ShutdownHost ? "yes" : "no")}");
+        yield return "Items:";
+        foreach (var i in Items) {
+            yield return string.Create(inv,
+                $"  {(i.Enabled ? "-" : "x")} {(string.IsNullOrWhiteSpace(i.Name) ? "(no target)" : i.Name)}: {i.Count} x {i.Exposure:0.##} s {i.ImageType}"
+                + $"{(string.IsNullOrWhiteSpace(i.Filter) ? "" : " " + i.Filter)}, gain {i.Gain}{(i.Enabled ? "" : " [disabled]")}");
+        }
+    }
+
     private async Task RunAsync(CancellationToken ct) {
+        string runOutcome = "stopped";
+        string? runError = null;
         // Run the auxiliary camera capture loop alongside the sequence.
         try { _aux.NotifySessionActive(true); } catch { }
         // Main imaging camera joins the synchronized-dither barrier (primary, so
@@ -762,6 +791,7 @@ public class SequenceEngine {
                 TotalFramesCompleted,
                 StartedAt.HasValue ? (DateTime.UtcNow - StartedAt.Value).ToString(@"hh\:mm\:ss") : "??");
 
+            runOutcome = "completed";
             // Natural completion always fires the end-actions.
             await RunEndActionsAsync(triggeredByStop: false);
 
@@ -779,6 +809,8 @@ public class SequenceEngine {
         } catch (Exception ex) {
             LastError = ex.Message;
             State = SequenceState.Idle;
+            runOutcome = "FAILED";
+            runError = ex.Message;
             _logger.LogError(ex, "Sequence failed");
             // Failure: still try housekeeping so the rig isn't left tracking unattended.
             await RunEndActionsAsync(triggeredByStop: true);
@@ -787,6 +819,10 @@ public class SequenceEngine {
             try { _barrier.Deregister("main"); } catch { }
             ReportGuidingForSession();
             CompactAfterRun();
+            var log = _runLog;
+            _runLog = null;
+            try { _runLogs?.End(log, runOutcome, runError); }
+            catch (Exception ex) { _logger.LogWarning(ex, "Run log could not be closed"); }
         }
     }
 

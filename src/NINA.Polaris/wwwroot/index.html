@@ -4016,6 +4016,13 @@
                             </label>
                         </div>
                         <div class="hint mosaic-summary-line" data-no-i18n x-text="mosaicSummaryLine()"></div>
+                        <!-- Plan the grid for another night: one PLAN target
+                             per panel. Works with nothing connected. -->
+                        <div class="control-row" style="margin-top:6px">
+                            <button class="btn btn-sm" @click="mosaicRunExportToPlan()"
+                                    :disabled="mosaicActive() || mosaicPlannedTiles().length === 0"
+                                    title="One PLAN target per panel, to shoot on another night">Send to PLAN</button>
+                        </div>
                     </div>
 
                     <div class="shutter-wrap">
@@ -7242,6 +7249,31 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                            step="0.05" min="0.1" max="5" class="input-sm" style="width:70px">
                                 </label>
                             </div>
+                            <!-- Camera sensor size remembered on the rig, so
+                                 PLAN, MOSAIC and the SKY box get the right
+                                 field of view with nothing connected. Learned
+                                 when the camera connects; typed here for a
+                                 camera that has not been connected yet. -->
+                            <div class="equip-meta-row">
+                                <label>Sensor width (mm)
+                                    <input type="number" x-model.number="settings.rigSensorWidth"
+                                           @change="saveRigSensor()"
+                                           step="0.1" min="0" class="input-sm" style="width:80px">
+                                </label>
+                                <label>Sensor height (mm)
+                                    <input type="number" x-model.number="settings.rigSensorHeight"
+                                           @change="saveRigSensor()"
+                                           step="0.1" min="0" class="input-sm" style="width:80px">
+                                </label>
+                                <span class="equip-meta-derived"
+                                      x-show="settings.focalLength > 0 && fov.width > 0"
+                                      x-text="'FOV ' + fov.width.toFixed(2) + '° × ' + fov.height.toFixed(2) + '°'"></span>
+                            </div>
+                            <p class="hint" style="margin:4px 0 0;font-size:11px">
+                                Filled in when the camera connects. Type it to plan
+                                (PLAN, MOSAIC, SKY) before the camera has ever been
+                                connected on this rig.
+                            </p>
                             <p class="hint" style="margin:4px 0 0;font-size:11px"
                                x-show="settings.requiredBackspacingMm">
                                 Required backspacing: <strong x-text="settings.requiredBackspacingMm + ' mm'"></strong>
@@ -8889,6 +8921,21 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     <span class="equip-toggle-thumb"></span>
                                 </label>
                             </div>
+                            <!-- The rig's filter names, typed with the wheel
+                                 unplugged, so PLAN and AUTORUN offer the right
+                                 filters when planning at a desk. Connecting the
+                                 wheel later keeps them in sync with its slots. -->
+                            <div class="equip-meta-row" x-show="!filterWheel.connected" style="margin-top:6px">
+                                <label style="flex:1; min-width:0">Filter names, in slot order
+                                    <input type="text" class="input-sm" style="width:100%"
+                                           :value="rigFilterNamesText()"
+                                           @change="saveRigFilterNamesText($event.target.value)"
+                                           placeholder="L, R, G, B, Ha, OIII, SII">
+                                </label>
+                            </div>
+                            <p class="hint" x-show="!filterWheel.connected" style="margin:2px 0 0;font-size:11px">
+                                For planning with the wheel unplugged. Separate the names with commas.
+                            </p>
                             <div class="equip-detail" x-show="filterWheel.connected">
                                 <div class="equip-detail-name" x-text="selectedFilterWheel"></div>
                                 <div class="equip-detail-props">
@@ -13318,12 +13365,12 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     <strong x-text="selectedCamera || 'not connected'"></strong>
                                 </div>
                                 <div class="flatwiz-preflight-row"
-                                     :class="(filterWheel.connected && filterWheel.filters.length > 0) ? 'ok' : 'err'">
-                                    <span x-text="(filterWheel.connected && filterWheel.filters.length > 0) ? '✓' : '✗'"></span>
+                                     :class="flatWizardHasWheel() ? 'ok' : 'warn'">
+                                    <span x-text="flatWizardHasWheel() ? '✓' : '⚠'"></span>
                                     <span>Filter wheel:</span>
-                                    <strong x-show="filterWheel.connected && filterWheel.filters.length > 0"
+                                    <strong x-show="flatWizardHasWheel()"
                                             x-text="filterWheel.filters.length + ' filter' + (filterWheel.filters.length === 1 ? '' : 's')"></strong>
-                                    <strong x-show="!filterWheel.connected || filterWheel.filters.length === 0">not connected</strong>
+                                    <strong x-show="!flatWizardHasWheel()">not connected (one set with the filter in place)</strong>
                                 </div>
                                 <div class="flatwiz-preflight-row"
                                      :class="flatDevice.connected ? 'ok' : 'warn'">
@@ -13333,14 +13380,19 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     <strong x-show="!flatDevice.connected">not connected (sky / T-shirt OK)</strong>
                                 </div>
                             </div>
-                            <p class="hint" x-show="!selectedCamera || !filterWheel.connected" style="margin-top:8px">
-                                Connect camera + filter wheel in the
+                            <p class="hint" x-show="!selectedCamera" style="margin-top:8px">
+                                Connect the camera in the
                                 <a href="#" @click.prevent="tab = 'equip'">RIGS</a> tab first.
+                            </p>
+                            <p class="hint" x-show="selectedCamera && !flatWizardHasWheel()" style="margin-top:8px">
+                                Without a filter wheel the wizard takes one set of
+                                flats with whatever is in the light path (a colour
+                                camera, or a filter screwed in front of it).
                             </p>
                         </div>
 
                         <!-- Filter pick -->
-                        <div class="settings-section" x-show="filterWheel.connected && filterWheel.filters.length > 0">
+                        <div class="settings-section" x-show="flatWizardHasWheel()">
                             <h4 style="margin-top:0">Filters to capture</h4>
                             <div class="control-row" style="margin-bottom:6px">
                                 <button class="btn btn-sm" @click="flatWizardSelectAll()">Select all</button>
@@ -13442,7 +13494,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <tbody>
                                     <template x-for="(exp, key) in flatWizard.trained" :key="key">
                                         <tr>
-                                            <td x-text="(key.split('_bin')[0] || key)"></td>
+                                            <td x-text="(key.split('_bin')[0] || 'Filter in place')"></td>
                                             <td x-text="(key.split('_bin')[1] || '?')"></td>
                                             <td><strong x-text="exp.toFixed(3) + 's'"></strong></td>
                                         </tr>
@@ -26494,7 +26546,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261112-authboot"></script>
+    <script src="/js/app.js?v=20261113-planoffline"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

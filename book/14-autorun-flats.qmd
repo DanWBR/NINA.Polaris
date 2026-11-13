@@ -235,19 +235,22 @@ for you.
 ### Pre-flight checks
 
 The pre-flight panel at the top of the sub-tab shows three rows. The
-**Camera** must be connected (mandatory). The **Filter wheel** must be
-connected with at least one filter (also mandatory; the wizard's whole
-point is per-filter exposure tuning). A **Flat panel** is optional:
+**Camera** must be connected (mandatory). The **Filter wheel** is
+optional: with one connected, the wizard tunes the exposure filter by
+filter; without one (a colour camera, or a single filter screwed in
+front of the camera), it takes one set of flats with whatever is in the
+light path. A **Flat panel** is optional:
 when one is connected, the brightness slider in the sidebar applies
 before the wizard kicks off, and when none is connected the wizard
 works fine with sky flats at dusk or dawn, or with a T-shirt stretched
 over the front of the OTA (the optical tube assembly, the telescope
-tube itself). If the camera or filter wheel is missing,
-the link in the hint takes you to the RIGS tab (@sec-rigs).
+tube itself). If the camera is missing, the link in the hint takes
+you to the RIGS tab (@sec-rigs).
 
 ### Picking filters
 
-Multi-select chips list the filters detected by the wheel. The wizard
+With a filter wheel connected, multi-select chips list the filters
+detected by the wheel. The wizard
 captures in the order you tick them, left to right in the chip list,
 and **Select all** and **Clear** buttons help when you have many
 filters. Pick whichever subset matches your imaging plan; there is no
@@ -311,7 +314,8 @@ The ring around the button shows composite progress,
 `(filtersDone + frames-in-current-filter) / totalFilters`; an empty
 ring means idle and a full ring means the last filter just finished its
 last frame. The shutter is greyed out and disabled when no camera is
-connected, no filter wheel is connected, or zero filters are picked.
+connected, or when a filter wheel is connected and zero filters are
+picked.
 
 ### Live progress
 

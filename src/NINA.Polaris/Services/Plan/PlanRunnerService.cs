@@ -12,6 +12,7 @@
 // for more details. You should have received a copy of the license along with
 // this program. If not, see <https://www.gnu.org/licenses/>.
 
+using NINA.Polaris.Services.Logging;
 using NINA.Polaris.Services.Sequencer;
 using NINA.Polaris.Services.Sequencer.Containers;
 using NINA.Polaris.Services.Sequencer.Instructions;
@@ -41,6 +42,10 @@ public class PlanRunnerService : IHostedService {
     private readonly PowerService _power;
     private readonly MeridianFlipService _flip;
     private readonly ILogger<PlanRunnerService> _logger;
+    private readonly SessionRunLogService? _runLog;
+    // The run log of the active plan, closed by FinishPlan.
+    private SessionRunLogService.Session? _session;
+    private string? _mainRunError;
 
     private readonly object _lock = new();
     private ImagingPlan? _active;
@@ -74,7 +79,8 @@ public class PlanRunnerService : IHostedService {
 
     public PlanRunnerService(AdvancedSequenceEngine engine, PlanCompilerService compiler,
         AltitudeService altitude, PowerService power, MeridianFlipService flip,
-        ILogger<PlanRunnerService> logger) {
+        ILogger<PlanRunnerService> logger, SessionRunLogService? runLog = null) {
+        _runLog = runLog;
         _engine = engine;
         _compiler = compiler;
         _altitude = altitude;
@@ -104,21 +110,35 @@ public class PlanRunnerService : IHostedService {
             if (plan.Targets.All(t => !t.Enabled))
                 return (false, "The plan has no enabled targets.");
 
-            // Apply the plan's meridian-flip tuning to the shared service the
-            // MeridianFlipTrigger reads at runtime. Preserve the service's other
-            // settings (pause-before, tolerance, settle, live-stack flag) and
-            // only override the three knobs exposed in the PLAN panel.
-            var doc = _compiler.Compile(plan);
-            _mainPlannedFrames = CountFrames(doc.Root);
-            _engine.Load(doc);
-            if (plan.AutoMeridianFlip) {
-                ApplyPlanFlipSettings(plan);
+            // The run log opens before anything can fail, so a plan that never
+            // starts still leaves a file saying why.
+            var session = _runLog?.Begin("plan", plan.Name, DescribePlan(plan));
+            try {
+                // Apply the plan's meridian-flip tuning to the shared service the
+                // MeridianFlipTrigger reads at runtime. Preserve the service's other
+                // settings (pause-before, tolerance, settle, live-stack flag) and
+                // only override the three knobs exposed in the PLAN panel.
+                var doc = _compiler.Compile(plan);
+                _mainPlannedFrames = CountFrames(doc.Root);
+                _engine.Load(doc);
+                if (plan.AutoMeridianFlip) {
+                    ApplyPlanFlipSettings(plan);
+                }
+                _engine.Start();
+            } catch (Exception ex) {
+                RestoreFlipSettings();
+                _logger.LogError(ex, "Plan '{Name}' could not start", plan.Name);
+                _runLog?.End(session, "did not start", ex.Message);
+                throw;
             }
-            _engine.Start();
             if (_engine.State != AdvancedSequenceState.Running) {
                 RestoreFlipSettings();
-                return (false, _engine.LastError ?? "The engine refused to start.");
+                var why = _engine.LastError ?? "The engine refused to start.";
+                _logger.LogWarning("Plan '{Name}' did not start: {Why}", plan.Name, why);
+                _runLog?.End(session, "did not start", why);
+                return (false, why);
             }
+            _session = session;
 
             // A fresh plan supersedes any resumable leftovers.
             _resumePlan = null;
@@ -154,6 +174,7 @@ public class PlanRunnerService : IHostedService {
                 return (false, "There is no interrupted plan to resume.");
 
             var plan = _resumePlan;
+            var session = _runLog?.Begin("plan", plan.Name + " (resumed)", DescribePlan(plan));
             _engine.LoadForResume(_resumeDoc);
             if (plan.AutoMeridianFlip) {
                 ApplyPlanFlipSettings(plan);
@@ -161,8 +182,12 @@ public class PlanRunnerService : IHostedService {
             _engine.Start(resume: true);
             if (_engine.State != AdvancedSequenceState.Running) {
                 RestoreFlipSettings();
-                return (false, _engine.LastError ?? "The engine refused to resume.");
+                var why = _engine.LastError ?? "The engine refused to resume.";
+                _logger.LogWarning("Plan '{Name}' did not resume: {Why}", plan.Name, why);
+                _runLog?.End(session, "did not start", why);
+                return (false, why);
             }
+            _session = session;
 
             _mainPlannedFrames = CountFrames(_resumeDoc.Root);
             _active = plan;
@@ -356,6 +381,7 @@ public class PlanRunnerService : IHostedService {
                 // the plan went on to run end actions and power off the host while
                 // the watchdog was mid-recovery. (See FIELD7-3.)
                 _mainRunFailed = _engine.LastRunFailed;
+                _mainRunError = _mainRunFailed ? _engine.LastError : null;
                 if (_mainRunFailed) {
                     _logger.LogWarning(
                         "Plan '{Name}' main run FAILED ({Err}); end actions will run but host " +
@@ -402,6 +428,10 @@ public class PlanRunnerService : IHostedService {
         var plan = _active;
         var aborted = _userAborted;
         var failed = _mainRunFailed;
+        var error = _mainRunError;
+        var session = _session;
+        _session = null;
+        _mainRunError = null;
         _active = null;
         _phase = Phase.Idle;
         _endsAtUtc = null;
@@ -415,6 +445,9 @@ public class PlanRunnerService : IHostedService {
 
         var how = aborted ? "stopped by user" : failed ? "FAILED" : "completed";
         _logger.LogInformation("Plan '{Name}' finished ({How})", plan.Name, how);
+        // Closed before a power-off is asked for: the power-off waits for the
+        // log to reach the storage target.
+        _runLog?.End(session, how, error);
 
         if (plan.EndShutdownHost) {
             if (ShouldShutdownHost(true, aborted, failed)) {
@@ -426,6 +459,33 @@ public class PlanRunnerService : IHostedService {
                     "Plan '{Name}' requested host shutdown, but the run {How}, NOT powering off " +
                     "so the session can be recovered", plan.Name, how);
             }
+        }
+    }
+
+    /// <summary>The plan as the run log's header shows it: what was asked
+    /// for, so a log of a run that saved nothing still says what it was.</summary>
+    internal static IEnumerable<string> DescribePlan(ImagingPlan plan) {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        yield return plan.StartMode == PlanStartMode.AtTime
+            ? $"Start: at {plan.StartAtUtc} UTC"
+            : "Start: now";
+        yield return plan.EndMode switch {
+            PlanEndMode.Dawn => "End: at astronomical dawn",
+            PlanEndMode.AtTime => $"End: at {plan.EndAtUtc} UTC",
+            _ => "End: when every frame is done"
+        };
+        yield return string.Create(inv,
+            $"Guiding: {(plan.AutoGuiding ? "on" : "off")}, meridian flip: {(plan.AutoMeridianFlip ? $"on, {plan.MeridianFlipMinutesAfter:0.#} min after" : "off")}, "
+            + $"cooling: {(plan.AutoCooling ? $"{plan.CoolTargetC:0.#} C" : "off")}, "
+            + $"power off at the end: {(plan.EndShutdownHost ? "yes" : "no")}");
+        yield return "Targets:";
+        foreach (var t in plan.Targets) {
+            var frames = string.Join(", ", t.Frames.Select(f => string.Create(inv,
+                $"{f.Count} x {f.ExposureSeconds:0.##} s {f.ImageType}{(string.IsNullOrWhiteSpace(f.Filter) ? "" : " " + f.Filter)}")));
+            var window = t.ScheduleMode == PlanScheduleMode.TimeWindow
+                ? $", window {t.StartAtUtc}-{t.EndAtUtc} UTC" : "";
+            yield return string.Create(inv,
+                $"  {(t.Enabled ? "-" : "x")} {t.Name} (RA {t.RaHours:0.####} h, Dec {t.DecDeg:+0.####;-0.####} deg{window}): {frames}{(t.Enabled ? "" : " [disabled]")}");
         }
     }
 

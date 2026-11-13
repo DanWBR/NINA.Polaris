@@ -640,20 +640,15 @@ public class TonightsBestService {
     }
 
     private CameraFov? ComputeCameraFov() {
-        var cam = _equip.Camera;
-        if (cam == null || !cam.IsConnected) return null;
-        double pixX, pixY; int mx, my;
-        try {
-            pixX = cam.PixelSizeX;
-            pixY = cam.PixelSizeY;
-            mx   = cam.MaxX;
-            my   = cam.MaxY;
-        } catch { return null; }
-        if (pixX <= 0 || pixY <= 0 || mx <= 0 || my <= 0) return null;
-
-        var sensorWmm = mx * pixX / 1000.0;
-        var sensorHmm = my * pixY / 1000.0;
-        var focalMm   = _profile.Active.FocalLengthMm;
+        // The connected camera, else the sensor the active rig remembers, so
+        // the framing fit works at a desk with nothing connected. A default
+        // guess is not a fit, so without either there is no FOV.
+        var rig = _profile.ActiveEquipmentProfile;
+        var sensor = RigSensorMemoryService.Resolve(_equip.Camera, rig, _profile.Active);
+        if (sensor.Source == "default") return null;
+        var sensorWmm = sensor.WidthMm;
+        var sensorHmm = sensor.HeightMm;
+        var focalMm   = rig?.FocalLengthMm > 0 ? rig.FocalLengthMm : _profile.Active.FocalLengthMm;
         if (focalMm <= 0) return null;
 
         var fovWdeg = 2 * Math.Atan(sensorWmm / (2 * focalMm)) * (180.0 / Math.PI);

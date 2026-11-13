@@ -5513,5 +5513,18 @@
   "Power off runs last, and only when the run completes; a Stop or a failure leaves the host on.": "Das Ausschalten läuft zuletzt und nur, wenn der Lauf abgeschlossen ist; ein Stopp oder ein Fehler lässt den Host an.",
   "Menu order": "Menüreihenfolge",
   "Back to the default order": "Zurück zur Standardreihenfolge",
-  "Order of the buttons in the navigation rail. On the rail itself, press and hold a button (touch or mouse) and drag it; here, use the arrows or drag a row. Saved on the host, so every browser and device that opens this Polaris shows the same order.": "Reihenfolge der Schaltflächen in der Navigationsleiste. In der Leiste selbst eine Schaltfläche gedrückt halten (Touch oder Maus) und ziehen; hier die Pfeile verwenden oder eine Zeile ziehen. Wird auf dem Host gespeichert, daher zeigt jeder Browser und jedes Gerät, das dieses Polaris öffnet, dieselbe Reihenfolge."
+  "Order of the buttons in the navigation rail. On the rail itself, press and hold a button (touch or mouse) and drag it; here, use the arrows or drag a row. Saved on the host, so every browser and device that opens this Polaris shows the same order.": "Reihenfolge der Schaltflächen in der Navigationsleiste. In der Leiste selbst eine Schaltfläche gedrückt halten (Touch oder Maus) und ziehen; hier die Pfeile verwenden oder eine Zeile ziehen. Wird auf dem Host gespeichert, daher zeigt jeder Browser und jedes Gerät, das dieses Polaris öffnet, dieselbe Reihenfolge.",
+  "not connected (one set with the filter in place)": "nicht verbunden (ein Satz mit dem eingesetzten Filter)",
+  "Connect the camera in the": "Verbinde die Kamera im Tab",
+  "Without a filter wheel the wizard takes one set of flats with whatever is in the light path (a colour camera, or a filter screwed in front of it).": "Ohne Filterrad nimmt der Assistent einen Satz Flats mit dem auf, was im Strahlengang ist (eine Farbkamera oder ein davor geschraubter Filter).",
+  "Filter in place": "Eingesetzter Filter",
+  "Sensor width (mm)": "Sensorbreite (mm)",
+  "Sensor height (mm)": "Sensorhöhe (mm)",
+  "Filled in when the camera connects. Type it to plan (PLAN, MOSAIC, SKY) before the camera has ever been connected on this rig.": "Wird beim Verbinden der Kamera ausgefüllt. Eintippen, um (PLAN, MOSAIC, SKY) zu planen, bevor die Kamera an diesem Rig je verbunden war.",
+  "One PLAN target per panel, to shoot on another night": "Ein PLAN-Ziel pro Panel, für eine andere Nacht",
+  "Set the focal length in RIGS to draw the panels": "Brennweite in RIGS eintragen, um die Panels zu zeichnen",
+  "Panels drawn with a default sensor size: set the camera sensor in RIGS": "Panels mit einer Standard-Sensorgröße gezeichnet: Kamerasensor in RIGS eintragen",
+  "Filter names, in slot order": "Filternamen, in Reihenfolge der Positionen",
+  "For planning with the wheel unplugged. Separate the names with commas.": "Zum Planen bei abgestecktem Filterrad. Namen mit Kommas trennen.",
+  "Type at least one filter name": "Mindestens einen Filternamen eingeben"
 }

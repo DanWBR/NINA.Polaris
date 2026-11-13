@@ -55,8 +55,20 @@ predictable subtree:
     calibration/{Camera}/bias/g{Gain}/
     calibration/{Camera}/masters/    masters built in Studio
     snaps/{Filter}_{Night}/          from PREVIEW with Save on
+    logs/{Night}/                    one log per PLAN, AUTORUN, ADV or LIVE run
     calibrated/ integrated/ processed/   Studio output
 ```
+
+**The run log:** every PLAN, AUTORUN, ADV and LIVE run writes a plain text
+log into `logs/{Night}/` (with a night-first layout, `{Night}/logs/`),
+even when it never saves a frame. It opens with what the run was asked
+to do (targets, frames, start and end times) and the ten minutes logged
+before it started, follows the whole run, and ends with how it finished,
+or why it did not start. The guide logs written during the run (the
+PHD2-format log of the built-in guider, its debug log, and the log of an
+external PHD2 on the same host) are copied beside it, into `guide/`.
+With the storage push on, all of them go to the destination with the
+frames (see the next section).
 
 Light frames are therefore grouped by target, then by night, which
 makes both housekeeping ("delete the cloudy night of June 3rd") and
@@ -287,6 +299,12 @@ goes up.
   finishes* is on. This catches the files that a live stack, a plate
   solve or a Studio step wrote without saving a new frame, which the
   per-frame push never sees.
+- **The run log** of a PLAN, AUTORUN, ADV or LIVE run and its guide
+  logs (see the folder tree above) go up
+  every five minutes while the run is going, and once more when it
+  ends. A power-off at the end of a run waits up to a minute for that
+  last copy, so the log of the night is on the destination even when
+  the host is already off by morning.
 - **On demand**, from this tab: select exactly one folder and press
   **Send to cloud**. Only what the destination is missing is queued,
   so sending the same night twice costs nothing.

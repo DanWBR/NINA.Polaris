@@ -75,8 +75,11 @@ public class FlatWizardService {
                 throw new InvalidOperationException("Flat wizard already running");
             if (_equip.Camera == null)
                 throw new InvalidOperationException("No camera connected");
-            if (request.Filters == null || request.Filters.Count == 0)
-                throw new ArgumentException("At least one filter must be specified");
+            // No filter named: one set with whatever is in the light path. A
+            // rig without a filter wheel (a colour camera, a fixed filter)
+            // takes its flats this way; the empty name skips the wheel move
+            // and leaves the FITS FILTER keyword to the writer's default.
+            request.Filters = NormalizeFilters(request.Filters);
             if (request.MinExposure <= 0 || request.MaxExposure <= request.MinExposure)
                 throw new ArgumentException("MinExposure must be > 0 and < MaxExposure");
             if (request.TargetAdu <= 0)
@@ -93,8 +96,19 @@ public class FlatWizardService {
         }
 
         _runTask = Task.Run(() => RunAsync(request, _cts!.Token));
-        _logger.LogInformation("Flat wizard started: {N} filters, {F} frames each, target {Adu} ADU",
-            request.Filters.Count, request.FramesPerFilter, request.TargetAdu);
+        if (request.Filters.Count == 1 && request.Filters[0] == "")
+            _logger.LogInformation("Flat wizard started: the filter in place, {F} frames, target {Adu} ADU",
+                request.FramesPerFilter, request.TargetAdu);
+        else
+            _logger.LogInformation("Flat wizard started: {N} filters, {F} frames each, target {Adu} ADU",
+                request.Filters.Count, request.FramesPerFilter, request.TargetAdu);
+    }
+
+    /// <summary>The filters a run goes through: the named ones in order, or a
+    /// single unnamed entry (the filter in the light path) when none is named.</summary>
+    internal static List<string> NormalizeFilters(List<string>? filters) {
+        var named = (filters ?? new()).Where(f => !string.IsNullOrWhiteSpace(f)).Select(f => f.Trim()).ToList();
+        return named.Count > 0 ? named : new List<string> { "" };
     }
 
     public void Abort() {

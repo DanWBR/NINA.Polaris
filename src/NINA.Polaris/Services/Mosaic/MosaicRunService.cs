@@ -88,18 +88,18 @@ public sealed class MosaicRunService {
         get { lock (_sync) return _run is { Finished: false }; }
     }
 
-    /// <summary>Panel size of the active camera and rig at bin 1, from the
-    /// focal length and the sensor. Null when either is unknown.</summary>
-    public (double widthDeg, double heightDeg, double scaleArcsec)? EstimatePanelFov() {
-        var cam = _equip.Camera;
-        double fl = _profiles.ActiveEquipmentProfile?.FocalLengthMm ?? 0;
-        if (cam == null || fl <= 0) return null;
-        double px = cam.PixelSizeX > 0 ? cam.PixelSizeX : cam.PixelSizeY;
-        double py = cam.PixelSizeY > 0 ? cam.PixelSizeY : cam.PixelSizeX;
-        if (px <= 0 || cam.MaxX <= 0 || cam.MaxY <= 0) return null;
-        double w = 2 * Math.Atan(px * cam.MaxX / 1000.0 / (2 * fl)) * 180 / Math.PI;
-        double h = 2 * Math.Atan(py * cam.MaxY / 1000.0 / (2 * fl)) * 180 / Math.PI;
-        return (w, h, 206.2648 * px / fl);
+    /// <summary>Panel size of the active rig at bin 1, from its focal length
+    /// and the camera's sensor: the connected camera, else the size the rig
+    /// remembers, else the profile fallback (<see cref="RigSensorMemoryService.Resolve"/>),
+    /// so a mosaic can be planned with nothing connected. Null without a
+    /// focal length. The scale is 0 when the pixel size is unknown.</summary>
+    public (double widthDeg, double heightDeg, double scaleArcsec, string source)? EstimatePanelFov() {
+        var rig = _profiles.ActiveEquipmentProfile;
+        double fl = rig?.FocalLengthMm ?? 0;
+        if (fl <= 0) return null;
+        var sensor = RigSensorMemoryService.Resolve(_equip.Camera, rig, _profiles.Active);
+        var (w, h) = sensor.FovDeg(fl);
+        return (w, h, sensor.PixelUm > 0 ? 206.2648 * sensor.PixelUm / fl : 0, sensor.Source);
     }
 
     /// <summary>Start a run. Returns null on success, or the reason it

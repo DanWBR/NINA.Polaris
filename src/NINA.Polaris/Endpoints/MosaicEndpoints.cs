@@ -64,7 +64,10 @@ public static class MosaicEndpoints {
                     known = true,
                     widthDeg = fov.Value.widthDeg,
                     heightDeg = fov.Value.heightDeg,
-                    scaleArcsec = fov.Value.scaleArcsec
+                    scaleArcsec = fov.Value.scaleArcsec,
+                    // "camera", "rig" or "default": the UI says when the
+                    // panels are drawn from a remembered or a default sensor.
+                    source = fov.Value.source
                 });
         });
 

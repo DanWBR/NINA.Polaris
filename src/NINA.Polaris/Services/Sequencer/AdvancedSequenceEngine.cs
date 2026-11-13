@@ -161,6 +161,15 @@ public class AdvancedSequenceEngine {
 
         bool doResume = resume && HasResumableProgress;
 
+        // Null while a plan runs this engine: the plan owns the run log then.
+        try {
+            _runLog = _services.GetService<NINA.Polaris.Services.Logging.SessionRunLogService>()
+                ?.Begin("adv", Document.Name);
+        } catch (Exception ex) {
+            _logger.LogWarning(ex, "Run log could not start");
+            _runLog = null;
+        }
+
         _cts = new CancellationTokenSource();
         State = AdvancedSequenceState.Running;
         StartedAt = DateTime.UtcNow;
@@ -194,6 +203,7 @@ public class AdvancedSequenceEngine {
             State = AdvancedSequenceState.Idle;
             FinishedAt = DateTime.UtcNow;
             _logger.LogError(ex, "Failed to build SequenceContext");
+            EndRunLog("did not start", LastError);
             return;
         }
 
@@ -226,6 +236,12 @@ public class AdvancedSequenceEngine {
             Document.Root.FinishedAt = DateTime.UtcNow;
             FinishedAt = DateTime.UtcNow;
             State = AdvancedSequenceState.Idle;
+            var outcome = Document.Root.Status switch {
+                SequenceEntityStatus.Completed => "completed",
+                SequenceEntityStatus.Failed => "FAILED",
+                _ => AbortReason != null ? "ended early" : "stopped"
+            };
+            EndRunLog(outcome, Document.Root.Status == SequenceEntityStatus.Failed ? LastError : AbortReason);
             // Offload the night when the operator asked for it. Resolved rather
             // than injected: this engine is built by the service provider it
             // already holds, and a constructor dependency here would put a cycle
@@ -236,6 +252,19 @@ public class AdvancedSequenceEngine {
             } catch (Exception ex) {
                 _logger.LogWarning(ex, "Session offload could not start");
             }
+        }
+    }
+
+    private NINA.Polaris.Services.Logging.SessionRunLogService.Session? _runLog;
+
+    private void EndRunLog(string outcome, string? error) {
+        var s = _runLog;
+        _runLog = null;
+        if (s == null) return;
+        try {
+            _services.GetService<NINA.Polaris.Services.Logging.SessionRunLogService>()?.End(s, outcome, error);
+        } catch (Exception ex) {
+            _logger.LogWarning(ex, "Run log could not be closed");
         }
     }
 

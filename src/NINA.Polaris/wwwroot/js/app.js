@@ -1215,6 +1215,9 @@ function ninaApp() {
             indiPort: 7624,
             latitude: 0, longitude: 0, altitude: 0,
             sensorWidth: 23.5, sensorHeight: 15.7, focalLength: 478,
+            // The active rig's remembered camera sensor (mm), the RIGS inputs.
+            // 0 = unknown. sensorWidth/Height above are what FOV uses.
+            rigSensorWidth: 0, rigSensorHeight: 0,
             imageFormat: 'fits',
             imageOutputDir: '',
             imageNamePattern: '',
@@ -13597,6 +13600,53 @@ function ninaApp() {
             this._updateSkyClock();
         },
 
+        /// With no camera connected, plan with the sensor the active rig
+        /// remembers (learned when its camera last connected, or typed in
+        /// RIGS) instead of whichever camera was connected last on any rig.
+        _applyRigSensor(rig) {
+            rig = rig || this.rigs?.find(x => x.id === this.activeRigId);
+            if (!rig) return;
+            this.settings.rigSensorWidth = Number(rig.sensorWidthMm) || 0;
+            this.settings.rigSensorHeight = Number(rig.sensorHeightMm) || 0;
+            if (this.planningSensorSource() === 'camera') return;
+            if (this.settings.rigSensorWidth > 0 && this.settings.rigSensorHeight > 0) {
+                this.settings.sensorWidth = this.settings.rigSensorWidth;
+                this.settings.sensorHeight = this.settings.rigSensorHeight;
+                this.updateFov();
+                if (this.tab === 'sky' && typeof this.updateSkyCameraFov === 'function') {
+                    this.updateSkyCameraFov();
+                }
+            }
+        },
+        /// Where the planning sensor comes from: the connected camera, the
+        /// size remembered on the rig, or the built-in default.
+        planningSensorSource() {
+            if (this.selectedCamera && this.equipCameraInfo?.sensorWidthMm > 0) return 'camera';
+            const rig = this.rigs?.find(x => x.id === this.activeRigId);
+            if (rig && rig.sensorWidthMm > 0 && rig.sensorHeightMm > 0) return 'rig';
+            return 'default';
+        },
+        /// The rig's filter names as one line, for the RIGS input shown
+        /// while the wheel is unplugged.
+        rigFilterNamesText() {
+            const rig = this.rigs?.find(x => x.id === this.activeRigId);
+            return (rig?.filterNames || []).filter(Boolean).join(', ');
+        },
+        saveRigFilterNamesText(text) {
+            const names = String(text || '').split(',').map(s => s.trim()).filter(Boolean);
+            if (!names.length) { this.toast('Type at least one filter name', 'warn'); return; }
+            this._persistRigSelection({ filterNames: names });
+        },
+        /// The sensor inputs on the RIGS tab.
+        saveRigSensor() {
+            const w = Number(this.settings.rigSensorWidth) || 0;
+            const h = Number(this.settings.rigSensorHeight) || 0;
+            if (w < 0 || h < 0) return;
+            this._persistRigSelection({ sensorWidthMm: w, sensorHeightMm: h });
+            this._applyRigSensor();
+            if (this.tab === 'mosaic') setTimeout(() => this.mosaicLoadFov(), 800);
+        },
+
         updateFov() {
             const { sensorWidth: sw, sensorHeight: sh, focalLength: fl } = this.settings;
             if (fl > 0 && sw > 0 && sh > 0) {
@@ -13636,6 +13686,8 @@ function ninaApp() {
                     this._refreshLocationLabel();
                     this.settings.sensorWidth = data.sensorWidthMm || 23.5;
                     this.settings.sensorHeight = data.sensorHeightMm || 15.7;
+                    // The active rig's own sensor wins over the profile-wide one.
+                    this._applyRigSensor();
                     this.settings.focalLength = data.focalLengthMm || 478;
                     this.settings.imageFormat = data.imageFormat || 'fits';
                     this.settings.imageOutputDir = data.imageOutputDir || '';
@@ -26212,6 +26264,8 @@ function ninaApp() {
                 this.settings.focalLength = rig.focalLengthMm;
                 this.updateFov();
             }
+            // Camera sensor remembered on this rig, for planning offline.
+            this._applyRigSensor(rig);
             // OTA optics, hydrate the Main Telescope card on the RIGS tab.
             // Empty/zero values are fine (the card just shows blanks).
             this.settings.aperture = rig.apertureMm || 0;
@@ -29383,6 +29437,11 @@ function ninaApp() {
             }
         },
 
+        /// A wheel with filters to pick. Without one the wizard takes a
+        /// single set with whatever is in the light path.
+        flatWizardHasWheel() {
+            return !!(this.filterWheel?.connected && (this.filterWheel.filters || []).length > 0);
+        },
         flatWizardToggleFilter(f) {
             const idx = this.flatWizard.selectedFilters.indexOf(f);
             if (idx >= 0) this.flatWizard.selectedFilters.splice(idx, 1);
@@ -29416,7 +29475,8 @@ function ninaApp() {
         },
 
         async flatWizardStart() {
-            if (this.flatWizard.selectedFilters.length === 0) {
+            const wheel = this.flatWizardHasWheel();
+            if (wheel && this.flatWizard.selectedFilters.length === 0) {
                 this.toast('Pick at least 1 filter', 'warn');
                 return;
             }
@@ -29444,7 +29504,8 @@ function ninaApp() {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        filters: this.flatWizard.selectedFilters,
+                        // Empty without a wheel: one set with the filter in place.
+                        filters: wheel ? this.flatWizard.selectedFilters : [],
                         framesPerFilter: this.flatWizard.framesPerFilter,
                         targetAdu: this.flatWizard.targetAdu,
                         tolerance: this.flatWizard.tolerance,
@@ -29474,8 +29535,7 @@ function ninaApp() {
             return {
                 isActive: () => this.flatWizard.state === 'running',
                 disabled: () => !this.selectedCamera
-                    || !this.filterWheel?.connected
-                    || this.flatWizard.selectedFilters.length === 0,
+                    || (this.flatWizardHasWheel() && this.flatWizard.selectedFilters.length === 0),
                 onTap: () => this.flatWizardStart(),
                 onLongPress: () => this.flatWizardStart(),
                 onAbort: () => this.flatWizardAbort()
@@ -51211,6 +51271,15 @@ function ninaApp() {
                         Math.abs(this.settings.sensorHeight - eq.camera.sensorHeightMm) > 0.05) {
                         this.settings.sensorWidth = eq.camera.sensorWidthMm;
                         this.settings.sensorHeight = eq.camera.sensorHeightMm;
+                        // The host remembers it on the rig (RigSensorMemoryService);
+                        // mirror that into the local rig and the RIGS inputs.
+                        const sensorRig = this.rigs?.find(x => x.id === this.activeRigId);
+                        if (camConn && sensorRig) {
+                            sensorRig.sensorWidthMm = Math.round(eq.camera.sensorWidthMm * 100) / 100;
+                            sensorRig.sensorHeightMm = Math.round(eq.camera.sensorHeightMm * 100) / 100;
+                            this.settings.rigSensorWidth = sensorRig.sensorWidthMm;
+                            this.settings.rigSensorHeight = sensorRig.sensorHeightMm;
+                        }
                         this.updateFov();
                         // Refresh the sky overlay so the rectangle resizes
                         // immediately when a camera connects with a sensor
@@ -52561,7 +52630,9 @@ function ninaApp() {
                 names = this.filterWheel.filters.filter(Boolean);
             }
             if (names.length === 0) {
-                const rig = this.activeRig;
+                // activeRig is the rig's NAME (a display getter); the names
+                // live on the rig object, looked up by id.
+                const rig = this.rigs?.find(x => x.id === this.activeRigId);
                 if (rig && Array.isArray(rig.filterNames)) names = rig.filterNames.filter(Boolean);
             }
             const out = [...new Set(names)];
@@ -53522,7 +53593,9 @@ function ninaApp() {
 
         mosaicSkyCaption() {
             if (this.mosaicActive()) return this._t('Centring on the target to read the camera angle…');
-            if (!this.mosaicRun.fov?.known) return this._t('Connect the camera to draw the panels');
+            if (!this.mosaicRun.fov?.known) return this._t('Set the focal length in RIGS to draw the panels');
+            if (this.mosaicRun.fov.source === 'default')
+                return this._t('Panels drawn with a default sensor size: set the camera sensor in RIGS');
             if (this.mosaicHasSolveAngle())
                 return this._t('Planned panels, at the camera angle of the last plate solve');
             return Number.isFinite(this.mosaicRun.form.angleDeg) && this.mosaicRun.form.angleDeg !== 0
@@ -53804,6 +53877,47 @@ function ninaApp() {
         // per panel, each with the modal's exposure/count/filter. Lets the user
         // run the mosaic through the multi-target night planner instead of the
         // Advanced Sequencer.
+        /// MOSAIC tab: the planned grid as a new PLAN, one target per panel,
+        /// in shooting order. Needs nothing connected: the panels come from
+        /// the rig's focal length and remembered sensor.
+        async mosaicRunExportToPlan() {
+            const f = this.mosaicRun.form;
+            const tiles = this.mosaicPlannedTiles();
+            if (!tiles.length) { this.toast('Pick a target first', 'warn'); return; }
+            const g = this.mosaicGridPreview();
+            const name = (f.targetName || f.query || 'Mosaic').trim();
+            const rotation = this.mosaicHasSolveAngle()
+                ? (Number.isFinite(this.solveRotationDeg) ? this.solveRotationDeg : 0)
+                : (Number.isFinite(f.angleDeg) ? f.angleDeg : 0);
+            try {
+                const p = this._blankPlan();
+                p.name = `Mosaic ${name} (${g.cols}×${g.rows})`;
+                p.targets = tiles.map(tile => {
+                    const t = this._blankTarget();
+                    t.name = `${name} panel ${tile.label}`;
+                    t.raHours = tile.raDeg / 15;
+                    t.decDeg = tile.decDeg;
+                    t.rotation = rotation;
+                    t.frames = [{
+                        exposureSeconds: +f.exposureSeconds || 60, count: 10,
+                        filter: null, gain: f.gain ?? null, binning: +f.binning || 1, imageType: 'LIGHT'
+                    }];
+                    return t;
+                });
+                const resp = await this.apiPost('/api/plan/plans', p);
+                if (!resp.ok) {
+                    let msg = 'Plan export failed';
+                    try { const j = await resp.json(); if (j?.error) msg = j.error; } catch { }
+                    this.toast(msg, 'error'); return;
+                }
+                const created = await resp.json();
+                this.plans.push(created);
+                this.selectPlan(created.id);
+                this.tab = 'plan';
+                this.toast(`Exported ${p.targets.length} panels to a new plan`, 'ok');
+            } catch (e) { this.toastFail('Plan export failed', e); }
+        },
+
         async exportMosaicToPlan() {
             const panels = this.mosaic.plan?.panels;
             if (!panels?.length) { this.toast('Build a mosaic first', 'warn'); return; }
