@@ -2443,7 +2443,7 @@
                             </select>
                         </label>
                         <span class="text-warn" style="font-size:11px"
-                              x-show="polar.camera !== 'main' && !polarCameraAvailable(polar.camera)">Not connected</span>
+                              x-show="!cameraSourceReady(polar.camera || 'main')">Not connected</span>
                     </div>
                 </div>
 
@@ -2536,7 +2536,7 @@
                     </div>
                     <div class="control-row actions">
                         <button class="btn btn-primary" @click="polarStart()"
-                                :disabled="polar.isActive || !selectedCamera || (!polar.manualRotation && !mount?.connected)">
+                                :disabled="polar.isActive || !cameraSourceReady(polar.camera || 'main') || (!polar.manualRotation && !mount?.connected)">
                             ▶ Start TPPA
                         </button>
                         <button class="btn btn-danger" @click="polarAbort()"
@@ -2850,6 +2850,7 @@
                             <button class="btn btn-primary"
                                     @click="rudimentaryStart()"
                                     :disabled="rudimentary.busy
+                                               || !cameraSourceReady(polar.camera || 'main')
                                                || !rudimentary.targetRaHours
                                                || rudimentary.targetDecDeg === null
                                                || rudimentary.targetDecDeg === undefined">
@@ -3185,11 +3186,11 @@
                             <button @click="_pzZoomButton('manualFocusCanvas', 1.3)" title="Zoom in">＋</button>
                             <button @click="_pzZoomButton('manualFocusCanvas', 1/1.3)" title="Zoom out">－</button>
                         </div>
-                        <div class="preview-overlay" x-show="!selectedCamera">
+                        <div class="preview-overlay" x-show="!cameraSourceReady(focusCameraSource || 'main')">
                             <p>Connect a camera in RIGS first to use the focus assist.</p>
                         </div>
                         <div class="preview-overlay"
-                             x-show="selectedCamera && !manualFocus.running && manualFocus.samples.length === 0">
+                             x-show="cameraSourceReady(focusCameraSource || 'main') && !manualFocus.running && manualFocus.samples.length === 0">
                             <p>Click ▶ Start loop. Focuser knob = HFR drops as you find focus, rises again when you pass.</p>
                         </div>
                     </div>
@@ -3262,7 +3263,7 @@
                                      'shutter-active': manualFocus.running,
                                      'shutter-arming': armingLoop
                                  }"
-                                 :aria-disabled="!selectedCamera"
+                                 :aria-disabled="!cameraSourceReady(focusCameraSource || 'main')"
                                  role="button"
                                  :aria-label="manualFocus.running ? 'Stop loop' : 'Snap once'"
                                  @pointerdown="shutterPointerDown($event, focusShutterCtx())"
@@ -26831,7 +26832,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261113-planoffline"></script>
+    <script src="/js/app.js?v=20261113-camsource"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

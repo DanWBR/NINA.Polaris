@@ -29110,7 +29110,7 @@ function ninaApp() {
         focusShutterCtx() {
             return {
                 isActive: () => !!this.manualFocus.running,
-                disabled: () => !this.selectedCamera,
+                disabled: () => !this.cameraSourceReady(this.focusCameraSource || 'main'),
                 onTap: () => this.manualFocusSnap(),
                 onLongPress: () => this.manualFocusStart(),
                 onAbort: () => this.manualFocusStop()
@@ -35375,7 +35375,7 @@ function ninaApp() {
             else this.manualFocusStart();
         },
         manualFocusStart() {
-            if (!this.selectedCamera) {
+            if (!this.cameraSourceReady(this.focusCameraSource || 'main')) {
                 this.toast('Connect a camera in RIGS first', 'warn');
                 return;
             }
@@ -35952,6 +35952,17 @@ function ninaApp() {
             } catch (e) {
                 this.toastFail('Slew failed', e);
             }
+        },
+
+        /// Is the camera a source picker points at (main, guide or imager:N)
+        /// connected? Polar alignment and the focus assist run on any of them,
+        /// so a rig used for visual observing can align and focus with the
+        /// guide camera and no main camera at all.
+        cameraSourceReady(src) {
+            if (src === 'guide') return !!(this.guider && this.guider.guideCameraConnected);
+            const card = this._imagerBySource(src);
+            if (card) return !!card.cameraConnected;
+            return !!this.selectedCamera;
         },
 
         /// Is this camera connected, so polar alignment can use it? Same source
