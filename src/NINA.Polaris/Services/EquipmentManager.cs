@@ -473,6 +473,53 @@ public class EquipmentManager : IDisposable {
     /// supported on the current platform.</summary>
     public IReadOnlyList<DiscoveredCamera> GetDiscoveredCamerasFor(string driver) {
         driver = (driver ?? "indi").Trim().ToLowerInvariant();
+        var found = DiscoverCameras(driver);
+        // A full scan is the truth about what is plugged in: it replaces the
+        // memory, so a camera unplugged since drops out of the list.
+        if (RemembersSeenCameras(driver) && found.All(c => c.Detail != "connected"))
+            _seenCameras[driver] = new(found.Where(c => !string.IsNullOrEmpty(c.Id))
+                .GroupBy(c => c.Id).ToDictionary(g => g.Key, g => g.First()), StringComparer.Ordinal);
+        return found;
+    }
+
+    // ---- Cameras seen by a vendor-SDK scan ----
+    //
+    // A vendor SDK is not rescanned while one of its cameras is open (the
+    // rescan resets the open handle, see DiscoverCameras). The live-only
+    // answer that guard gave listed the connected camera and nothing else, so
+    // with the guide camera connected the main camera picker offered only the
+    // guide camera, and the way out was to disconnect it and switch drivers
+    // back and forth (field report, two SVBony cameras). The cameras the last
+    // full scan found are kept per driver and listed with the live ones.
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string,
+        System.Collections.Concurrent.ConcurrentDictionary<string, DiscoveredCamera>> _seenCameras = new();
+
+    internal static bool RemembersSeenCameras(string driver) =>
+        driver is not ("indi" or "alpaca" or "sim" or "zwo-sdk" or "ascom-com");
+
+    internal void RememberSeen(string driver, IEnumerable<DiscoveredCamera> cams) {
+        var map = _seenCameras.GetOrAdd(driver, _ => new(StringComparer.Ordinal));
+        foreach (var c in cams) if (!string.IsNullOrEmpty(c.Id)) map[c.Id] = c;
+    }
+
+    /// <summary>What to list while a camera of <paramref name="driver"/> is
+    /// open and the bus cannot be rescanned: the live cameras, every camera
+    /// the last scan found, and the cameras this rig has saved for that
+    /// driver, so the other picker still offers its camera.</summary>
+    internal List<DiscoveredCamera> KnownCameras(string driver, List<DiscoveredCamera> live,
+                                                 IEnumerable<string?> savedIds) {
+        var list = new List<DiscoveredCamera>(live);
+        bool Has(string id) => list.Any(c => string.Equals(c.Id, id, StringComparison.Ordinal));
+        if (_seenCameras.TryGetValue(driver, out var seen))
+            foreach (var c in seen.Values.OrderBy(c => c.Model, StringComparer.OrdinalIgnoreCase))
+                if (!Has(c.Id)) list.Add(c);
+        foreach (var id in savedIds)
+            if (!string.IsNullOrEmpty(id) && !Has(id))
+                list.Add(new DiscoveredCamera(id!, id!, "saved on this rig"));
+        return list;
+    }
+
+    private IReadOnlyList<DiscoveredCamera> DiscoverCameras(string driver) {
         if (driver == "indi") {
             return GetDeviceNames()
                 .Select(n => new DiscoveredCamera(n, n, n))
@@ -514,7 +561,17 @@ public class EquipmentManager : IDisposable {
                 && !live.Any(c => c.Id == AuxCameraDeviceId)) {
                 live.Add(new(AuxCameraDeviceId, AuxCamera.DeviceName, "connected"));
             }
-            if (live.Count > 0) return live;
+            if (live.Count > 0) {
+                RememberSeen(driver, live);
+                var rig = _profiles?.ActiveEquipmentProfile;
+                var saved = new List<string?>();
+                if (rig != null) {
+                    if (rig.CameraDriver == driver) saved.Add(rig.Camera);
+                    if (rig.GuideCameraDriver == driver) saved.Add(rig.GuideCamera);
+                    if (rig.AuxCameraDriver == driver) saved.Add(rig.AuxCamera);
+                }
+                return KnownCameras(driver, live, saved);
+            }
         }
         if (driver == "canon-edsdk" && OperatingSystem.IsWindows()) {
             try {
