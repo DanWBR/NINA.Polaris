@@ -53740,6 +53740,10 @@ function ninaApp() {
                     this.focuserDrivers = await this.apiGet('/api/focuser/drivers');
                     this.filterWheelDrivers = await this.apiGet('/api/filterwheel/drivers');
                     this.rotatorDrivers = await this.apiGet('/api/rotator/drivers');
+                    // The power box too: its "Alpaca (ASCOM)" entry is only
+                    // available once discovery has found a Switch device, and
+                    // the page's first fetch runs before discovery ends (#71).
+                    this.powerBoxDrivers = await this.apiGet('/api/switch/drivers');
                 } catch (_) { /* best-effort; the next tab open will repopulate */ }
             } catch (e) {
                 if (!silent) {
