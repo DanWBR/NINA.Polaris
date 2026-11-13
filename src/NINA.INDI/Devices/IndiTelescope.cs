@@ -14,7 +14,9 @@
 
 using NINA.Core.Enum;
 using NINA.Image.Interfaces;
+using Microsoft.Extensions.Logging;
 using NINA.INDI.Client;
+using NINA.INDI.Protocol;
 
 namespace NINA.INDI.Devices;
 
@@ -221,6 +223,7 @@ public class IndiTelescope : ITelescope {
     }
 
     public async Task SyncAsync(double ra, double dec, CancellationToken ct = default) {
+        await EnsureStandardSyncAsync(ct);
         await _client.SetSwitchAsync(DeviceName, "ON_COORD_SET",
             new Dictionary<string, bool> { ["TRACK"] = false, ["SLEW"] = false, ["SYNC"] = true }, ct);
 
@@ -228,6 +231,32 @@ public class IndiTelescope : ITelescope {
         var ack = await _client.SetNumberAsyncAck(DeviceName, "EQUATORIAL_EOD_COORD",
             new Dictionary<string, double> { ["RA"] = raNow, ["DEC"] = decNow }, ct: ct);
         ThrowIfRejectedOrTimedOut(ack, "sync", "EQUATORIAL_EOD_COORD");
+    }
+
+    /// <summary>
+    /// True when the driver is EQMod (Sky-Watcher mounts) in "Add point on
+    /// Sync" mode (<c>ALIGNSYNCMODE</c> = <c>ALIGNAPPENDSYNC</c>).
+    ///
+    /// <para>That is EQMod's default, and the driver does not keep the choice
+    /// in its saved configuration, so every driver start comes back in it.
+    /// Each plate-solve sync then adds an alignment point instead of
+    /// correcting the pointing; with the nearest-point alignment the points
+    /// from one side of the pier pull the pointing on the other, and a
+    /// meridian flip did not happen until the operator set Standard Sync by
+    /// hand again (field report, GTi on indi_eqmod).</para>
+    /// </summary>
+    internal static bool InAppendSyncMode(IndiClient client, string device) =>
+        client.GetProperty(device, "ALIGNSYNCMODE") is IndiSwitchProperty
+        && client.GetSwitch(device, "ALIGNSYNCMODE", "ALIGNAPPENDSYNC");
+
+    /// <summary>Put EQMod in Standard Sync before a sync, so the sync
+    /// corrects the pointing the way every other driver's sync does.</summary>
+    private async Task EnsureStandardSyncAsync(CancellationToken ct) {
+        if (!InAppendSyncMode(_client, DeviceName)) return;
+        await _client.SetSwitchAsync(DeviceName, "ALIGNSYNCMODE",
+            new Dictionary<string, bool> { ["ALIGNSTANDARDSYNC"] = true, ["ALIGNAPPENDSYNC"] = false }, ct);
+        _client.DiagLogger.LogInformation(
+            "EQMod '{Device}': sync mode set from 'Add point on Sync' to 'Standard Sync' before a sync", DeviceName);
     }
 
     public async Task ParkAsync(CancellationToken ct = default) {
