@@ -5839,5 +5839,18 @@
   "Power off runs last, and only when the run completes; a Stop or a failure leaves the host on.": "Выключение выполняется последним и только при завершении прогона; остановка или сбой оставляют хост включённым.",
   "Menu order": "Порядок меню",
   "Back to the default order": "Вернуть порядок по умолчанию",
-  "Order of the buttons in the navigation rail. On the rail itself, press and hold a button (touch or mouse) and drag it; here, use the arrows or drag a row. Saved on the host, so every browser and device that opens this Polaris shows the same order.": "Порядок кнопок на панели навигации. На самой панели нажмите и удерживайте кнопку (касанием или мышью) и перетащите её; здесь используйте стрелки или перетащите строку. Сохраняется на хосте, поэтому каждый браузер и устройство, открывающие этот Polaris, показывают тот же порядок."
+  "Order of the buttons in the navigation rail. On the rail itself, press and hold a button (touch or mouse) and drag it; here, use the arrows or drag a row. Saved on the host, so every browser and device that opens this Polaris shows the same order.": "Порядок кнопок на панели навигации. На самой панели нажмите и удерживайте кнопку (касанием или мышью) и перетащите её; здесь используйте стрелки или перетащите строку. Сохраняется на хосте, поэтому каждый браузер и устройство, открывающие этот Polaris, показывают тот же порядок.",
+  "not connected (one set with the filter in place)": "не подключено (один набор с установленным фильтром)",
+  "Connect the camera in the": "Подключите камеру на вкладке",
+  "Without a filter wheel the wizard takes one set of flats with whatever is in the light path (a colour camera, or a filter screwed in front of it).": "Без колеса фильтров мастер снимает один набор флэтов с тем, что стоит на пути света (цветная камера или фильтр, вкрученный перед ней).",
+  "Filter in place": "Установленный фильтр",
+  "Sensor width (mm)": "Ширина сенсора (мм)",
+  "Sensor height (mm)": "Высота сенсора (мм)",
+  "Filled in when the camera connects. Type it to plan (PLAN, MOSAIC, SKY) before the camera has ever been connected on this rig.": "Заполняется при подключении камеры. Введите вручную, чтобы планировать (PLAN, MOSAIC, SKY) до первого подключения камеры на этой установке.",
+  "One PLAN target per panel, to shoot on another night": "Одна цель PLAN на панель, для съёмки в другую ночь",
+  "Set the focal length in RIGS to draw the panels": "Укажите фокусное расстояние в RIGS, чтобы нарисовать панели",
+  "Panels drawn with a default sensor size: set the camera sensor in RIGS": "Панели нарисованы со стандартным размером сенсора: укажите сенсор камеры в RIGS",
+  "Filter names, in slot order": "Названия фильтров, по порядку позиций",
+  "For planning with the wheel unplugged. Separate the names with commas.": "Для планирования с отключённым колесом. Разделяйте названия запятыми.",
+  "Type at least one filter name": "Введите хотя бы одно название фильтра"
 }

@@ -748,6 +748,15 @@ public class EquipmentProfile {
     // multiplied by AccessoryFactor. The picker in the Manage Rigs
     // modal computes it; the user can also override manually.
     public double FocalLengthMm { get; set; } = 478;
+    /// <summary>Main-camera sensor size in millimetres, so the field of view
+    /// can be planned with nothing connected (PLAN, MOSAIC, the SKY framing
+    /// box, Tonight's Best). Learned from the camera each time it connects
+    /// (<see cref="RigSensorMemoryService"/>) and editable by hand on the RIGS
+    /// tab for a camera that has never been connected. 0 = unknown, and the
+    /// profile-wide fallback applies.</summary>
+    public double SensorWidthMm { get; set; }
+    /// <summary>See <see cref="SensorWidthMm"/>.</summary>
+    public double SensorHeightMm { get; set; }
     /// <summary>OTA aperture in millimetres. Auto-filled from the
     /// telescopes.json catalogue when the user picks a model; can
     /// be set manually for off-catalogue scopes. Drives the FOV

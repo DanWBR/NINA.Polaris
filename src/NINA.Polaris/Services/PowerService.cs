@@ -231,6 +231,7 @@ public class PowerService {
         }
         _ = Task.Run(async () => {
             await Task.Delay(700);
+            await RunBeforePowerOffAsync();
             try { await DoRebootAsync(); }
             catch (Exception ex) { _logger.LogError(ex, "Reboot failed"); }
         });
@@ -247,6 +248,38 @@ public class PowerService {
         }
     }
 
+    // ---- Before power-off ----------------------------------------------
+    private readonly List<Func<CancellationToken, Task>> _beforePowerOff = new();
+    /// <summary>How long a power-off or reboot waits, at most, for the work
+    /// registered with <see cref="OnBeforePowerOff"/>.</summary>
+    public static readonly TimeSpan BeforePowerOffLimit = TimeSpan.FromSeconds(60);
+
+    /// <summary>Work that has to finish before the host powers off or reboots,
+    /// such as sending the run log to the storage target. Every power-off path
+    /// (the button, a plan, Autorun, ADV, the scheduled teardown) goes through
+    /// <see cref="ScheduleShutdown"/> or <see cref="ScheduleReboot"/>, so one
+    /// registration covers them all.</summary>
+    public void OnBeforePowerOff(Func<CancellationToken, Task> hook) {
+        lock (_beforePowerOff) _beforePowerOff.Add(hook);
+    }
+
+    private async Task RunBeforePowerOffAsync() {
+        Func<CancellationToken, Task>[] hooks;
+        lock (_beforePowerOff) hooks = _beforePowerOff.ToArray();
+        if (hooks.Length == 0) return;
+        using var cts = new CancellationTokenSource(BeforePowerOffLimit);
+        foreach (var hook in hooks) {
+            try { await hook(cts.Token).WaitAsync(cts.Token); }
+            catch (OperationCanceledException) {
+                _logger.LogWarning("Powering off without waiting longer for pending work ({Sec:F0} s limit)",
+                    BeforePowerOffLimit.TotalSeconds);
+                return;
+            } catch (Exception ex) {
+                _logger.LogWarning(ex, "Work before power-off failed");
+            }
+        }
+    }
+
     // ---- Shutdown ------------------------------------------------------
     /// <summary>Power the DEVICE off, not the Polaris process. Refused on a
     /// development build, see the host power guard above.</summary>
@@ -259,6 +292,7 @@ public class PowerService {
         }
         _ = Task.Run(async () => {
             await Task.Delay(700);
+            await RunBeforePowerOffAsync();
             try { await DoShutdownAsync(); }
             catch (Exception ex) { _logger.LogError(ex, "Shutdown failed"); }
         });

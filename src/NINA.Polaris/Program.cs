@@ -249,6 +249,10 @@ builder.Services.AddHostedService<NINA.Polaris.Services.Logging.SystemJournalSer
 // ASIAIR-style per-session guiding logs: native → PHD2-compatible guide log,
 // external PHD2 → copy of PHD2's own log. Opt-out via profile.SaveGuideLogs.
 builder.Services.AddHostedService<NINA.Polaris.Services.Logging.GuideSessionLogService>();
+// One readable log per PLAN / AUTORUN / ADV run, in the capture folder beside
+// the frames and pushed to the storage target with them.
+builder.Services.AddSingleton<NINA.Polaris.Services.Logging.SessionRunLogService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<NINA.Polaris.Services.Logging.SessionRunLogService>());
 // Filter labels belong to the rig, not to the driver: INDI wheels come back
 // from a restart advertising "Filter 1..N". Restore them server-side so it
 // happens headless and for every client, not only when a browser is open on
@@ -299,6 +303,8 @@ builder.Services.AddSingleton<LiveStackCheckpointService>();
 // frame stream. Subscribes at construction.
 builder.Services.AddSingleton<LiveStackWatchdogService>();
 builder.Services.AddSingleton<RigTeardownService>();
+// The main camera's sensor size onto the active rig, for planning offline.
+builder.Services.AddHostedService<RigSensorMemoryService>();
 // LIVE end actions: run the rig's end actions when the stack reaches its
 // duration limit or its target SNR.
 builder.Services.AddHostedService<LiveStackEndService>();

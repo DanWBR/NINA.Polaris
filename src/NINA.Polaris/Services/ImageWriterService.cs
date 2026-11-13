@@ -864,6 +864,22 @@ public class ImageWriterService {
         };
     }
 
+    /// <summary>Subdirectory for the readable log of a capture run:
+    /// <c>{rig}/logs/{yyyy-MM-dd}</c> with the target-first layout, and
+    /// <c>{rig}/{night}/logs</c> with the night-first ones, so the log of a
+    /// night sits with that night's frames and travels to the storage target
+    /// with them. Written even when the run never saved a frame.</summary>
+    public static string SessionLogSubDir(string rigName, string? folderLayout, DateTime sessionDate) {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var rig = SanitizeFolder(string.IsNullOrEmpty(rigName) ? "Default" : rigName);
+        var sub = ParseFolderLayout(folderLayout) switch {
+            FolderLayout.NightFirst       => Path.Combine(sessionDate.ToString("yyyyMMdd", inv), "logs"),
+            FolderLayout.NightFirstDashed => Path.Combine(sessionDate.ToString("yyyy-MM-dd", inv), "logs"),
+            _                             => Path.Combine("logs", sessionDate.ToString("yyyy-MM-dd", inv))
+        };
+        return Path.Combine(rig, sub);
+    }
+
     /// <summary>
     /// Map a local timestamp to its astronomical session date, the date
     /// the *evening* started. A capture at 02:30 local time still belongs

@@ -598,8 +598,12 @@ numbered in the order they will be shot. It redraws as you change the
 target or the field size. The panels take the camera's angle from the
 last plate solve. With no solve yet, a **Camera angle** field turns
 them to the angle you type (north up when empty); either way the run
-lays the real grid out along the camera's angle once it has centred. The panels only appear once the camera is connected,
-because their size comes from the camera and the rig.
+lays the real grid out along the camera's angle once it has centred.
+The panel size comes from the rig's focal length and its camera sensor:
+the connected camera's, or with nothing connected the size the rig
+remembers (see @sec-plan-offline). **Send to PLAN** turns the planned
+grid into a new plan, one target per panel in shooting order, to shoot
+on another night.
 
 What happens next:
 

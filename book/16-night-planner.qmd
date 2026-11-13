@@ -141,6 +141,25 @@ the window to open), and the summary table with per-target frame
 counts, time estimates, and maximum
 altitude.](images/plan.jpg){#fig-plan-timeline}
 
+## Planning with nothing connected {#sec-plan-offline}
+
+A night can be planned at a desk, with the host powered on and nothing
+plugged in: PLAN, the mosaic planner on the SKY map, the MOSAIC tab and
+the framing box on the sky map do not need a camera, a mount or a
+filter wheel. Only running the plan does.
+
+What they need instead is the rig's optics, which the rig remembers:
+
+- **Focal length:** typed on the RIGS tab, in the Main Telescope card.
+- **Camera sensor size:** learned from the camera every time it
+  connects on that rig, and kept on the rig. For a camera that has not
+  been connected on that rig yet, type its width and height in
+  millimetres under the focal length. With two rigs and two cameras,
+  each rig plans with its own camera's field.
+- **Filter names:** learned from the wheel when it connects. With the
+  wheel unplugged, the filter wheel card on RIGS takes them as one line,
+  separated by commas, in slot order.
+
 ## Notes and current limits
 
 PLAN and ADV share one engine; starting one blocks the other, with a

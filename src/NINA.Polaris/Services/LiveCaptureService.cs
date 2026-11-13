@@ -65,13 +65,18 @@ public sealed class LiveCaptureService {
     public string? LastError { get; private set; }
 
     private readonly ProfileService? _profile;
+    private readonly NINA.Polaris.Services.Logging.SessionRunLogService? _runLogs;
+    private NINA.Polaris.Services.Logging.SessionRunLogService.Session? _runLog;
+    private string _runOutcome = "stopped";
 
     public LiveCaptureService(EquipmentManager equip, LiveStackingService liveStack,
         ImageRelayService relay, CaptureProgressService captureProgress,
         ActiveGuiderProvider guiders, AutoFocusService autoFocus,
         AuxCaptureService aux, CameraReadyGate cameraReady,
         MeridianFlipService meridian, DitherBarrier barrier,
-        ILogger<LiveCaptureService> logger, ProfileService? profile = null) {
+        ILogger<LiveCaptureService> logger, ProfileService? profile = null,
+        NINA.Polaris.Services.Logging.SessionRunLogService? runLogs = null) {
+        _runLogs = runLogs;
         _profile = profile;
         _equip = equip;
         _liveStack = liveStack;
@@ -102,6 +107,11 @@ public sealed class LiveCaptureService {
             FrameCount = 0;
             LastError = null;
             IsRunning = true;
+            _runOutcome = "stopped";
+            _runLog = _runLogs?.Begin("live", "", new[] {
+                string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                    $"LIVE: {ExposureSeconds:0.###} s, gain {Gain}{(Iso is int i ? $", ISO {i}" : "")}, bin {BinX}, stacking {(_liveStack.IsRunning ? "on" : "off")}")
+            });
             _cts = new CancellationTokenSource();
             var ct = _cts.Token;
             _loopTask = Task.Run(() => RunLoop(ct));
@@ -254,13 +264,27 @@ public sealed class LiveCaptureService {
                 // when the session's max duration is reached.
                 if (_liveStack.IsRunning && _liveStack.DurationCapReached) {
                     _logger.LogInformation("Server LIVE loop ending: stack duration cap reached");
+                    _runOutcome = "stack time limit reached";
                     break;
                 }
             }
+        } catch (OperationCanceledException) {
+            // stopped
+        } catch (Exception ex) {
+            _runOutcome = "FAILED";
+            LastError = ex.Message;
+            _logger.LogError(ex, "Server LIVE loop failed");
         } finally {
             lock (_lock) { IsRunning = false; }
             try { _aux.NotifySessionActive(false); } catch { }
             try { _barrier.Deregister("main"); } catch { }
+            var log = _runLog;
+            _runLog = null;
+            try {
+                _runLogs?.End(log, _runOutcome, _runOutcome == "FAILED" ? LastError : null);
+            } catch (Exception ex) {
+                _logger.LogWarning(ex, "Run log could not be closed");
+            }
         }
     }
 

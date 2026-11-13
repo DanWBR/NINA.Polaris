@@ -5144,5 +5144,18 @@
   "Power off runs last, and only when the run completes; a Stop or a failure leaves the host on.": "",
   "Menu order": "",
   "Back to the default order": "",
-  "Order of the buttons in the navigation rail. On the rail itself, press and hold a button (touch or mouse) and drag it; here, use the arrows or drag a row. Saved on the host, so every browser and device that opens this Polaris shows the same order.": ""
+  "Order of the buttons in the navigation rail. On the rail itself, press and hold a button (touch or mouse) and drag it; here, use the arrows or drag a row. Saved on the host, so every browser and device that opens this Polaris shows the same order.": "",
+  "not connected (one set with the filter in place)": "",
+  "Connect the camera in the": "",
+  "Without a filter wheel the wizard takes one set of flats with whatever is in the light path (a colour camera, or a filter screwed in front of it).": "",
+  "Filter in place": "",
+  "Sensor width (mm)": "",
+  "Sensor height (mm)": "",
+  "Filled in when the camera connects. Type it to plan (PLAN, MOSAIC, SKY) before the camera has ever been connected on this rig.": "",
+  "One PLAN target per panel, to shoot on another night": "",
+  "Set the focal length in RIGS to draw the panels": "",
+  "Panels drawn with a default sensor size: set the camera sensor in RIGS": "",
+  "Filter names, in slot order": "",
+  "For planning with the wheel unplugged. Separate the names with commas.": "",
+  "Type at least one filter name": ""
 }

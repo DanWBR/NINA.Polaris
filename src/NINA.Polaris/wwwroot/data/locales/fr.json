@@ -5511,5 +5511,18 @@
   "Power off runs last, and only when the run completes; a Stop or a failure leaves the host on.": "L'extinction s'exécute en dernier, et seulement quand la séquence se termine ; un Stop ou un échec laisse l'hôte allumé.",
   "Menu order": "Ordre du menu",
   "Back to the default order": "Revenir à l'ordre par défaut",
-  "Order of the buttons in the navigation rail. On the rail itself, press and hold a button (touch or mouse) and drag it; here, use the arrows or drag a row. Saved on the host, so every browser and device that opens this Polaris shows the same order.": "Ordre des boutons de la barre de navigation. Dans la barre elle-même, maintenez un bouton appuyé (tactile ou souris) et faites-le glisser ; ici, utilisez les flèches ou faites glisser une ligne. Enregistré sur l'hôte : chaque navigateur et appareil qui ouvre ce Polaris affiche le même ordre."
+  "Order of the buttons in the navigation rail. On the rail itself, press and hold a button (touch or mouse) and drag it; here, use the arrows or drag a row. Saved on the host, so every browser and device that opens this Polaris shows the same order.": "Ordre des boutons de la barre de navigation. Dans la barre elle-même, maintenez un bouton appuyé (tactile ou souris) et faites-le glisser ; ici, utilisez les flèches ou faites glisser une ligne. Enregistré sur l'hôte : chaque navigateur et appareil qui ouvre ce Polaris affiche le même ordre.",
+  "not connected (one set with the filter in place)": "non connectée (une série avec le filtre en place)",
+  "Connect the camera in the": "Connectez la caméra dans l'onglet",
+  "Without a filter wheel the wizard takes one set of flats with whatever is in the light path (a colour camera, or a filter screwed in front of it).": "Sans roue à filtres, l'assistant prend une série de flats avec ce qui se trouve sur le trajet de la lumière (une caméra couleur, ou un filtre vissé devant).",
+  "Filter in place": "Filtre en place",
+  "Sensor width (mm)": "Largeur du capteur (mm)",
+  "Sensor height (mm)": "Hauteur du capteur (mm)",
+  "Filled in when the camera connects. Type it to plan (PLAN, MOSAIC, SKY) before the camera has ever been connected on this rig.": "Rempli quand la caméra se connecte. Saisissez-le pour planifier (PLAN, MOSAIC, SKY) avant d'avoir connecté la caméra sur ce setup.",
+  "One PLAN target per panel, to shoot on another night": "Une cible PLAN par panneau, à photographier une autre nuit",
+  "Set the focal length in RIGS to draw the panels": "Indiquez la focale dans RIGS pour dessiner les panneaux",
+  "Panels drawn with a default sensor size: set the camera sensor in RIGS": "Panneaux dessinés avec une taille de capteur par défaut : indiquez le capteur de la caméra dans RIGS",
+  "Filter names, in slot order": "Noms des filtres, dans l'ordre des positions",
+  "For planning with the wheel unplugged. Separate the names with commas.": "Pour planifier avec la roue débranchée. Séparez les noms par des virgules.",
+  "Type at least one filter name": "Saisissez au moins un nom de filtre"
 }

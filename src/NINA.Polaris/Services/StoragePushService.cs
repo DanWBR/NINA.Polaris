@@ -183,6 +183,11 @@ public sealed class StoragePushService : BackgroundService {
         foreach (var file in files) {
             ct.ThrowIfCancellationRequested();
             if (IsExcludedFromPush(root, file)) { skipped++; continue; }
+            // The end-of-run offload leaves the run's log folder (the run log
+            // and its guide logs) to SessionRunLogService, which sends it once
+            // the last line is written. Two uploads of one file at once would race on the
+            // target's sidecar. The other walks (backfill, folder send) carry it.
+            if (modifiedAfterUtc != null && IsSessionLog(root, file)) { skipped++; continue; }
             if (modifiedAfterUtc is DateTime since) {
                 DateTime written;
                 try { written = new FileInfo(file).LastWriteTimeUtc; } catch { written = DateTime.MinValue; }
@@ -217,6 +222,41 @@ public sealed class StoragePushService : BackgroundService {
         catch { return false; }
         return rel.StartsWith("discarded/", StringComparison.OrdinalIgnoreCase)
             || rel.Contains("/discarded/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>A file of a run's log folder, written by
+    /// <see cref="Logging.SessionRunLogService"/>: the run log itself and the
+    /// guide logs copied beside it, anything under a "logs" folder of the
+    /// capture tree.</summary>
+    internal static bool IsSessionLog(string root, string fullPath) {
+        string rel;
+        try { rel = Path.GetRelativePath(root, fullPath).Replace('\\', '/'); }
+        catch { return false; }
+        return rel.Split('/').SkipLast(1).Any(s => s.Equals("logs", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Send one file now, on a connection of its own, and wait for it.
+    /// For the run log: small, rewritten as it grows, and needed on the target
+    /// before the host powers off, so it cannot wait in a lane behind the
+    /// night's frames. Throws when the target fails; returns false when the
+    /// push is off or the file is outside the capture folder.</summary>
+    public async Task<bool> UploadNowAsync(string localPath, CancellationToken ct) =>
+        await UploadNowAsync(new[] { localPath }, ct) > 0;
+
+    /// <summary>The same for several files, over one connection. Returns how
+    /// many were sent.</summary>
+    public async Task<int> UploadNowAsync(IReadOnlyList<string> localPaths, CancellationToken ct) {
+        if (!Enabled) return 0;
+        var root = _profile.Active?.ImageOutputDir ?? "";
+        var files = localPaths.Where(p => IsUnderRoot(root, p) && File.Exists(p)).ToList();
+        if (files.Count == 0) return 0;
+        var cfg = StorageConfig.FromProfile(_profile.Active!);
+        using var target = _factory.Create(cfg.Kind);
+        await target.ConnectAsync(cfg, ct);
+        foreach (var f in files)
+            await target.UploadAsync(f, Path.GetRelativePath(root, f), ct);
+        target.Disconnect();
+        return files.Count;
     }
 
     /// <summary>Is this folder inside the capture root? The remote mirrors paths

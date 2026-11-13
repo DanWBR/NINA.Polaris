@@ -488,6 +488,8 @@ public class ProfileService {
             SlewCenterExposureSec = src.SlewCenterExposureSec,
             SlewCenterGain = src.SlewCenterGain,
             FocalLengthMm = src.FocalLengthMm,
+            SensorWidthMm = src.SensorWidthMm,
+            SensorHeightMm = src.SensorHeightMm,
             ApertureMm = src.ApertureMm,
             TelescopeBrand = src.TelescopeBrand,
             TelescopeModel = src.TelescopeModel,

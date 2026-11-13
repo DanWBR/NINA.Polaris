@@ -190,14 +190,17 @@ public sealed class GuideSessionLogService : BackgroundService {
     /// into the Polaris guide-log folder so every session's log lives together.
     /// PHD2 keeps one guide log per app run and appends across sessions, so we
     /// copy the newest one touched since this session began.</summary>
-    private void CopyExternalPhd2Log() {
+    /// <summary>Where an external PHD2 on this host writes its guide logs:
+    /// the folder set in Settings first, then PHD2's defaults.</summary>
+    public static IEnumerable<string> ExternalPhd2LogDirs(string? configured) {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var dirs = new[] {
-            _profiles.Active?.Phd2GuideLogDir,
-            Path.Combine(home, "Documents", "PHD2"),
-            Path.Combine(home, "PHD2"),
-        };
-        foreach (var dir in dirs) {
+        if (!string.IsNullOrWhiteSpace(configured)) yield return configured;
+        yield return Path.Combine(home, "Documents", "PHD2");
+        yield return Path.Combine(home, "PHD2");
+    }
+
+    private void CopyExternalPhd2Log() {
+        foreach (var dir in ExternalPhd2LogDirs(_profiles.Active?.Phd2GuideLogDir)) {
             if (string.IsNullOrWhiteSpace(dir) || !Directory.Exists(dir)) continue;
             try {
                 var newest = new DirectoryInfo(dir)
