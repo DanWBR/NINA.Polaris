@@ -909,6 +909,7 @@
   "Connect a camera to enable this filter": "Verbinden Sie eine Kamera, um diesen Filter zu aktivieren",
   "Connect a focuser motor in RIGS to enable V-curve auto-focus": "Verbinden Sie einen Fokusmotor in RIGS, um den V-Kurven-Autofokus zu aktivieren",
   "Connect a mount first": "Schließen Sie zuerst eine Halterung an",
+  "Connect a mount in RIGS first": "Schließen Sie zuerst eine Montierung in RIGS an",
   "Connect a mount to auto-fill the target": "Verbinden Sie eine Montierung, um das Ziel automatisch zu füllen",
   "Connect a mount to flip.": "Schließen Sie eine Halterung an, um sie umzudrehen.",
   "Connect a native-SDK camera (ZWO ASI, SVBony, PlayerOne, ToupTek or Altair) to configure its gain, cooler and other SDK-exposed settings here.": "Verbinden Sie eine Kamera mit nativem SDK (ZWO ASI, SVBony, PlayerOne, ToupTek oder Altair), um hier ihren Gain, die Kühlung und andere vom SDK bereitgestellte Einstellungen zu konfigurieren.",
