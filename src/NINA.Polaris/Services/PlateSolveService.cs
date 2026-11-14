@@ -158,7 +158,13 @@ public class PlateSolveService {
                 && (!string.Equals(blind.Id, primary.Id, StringComparison.OrdinalIgnoreCase) || retrySameBackend)) {
             _logger.LogInformation("Falling back to blind solver {Name}", blind.DisplayName);
             try { onLog?.Invoke($"== blind fallback: {blind.DisplayName} =="); } catch { }
-            var blindResult = await blind.SolveAsync(fitsPath, options.ForBlindSolve(), ct, onLog);
+            // ASTAP and Asterion keep the hint: with one they try it first, then
+            // the whole sky, then the hint again at a coarser downsample.
+            // Without it they skip straight to the whole-sky pass, and the
+            // primary may have failed for a reason other than the hint
+            // (missing index files, a timeout).
+            var blindOptions = blind is AstapSolver ? options : options.ForBlindSolve();
+            var blindResult = await blind.SolveAsync(fitsPath, blindOptions, ct, onLog);
             if (blindResult.Success) { RecordSolve(blindResult, options.CaptureContext); return blindResult; }
             return PlateSolveResult.Failed(
                 $"Primary ({primary.DisplayName}) failed: {primaryError}. " +

@@ -162,4 +162,49 @@ public class PlateSolveFallbackRegressionTests {
         } finally { try { Directory.Delete(dir, true); } catch { } }
     }
 
+    /// <summary>ASTAP as the blind fallback keeps the hint: it tries the hint
+    /// first and the whole sky after, so the fallback still gets the fast
+    /// hinted pass when the primary failed for another reason.</summary>
+    [Test]
+    public async Task CrossBackendFallback_ToAstap_KeepsTheHint() {
+        var dir = Path.Combine(Path.GetTempPath(), "astap-blind-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try {
+            var calls = Path.Combine(dir, "calls");
+            var fits = Path.Combine(dir, "frame.fits");
+            File.WriteAllText(fits, "invalid FITS exercises the normal solve path");
+            string path;
+            if (OperatingSystem.IsWindows()) {
+                path = Path.Combine(dir, "fake-astap.cmd");
+                File.WriteAllText(path, "@echo %* >> \"" + calls + "\"\r\n@exit /b 1\r\n");
+            } else {
+                path = Path.Combine(dir, "fake-astap");
+                File.WriteAllText(path, "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '" + calls + "'\nexit 1\n");
+                File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+            var primary = new Solver("failed-primary", (_, _) => PlateSolveResult.Failed("no index for this scale"));
+            var cfg = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
+                ["PlateSolve:AstapPath"] = path,
+                ["PlateSolve:PrimarySolver"] = primary.Id,
+                ["PlateSolve:BlindSolver"] = "astap",
+                ["PlateSolve:UseBlindFallback"] = "true"
+            }).Build();
+            var plugins = new PlateSolverRegistry();
+            Assert.That(plugins.Add(primary, "regression"), Is.Null);
+            var service = new PlateSolveService(cfg, NullLogger<PlateSolveService>.Instance,
+                new AstapSolver(cfg, NullLogger<AstapSolver>.Instance),
+                new PlateSolve3Solver(cfg, NullLogger<PlateSolve3Solver>.Instance),
+                new AstrometryNetOnlineSolver(cfg, NullLogger<AstrometryNetOnlineSolver>.Instance),
+                new AstrometryNetLocalSolver(cfg, NullLogger<AstrometryNetLocalSolver>.Instance),
+                null, plugins: plugins);
+
+            var options = new PlateSolveOptions { HintRa = 5.5, HintDec = -5, SearchRadiusDeg = 10, FovDeg = 2 };
+            Assert.That((await service.SolveAsync(fits, options)).Success, Is.False);
+
+            var first = File.ReadAllLines(calls).First();
+            Assert.That(first, Does.Contain("-ra 5.5"), "the first ASTAP pass must use the hint");
+            Assert.That(first, Does.Contain("-r 10"));
+        } finally { try { Directory.Delete(dir, true); } catch { } }
+    }
+
 }
