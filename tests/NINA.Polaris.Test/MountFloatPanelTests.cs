@@ -175,4 +175,27 @@ public class MountFloatPanelTests {
             }
         });
     }
+
+    /// <summary>What: Esc closes the Mount panel only on a tab that shows it.
+    /// Why: on the other tabs the panel is hidden, so an Esc there (closing
+    /// a dialog, say) would close it without the user seeing it, and it
+    /// would be gone on the way back to SKY.</summary>
+    [Test]
+    public void EscClosesThePanelOnlyWhereItShows() {
+        var js = Js();
+        var at = js.IndexOf("if (this.mountPanel?.visible", StringComparison.Ordinal);
+        Assert.That(at, Is.GreaterThanOrEqualTo(0), "Esc handler for the Mount panel not found");
+        var cond = js.Substring(at, js.IndexOf('{', at) - at);
+        Assert.That(cond, Does.Contain("this.mountPanelTabs.includes(this.tab)"));
+    }
+
+    /// <summary>What: the stylesheet does not style the old SKY Mount pill.
+    /// Why: the pill was replaced by the Mount buttons; its rules were dead
+    /// and pushed the Camera pill up to leave room for it.</summary>
+    [Test]
+    public void TheOldMountPillIsGone() {
+        var css = File.ReadAllText(Path.Combine(Wwwroot(), "css", "parts", "03-equipment-mount.css"));
+        Assert.That(Uncommented(Html()), Does.Not.Contain("mount-float-reopen"));
+        Assert.That(css, Does.Not.Contain("mount-float-reopen"));
+    }
 }

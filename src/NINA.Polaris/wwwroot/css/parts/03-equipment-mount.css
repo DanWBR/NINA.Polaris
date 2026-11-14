@@ -650,8 +650,7 @@
     font-variant-numeric: tabular-nums;
 }
 
-/* Re-open pill (bottom-right of the Sky tab) */
-.mount-float-reopen,
+/* Camera pill (bottom-right of the Sky tab) */
 .camera-float-reopen {
     position: fixed;
     z-index: 89;
@@ -674,18 +673,13 @@
     cursor: pointer;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
-/* Camera pill stacks above the Mount pill when both are visible so
-   they don't overlap. ~36 px clear (pill height + small gap). */
-.camera-float-reopen { bottom: 132px; }
 .camera-float-reopen:hover {
     background: var(--accent);
     color: #fff;
 }
 /* Active state -- the corresponding popup IS open. Filled blue +
    subtle inset shadow signals "this is currently showing". Pill
-   stays a toggle, not a hide-only button. Applies to both pills
-   since they share the same toggle semantics now. */
-.mount-float-reopen.active,
+   stays a toggle, not a hide-only button. */
 .camera-float-reopen.active {
     background: var(--accent);
     color: #fff;
@@ -794,11 +788,6 @@
     border-bottom-right-radius: var(--radius);
     overflow: hidden;
 }
-.mount-float-reopen:hover {
-    background: var(--accent);
-    color: #fff;
-}
-
 /* ===========================================================
    FILES tab, server-side file explorer
    ----------------------------------------------------------- */

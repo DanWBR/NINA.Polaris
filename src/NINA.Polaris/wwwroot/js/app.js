@@ -34142,7 +34142,9 @@ function ninaApp() {
                 return;
             }
             let closed = false;
-            if (this.mountPanel?.visible) {
+            // Only the tabs that show the panel: on the others it is
+            // hidden, and Esc there must not close it behind the user's back.
+            if (this.mountPanel?.visible && this.mountPanelTabs.includes(this.tab)) {
                 this.mountPanel.visible = false;
                 try { this.persistMountPanel(); } catch {}
                 closed = true;
