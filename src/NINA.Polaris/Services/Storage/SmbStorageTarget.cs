@@ -315,12 +315,66 @@ public sealed class SmbStorageTarget : IStorageTarget {
             try { client.Logoff(); client.Disconnect(); } catch { }
             throw new IOException($"SMB share '{cfg.Share}' not accessible: {ts}");
         }
+        RememberAddress(cfg.Host, address, UtcNow());
         return (client, store);
     }
 
-    private static IPAddress ResolveIPv4(string host) {
-        host = (host ?? "").Trim().TrimStart('\\').TrimEnd('\\');
+    // ---- Name resolution ----
+    //
+    // A server given by name ("jupiter") is usually found through the mDNS
+    // ".local" fallback, and mDNS rides on multicast, which WiFi drops now and
+    // then. One lost answer failed the lookup outright (nss-mdns returns
+    // NOTFOUND at once), and every fresh connection resolves again: the run
+    // log, pushed on its own connection every few minutes, failed with "could
+    // not resolve host" while the frame lane, connected earlier, kept writing
+    // to the same server (field case, SV503 rig on WiFi, 2026-11-14). So a
+    // failed lookup is retried once, then the last address the server was
+    // reached at is used, if that was recent: a login only goes to an address
+    // that answered to the name, now or within the last hour.
+
+    /// <summary>How long a server's last address stays usable when its name
+    /// does not resolve. Short enough that DHCP cannot plausibly have handed
+    /// the address to another machine in between.</summary>
+    internal static readonly TimeSpan LastAddressValidFor = TimeSpan.FromHours(1);
+    internal static readonly TimeSpan RetryAfter = TimeSpan.FromSeconds(1);
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (IPAddress Address, DateTime AtUtc)>
+        LastAddress = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Lookup, wait and clock, replaceable by tests.</summary>
+    internal static Func<string, IPAddress[]> Lookup = Dns.GetHostAddresses;
+    internal static Action<TimeSpan> Pause = t => Thread.Sleep(t);
+    internal static Func<DateTime> UtcNow = () => DateTime.UtcNow;
+
+    private static string NormaliseHost(string host) => (host ?? "").Trim().TrimStart('\\').TrimEnd('\\');
+
+    /// <summary>Remember where a server given by name was just reached.</summary>
+    internal static void RememberAddress(string host, IPAddress address, DateTime atUtc) {
+        host = NormaliseHost(host);
+        if (host.Length == 0 || IPAddress.TryParse(host, out _)) return;
+        LastAddress[host] = (address, atUtc);
+    }
+
+    internal static void ForgetAddresses() => LastAddress.Clear();
+
+    internal static IPAddress ResolveIPv4(string host) {
+        host = NormaliseHost(host);
         if (IPAddress.TryParse(host, out var ip)) return ip;
+
+        var found = TryResolve(host);
+        if (found == null) {
+            Pause(RetryAfter);
+            found = TryResolve(host);
+        }
+        if (found != null) return found;
+        if (LastAddress.TryGetValue(host, out var last) && UtcNow() - last.AtUtc <= LastAddressValidFor)
+            return last.Address;
+        throw new IOException(
+            $"Could not resolve host '{host}'. Use the server's IP address " +
+            $"(e.g. 192.168.1.50), or a name the network can resolve such as '{host}.local'.");
+    }
+
+    private static IPAddress? TryResolve(string host) {
 
         // Try the name as given, then an mDNS `.local` fallback. Bare Windows/
         // NetBIOS box names (e.g. "DESKTOP-ABC") aren't resolvable by a plain
@@ -331,7 +385,7 @@ public sealed class SmbStorageTarget : IStorageTarget {
         if (!host.Contains('.')) candidates.Add(host + ".local");
         foreach (var name in candidates) {
             try {
-                var addrs = Dns.GetHostAddresses(name);
+                var addrs = Lookup(name);
                 var v4 = addrs.FirstOrDefault(a => a.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork);
                 if (v4 != null) return v4;
                 if (addrs.Length > 0) return addrs[0];
@@ -339,9 +393,7 @@ public sealed class SmbStorageTarget : IStorageTarget {
                 // Unresolvable; fall through to the next candidate.
             }
         }
-        throw new IOException(
-            $"Could not resolve host '{host}'. Use the server's IP address " +
-            $"(e.g. 192.168.1.50), or a name the network can resolve such as '{host}.local'.");
+        return null;
     }
 
     public void Disconnect() {
