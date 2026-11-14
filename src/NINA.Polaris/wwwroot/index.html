@@ -10892,7 +10892,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 @click="toggleMountPanel($event)"
                                 @contextmenu.prevent="resetMountPanelPosition(); mountPanel.visible = true"
                                 :disabled="!mount.connected"
-                                :title="!mount.connected ? 'Connect a mount first'
+                                :title="!mount.connected ? 'Connect a mount in RIGS first'
                                        : (mountPanel.visible ? 'Hide' : 'Show') + ' mount control (shift+click or right-click resets position)'">
                             <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" style="vertical-align:-1px">
                                 <path d="M12 2L2 22h20L12 2z" fill="none" stroke="currentColor" stroke-width="2"/>
