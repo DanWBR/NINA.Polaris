@@ -3330,7 +3330,7 @@
                                 ↻ Reset baseline
                             </button>
                             <!-- Opens the shared floating Mount control (same panel as
-                                 the SKY tab's Mount pill). Shift+click or right-click
+                                 the SKY tab's Mount button). Shift+click or right-click
                                  resets its position. -->
                             <button class="btn btn-sm"
                                     :class="mountPanel.visible ? 'btn-active' : ''"
@@ -4477,7 +4477,7 @@
                             <span x-show="previewSolveBusy">⏳ Solving...</span>
                         </button>
                         <!-- Opens the shared floating Mount control (same panel as
-                             the SKY tab's Mount pill). Shift+click or right-click
+                             the SKY tab's Mount button). Shift+click or right-click
                              resets its position. -->
                         <button class="btn"
                                 :class="mountPanel.visible ? 'btn-active' : ''"
@@ -10884,6 +10884,21 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <span class="center-body-phase" x-show="centerBodyJobId && centerBodyStatus" x-cloak
                                   x-text="centerBodyPhaseLabel(centerBodyStatus && centerBodyStatus.state)"></span>
                         </span>
+                        <!-- Toggles the shared floating Mount control (was a
+                             fixed bottom-right pill that overlapped the Lat/Long
+                             status). Shift+click or right-click resets its position. -->
+                        <button class="btn btn-sm"
+                                :class="mountPanel.visible ? 'btn-active' : ''"
+                                @click="toggleMountPanel($event)"
+                                @contextmenu.prevent="resetMountPanelPosition(); mountPanel.visible = true"
+                                :disabled="!mount.connected"
+                                :title="!mount.connected ? 'Connect a mount first'
+                                       : (mountPanel.visible ? 'Hide' : 'Show') + ' mount control (shift+click or right-click resets position)'">
+                            <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" style="vertical-align:-1px">
+                                <path d="M12 2L2 22h20L12 2z" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            Mount
+                        </button>
                     </div>
 
                     <!-- Top-centre progress + STOP overlay. Always
@@ -11064,28 +11079,6 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <p class="hint">Click any object on the map, or use Search above.</p>
                 </div>
 
-                <!-- Mount toggle pill -- always visible while a
-                     telescope is connected so the operator always
-                     has a guaranteed way to show/hide the mount
-                     popup. .active class gives visual feedback
-                     for the current state. Toggle semantics, like
-                     the Camera pill below. -->
-                <!-- @contextmenu (right-click) + shift+click rescue:
-                     resets the popup to its default position. Saves
-                     the operator when they drag the panel off-screen
-                     and can't grab the header anymore. -->
-                <button class="mount-float-reopen"
-                        :class="{ 'active': mountPanel.visible }"
-                        x-show="mount.connected"
-                        x-cloak
-                        @click="toggleMountPanel($event)"
-                        @contextmenu.prevent="resetMountPanelPosition(); mountPanel.visible = true"
-                        :title="(mountPanel.visible ? 'Hide' : 'Show') + ' mount control (shift+click or right-click resets position)'">
-                    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-                        <path d="M12 2L2 22h20L12 2z" fill="none" stroke="currentColor" stroke-width="2"/>
-                    </svg>
-                    Mount
-                </button>
 
                 <!-- Camera toggle pill -- ALWAYS visible while a slew
                      preview stream is active, so the operator always
@@ -11117,9 +11110,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
             <!-- Floating mount control, shared by SKY, FOCUS, PREVIEW and LIVE.
                  Lives outside the tab panels so one instance (same
                  position, visibility and drag state in mountPanel)
-                 serves all three. Sky toggles it with the Mount pill;
-                 Focus, Preview and Live each have a Mount button in
-                 their controls. -->
+                 serves all four. Each tab has a Mount button in its
+                 controls (Sky: the map-actions bar). -->
             <!-- Floating, draggable mount control. Shown only when
                  a mount is connected and the user hasn't dismissed
                  the panel. Position survives across reloads via

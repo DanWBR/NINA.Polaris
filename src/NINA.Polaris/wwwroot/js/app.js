@@ -497,7 +497,7 @@ function ninaApp() {
         // it. _drag is transient state held during a mouse/touch drag.
         mountPanel: { x: 24, y: 80, visible: true },
         // Tabs the floating mount panel appears on. One shared panel
-        // instance; Sky toggles it with its Mount pill, Focus,
+        // instance; Sky (map-actions bar), Focus,
         // Preview and Live with a Mount button in their controls.
         mountPanelTabs: ['sky', 'focus', 'preview', 'live'],
         // Live-camera preview floats next to the mount panel by
@@ -33426,8 +33426,8 @@ function ninaApp() {
 
         // Show/hide the floating mount panel. Shift+click resets it
         // to the default position and shows it, the rescue path when
-        // it has been dragged off-screen. Shared by the Sky pill and
-        // the Focus / Preview Mount buttons.
+        // it has been dragged off-screen. Shared by the Sky, Live,
+        // Focus and Preview Mount buttons.
         toggleMountPanel(ev) {
             if (ev && ev.shiftKey) {
                 this.resetMountPanelPosition();
