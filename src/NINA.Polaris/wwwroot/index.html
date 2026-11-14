@@ -2734,8 +2734,13 @@
                 <div x-show="polarTab === 'rudimentary'" class="rudimentary-pane">
                     <!-- Pre-flight strip -->
                     <div class="control-row" style="margin-bottom: 10px; gap: 14px; flex-wrap: wrap">
-                        <span :class="equipCameraInfo?.connected ? 'text-ok' : 'text-warn'">
-                            <span x-text="equipCameraInfo?.connected ? '✓' : '✗'"></span> Camera
+                        <!-- The camera picked in the Camera selector above (main,
+                             guide or aux). It read equipCameraInfo.connected,
+                             a field nothing sets, so it showed ✗ for every
+                             camera (#70). -->
+                        <span :class="cameraSourceReady(polar.camera || 'main') ? 'text-ok' : 'text-warn'">
+                            <span x-text="cameraSourceReady(polar.camera || 'main') ? '✓' : '✗'"></span>
+                            <span x-text="polar.camera === 'guide' ? 'Guide camera' : polar.camera === 'aux' ? 'Aux camera' : 'Camera'"></span>
                         </span>
                         <span :class="mount?.connected ? 'text-ok' : 'text-warn'">
                             <span x-text="mount?.connected ? '✓' : '✗'"></span> Mount
@@ -2851,7 +2856,7 @@
                                     @click="rudimentaryStart()"
                                     :disabled="rudimentary.busy
                                                || !cameraSourceReady(polar.camera || 'main')
-                                               || !rudimentary.targetRaHours
+                                               || rudimentary.targetRaHours === null || rudimentary.targetRaHours === undefined
                                                || rudimentary.targetDecDeg === null
                                                || rudimentary.targetDecDeg === undefined">
                                 ▶ Start
@@ -26832,7 +26837,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261113-previewsrc"></script>
+    <script src="/js/app.js?v=20261113-rudicam"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
