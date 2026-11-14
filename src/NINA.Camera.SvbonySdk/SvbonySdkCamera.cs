@@ -46,6 +46,31 @@ public sealed class SvbonySdkCamera : ICamera {
     private bool _supportsCooler;
     private bool _isTriggerCam;
 
+    /// <summary>The mode last set on the camera, null when unknown. Every
+    /// change of mode resets the camera on the USB bus (measured on an
+    /// SV605CC: one "reset SuperSpeed USB device" per SVBSetCameraMode that
+    /// changes the mode; start, stop and a call for the mode already set do
+    /// not). Stills used to switch to soft trigger and back to normal on
+    /// every frame, two resets per frame, and on a board whose USB 3 port
+    /// shares its controller with another port the device on that other port
+    /// dropped off with them. The SDK also stops the cooler fan on a mode
+    /// change. So the mode only changes between stills and video.</summary>
+    private SVB_CAMERA_MODE? _mode;
+
+    /// <summary>Set the camera mode only when it differs from the current
+    /// one. Caller holds <c>_sdk</c>.</summary>
+    private SVB_ERROR_CODE SetMode(SVB_CAMERA_MODE mode) {
+        if (_mode == mode) return SVB_ERROR_CODE.SVB_SUCCESS;
+        var rc = SVBSetCameraMode(_cameraId, mode);
+        _mode = rc == SVB_ERROR_CODE.SVB_SUCCESS ? mode : null;
+        return rc;
+    }
+
+    /// <summary>The mode stills are taken in: soft trigger when the camera
+    /// has it (an exact exposure on demand), continuous otherwise.</summary>
+    internal static SVB_CAMERA_MODE StillMode(bool isTriggerCam)
+        => isTriggerCam ? SVB_CAMERA_MODE.SVB_MODE_TRIG_SOFT : SVB_CAMERA_MODE.SVB_MODE_NORMAL;
+
     private int _gain;
     private double _exposureSec = 0.03;
     private int _roiX, _roiY, _roiW, _roiH, _bin = 1;
@@ -199,7 +224,9 @@ public sealed class SvbonySdkCamera : ICamera {
         if (SVBGetSensorPixelSize(_cameraId, out var px) == SVB_ERROR_CODE.SVB_SUCCESS) _pixelSize = px;
 
         _imgType = _maxBitDepth > 8 ? SVB_IMG_TYPE.SVB_IMG_RAW16 : SVB_IMG_TYPE.SVB_IMG_RAW8;
-        SVBSetCameraMode(_cameraId, SVB_CAMERA_MODE.SVB_MODE_NORMAL);
+        // Start in the mode stills use, so the first still does not switch.
+        _mode = null;
+        SetMode(StillMode(_isTriggerCam));
         SVBSetOutputImageType(_cameraId, _imgType);
 
         _roiX = 0; _roiY = 0; _roiW = _maxX; _roiH = _maxY; _bin = 1;
@@ -321,8 +348,9 @@ public sealed class SvbonySdkCamera : ICamera {
                 // integrating for the requested duration. Switching to
                 // SVB_MODE_TRIG_SOFT and firing one SVBSendSoftTrigger makes
                 // SVBGetVideoData block until a single full-length exposure
-                // completes. Mode is restored to NORMAL afterwards so the
-                // video-stream path keeps working.
+                // completes. The camera stays in soft trigger afterwards: a mode
+                // change resets it on the USB bus (see _mode), and the video
+                // stream sets NORMAL itself when it starts.
                 // The mode switch + start MUST sit inside the try: if
                 // SVBStartVideoCapture throws with them outside it, the finally
                 // below never runs and the camera is left latched in TRIG_SOFT
@@ -332,7 +360,7 @@ public sealed class SvbonySdkCamera : ICamera {
                 // already swallow), so running it after a failed start is safe.
                 try {
                     lock (_sdk) {
-                        Check(SVBSetCameraMode(_cameraId, SVB_CAMERA_MODE.SVB_MODE_TRIG_SOFT),
+                        Check(SetMode(SVB_CAMERA_MODE.SVB_MODE_TRIG_SOFT),
                             "SVBSetCameraMode(TRIG_SOFT)");
                         // Same defensive stop the stream path does (see
                         // StartVideoStreamAsync): if the PREVIOUS capture didn't
@@ -358,10 +386,7 @@ public sealed class SvbonySdkCamera : ICamera {
                     lock (_sdk) err = SVBGetVideoData(_cameraId, bytes, new CLong(bytes.Length), waitMs);
                     Check(err, "SVBGetVideoData");
                 } finally {
-                    lock (_sdk) {
-                        try { SVBStopVideoCapture(_cameraId); } catch { }
-                        try { SVBSetCameraMode(_cameraId, SVB_CAMERA_MODE.SVB_MODE_NORMAL); } catch { }
-                    }
+                    lock (_sdk) { try { SVBStopVideoCapture(_cameraId); } catch { } }
                     State = CameraStates.Idle;
                 }
             } else {
@@ -434,6 +459,9 @@ public sealed class SvbonySdkCamera : ICamera {
                     // without reconnecting"). A stop on an idle camera is a
                     // harmless no-op.
                     try { SVBStopVideoCapture(_cameraId); } catch { }
+                    // Video runs in continuous mode; stills leave the camera in
+                    // soft trigger, which would wait for a trigger that never comes.
+                    Check(SetMode(SVB_CAMERA_MODE.SVB_MODE_NORMAL), "SVBSetCameraMode(NORMAL)");
                     Check(SVBStartVideoCapture(_cameraId), "SVBStartVideoCapture");
                 }
                 _streamCts = new CancellationTokenSource();
@@ -533,6 +561,7 @@ public sealed class SvbonySdkCamera : ICamera {
             Thread.Sleep(500);
             if (SVBOpenCamera(_cameraId) != SVB_ERROR_CODE.SVB_SUCCESS) return false;
             _roiApplied = false;
+            _mode = null;   // a fresh handle: the mode is whatever the camera opened in
         }
         ApplyExposureGain(_exposureSec, _gain, _offset);
         bool wasStreaming = _streaming;
@@ -540,6 +569,7 @@ public sealed class SvbonySdkCamera : ICamera {
         try { ApplyRoi(); } finally { lock (_gate) { _streaming = wasStreaming; } }
         lock (_sdk) {
             SVBSetOutputImageType(_cameraId, _imgType);
+            SetMode(SVB_CAMERA_MODE.SVB_MODE_NORMAL);
             return SVBStartVideoCapture(_cameraId) == SVB_ERROR_CODE.SVB_SUCCESS;
         }
     }
