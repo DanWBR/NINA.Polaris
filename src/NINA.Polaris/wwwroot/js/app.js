@@ -499,6 +499,10 @@ function ninaApp() {
         // in localStorage so the panel comes back where the user left
         // it. _drag is transient state held during a mouse/touch drag.
         mountPanel: { x: 24, y: 80, visible: true },
+        // Tabs the floating mount panel appears on. One shared panel
+        // instance; Sky (map-actions bar), Focus,
+        // Preview and Live with a Mount button in their controls.
+        mountPanelTabs: ['sky', 'focus', 'preview', 'live'],
         // Live-camera preview floats next to the mount panel by
         // default. Shares the same draggable + persist pattern.
         // Visibility flag lives in slewPreviewVisible above so the
@@ -33486,6 +33490,20 @@ function ninaApp() {
                 if (typeof saved.visible === 'boolean') this.mountPanel.visible = saved.visible;
                 this._clampMountPanel();
             } catch { /* corrupt storage, ignore */ }
+        },
+
+        // Show/hide the floating mount panel. Shift+click resets it
+        // to the default position and shows it, the rescue path when
+        // it has been dragged off-screen. Shared by the Sky, Live,
+        // Focus and Preview Mount buttons.
+        toggleMountPanel(ev) {
+            if (ev && ev.shiftKey) {
+                this.resetMountPanelPosition();
+                this.mountPanel.visible = true;
+            } else {
+                this.mountPanel.visible = !this.mountPanel.visible;
+            }
+            this.persistMountPanel();
         },
 
         persistMountPanel() {

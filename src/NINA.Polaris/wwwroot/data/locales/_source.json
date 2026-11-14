@@ -775,6 +775,7 @@
   "Connect a camera to enable this filter": "",
   "Connect a focuser motor in RIGS to enable V-curve auto-focus": "",
   "Connect a mount first": "",
+  "Connect a mount in RIGS first": "",
   "Connect a mount to auto-fill the target": "",
   "Connect a mount to flip.": "",
   "Connect a native-SDK camera (ZWO ASI, SVBony, PlayerOne, ToupTek or Altair) to configure its gain, cooler and other SDK-exposed settings here.": "",
