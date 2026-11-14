@@ -36043,8 +36043,9 @@ function ninaApp() {
         },
 
         rudimentaryPickResult(r) {
-            this.rudimentary.targetRaHours = r.raHours ?? r.RaHours ?? null;
-            this.rudimentary.targetDecDeg = r.decDeg ?? r.DecDeg ?? null;
+            // /api/sky/catalog/search returns `ra` (hours) and `dec` (degrees).
+            this.rudimentary.targetRaHours = r.ra ?? r.raHours ?? null;
+            this.rudimentary.targetDecDeg = r.dec ?? r.decDeg ?? null;
             this.rudimentary.targetName = r.name || r.Name || '';
             this.rudimentary.search = r.name || '';
             this.rudimentary.searchResults = [];
