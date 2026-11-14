@@ -264,9 +264,10 @@ public static class GuiderEndpoints {
             return Results.Ok(new { status = "connected", device = equip.GuideCamera.DeviceName });
         });
 
-        group.MapPost("/camera/disconnect", async (EquipmentManager equip) => {
+        group.MapPost("/camera/disconnect", async (EquipmentManager equip, CameraLinkRecoveryService recovery) => {
             if (equip.GuideCamera == null)
                 return Results.Ok(new { status = "disconnected" });
+            recovery.Stop(equip.GuideCamera);
             return await DeviceConnectGuard.RunAsync(
                 "disconnect", equip.GuideCamera.DeviceName,
                 ct => equip.GuideCamera.DisconnectAsync(ct),

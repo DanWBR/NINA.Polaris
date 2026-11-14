@@ -306,6 +306,7 @@ public sealed class ToupTekSdkCamera : ICamera {
 
         _connected = true;
         _disconnectReason = null;
+        _timeoutsInARow = 0;
         State = CameraStates.Idle;
     }, ct);
 
@@ -623,8 +624,10 @@ public sealed class ToupTekSdkCamera : ICamera {
             if (!tcs.Task.Wait(waitMs, ct)) {
                 // A frame for this trigger arriving later must not answer the next capture.
                 if (triggered) { try { _cam.Trigger(0); } catch { } }
+                NoteFrameTimeout();
                 throw new TimeoutException("ToupTek frame timed out.");
             }
+            _timeoutsInARow = 0;
             return tcs.Task.Result;
         } finally {
             lock (_captureGate) _captureTcs = null;
@@ -632,6 +635,21 @@ public sealed class ToupTekSdkCamera : ICamera {
             State = CameraStates.Idle;
         }
     }, ct);
+
+    /// <summary>Frames that timed out one after the other. A camera that
+    /// dropped off the bus and came straight back leaves a dead handle, and
+    /// the SDK's disconnect event can take a minute to arrive (field case:
+    /// a G3M662C reset with the port it shared, guiding lost a minute of
+    /// frames before the drop was reported). Three in a row is that, not a
+    /// slow frame: the wait is already twice the exposure plus 3 s.</summary>
+    internal const int TimeoutsBeforeLinkLost = 3;
+    private int _timeoutsInARow;
+
+    internal void NoteFrameTimeout() {
+        if (++_timeoutsInARow < TimeoutsBeforeLinkLost || !_connected) return;
+        _connected = false;
+        _disconnectReason = $"the camera stopped sending frames ({_timeoutsInARow} timed out in a row)";
+    }
 
     public bool IsStreaming => _streaming;
 

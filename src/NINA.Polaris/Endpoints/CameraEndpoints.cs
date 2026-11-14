@@ -744,9 +744,11 @@ public static class CameraEndpoints {
         });
 
         group.MapPost("/disconnect", async (EquipmentManager equip, CameraStreamService stream,
-                NINA.Polaris.Services.Planetary.VideoRecordingService recorder, ILoggerFactory loggerFactory) => {
+                NINA.Polaris.Services.Planetary.VideoRecordingService recorder, ILoggerFactory loggerFactory,
+                CameraLinkRecoveryService recovery) => {
             if (equip.Camera == null)
                 return Results.BadRequest(new { error = "No camera selected" });
+            recovery.Stop(equip.Camera);
 
             // A recording and a stream outlive the camera otherwise: the stream
             // kept its hold on the camera and the recorder kept writing, with the

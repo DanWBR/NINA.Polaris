@@ -469,6 +469,9 @@ builder.Services.AddSingleton<UsbScanService>();
 // or request thread froze the host (field report 2026-09-22).
 builder.Services.AddSingleton<EquipmentSnapshotService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<EquipmentSnapshotService>());
+// Reopens a native-SDK camera that dropped off the USB bus on its own.
+builder.Services.AddSingleton<CameraLinkRecoveryService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<CameraLinkRecoveryService>());
 // Wedged-INDI-driver watchdog: on repeated BLOB timeouts, restart just that
 // driver through indi-web (a device reconnect can't fix a stuck driver). Dual
 // registration so the hosted StartAsync subscribes to IndiClient.BlobTimeout.
