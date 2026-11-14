@@ -1057,6 +1057,7 @@
   "Connect a focuser motor and a filter wheel in RIGS to measure per-filter focus": "Подключите мотор фокусера и колесо фильтров в разделе RIGS, чтобы измерять фокус по фильтрам",
   "Connect a focuser motor in RIGS to enable V-curve auto-focus": "Подключите мотор фокусера в RIGS, чтобы включить автофокус по V-кривой",
   "Connect a mount first": "Сначала подключите монтировку",
+  "Connect a mount in RIGS first": "Сначала подключите монтировку в RIGS",
   "Connect a mount to auto-fill the target": "Подключите монтировку для автозаполнения цели",
   "Connect a mount to flip.": "Подключите монтировку для перекладки.",
   "Connect a native-SDK camera (ZWO ASI, SVBony, PlayerOne, ToupTek or Altair) to configure its gain, cooler and other SDK-exposed settings here.": "Подключите камеру с нативным SDK (ZWO ASI, SVBony, PlayerOne, ToupTek или Altair), чтобы настроить здесь её усиление, охлаждение и другие параметры, доступные через SDK.",
