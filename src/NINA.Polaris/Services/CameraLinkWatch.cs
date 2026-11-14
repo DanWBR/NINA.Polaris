@@ -49,7 +49,7 @@ public sealed class CameraLinkWatch {
 
         var name = string.IsNullOrWhiteSpace(deviceName) ? role : deviceName;
         return $"{name} disconnected on its own: {reason}. "
-             + "Check the cable and the power on the camera. Nothing will capture until it is back.";
+             + "Polaris is trying to reopen it; if it does not come back, check the cable and the power on the camera.";
     }
 
     /// <summary>Forget what is known about a device, so the next connection

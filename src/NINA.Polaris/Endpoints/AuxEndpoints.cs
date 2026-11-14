@@ -66,9 +66,11 @@ public static class AuxEndpoints {
             return Results.Ok(new { status = "connected", device = equip.AuxCamera.DeviceName });
         });
 
-        group.MapPost("/camera/disconnect", async (EquipmentManager equip, AuxCaptureService aux) => {
+        group.MapPost("/camera/disconnect", async (EquipmentManager equip, AuxCaptureService aux,
+                CameraLinkRecoveryService recovery) => {
             if (equip.AuxCamera == null)
                 return Results.Ok(new { status = "disconnected" });
+            recovery.Stop(equip.AuxCamera);
             await equip.AuxCamera.DisconnectAsync();
             aux.Sync();
             return Results.Ok(new { status = "disconnected" });
