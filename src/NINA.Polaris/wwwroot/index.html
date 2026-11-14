@@ -2396,6 +2396,21 @@
                             :class="fullStats ? 'btn-active' : ''"
                             :disabled="!selectedCamera"
                             x-text="fullStats ? 'Hide stats' : 'Detailed stats'">Detailed stats</button>
+                    <!-- Opens the shared floating Mount control (same panel as
+                         SKY / FOCUS / PREVIEW). Shift+click or right-click resets
+                         its position. -->
+                    <button class="btn btn-sm"
+                            :class="mountPanel.visible ? 'btn-active' : ''"
+                            @click="toggleMountPanel($event)"
+                            @contextmenu.prevent="resetMountPanelPosition(); mountPanel.visible = true"
+                            :disabled="!mount.connected"
+                            :title="!mount.connected ? 'Connect a mount in RIGS first'
+                                   : (mountPanel.visible ? 'Hide' : 'Show') + ' mount control (shift+click or right-click resets position)'">
+                        <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" style="vertical-align:-1px">
+                            <path d="M12 2L2 22h20L12 2z" fill="none" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                        Mount
+                    </button>
                 </div>
 
                 <!-- (LIVE histogram moved into the frame as a bottom overlay,
@@ -3313,6 +3328,21 @@
                                     @click="manualFocusResetBaseline()"
                                     title="Clear the rolling HFR history + bestHfr marker">
                                 ↻ Reset baseline
+                            </button>
+                            <!-- Opens the shared floating Mount control (same panel as
+                                 the SKY tab's Mount pill). Shift+click or right-click
+                                 resets its position. -->
+                            <button class="btn btn-sm"
+                                    :class="mountPanel.visible ? 'btn-active' : ''"
+                                    @click="toggleMountPanel($event)"
+                                    @contextmenu.prevent="resetMountPanelPosition(); mountPanel.visible = true"
+                                    :disabled="!mount.connected"
+                                    :title="!mount.connected ? 'Connect a mount in RIGS first'
+                                           : (mountPanel.visible ? 'Hide' : 'Show') + ' mount control (shift+click or right-click resets position)'">
+                                <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" style="vertical-align:-1px">
+                                    <path d="M12 2L2 22h20L12 2z" fill="none" stroke="currentColor" stroke-width="2"/>
+                                </svg>
+                                Mount
                             </button>
                             <span x-show="manualFocus.running" class="text-muted" style="font-size:11px">
                                 Loop · every <strong x-text="manualFocus.intervalSec"></strong>s
@@ -4445,6 +4475,21 @@
                                     : 'Plate solve the current preview frame'">
                             <span x-show="!previewSolveBusy">🎯 Plate solve</span>
                             <span x-show="previewSolveBusy">⏳ Solving...</span>
+                        </button>
+                        <!-- Opens the shared floating Mount control (same panel as
+                             the SKY tab's Mount pill). Shift+click or right-click
+                             resets its position. -->
+                        <button class="btn"
+                                :class="mountPanel.visible ? 'btn-active' : ''"
+                                @click="toggleMountPanel($event)"
+                                @contextmenu.prevent="resetMountPanelPosition(); mountPanel.visible = true"
+                                :disabled="!mount.connected"
+                                :title="!mount.connected ? 'Connect a mount in RIGS first'
+                                       : (mountPanel.visible ? 'Hide' : 'Show') + ' mount control (shift+click or right-click resets position)'">
+                            <svg viewBox="0 0 24 24" width="12" height="12" aria-hidden="true" style="vertical-align:-1px">
+                                <path d="M12 2L2 22h20L12 2z" fill="none" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            Mount
                         </button>
                     </div>
                     </div><!-- /.shutter-secondary -->
@@ -11019,166 +11064,6 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <p class="hint">Click any object on the map, or use Search above.</p>
                 </div>
 
-                <!-- Floating, draggable mount control. Shown only when
-                     a mount is connected and the user hasn't dismissed
-                     the panel. Position survives across reloads via
-                     localStorage. A small "Mount" pill in the corner
-                     re-opens it when hidden. -->
-                <!-- Same .force-hidden trick as the camera popup below
-                     to dodge the Alpine x-show reactivity issue. -->
-                <div class="mount-float-panel"
-                     :class="{ 'force-hidden': !mount.connected || !mountPanel.visible }"
-                     :style="`left: ${mountPanel.x}px; top: ${mountPanel.y}px;`">
-                    <div class="mount-float-header"
-                         @mousedown="mountPanelDragStart($event)"
-                         @touchstart="mountPanelDragStart($event)">
-                        <span class="mount-float-title">
-                            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-                                <path d="M12 2L2 22h20L12 2z" fill="none" stroke="currentColor" stroke-width="2"/>
-                            </svg>
-                            Mount
-                            <span class="mount-float-sub" x-text="selectedTelescope || ''"></span>
-                        </span>
-                    </div>
-                    <!-- Close moved outside the header so the
-                         header's @mousedown drag handler can never
-                         steal the click. CSS position:absolute keeps
-                         it visually in the top-right corner. -->
-                    <button class="mount-float-close"
-                            @pointerdown.stop
-                            @mousedown.stop
-                            @touchstart.stop
-                            @click.stop.prevent="mountPanel.visible = false; persistMountPanel()"
-                            title="Hide">×</button>
-                    <div class="mount-float-body">
-                        <!-- Jog column: d-pad on top, slew-rate slider
-                             stacked directly below so the operator can
-                             change rate without their eye jumping
-                             across the panel. The flex parent keeps
-                             this whole block left of the readouts. -->
-                        <div class="mount-float-jog">
-                            <!-- Manual jog d-pad. Hidden entirely when the
-                                 driver doesn't expose TELESCOPE_MOTION_NS/WE
-                                 so the user doesn't waste clicks on buttons
-                                 that would just 501. The STOP button stays
-                                 visible regardless (mounts that can slew can
-                                 always abort, even those without manual jog). -->
-                            <!-- Press-and-hold semantics: the INDI spec for
-                                 TELESCOPE_MOTION_* says "set to true to START
-                                 moving, set to false to STOP". Earlier click
-                                 handlers fired only the press half, so the
-                                 mount either crept for a single tick or (on
-                                 the AM3 driver) did nothing visible because
-                                 the motion command + the implicit "no stop
-                                 ever" left the driver waiting. Pointer down
-                                 fires move, pointer up/leave/cancel sends an
-                                 abort which clears the motion switch and
-                                 halts the mount. Works for both mouse and
-                                 touch (single event API). The .prevent stops
-                                 the browser from synthesising a click after
-                                 touchend, which would re-fire the move and
-                                 leave the mount moving after release. -->
-                            <div class="dpad-container dpad-container-sm"
-                                 x-show="mount.capabilities?.manualJog !== false">
-                                <button class="dpad-btn dpad-n"
-                                        @pointerdown.prevent="mountMoveStart('n', $event)"
-                                        @pointerup.prevent="mountMoveStop()"
-                                        @pointerleave="mountMoveStop()"
-                                        @pointercancel="mountMoveStop()"
-                                        :disabled="!mount.connected">N</button>
-                                <button class="dpad-btn dpad-w"
-                                        @pointerdown.prevent="mountMoveStart('w', $event)"
-                                        @pointerup.prevent="mountMoveStop()"
-                                        @pointerleave="mountMoveStop()"
-                                        @pointercancel="mountMoveStop()"
-                                        :disabled="!mount.connected">W</button>
-                                <button class="dpad-btn dpad-stop" @click="mountStop()">STOP</button>
-                                <button class="dpad-btn dpad-e"
-                                        @pointerdown.prevent="mountMoveStart('e', $event)"
-                                        @pointerup.prevent="mountMoveStop()"
-                                        @pointerleave="mountMoveStop()"
-                                        @pointercancel="mountMoveStop()"
-                                        :disabled="!mount.connected">E</button>
-                                <button class="dpad-btn dpad-s"
-                                        @pointerdown.prevent="mountMoveStart('s', $event)"
-                                        @pointerup.prevent="mountMoveStop()"
-                                        @pointerleave="mountMoveStop()"
-                                        @pointercancel="mountMoveStop()"
-                                        :disabled="!mount.connected">S</button>
-                            </div>
-                            <!-- Fallback STOP-only row when the driver doesn't
-                                 advertise jog. Without this the operator has
-                                 no way to abort an in-progress slew from the
-                                 floating panel. -->
-                            <div class="dpad-container dpad-container-sm"
-                                 x-show="mount.capabilities?.manualJog === false">
-                                <button class="dpad-btn dpad-stop"
-                                        style="grid-area: c;"
-                                        @click="mountStop()">STOP</button>
-                            </div>
-
-                            <!-- SLEWRATE: discrete slew-rate slider. Tick
-                                 count = number of TELESCOPE_SLEW_RATE
-                                 elements the driver advertises (typically
-                                 4 for LX200-class: Guide / Centering / Find
-                                 / Max). Hidden when the driver hard-codes
-                                 a single rate (slewRates.length < 2). The
-                                 label below the slider shows the currently
-                                 lit element so the operator can confirm
-                                 which step they're on without counting
-                                 ticks. -->
-                            <div class="mount-slew-rate"
-                                 x-show="(mount.slewRates || []).length > 1">
-                                <div class="mount-slew-rate-label">
-                                    <span>Slew rate</span>
-                                    <strong x-text="(mount.slewRates || [])
-                                                .find(r => r.active)?.label || '-'"></strong>
-                                </div>
-                                <input type="range" min="0"
-                                       :max="(mount.slewRates || []).length - 1"
-                                       step="1"
-                                       :value="Math.max(0, mountSlewRateIndex)"
-                                       @input="setMountSlewRate($event.target.value)"
-                                       list="mount-slew-rate-ticks">
-                                <datalist id="mount-slew-rate-ticks">
-                                    <template x-for="(r, i) in (mount.slewRates || [])" :key="r.name">
-                                        <option :value="i" :label="r.label"></option>
-                                    </template>
-                                </datalist>
-                            </div>
-                        </div>
-                        <div class="mount-info mount-info-sm">
-                            <div class="info-row"><span>RA:</span><strong x-text="formatRA(mount.ra)"></strong></div>
-                            <div class="info-row"><span>Dec:</span><strong x-text="formatDec(mount.dec)"></strong></div>
-                            <div class="info-row"><span>Alt:</span><strong x-text="formatDeg(mount.alt)"></strong></div>
-                            <div class="info-row"><span>Az:</span><strong x-text="formatDeg(mount.az)"></strong></div>
-                            <div class="info-row"><span>Track:</span>
-                                <strong :class="mount.tracking ? 'text-ok' : 'text-warn'"
-                                        x-text="mount.tracking ? 'ON' : 'OFF'"></strong>
-                            </div>
-                            <div class="info-row"><span>Pier:</span><strong x-text="mount.pierSide"></strong></div>
-                            <div class="info-row" x-show="mount.slewing">
-                                <span>Status:</span><strong class="text-warn">SLEWING</strong>
-                            </div>
-                            <div class="info-row" x-show="mount.parked">
-                                <span>Status:</span><strong class="text-warn">PARKED</strong>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="mount-float-actions">
-                        <button class="btn btn-sm" @click="toggleTracking()" :disabled="!mount.connected">
-                            <span x-text="mount.tracking ? 'Stop Track' : 'Start Track'"></span>
-                        </button>
-                        <button class="btn btn-sm" @click="parkMount()" :disabled="!mount.connected || mount.parked">Park</button>
-                        <button class="btn btn-sm" @click="unparkMount()" :disabled="!mount.connected || !mount.parked">Unpark</button>
-                        <!-- Capture this pointing as a custom-horizon point: aim
-                             at an obstacle's top edge and click. -->
-                        <button class="btn btn-sm" @click="horizonAddFromMount()"
-                                :disabled="!mount.connected"
-                                title="Add a custom-horizon point at the scope's current altitude + azimuth">🌄 Horizon point</button>
-                    </div>
-                </div>
-
                 <!-- Mount toggle pill -- always visible while a
                      telescope is connected so the operator always
                      has a guaranteed way to show/hide the mount
@@ -11193,7 +11078,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         :class="{ 'active': mountPanel.visible }"
                         x-show="mount.connected"
                         x-cloak
-                        @click="if ($event.shiftKey) { resetMountPanelPosition(); mountPanel.visible = true; } else { mountPanel.visible = !mountPanel.visible; persistMountPanel(); }"
+                        @click="toggleMountPanel($event)"
                         @contextmenu.prevent="resetMountPanelPosition(); mountPanel.visible = true"
                         :title="(mountPanel.visible ? 'Hide' : 'Show') + ' mount control (shift+click or right-click resets position)'">
                     <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
@@ -11227,6 +11112,172 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </svg>
                     Camera
                 </button>
+            </div>
+
+            <!-- Floating mount control, shared by SKY, FOCUS, PREVIEW and LIVE.
+                 Lives outside the tab panels so one instance (same
+                 position, visibility and drag state in mountPanel)
+                 serves all three. Sky toggles it with the Mount pill;
+                 Focus, Preview and Live each have a Mount button in
+                 their controls. -->
+            <!-- Floating, draggable mount control. Shown only when
+                 a mount is connected and the user hasn't dismissed
+                 the panel. Position survives across reloads via
+                 localStorage. A small "Mount" pill in the corner
+                 re-opens it when hidden. -->
+            <!-- Same .force-hidden trick as the Sky tab camera popup
+                 to dodge the Alpine x-show reactivity issue. -->
+            <div class="mount-float-panel"
+                 :class="{ 'force-hidden': !mount.connected || !mountPanel.visible || !mountPanelTabs.includes(tab) }"
+                 :style="`left: ${mountPanel.x}px; top: ${mountPanel.y}px;`">
+                <div class="mount-float-header"
+                     @mousedown="mountPanelDragStart($event)"
+                     @touchstart="mountPanelDragStart($event)">
+                    <span class="mount-float-title">
+                        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+                            <path d="M12 2L2 22h20L12 2z" fill="none" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                        Mount
+                        <span class="mount-float-sub" x-text="selectedTelescope || ''"></span>
+                    </span>
+                </div>
+                <!-- Close moved outside the header so the
+                     header's @mousedown drag handler can never
+                     steal the click. CSS position:absolute keeps
+                     it visually in the top-right corner. -->
+                <button class="mount-float-close"
+                        @pointerdown.stop
+                        @mousedown.stop
+                        @touchstart.stop
+                        @click.stop.prevent="mountPanel.visible = false; persistMountPanel()"
+                        title="Hide">×</button>
+                <div class="mount-float-body">
+                    <!-- Jog column: d-pad on top, slew-rate slider
+                         stacked directly below so the operator can
+                         change rate without their eye jumping
+                         across the panel. The flex parent keeps
+                         this whole block left of the readouts. -->
+                    <div class="mount-float-jog">
+                        <!-- Manual jog d-pad. Hidden entirely when the
+                             driver doesn't expose TELESCOPE_MOTION_NS/WE
+                             so the user doesn't waste clicks on buttons
+                             that would just 501. The STOP button stays
+                             visible regardless (mounts that can slew can
+                             always abort, even those without manual jog). -->
+                        <!-- Press-and-hold semantics: the INDI spec for
+                             TELESCOPE_MOTION_* says "set to true to START
+                             moving, set to false to STOP". Earlier click
+                             handlers fired only the press half, so the
+                             mount either crept for a single tick or (on
+                             the AM3 driver) did nothing visible because
+                             the motion command + the implicit "no stop
+                             ever" left the driver waiting. Pointer down
+                             fires move, pointer up/leave/cancel sends an
+                             abort which clears the motion switch and
+                             halts the mount. Works for both mouse and
+                             touch (single event API). The .prevent stops
+                             the browser from synthesising a click after
+                             touchend, which would re-fire the move and
+                             leave the mount moving after release. -->
+                        <div class="dpad-container dpad-container-sm"
+                             x-show="mount.capabilities?.manualJog !== false">
+                            <button class="dpad-btn dpad-n"
+                                    @pointerdown.prevent="mountMoveStart('n', $event)"
+                                    @pointerup.prevent="mountMoveStop()"
+                                    @pointerleave="mountMoveStop()"
+                                    @pointercancel="mountMoveStop()"
+                                    :disabled="!mount.connected">N</button>
+                            <button class="dpad-btn dpad-w"
+                                    @pointerdown.prevent="mountMoveStart('w', $event)"
+                                    @pointerup.prevent="mountMoveStop()"
+                                    @pointerleave="mountMoveStop()"
+                                    @pointercancel="mountMoveStop()"
+                                    :disabled="!mount.connected">W</button>
+                            <button class="dpad-btn dpad-stop" @click="mountStop()">STOP</button>
+                            <button class="dpad-btn dpad-e"
+                                    @pointerdown.prevent="mountMoveStart('e', $event)"
+                                    @pointerup.prevent="mountMoveStop()"
+                                    @pointerleave="mountMoveStop()"
+                                    @pointercancel="mountMoveStop()"
+                                    :disabled="!mount.connected">E</button>
+                            <button class="dpad-btn dpad-s"
+                                    @pointerdown.prevent="mountMoveStart('s', $event)"
+                                    @pointerup.prevent="mountMoveStop()"
+                                    @pointerleave="mountMoveStop()"
+                                    @pointercancel="mountMoveStop()"
+                                    :disabled="!mount.connected">S</button>
+                        </div>
+                        <!-- Fallback STOP-only row when the driver doesn't
+                             advertise jog. Without this the operator has
+                             no way to abort an in-progress slew from the
+                             floating panel. -->
+                        <div class="dpad-container dpad-container-sm"
+                             x-show="mount.capabilities?.manualJog === false">
+                            <button class="dpad-btn dpad-stop"
+                                    style="grid-area: c;"
+                                    @click="mountStop()">STOP</button>
+                        </div>
+
+                        <!-- SLEWRATE: discrete slew-rate slider. Tick
+                             count = number of TELESCOPE_SLEW_RATE
+                             elements the driver advertises (typically
+                             4 for LX200-class: Guide / Centering / Find
+                             / Max). Hidden when the driver hard-codes
+                             a single rate (slewRates.length < 2). The
+                             label below the slider shows the currently
+                             lit element so the operator can confirm
+                             which step they're on without counting
+                             ticks. -->
+                        <div class="mount-slew-rate"
+                             x-show="(mount.slewRates || []).length > 1">
+                            <div class="mount-slew-rate-label">
+                                <span>Slew rate</span>
+                                <strong x-text="(mount.slewRates || [])
+                                            .find(r => r.active)?.label || '-'"></strong>
+                            </div>
+                            <input type="range" min="0"
+                                   :max="(mount.slewRates || []).length - 1"
+                                   step="1"
+                                   :value="Math.max(0, mountSlewRateIndex)"
+                                   @input="setMountSlewRate($event.target.value)"
+                                   list="mount-slew-rate-ticks">
+                            <datalist id="mount-slew-rate-ticks">
+                                <template x-for="(r, i) in (mount.slewRates || [])" :key="r.name">
+                                    <option :value="i" :label="r.label"></option>
+                                </template>
+                            </datalist>
+                        </div>
+                    </div>
+                    <div class="mount-info mount-info-sm">
+                        <div class="info-row"><span>RA:</span><strong x-text="formatRA(mount.ra)"></strong></div>
+                        <div class="info-row"><span>Dec:</span><strong x-text="formatDec(mount.dec)"></strong></div>
+                        <div class="info-row"><span>Alt:</span><strong x-text="formatDeg(mount.alt)"></strong></div>
+                        <div class="info-row"><span>Az:</span><strong x-text="formatDeg(mount.az)"></strong></div>
+                        <div class="info-row"><span>Track:</span>
+                            <strong :class="mount.tracking ? 'text-ok' : 'text-warn'"
+                                    x-text="mount.tracking ? 'ON' : 'OFF'"></strong>
+                        </div>
+                        <div class="info-row"><span>Pier:</span><strong x-text="mount.pierSide"></strong></div>
+                        <div class="info-row" x-show="mount.slewing">
+                            <span>Status:</span><strong class="text-warn">SLEWING</strong>
+                        </div>
+                        <div class="info-row" x-show="mount.parked">
+                            <span>Status:</span><strong class="text-warn">PARKED</strong>
+                        </div>
+                    </div>
+                </div>
+                <div class="mount-float-actions">
+                    <button class="btn btn-sm" @click="toggleTracking()" :disabled="!mount.connected">
+                        <span x-text="mount.tracking ? 'Stop Track' : 'Start Track'"></span>
+                    </button>
+                    <button class="btn btn-sm" @click="parkMount()" :disabled="!mount.connected || mount.parked">Park</button>
+                    <button class="btn btn-sm" @click="unparkMount()" :disabled="!mount.connected || !mount.parked">Unpark</button>
+                    <!-- Capture this pointing as a custom-horizon point: aim
+                         at an obstacle's top edge and click. -->
+                    <button class="btn btn-sm" @click="horizonAddFromMount()"
+                            :disabled="!mount.connected"
+                            title="Add a custom-horizon point at the scope's current altitude + azimuth">🌄 Horizon point</button>
+                </div>
             </div>
 
             <!-- EDITOR, Lightroom-style non-destructive image editor.
