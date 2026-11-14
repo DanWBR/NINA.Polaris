@@ -48821,7 +48821,10 @@ function ninaApp() {
         },
 
         async indiWebEnsureIframe(force) {
-            if (!this.auth.authenticated || !this.indiWeb.status?.running) {
+            // With the login turned off no session is ever authenticated, so
+            // the gate is the same as the other iframes': signed in, or no
+            // login at all (#76: a blank panel with auth off).
+            if (!(this.auth.authenticated || !this.auth.enabled) || !this.indiWeb.status?.running) {
                 this.indiWeb.iframeSrc = 'about:blank';
                 return;
             }
