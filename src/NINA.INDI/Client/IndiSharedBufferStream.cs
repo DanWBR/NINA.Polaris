@@ -47,6 +47,7 @@ public sealed class IndiSharedBufferStream : Stream {
     private const int SOL_SOCKET = 1;
     private const int SCM_RIGHTS = 1;
     private const int EINTR = 4;
+    private const int EAGAIN = 11;
 
     private readonly Socket _socket;
     private readonly ConcurrentQueue<int> _fds = new();
@@ -136,6 +137,13 @@ public sealed class IndiSharedBufferStream : Stream {
                 if (n < 0) {
                     int errno = Marshal.GetLastPInvokeError();
                     if (errno == EINTR) continue;
+                    if (errno == EAGAIN) {
+                        // .NET switches the descriptor to non-blocking as soon as an async
+                        // operation (ConnectAsync, SendAsync) has run on it. Wait for data
+                        // the way the runtime would, then read again.
+                        if (!WaitReadable()) return 0;
+                        continue;
+                    }
                     if (_disposed) return 0;
                     throw new IOException($"recvmsg on the INDI unix socket failed, errno {errno}");
                 }
@@ -143,6 +151,17 @@ public sealed class IndiSharedBufferStream : Stream {
                 return (int)n;
             }
         }
+    }
+
+    /// <summary>Blocks until the socket is readable or closed. False once disposed.</summary>
+    private bool WaitReadable() {
+        try {
+            while (!_disposed) {
+                if (_socket.Poll(1_000_000, SelectMode.SelectRead)) return true;
+            }
+        } catch (ObjectDisposedException) { }
+        catch (SocketException) { }
+        return false;
     }
 
     public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) {

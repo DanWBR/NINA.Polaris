@@ -99,6 +99,35 @@ public class IndiSharedBufferStreamTests {
         server.Dispose();
     }
 
+    /// <summary>What the live connection looks like: .NET makes the descriptor
+    /// non-blocking once ConnectAsync has run on it, so recvmsg returns EAGAIN
+    /// until data is there. On the Pi this surfaced as "recvmsg failed, errno 11"
+    /// right after connecting (0.98.267-henosys3, 2026-11-15).</summary>
+    [Test]
+    public async Task NonBlockingSocket_WaitsForData_InsteadOfFailing() {
+        var (server, client) = SocketPair();
+        client.Blocking = false;
+        using var stream = IndiSharedBufferStream.FromConnectedSocket(client);
+        var buf = new byte[64];
+
+        var read = Task.Run(() => stream.Read(buf, 0, buf.Length));
+        await Task.Delay(300);
+        Assert.That(read.IsCompleted, Is.False, "nothing sent yet, the read must wait");
+
+        using var fd = Memfd(new byte[] { 9, 9 });
+        SendWithFd(server, Encoding.UTF8.GetBytes("<x/>\n"), (int)fd.DangerousGetHandle());
+
+        int n = await read.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.That(n, Is.EqualTo(5));
+        Assert.That(stream.TakeAttachedBlob(2), Is.EqualTo(new byte[] { 9, 9 }));
+
+        var second = Task.Run(() => stream.Read(buf, 0, buf.Length));
+        await Task.Delay(100);
+        server.Shutdown(SocketShutdown.Both);
+        Assert.That(await second.WaitAsync(TimeSpan.FromSeconds(5)), Is.EqualTo(0), "peer closed: EOF, not an exception");
+        server.Dispose();
+    }
+
     [Test]
     public void AttachedWithoutDescriptor_YieldsNull_NotGarbage() {
         var (server, client) = SocketPair();
