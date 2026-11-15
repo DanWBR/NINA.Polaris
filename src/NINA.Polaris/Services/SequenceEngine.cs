@@ -792,9 +792,9 @@ public class SequenceEngine {
                 StartedAt.HasValue ? (DateTime.UtcNow - StartedAt.Value).ToString(@"hh\:mm\:ss") : "??");
 
             runOutcome = "completed";
-            // The last frame's preview belongs to this run, before the end
-            // actions can power the host off.
-            try { await _previewRelay; } catch { /* logged inside */ }
+            // The last frame's file and preview belong to this run, before the
+            // end actions can power the host off.
+            await DrainPostCaptureAsync();
             // Natural completion always fires the end-actions.
             await RunEndActionsAsync(triggeredByStop: false);
 
@@ -805,6 +805,8 @@ public class SequenceEngine {
 
         } catch (OperationCanceledException) {
             _logger.LogInformation("Sequence cancelled");
+            // The frame captured just before the stop is still being written.
+            await DrainPostCaptureAsync();
             // Stop is a user action, only run housekeeping if the user opted in.
             if (EndActions.RunOnStop) {
                 await RunEndActionsAsync(triggeredByStop: true);
@@ -815,6 +817,7 @@ public class SequenceEngine {
             runOutcome = "FAILED";
             runError = ex.Message;
             _logger.LogError(ex, "Sequence failed");
+            await DrainPostCaptureAsync();
             // Failure: still try housekeeping so the rig isn't left tracking unattended.
             await RunEndActionsAsync(triggeredByStop: true);
         } finally {
@@ -849,38 +852,12 @@ public class SequenceEngine {
         if (item.Ra.HasValue) imageData.MetaData.Target.RightAscension = item.Ra.Value;
         if (item.Dec.HasValue) imageData.MetaData.Target.Declination = item.Dec.Value;
 
-        // Persist to disk with extended FITS headers (no-op if no output dir).
+        // Name the file and take the capture-time metadata now (no-op if no
+        // output dir); the bytes are written behind the capture, below.
         // imageType controls the calibration/light subfolder split in BuildSubDir.
-        var savedPath = _imageWriter.SaveImage(imageData, targetName: effectiveTargetName,
+        var pendingSave = _imageWriter.PrepareSave(imageData, targetName: effectiveTargetName,
             imageType: imageType, gain: item.Gain);
-
-        // Auto-GraXpert BGE hook. Fire-and-forget so the
-        // next exposure doesn't wait on the ~10s BGE pass.
-        // Only LIGHT frames + only when the user opted in
-        // + only when GraXpert is actually installed. Decon
-        // and Denoise never auto-run, they hurt SNR on
-        // individual lights and are best on integrated
-        // masters; offered manually in STUDIO instead.
-        if (EndActions.AutoGraXpert
-            && !string.IsNullOrEmpty(savedPath)
-            && !isCalibration
-            && _graXpert.IsAvailable) {
-            var fileToProcess = savedPath!;
-            _ = Task.Run(async () => {
-                try {
-                    var opts = new NINA.Polaris.Services.External.GraXpertOptions(
-                        Operation: NINA.Polaris.Services.External.GraXpertOperation.BackgroundExtraction);
-                    var res = await _graXpert.ProcessFrameAsync(
-                        fileToProcess, opts, CancellationToken.None);
-                    if (!string.IsNullOrEmpty(res.Error)) {
-                        _logger.LogWarning("Auto-GraXpert failed for {Path}: {Err}",
-                            fileToProcess, res.Error);
-                    }
-                } catch (Exception ex) {
-                    _logger.LogWarning(ex, "Auto-GraXpert hook threw for {Path}", fileToProcess);
-                }
-            });
-        }
+        bool autoGraXpert = EndActions.AutoGraXpert && !isCalibration && _graXpert.IsAvailable;
 
         // AUTORUN frames are saved to disk and shown in the
         // preview, but are NOT fed into the LIVE-tab stacking
@@ -895,30 +872,63 @@ public class SequenceEngine {
         // and throwing here would send the caller into its retry, which
         // captures and saves the same frame a second time.
         //
-        // The relay runs behind the capture, not in front of the next exposure:
-        // on a DSLR this is where the RAW is decoded for the first time (7.8 s
-        // for a 33 MP ARW on a Raspberry Pi 4), and with the full-size frame
-        // pushed to every browser it cost each sub about 10 s of camera idle
-        // time. Only when the previous frame is still being relayed does the
-        // run wait, so frames stay in order and at most one frame is held
-        // beyond the one being exposed.
-        if (!_previewRelay.IsCompleted) await _previewRelay;
+        // The write and the relay run behind the capture, not in front of the
+        // next exposure: on a Raspberry Pi 4 a 64 MB DSLR RAW takes 1 to 3 s
+        // to reach the SD card, and the relay is where the RAW is decoded for
+        // the first time (7.8 s for a 33 MP ARW), pushed full-size to every
+        // browser. Together they cost each sub over 10 s of camera idle time.
+        // Only when the previous frame is still being handled does the run
+        // wait, so frames stay in order, each file is on disk before the one
+        // after it, and at most one frame is held beyond the one being
+        // exposed. The run and the end actions wait for the last one, so a
+        // power-off end action never races the final write.
+        if (!_postCapture.IsCompleted) await _postCapture;
         var frame = imageData;
-        var path = savedPath;
-        _previewRelay = Task.Run(async () => {
+        _postCapture = Task.Run(async () => {
+            var savedPath = pendingSave?.Commit();
+            if (autoGraXpert && !string.IsNullOrEmpty(savedPath)) StartAutoGraXpert(savedPath);
             try {
                 await _relay.RelayImageAsync(frame, FrameKind.Autorun, ct);
             } catch (OperationCanceledException) {
             } catch (Exception ex) {
                 _logger.LogWarning(ex, "AUTORUN preview relay failed for {Path}; the frame is saved",
-                    path ?? "(not saved)");
+                    savedPath ?? "(not saved)");
             }
         }, CancellationToken.None);
     }
 
-    // The preview relay of the previous frame, running while the next exposure
-    // is open. Completed when nothing is pending; awaited before the run ends.
-    private Task _previewRelay = Task.CompletedTask;
+    // Save and preview relay of the previous frame, running while the next
+    // exposure is open. Completed when nothing is pending; drained before the
+    // end actions run.
+    private Task _postCapture = Task.CompletedTask;
+
+    /// <summary>Wait for the last frame's save and relay. Never throws: both
+    /// log their own failures.</summary>
+    internal async Task DrainPostCaptureAsync() {
+        try { await _postCapture; } catch { /* logged inside */ }
+    }
+
+    /// <summary>Auto-GraXpert BGE hook. Fire-and-forget so the next exposure
+    /// doesn't wait on the ~10s BGE pass. Only LIGHT frames + only when the
+    /// user opted in + only when GraXpert is actually installed. Decon and
+    /// Denoise never auto-run, they hurt SNR on individual lights and are best
+    /// on integrated masters; offered manually in STUDIO instead.</summary>
+    private void StartAutoGraXpert(string fileToProcess) {
+        _ = Task.Run(async () => {
+            try {
+                var opts = new NINA.Polaris.Services.External.GraXpertOptions(
+                    Operation: NINA.Polaris.Services.External.GraXpertOperation.BackgroundExtraction);
+                var res = await _graXpert.ProcessFrameAsync(
+                    fileToProcess, opts, CancellationToken.None);
+                if (!string.IsNullOrEmpty(res.Error)) {
+                    _logger.LogWarning("Auto-GraXpert failed for {Path}: {Err}",
+                        fileToProcess, res.Error);
+                }
+            } catch (Exception ex) {
+                _logger.LogWarning(ex, "Auto-GraXpert hook threw for {Path}", fileToProcess);
+            }
+        });
+    }
 
     /// <summary>
     /// Give the large-object heap back at the end of a run.

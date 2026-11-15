@@ -143,6 +143,82 @@ public class ImageWriterService {
         int gain = 0,
         bool stacked = false,
         double? focalLengthMmOverride = null,
+        string stackedFolderName = "stacked")
+        => PrepareSave(imageData, targetName, imageType, gain, stacked,
+                       focalLengthMmOverride, stackedFolderName)?.Commit();
+
+    /// <summary>
+    /// A save whose file has been named and whose metadata is final, but whose
+    /// bytes are not on disk yet. <see cref="Commit"/> writes them.
+    ///
+    /// The split exists for the sequencers: writing a 64 MB DSLR RAW to a
+    /// Raspberry Pi's SD card takes 1 to 3 s, and the camera idled through it
+    /// before the next exposure. Everything that must be taken at capture
+    /// time happens in <see cref="PrepareSave"/> on the caller's thread: the
+    /// target resolved from the current pointing, the WCS from the current
+    /// mount position (a dither moves it right after the sub), the frame
+    /// number and the file name. Only the write is left for later, so the
+    /// file comes out byte for byte as a synchronous save would have.
+    /// </summary>
+    public sealed class PendingSave {
+        private readonly ImageWriterService _owner;
+        private readonly IImageData _image;
+        private readonly string _format;
+        private readonly bool _hasRaw;
+        private readonly RotatorMetaData? _rotator;
+        private bool _committed;
+
+        /// <summary>Where <see cref="Commit"/> will write.</summary>
+        public string Path { get; }
+        /// <summary>The on-disk extension, ".arw", ".fits", ".xisf".</summary>
+        public string Extension { get; }
+
+        internal PendingSave(ImageWriterService owner, IImageData image, string path,
+                string extension, string format, bool hasRaw, RotatorMetaData? rotator) {
+            _owner = owner; _image = image; Path = path; Extension = extension;
+            _format = format; _hasRaw = hasRaw; _rotator = rotator;
+        }
+
+        /// <summary>Write the file. Returns the path, or null when the write
+        /// failed (logged). Safe to call once; later calls return the path
+        /// without writing again.</summary>
+        public string? Commit() {
+            if (_committed) return Path;
+            _committed = true;
+            try {
+                if (_hasRaw) {
+                    File.WriteAllBytes(Path, ((IHasRawFile)_image).RawFileBytes!);
+                    _owner._logger.LogInformation("Saved RAW ({Ext}): {Path}", Extension, Path);
+                } else if (_format == "xisf") {
+                    XISFWriter.Write(_image, Path, rotator: _rotator);
+                    _owner._logger.LogInformation("Saved XISF: {Path}", Path);
+                } else {
+                    FITSWriter.Write(_image, Path, rotator: _rotator);
+                    _owner._logger.LogInformation("Saved FITS: {Path}", Path);
+                }
+                _owner._lastWrittenPath = Path;
+                // Fire-and-forget notify for auto-push to network storage. Wrapped
+                // so a misbehaving subscriber never fails the capture.
+                try { _owner.ImageSaved?.Invoke(Path); }
+                catch (Exception ex) { _owner._logger.LogDebug(ex, "ImageSaved handler threw"); }
+                return Path;
+            } catch (Exception ex) {
+                _owner._logger.LogError(ex, "Failed to save {Path}", Path);
+                return null;
+            }
+        }
+    }
+
+    /// <summary>The capture-time half of <see cref="SaveImage"/>: resolve the
+    /// target, enrich the metadata, pick the file name and the WCS, but do not
+    /// write. Returns null when saving is disabled or the preparation failed
+    /// (logged), the same cases in which <see cref="SaveImage"/> returns null.</summary>
+    public PendingSave? PrepareSave(IImageData imageData,
+        string? targetName = null,
+        string imageType = "LIGHT",
+        int gain = 0,
+        bool stacked = false,
+        double? focalLengthMmOverride = null,
         string stackedFolderName = "stacked") {
 
         var profile = _profile.Active;
@@ -232,25 +308,13 @@ public class ImageWriterService {
                 };
             }
 
-            if (hasRaw) {
-                File.WriteAllBytes(fullPath, ((IHasRawFile)imageData).RawFileBytes!);
-                _logger.LogInformation("Saved RAW ({Ext}): {Path}",
-                    extension, fullPath);
-            } else if (format == "xisf") {
-                XISFWriter.Write(WithCaptureWcs(imageData, imageType, stacked, focalLengthMmOverride), fullPath, rotator: rotMeta);
-                _logger.LogInformation("Saved XISF: {Path}", fullPath);
-            } else {
-                FITSWriter.Write(WithCaptureWcs(imageData, imageType, stacked, focalLengthMmOverride), fullPath, rotator: rotMeta);
-                _logger.LogInformation("Saved FITS: {Path}", fullPath);
-            }
-            _lastWrittenPath = fullPath;
-            // Fire-and-forget notify for auto-push to network storage. Wrapped
-            // so a misbehaving subscriber never fails the capture.
-            try { ImageSaved?.Invoke(fullPath); }
-            catch (Exception ex) { _logger.LogDebug(ex, "ImageSaved handler threw"); }
-            return fullPath;
+            // The WCS is taken now, from the pointing the frame was shot at;
+            // a RAW is written verbatim and carries none.
+            var toWrite = hasRaw ? imageData
+                : WithCaptureWcs(imageData, imageType, stacked, focalLengthMmOverride);
+            return new PendingSave(this, toWrite, fullPath, extension, format, hasRaw, rotMeta);
         } catch (Exception ex) {
-            _logger.LogError(ex, "Failed to save FITS to {Dir}", dir);
+            _logger.LogError(ex, "Failed to prepare a save in {Dir}", dir);
             return null;
         }
     }

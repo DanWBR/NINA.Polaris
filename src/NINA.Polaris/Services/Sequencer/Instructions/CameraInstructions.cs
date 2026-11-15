@@ -120,6 +120,7 @@ public class TakeExposureInstruction : SequenceInstruction {
                 "TakeExposure '{Name}': resuming at frame {Next}/{Total}",
                 Name, CompletedCount + 1, Count);
 
+        try {
         for (int i = CompletedCount; i < Count; i++) {
             ct.ThrowIfCancellationRequested();
             await ctx.HoldIfRequestedAsync(ct);
@@ -165,26 +166,42 @@ public class TakeExposureInstruction : SequenceInstruction {
                 image.MetaData.Exposure.Filter = Filter;
             if (!string.IsNullOrEmpty(TargetName)) image.MetaData.Target.Name = TargetName;
 
-            ctx.ImageWriter.SaveImage(image, targetName: TargetName, imageType: imageType, gain: Gain ?? 0);
+            // Name the file and take the capture-time metadata now; the bytes
+            // are written behind the capture, below.
+            var pendingSave = ctx.ImageWriter.PrepareSave(image, targetName: TargetName, imageType: imageType, gain: Gain ?? 0);
 
             // Only lights go into the stack; a dark, flat or bias is saved and
             // shown on the AUTORUN preview.
             bool isLight = imageType is not ("DARK" or "BIAS" or "FLAT" or "DARKFLAT");
             if (ctx.LiveStack.IsRunning && isLight) {
+                // The stack needs the pixels before the next frame anyway, so
+                // nothing is gained by deferring here.
+                pendingSave?.Commit();
                 await ctx.LiveStack.AddFrameAsync(image, ct);
                 MeasureFrame(ctx, image);
+                // Persist per-instruction progress AFTER the frame is fully
+                // handled: a stop/crash between frames resumes at the first
+                // frame that didn't complete.
+                CompletedCount = i + 1;
             } else {
-                // Preview and HFR run behind the capture, not in front of the
-                // next exposure. On a DSLR the pixels are decoded here for the
-                // first time (seconds on a Pi), and that decode plus the relay
-                // of a full-size frame cost every sub 10 s of dead time while
-                // the camera idled. The frame is already on disk; the next
-                // exposure only has to wait when the previous frame's
-                // processing is still running, so frames stay in order and
-                // memory holds at most one frame beyond the one being exposed.
+                // Save, preview and HFR run behind the capture, not in front
+                // of the next exposure. On a Raspberry Pi 4 a 64 MB DSLR RAW
+                // takes 1 to 3 s to reach the SD card, and the relay is where
+                // the pixels are decoded for the first time (seconds), then
+                // pushed full-size to every browser; together they cost every
+                // sub over 10 s of dead time while the camera idled. The next
+                // exposure only has to wait when the previous frame's work is
+                // still running, so frames stay in order, each file is on disk
+                // before the next one's, and memory holds at most one frame
+                // beyond the one being exposed. The progress counter advances
+                // once the file is written, so a crash in between resumes at
+                // the frame that is not on disk.
                 if (!_postProcess.IsCompleted) await _postProcess;
                 var frame = image;
+                int done = i + 1;
                 _postProcess = Task.Run(async () => {
+                    pendingSave?.Commit();
+                    CompletedCount = done;
                     try {
                         // Sequence capture -> AUTORUN preview canvas only, never LIVE.
                         await ctx.Relay.RelayImageAsync(frame, NINA.Polaris.Services.FrameKind.Autorun, ct);
@@ -200,18 +217,16 @@ public class TakeExposureInstruction : SequenceInstruction {
             // Report the finished sub to the barrier; when this is the slowest of
             // >=2 imaging cameras it runs the synchronized dither round here.
             await ctx.Barrier.AfterSubAsync("main", ExposureSeconds, ct);
-            // Persist per-instruction progress AFTER the frame is fully
-            // handled (saved + relayed): a stop/crash between frames resumes
-            // at the first frame that didn't complete.
-            CompletedCount = i + 1;
         }
-        // The last frame's preview belongs to this instruction, not to
-        // whatever runs next.
-        try { await _postProcess; } catch { /* logged inside */ }
+        } finally {
+            // The last frame's file and preview belong to this instruction, not
+            // to whatever runs next, and a stop must not leave a frame unwritten.
+            try { await _postProcess; } catch { /* logged inside */ }
+        }
     }
 
-    // Preview relay and HFR of the previous frame, running while the next
-    // exposure is open. Completed when nothing is pending.
+    // Save, preview relay and HFR of the previous frame, running while the
+    // next exposure is open. Completed when nothing is pending.
     private Task _postProcess = Task.CompletedTask;
 
     /// <summary>Measure HFR and star count and stash them in Scratch so the
