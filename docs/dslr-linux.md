@@ -92,7 +92,10 @@ Web Manager UI.
   If `libraw` is missing it falls back to the embedded full-res JPEG
   (`sudo apt install libraw23` to enable the real-RAW path). Either way
   the **untouched RAW file** is what gets saved to disk (`.cr2` / `.nef`
-  / `.arw`), so your subs are always full quality.
+  / `.arw`), so your subs are always full quality. The decode runs after
+  the frame is saved, while the next exposure is already open; on a
+  Raspberry Pi 4 it takes several seconds for a 33 MP body, and it used
+  to hold up every sub by that much.
 - **Sensor temperature**: most DSLRs don't report a sensor temperature
   to the OS, Polaris shows the field as blank for these cameras. The
   Camera card hides cooler controls accordingly.

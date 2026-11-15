@@ -792,6 +792,9 @@ public class SequenceEngine {
                 StartedAt.HasValue ? (DateTime.UtcNow - StartedAt.Value).ToString(@"hh\:mm\:ss") : "??");
 
             runOutcome = "completed";
+            // The last frame's preview belongs to this run, before the end
+            // actions can power the host off.
+            try { await _previewRelay; } catch { /* logged inside */ }
             // Natural completion always fires the end-actions.
             await RunEndActionsAsync(triggeredByStop: false);
 
@@ -891,14 +894,31 @@ public class SequenceEngine {
         // A relay failure does not fail the frame: it is already on disk,
         // and throwing here would send the caller into its retry, which
         // captures and saves the same frame a second time.
-        try {
-            await _relay.RelayImageAsync(imageData, FrameKind.Autorun, ct);
-        } catch (OperationCanceledException) { throw; }
-        catch (Exception ex) {
-            _logger.LogWarning(ex, "AUTORUN preview relay failed for {Path}; the frame is saved",
-                savedPath ?? "(not saved)");
-        }
+        //
+        // The relay runs behind the capture, not in front of the next exposure:
+        // on a DSLR this is where the RAW is decoded for the first time (7.8 s
+        // for a 33 MP ARW on a Raspberry Pi 4), and with the full-size frame
+        // pushed to every browser it cost each sub about 10 s of camera idle
+        // time. Only when the previous frame is still being relayed does the
+        // run wait, so frames stay in order and at most one frame is held
+        // beyond the one being exposed.
+        if (!_previewRelay.IsCompleted) await _previewRelay;
+        var frame = imageData;
+        var path = savedPath;
+        _previewRelay = Task.Run(async () => {
+            try {
+                await _relay.RelayImageAsync(frame, FrameKind.Autorun, ct);
+            } catch (OperationCanceledException) {
+            } catch (Exception ex) {
+                _logger.LogWarning(ex, "AUTORUN preview relay failed for {Path}; the frame is saved",
+                    path ?? "(not saved)");
+            }
+        }, CancellationToken.None);
     }
+
+    // The preview relay of the previous frame, running while the next exposure
+    // is open. Completed when nothing is pending; awaited before the run ends.
+    private Task _previewRelay = Task.CompletedTask;
 
     /// <summary>
     /// Give the large-object heap back at the end of a run.
