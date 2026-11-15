@@ -97,6 +97,15 @@ Web Manager UI.
   Raspberry Pi 4 the write takes 1 to 3 s and the decode several seconds
   for a 33 MP body, and together they used to hold up every sub by that
   much. The run waits for the last frame's file before its end actions.
+- **Local indiserver, shared-memory frames**: when the INDI host is
+  `localhost`, Polaris connects to indiserver's local Unix socket
+  (`/tmp/indiserver`, indiserver's `-u` default) instead of TCP port
+  7624. indiserver then hands each frame over as shared memory rather
+  than base64 text, which on a Raspberry Pi 4 saves 0.7 s per sub for a
+  35 MB RAW and 1.4 s for a 67 MB one. The log line on connect says
+  which path is in use. If indiserver runs with another `-u`, set
+  `Indi:UnixSocketPath` in `appsettings.json` to match; an empty value
+  keeps everything on TCP. A remote indiserver is unaffected.
 - **Sensor temperature**: most DSLRs don't report a sensor temperature
   to the OS, Polaris shows the field as blank for these cameras. The
   Camera card hides cooler controls accordingly.

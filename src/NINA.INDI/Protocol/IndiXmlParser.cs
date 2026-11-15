@@ -26,6 +26,13 @@ public class IndiXmlParser {
     public event Action<string, string?>? PropertyDeleted;
     public event Action<string, string>? MessageReceived;
 
+    /// <summary>Supplies the bytes of a <c>oneBLOB</c> sent as <c>attached="true"</c>:
+    /// indiserver does that on its Unix socket, where the data travels as a shared
+    /// memory descriptor instead of base64 text (see
+    /// <see cref="Client.IndiSharedBufferStream"/>). The argument is the declared
+    /// size. Null on a TCP connection, where every BLOB is inline.</summary>
+    public Func<int, byte[]?>? AttachedBlobSource { get; set; }
+
     private readonly XmlReaderSettings _settings = new() {
         ConformanceLevel = ConformanceLevel.Fragment,
         Async = true
@@ -204,7 +211,7 @@ public class IndiXmlParser {
         return prop;
     }
 
-    private static IndiBlobProperty ParseBlobVector(XmlReader reader, bool isDefine) {
+    private IndiBlobProperty ParseBlobVector(XmlReader reader, bool isDefine) {
         var prop = new IndiBlobProperty();
         ReadVectorAttributes(reader, prop);
 
@@ -219,7 +226,9 @@ public class IndiXmlParser {
 
                 byte[]? data = null;
                 if (!isDefine) {
-                    data = ReadBlobBase64(subtree, size);
+                    data = subtree.GetAttribute("attached") == "true"
+                        ? AttachedBlobSource?.Invoke(size)
+                        : ReadBlobBase64(subtree, size);
                 }
 
                 prop.Values[name] = new IndiBlobElement {

@@ -24,7 +24,8 @@ namespace NINA.INDI.Client;
 
 public class IndiClient : IDisposable {
     private TcpClient? _tcp;
-    private NetworkStream? _stream;
+    private IndiSharedBufferStream? _shared;
+    private Stream? _stream;
     private readonly IndiXmlParser _parser = new();
     private CancellationTokenSource? _cts;
     private Task? _readTask;
@@ -47,7 +48,17 @@ public class IndiClient : IDisposable {
 
     public string Host { get; }
     public int Port { get; }
-    public bool IsConnected => _tcp?.Connected == true && _stream != null;
+    public bool IsConnected => _stream != null && (_shared != null || _tcp?.Connected == true);
+
+    /// <summary>indiserver's local Unix socket (its <c>-u</c>, default
+    /// <c>/tmp/indiserver</c>). When <see cref="Host"/> is loopback and this is
+    /// set, the client connects there first and receives BLOBs as shared memory
+    /// instead of base64 over TCP; see <see cref="IndiSharedBufferStream"/>.
+    /// Empty disables the attempt. Falls back to TCP when nothing listens.</summary>
+    public string UnixSocketPath { get; set; } = "/tmp/indiserver";
+
+    /// <summary>True while connected over the Unix socket with shared-memory BLOBs.</summary>
+    public bool UsesSharedBuffers => _shared != null;
 
     public TimeSpan ConnectTimeout { get; set; } = TimeSpan.FromSeconds(10);
     public TimeSpan SendTimeout { get; set; } = TimeSpan.FromSeconds(5);
@@ -259,6 +270,41 @@ public class IndiClient : IDisposable {
     public async Task ConnectAsync(CancellationToken ct = default) {
         if (IsConnected) return;
 
+        if (OperatingSystem.IsLinux() && IsLoopback(Host)) {
+            _shared = await IndiSharedBufferStream.TryConnectAsync(UnixSocketPath, ConnectTimeout, ct);
+        }
+        if (OperatingSystem.IsLinux() && _shared != null) {
+            _stream = _shared;
+            _parser.AttachedBlobSource = _shared.TakeAttachedBlob;
+            Logger.Info($"Connected to INDI server over unix socket '{UnixSocketPath}' (shared-memory BLOBs)");
+        } else {
+            _parser.AttachedBlobSource = null;
+            await ConnectTcpAsync(ct);
+        }
+
+        _cts = new CancellationTokenSource();
+        _reconnectAttempt = 0;
+        _autoReconnect = true;
+
+        _readTask = Task.Run(() => ReadLoopAsync(_cts.Token), _cts.Token);
+
+        // Clear stale device snapshot before issuing getProperties.
+        // Without this, an auto-reconnect (or a manual reconnect after
+        // the user restarted indiserver / unloaded drivers in indi-web)
+        // would keep the OLD device list visible forever, because new
+        // defXxxVector messages only ADD to Devices, never wipe it.
+        // The freshly-issued getProperties below repopulates with
+        // exactly what indiserver advertises right now.
+        Devices.Clear();
+
+        await SendAsync(IndiXmlWriter.GetProperties(), ct);
+    }
+
+    private static bool IsLoopback(string host) =>
+        host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+        || (System.Net.IPAddress.TryParse(host, out var ip) && System.Net.IPAddress.IsLoopback(ip));
+
+    private async Task ConnectTcpAsync(CancellationToken ct) {
         _tcp = new TcpClient {
             SendTimeout = (int)SendTimeout.TotalMilliseconds,
             ReceiveTimeout = 0, // read loop manages its own cancellation
@@ -278,24 +324,7 @@ public class IndiClient : IDisposable {
         }
 
         _stream = _tcp.GetStream();
-        _cts = new CancellationTokenSource();
-        _reconnectAttempt = 0;
-        _autoReconnect = true;
-
         Logger.Info($"Connected to INDI server at {Host}:{Port}");
-
-        _readTask = Task.Run(() => ReadLoopAsync(_cts.Token), _cts.Token);
-
-        // Clear stale device snapshot before issuing getProperties.
-        // Without this, an auto-reconnect (or a manual reconnect after
-        // the user restarted indiserver / unloaded drivers in indi-web)
-        // would keep the OLD device list visible forever, because new
-        // defXxxVector messages only ADD to Devices, never wipe it.
-        // The freshly-issued getProperties below repopulates with
-        // exactly what indiserver advertises right now.
-        Devices.Clear();
-
-        await SendAsync(IndiXmlWriter.GetProperties(), ct);
     }
 
     /// <summary>Force a full device-list resync without dropping the
@@ -363,7 +392,9 @@ public class IndiClient : IDisposable {
         try { _stream?.Dispose(); } catch { }
         try { _tcp?.Dispose(); } catch { }
         _stream = null;
+        _shared = null;
         _tcp = null;
+        _parser.AttachedBlobSource = null;
     }
 
     public async Task DisconnectAsync() {

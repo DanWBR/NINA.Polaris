@@ -801,7 +801,11 @@ builder.Services.AddSingleton(sp =>
     var config = sp.GetRequiredService<IConfiguration>();
     var host = config.GetValue("Indi:Host", "localhost")!;
     var port = config.GetValue("Indi:Port", 7624);
-    var client = new IndiClient(host, port);
+    var client = new IndiClient(host, port) {
+        // indiserver's local socket: on a loopback host the BLOBs then arrive as
+        // shared memory instead of base64 over TCP. "" keeps everything on TCP.
+        UnixSocketPath = config.GetValue("Indi:UnixSocketPath", "/tmp/indiserver") ?? ""
+    };
     // Wire DBGLOG-2 bridge so every INDI write (newNumberVector /
     // newSwitchVector / newTextVector) shows up in the LOG panel,
     // and "property name doesn't exist on this device" warnings
