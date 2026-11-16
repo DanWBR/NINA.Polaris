@@ -9601,9 +9601,9 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                 <div class="equip-detail-name" x-text="dome.name"></div>
                                 <div class="equip-detail-props">
                                     <span>Az: <strong x-text="(dome.azimuth?.toFixed(2) || '--') + '°'"></strong></span>
-                                    <span>Shutter: <strong :class="dome.shutter === 'Open' ? 'text-ok' : (dome.shutter === 'Closed' ? 'text-warn' : 'text-muted')"
+                                    <span><span x-text="dome.rollOff ? 'Roof' : 'Shutter'"></span>: <strong :class="dome.shutter === 'Open' ? 'text-ok' : (dome.shutter === 'Closed' ? 'text-warn' : 'text-muted')"
                                                             x-text="dome.shutter"></strong></span>
-                                    <span x-show="dome.parked" class="text-warn">PARKED</span>
+                                    <span x-show="dome.parked && !dome.rollOff" class="text-warn">PARKED</span>
                                     <span x-show="dome.slaved" class="text-ok">SLAVED</span>
                                     <span x-show="dome.moving" class="text-warn">MOVING</span>
                                 </div>
@@ -9617,8 +9617,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     <button class="btn btn-sm" @click="domeAbort()" :disabled="!dome.moving">Abort</button>
                                 </div>
                                 <div class="equip-inline-controls">
-                                    <button class="btn btn-sm" @click="domeOpenShutter()" :disabled="dome.shutter === 'Open' || dome.shutter === 'Opening'">Open Shutter</button>
-                                    <button class="btn btn-sm" @click="domeCloseShutter()" :disabled="dome.shutter === 'Closed' || dome.shutter === 'Closing'">Close Shutter</button>
+                                    <button class="btn btn-sm" @click="domeOpenShutter()" :disabled="dome.shutter === 'Open' || dome.shutter === 'Opening'" x-text="dome.rollOff ? 'Open Roof' : 'Open Shutter'">Open Shutter</button>
+                                    <button class="btn btn-sm" @click="domeCloseShutter()" :disabled="dome.shutter === 'Closed' || dome.shutter === 'Closing'" x-text="dome.rollOff ? 'Close Roof' : 'Close Shutter'">Close Shutter</button>
                                     <button class="btn btn-sm" @click="domePark()" :disabled="dome.parked">Park</button>
                                     <button class="btn btn-sm" @click="domeUnpark()" :disabled="!dome.parked">Unpark</button>
                                 </div>
@@ -26880,7 +26880,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261114-indiwebauth"></script>
+    <script src="/js/app.js?v=20261116-rolloffroof"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

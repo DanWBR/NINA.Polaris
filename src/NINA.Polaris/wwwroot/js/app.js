@@ -52169,6 +52169,7 @@ function ninaApp() {
                     moving: eq.dome.moving,
                     parked: eq.dome.parked,
                     slaved: eq.dome.slaved,
+                    rollOff: !!eq.dome.rollOff,
                     shutter: eq.dome.shutter
                 };
             }

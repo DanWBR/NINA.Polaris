@@ -39,6 +39,7 @@ public static class DomeEndpoints {
                 moving = equip.Dome.IsMoving,
                 parked = equip.Dome.IsParked,
                 slaved = equip.Dome.IsSlaved,
+                rollOff = equip.Dome.IsRollOffRoof,
                 shutter = equip.Dome.ShutterStatus.ToString()
             });
         });

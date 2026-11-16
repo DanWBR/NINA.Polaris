@@ -1583,6 +1583,7 @@ public class EquipmentManager : IDisposable {
                 moving = Dome.IsMoving,
                 parked = Dome.IsParked,
                 slaved = Dome.IsSlaved,
+                rollOff = Dome.IsRollOffRoof,
                 shutter = Dome.ShutterStatus.ToString()
             };
         }
