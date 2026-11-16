@@ -35,6 +35,16 @@ public class IndiDome : IDisposable {
     public bool IsParked => _client.GetSwitch(DeviceName, "DOME_PARK", "PARK");
     public bool IsSlaved => _client.GetSwitch(DeviceName, "DOME_AUTOSYNC", "DOME_AUTOSYNC_ENABLE");
 
+    /// <summary>A roll-off roof driver (rolloffino, the roll-off simulator)
+    /// declares DOME_PARK and no DOME_SHUTTER: unpark opens the roof and park
+    /// closes it. The shutter commands and the shutter status then go through
+    /// the park property, so Open Shutter opens the roof.</summary>
+    public bool IsRollOffRoof => IsRollOff(_client, DeviceName);
+
+    internal static bool IsRollOff(IndiClient client, string device) =>
+        client.GetProperty(device, "DOME_SHUTTER") == null
+        && client.GetProperty(device, "DOME_PARK") != null;
+
     public enum ShutterState {
         Open,
         Closed,
@@ -46,7 +56,7 @@ public class IndiDome : IDisposable {
     public ShutterState ShutterStatus {
         get {
             var prop = _client.GetProperty(DeviceName, "DOME_SHUTTER");
-            if (prop == null) return ShutterState.Unknown;
+            if (prop == null) return RoofState(_client, DeviceName);
 
             var isOpen = _client.GetSwitch(DeviceName, "DOME_SHUTTER", "SHUTTER_OPEN");
             var isClosed = _client.GetSwitch(DeviceName, "DOME_SHUTTER", "SHUTTER_CLOSE");
@@ -59,6 +69,24 @@ public class IndiDome : IDisposable {
             if (isClosed) return ShutterState.Closed;
             return ShutterState.Unknown;
         }
+    }
+
+    /// <summary>Roof state of a roll-off roof, read from DOME_PARK: parked is
+    /// closed, unparked is open, and Busy is the roof on its way to the
+    /// switch that is on.</summary>
+    internal static ShutterState RoofState(IndiClient client, string device) {
+        var park = client.GetProperty(device, "DOME_PARK");
+        if (park == null) return ShutterState.Unknown;
+        var parked = client.GetSwitch(device, "DOME_PARK", "PARK");
+        var unparked = client.GetSwitch(device, "DOME_PARK", "UNPARK");
+        if (park.State == IndiPropertyState.Busy) {
+            if (parked) return ShutterState.Closing;
+            if (unparked) return ShutterState.Opening;
+            return ShutterState.Unknown;
+        }
+        if (parked) return ShutterState.Closed;
+        if (unparked) return ShutterState.Open;
+        return ShutterState.Unknown;
     }
 
     public IndiDome(IndiClient client, string deviceName) {
@@ -80,11 +108,13 @@ public class IndiDome : IDisposable {
     }
 
     public async Task OpenShutterAsync(CancellationToken ct = default) {
+        if (IsRollOffRoof) { await UnparkAsync(ct); return; }
         await _client.SetSwitchAsync(DeviceName, "DOME_SHUTTER",
             new Dictionary<string, bool> { ["SHUTTER_OPEN"] = true, ["SHUTTER_CLOSE"] = false }, ct);
     }
 
     public async Task CloseShutterAsync(CancellationToken ct = default) {
+        if (IsRollOffRoof) { await ParkAsync(ct); return; }
         await _client.SetSwitchAsync(DeviceName, "DOME_SHUTTER",
             new Dictionary<string, bool> { ["SHUTTER_OPEN"] = false, ["SHUTTER_CLOSE"] = true }, ct);
     }
