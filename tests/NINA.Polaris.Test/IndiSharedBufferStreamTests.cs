@@ -176,6 +176,42 @@ public class IndiSharedBufferStreamTests {
     }
 
     [Test]
+    public async Task ThrowingSubscriber_SkipsThatFrame_AndTheNextOneStillArrives() {
+        // A subscriber bug is not a broken message: the descriptor was consumed
+        // by the parse, the queue is in step, the connection stays up.
+        var (server, client) = SocketPair();
+        using var stream = IndiSharedBufferStream.FromConnectedSocket(client);
+        var parser = new IndiXmlParser { AttachedBlobSource = stream.TakeAttachedBlob };
+        var delivered = new List<byte[]>();
+        int calls = 0;
+        parser.PropertyUpdated += p => {
+            if (p is not IndiBlobProperty b) return;
+            if (++calls == 1) throw new InvalidOperationException("subscriber bug");
+            delivered.Add(b.Values["CCD1"].Data!);
+        };
+
+        var first = Encoding.ASCII.GetBytes("FIRST");
+        var second = Encoding.ASCII.GetBytes("SECOND");
+        using var fd1 = Memfd(first);
+        using var fd2 = Memfd(second);
+        foreach (var (bytes, fd) in new[] { (first, fd1), (second, fd2) })
+            SendWithFd(server, Encoding.UTF8.GetBytes(
+                "<setBLOBVector device=\"GPhoto CCD\" name=\"CCD1\" state=\"Ok\">" +
+                $"<oneBLOB name=\"CCD1\" size=\"{bytes.Length}\" format=\".arw\" attached=\"true\"/></setBLOBVector>\n"),
+                (int)fd.DangerousGetHandle());
+        server.Shutdown(SocketShutdown.Both);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await parser.ParseStreamAsync(stream, cts.Token);
+
+        Assert.That(calls, Is.EqualTo(2));
+        Assert.That(delivered, Has.Count.EqualTo(1));
+        Assert.That(delivered[0], Is.EqualTo(second), "the second frame carries its own bytes, not the first frame's");
+        Assert.That(stream.PendingAttachedBlobs, Is.EqualTo(0));
+        server.Dispose();
+    }
+
+    [Test]
     public void DescriptorOfTheWrongSize_DropsTheStream_AndClosesTheQueue() {
         // libindi rounds allocations up to 1 MiB, so a 5-byte frame lives in a
         // 1 MiB file. A 3 MiB file for a 5-byte announcement is a descriptor

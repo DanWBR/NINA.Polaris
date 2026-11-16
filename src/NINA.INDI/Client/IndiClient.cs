@@ -313,10 +313,16 @@ public class IndiClient : IDisposable {
         if (setting.Equals("off", StringComparison.OrdinalIgnoreCase)) return null;
         if (setting.Length > 0 && !setting.Equals("auto", StringComparison.OrdinalIgnoreCase)) return setting;
         var found = IndiSharedBufferStream.FindSocketOfIndiserverOnPort(Port);
-        if (found == null)
+        // Once per setting, not once per reconnect attempt: the attempts come every few seconds.
+        if (found == null && _noLocalIndiserverLoggedForPort != Port) {
+            _noLocalIndiserverLoggedForPort = Port;
             Logger.Info($"No local indiserver owning port {Port} is visible in /proc; INDI stays on TCP");
+        }
+        if (found != null) _noLocalIndiserverLoggedForPort = null;
         return found;
     }
+
+    private int? _noLocalIndiserverLoggedForPort;
 
     private static bool IsLoopback(string host) =>
         host.Equals("localhost", StringComparison.OrdinalIgnoreCase)

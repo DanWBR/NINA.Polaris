@@ -75,7 +75,7 @@ public class IndiXmlParser {
                         PropertyDefined?.Invoke(ParseLightVector(reader));
                         break;
                     case "defBLOBVector":
-                        PropertyDefined?.Invoke(ParseBlobVector(reader, isDefine: true));
+                        PropertyDefined?.Invoke(ParseBlobVectorGuarded(reader, isDefine: true));
                         break;
                     case "setTextVector":
                         PropertyUpdated?.Invoke(ParseTextVector(reader, isDefine: false));
@@ -90,7 +90,7 @@ public class IndiXmlParser {
                         PropertyUpdated?.Invoke(ParseLightVector(reader));
                         break;
                     case "setBLOBVector":
-                        PropertyUpdated?.Invoke(ParseBlobVector(reader, isDefine: false));
+                        PropertyUpdated?.Invoke(ParseBlobVectorGuarded(reader, isDefine: false));
                         break;
                     case "delProperty":
                         // Per INDI spec: delProperty has device (required)
@@ -113,9 +113,9 @@ public class IndiXmlParser {
             } catch (IndiAttachedBlobException) {
                 throw;
             } catch (Exception ex) {
-                if (AttachedBlobSource != null && reader.Name is "setBLOBVector" or "defBLOBVector")
-                    throw new IndiAttachedBlobException(
-                        "INDI BLOB message failed to parse while attached BLOB descriptors may be pending: " + ex.Message, ex);
+                // A subscriber that throws is a bug in the subscriber, not a
+                // broken message: the queue is still in step, the message is
+                // skipped as it always was.
                 System.Diagnostics.Debug.WriteLine($"INDI parse error: {ex.Message}");
             }
         }
@@ -224,6 +224,19 @@ public class IndiXmlParser {
         }
 
         return prop;
+    }
+
+    /// <summary>The parse of a BLOB message, and only the parse: a failure in
+    /// here while descriptors may be riding on the message means the queue can
+    /// no longer be matched to the XML, so it ends the connection. The
+    /// subscriber the result goes to runs outside this guard.</summary>
+    private IndiBlobProperty ParseBlobVectorGuarded(XmlReader reader, bool isDefine) {
+        try {
+            return ParseBlobVector(reader, isDefine);
+        } catch (Exception ex) when (AttachedBlobSource != null && ex is not IndiAttachedBlobException) {
+            throw new IndiAttachedBlobException(
+                "INDI BLOB message failed to parse while attached BLOB descriptors may be pending: " + ex.Message, ex);
+        }
     }
 
     private IndiBlobProperty ParseBlobVector(XmlReader reader, bool isDefine) {
