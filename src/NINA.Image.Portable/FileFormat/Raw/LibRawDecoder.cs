@@ -74,6 +74,9 @@ public static class LibRawDecoder {
     [DllImport(Lib, EntryPoint = "libraw_set_output_color")] private static extern void libraw_set_output_color(IntPtr p, int value);
     [DllImport(Lib, EntryPoint = "libraw_set_no_auto_bright")] private static extern void libraw_set_no_auto_bright(IntPtr p, int value);
     [DllImport(Lib, EntryPoint = "libraw_set_gamma")] private static extern void libraw_set_gamma(IntPtr p, int index, float value);
+    [DllImport(Lib, EntryPoint = "libraw_adjust_sizes_info_only")] private static extern int libraw_adjust_sizes_info_only(IntPtr p);
+    [DllImport(Lib, EntryPoint = "libraw_get_iwidth")] private static extern int libraw_get_iwidth(IntPtr p);
+    [DllImport(Lib, EntryPoint = "libraw_get_iheight")] private static extern int libraw_get_iheight(IntPtr p);
     [DllImport(Lib, EntryPoint = "libraw_strerror")] private static extern IntPtr libraw_strerror(int errorcode);
     [DllImport(Lib, EntryPoint = "libraw_version")] private static extern IntPtr libraw_version();
 
@@ -115,6 +118,47 @@ public static class LibRawDecoder {
 
     public static bool TryDecodeToRggb(byte[] rawBytes, out int width, out int height, out ushort[]? mosaic)
         => TryDecodeToRggb(rawBytes, out width, out height, out mosaic, out _);
+
+    /// <summary>
+    /// Read only the output size of a RAW, in the orientation
+    /// <see cref="TryDecodeToRggb"/> will deliver, without unpacking or
+    /// demosaicing it. Parsing the header takes milliseconds where the full
+    /// decode takes seconds on a single-board computer (7.8 s for a 33 MP ARW
+    /// on a Raspberry Pi 4), so a caller can hand the frame on and decode
+    /// later, off the thread that received it. Returns false with
+    /// <paramref name="error"/> when libraw is missing or does not recognise
+    /// the file, in which case the caller should decode synchronously the way
+    /// it always did.
+    /// </summary>
+    public static bool TryReadSize(byte[] rawBytes, out int width, out int height, out string? error) {
+        width = 0; height = 0; error = null;
+        if (rawBytes == null || rawBytes.Length == 0) { error = "the camera sent an empty file"; return false; }
+        if (!IsAvailable) { error = "libraw is not available on this host"; return false; }
+        string step = "init";
+        IntPtr lr = IntPtr.Zero;
+        try {
+            lr = libraw_init(0);
+            if (lr == IntPtr.Zero) { error = Fail(step, null); return false; }
+            step = "open";
+            int rc = libraw_open_buffer(lr, rawBytes, (UIntPtr)rawBytes.Length);
+            if (rc != 0) { error = Fail(step, rc); return false; }
+            // Applies the camera orientation flag to the reported size, which
+            // is what dcraw_process does to the pixels later, so a portrait
+            // frame is reported portrait here too.
+            step = "sizes";
+            rc = libraw_adjust_sizes_info_only(lr);
+            if (rc != 0) { error = Fail(step, rc); return false; }
+            int w = libraw_get_iwidth(lr), h = libraw_get_iheight(lr);
+            if (w <= 0 || h <= 0) { error = $"libraw {Version} reported a {w}x{h} image"; return false; }
+            width = w; height = h;
+            return true;
+        } catch (Exception ex) {
+            error = $"libraw {Version} failed at {step}: {ex.GetType().Name}: {ex.Message}";
+            return false;
+        } finally {
+            if (lr != IntPtr.Zero) { try { libraw_close(lr); } catch { } }
+        }
+    }
 
     /// <summary>
     /// Decode a RAW file to a 16-bit linear RGGB Bayer mosaic so it flows through

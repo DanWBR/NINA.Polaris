@@ -120,6 +120,7 @@ public class TakeExposureInstruction : SequenceInstruction {
                 "TakeExposure '{Name}': resuming at frame {Next}/{Total}",
                 Name, CompletedCount + 1, Count);
 
+        try {
         for (int i = CompletedCount; i < Count; i++) {
             ct.ThrowIfCancellationRequested();
             await ctx.HoldIfRequestedAsync(ct);
@@ -165,43 +166,87 @@ public class TakeExposureInstruction : SequenceInstruction {
                 image.MetaData.Exposure.Filter = Filter;
             if (!string.IsNullOrEmpty(TargetName)) image.MetaData.Target.Name = TargetName;
 
-            ctx.ImageWriter.SaveImage(image, targetName: TargetName, imageType: imageType, gain: Gain ?? 0);
+            // Name the file and take the capture-time metadata now; the bytes
+            // are written behind the capture, below.
+            var pendingSave = ctx.ImageWriter.PrepareSave(image, targetName: TargetName, imageType: imageType, gain: Gain ?? 0);
 
             // Only lights go into the stack; a dark, flat or bias is saved and
             // shown on the AUTORUN preview.
             bool isLight = imageType is not ("DARK" or "BIAS" or "FLAT" or "DARKFLAT");
             if (ctx.LiveStack.IsRunning && isLight) {
+                // The stack needs the pixels before the next frame anyway, so
+                // nothing is gained by deferring here.
+                pendingSave?.Commit();
                 await ctx.LiveStack.AddFrameAsync(image, ct);
+                MeasureFrame(ctx, image);
+                // Persist per-instruction progress AFTER the frame is fully
+                // handled: a stop/crash between frames resumes at the first
+                // frame that didn't complete.
+                CompletedCount = i + 1;
             } else {
-                // Sequence capture → AUTORUN preview canvas only, never LIVE.
-                await ctx.Relay.RelayImageAsync(image, NINA.Polaris.Services.FrameKind.Autorun, ct);
-            }
-
-            // Measure HFR + star count and stash in Scratch so the
-            // AutoFocusOnHfrIncrease trigger has something to compare against.
-            // Failures are non-fatal, a bad frame shouldn't kill the run.
-            try {
-                var stars = new StarDetector().Detect(image.Data,
-                    image.Properties.Width, image.Properties.Height);
-                if (stars.Count > 0) {
-                    var hfrs = stars.Select(s => s.HFR).OrderBy(h => h).ToArray();
-                    var median = hfrs[hfrs.Length / 2];
-                    ctx.Scratch["Frame:LastHfr"] = median;
-                    ctx.Scratch["Frame:StarCount"] = stars.Count;
-                    ctx.Logger.LogDebug("Frame HFR={Hfr:0.00} ({Count} stars)", median, stars.Count);
-                }
-            } catch (Exception ex) {
-                ctx.Logger.LogDebug(ex, "Star detection failed on captured frame (continuing)");
+                // Save, preview and HFR run behind the capture, not in front
+                // of the next exposure. On a Raspberry Pi 4 a 64 MB DSLR RAW
+                // takes 1 to 3 s to reach the SD card, and the relay is where
+                // the pixels are decoded for the first time (seconds), then
+                // pushed full-size to every browser; together they cost every
+                // sub over 10 s of dead time while the camera idled. The next
+                // exposure only has to wait when the previous frame's work is
+                // still running, so frames stay in order, each file is on disk
+                // before the next one's, and memory holds at most one frame
+                // beyond the one being exposed. The progress counter advances
+                // once the file is written, so a crash in between resumes at
+                // the frame that is not on disk.
+                if (!_postProcess.IsCompleted) await _postProcess;
+                var frame = image;
+                int done = i + 1;
+                _postProcess = Task.Run(async () => {
+                    pendingSave?.Commit();
+                    CompletedCount = done;
+                    try {
+                        // Sequence capture -> AUTORUN preview canvas only, never LIVE.
+                        await ctx.Relay.RelayImageAsync(frame, NINA.Polaris.Services.FrameKind.Autorun, ct);
+                    } catch (OperationCanceledException) {
+                    } catch (Exception ex) {
+                        ctx.Logger.LogWarning(ex, "AUTORUN preview relay failed; the frame is saved");
+                    }
+                    MeasureFrame(ctx, frame);
+                }, CancellationToken.None);
             }
 
             ctx.IncrementFramesCompleted();
             // Report the finished sub to the barrier; when this is the slowest of
             // >=2 imaging cameras it runs the synchronized dither round here.
             await ctx.Barrier.AfterSubAsync("main", ExposureSeconds, ct);
-            // Persist per-instruction progress AFTER the frame is fully
-            // handled (saved + relayed): a stop/crash between frames resumes
-            // at the first frame that didn't complete.
-            CompletedCount = i + 1;
+        }
+        } finally {
+            // The last frame's file and preview belong to this instruction, not
+            // to whatever runs next, and a stop must not leave a frame unwritten.
+            try { await _postProcess; } catch { /* logged inside */ }
+        }
+    }
+
+    // Save, preview relay and HFR of the previous frame, running while the
+    // next exposure is open. Completed when nothing is pending.
+    private Task _postProcess = Task.CompletedTask;
+
+    /// <summary>Measure HFR and star count and stash them in Scratch so the
+    /// AutoFocusOnHfrIncrease trigger has something to compare against. When
+    /// the measurement runs behind the capture, the trigger sees the previous
+    /// frame's value, which is one sub late and good enough for a focus trend.
+    /// Failures are non-fatal, a bad frame shouldn't kill the run.</summary>
+    private static void MeasureFrame(SequenceContext ctx, NINA.Image.Interfaces.IImageData image) {
+        try {
+            var stars = new StarDetector().Detect(image.Data,
+                image.Properties.Width, image.Properties.Height);
+            if (stars.Count > 0) {
+                var hfrs = stars.Select(s => s.HFR).OrderBy(h => h).ToArray();
+                var median = hfrs[hfrs.Length / 2];
+                ctx.Scratch["Frame:LastHfr"] = median;
+                ctx.Scratch["Frame:StarCount"] = stars.Count;
+                ctx.Logger.LogDebug("Frame HFR={Hfr:0.00} ({Count} stars)", median, stars.Count);
+            }
+        } catch (Exception ex) {
+            ctx.Logger.LogDebug(ex, "Star detection failed on captured frame (continuing)");
         }
     }
 
