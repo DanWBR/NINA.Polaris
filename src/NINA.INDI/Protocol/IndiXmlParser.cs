@@ -38,13 +38,23 @@ public class IndiXmlParser {
         Async = true
     };
 
+    /// <summary>Reads messages until the stream ends or <paramref name="ct"/> fires.
+    /// Over TCP a message that fails to parse is skipped. With an
+    /// <see cref="AttachedBlobSource"/> set it is not: descriptors ride on the
+    /// bytes of the message they belong to, so a skipped message may leave its
+    /// descriptor in the queue and every later frame would get the bytes of
+    /// the one before it. An <see cref="IndiAttachedBlobException"/> then ends
+    /// the read, and the owner reconnects with an empty queue.</summary>
     public async Task ParseStreamAsync(Stream stream, CancellationToken ct) {
         using var reader = XmlReader.Create(stream, _settings);
 
         while (!ct.IsCancellationRequested) {
             try {
                 if (!await reader.ReadAsync()) break;
-            } catch (XmlException) {
+            } catch (XmlException ex) {
+                if (AttachedBlobSource != null)
+                    throw new IndiAttachedBlobException(
+                        "INDI message failed to parse while attached BLOB descriptors may be pending: " + ex.Message, ex);
                 continue;
             }
 
@@ -100,7 +110,12 @@ public class IndiXmlParser {
                             reader.GetAttribute("message") ?? "");
                         break;
                 }
+            } catch (IndiAttachedBlobException) {
+                throw;
             } catch (Exception ex) {
+                if (AttachedBlobSource != null && reader.Name is "setBLOBVector" or "defBLOBVector")
+                    throw new IndiAttachedBlobException(
+                        "INDI BLOB message failed to parse while attached BLOB descriptors may be pending: " + ex.Message, ex);
                 System.Diagnostics.Debug.WriteLine($"INDI parse error: {ex.Message}");
             }
         }

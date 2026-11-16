@@ -98,14 +98,21 @@ Web Manager UI.
   for a 33 MP body, and together they used to hold up every sub by that
   much. The run waits for the last frame's file before its end actions.
 - **Local indiserver, shared-memory frames**: when the INDI host is
-  `localhost`, Polaris connects to indiserver's local Unix socket
-  (`/tmp/indiserver`, indiserver's `-u` default) instead of TCP port
-  7624. indiserver then hands each frame over as shared memory rather
-  than base64 text, which on a Raspberry Pi 4 saves 0.7 s per sub for a
-  35 MB RAW and 1.4 s for a 67 MB one. The log line on connect says
-  which path is in use. If indiserver runs with another `-u`, set
-  `Indi:UnixSocketPath` in `appsettings.json` to match; an empty value
-  keeps everything on TCP. A remote indiserver is unaffected.
+  `localhost`, Polaris looks for the running `indiserver` that owns the
+  configured port (its command line in `/proc`), connects to that
+  server's local Unix socket (its `-u`, or `/tmp/indiserver` when it
+  has none) instead of TCP, and indiserver then hands each frame over
+  as shared memory rather than base64 text. On a Raspberry Pi 4 that
+  saves 0.7 s per sub for a 35 MB RAW and 1.4 s for a 67 MB one. The
+  log line on connect says which path is in use; when no indiserver on
+  that port is visible, Polaris stays on TCP and says so. The INDI Web
+  Manager start (`-u /tmp/indiFIFO_sock`) is found this way without
+  configuration. `Indi:UnixSocketPath` in `appsettings.json` overrides
+  the lookup with a fixed path; `off` keeps everything on TCP. A remote
+  indiserver is unaffected. A frame whose shared buffer does not match
+  what the message announced, or a message that fails to parse on this
+  path, drops the connection and reconnects, so frames can never be
+  handed over swapped.
 - **Sensor temperature**: most DSLRs don't report a sensor temperature
   to the OS, Polaris shows the field as blank for these cameras. The
   Camera card hides cooler controls accordingly.

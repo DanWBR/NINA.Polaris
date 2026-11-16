@@ -143,6 +143,95 @@ public class IndiSharedBufferStreamTests {
         Assert.That(s, Is.Null);
     }
 
+    [Test]
+    public async Task MessageThatFailsToParse_DropsTheStream_InsteadOfSwappingFrames() {
+        // Two frames, each with its descriptor. The first message is malformed
+        // (unquoted attribute), so its descriptor would stay queued and the
+        // second frame would be delivered with the first frame's bytes. The
+        // stream must end with an error instead, and nothing may be delivered.
+        var (server, client) = SocketPair();
+        using var stream = IndiSharedBufferStream.FromConnectedSocket(client);
+        var parser = new IndiXmlParser { AttachedBlobSource = stream.TakeAttachedBlob };
+        var delivered = new List<IndiBlobProperty>();
+        parser.PropertyUpdated += p => { if (p is IndiBlobProperty b) delivered.Add(b); };
+
+        var first = Encoding.ASCII.GetBytes("FIRST");
+        var second = Encoding.ASCII.GetBytes("SECOND");
+        using var fd1 = Memfd(first);
+        using var fd2 = Memfd(second);
+        SendWithFd(server, Encoding.UTF8.GetBytes(
+            "<setBLOBVector device=\"GPhoto CCD\" name=CCD1 state=\"Ok\">" +
+            $"<oneBLOB name=\"CCD1\" size=\"{first.Length}\" format=\".arw\" attached=\"true\"/></setBLOBVector>\n"),
+            (int)fd1.DangerousGetHandle());
+        SendWithFd(server, Encoding.UTF8.GetBytes(
+            "<setBLOBVector device=\"GPhoto CCD\" name=\"CCD1\" state=\"Ok\">" +
+            $"<oneBLOB name=\"CCD1\" size=\"{second.Length}\" format=\".arw\" attached=\"true\"/></setBLOBVector>\n"),
+            (int)fd2.DangerousGetHandle());
+        server.Shutdown(SocketShutdown.Both);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        Assert.ThrowsAsync<IndiAttachedBlobException>(() => parser.ParseStreamAsync(stream, cts.Token));
+        Assert.That(delivered, Is.Empty, "no frame may be handed on once the queue and the XML can disagree");
+        server.Dispose();
+    }
+
+    [Test]
+    public void DescriptorOfTheWrongSize_DropsTheStream_AndClosesTheQueue() {
+        // libindi rounds allocations up to 1 MiB, so a 5-byte frame lives in a
+        // 1 MiB file. A 3 MiB file for a 5-byte announcement is a descriptor
+        // that belongs to some other frame.
+        var (server, client) = SocketPair();
+        using var stream = IndiSharedBufferStream.FromConnectedSocket(client);
+        using var wrong = Memfd(new byte[3 * 1024 * 1024]);
+        using var other = Memfd(new byte[16]);
+        SendWithFds(server, Encoding.UTF8.GetBytes("<x/>"),
+            new[] { (int)wrong.DangerousGetHandle(), (int)other.DangerousGetHandle() });
+        var buf = new byte[64];
+        stream.Read(buf, 0, buf.Length);
+        Assert.That(stream.PendingAttachedBlobs, Is.EqualTo(2));
+
+        Assert.Throws<IndiAttachedBlobException>(() => stream.TakeAttachedBlob(5));
+        Assert.That(stream.PendingAttachedBlobs, Is.EqualTo(0), "every pending descriptor is closed with the drop");
+        server.Dispose();
+    }
+
+    [Test]
+    public void RoundedUpAllocation_IsAccepted() {
+        // The normal case: libindi's memfd is the announced size rounded up to 1 MiB.
+        var (server, client) = SocketPair();
+        using var stream = IndiSharedBufferStream.FromConnectedSocket(client);
+        var payload = new byte[300_001];
+        new Random(3).NextBytes(payload);
+        var rounded = new byte[1024 * 1024];
+        payload.CopyTo(rounded, 0);
+        using var fd = Memfd(rounded);
+        SendWithFd(server, Encoding.UTF8.GetBytes("<x/>"), (int)fd.DangerousGetHandle());
+        stream.Read(new byte[64], 0, 64);
+
+        Assert.That(stream.TakeAttachedBlob(payload.Length), Is.EqualTo(payload));
+        server.Dispose();
+    }
+
+    [Test]
+    public void SocketPath_FollowsTheIndiserverThatOwnsThePort() {
+        // INDI Web Manager's start line on a Polaris rig.
+        var webManager = new[] { "indiserver", "-p", "7624", "-m", "1000", "-v", "-f", "/tmp/indiFIFO", "-u", "/tmp/indiFIFO_sock" };
+        Assert.That(IndiSharedBufferStream.SocketPathFromCommandLine(webManager, 7624), Is.EqualTo("/tmp/indiFIFO_sock"));
+        Assert.That(IndiSharedBufferStream.SocketPathFromCommandLine(webManager, 7625), Is.Null, "another port is another server");
+
+        var plain = new[] { "/usr/bin/indiserver", "-vv", "indi_simulator_ccd" };
+        Assert.That(IndiSharedBufferStream.SocketPathFromCommandLine(plain, 7624), Is.EqualTo("/tmp/indiserver"),
+            "no -p means 7624, no -u means indiserver's default");
+
+        var otherPort = new[] { "indiserver", "-p", "8000", "-u", "/tmp/a", "indi_simulator_ccd" };
+        Assert.That(IndiSharedBufferStream.SocketPathFromCommandLine(otherPort, 7624), Is.Null);
+        Assert.That(IndiSharedBufferStream.SocketPathFromCommandLine(otherPort, 8000), Is.EqualTo("/tmp/a"));
+
+        Assert.That(IndiSharedBufferStream.SocketPathFromCommandLine(new[] { "indi-web", "-p", "7624" }, 7624), Is.Null,
+            "only indiserver itself owns a socket");
+        Assert.That(IndiSharedBufferStream.SocketPathFromCommandLine(Array.Empty<string>(), 7624), Is.Null);
+    }
+
     // --- libc helpers for the server side ---
 
     private static (Socket server, Socket client) SocketPair() {

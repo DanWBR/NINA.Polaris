@@ -803,8 +803,9 @@ builder.Services.AddSingleton(sp =>
     var port = config.GetValue("Indi:Port", 7624);
     var client = new IndiClient(host, port) {
         // indiserver's local socket: on a loopback host the BLOBs then arrive as
-        // shared memory instead of base64 over TCP. "" keeps everything on TCP.
-        UnixSocketPath = config.GetValue("Indi:UnixSocketPath", "/tmp/indiserver") ?? ""
+        // shared memory instead of base64 over TCP. Unset: the socket of the
+        // indiserver that owns the configured port, found in /proc. "off": TCP.
+        UnixSocketPath = config.GetValue("Indi:UnixSocketPath", "auto") ?? "auto"
     };
     // Wire DBGLOG-2 bridge so every INDI write (newNumberVector /
     // newSwitchVector / newTextVector) shows up in the LOG panel,

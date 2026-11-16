@@ -17,6 +17,7 @@ using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Microsoft.Win32.SafeHandles;
+using NINA.INDI.Protocol;
 
 namespace NINA.INDI.Client;
 
@@ -48,6 +49,11 @@ public sealed class IndiSharedBufferStream : Stream {
     private const int SCM_RIGHTS = 1;
     private const int EINTR = 4;
     private const int EAGAIN = 11;
+    // libindi rounds every shared BLOB allocation up to this (BLOB_SIZE_UNIT in sharedblob.c),
+    // so a descriptor's file is between the announced size and one unit above it.
+    private const long BlobSizeUnit = 0x100000;
+    /// <summary>indiserver's <c>-u</c> default (INDIUNIXSOCK).</summary>
+    public const string DefaultSocketPath = "/tmp/indiserver";
 
     private readonly Socket _socket;
     private readonly ConcurrentQueue<int> _fds = new();
@@ -91,10 +97,21 @@ public sealed class IndiSharedBufferStream : Stream {
     /// from the oldest pending descriptor and closes it. Null when no descriptor
     /// is pending, which means the server announced an attachment it never
     /// sent.</summary>
+    /// <exception cref="IndiAttachedBlobException">The descriptor's file is not
+    /// the size the element announced (allowing for libindi's rounding up to
+    /// 1 MiB). The queue has then drifted from the parser and the connection
+    /// has to be dropped; every pending descriptor is closed here.</exception>
     public byte[]? TakeAttachedBlob(int size) {
         if (!_fds.TryDequeue(out int fd)) return null;
         using var handle = new SafeFileHandle((IntPtr)fd, ownsHandle: true);
         if (size <= 0) return Array.Empty<byte>();
+        long length = RandomAccess.GetLength(handle);
+        if (length < size || length >= size + BlobSizeUnit) {
+            DiscardPendingDescriptors();
+            throw new IndiAttachedBlobException(
+                $"attached BLOB descriptor holds {length} bytes, the message announced {size}: " +
+                "descriptor queue out of step with the XML, dropping the INDI connection");
+        }
         var buffer = new byte[size];
         int total = 0;
         while (total < size) {
@@ -105,6 +122,58 @@ public sealed class IndiSharedBufferStream : Stream {
         }
         if (total < size) Array.Resize(ref buffer, total);
         return buffer;
+    }
+
+    /// <summary>Closes every descriptor received and not yet consumed. Called when
+    /// the queue can no longer be matched to the XML; the stream is about to be
+    /// dropped by its owner.</summary>
+    public void DiscardPendingDescriptors() {
+        while (_fds.TryDequeue(out int fd)) close(fd);
+    }
+
+    /// <summary>Finds the Unix socket of the indiserver that owns <paramref name="port"/>
+    /// on this host, by reading the command line of every running <c>indiserver</c>
+    /// in <c>/proc</c>. Null when no such process is visible, in which case TCP is
+    /// the right choice: a fixed default path would reach a different indiserver
+    /// than the configured port, or none at all when INDI Web Manager started it
+    /// with its own <c>-u</c>, as it does on a Polaris rig.</summary>
+    public static string? FindSocketOfIndiserverOnPort(int port) {
+        if (!IsSupported) return null;
+        string[] dirs;
+        try { dirs = Directory.GetDirectories("/proc"); } catch { return null; }
+        foreach (var dir in dirs) {
+            if (!int.TryParse(System.IO.Path.GetFileName(dir), out _)) continue;
+            string[] argv;
+            try {
+                var raw = File.ReadAllBytes(System.IO.Path.Combine(dir, "cmdline"));
+                argv = System.Text.Encoding.UTF8.GetString(raw).Split('\0', StringSplitOptions.RemoveEmptyEntries);
+            } catch { continue; }   // the process ended, or it is not ours to read
+            var path = SocketPathFromCommandLine(argv, port);
+            if (path != null) return path;
+        }
+        return null;
+    }
+
+    /// <summary>The socket path an <c>indiserver</c> command line implies, or null
+    /// when it is not indiserver or serves another port. indiserver's value
+    /// options are <c>-l -m -d -u -p -r -f</c>; <c>-v</c>, <c>-vv</c> and friends
+    /// take none, and the first non-option is the first driver.</summary>
+    public static string? SocketPathFromCommandLine(IReadOnlyList<string> argv, int port) {
+        if (argv.Count == 0) return null;
+        var exe = System.IO.Path.GetFileName(argv[0]);
+        if (exe != "indiserver") return null;
+        int serverPort = 7624;
+        string path = DefaultSocketPath;
+        for (int i = 1; i < argv.Count; i++) {
+            var arg = argv[i];
+            if (arg.Length < 2 || arg[0] != '-') break;         // first driver
+            bool takesValue = "lmdupfr".Contains(arg[1]) && arg.Length == 2;
+            if (!takesValue) continue;                           // -v, -vv, -vvv
+            if (++i >= argv.Count) break;
+            if (arg[1] == 'p' && int.TryParse(argv[i], out int p)) serverPort = p;
+            if (arg[1] == 'u' && argv[i].Length > 0) path = argv[i];
+        }
+        return serverPort == port ? path : null;
     }
 
     public override bool CanRead => true;
@@ -224,7 +293,7 @@ public sealed class IndiSharedBufferStream : Stream {
             // Wakes a blocked recvmsg with EOF before the handle goes away.
             try { _socket.Shutdown(SocketShutdown.Both); } catch { }
             _socket.Dispose();
-            while (_fds.TryDequeue(out int fd)) close(fd);
+            DiscardPendingDescriptors();
         }
         base.Dispose(disposing);
     }

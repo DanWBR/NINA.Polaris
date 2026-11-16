@@ -55,7 +55,11 @@ public class IndiClient : IDisposable {
     /// set, the client connects there first and receives BLOBs as shared memory
     /// instead of base64 over TCP; see <see cref="IndiSharedBufferStream"/>.
     /// Empty disables the attempt. Falls back to TCP when nothing listens.</summary>
-    public string UnixSocketPath { get; set; } = "/tmp/indiserver";
+    /// <summary>Where to find indiserver's Unix socket on a loopback host. Empty or
+    /// <c>auto</c>: the socket of the indiserver that owns <see cref="Port"/>,
+    /// read from its command line in <c>/proc</c>, TCP when none is visible.
+    /// <c>off</c>: TCP always. Anything else: that path, as an explicit override.</summary>
+    public string UnixSocketPath { get; set; } = "auto";
 
     /// <summary>True while connected over the Unix socket with shared-memory BLOBs.</summary>
     public bool UsesSharedBuffers => _shared != null;
@@ -271,12 +275,14 @@ public class IndiClient : IDisposable {
         if (IsConnected) return;
 
         if (OperatingSystem.IsLinux() && IsLoopback(Host)) {
-            _shared = await IndiSharedBufferStream.TryConnectAsync(UnixSocketPath, ConnectTimeout, ct);
+            var socketPath = ResolveUnixSocketPath();
+            if (socketPath != null)
+                _shared = await IndiSharedBufferStream.TryConnectAsync(socketPath, ConnectTimeout, ct);
         }
         if (OperatingSystem.IsLinux() && _shared != null) {
             _stream = _shared;
             _parser.AttachedBlobSource = _shared.TakeAttachedBlob;
-            Logger.Info($"Connected to INDI server over unix socket '{UnixSocketPath}' (shared-memory BLOBs)");
+            Logger.Info($"Connected to INDI server over unix socket '{_shared.Path}' (shared-memory BLOBs)");
         } else {
             _parser.AttachedBlobSource = null;
             await ConnectTcpAsync(ct);
@@ -298,6 +304,18 @@ public class IndiClient : IDisposable {
         Devices.Clear();
 
         await SendAsync(IndiXmlWriter.GetProperties(), ct);
+    }
+
+    /// <summary>The socket path to try, or null for TCP. See <see cref="UnixSocketPath"/>.</summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("linux")]
+    private string? ResolveUnixSocketPath() {
+        var setting = UnixSocketPath?.Trim() ?? "";
+        if (setting.Equals("off", StringComparison.OrdinalIgnoreCase)) return null;
+        if (setting.Length > 0 && !setting.Equals("auto", StringComparison.OrdinalIgnoreCase)) return setting;
+        var found = IndiSharedBufferStream.FindSocketOfIndiserverOnPort(Port);
+        if (found == null)
+            Logger.Info($"No local indiserver owning port {Port} is visible in /proc; INDI stays on TCP");
+        return found;
     }
 
     private static bool IsLoopback(string host) =>
