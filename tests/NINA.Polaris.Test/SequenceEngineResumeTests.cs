@@ -164,6 +164,10 @@ public class SequenceEngineResumeTests {
 
             Assert.That(image.MetaData.Exposure.ImageType, Is.EqualTo("BIAS"));
             Assert.That(image.MetaData.Target.RightAscension, Is.EqualTo(12.5));
+            // The file is written behind the capture, while the next exposure
+            // would be open; the run drains it before anything that depends on
+            // it (the next frame's save, the end actions).
+            await engine.DrainPostCaptureAsync();
             Assert.That(Directory.GetFiles(outputDir, "*", SearchOption.AllDirectories), Is.Not.Empty);
         } finally {
             if (Directory.Exists(outputDir)) Directory.Delete(outputDir, recursive: true);

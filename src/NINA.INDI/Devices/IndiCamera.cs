@@ -1445,10 +1445,12 @@ public class IndiCamera : ICamera, IDisposable {
                 // says video is working. Treat zero-sized parses as
                 // failures so the streaming-fallback logic in
                 // CameraStreamService kicks in.
+                // A deferred DSLR frame decodes on first Data access; asking it
+                // for Data here would pull the decode back onto this thread.
                 if (imageData.Properties.Width <= 0
                     || imageData.Properties.Height <= 0
-                    || imageData.Data == null
-                    || imageData.Data.Length == 0) {
+                    || (imageData is not DeferredDslrFrame
+                        && (imageData.Data == null || imageData.Data.Length == 0))) {
                     if (_isStreaming) {
                         Interlocked.Increment(ref _emptyStreamFrameCount);
                     } else {
@@ -1578,6 +1580,7 @@ public class IndiCamera : ICamera, IDisposable {
     /// whatever had been decoded for the preview (a LibRaw rendering, or the
     /// 8-bit embedded JPEG), never as the RAW the camera recorded.</summary>
     internal static IImageData WithProperties(IImageData src, ImageProperties props) {
+        if (src is DeferredDslrFrame deferred) return deferred.WithProperties(props);
         var copy = new BaseImageData(src.Data, props, src.MetaData);
         if (src is IHasRawFile raw && raw.RawFileBytes != null) {
             copy.RawFileBytes = raw.RawFileBytes;
@@ -1656,42 +1659,94 @@ public class IndiCamera : ICamera, IDisposable {
     /// (every CR2/NEF carries one), re-mosaiced to RGGB for a colour preview,
     /// the vendor-SDK DSLR behaviour. Either way the original RAW bytes ride on
     /// IHasRawFile so save-to-disk writes the real .cr2. Returns null if nothing
-    /// decodes.</summary>
+    /// decodes.
+    ///
+    /// The libraw path is deferred: this method only reads the frame size from
+    /// the RAW header and returns a <see cref="DeferredDslrFrame"/> that runs
+    /// the decode when its pixels are first read. The decode is the slow part
+    /// (7.8 s for a 33 MP ARW on a Raspberry Pi 4) and it used to run right
+    /// here, on the INDI reader thread, before the exposure counted as done, so
+    /// every sub paid for it before the next could start. The sequencers save
+    /// the RAW bytes without touching the pixels and start the next exposure
+    /// while the preview decodes.</summary>
     private IImageData? DecodeRawDslrBlob(byte[] data, string ext) {
-        // Preferred path: decode the actual RAW with libraw (when installed) →
-        // true 16-bit linear sensor data, re-mosaiced to RGGB. This is what the
-        // live stack wants (full dynamic range), instead of the 8-bit sRGB
-        // embedded JPEG. Falls through to the JPEG path below if libraw is absent
-        // or the decode fails (e.g. a plain .jpg BLOB, or an unsupported body).
+        string extension = ext.StartsWith('.') ? ext : "." + ext;
         string why = DslrFallbackReason(LooksLikeJpeg(data),
             NINA.Image.FileFormat.Raw.LibRawDecoder.IsAvailable);
 
-        if (!LooksLikeJpeg(data)) {
-            try {
-                if (NINA.Image.FileFormat.Raw.LibRawDecoder.TryDecodeToRggb(
-                        data, out int rw, out int rh, out var mosaic, out var librawError) && mosaic != null) {
-                    var rprops = new ImageProperties {
-                        Width = rw, Height = rh, BitDepth = 16,
-                        IsBayered = true, BayerPattern = BayerPatternEnum.RGGB
-                    };
-                    var rmeta = new ImageMetaData { CreationTime = DateTime.UtcNow };
+        string? sizeError = null;
+        if (!LooksLikeJpeg(data)
+                && NINA.Image.FileFormat.Raw.LibRawDecoder.TryReadSize(data, out int rw, out int rh, out sizeError)) {
+            var rprops = new ImageProperties {
+                Width = rw, Height = rh, BitDepth = 16,
+                IsBayered = true, BayerPattern = BayerPatternEnum.RGGB
+            };
+            var rmeta = new ImageMetaData { CreationTime = DateTime.UtcNow };
+            return new DeferredDslrFrame(rprops, rmeta, data, extension,
+                () => DecodeRawPixels(data, ext, rw, rh, why));
+        }
+        if (sizeError != null) why = sizeError + ".";
+
+        // libraw could not even identify the file (or it is a plain JPEG): the
+        // embedded-JPEG path is cheap enough to run here, as it always did.
+        if (!TryDecodeEmbeddedJpeg(data, out var pixels, out int w, out int h)) return null;
+        ReportDslrFrame("embedded-jpeg", ext, why, 8);
+        var props = new ImageProperties {
+            Width = w, Height = h, BitDepth = 16,
+            IsBayered = true, BayerPattern = BayerPatternEnum.RGGB
+        };
+        var meta = new ImageMetaData { CreationTime = DateTime.UtcNow };
+        return new BaseImageData(pixels, props, meta) {
+            RawFileBytes = data,
+            RawFileExtension = extension
+        };
+    }
+
+    /// <summary>The deferred half of <see cref="DecodeRawDslrBlob"/>: libraw
+    /// first, the embedded JPEG when libraw refuses the file after all. Returns
+    /// null when neither yields a frame of the announced size; the caller
+    /// substitutes zeros, and the RAW on disk is untouched either way.</summary>
+    private ushort[]? DecodeRawPixels(byte[] data, string ext, int width, int height, string why) {
+        try {
+            if (NINA.Image.FileFormat.Raw.LibRawDecoder.TryDecodeToRggb(
+                    data, out int rw, out int rh, out var mosaic, out var librawError) && mosaic != null) {
+                if (rw == width && rh == height) {
                     ReportDslrFrame("raw", ext,
                         $"Decoded with libraw {NINA.Image.FileFormat.Raw.LibRawDecoder.Version}.", 16);
-                    return new BaseImageData(mosaic, rprops, rmeta) {
-                        RawFileBytes = data,
-                        RawFileExtension = ext.StartsWith('.') ? ext : "." + ext
-                    };
+                    return mosaic;
                 }
+                why = $"libraw decoded {rw}x{rh} but announced {width}x{height}.";
+            } else if (librawError != null) {
                 // Say what libraw actually reported, not a guess about the body.
-                if (librawError != null) why = librawError + ".";
-            } catch (Exception ex) {
-                // Fall back to the embedded JPEG, but say what libraw hit: an
-                // unsupported body and a corrupt download look identical from
-                // the picture alone.
-                why = "libraw failed on this RAW (" + ex.GetType().Name + "): " + ex.Message;
+                why = librawError + ".";
             }
+        } catch (Exception ex) {
+            // Fall back to the embedded JPEG, but say what libraw hit: an
+            // unsupported body and a corrupt download look identical from
+            // the picture alone.
+            why = "libraw failed on this RAW (" + ex.GetType().Name + "): " + ex.Message;
         }
 
+        if (TryDecodeEmbeddedJpeg(data, out var pixels, out int w, out int h) && w == width && h == height) {
+            ReportDslrFrame("embedded-jpeg", ext, why, 8);
+            return pixels;
+        }
+        _client.DiagLogger.LogWarning(
+            "{Device}: DSLR frame could not be decoded for the preview ({Format}); the RAW file is saved as is. {Reason}",
+            DeviceName, ext, why);
+        return null;
+    }
+
+    /// <summary>Decode the embedded full-resolution JPEG of a RAW container (or a
+    /// BLOB that is itself a JPEG) into an RGGB Bayer mosaic. The embedded JPEG
+    /// is already debayered RGB, but Polaris's live relay only carries a
+    /// single-channel buffer plus a Bayer pattern (the client WebGL pipeline
+    /// debayers), so each pixel keeps the one channel an RGGB sensor would
+    /// sample there and the client debayers it back to colour, exactly like a
+    /// real OSC. Slight quality loss against the full RGB; the authoritative
+    /// data is the untouched RAW kept on IHasRawFile.</summary>
+    private static bool TryDecodeEmbeddedJpeg(byte[] data, out ushort[] pixels, out int width, out int height) {
+        pixels = Array.Empty<ushort>(); width = 0; height = 0;
         // The whole BLOB might already be a JPEG (gphoto delivering .jpg), else
         // it's a TIFF-based RAW (CR2/NEF/ARW) with one or more embedded JPEGs.
         // Try the candidates largest-first and take the first that actually
@@ -1709,16 +1764,9 @@ public class IndiCamera : ICamera, IDisposable {
                 bmp?.Dispose(); bmp = null;
             }
         }
-        if (bmp == null || bmp.Width <= 0 || bmp.Height <= 0) { bmp?.Dispose(); return null; }
+        if (bmp == null || bmp.Width <= 0 || bmp.Height <= 0) { bmp?.Dispose(); return false; }
         int w = bmp.Width, h = bmp.Height;
-        var pixels = new ushort[w * h];
-        // The embedded JPEG is already debayered RGB, but Polaris's live relay
-        // only carries a single-channel buffer + a Bayer pattern (the client
-        // WebGL pipeline debayers). To get a COLOUR preview we re-mosaic the RGB
-        // back into an RGGB Bayer grid: each pixel keeps the one channel an RGGB
-        // sensor would sample there. The client then debayers it back to colour,
-        // exactly like a real OSC. Slight quality loss vs the full RGB, but the
-        // authoritative data is the untouched RAW kept on IHasRawFile.
+        var px = new ushort[w * h];
         try {
             var cols = bmp.Pixels;   // SKColor[], color-type agnostic
             for (int y = 0; y < h; y++) {
@@ -1730,25 +1778,14 @@ public class IndiCamera : ICamera, IDisposable {
                     // RGGB: (even,even)=R, (even,odd)=G, (odd,even)=G, (odd,odd)=B
                     byte ch = evenRow ? (evenCol ? c.Red : c.Green)
                                       : (evenCol ? c.Green : c.Blue);
-                    pixels[row + x] = (ushort)(ch * 257);   // 8-bit → full 16-bit
+                    px[row + x] = (ushort)(ch * 257);   // 8-bit -> full 16-bit
                 }
             }
         } finally { bmp.Dispose(); }
-
-        // BitDepth below says 16 because that is the container; the data in it
-        // holds 256 levels per channel. Report the real precision separately so
-        // the operator is not told 16 when the pixels are multiples of 257.
-        ReportDslrFrame("embedded-jpeg", ext, why, 8);
-
-        var props = new ImageProperties {
-            Width = w, Height = h, BitDepth = 16,
-            IsBayered = true, BayerPattern = BayerPatternEnum.RGGB
-        };
-        var meta = new ImageMetaData { CreationTime = DateTime.UtcNow };
-        return new BaseImageData(pixels, props, meta) {
-            RawFileBytes = data,
-            RawFileExtension = ext.StartsWith('.') ? ext : "." + ext
-        };
+        // The container says 16 bit; the data in it holds 256 levels per
+        // channel. ReportDslrFrame tells the operator the real precision.
+        pixels = px; width = w; height = h;
+        return true;
     }
 
     private static bool LooksLikeJpeg(byte[] d) =>
