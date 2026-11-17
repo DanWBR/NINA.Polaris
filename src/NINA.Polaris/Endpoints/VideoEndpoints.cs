@@ -243,6 +243,74 @@ public static class VideoEndpoints {
             return Results.Ok(new { aborted = true });
         });
 
+        // ----- Planet + moons (metered pair of recordings, stacked and merged) -----
+
+        group.MapPost("/planet-moons/start", (PlanetMoonsService svc, PlanetMoonsStartRequest req) => {
+            try {
+                var job = svc.Start(new PlanetMoonsConfig(
+                    Target: string.IsNullOrWhiteSpace(req.Target) ? "Jupiter" : req.Target!.Trim(),
+                    PlanetFrames: Math.Clamp(req.PlanetFrames ?? 1500, 50, 20000),
+                    PlanetMaxSeconds: Math.Clamp(req.PlanetMaxSeconds ?? 60, 5, 600),
+                    MoonFrames: Math.Clamp(req.MoonFrames ?? 200, 10, 5000),
+                    MoonMaxSeconds: Math.Clamp(req.MoonMaxSeconds ?? 60, 5, 600),
+                    PlanetMaxExposureMs: Math.Clamp(req.PlanetMaxExposureMs ?? 100, 1, 2000),
+                    MoonMaxExposureMs: Math.Clamp(req.MoonMaxExposureMs ?? 1000, 10, 10000),
+                    KeepPercent: Math.Clamp(req.KeepPercent ?? 25, 1, 100),
+                    BitDepth: req.BitDepth == 8 ? 8 : 16));
+                return Results.Ok(new { jobId = job.Id });
+            } catch (Exception ex) {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
+        group.MapGet("/planet-moons", (PlanetMoonsService svc) => {
+            var j = svc.Current;
+            if (j == null) return Results.Ok(new { active = false });
+            return Results.Ok(new {
+                active = true,
+                id = j.Id,
+                running = j.Running,
+                phase = j.Phase,
+                message = j.Message,
+                error = j.Error,
+                warnings = j.Warnings.ToArray(),
+                target = j.Config.Target,
+                planetExposureMs = j.PlanetExposureMs,
+                moonExposureMs = j.MoonExposureMs,
+                planetLevel = j.PlanetLevel,
+                moonLevel = j.MoonLevel,
+                moonsFound = j.MoonsFound,
+                moonsSeen = j.MoonsSeen,
+                framesRecorded = j.FramesRecorded,
+                framesTarget = j.FramesTarget,
+                stackPhase = j.StackPhase,
+                stackFrames = j.StackFrames,
+                stackTotal = j.StackTotal,
+                planetSer = j.PlanetSer,
+                moonSer = j.MoonSer,
+                planetStack = j.PlanetStack,
+                moonStack = j.MoonStack,
+                compositeFits = j.CompositeFits,
+                compositePng = j.CompositePng,
+                startedAt = j.StartedAt,
+                completedAt = j.CompletedAt,
+            });
+        });
+
+        group.MapPost("/planet-moons/abort", (PlanetMoonsService svc) => {
+            svc.Abort();
+            return Results.Ok(new { aborted = true });
+        });
+
+        // The finished composite as PNG, for the result panel. Only the current
+        // job's own file is served, so no path comes from the client.
+        group.MapGet("/planet-moons/{jobId}/composite.png", (string jobId, PlanetMoonsService svc) => {
+            var j = svc.Current;
+            if (j == null || j.Id != jobId || j.CompositePng == null || !File.Exists(j.CompositePng))
+                return Results.NotFound(new { error = "No composite for this job" });
+            return Results.File(j.CompositePng, "image/png");
+        });
+
         // ----- Time-lapse (frames folder -> GIF / MP4) -----
 
         // Whether MP4 can be produced on this host (ffmpeg present). GIF always can.
@@ -456,6 +524,17 @@ public static class VideoEndpoints {
         /// <summary>SERSCALE-3: sample alignment. Omitted = Auto; 16 = Off;
         /// 8..15 = treat the stream as that many significant bits.</summary>
         int? SerDepth = null);
+
+    public record PlanetMoonsStartRequest(
+        string? Target,
+        int? PlanetFrames,
+        double? PlanetMaxSeconds,
+        int? MoonFrames,
+        double? MoonMaxSeconds,
+        double? PlanetMaxExposureMs,
+        double? MoonMaxExposureMs,
+        double? KeepPercent,
+        int? BitDepth);
 
     public record StackStartRequest(
         string SerPath,
