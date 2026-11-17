@@ -1064,6 +1064,9 @@ function ninaApp() {
         horizonDragIdx: -1,         // point being dragged, -1 = none
         horizonSavedFlash: false,
         _skyInfoChart: null,
+        // Refreshes the open SKY card once a minute (see _skyInfoTick).
+        _skyInfoTimer: null,
+        _skyInfoTicks: 0,
         skyResults: [],
         skyShowResults: false,
         // Mobile WebView hard-suspend for the SKY engine iframe: after a
@@ -46308,10 +46311,16 @@ function ninaApp() {
                 raDeg: typeof obj.raDeg === 'number' ? obj.raDeg : null,
                 decDeg: typeof obj.decDeg === 'number' ? obj.decDeg : null,
                 types: obj.types || null,
+                // Sun, Moon, planets, comets and asteroids move against the
+                // stars: their RA/Dec is read again from the engine while the
+                // card stays open.
+                moving: isPlanet
+                    || /^(Sun|Moon|Mercury|Venus|Mars|Jupiter|Saturn|Uranus|Neptune|Pluto)$/i.test(obj.name || ''),
                 altitudeSamples: null,
                 transitText: '',
                 setText: '',
             };
+            this._skyInfoStartRefresh();
 
             // Tear down any previous chart instance, Chart.js leaks
             // the canvas otherwise and the next render throws "Canvas
@@ -46376,24 +46385,105 @@ function ninaApp() {
             // human-readable time-to-meridian-transit and
             // time-to-horizon-set client-side from the samples so the
             // numbers stay consistent with what's plotted.
-            if (Number.isFinite(obj.raDeg) && Number.isFinite(obj.decDeg)) {
-                try {
-                    const raHours = obj.raDeg / 15;
-                    const data = await this.apiGet(
-                        `/api/sky/altitude?ra=${raHours}&dec=${obj.decDeg}&stepMinutes=15`);
-                    if (data && Array.isArray(data.samples) && data.samples.length > 0
-                        && this.skyInfo.title === obj.name) {
-                        this.skyInfo.altitudeSamples = data.samples;
-                        const events = this._skyInfoComputeEvents(data.samples);
-                        this.skyInfo.transitText = events.transitText;
-                        this.skyInfo.setText = events.setText;
-                        // Render after Alpine commits the DOM, the
-                        // canvas only exists once skyInfo.altitudeSamples
-                        // flips x-show on.
-                        this.$nextTick(() => this._renderSkyInfoChart());
+            await this._skyInfoLoadAltitude();
+        },
+
+        // Altitude track for the open card, and the meridian/horizon texts
+        // derived from it. Called when the card opens and again by the
+        // periodic refresh.
+        async _skyInfoLoadAltitude() {
+            const i = this.skyInfo;
+            if (!Number.isFinite(i.raDeg) || !Number.isFinite(i.decDeg)) return;
+            const title = i.title;
+            try {
+                const data = await this.apiGet(
+                    `/api/sky/altitude?ra=${i.raDeg / 15}&dec=${i.decDeg}&stepMinutes=15`);
+                if (data && Array.isArray(data.samples) && data.samples.length > 0
+                    && this.skyInfo.visible && this.skyInfo.title === title) {
+                    this.skyInfo.altitudeSamples = data.samples;
+                    const events = this._skyInfoComputeEvents(data.samples);
+                    this.skyInfo.transitText = events.transitText;
+                    this.skyInfo.setText = events.setText;
+                    // Render after Alpine commits the DOM, the
+                    // canvas only exists once skyInfo.altitudeSamples
+                    // flips x-show on.
+                    this.$nextTick(() => this._renderSkyInfoChart());
+                }
+            } catch (e) { /* leave chart hidden if altitude lookup fails */ }
+        },
+
+        // The card shows times relative to now and, for the Sun, Moon and
+        // planets, a position that moves. Once a minute while it is open:
+        // the meridian/horizon texts are recomputed, a moving object's
+        // RA/Dec is read again from the engine, and every 10 minutes (or
+        // when the night the track covers is over) the altitude track is
+        // fetched again.
+        _skyInfoStartRefresh() {
+            this._skyInfoTicks = 0;
+            if (this._skyInfoTimer) return;
+            this._skyInfoTimer = setInterval(() => this._skyInfoTick(), 60000);
+        },
+        _skyInfoStopRefresh() {
+            if (this._skyInfoTimer) { clearInterval(this._skyInfoTimer); this._skyInfoTimer = null; }
+        },
+        async _skyInfoTick() {
+            const i = this.skyInfo;
+            if (!i.visible) { this._skyInfoStopRefresh(); return; }
+            if (typeof document !== 'undefined' && document.hidden) return;
+            this._skyInfoTicks++;
+            const title = i.title;
+            if (i.moving && title) {
+                const fresh = await this._skyInfoReadPosition();
+                if (fresh && this.skyInfo.visible && this.skyInfo.title === title) {
+                    this.skyInfo.raDeg = fresh.raDeg;
+                    this.skyInfo.decDeg = fresh.decDeg;
+                    if (typeof fresh.magnitude === 'number') this.skyInfo.magnitude = fresh.magnitude;
+                    // The map's own target follows the object it names.
+                    if (this.skyTarget && this.skyTarget.name === title) {
+                        this.skyTarget = { ...this.skyTarget, ra: fresh.raDeg / 15, dec: fresh.decDeg };
                     }
-                } catch (e) { /* leave chart hidden if altitude lookup fails */ }
+                    if (this._skyFixedTarget && this._skyFixedTarget.name === title) {
+                        this._skyFixedTarget = { ...this._skyFixedTarget, ra: fresh.raDeg / 15, dec: fresh.decDeg };
+                    }
+                }
             }
+            const samples = this.skyInfo.altitudeSamples;
+            const last = samples && samples.length ? new Date(samples[samples.length - 1].utc).getTime() : 0;
+            const stale = !samples || last < Date.now();
+            if (stale || this._skyInfoTicks % 10 === 0) {
+                await this._skyInfoLoadAltitude();
+            } else if (samples && samples.length) {
+                const events = this._skyInfoComputeEvents(samples);
+                this.skyInfo.transitText = events.transitText;
+                this.skyInfo.setText = events.setText;
+            }
+        },
+        // Current RA/Dec of the card's object from the engine, by name.
+        async _skyInfoReadPosition() {
+            const title = this.skyInfo.title;
+            if (!title) return null;
+            try {
+                const r = await this._skySearch(title);
+                if (r && Number.isFinite(r.raDeg) && Number.isFinite(r.decDeg)) return r;
+            } catch (_) { /* engine not ready */ }
+            return null;
+        },
+        // The target the card's mount and sequence buttons act on: the
+        // card's own object, never whatever the map is centred on. A moving
+        // object's position is read again first, so the mount gets where it
+        // is now and not where it was when the card opened.
+        async _skyInfoTarget() {
+            const i = this.skyInfo;
+            if (i.moving) {
+                const title = i.title;
+                const fresh = await this._skyInfoReadPosition();
+                if (fresh && this.skyInfo.title === title) {
+                    this.skyInfo.raDeg = fresh.raDeg;
+                    this.skyInfo.decDeg = fresh.decDeg;
+                }
+            }
+            if (!Number.isFinite(this.skyInfo.raDeg) || !Number.isFinite(this.skyInfo.decDeg)) return null;
+            return { name: this.skyInfo.title, ra: this.skyInfo.raDeg / 15, dec: this.skyInfo.decDeg };
         },
 
         // From an altitude track [{utc, altitudeDeg}], find the time of
@@ -46728,21 +46818,25 @@ function ninaApp() {
                 undefined, this.skyInfo.title);
         },
 
-        // Card action: route Slew & Center via the existing path.
+        // Card actions: Slew & Center / Slew Only go to the card's object.
+        // The map buttons resolve the map's fixed target or its centre,
+        // which is somewhere else once the map was dragged, or when
+        // Auto-center on select is off.
         async skyInfoSlewCenter() {
-            // _currentSlewTarget already falls back to skyTarget which
-            // _populateSkyInfo populated. Trigger the full workflow.
-            return this.slewAndCenter();
+            const t = await this._skyInfoTarget();
+            if (!t) { this.toast('This object has no coordinates', 'error'); return; }
+            return this.slewAndCenter(t);
         },
 
-        // Card action: Slew Only, same target resolution as
-        // skyInfoSlewCenter but skips the plate-solve centering loop.
-        // Mirrors the standalone "Slew Only" button below the map.
         async skyInfoSlewOnly() {
-            return this.slewToCurrent();
+            const t = await this._skyInfoTarget();
+            if (!t) { this.toast('This object has no coordinates', 'error'); return; }
+            return this.slewToCurrent(t);
         },
 
-        skyInfoAddToSequence() {
+        async skyInfoAddToSequence() {
+            const t = await this._skyInfoTarget();
+            if (t) this.skyTarget = t;
             if (this.skyTarget) this.addToSequence();
         },
 
@@ -46793,11 +46887,14 @@ function ninaApp() {
         // is what the mount tries to put under the camera.
         // Falls back to a picked skyTarget if the map centre can't
         // be read for any reason.
-        async slewAndCenter() {
+        async slewAndCenter(targetOverride) {
             // Target resolution (fixed catalog object / click over the drifting
-            // live centre) is shared with Slew Only and Sync — see
-            // _resolveSkyTarget / _skyLookAt (#13).
-            let target = await this._resolveSkyTarget();
+            // live centre) is shared with Slew Only and Sync, see
+            // _resolveSkyTarget / _skyLookAt (#13). The SKY card passes its
+            // own object instead.
+            let target = (targetOverride && Number.isFinite(targetOverride.ra)
+                && Number.isFinite(targetOverride.dec))
+                ? targetOverride : await this._resolveSkyTarget();
             if (!target) {
                 this.toast('Sky map not ready', 'error');
                 return;
@@ -46827,8 +46924,10 @@ function ninaApp() {
         // Slew Only handler, same target source as slewAndCenter
         // (live engine centre = where the red rectangle is) but
         // skips the plate-solve loop.
-        async slewToCurrent() {
-            let target = await this._resolveSkyTarget();
+        async slewToCurrent(targetOverride) {
+            let target = (targetOverride && Number.isFinite(targetOverride.ra)
+                && Number.isFinite(targetOverride.dec))
+                ? targetOverride : await this._resolveSkyTarget();
             if (!target) { this.toast('Sky map not ready', 'error'); return; }
             if (this._blockIfBelowHorizon(target.ra, target.dec)) return;
             return this.slewTo(target.ra, target.dec);

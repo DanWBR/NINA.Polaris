@@ -10988,13 +10988,13 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                             <button class="btn btn-sm btn-primary"
                                     @click="skyInfoSlewCenter()"
                                     :disabled="!mount.connected || !Number.isFinite(skyInfo.raDeg)"
-                                    title="Slew the mount + plate-solve loop to whatever is framed by the red target FOV (the map centre).">
+                                    title="Slew the mount to this object and center it with the plate-solve loop.">
                                 Slew &amp; Center
                             </button>
                             <button class="btn btn-sm"
                                     @click="skyInfoSlewOnly()"
                                     :disabled="!mount.connected || !Number.isFinite(skyInfo.raDeg)"
-                                    title="Slew the mount to whatever is framed by the red target FOV (the map centre), without the plate-solve centering loop.">
+                                    title="Slew the mount to this object, without the plate-solve centering loop.">
                                 Slew Only
                             </button>
                             <button class="btn btn-sm"
@@ -26880,7 +26880,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261116-rolloffroof"></script>
+    <script src="/js/app.js?v=20261117-skycard"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
