@@ -268,6 +268,7 @@ builder.Services.AddSingleton<LiveCaptureService>();
 builder.Services.AddSingleton<AuxCaptureService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Planetary.VideoRecordingService>();
 builder.Services.AddSingleton<NINA.Polaris.Services.Planetary.PlanetaryStackerService>();
+builder.Services.AddSingleton<NINA.Polaris.Services.Planetary.PlanetMoonsService>();
 // Time-lapse / SER->MP4 builder: renders a frame source (folder of stills or a
 // SER) into an animated GIF (self-contained) and/or an MP4 (ffmpeg when present).
 builder.Services.AddSingleton<NINA.Polaris.Services.External.FfmpegService>();

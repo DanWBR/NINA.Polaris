@@ -48,7 +48,7 @@
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20261112-afphone">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20261024-cloudhourly">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20261011-kblift">
-    <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20261016-bincap">
+    <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20261117-planetmoons">
     <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20261027-asterion">
     <link rel="stylesheet" href="/css/parts/09-mobile.css?v=20260801-hscroll">
     <link rel="stylesheet" href="/css/parts/10-density.css?v=20260728-slimaddr">
@@ -4608,6 +4608,8 @@
                             @click="videoTab = 'process'; loadVideoSerList(); timelapseProbeFfmpeg(); $nextTick(() => drawVideoQualityChart())">Process</button>
                     <button class="video-tab" :class="{ active: videoTab === 'timelapse' }"
                             @click="videoTab = 'timelapse'; timelapseInit()">Time-lapse</button>
+                    <button class="video-tab" :class="{ active: videoTab === 'planetmoons' }"
+                            @click="videoTab = 'planetmoons'; planetMoonsInit()">Planet + Moons</button>
                 </div>
 
                 <!-- ===== Tab 1: Capture ===== -->
@@ -5622,6 +5624,114 @@
                     <div class="stats-bar" x-show="mediaEncode?.phase === 'Fail'" style="margin-top:10px">
                         <span class="text-err">✗ <span x-text="mediaEncode?.error"></span></span>
                     </div>
+                </div>
+
+                <!-- ===== Tab 4: Planet + Moons =====
+                     One button: meter the planet, record it, meter the moons
+                     (disc saturated), record them, stack both and merge the
+                     stacks into one picture. Runs on the live stream the
+                     Capture tab started, with its gain, ROI and framing. -->
+                <div x-show="videoTab === 'planetmoons'" class="video-process-pane pm-pane">
+                  <div class="video-process-form">
+                    <p class="hint">
+                        Start the stream on <a href="#" @click.prevent="videoTab = 'capture'"
+                        style="color:var(--accent);text-decoration:underline">Capture</a>
+                        with the planet and its moons in the frame (keep the ROI wide enough for the moons),
+                        set the gain, then press Start. Polaris finds the exposure for the planet and
+                        for the moons, records both, stacks them and merges the result.
+                    </p>
+                    <div class="stats-bar pm-stream" :class="cameraStream.running ? 'text-ok' : 'text-warn'"
+                         x-text="cameraStream.running
+                            ? ('Stream running · ' + ((cameraStream.width || '?') + '×' + (cameraStream.height || '?')) + ' · gain ' + (cameraStream.gain ?? video.gain))
+                            : 'Stream not running: start it on Capture first'"></div>
+
+                    <div class="control-row">
+                        <label>Planet
+                            <select x-model="planetMoons.target" class="input-sm" :disabled="planetMoonsJob?.running">
+                                <option>Jupiter</option>
+                                <option>Saturn</option>
+                                <option>Uranus</option>
+                                <option>Neptune</option>
+                                <option>Mars</option>
+                            </select>
+                        </label>
+                        <label title="Best frames kept from the planet recording">Keep %
+                            <input type="number" min="1" max="100" step="1" class="input-sm" style="width:64px"
+                                   x-model.number="planetMoons.keepPercent" :disabled="planetMoonsJob?.running">
+                        </label>
+                    </div>
+                    <div class="control-row">
+                        <label>Planet frames
+                            <input type="number" min="50" max="20000" step="50" class="input-sm" style="width:80px"
+                                   x-model.number="planetMoons.planetFrames" :disabled="planetMoonsJob?.running">
+                        </label>
+                        <label title="Longest planet recording. Jupiter turns fast: past about 90 s its detail smears.">max s
+                            <input type="number" min="5" max="600" step="5" class="input-sm" style="width:64px"
+                                   x-model.number="planetMoons.planetMaxSeconds" :disabled="planetMoonsJob?.running">
+                        </label>
+                        <label title="Longest exposure the planet metering may use">max ms
+                            <input type="number" min="1" max="2000" step="1" class="input-sm" style="width:64px"
+                                   x-model.number="planetMoons.planetMaxExposureMs" :disabled="planetMoonsJob?.running">
+                        </label>
+                    </div>
+                    <div class="control-row">
+                        <label>Moon frames
+                            <input type="number" min="10" max="5000" step="10" class="input-sm" style="width:80px"
+                                   x-model.number="planetMoons.moonFrames" :disabled="planetMoonsJob?.running">
+                        </label>
+                        <label>max s
+                            <input type="number" min="5" max="600" step="5" class="input-sm" style="width:64px"
+                                   x-model.number="planetMoons.moonMaxSeconds" :disabled="planetMoonsJob?.running">
+                        </label>
+                        <label title="Longest exposure the moons metering may use">max ms
+                            <input type="number" min="10" max="10000" step="10" class="input-sm" style="width:72px"
+                                   x-model.number="planetMoons.moonMaxExposureMs" :disabled="planetMoonsJob?.running">
+                        </label>
+                    </div>
+                    <div class="control-row">
+                        <button class="btn btn-primary" @click="planetMoonsStart()"
+                                :disabled="!cameraStream.running || planetMoonsJob?.running || videoRecording.recording">
+                            ▶ Start
+                        </button>
+                        <button class="btn btn-danger" x-show="planetMoonsJob?.running" @click="planetMoonsAbort()">■ Abort</button>
+                    </div>
+
+                    <ol class="pm-steps" x-show="planetMoonsJob">
+                        <template x-for="s in planetMoonsSteps()" :key="s.key">
+                            <li :class="'pm-step-' + s.state">
+                                <span class="pm-step-mark" x-text="s.state === 'done' ? '✓' : (s.state === 'active' ? '●' : (s.state === 'failed' ? '✗' : '○'))"></span>
+                                <span x-text="s.label"></span>
+                                <span class="text-muted" x-show="s.detail" x-text="s.detail"></span>
+                            </li>
+                        </template>
+                    </ol>
+                    <div class="stats-bar" x-show="planetMoonsJob?.running" x-text="planetMoonsJob?.message"></div>
+                    <div class="stats-bar" x-show="planetMoonsJob?.error && !planetMoonsJob?.running">
+                        <span class="text-err">✗ <span x-text="planetMoonsJob?.error"></span></span>
+                    </div>
+                    <template x-for="w in (planetMoonsJob?.warnings || [])" :key="w">
+                        <div class="hint text-warn" x-text="'⚠ ' + w"></div>
+                    </template>
+                  </div>
+
+                  <div class="video-process-preview pm-result">
+                    <template x-if="planetMoonsJob?.phase === 'done' && planetMoonsJob?.compositePng">
+                        <div>
+                            <img class="pm-result-img" :src="'/api/video/planet-moons/' + planetMoonsJob.id + '/composite.png'"
+                                 alt="Planet and moons composite">
+                            <div class="stats-bar" style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap; align-items:center">
+                                <span class="text-ok">✓ Composite saved</span>
+                                <button class="btn btn-sm" @click="planetMoonsOpenInStudio()">Open in Studio</button>
+                                <a class="btn btn-sm" :href="'/api/video/planet-moons/' + planetMoonsJob.id + '/composite.png'"
+                                   :download="(planetMoonsJob.compositePng || 'composite.png').split(/[\\/]/).pop()">Download PNG</a>
+                            </div>
+                            <div class="hint" style="margin-top:6px; overflow-wrap:anywhere" x-text="planetMoonsJob.compositeFits"></div>
+                        </div>
+                    </template>
+                    <div class="preview-overlay" x-show="!(planetMoonsJob?.phase === 'done' && planetMoonsJob?.compositePng)">
+                        <p>The composite appears here when the run finishes.</p>
+                    </div>
+                  </div>
                 </div>
 
             </div>
@@ -26595,7 +26705,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261117-skycard"></script>
+    <script src="/js/app.js?v=20261117-planetmoons"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

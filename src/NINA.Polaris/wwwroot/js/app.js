@@ -1858,7 +1858,15 @@ function ninaApp() {
         // VIDEO tab state, planetary capture (SER) + lucky-imaging stack.
         // Driven by VideoRecordingService + PlanetaryStackerService on the
         // server; the WS status feed populates videoRecording / videoStack.
-        videoTab: 'capture',       // 'capture' | 'process'
+        videoTab: 'capture',       // 'capture' | 'process' | 'timelapse' | 'planetmoons'
+        // Planet + Moons: settings (kept in this browser) and the server job.
+        planetMoons: {
+            target: 'Jupiter', keepPercent: 25,
+            planetFrames: 1500, planetMaxSeconds: 60, planetMaxExposureMs: 100,
+            moonFrames: 200, moonMaxSeconds: 60, moonMaxExposureMs: 1000,
+        },
+        planetMoonsJob: null,
+        _planetMoonsTimer: null,
         equipTab: 'equipment',     // 'equipment' | 'indi-web' | 'panels' (RIGS sub-tabstrip)
         // Property Control Panels: raw WS equipment snapshot for readouts,
         // editor state, and live caches for the poll-backed sources.
@@ -31426,9 +31434,96 @@ function ninaApp() {
         // FITS in the Studio editor (FILES → Edit). One-shot via the job id so
         // repeated status ticks don't re-prompt.
         _pageLoadedAt: Date.now(),
+        // ---- Planet + Moons ----
+        planetMoonsInit() {
+            try {
+                const saved = JSON.parse(localStorage.getItem('polaris.planetMoons') || 'null');
+                if (saved && typeof saved === 'object') this.planetMoons = { ...this.planetMoons, ...saved };
+            } catch (_) { /* storage blocked: keep the defaults */ }
+            this.planetMoonsPoll();
+        },
+        async planetMoonsStart() {
+            try { localStorage.setItem('polaris.planetMoons', JSON.stringify(this.planetMoons)); } catch (_) { }
+            try {
+                await this.apiPost('/api/video/planet-moons/start', { ...this.planetMoons });
+                this.toast('Planet + moons started', 'ok');
+                await this.planetMoonsPoll();
+            } catch (e) {
+                this.toastFail('Planet + moons could not start', e);
+            }
+        },
+        async planetMoonsAbort() {
+            try { await this.apiPost('/api/video/planet-moons/abort'); }
+            catch (e) { this.toastFail('Abort failed', e); }
+        },
+        // Poll once a second while a job runs; stop when it ends.
+        async planetMoonsPoll() {
+            if (this._planetMoonsTimer) { clearTimeout(this._planetMoonsTimer); this._planetMoonsTimer = null; }
+            let s = null;
+            try { s = await this.apiGet('/api/video/planet-moons'); } catch (_) { return; }
+            const wasRunning = !!this.planetMoonsJob?.running;
+            this.planetMoonsJob = s && s.active ? s : null;
+            if (this.planetMoonsJob?.running) {
+                this._planetMoonsTimer = setTimeout(() => this.planetMoonsPoll(), 1000);
+            } else if (wasRunning && this.planetMoonsJob) {
+                if (this.planetMoonsJob.phase === 'done') this.toast('Planet + moons composite ready', 'ok');
+                else if (this.planetMoonsJob.phase === 'failed') this.toast('Planet + moons failed: ' + (this.planetMoonsJob.error || ''), 'error');
+            }
+        },
+        planetMoonsSteps() {
+            const j = this.planetMoonsJob;
+            const steps = [
+                ['meter-planet', 'Meter the planet', j?.planetExposureMs != null ? j.planetExposureMs.toFixed(2) + ' ms' : ''],
+                ['record-planet', 'Record the planet', ''],
+                ['meter-moons', 'Meter the moons', j?.moonExposureMs != null
+                    ? j.moonExposureMs.toFixed(0) + ' ms' + (j.moonsFound ? '' : ' (no moon found)') : ''],
+                ['record-moons', 'Record the moons', ''],
+                ['stack-planet', 'Stack the planet', ''],
+                ['stack-moons', 'Stack the moons', ''],
+                ['composite', 'Merge', ''],
+            ];
+            const idx = j ? steps.findIndex(s => s[0] === j.phase) : -1;
+            const finished = j && j.phase === 'done';
+            const ended = j && (j.phase === 'failed' || j.phase === 'cancelled');
+            // A failed job keeps the step it failed in: the last one with a result.
+            let failedAt = -1;
+            if (ended) {
+                failedAt = 0;
+                if (j.planetExposureMs != null) failedAt = 1;
+                if (j.planetSer) failedAt = 2;
+                if (j.moonExposureMs != null) failedAt = 3;
+                if (j.moonSer) failedAt = 4;
+                if (j.planetStack) failedAt = 5;
+                if (j.moonStack) failedAt = 6;
+            }
+            return steps.map(([key, label, detail], i) => {
+                let state = 'pending';
+                if (finished) state = 'done';
+                else if (ended) state = i < failedAt ? 'done' : (i === failedAt ? 'failed' : 'pending');
+                else if (idx >= 0) state = i < idx ? 'done' : (i === idx ? 'active' : 'pending');
+                if (state === 'active' && (key === 'record-planet' || key === 'record-moons') && j.framesTarget)
+                    detail = (j.framesRecorded || 0) + ' / ' + j.framesTarget + ' frames';
+                if (state === 'active' && (key === 'stack-planet' || key === 'stack-moons') && j.stackPhase)
+                    detail = j.stackPhase + (j.stackTotal ? ' · ' + (j.stackFrames || 0) + ' / ' + j.stackTotal : '');
+                return { key, label, detail, state };
+            });
+        },
+        async planetMoonsOpenInStudio() {
+            const p = this.planetMoonsJob?.compositeFits;
+            if (!p) return;
+            this.tab = 'files';
+            this.setFilesSubTab('edit');
+            await this.$nextTick();
+            try { await this.editorLoad(p); }
+            catch (e) { this.toastFail('Could not open in Studio', e); }
+        },
+
         async _maybePromptStackDone() {
             const j = this.videoStack;
             if (!j || j.phase !== 'Ok' || !j.outputPath) return;
+            // The planet + moons run stacks its own recordings and shows the
+            // merged result itself: asking about each stack would interrupt it.
+            if (this.planetMoonsJob?.running) return;
             if (this._stackDonePromptedId === j.id) return;
             this._stackDonePromptedId = j.id;
             // A job that ended before this page loaded was already offered
