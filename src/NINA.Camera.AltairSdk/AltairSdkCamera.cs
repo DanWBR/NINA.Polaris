@@ -334,6 +334,29 @@ public sealed class AltairSdkCamera : ICamera {
         return Task.CompletedTask;
     }
 
+    // The heater level last seen above zero, so the card's on/off switch puts
+    // back the level the operator chose in the controls panel.
+    private int _heatLast;
+
+    /// <summary>The level the on switch uses: the last one seen above zero,
+    /// else the top level.</summary>
+    internal static int HeatOnLevel(int last, int max) => last > 0 && last <= max ? last : max;
+
+    public CameraAntiDew? AntiDew {
+        get {
+            if (_cam == null || !_connected || _heatMax <= 0) return null;
+            if (!_cam.get_Option(Altaircam.eOPTION.OPTION_HEAT, out int heat)) return null;
+            if (heat > 0) _heatLast = heat;
+            return new CameraAntiDew(heat > 0, heat, _heatMax);
+        }
+    }
+
+    public Task<bool> SetAntiDewAsync(bool on, CancellationToken ct = default) {
+        if (_cam == null || !_connected || _heatMax <= 0) return Task.FromResult(false);
+        int level = on ? HeatOnLevel(_heatLast, _heatMax) : 0;
+        return Task.FromResult(_cam.put_Option(Altaircam.eOPTION.OPTION_HEAT, level));
+    }
+
     public Task SetCoolerAsync(bool on, CancellationToken ct = default) {
         if (_cam != null && _supportsCooler)
             _cam.put_Option(Altaircam.eOPTION.OPTION_TEC, on ? 1 : 0);
@@ -531,9 +554,12 @@ public sealed class AltairSdkCamera : ICamera {
                 }
                 case "LowNoise":
                     return _cam.put_Option(Altaircam.eOPTION.OPTION_LOW_NOISE, value != 0 ? 1 : 0);
-                case "Heat":
-                    return _heatMax > 0
-                        && _cam.put_Option(Altaircam.eOPTION.OPTION_HEAT, Math.Clamp((int)Math.Round(value), 0, _heatMax));
+                case "Heat": {
+                    if (_heatMax <= 0) return false;
+                    int level = Math.Clamp((int)Math.Round(value), 0, _heatMax);
+                    if (level > 0) _heatLast = level;
+                    return _cam.put_Option(Altaircam.eOPTION.OPTION_HEAT, level);
+                }
                 case "Cooler":
                     return _cam.put_Option(Altaircam.eOPTION.OPTION_TEC, value != 0 ? 1 : 0);
                 case "CoolerVoltageLimit": {

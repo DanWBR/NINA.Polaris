@@ -259,6 +259,8 @@ public sealed class AsiSdkCamera : ICamera {
     // naming them would change ids ("9" -> "ASI_FLIP") that
     // NativeCameraControlStore has already saved per camera.
     internal const int AsiWbR = 3, AsiWbB = 4, AsiFlip = 9, AsiMonoBin = 18;
+    /// <summary>ASI_ANTI_DEW_HEATER: on/off, cooled cameras only ("AntiDewHeater").</summary>
+    internal const int AsiAntiDew = 21;
 
     internal static readonly string[] FlipOptions = { "None", "Horizontal", "Vertical", "Both" };
 
@@ -301,6 +303,25 @@ public sealed class AsiSdkCamera : ICamera {
     // ruined sequence.
     private bool? _coolerOnWanted;
     private double? _targetTempWanted;
+    // Same for the anti-dew heater: a reopen that leaves it off lets the
+    // window dew over in the middle of the night.
+    private bool? _antiDewWanted;
+
+    public CameraAntiDew? AntiDew {
+        get {
+            if (!_connected || !_controls.Contains(AsiAntiDew)) return null;
+            bool on = ReadControl((ASI_CONTROL_TYPE)AsiAntiDew) != 0;
+            return new CameraAntiDew(on, on ? 1 : 0, 1);
+        }
+    }
+
+    public Task<bool> SetAntiDewAsync(bool on, CancellationToken ct = default) {
+        if (!_connected || !_controls.Contains(AsiAntiDew)) return Task.FromResult(false);
+        _antiDewWanted = on;
+        ASI_ERROR_CODE rc;
+        lock (_sdk) rc = ASISetControlValue(_cameraId, (ASI_CONTROL_TYPE)AsiAntiDew, new CLong(on ? 1 : 0), 0);
+        return Task.FromResult(rc == ASI_ERROR_CODE.ASI_SUCCESS);
+    }
 
     /// <summary>Close/reopen recoveries performed on still captures.</summary>
     public int StillReopens { get; private set; }
@@ -342,6 +363,8 @@ public sealed class AsiSdkCamera : ICamera {
     /// <summary>Puts the cooler back after a reopen. ASICloseCamera forgets it,
     /// and the reopen path is invisible to the caller that set it.</summary>
     private void RestoreCoolerState() {
+        if (_antiDewWanted is bool dew && _controls.Contains(AsiAntiDew))
+            lock (_sdk) ASISetControlValue(_cameraId, (ASI_CONTROL_TYPE)AsiAntiDew, new CLong(dew ? 1 : 0), 0);
         if (!_supportsCooler) return;
         lock (_sdk) {
             if (_targetTempWanted is double t)

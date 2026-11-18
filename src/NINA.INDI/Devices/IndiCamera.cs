@@ -102,6 +102,93 @@ public class IndiCamera : ICamera, IDisposable {
     public int BinX => (int)_client.GetNumber(DeviceName, "CCD_BINNING", "HOR_BIN");
     public int BinY => (int)_client.GetNumber(DeviceName, "CCD_BINNING", "VER_BIN");
     public bool CoolerOn => _client.GetSwitch(DeviceName, "CCD_COOLER", "COOLER_ON");
+
+    // ----- Anti-dew heater -----
+    // INDI has no standard property for it; each driver family names its own:
+    //   ToupTek / Altair / Omegon / Mallincam ... (indi_toupbase): the switch
+    //     TC_HEAT_CONTROL, INDI_DISABLED = off, then INDI_ENABLED (one level)
+    //     or HEAT1..HEATn;
+    //   ZWO (indi_asi_ccd): CCD_CONTROLS.AntiDewHeater, 0/1;
+    //   Player One (indi_playerone_ccd): CCD_CONTROLS.LensHeaterPowerPerc, 0..100.
+    internal const string ToupHeatProperty = "TC_HEAT_CONTROL";
+    internal const string AsiAntiDewElement = "AntiDewHeater";
+    internal const string PoaHeaterElement = "LensHeaterPowerPerc";
+
+    // The last level seen above zero, so switching on puts it back.
+    private int _antiDewLast;
+
+    public CameraAntiDew? AntiDew {
+        get {
+            var dew = ReadAntiDew(_client.GetProperty(DeviceName, ToupHeatProperty) as IndiSwitchProperty,
+                                  _client.GetProperty(DeviceName, "CCD_CONTROLS") as IndiNumberProperty);
+            if (dew is { Level: > 0 }) _antiDewLast = dew.Level;
+            return dew;
+        }
+    }
+
+    public async Task<bool> SetAntiDewAsync(bool on, CancellationToken ct = default) {
+        var heat = _client.GetProperty(DeviceName, ToupHeatProperty) as IndiSwitchProperty;
+        var controls = _client.GetProperty(DeviceName, "CCD_CONTROLS") as IndiNumberProperty;
+        var write = AntiDewWrite(heat, controls, on, _antiDewLast);
+        if (write == null) return false;
+        if (write.Value.Switches != null)
+            await _client.SetSwitchAsync(DeviceName, ToupHeatProperty, write.Value.Switches, ct);
+        else
+            await _client.SetNumberAsync(DeviceName, "CCD_CONTROLS", write.Value.Numbers!, ct);
+        return true;
+    }
+
+    /// <summary>Level of a TC_HEAT_CONTROL element: INDI_DISABLED 0,
+    /// INDI_ENABLED 1, HEATn n; -1 for anything else.</summary>
+    internal static int ToupHeatLevel(string element) =>
+        element == "INDI_DISABLED" ? 0
+        : element == "INDI_ENABLED" ? 1
+        : element.StartsWith("HEAT", StringComparison.Ordinal) && int.TryParse(element.AsSpan(4), out var n) ? n
+        : -1;
+
+    /// <summary>The heater as the driver publishes it, or null when it does
+    /// not publish one.</summary>
+    internal static CameraAntiDew? ReadAntiDew(IndiSwitchProperty? heat, IndiNumberProperty? controls) {
+        if (heat != null && heat.Values.ContainsKey("INDI_DISABLED") && heat.Values.Count >= 2) {
+            int max = heat.Values.Keys.Select(ToupHeatLevel).DefaultIfEmpty(0).Max();
+            var onKey = heat.Values.FirstOrDefault(kv => kv.Value).Key;
+            int level = onKey == null ? 0 : Math.Max(0, ToupHeatLevel(onKey));
+            return new CameraAntiDew(level > 0, level, Math.Max(1, max));
+        }
+        if (controls != null) {
+            foreach (var name in new[] { AsiAntiDewElement, PoaHeaterElement }) {
+                if (!controls.Values.TryGetValue(name, out var el)) continue;
+                int max = Math.Max(1, (int)Math.Round(el.Max));
+                int level = (int)Math.Round(el.Value);
+                return new CameraAntiDew(level > 0, level, max);
+            }
+        }
+        return null;
+    }
+
+    /// <summary>What to send to switch the heater on or off: the full switch
+    /// set for TC_HEAT_CONTROL, or the one CCD_CONTROLS element (the drivers
+    /// apply only the elements that changed). On goes back to the last level
+    /// above zero; failing that, the top level of a stepped heater, or half
+    /// power for a percentage. Null when the driver has no heater.</summary>
+    internal static (Dictionary<string, bool>? Switches, Dictionary<string, double>? Numbers)? AntiDewWrite(
+            IndiSwitchProperty? heat, IndiNumberProperty? controls, bool on, int lastLevel) {
+        var state = ReadAntiDew(heat, controls);
+        if (state == null) return null;
+        if (heat != null && heat.Values.ContainsKey("INDI_DISABLED") && heat.Values.Count >= 2) {
+            int level = !on ? 0 : lastLevel > 0 && lastLevel <= state.MaxLevel ? lastLevel : state.MaxLevel;
+            string target = level == 0 ? "INDI_DISABLED"
+                : heat.Values.ContainsKey("INDI_ENABLED") ? "INDI_ENABLED" : "HEAT" + level;
+            if (!heat.Values.ContainsKey(target)) target = heat.Values.Keys.OrderBy(ToupHeatLevel).Last();
+            return (heat.Values.Keys.ToDictionary(k => k, k => k == target), null);
+        }
+        string name = controls!.Values.ContainsKey(AsiAntiDewElement) ? AsiAntiDewElement : PoaHeaterElement;
+        double value = !on ? 0
+            : name == AsiAntiDewElement ? 1
+            : lastLevel > 0 && lastLevel <= state.MaxLevel ? lastLevel
+            : Math.Max(1, state.MaxLevel / 2);
+        return (null, new Dictionary<string, double> { [name] = value });
+    }
     public double CoolerPower => PickCoolerPower(
         _client.GetProperty(DeviceName, "CCD_COOLER_POWER") as IndiNumberProperty);
     public int MaxX => (int)_client.GetNumber(DeviceName, "CCD_INFO", "CCD_MAX_X");

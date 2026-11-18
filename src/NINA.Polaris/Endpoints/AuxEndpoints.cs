@@ -93,6 +93,9 @@ public static class AuxEndpoints {
 
         // Cooler control for a cooled astro cam on the aux port (e.g. SV605CC).
         // 501 when the aux camera has no cooler, so the UI can hide the control.
+        group.MapPost("/camera/anti-dew", async (EquipmentManager equip, CameraEndpoints.AntiDewRequest req) =>
+            await CameraEndpoints.SetAntiDewAsync(equip.AuxCamera, req.On));
+
         group.MapPost("/camera/cooler", (EquipmentManager equip, ProfileService profiles,
                                          CoolingRampService ramp, AuxCoolerRequest req) => {
             if (equip.AuxCamera == null || !equip.AuxCamera.IsConnected)

@@ -196,8 +196,14 @@ public static class ImagerEndpoints {
                 temperature = double.IsNaN(cam.Temperature) ? (double?)null : cam.Temperature,
                 coolerOn = cam.CoolerOn,
                 supportsCooler = cam.Capabilities.SupportsCooler,
+                antiDew = ReadAntiDew(cam),
             });
         });
+
+        // Anti-dew heater on this imager's camera.
+        group.MapPost("/{index:int}/camera/anti-dew", async (EquipmentManager equip, int index,
+                CameraEndpoints.AntiDewRequest req) =>
+            await CameraEndpoints.SetAntiDewAsync(equip.GetImager(index), req.On));
 
         // Cool / warm this imager's own cooled sensor via the shared ramp service,
         // on its own slot ("imager-N") so it never disturbs the main/aux cooldown.
@@ -427,4 +433,8 @@ public static class ImagerEndpoints {
     public record FocuserSyncRequest(int Position);
     public record FocuserReverseRequest(bool Reversed);
     public record FocuserBacklashRequest(bool Enabled, int Steps);
+
+    private static NINA.Image.Interfaces.CameraAntiDew? ReadAntiDew(NINA.Image.Interfaces.ICamera cam) {
+        try { return cam.IsConnected ? cam.AntiDew : null; } catch { return null; }
+    }
 }

@@ -1291,6 +1291,8 @@ public class EquipmentManager : IDisposable {
                 coolerOn = Camera.CoolerOn,
                 coolerPower = Safe(Camera.CoolerPower),
                 supportsCooler = Camera.Capabilities.SupportsCooler,
+                // Anti-dew heater, null when the camera has none.
+                antiDew = SafeAntiDew(Camera),
                 // DSLR signal (gphoto exposes CCD_ISO) so the UI's isDslrCamera
                 // works from the always-present WS status, not just the
                 // on-demand /api/camera/status capability probe.
@@ -1348,6 +1350,7 @@ public class EquipmentManager : IDisposable {
                 temperature = Safe(AuxCamera.Temperature),
                 coolerOn = AuxCamera.CoolerOn,
                 coolerPower = Safe(AuxCamera.CoolerPower),
+                antiDew = SafeAntiDew(AuxCamera),
                 binX = AuxCamera.BinX,
                 binY = AuxCamera.BinY,
                 gain = AuxCamera.Gain,
@@ -1609,6 +1612,12 @@ public class EquipmentManager : IDisposable {
     }
 
     static double? Safe(double v) => double.IsNaN(v) || double.IsInfinity(v) ? null : v;
+
+    /// <summary>The heater state for the status block; a backend that throws
+    /// while reading it must not take the whole status message down.</summary>
+    static CameraAntiDew? SafeAntiDew(ICamera cam) {
+        try { return cam.IsConnected ? cam.AntiDew : null; } catch { return null; }
+    }
 
     private void OnDeviceFound(string deviceName) {
         _logger.LogInformation("INDI device discovered: {Name}", deviceName);
