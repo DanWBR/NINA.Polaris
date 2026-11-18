@@ -724,6 +724,12 @@ public sealed class QhySdkCamera : ICamera {
     /// <summary>Drop the connection when the SDK says the camera left the
     /// bus (QHYCCD_ERROR_DEVICELOSE). The generic error is not enough: it is
     /// what nearly every failure returns.</summary>
+    public void MarkRemoved(string reason) {
+        if (!_connected) return;
+        _connected = false;
+        _disconnectReason = reason;
+    }
+
     private void NoteSdkResult(uint rc) {
         if (rc != QHYCCD_ERROR_DEVICELOSE || !_connected) return;
         _connected = false;
