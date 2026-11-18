@@ -26,18 +26,35 @@ public class IndiXmlParser {
     public event Action<string, string?>? PropertyDeleted;
     public event Action<string, string>? MessageReceived;
 
+    /// <summary>Supplies the bytes of a <c>oneBLOB</c> sent as <c>attached="true"</c>:
+    /// indiserver does that on its Unix socket, where the data travels as a shared
+    /// memory descriptor instead of base64 text (see
+    /// <see cref="Client.IndiSharedBufferStream"/>). The argument is the declared
+    /// size. Null on a TCP connection, where every BLOB is inline.</summary>
+    public Func<int, byte[]?>? AttachedBlobSource { get; set; }
+
     private readonly XmlReaderSettings _settings = new() {
         ConformanceLevel = ConformanceLevel.Fragment,
         Async = true
     };
 
+    /// <summary>Reads messages until the stream ends or <paramref name="ct"/> fires.
+    /// Over TCP a message that fails to parse is skipped. With an
+    /// <see cref="AttachedBlobSource"/> set it is not: descriptors ride on the
+    /// bytes of the message they belong to, so a skipped message may leave its
+    /// descriptor in the queue and every later frame would get the bytes of
+    /// the one before it. An <see cref="IndiAttachedBlobException"/> then ends
+    /// the read, and the owner reconnects with an empty queue.</summary>
     public async Task ParseStreamAsync(Stream stream, CancellationToken ct) {
         using var reader = XmlReader.Create(stream, _settings);
 
         while (!ct.IsCancellationRequested) {
             try {
                 if (!await reader.ReadAsync()) break;
-            } catch (XmlException) {
+            } catch (XmlException ex) {
+                if (AttachedBlobSource != null)
+                    throw new IndiAttachedBlobException(
+                        "INDI message failed to parse while attached BLOB descriptors may be pending: " + ex.Message, ex);
                 continue;
             }
 
@@ -58,7 +75,7 @@ public class IndiXmlParser {
                         PropertyDefined?.Invoke(ParseLightVector(reader));
                         break;
                     case "defBLOBVector":
-                        PropertyDefined?.Invoke(ParseBlobVector(reader, isDefine: true));
+                        PropertyDefined?.Invoke(ParseBlobVectorGuarded(reader, isDefine: true));
                         break;
                     case "setTextVector":
                         PropertyUpdated?.Invoke(ParseTextVector(reader, isDefine: false));
@@ -73,7 +90,7 @@ public class IndiXmlParser {
                         PropertyUpdated?.Invoke(ParseLightVector(reader));
                         break;
                     case "setBLOBVector":
-                        PropertyUpdated?.Invoke(ParseBlobVector(reader, isDefine: false));
+                        PropertyUpdated?.Invoke(ParseBlobVectorGuarded(reader, isDefine: false));
                         break;
                     case "delProperty":
                         // Per INDI spec: delProperty has device (required)
@@ -93,7 +110,12 @@ public class IndiXmlParser {
                             reader.GetAttribute("message") ?? "");
                         break;
                 }
+            } catch (IndiAttachedBlobException) {
+                throw;
             } catch (Exception ex) {
+                // A subscriber that throws is a bug in the subscriber, not a
+                // broken message: the queue is still in step, the message is
+                // skipped as it always was.
                 System.Diagnostics.Debug.WriteLine($"INDI parse error: {ex.Message}");
             }
         }
@@ -204,7 +226,20 @@ public class IndiXmlParser {
         return prop;
     }
 
-    private static IndiBlobProperty ParseBlobVector(XmlReader reader, bool isDefine) {
+    /// <summary>The parse of a BLOB message, and only the parse: a failure in
+    /// here while descriptors may be riding on the message means the queue can
+    /// no longer be matched to the XML, so it ends the connection. The
+    /// subscriber the result goes to runs outside this guard.</summary>
+    private IndiBlobProperty ParseBlobVectorGuarded(XmlReader reader, bool isDefine) {
+        try {
+            return ParseBlobVector(reader, isDefine);
+        } catch (Exception ex) when (AttachedBlobSource != null && ex is not IndiAttachedBlobException) {
+            throw new IndiAttachedBlobException(
+                "INDI BLOB message failed to parse while attached BLOB descriptors may be pending: " + ex.Message, ex);
+        }
+    }
+
+    private IndiBlobProperty ParseBlobVector(XmlReader reader, bool isDefine) {
         var prop = new IndiBlobProperty();
         ReadVectorAttributes(reader, prop);
 
@@ -219,7 +254,9 @@ public class IndiXmlParser {
 
                 byte[]? data = null;
                 if (!isDefine) {
-                    data = ReadBlobBase64(subtree, size);
+                    data = subtree.GetAttribute("attached") == "true"
+                        ? AttachedBlobSource?.Invoke(size)
+                        : ReadBlobBase64(subtree, size);
                 }
 
                 prop.Values[name] = new IndiBlobElement {

@@ -25,6 +25,9 @@ src/NINA.INDI/
                              # properties, subscribe to BLOB events
     IndiBlobReceiver.cs      # BLOB framing (binary chunks delivered
                              # inline in the XML stream)
+    IndiSharedBufferStream.cs # Linux: indiserver's Unix socket, BLOBs
+                             # arrive as memfd descriptors (SCM_RIGHTS)
+                             # instead of base64
   Devices/
     IndiCamera.cs            # CCD_EXPOSURE, CCD_FRAME, CCD_VIDEO_STREAM,
                              # bayer pattern detection, cooler, gain, ISO
