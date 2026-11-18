@@ -36,6 +36,20 @@ public class AsiStillRecoveryTests {
             "the first attempt plus one after reopening the handle");
     }
 
+    /// <summary>The guider asks for FailFast: its next frame is the retry, so
+    /// a lost frame comes straight back, and only a third failure in a row
+    /// goes through the reopen. Every other caller reopens on the first.</summary>
+    [Test]
+    public void FailFastReopensOnlyOnARepeatedFailure() {
+        Assert.Multiple(() => {
+            Assert.That(AsiSdkCamera.ReopensOnFailure(failFast: false, failStreak: 0), Is.True);
+            Assert.That(AsiSdkCamera.ReopensOnFailure(failFast: true, failStreak: 0), Is.False);
+            Assert.That(AsiSdkCamera.ReopensOnFailure(failFast: true, failStreak: 1), Is.False);
+            Assert.That(AsiSdkCamera.ReopensOnFailure(failFast: true, failStreak: 2), Is.True,
+                "a camera that keeps failing still gets the reopen");
+        });
+    }
+
     /// <summary>A failed exposure and a timeout are worth reopening for. A
     /// cancellation is the caller going away, and repeating the request would
     /// fight whoever cancelled it.</summary>

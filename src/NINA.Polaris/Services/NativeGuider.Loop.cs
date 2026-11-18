@@ -623,7 +623,9 @@ public sealed partial class NativeGuider {
         // capture, the dark library and the log can never disagree about
         // which gain the sensor is running at.
         int? gain = Rig.NativeGuideGain > 0 ? EffectiveGuideGain : null;
-        var opts = new CaptureOptions(Gain: gain, BinX: bin, BinY: bin);
+        // FailFast: the next guide frame is the retry. A lost frame costs one
+        // frame instead of a close/reopen and a second exposure.
+        var opts = new CaptureOptions(Gain: gain, BinX: bin, BinY: bin, FailFast: true);
         // Bound the capture to a guide-sized budget. CaptureAsync honours the
         // token (it registers cancellation on its BLOB TCS), so a linked CTS
         // that fires our deadline unblocks the await without waiting on the

@@ -326,6 +326,23 @@ public sealed class AsiSdkCamera : ICamera {
     /// <summary>Close/reopen recoveries performed on still captures.</summary>
     public int StillReopens { get; private set; }
 
+    // Still captures that failed in a row, cancellations not counted.
+    private int _stillFailStreak;
+
+    /// <summary>Consecutive failed captures a FailFast caller gets back as
+    /// they are before the next failure goes through the reopen. An
+    /// ASI120MM Mini (no frame buffer) on a USB2 link shared with the board's
+    /// Wi-Fi lost one guide frame per light, when the stack went to the
+    /// tablet; the reopen and second exposure turned each lost frame into
+    /// about 10 s without guiding (FRA400, 2026-11-18).</summary>
+    internal const int FastFailsBeforeReopen = 2;
+
+    /// <summary>Whether a failed exposure goes through the reopen and a retry.
+    /// <paramref name="failStreak"/> counts the captures that failed before
+    /// this one.</summary>
+    internal static bool ReopensOnFailure(bool failFast, int failStreak)
+        => !failFast || failStreak >= FastFailsBeforeReopen;
+
     /// <summary>STREAMSTALL: the same USB posture indi_asi_ccd uses and that
     /// streamed all night on the same board: low bandwidth, no high-speed
     /// (10-bit) mode. Left at the SDK default, a full-frame RAW16 stream on
@@ -561,7 +578,12 @@ public sealed class AsiSdkCamera : ICamera {
             // operator do it. When the reopen does not help either, the message
             // says so, which is the part that points at the camera's power
             // instead of at Polaris.
+            // A FailFast caller (the guider) gets its first failures back
+            // without the reopen: its next frame is the retry.
+            bool reopens = ReopensOnFailure(opts?.FailFast == true, _stillFailStreak);
+            try {
             for (int attempt = 1; ; attempt++) {
+              long started = Environment.TickCount64;
               try {
                 // Inside the loop: the finally below leaves the state Idle, so a
                 // retry that did not set it again would expose while reporting
@@ -587,7 +609,8 @@ public sealed class AsiSdkCamera : ICamera {
                     lock (_sdk) Check(ASIGetExpStatus(_cameraId, out st), "ASIGetExpStatus");
                     if (st == ASI_EXPOSURE_STATUS.ASI_EXP_SUCCESS) break;
                     if (st == ASI_EXPOSURE_STATUS.ASI_EXP_FAILED)
-                        throw new InvalidOperationException(ExposureFailureMessage(w, h, attempt));
+                        throw new InvalidOperationException(ExposureFailureMessage(w, h, attempt,
+                            elapsedMs: Environment.TickCount64 - started, willReopen: reopens));
                     if (Environment.TickCount64 > deadline)
                         throw new TimeoutException("ASI exposure timed out.");
                     // Poll coarse while integrating, fine once it should be done.
@@ -599,13 +622,15 @@ public sealed class AsiSdkCamera : ICamera {
                 // arrived, reported as a success. Throwing sends it through the
                 // reopen below like any other failed exposure.
                 if (IsEmptyFrame(bytes))
-                    throw new InvalidOperationException(ExposureFailureMessage(w, h, attempt, emptyFrame: true));
+                    throw new InvalidOperationException(ExposureFailureMessage(w, h, attempt, emptyFrame: true,
+                        elapsedMs: Environment.TickCount64 - started, willReopen: reopens));
                 } finally {
                     lock (_sdk) { try { ASIStopExposure(_cameraId); } catch { } }
                     State = CameraStates.Idle;
                 }
+                _stillFailStreak = 0;
                 return WrapFrame(bytes, w, h);
-              } catch (Exception ex) when (attempt < StillAttempts && IsRecoverable(ex)) {
+              } catch (Exception ex) when (reopens && attempt < StillAttempts && IsRecoverable(ex)) {
                 StillReopens++;
                 bool reopened = ReopenHandle(forStream: false);
                 if (!reopened) {
@@ -628,6 +653,10 @@ public sealed class AsiSdkCamera : ICamera {
                     + "reconnect the camera.", ex);
               }
             }
+            } catch (Exception ex) when (ex is not OperationCanceledException) {
+                _stillFailStreak++;
+                throw;
+            }
         }
     }, ct);
 
@@ -647,13 +676,23 @@ public sealed class AsiSdkCamera : ICamera {
     /// sent a field session down the wrong path twice: it names neither the
     /// geometry, nor the USB bandwidth in force, nor whether a reopen was
     /// already tried.</summary>
-    private string ExposureFailureMessage(int w, int h, int attempt, bool emptyFrame = false) {
+    private string ExposureFailureMessage(int w, int h, int attempt, bool emptyFrame = false,
+                                          long elapsedMs = -1, bool willReopen = true) {
         int bandwidth = _controls.Contains((int)ASI_CONTROL_TYPE.ASI_BANDWIDTHOVERLOAD)
             ? (int)ReadControl(ASI_CONTROL_TYPE.ASI_BANDWIDTHOVERLOAD) : -1;
         var sb = new StringBuilder(emptyFrame ? "ASI frame came back empty, every pixel 0" : "ASI exposure failed");
         if (attempt > 1) sb.Append(" again after reopening the camera");
         sb.Append($" ({DeviceName}: {w}x{h} bin {_bin}, {_imgType}, {_exposureSec:0.###}s, gain {_gain}");
         if (bandwidth >= 0) sb.Append($", USB bandwidth {bandwidth}");
+        if (elapsedMs >= 0) sb.Append($", failed after {elapsedMs / 1000.0:0.0}s");
+        if (!willReopen) {
+            // Handed straight back to a caller that retries with its next
+            // frame: one lost frame is not yet a stuck camera.
+            sb.Append("). One lost frame usually means the USB link was busy (a shared hub, "
+                + "or the board's Wi-Fi on the same bus); the next frame retries, and the camera "
+                + $"is reopened after {FastFailsBeforeReopen + 1} failures in a row.");
+            return sb.ToString();
+        }
         sb.Append(emptyFrame
             ? "). The exposure finished but its data never crossed the USB link, and the host "
               + "usually resets the camera each time. Try another cable or another USB port; "
