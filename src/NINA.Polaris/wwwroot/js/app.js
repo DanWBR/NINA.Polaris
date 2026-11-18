@@ -5568,6 +5568,11 @@ function ninaApp() {
                     if (document.visibilityState === 'visible') {
                         this._lastStackFrameShown = 0;
                         this._lastImageFrameAt = 0;
+                        // The host turns the end events off at noon and on a
+                        // restart: a page left open since last night would
+                        // otherwise write yesterday's set back on its next click.
+                        this.loadEndActions && this.loadEndActions();
+                        this.loadLiveStackEndActions && this.loadLiveStackEndActions();
                     }
                     // Mobile SKY hard-suspend also covers the whole app
                     // going to background while the SKY tab is open,
@@ -12529,8 +12534,8 @@ function ninaApp() {
         },
 
         // Re-read the LIVE end events from the rig. The host turns them off
-        // when a session's end events run and on Reset; a stale copy here
-        // would put them back on the next checkbox click.
+        // when a session's end events run; a stale copy here would put them
+        // back on the next checkbox click.
         async loadLiveStackEndActions() {
             try {
                 const e = await this.apiGet('/api/livestack/end-actions');
@@ -32534,8 +32539,6 @@ function ninaApp() {
             } catch (e) {
                 this.toast('Live stack reset failed', 'error');
             }
-            // The reset turned the end events off on the host.
-            await this.loadLiveStackEndActions();
         },
 
         // --- LSTR-5: live-stack triggers ---

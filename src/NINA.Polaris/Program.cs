@@ -308,6 +308,7 @@ builder.Services.AddHostedService<RigSensorMemoryService>();
 // LIVE end actions: run the rig's end actions when the stack reaches its
 // duration limit or its target SNR.
 builder.Services.AddHostedService<LiveStackEndService>();
+builder.Services.AddHostedService<EndEventsResetService>();
 // REFSUG-1: trend-based refocus suggestion. Listens to the same
 // FrameIntegrated event as LSTR-3 but only when RefocusEnabled is
 // OFF, covers manual-focuser users who cannot be auto-fired.

@@ -161,4 +161,55 @@ public class EndEventsClearTests {
         Assert.That(back.SaveStack, Is.True);
         Assert.That(back.ToTeardown().Any, Is.False);
     }
+
+    /// <summary>The LIVE Reset restarts the stack inside the session, so the
+    /// session's end events stay as they are.</summary>
+    [Test]
+    public void Live_Reset_LeavesTheEndEvents() {
+        var here = Path.GetDirectoryName(Here())!;
+        var src = File.ReadAllText(Path.Combine(here, "..", "..", "src", "NINA.Polaris", "Endpoints", "LiveStackEndpoints.cs"));
+        var at = src.IndexOf("group.MapPost(\"/reset\"", StringComparison.Ordinal);
+        Assert.That(at, Is.GreaterThan(0));
+        var body = src.Substring(at, src.IndexOf("});", at, StringComparison.Ordinal) - at);
+        Assert.That(body, Does.Not.Contain("ClearEndEvents"));
+    }
+
+    private static string Here([System.Runtime.CompilerServices.CallerFilePath] string p = "") => p;
+
+    [Test]
+    public void NightOf_TurnsAtNoon() {
+        var evening = new DateTime(2026, 11, 17, 21, 0, 0);
+        var lateNight = new DateTime(2026, 11, 18, 3, 0, 0);
+        var morning = new DateTime(2026, 11, 18, 11, 59, 0);
+        var afternoon = new DateTime(2026, 11, 18, 12, 0, 0);
+        Assert.That(EndEventsResetService.NightOf(lateNight), Is.EqualTo(EndEventsResetService.NightOf(evening)));
+        Assert.That(EndEventsResetService.NightOf(morning), Is.EqualTo(EndEventsResetService.NightOf(evening)));
+        Assert.That(EndEventsResetService.NightOf(afternoon), Is.Not.EqualTo(EndEventsResetService.NightOf(evening)));
+    }
+
+    /// <summary>A restart, or a new night, clears every rig, not only the
+    /// active one, and the engine's in-memory copy with them.</summary>
+    [Test]
+    public void ClearAll_ClearsEveryRigAndTheEngine() {
+        var profile = NewProfile();
+        var active = profile.ActiveEquipmentProfile;
+        var other = profile.CreateEquipmentProfile("Second rig");
+        foreach (var id in new[] { active.Id, other.Id })
+            profile.UpdateEquipmentProfile(id, r => {
+                r.AutorunEndActions = AllOn();
+                r.LiveStackEndActions = new LiveStackEndActions { SaveStack = true, ParkMount = true, ShutdownHost = true };
+            });
+        var engine = MakeEngine(profile);
+        Assert.That(engine.EndActions.HasEndEvents, Is.True, "the engine loaded the active rig's set");
+
+        Assert.That(EndEventsResetService.ClearAll(profile, engine), Is.EqualTo(2));
+
+        AssertEndEventsOff(engine.EndActions);
+        var back = NewProfile();
+        foreach (var rig in back.ListEquipmentProfiles()) {
+            AssertEndEventsOff(rig.AutorunEndActions!);
+            Assert.That(rig.LiveStackEndActions.ToTeardown().Any, Is.False, rig.Name);
+            Assert.That(rig.LiveStackEndActions.SaveStack, Is.True, rig.Name);
+        }
+    }
 }
