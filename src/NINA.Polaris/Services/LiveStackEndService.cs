@@ -138,8 +138,9 @@ public sealed class LiveStackEndService : BackgroundService {
     }
 
     /// <summary>Turn the active rig's LIVE end events off, keeping Save stack.
-    /// Called when a session's end events run and when the stack is reset, so
-    /// the next session does not inherit them.</summary>
+    /// Called when a session's end events run, so the next session does not
+    /// inherit them. A Reset only restarts the stack within the session and
+    /// leaves them alone.</summary>
     internal static void ClearEndEvents(ProfileService profiles) {
         var rig = profiles.ActiveEquipmentProfile;
         if (rig?.LiveStackEndActions == null || !rig.LiveStackEndActions.ToTeardown().Any) return;
