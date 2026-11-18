@@ -250,7 +250,11 @@ public record VideoStreamOptions(
 
 /// <summary>Optional per-exposure overrides. Nulls mean "use the
 /// camera's current property value". Set the fields the caller cares
-/// about before capture.</summary>
+/// about before capture.
+/// <c>FailFast</c>: the caller takes another frame right away (the guider),
+/// so a backend that can recover a failed exposure in place may hand the
+/// failure back instead, and keep its heavier recovery for failures that
+/// repeat.</summary>
 public record CaptureOptions(
     int? Gain = null,
     int? Offset = null,
@@ -259,7 +263,8 @@ public record CaptureOptions(
     int? BinY = null,
     string? ImageType = null,
     string? Filter = null,
-    string? TargetName = null);
+    string? TargetName = null,
+    bool FailFast = false);
 
 /// <summary>One native-SDK camera control surfaced to the dynamic config panel.
 /// <c>Id</c> is a stable identifier (the SDK control-type / config name) used to
