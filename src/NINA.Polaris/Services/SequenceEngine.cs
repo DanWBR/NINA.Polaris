@@ -214,6 +214,14 @@ public class SequenceEngine {
         }
     }
 
+    /// <summary>Turn the end events off (see <see cref="SequenceEndActions.WithoutEndEvents"/>)
+    /// and save. Run when they fire, and on Reset and Clear.</summary>
+    public void ClearEndEvents() {
+        if (EndActions == null || !EndActions.HasEndEvents) return;
+        EndActions = EndActions.WithoutEndEvents();
+        SaveSchedule();
+    }
+
     /// <summary>Persist the current schedule (items + dither + end-actions) to the
     /// ACTIVE rig so it survives a host restart and stays tied to that rig.
     /// Best-effort; a failure to save must never break editing the sequence.</summary>
@@ -1026,6 +1034,10 @@ public class SequenceEngine {
     private async Task RunEndActionsAsync(bool triggeredByStop) {
         var ea = EndActions;
         if (ea == null) return;
+        // The end events belong to the run that just ended: turned off and
+        // saved before they run, so the next run starts without them and a
+        // power-off below cannot leave them set. `ea` keeps this run's copy.
+        ClearEndEvents();
         if (!ea.ParkMount && !ea.HomeMount && !ea.StopTracking && !ea.WarmCamera && !ea.DisconnectGuider
             && !ea.ShutdownHost) return;
 

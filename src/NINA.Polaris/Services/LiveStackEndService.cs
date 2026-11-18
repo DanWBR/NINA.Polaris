@@ -27,6 +27,10 @@ public class LiveStackEndActions {
     public bool WarmCamera { get; set; }
     public bool ShutdownHost { get; set; }
 
+    /// <summary>A copy with the end events off. Saving the stack stays as it
+    /// is: it is what keeps a stack held only in RAM, not an end event.</summary>
+    public LiveStackEndActions WithoutEndEvents() => new() { SaveStack = SaveStack };
+
     public RigTeardownOptions ToTeardown() => new() {
         StopCapture = StopCapture, StopGuiding = StopGuiding,
         ParkMount = ParkMount, HomeMount = HomeMount, StopTracking = StopTracking,
@@ -133,9 +137,23 @@ public sealed class LiveStackEndService : BackgroundService {
         });
     }
 
+    /// <summary>Turn the active rig's LIVE end events off, keeping Save stack.
+    /// Called when a session's end events run and when the stack is reset, so
+    /// the next session does not inherit them.</summary>
+    internal static void ClearEndEvents(ProfileService profiles) {
+        var rig = profiles.ActiveEquipmentProfile;
+        if (rig?.LiveStackEndActions == null || !rig.LiveStackEndActions.ToTeardown().Any) return;
+        profiles.UpdateEquipmentProfile(rig.Id, r => r.LiveStackEndActions = r.LiveStackEndActions.WithoutEndEvents());
+    }
+
     private async Task RunAsync(LiveStackEndActions actions, string why) {
         _logger.LogInformation("Live stack session ended: {Why}; running the end actions", why);
         var teardown = actions.ToTeardown();
+        // The end events belong to the session that just ended. Saved off
+        // before they run, so a power-off below cannot leave them set for the
+        // next session.
+        try { ClearEndEvents(_profiles); }
+        catch (Exception ex) { _logger.LogWarning(ex, "Could not clear the LIVE end events"); }
         // Stop first so the saved master and the rig moves see no new frames.
         if (teardown.NeedsCaptureStopped && _capture.IsRunning) _capture.Stop();
 

@@ -69,6 +69,7 @@ public static class SequenceEndpoints {
                 return Results.Conflict(new { error = "Cannot reset while running" });
 
             engine.ResetProgress();
+            engine.ClearEndEvents();
             return Results.Ok(new {
                 message = "Progress reset",
                 itemCount = engine.Items.Count,

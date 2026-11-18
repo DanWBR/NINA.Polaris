@@ -2120,7 +2120,8 @@
                             <p class="hint" style="margin:0 0 6px 0; font-size:11px">
                                 Runs once, when the stack reaches its time limit (Stop at, above) or its
                                 target SNR stops the capture. Only for a stack fed by LIVE: Autorun and
-                                Plan have their own end actions.
+                                Plan have their own end actions. Once they run, and on Reset, they turn
+                                off, so the next session starts without them (Save stack stays).
                             </p>
                             <div class="livestack-triggers-row">
                                 <label class="checkbox-label">
@@ -13354,6 +13355,8 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                         <p class="seq-dither-hint text-muted">
                             Park takes the place of home and stop tracking. End events always run on natural completion;
                             tick the box above to also run them when you press Stop.
+                            <br>
+                            Once they run, and on Reset or Clear, the end events turn off, so the next run starts without them.
                             <br>
                             Power off runs last, and only when the run completes; a Stop or a failure leaves the host on.
                             <br>
@@ -26990,7 +26993,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261117-planetmoons"></script>
+    <script src="/js/app.js?v=20261117-endevents"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
