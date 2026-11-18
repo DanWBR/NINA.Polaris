@@ -215,6 +215,118 @@ public class IndiDriverWatchdogService : IHostedService {
         });
     }
 
+    // Devices already told that their driver is shared and was not restarted,
+    // so the retries do not repeat the message every attempt.
+    private readonly ConcurrentDictionary<string, byte> _toldSharedDriver = new();
+
+    /// <summary>
+    /// Brings back an INDI camera that was unplugged and is on the USB bus
+    /// again. Called by <see cref="CameraLinkRecoveryService"/> only after the
+    /// device is back in sysfs.
+    ///
+    /// <para>First a disconnect and a connect, so the driver closes its dead
+    /// handle and opens the camera again. A driver that found its cameras
+    /// only when it started cannot open a replugged one that way; it is
+    /// restarted and the camera reconnected, unless another connected device
+    /// runs on the same driver (indi_asi_ccd serves every ZWO camera, and a
+    /// restart would cut the main camera's exposure to bring the guide
+    /// camera back). Then the operator is told to restart it when that is
+    /// convenient.</para>
+    /// </summary>
+    public async Task<bool> RecoverUnpluggedCameraAsync(NINA.Image.Interfaces.ICamera cam, CancellationToken ct) {
+        var device = cam.DeviceName;
+        // A camera just plugged in is still enumerating (and some load their
+        // firmware); a connect sent at once tends to fail.
+        await Task.Delay(TimeSpan.FromSeconds(2), ct);
+
+        try { await _indi.DisconnectDeviceAsync(device, ct); } catch { /* it may be off already */ }
+        // A connect sent while the switch still reads CONNECT is skipped as
+        // redundant, and the dead handle would be taken for a working one.
+        var off = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (DateTime.UtcNow < off && _indi.GetSwitch(device, "CONNECTION", "CONNECT"))
+            await Task.Delay(250, ct);
+        await Task.Delay(TimeSpan.FromSeconds(1), ct);
+        try {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(30));
+            await cam.ConnectAsync(cts.Token);
+        } catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception ex) {
+            _logger.LogInformation(ex, "INDI '{Device}': reconnect after the replug failed", device);
+        }
+        if (await WaitConnectedAsync(device, TimeSpan.FromSeconds(10), ct)) {
+            _toldSharedDriver.TryRemove(device, out _);
+            _logger.LogInformation("INDI '{Device}': back after the replug (reconnected)", device);
+            Record(device, null, "replug-reconnected");
+            return true;
+        }
+
+        if (!_indiWeb.Running) return false;
+        var label = await ResolveDriverLabelAsync(device);
+        if (string.IsNullOrWhiteSpace(label)) return false;
+        var others = OtherConnectedDevicesOnDriver(device);
+        if (others.Count > 0) {
+            if (_toldSharedDriver.TryAdd(device, 0)) {
+                var msg = $"{device} is plugged in again, but its INDI driver '{label}' also runs "
+                        + $"{string.Join(", ", others)}, so Polaris did not restart it. Restart '{label}' "
+                        + "in the INDI tab when that is not capturing.";
+                _logger.LogWarning("{Message}", msg);
+                _notify.Push("warn", msg, 0);
+                Record(device, label, "replug-shared-driver");
+            }
+            return false;
+        }
+
+        _logger.LogWarning("INDI '{Device}': reconnect refused after the replug; restarting '{Label}'",
+            device, label);
+        CaptureCoolerState(device);
+        if (!await _indiWeb.RestartDriverAsync(label)) {
+            Record(device, label, "replug-restart-failed");
+            return false;
+        }
+        if (!await TryReconnectAfterRestartAsync(device, label)) {
+            Record(device, label, "replug-restarted-reconnect-failed");
+            return false;
+        }
+        // The camera adapter still holds the removal until its own connect,
+        // which also re-enables BLOBs on the fresh driver.
+        try { await cam.ConnectAsync(ct); } catch { /* the switch is what counts */ }
+        _ = Task.Run(async () => {
+            await Task.Delay(TimeSpan.FromSeconds(4));
+            RestoreCoolerAfterReconnect(device);
+        });
+        _toldSharedDriver.TryRemove(device, out _);
+        Record(device, label, "replug-restarted+reconnected");
+        return cam.IsConnected;
+    }
+
+    private async Task<bool> WaitConnectedAsync(string device, TimeSpan timeout, CancellationToken ct) {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline) {
+            if (_indi.GetSwitch(device, "CONNECTION", "CONNECT")) return true;
+            await Task.Delay(500, ct);
+        }
+        return false;
+    }
+
+    /// <summary>The other devices the same driver process serves that are
+    /// connected now, matched by DRIVER_INFO.DRIVER_EXEC.</summary>
+    private List<string> OtherConnectedDevicesOnDriver(string device) {
+        var exec = DriverExec(device);
+        if (string.IsNullOrWhiteSpace(exec)) return new List<string>();
+        return _indi.Devices.Keys
+            .Where(d => d != device && string.Equals(DriverExec(d), exec, StringComparison.OrdinalIgnoreCase)
+                        && _indi.GetSwitch(d, "CONNECTION", "CONNECT"))
+            .ToList();
+    }
+
+    private string? DriverExec(string device) {
+        try {
+            return _indi.GetProperty(device, "DRIVER_INFO") is IndiTextProperty di
+                   && di.Values.TryGetValue("DRIVER_EXEC", out var exec) ? exec : null;
+        } catch { return null; }
+    }
+
     public void SetEnabled(bool enabled) => Enabled = enabled;
 
     /// <summary>Snapshot for the RIGS UI / status endpoint.</summary>

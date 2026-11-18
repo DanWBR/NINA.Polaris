@@ -595,6 +595,13 @@ public sealed class PlayerOneSdkCamera : ICamera {
     /// unambiguous codes count: a timeout is a bad moment, not a missing
     /// camera.
     /// </summary>
+    public void MarkRemoved(string reason) {
+        if (!_connected) return;
+        _connected = false;
+        _streaming = false;
+        _disconnectReason = reason;
+    }
+
     private void NoteSdkResult(POAErrors rc) {
         if (rc != POAErrors.POA_ERROR_DEVICE_NOT_FOUND
             && rc != POAErrors.POA_ERROR_INVALID_ID) return;

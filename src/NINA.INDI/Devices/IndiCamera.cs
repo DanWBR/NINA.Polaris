@@ -82,8 +82,20 @@ public class IndiCamera : ICamera, IDisposable {
     /// tick. Reading the actual CONNECTION switch fixes that.
     /// </summary>
     public bool IsConnected
-        => _client.IsConnected
+        => _removedReason == null
+           && _client.IsConnected
            && _client.GetSwitch(DeviceName, "CONNECTION", "CONNECT");
+
+    // Set when the camera's USB device left the bus while the driver went on
+    // reporting CONNECTION=On, which is what indi_asi_ccd does: it asks the
+    // same ZWO SDK that keeps answering for an unplugged camera. Cleared by
+    // the next connect or disconnect.
+    private volatile string? _removedReason;
+    public string? DisconnectReason => _removedReason;
+
+    public void MarkRemoved(string reason) {
+        if (_removedReason == null && IsConnected) _removedReason = reason;
+    }
 
     public CameraStates State {
         get {
@@ -910,10 +922,13 @@ public class IndiCamera : ICamera, IDisposable {
             try { await Task.Delay(100, ct); } catch { break; }
         }
         try { await EnsureClientUploadAsync(ct); } catch { /* best effort */ }
+        _removedReason = null;
     }
 
-    public Task DisconnectAsync(CancellationToken ct = default)
-        => _client.DisconnectDeviceAsync(DeviceName, ct);
+    public Task DisconnectAsync(CancellationToken ct = default) {
+        _removedReason = null;
+        return _client.DisconnectDeviceAsync(DeviceName, ct);
+    }
 
     /// <summary>True when <paramref name="prop"/> already holds every requested
     /// value, i.e. writing them again would be pure churn.

@@ -961,6 +961,14 @@ public sealed class AsiSdkCamera : ICamera {
             : "the SDK no longer knows this camera id, which is what a removed camera looks like";
     }
 
+    public void MarkRemoved(string reason) {
+        if (!_connected) return;
+        _connected = false;
+        _streaming = false;
+        _disconnectReason = reason;
+        State = CameraStates.NoState;
+    }
+
     /// <summary>The reopen after a failed exposure was refused: the camera
     /// stays disconnected until the operator reconnects it, instead of every
     /// following capture closing and reopening a handle that is not there.</summary>

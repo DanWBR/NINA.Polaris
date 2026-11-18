@@ -672,6 +672,13 @@ public sealed class SvbonySdkCamera : ICamera {
     /// Only the two unambiguous codes count: a timeout is a bad moment, not a
     /// missing camera.
     /// </summary>
+    public void MarkRemoved(string reason) {
+        if (!_connected) return;
+        _connected = false;
+        _streaming = false;
+        _disconnectReason = reason;
+    }
+
     private void NoteSdkResult(SVB_ERROR_CODE rc) {
         if (rc != SVB_ERROR_CODE.SVB_ERROR_CAMERA_REMOVED
             && rc != SVB_ERROR_CODE.SVB_ERROR_INVALID_ID) return;

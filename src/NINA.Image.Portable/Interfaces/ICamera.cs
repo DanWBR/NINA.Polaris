@@ -59,6 +59,18 @@ public interface ICamera {
     /// </summary>
     string? DisconnectReason => null;
 
+    /// <summary>
+    /// Something outside the SDK saw the camera leave the bus (on Linux, its
+    /// USB device vanished from sysfs): drop <see cref="IsConnected"/> and
+    /// set <see cref="DisconnectReason"/> as an SDK removal code would.
+    ///
+    /// <para>The vendor SDKs do not always say it themselves. An unplugged
+    /// ZWO camera went on answering control reads, so it stayed "connected"
+    /// until something tried to expose. A backend without a removal path
+    /// leaves the default, which does nothing.</para>
+    /// </summary>
+    void MarkRemoved(string reason) { }
+
     double Temperature { get; }
     bool CoolerOn { get; }
     double CoolerPower { get; }

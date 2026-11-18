@@ -673,6 +673,18 @@ temperature once a second, so the removal code arrives without any
 extra polling, on Windows and on Linux alike. ZWO, SVBony and
 Player One report it as a return code; ToupTek and Altair raise a
 disconnect event, which Polaris was registered for and used to ignore.
+
+The SDK does not always say it, though. An unplugged ZWO camera went on
+answering the temperature read as if it were still there. So on Linux
+Polaris also watches the camera's entry in the kernel's USB device list
+(`/sys/bus/usb/devices`, where the kernel lists every device plugged
+in). The entry disappears the moment the cable comes out, and comes
+back with a new device number when the camera is plugged in again.
+Polaris finds the entry by the model name the camera reports, because
+a ZWO mount, focuser and filter wheel use the same USB vendor number as
+the cameras. When two identical cameras are plugged in, it cannot tell
+which one is which, and that camera is left to the SDK alone.
+
 On any of them the reaction is the same:
 
 - the camera is marked disconnected, immediately, so everything that
@@ -684,11 +696,22 @@ On any of them the reaction is the same:
 A disconnect you asked for stays silent, because that is not news. The
 message only appears for a link nobody asked to drop.
 
-Two limits worth knowing. A camera driven through INDI is a different
-path: the driver stays loaded and usually keeps the device defined, so
-what you see depends on the driver rather than on Polaris, and the
-driver watchdog handles that case (@sec-rigs). And a DSLR over gphoto
-or the Canon SDK is not covered yet.
+A camera driven through INDI gets the same USB watch on Linux. That
+matters because the INDI driver stays loaded and usually goes on saying
+the camera is connected after the cable comes out (the ZWO driver asks
+the same SDK that does not notice). Polaris marks the camera
+disconnected the moment its USB entry disappears, and leaves the driver
+alone while the camera is off the bus. When the same model is plugged
+in again, Polaris disconnects and reconnects it in the driver, so the
+driver opens the camera afresh. If the driver refuses, Polaris restarts
+that driver and connects the camera again, putting the cooler back the
+way the driver watchdog does (@sec-rigs). There is one exception: one
+driver process can serve several cameras (the ZWO driver runs every ZWO
+camera), and restarting it would cut the other camera's exposure. Then
+Polaris does not restart it and tells you to do it from the INDI tab
+when the other camera is not capturing.
+
+A DSLR over gphoto or the Canon SDK is not covered yet.
 
 ## When a device vanishes: Reset USB {#sec-reset-usb}
 

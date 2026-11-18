@@ -743,6 +743,12 @@ public sealed class ToupTekSdkCamera : ICamera {
         _pullActive = false;
     }
 
+    public void MarkRemoved(string reason) {
+        if (!_connected) return;
+        _connected = false;
+        _disconnectReason = reason;
+    }
+
     private void OnEvent(Toupcam.eEVENT e) {
         // The SDK says it plainly on both operating systems, on its own
         // thread, the moment the device goes: this callback was already
