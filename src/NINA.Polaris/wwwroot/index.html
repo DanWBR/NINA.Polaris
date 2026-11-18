@@ -7909,6 +7909,26 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                           x-text="'Ramping → ' + (cooling?.main?.setpointC ?? 0).toFixed(1) + '°C'"></span>
                                 </div>
 
+                                <!-- Anti-dew heater on the sensor window, for the
+                                     cameras that report one (ZWO, ToupTek, Altair,
+                                     Player One, natively or through INDI). A heater
+                                     with levels comes back at its last level; the
+                                     camera controls panel sets the level. -->
+                                <div class="equip-inline-controls" x-show="!isDslrCamera && equipCameraInfo.antiDew" x-cloak>
+                                    <label class="equip-toggle"
+                                           :title="equipCameraInfo.antiDew?.on ? 'Turn the anti-dew heater OFF' : 'Turn the anti-dew heater ON'">
+                                        <input type="checkbox"
+                                               :checked="!!equipCameraInfo.antiDew?.on"
+                                               @change="setAntiDew('main', $event.target.checked)">
+                                        <span class="equip-toggle-track"></span>
+                                        <span class="equip-toggle-thumb"></span>
+                                    </label>
+                                    <span class="text-muted" style="font-size:11px">Anti-dew heater</span>
+                                    <span class="text-muted" style="font-size:11px"
+                                          x-show="antiDewLevelText(equipCameraInfo.antiDew)"
+                                          x-text="antiDewLevelText(equipCameraInfo.antiDew)"></span>
+                                </div>
+
                                 <!-- ISO dropdown, DSLR only. Standard ISO
                                      steps from 50 to 102400; vendor drivers
                                      pick the closest supported value. -->
@@ -8747,6 +8767,18 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                     <span>&deg;C</span>
                                 </label>
                                 <button class="btn btn-sm" @click="setAuxCooler(true, auxCoolerTarget)">Set</button>
+                            </div>
+                            <div class="equip-meta-row" x-show="auxCameraConnected && auxAntiDew" x-cloak>
+                                <label class="equip-toggle"
+                                       :title="auxAntiDew?.on ? 'Turn the aux anti-dew heater OFF' : 'Turn the aux anti-dew heater ON'">
+                                    <input type="checkbox" :checked="!!auxAntiDew?.on"
+                                           @change="setAntiDew('aux', $event.target.checked)">
+                                    <span class="equip-toggle-track"></span>
+                                    <span class="equip-toggle-thumb"></span>
+                                </label>
+                                <span class="text-muted" style="font-size:11px">Anti-dew heater</span>
+                                <span class="text-muted" style="font-size:11px"
+                                      x-show="antiDewLevelText(auxAntiDew)" x-text="antiDewLevelText(auxAntiDew)"></span>
                             </div>
                             <label style="margin-top:6px;display:flex;gap:8px;align-items:center;font-size:12px">
                                 <input type="checkbox" x-model="aux.enabled" @change="toggleAuxEnabled()">

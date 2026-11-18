@@ -1061,6 +1061,9 @@ function ninaApp() {
         horizonDragIdx: -1,         // point being dragged, -1 = none
         horizonSavedFlash: false,
         _skyInfoChart: null,
+        // Aux camera anti-dew heater state from the status (null = none).
+        auxAntiDew: null,
+        _antiDewPending: {},
         // Refreshes the open SKY card once a minute (see _skyInfoTick).
         _skyInfoTimer: null,
         _skyInfoTicks: 0,
@@ -8208,6 +8211,35 @@ function ninaApp() {
             catch (e) { this.toastFail('Aux ISO set failed', e, 'warn'); }
         },
         // Cooler on/off (+ optional target °C) for a cooled aux astro cam.
+        // ----- Anti-dew heater (main and aux camera cards) -----
+        // The switch holds the operator's choice for a few seconds, so the
+        // next 1 Hz status tick (which may still carry the old state) does not
+        // snap it back.
+        _antiDewShown(which, fromStatus) {
+            if (!fromStatus) return null;
+            const p = (this._antiDewPending || {})[which];
+            if (p && Date.now() < p.until && !!fromStatus.on !== p.on)
+                return { ...fromStatus, on: p.on };
+            return fromStatus;
+        },
+        antiDewLevelText(d) {
+            if (!d || !d.on || !(d.maxLevel > 1)) return '';
+            return d.maxLevel === 100 ? d.level + ' %' : 'level ' + d.level + ' of ' + d.maxLevel;
+        },
+        async setAntiDew(which, on) {
+            this._antiDewPending = { ...(this._antiDewPending || {}), [which]: { on: !!on, until: Date.now() + 5000 } };
+            if (which === 'aux') { if (this.auxAntiDew) this.auxAntiDew = { ...this.auxAntiDew, on: !!on }; }
+            else if (this.equipCameraInfo?.antiDew)
+                this.equipCameraInfo = { ...this.equipCameraInfo, antiDew: { ...this.equipCameraInfo.antiDew, on: !!on } };
+            try {
+                await this.apiPost(which === 'aux' ? '/api/aux/camera/anti-dew' : '/api/camera/anti-dew', { on: !!on });
+                this.toast('Anti-dew heater ' + (on ? 'on' : 'off'), 'ok');
+            } catch (e) {
+                this._antiDewPending[which] = null;
+                this.toastFail('Anti-dew heater failed', e, 'warn');
+            }
+        },
+
         async setAuxCooler(enabled, target) {
             this.auxCoolerOn = !!enabled;
             try {
@@ -51512,6 +51544,7 @@ function ninaApp() {
                     coolerOn: coolerOn,
                     supportsCooler: coolNow,
                     supportsIso: isoNow,
+                    antiDew: camConn ? this._antiDewShown('main', eq.camera.antiDew) : null,
                     binX: eq.camera.binX || 0,
                     binY: eq.camera.binY || 0,
                     bitDepth: eq.camera.bitDepth || 0,
@@ -51599,6 +51632,8 @@ function ninaApp() {
                 this.auxSupportsCooler = !!eq.auxCamera.supportsCooler;
             }
             this.auxCoolerOn = !!(eq.auxCamera && eq.auxCamera.coolerOn);
+            this.auxAntiDew = eq.auxCamera && eq.auxCamera.connected
+                ? this._antiDewShown('aux', eq.auxCamera.antiDew) : null;
             if (eq.auxCamera && eq.auxCamera.temperature !== null
                 && eq.auxCamera.temperature !== undefined) {
                 this.auxTemp = eq.auxCamera.temperature;

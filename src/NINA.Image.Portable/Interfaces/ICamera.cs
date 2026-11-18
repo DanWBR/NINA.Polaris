@@ -189,6 +189,17 @@ public interface ICamera {
     /// unsupported by this backend.</summary>
     bool SetControl(string id, double value, bool auto) => false;
 
+    // ----- Anti-dew heater (optional) -----
+    /// <summary>The heater some cameras carry on the sensor window, null when
+    /// this camera has none or the backend cannot tell. Read live.</summary>
+    CameraAntiDew? AntiDew => null;
+
+    /// <summary>Switch the anti-dew heater on or off. A heater with levels
+    /// goes back to the last level it ran at (or its default) when switched
+    /// on; the camera's controls panel still sets the level itself. Returns
+    /// false when the camera has no heater.</summary>
+    Task<bool> SetAntiDewAsync(bool on, CancellationToken ct = default) => Task.FromResult(false);
+
     // ----- Native video streaming (optional, gated by Capabilities.SupportsVideoStream) -----
     // Backends without driver-level streaming leave the defaults and
     // CameraStreamService falls back to a server-side capture loop.
@@ -268,6 +279,11 @@ public record CameraControl(
     bool AutoSupported,
     string ValueType,
     IReadOnlyList<string>? Options = null);
+
+/// <summary>An anti-dew heater's state. <c>MaxLevel</c> is 1 for an on/off
+/// heater; otherwise the top step (ToupTek/Altair) or 100 for a power
+/// percentage (PlayerOne), and <c>Level</c> is where it is now.</summary>
+public record CameraAntiDew(bool On, int Level, int MaxLevel);
 
 /// <summary>Optional-feature flags. Used by the UI to decide which
 /// controls to render for the currently-selected camera.</summary>

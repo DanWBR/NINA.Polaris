@@ -156,6 +156,7 @@ public sealed class PlayerOneSdkCamera : ICamera {
         _bayer = _isColor ? MapBayer(info.bayerPattern) : BayerPatternEnum.None;
         _pixelSize = info.pixelSize;
         _supportsCooler = info.isHasCooler != 0;
+        _heaterProbed = false;
 
         // Gain range from the config attributes.
         var attr = new POAConfigAttributes();
@@ -215,6 +216,48 @@ public sealed class PlayerOneSdkCamera : ICamera {
             lock (_sdk)
                 POASetConfig(_cameraId, POAConfig.POA_TARGET_TEMP, POAConfigValue.Int((int)Math.Round(temperature)), POABool.POA_FALSE);
         return Task.CompletedTask;
+    }
+
+    // Lens (window) heater, POA_HEATER_POWER 0..100 % ("LensHeaterPowerPerc").
+    // Probed once per connection: the status loop reads it every second.
+    private bool _heaterProbed, _heaterOk;
+    private int _heaterDefault, _heaterLast;
+
+    private bool HeaterAvailable() {
+        if (_heaterProbed) return _heaterOk;
+        _heaterProbed = true;
+        try {
+            lock (_sdk) {
+                var attr = new POAConfigAttributes();
+                _heaterOk = CameraConfigs().Contains(POAConfig.POA_HEATER_POWER)
+                    && POAGetConfigAttributesByConfigID(_cameraId, POAConfig.POA_HEATER_POWER, ref attr) == POAErrors.POA_OK
+                    && attr.isWritable != 0;
+                _heaterDefault = _heaterOk ? attr.defaultValue.intValue : 0;
+            }
+        } catch { _heaterOk = false; }
+        return _heaterOk;
+    }
+
+    /// <summary>The power the on switch uses: the last one seen above zero,
+    /// else the camera's default, else half power.</summary>
+    internal static int HeaterOnPower(int last, int def) =>
+        last is > 0 and <= 100 ? last : def is > 0 and <= 100 ? def : 50;
+
+    public CameraAntiDew? AntiDew {
+        get {
+            if (!_connected || !HeaterAvailable()) return null;
+            int p = ReadInt(POAConfig.POA_HEATER_POWER);
+            if (p > 0) _heaterLast = p;
+            return new CameraAntiDew(p > 0, p, 100);
+        }
+    }
+
+    public Task<bool> SetAntiDewAsync(bool on, CancellationToken ct = default) {
+        if (!_connected || !HeaterAvailable()) return Task.FromResult(false);
+        int p = on ? HeaterOnPower(_heaterLast, _heaterDefault) : 0;
+        POAErrors rc;
+        lock (_sdk) rc = POASetConfig(_cameraId, POAConfig.POA_HEATER_POWER, POAConfigValue.Int(p), POABool.POA_FALSE);
+        return Task.FromResult(rc == POAErrors.POA_OK);
     }
 
     public Task SetCoolerAsync(bool on, CancellationToken ct = default) {
@@ -754,6 +797,7 @@ public sealed class PlayerOneSdkCamera : ICamera {
             case POAConfig.POA_EXPOSURE when !auto && v > 0: _exposureSec = v / 1_000_000.0; break;
             case POAConfig.POA_OFFSET: _offset = v; break;
             case POAConfig.POA_MONO_BIN: _monoBin = _isColor && v != 0; break;
+            case POAConfig.POA_HEATER_POWER when v > 0: _heaterLast = v; break;
         }
     }
 

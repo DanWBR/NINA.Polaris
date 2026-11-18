@@ -524,6 +524,11 @@ public static class CameraEndpoints {
             }
         });
 
+        // Anti-dew heater on/off. A heater with levels comes back on at the
+        // last level it ran at; the camera's controls panel sets the level.
+        group.MapPost("/anti-dew", async (EquipmentManager equip, AntiDewRequest req) =>
+            await SetAntiDewAsync(equip.Camera, req.On));
+
         group.MapPost("/select/{deviceName}", (EquipmentManager equip, string deviceName, string? driver) => {
             // Default driver is "indi" so existing clients (which only
             // pass the device name) keep working untouched. DSLR / Alpaca
@@ -912,6 +917,19 @@ public static class CameraEndpoints {
     /// the rig's ramp. <c>RampDegPerMinute</c>=0 forces the old write-once
     /// behaviour. <c>WarmTargetC</c> is where a cooler-OFF ramps up to before the
     /// TEC is powered down.</summary>
+    public record AntiDewRequest(bool On);
+
+    /// <summary>Shared by the main and aux camera endpoints.</summary>
+    internal static async Task<IResult> SetAntiDewAsync(NINA.Image.Interfaces.ICamera? cam, bool on) {
+        if (cam == null || !cam.IsConnected)
+            return Results.BadRequest(new { error = "The camera is not connected" });
+        if (cam.AntiDew == null)
+            return Results.BadRequest(new { error = "This camera does not report an anti-dew heater" });
+        if (!await cam.SetAntiDewAsync(on))
+            return Results.Problem("The camera refused the anti-dew setting");
+        return Results.Ok(new { on, antiDew = cam.AntiDew });
+    }
+
     public record CoolerRequest(bool Enabled, double? TargetTemperature = null,
                                 double? RampDegPerMinute = null, double? WarmTargetC = null);
 
