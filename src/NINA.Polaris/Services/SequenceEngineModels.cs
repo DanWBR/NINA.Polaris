@@ -109,6 +109,17 @@ public class SequenceEndActions {
     /// ~10 s BGE pass, explicit performance > purity trade-off.
     /// </summary>
     public bool AutoGraXpert { get; set; }
+
+    /// <summary>A copy with the end events off: park, home, stop tracking, warm
+    /// camera, stop PHD2, power off and run-on-stop. The per-item auto-focus
+    /// and the per-frame GraXpert are run options, not end events, and stay.</summary>
+    public SequenceEndActions WithoutEndEvents() => new() {
+        AutoFocusEachItem = AutoFocusEachItem,
+        AutoGraXpert = AutoGraXpert,
+    };
+
+    public bool HasEndEvents =>
+        ParkMount || HomeMount || StopTracking || WarmCamera || DisconnectGuider || ShutdownHost || RunOnStop;
 }
 
 public class SequenceStatus {

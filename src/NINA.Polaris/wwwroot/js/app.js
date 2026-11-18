@@ -12528,6 +12528,24 @@ function ninaApp() {
                 || e.stopTracking || e.warmCamera || e.shutdownHost);
         },
 
+        // Re-read the LIVE end events from the rig. The host turns them off
+        // when a session's end events run and on Reset; a stale copy here
+        // would put them back on the next checkbox click.
+        async loadLiveStackEndActions() {
+            try {
+                const e = await this.apiGet('/api/livestack/end-actions');
+                if (!e) return;
+                this.liveStackEndActions = {
+                    saveStack: e.saveStack !== false, stopCapture: !!e.stopCapture,
+                    stopGuiding: !!e.stopGuiding, parkMount: !!e.parkMount,
+                    homeMount: !!e.homeMount, stopTracking: !!e.stopTracking,
+                    warmCamera: !!e.warmCamera, shutdownHost: !!e.shutdownHost
+                };
+                const rig = this.rigs.find(x => x.id === this.activeRigId);
+                if (rig) rig.liveStackEndActions = { ...this.liveStackEndActions };
+            } catch (_) { /* keep what is shown */ }
+        },
+
         async saveLiveStackEndActions() {
             try {
                 await this.apiPost('/api/livestack/end-actions', null, {
@@ -32516,6 +32534,8 @@ function ninaApp() {
             } catch (e) {
                 this.toast('Live stack reset failed', 'error');
             }
+            // The reset turned the end events off on the host.
+            await this.loadLiveStackEndActions();
         },
 
         // --- LSTR-5: live-stack triggers ---
@@ -47409,12 +47429,15 @@ function ninaApp() {
             // Pull the zeroed counters straight back rather than waiting for
             // the next poll, which only runs while a sequence is active.
             try { await this.pollSeqStatus(); } catch { /* non-fatal */ }
+            // The reset turned the end events off on the host.
+            await this.loadEndActions();
             this.toast('Autorun reset to the start', 'ok');
         },
 
         // Clear the whole AUTORUN schedule: removes every item after a
-        // confirm. Refuses while running. Keeps options (dither / MF /
-        // end events) untouched -- this only wipes the target list.
+        // confirm. Refuses while running. The end events go with it (a new
+        // schedule starts without them); dither, meridian flip, per-item
+        // auto-focus and GraXpert stay.
         async clearSequence() {
             if (this.seqState === 'running') {
                 this.toast('Cannot modify while running', 'warn');
@@ -47427,6 +47450,12 @@ function ninaApp() {
             if (!ok) return;
             this.sequence = [];
             this.syncSequenceToServer();
+            this.endActions = {
+                ...this.endActions,
+                parkMount: false, homeMount: false, stopTracking: false, warmCamera: false,
+                disconnectGuider: false, shutdownHost: false, runOnStop: false
+            };
+            this.saveEndActions();
             this.toast('Autorun cleared', 'ok');
         },
 
@@ -52129,6 +52158,11 @@ function ninaApp() {
             if (msg.broadcast) this.broadcastStatus = msg.broadcast;
 
             if (msg.liveStack) {
+                // A stack that stops may be a session whose end events just
+                // ran: the host turns them off, so read them back shortly after.
+                if (this.liveStackEnabled && !msg.liveStack.isRunning) {
+                    setTimeout(() => this.loadLiveStackEndActions(), 4000);
+                }
                 this.liveStackEnabled = msg.liveStack.isRunning;
                 this.liveStackFrames = msg.liveStack.frameCount;
                 // Whole payload kept around so the triggers panel can
@@ -52220,6 +52254,12 @@ function ninaApp() {
                 // animates, and pull the item list if we don't have it yet
                 // so the cards render. Covers the "reopened the browser, it
                 // kept running but the UI didn't adapt" case.
+                // A run that ended may have run its end events, which the
+                // host then turns off: read them back.
+                if ((oldState === 'running' || oldState === 'paused')
+                        && newState !== 'running' && newState !== 'paused') {
+                    this.loadEndActions();
+                }
                 if (oldState !== 'running' && oldState !== 'paused'
                         && (newState === 'running' || newState === 'paused')) {
                     this._startShutterTick();

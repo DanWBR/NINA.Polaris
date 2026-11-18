@@ -108,8 +108,12 @@ public static class LiveStackEndpoints {
 
         group.MapPost("/reset", (LiveStackingService stack,
                                  LiveStackTriggersService triggers,
-                                 RefocusSuggestionService refocusSuggest) => {
+                                 RefocusSuggestionService refocusSuggest,
+                                 ProfileService profiles) => {
             stack.Reset();
+            // A reset starts a new session: the end events set for the old one
+            // do not carry over.
+            LiveStackEndService.ClearEndEvents(profiles);
             // Trigger state (last-refocus snapshot, reference RA/Dec, etc.)
             // is meaningless after a stack reset, clear it too so the
             // next first frame re-establishes the reference.
