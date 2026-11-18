@@ -2161,4 +2161,24 @@
 .pm-step-done .pm-step-mark { color: var(--success); }
 .pm-step-failed { color: var(--danger); }
 .pm-result { position: relative; min-height: 200px; }
-.pm-result-img { display: block; max-width: 100%; max-height: 70vh; margin: 0 auto; background: #000; border-radius: 4px; }
+/* The result docks under the settings in every orientation: the composite is
+   wide (planet plus moons on a line), so it gets the pane's full width. This
+   undoes the side-by-side landscape layout of the other VIDEO sub-tabs. */
+@media (orientation: landscape) and (min-width: 761px) {
+    .video-process-pane.pm-pane { flex-direction: column; gap: 4px; overflow-y: auto; }
+    .pm-pane .video-process-form { flex: 0 0 auto; overflow: visible; }
+    .pm-pane .pm-result { flex: 1 0 auto; max-width: none; height: auto; margin-top: 10px; }
+}
+.pm-result-empty {
+    flex: 1 1 auto;
+    min-height: 200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 16px;
+    color: var(--text-muted);
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+}
+.pm-result-img { display: block; max-width: 100%; max-height: 60vh; margin: 0 auto; background: #000; border-radius: 4px; }
