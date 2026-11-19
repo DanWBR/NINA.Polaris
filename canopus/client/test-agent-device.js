@@ -75,6 +75,24 @@ function makeHarness(script) {
   await h3.agent.onMessage({ type: 'reject', planId: plan3.planId });
   assert(!h3.out.some(m => m.path === '/api/sky/slew-and-center'), 'reject: never slews');
 
+  // ask_user: the question goes out with its options, and the tapped option
+  // (or a typed answer) comes back to the model as the tool result.
+  CATALOG.tools.push({ name: 'ask_user', description: 'Ask the user to choose.', parameters: { type: 'object', properties: {} }, requiresApproval: false, local: 'question' });
+  for (const [answer, expected, label] of [
+      [{ choices: ['o2'] }, { answer: 'M42' }, 'tapped option'],
+      [{ choices: [], text: 'after midnight' }, { answer: 'after midnight', typed: true }, 'typed answer']]) {
+    const h4 = makeHarness([{ text: null, toolCalls: [{ id: '1', name: 'ask_user', arguments: { prompt: 'Which target?', options: ['M31', 'M42'] } }] }, { text: 'Fine.', toolCalls: [] }]);
+    const turn = h4.agent.onMessage({ type: 'user', text: 'point the scope' });
+    await new Promise(r => setTimeout(r, 0));
+    const q = h4.out.find(m => m.type === 'question');
+    assert(q && q.options.map(o => o.label).join() === 'M31,M42', 'ask_user (' + label + '): question with options');
+    await h4.agent.onMessage(Object.assign({ type: 'answer', questionId: q && q.questionId }, answer));
+    await turn;
+    const toolMsg = h4.agent.messages.find(m => m.role === 'tool');
+    assert(toolMsg && eq(JSON.parse(toolMsg.content), { ok: true, result: expected }), 'ask_user (' + label + '): answer reaches the model');
+    assert(h4.out[h4.out.length - 1].type === 'done', 'ask_user (' + label + '): turn ends with done');
+  }
+
   console.log(failures ? ('\n' + failures + ' FAILURE(S)') : '\nALL PASS');
   process.exit(failures ? 1 : 0);
 })();

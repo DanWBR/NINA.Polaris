@@ -69,6 +69,26 @@
   #bar { display: flex; gap: 8px; padding: calc(10px * var(--asst-pad, 1)); border-top: 1px solid #2b3644; position: relative; }
   #inp { flex: 1; padding: calc(8px * var(--asst-pad, 1)) 11px; border-radius: 10px; border: 1px solid #2b3644; background: #0b1017; color: #e6edf3; }
   .choices { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  /* Tappable answers and suggestions. 44 px is the smallest target a finger
+     hits reliably on a tablet. */
+  .choices button { min-height: 44px; padding: 8px 16px; border-radius: 22px; white-space: normal; }
+  .choices button.picked { opacity: 1; border-color: #1f6feb; background: #1f2b39; }
+  #chips { display: none; gap: 8px; overflow-x: auto; scrollbar-width: thin;
+           padding: calc(8px * var(--asst-pad, 1)) calc(10px * var(--asst-pad, 1)) 0; }
+  #chips.on { display: flex; }
+  /* On a touch screen the row scrolls with a swipe, so the bar only takes room. */
+  @media (pointer: coarse) {
+    #chips { scrollbar-width: none; }
+    #chips::-webkit-scrollbar { display: none; }
+  }
+  .chip { flex: none; min-height: 44px; padding: 8px 16px; border-radius: 22px; background: #16202c; white-space: nowrap; }
+  .chip.yesno { background: #1b2a3d; }
+  .chip.pinned { border-color: #1f6feb; }
+  /* A sent question, with the pin button that keeps it as a suggestion. */
+  .urow { align-self: flex-end; display: flex; align-items: center; gap: 4px; max-width: 92%; }
+  .urow .msg { max-width: none; }
+  .pin { border: none; background: none; padding: 6px; min-width: 36px; min-height: 36px; opacity: .35; font-size: 14px; line-height: 1; }
+  .pin.on { opacity: 1; }
 
   /* subscription gate */
   #gate { flex: 1; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 22px; text-align: center; }
@@ -105,6 +125,7 @@
 <body>
   <div id="gate"></div>
   <div id="log" style="display:none"></div>
+  <div id="chips"></div>
   <div id="bar" style="display:none">
     <button id="gearBtn" title="Settings">⚙</button>
     <div id="gearMenu" class="menu"></div>
@@ -142,7 +163,8 @@
   let price = 'US$4.99/mo';
   let trialDays = 0;
   let pollTimer = null;
-  let assistantTier = 'cloud';   // 'cloud' | 'sbc' | 'device' — for the gear-menu backend hint
+  let assistantTier = 'cloud';   // 'cloud' | 'sbc' | 'device', for the gear-menu backend hint
+  let vision = false;            // the active tool catalog can look at images
 
   // ---- i18n (English source string = key) ----
   const STRINGS = {
@@ -263,6 +285,67 @@
       '{n}-day free trial, then {price}.': '{n} Tage gratis, dann {price}.', 'Start free trial': 'Kostenlos testen', 'Analyzing the current frame…': 'Analysiere das aktuelle Bild…',
     },
   };
+  // Suggestion badges, question answers and pinned questions.
+  const CHIP_STRINGS = {
+    'pt-BR': {
+      'Or type your answer…': 'Ou digite sua resposta…', 'Pinned questions': 'Perguntas fixadas',
+      'Pin this question': 'Fixar esta pergunta', 'Unpin': 'Desafixar', 'Yes': 'Sim', 'No': 'Não',
+      'How is the session going?': 'Como está a sessão?', "What's good to image tonight?": 'O que vale fotografar hoje?',
+      'Did something go wrong?': 'Algo deu errado?', 'How is guiding?': 'Como está o guiding?',
+      'Start guiding': 'Inicie o guiding', 'Is my focus good?': 'Meu foco está bom?', 'Run autofocus': 'Faça o autofoco',
+      "Plan tonight's targets": 'Planeje os alvos de hoje', "What's the weather tonight?": 'Como está o tempo hoje à noite?',
+      'Does this image look good?': 'Esta imagem está boa?', 'Take a test frame': 'Tire um frame de teste',
+      'Stack the best subs from last night': 'Empilhe os melhores subs de ontem', 'How do I polar align?': 'Como faço o alinhamento polar?',
+      'Is all my gear connected?': 'Todo o equipamento está conectado?', 'How do I capture a planet?': 'Como capturo um planeta?',
+      'Close the roof': 'Feche o teto', 'Close the dome': 'Feche a cúpula', 'Make a plan with these': 'Monte um plano com esses',
+      'Start the plan': 'Inicie o plano', 'How do I fix it?': 'Como resolvo isso?', 'Show me where': 'Me mostre onde',
+      'Stack the keepers': 'Empilhe os escolhidos', 'Show me the result': 'Me mostre o resultado',
+    },
+    'es': {
+      'Or type your answer…': 'O escribe tu respuesta…', 'Pinned questions': 'Preguntas fijadas',
+      'Pin this question': 'Fijar esta pregunta', 'Unpin': 'Quitar', 'Yes': 'Sí', 'No': 'No',
+      'How is the session going?': '¿Cómo va la sesión?', "What's good to image tonight?": '¿Qué conviene fotografiar esta noche?',
+      'Did something go wrong?': '¿Algo salió mal?', 'How is guiding?': '¿Cómo va el guiado?',
+      'Start guiding': 'Inicia el guiado', 'Is my focus good?': '¿Está bien mi enfoque?', 'Run autofocus': 'Haz el autoenfoque',
+      "Plan tonight's targets": 'Planifica los objetivos de esta noche', "What's the weather tonight?": '¿Qué tiempo hará esta noche?',
+      'Does this image look good?': '¿Se ve bien esta imagen?', 'Take a test frame': 'Haz una toma de prueba',
+      'Stack the best subs from last night': 'Apila los mejores subs de anoche', 'How do I polar align?': '¿Cómo hago la alineación polar?',
+      'Is all my gear connected?': '¿Está conectado todo mi equipo?', 'How do I capture a planet?': '¿Cómo capturo un planeta?',
+      'Close the roof': 'Cierra el techo', 'Close the dome': 'Cierra la cúpula', 'Make a plan with these': 'Haz un plan con estos',
+      'Start the plan': 'Inicia el plan', 'How do I fix it?': '¿Cómo lo soluciono?', 'Show me where': 'Muéstrame dónde',
+      'Stack the keepers': 'Apila los elegidos', 'Show me the result': 'Muéstrame el resultado',
+    },
+    'fr': {
+      'Or type your answer…': 'Ou tapez votre réponse…', 'Pinned questions': 'Questions épinglées',
+      'Pin this question': 'Épingler cette question', 'Unpin': 'Désépingler', 'Yes': 'Oui', 'No': 'Non',
+      'How is the session going?': 'Comment se passe la session ?', "What's good to image tonight?": 'Que photographier ce soir ?',
+      'Did something go wrong?': 'Quelque chose a mal tourné ?', 'How is guiding?': 'Comment va le guidage ?',
+      'Start guiding': 'Lance le guidage', 'Is my focus good?': 'Ma mise au point est-elle bonne ?', 'Run autofocus': 'Lance l’autofocus',
+      "Plan tonight's targets": 'Planifie les cibles de ce soir', "What's the weather tonight?": 'Quel temps fera-t-il ce soir ?',
+      'Does this image look good?': 'Cette image est-elle bonne ?', 'Take a test frame': 'Prends une image test',
+      'Stack the best subs from last night': 'Empile les meilleures poses d’hier soir', 'How do I polar align?': 'Comment faire la mise en station ?',
+      'Is all my gear connected?': 'Tout mon matériel est-il connecté ?', 'How do I capture a planet?': 'Comment capturer une planète ?',
+      'Close the roof': 'Ferme le toit', 'Close the dome': 'Ferme la coupole', 'Make a plan with these': 'Fais un plan avec celles-ci',
+      'Start the plan': 'Lance le plan', 'How do I fix it?': 'Comment je corrige ça ?', 'Show me where': 'Montre-moi où',
+      'Stack the keepers': 'Empile les retenues', 'Show me the result': 'Montre-moi le résultat',
+    },
+    'de': {
+      'Or type your answer…': 'Oder tippe deine Antwort…', 'Pinned questions': 'Angeheftete Fragen',
+      'Pin this question': 'Diese Frage anheften', 'Unpin': 'Lösen', 'Yes': 'Ja', 'No': 'Nein',
+      'How is the session going?': 'Wie läuft die Session?', "What's good to image tonight?": 'Was lohnt sich heute Nacht?',
+      'Did something go wrong?': 'Ist etwas schiefgelaufen?', 'How is guiding?': 'Wie läuft das Guiding?',
+      'Start guiding': 'Starte das Guiding', 'Is my focus good?': 'Ist mein Fokus gut?', 'Run autofocus': 'Starte den Autofokus',
+      "Plan tonight's targets": 'Plane die Ziele für heute Nacht', "What's the weather tonight?": 'Wie wird das Wetter heute Nacht?',
+      'Does this image look good?': 'Sieht dieses Bild gut aus?', 'Take a test frame': 'Mach eine Testaufnahme',
+      'Stack the best subs from last night': 'Stacke die besten Subs von letzter Nacht', 'How do I polar align?': 'Wie mache ich das Polar-Alignment?',
+      'Is all my gear connected?': 'Ist meine ganze Ausrüstung verbunden?', 'How do I capture a planet?': 'Wie nehme ich einen Planeten auf?',
+      'Close the roof': 'Schließe das Dach', 'Close the dome': 'Schließe die Kuppel', 'Make a plan with these': 'Mach einen Plan mit diesen',
+      'Start the plan': 'Starte den Plan', 'How do I fix it?': 'Wie behebe ich das?', 'Show me where': 'Zeig mir, wo',
+      'Stack the keepers': 'Stacke die ausgewählten', 'Show me the result': 'Zeig mir das Ergebnis',
+    },
+  };
+  Object.keys(CHIP_STRINGS).forEach(l => Object.assign(STRINGS[l] = STRINGS[l] || {}, CHIP_STRINGS[l]));
+
   function T(key, vars) {
     const tbl = STRINGS[locale];
     let out = (tbl && tbl[key] != null) ? tbl[key] : key;
@@ -298,7 +381,11 @@
     booted = true;
     try {
       const m = await fetch(BASE + '/api/manifest').then(r => r.json());
-      // Local tier (SBC / on-device): free, no accounts, no billing — the server
+      // Whether the active catalog can look at images, which decides between
+      // "Does this image look good?" and "Take a test frame". An older manifest
+      // doesn't say, and then only the cloud has vision.
+      vision = (m && typeof m.vision === 'boolean') ? m.vision : !(m && m.tier === 'local');
+      // Local tier (SBC / on-device): free, no accounts, no billing, the server
       // has no /account surface, so skip the sign-in/subscribe gate entirely and
       // go straight to the chat.
       if (m && m.tier === 'local') { assistantTier = 'sbc'; return enterChat(); }
@@ -537,6 +624,7 @@
     document.getElementById('gearBtn').title = T('Settings');
     if (!ws && !agent) connectWs();
     setBusy(false);
+    if (userTurns === 0) showChips(false);
   }
 
   // ---- chat rendering ----
@@ -546,6 +634,162 @@
     log.appendChild(d); log.scrollTop = log.scrollHeight; return d;
   }
   function sys(t) { bubble('sys', t); }
+
+  // ---- suggestion badges (tablets: tap instead of type) ----
+  // The row above the text field shows suggestions while the chat is empty and
+  // after every reply. Tapping one sends it exactly as if it had been typed;
+  // the text field always stays available. Pinned questions come first.
+  const chipsEl = document.getElementById('chips');
+  const PIN_KEY = 'canopus.pinnedQuestions';
+  const MAX_PINS = 8, MAX_SUGGESTIONS = 5;
+  let lastSnap = {};          // latest host:status snapshot (tab, guider, dome, ...)
+  let snapKey = '';           // the part of the snapshot the badges depend on
+  let chipMode = null;        // 'start' | 'after' | null (hidden)
+  let userTurns = 0;
+  let turnTools = [];         // tools the agent called in this turn
+  let turnAsked = false;      // this turn showed an ask_user question
+  let lastAsstText = '', lastUserText = '';
+  let pendingQuestion = null; // { id, wrap } while an ask_user question waits
+
+  function loadPins() {
+    try { const a = JSON.parse(localStorage.getItem(PIN_KEY) || '[]'); return Array.isArray(a) ? a.filter(s => typeof s === 'string') : []; }
+    catch (_) { return []; }
+  }
+  let pins = loadPins();
+  function togglePin(text) {
+    pins = pins.includes(text) ? pins.filter(p => p !== text) : pins.concat([text]).slice(-MAX_PINS);
+    try { localStorage.setItem(PIN_KEY, JSON.stringify(pins)); } catch (_) {}
+    log.querySelectorAll('.pin').forEach(b => {
+      const on = pins.includes(b.dataset.text);
+      b.classList.toggle('on', on); b.title = on ? T('Unpin') : T('Pin this question');
+    });
+    if (chipMode) showChips(chipMode === 'after');
+  }
+
+  // Suggestions for what the user is looking at (the Polaris tab) and the rig state.
+  function contextChips() {
+    const s = lastSnap || {};
+    const out = [];
+    const dome = s.dome;
+    if (dome && dome.connected && /^(Open|Opening)$/.test(dome.shutter || ''))
+      out.push(dome.rollOff ? 'Close the roof' : 'Close the dome');
+    switch (s.tab) {
+      case 'guide': out.push('How is guiding?'); if (!(s.guider && s.guider.guiding)) out.push('Start guiding'); break;
+      case 'focus': out.push('Is my focus good?', 'Run autofocus'); break;
+      case 'sky': case 'tonight': case 'milkyway': out.push("What's good to image tonight?", "Plan tonight's targets"); break;
+      case 'plan': out.push("Plan tonight's targets"); break;
+      case 'weather': out.push("What's the weather tonight?"); break;
+      case 'live': case 'preview': case 'sequence': out.push(vision ? 'Does this image look good?' : 'Take a test frame'); break;
+      case 'files': out.push('Stack the best subs from last night'); break;
+      case 'polar': out.push('How do I polar align?'); break;
+      case 'equip': out.push('Is all my gear connected?'); break;
+      case 'video': out.push('How do I capture a planet?'); break;
+    }
+    out.push('How is the session going?', "What's good to image tonight?", 'Did something go wrong?');
+    return out;
+  }
+  // What usually comes next after a tool ran.
+  const FOLLOW_UPS = {
+    get_tonights_best: ['Make a plan with these'],
+    create_plan: ['Start the plan'],
+    get_status: ['How is guiding?', 'Is my focus good?'],
+    take_test_frame: () => vision ? ['Does this image look good?'] : ['Is my focus good?'],
+    analyze_frame: ['How do I fix it?'], analyze_current_view: ['How do I fix it?'],
+    analyze_selected_frame: ['How do I fix it?'], read_logs: ['How do I fix it?'],
+    search_knowledge: ['Show me where'],
+    start_guiding: ['How is guiding?'],
+    run_autofocus: ['Is my focus good?'],
+    slew_to: ['Take a test frame'],
+    grade_frames: ['Stack the keepers'],
+    integrate_frames: ['Show me the result'],
+    start_autorun: ['How is the session going?'], start_live_stack: ['How is the session going?'],
+    start_plan: ['How is the session going?'],
+  };
+
+  function hideChips() { chipMode = null; chipsEl.classList.remove('on'); chipsEl.innerHTML = ''; }
+  function showChips(after) {
+    chipsEl.innerHTML = '';
+    chipMode = after ? 'after' : 'start';
+    // A suggestion that repeats the question just asked is left out; a pinned
+    // one stays, since it is the question the user repeats all night.
+    const seen = new Set();
+    const justAsked = lastUserText.toLowerCase();
+    let others = 0;
+    const add = (label, cls) => {
+      const k = (label || '').toLowerCase();
+      if (!label || seen.has(k)) return;
+      if (cls !== 'pinned' && (k === justAsked || others >= MAX_SUGGESTIONS)) return;
+      seen.add(k);
+      if (cls !== 'pinned') others++;
+      const b = document.createElement('button');
+      b.className = 'chip' + (cls ? ' ' + cls : '');
+      b.textContent = (cls === 'pinned' ? '📌 ' : '') + label;
+      b.onclick = () => sendText(label);
+      chipsEl.appendChild(b);
+    };
+    pins.forEach(p => add(p, 'pinned'));
+    if (after) {
+      // A reply that ends in a question gets Yes and No, unless the agent
+      // already asked with its own options.
+      if (!turnAsked && /\?\s*$/.test(lastAsstText || '')) { add(T('Yes'), 'yesno'); add(T('No'), 'yesno'); }
+      turnTools.forEach(t => { let f = FOLLOW_UPS[t]; if (typeof f === 'function') f = f(); (f || []).forEach(x => add(T(x))); });
+    }
+    contextChips().forEach(x => add(T(x)));
+    chipsEl.scrollLeft = 0;
+    chipsEl.classList.toggle('on', chipsEl.childElementCount > 0);
+  }
+  // Refresh the empty-chat badges when the user moves to another tab or the
+  // dome changes, but not on every 2 s status tick.
+  function onSnapshot(snap) {
+    lastSnap = snap || {};
+    const key = [lastSnap.tab, !!(lastSnap.guider && lastSnap.guider.guiding),
+                 lastSnap.dome ? lastSnap.dome.shutter : ''].join('|');
+    if (key === snapKey) return;
+    snapKey = key;
+    if (chipMode === 'start') showChips(false);
+  }
+
+  // A question the user sent, with a pin that keeps it as a badge.
+  function userBubble(text, noPin) {
+    const row = document.createElement('div'); row.className = 'urow';
+    if (!noPin && text.length >= 6) {
+      const pb = document.createElement('button');
+      pb.className = 'pin' + (pins.includes(text) ? ' on' : '');
+      pb.textContent = '📌'; pb.dataset.text = text;
+      pb.title = pins.includes(text) ? T('Unpin') : T('Pin this question');
+      pb.onclick = () => togglePin(text);
+      row.appendChild(pb);
+    }
+    const d = document.createElement('div'); d.className = 'msg user'; d.textContent = text;
+    row.appendChild(d);
+    log.appendChild(row); log.scrollTop = log.scrollHeight;
+    return d;
+  }
+
+  // Send a user turn, typed or tapped. While an ask_user question waits, the
+  // text is the answer to it.
+  function sendText(text) {
+    text = String(text || '').trim();
+    if (!text) return;
+    if (pendingQuestion) { answerQuestion(null, text); return; }
+    userBubble(text);
+    lastUserText = text; userTurns++;
+    turnTools = []; turnAsked = false; lastAsstText = '';
+    setBusy(true);
+    sendToAgent({ v: V, type: 'user', text });
+  }
+  function answerQuestion(btn, text) {
+    const q = pendingQuestion;
+    if (!q) return;
+    pendingQuestion = null;
+    q.wrap.querySelectorAll('button').forEach(x => { x.disabled = true; });
+    if (btn) btn.classList.add('picked');
+    userBubble(btn ? btn.textContent : text, true);
+    inp.placeholder = T('Ask the assistant…');
+    setBusy(true);
+    sendToAgent({ v: V, type: 'answer', questionId: q.id,
+                  choices: btn ? [btn.dataset.id] : [], text: btn ? undefined : text });
+  }
 
   // ---- minimal, XSS-safe Markdown for assistant replies ----
   // Escape first, then apply a small subset (headings, lists, bold/italic,
@@ -642,16 +886,23 @@
     log.appendChild(box); log.scrollTop = log.scrollHeight;
   }
 
+  // An ask_user question: its options are buttons, and the text field opens so
+  // the user can type a different answer instead.
   function renderQuestion(msg) {
     const box = bubble('asst', msg.prompt || T('Choose:'));
     const wrap = document.createElement('div'); wrap.className = 'choices';
     (msg.options || []).forEach(o => {
-      const b = document.createElement('button'); b.textContent = o.label;
-      b.onclick = () => { wrap.querySelectorAll('button').forEach(x => x.disabled = true);
-        sendToAgent({ v: V, type: 'answer', questionId: msg.questionId, choices: [o.id] }); };
+      const b = document.createElement('button'); b.textContent = o.label; b.dataset.id = o.id;
+      b.onclick = () => answerQuestion(b);
       wrap.appendChild(b);
     });
     box.appendChild(wrap);
+    log.scrollTop = log.scrollHeight;
+    pendingQuestion = { id: msg.questionId, wrap };
+    turnAsked = true;
+    hideChips();
+    inp.placeholder = T('Or type your answer…');
+    setBusy(false);
   }
 
   // ---- transport: WebSocket (cloud/SBC server agent) OR in-browser agent (device) ----
@@ -664,12 +915,13 @@
   // WebSocket (cloud/SBC) or from the in-browser agent (device).
   function handleAgentMessage(m) {
     switch (m.type) {
-      case 'assistant': clearStatus(); if (m.text) mdBubble('asst', m.text); break;
+      case 'assistant': clearStatus(); if (m.text) { mdBubble('asst', m.text); lastAsstText = m.text; } break;
       case 'notice': if (m.text) bubble('notice ' + (m.severity === 'info' ? 'notice-info' : ''), m.text); break;
       case 'plan': clearStatus(); renderPlan(m); break;
       case 'question': clearStatus(); renderQuestion(m); break;
       case 'tool-call':
-        // Hide the raw API call — show a playful "working" line instead.
+        // Hide the raw API call, show a playful "working" line instead.
+        if (m.tool && m.tool !== 'poll') turnTools.push(m.tool);
         setStatus(m.responseType === 'image' ? '📷 ' + playful() : playful());
         postParent({ v: V, type: 'assistant:tool-call', id: m.id, method: m.method, path: m.path, query: m.query, body: m.body, responseType: m.responseType });
         break;
@@ -683,8 +935,8 @@
         setStatus(playful());
         postParent({ v: V, type: 'assistant:ui', id: m.id, action: m.action, params: m.params });
         break;
-      case 'done': clearStatus(); setBusy(false); break;
-      case 'error': clearStatus(); sys(T('Error: {m}', { m: m.message || 'unknown' })); setBusy(false); break;
+      case 'done': clearStatus(); setBusy(false); if (!pendingQuestion) showChips(true); break;
+      case 'error': clearStatus(); sys(T('Error: {m}', { m: m.message || 'unknown' })); setBusy(false); if (!pendingQuestion) showChips(true); break;
     }
   }
 
@@ -724,13 +976,20 @@
     }
   }
 
-  function setBusy(b) { inp.disabled = b; sendBtn.disabled = b; if (!b) inp.focus(); }
+  // On a touch screen the field is not focused after each reply, because that
+  // pops the on-screen keyboard over the badges the user wanted to tap.
+  const COARSE = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+  function setBusy(b) {
+    inp.disabled = b; sendBtn.disabled = b;
+    if (b) hideChips();
+    else if (!COARSE) inp.focus();
+  }
 
   function submit() {
     const text = inp.value.trim();
     if (!text) return;
-    bubble('user', text); inp.value = ''; setBusy(true);
-    sendToAgent({ v: V, type: 'user', text });
+    inp.value = '';
+    sendText(text);
   }
   sendBtn.onclick = submit;
   inp.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } });
@@ -761,7 +1020,18 @@
     beNote.textContent = T('To change the backend, open Polaris Settings → Assistant (under AI Tools).');
     gearMenu.appendChild(beNote);
 
-    // Local tiers (SBC / on-device) are free and account-less — the rest of the
+    // Pinned questions (all tiers), each with a way to unpin it.
+    if (pins.length) {
+      gearMenu.appendChild(sep());
+      gearMenu.appendChild(hdr(T('Pinned questions')));
+      pins.forEach(p => {
+        const a = item('✕ ' + p, () => togglePin(p));
+        a.title = T('Unpin');
+        gearMenu.appendChild(a);
+      });
+    }
+
+    // Local tiers (SBC / on-device) are free and account-less, the rest of the
     // menu (billing, account, legal) is cloud-only, so stop here for them.
     if (assistantTier !== 'cloud') return;
     gearMenu.appendChild(sep());
@@ -849,6 +1119,7 @@
         sendToAgent({ v: V, type: 'tool-result', id: m.id, ok: m.ok, result: m.result, error: m.error });
         break;
       case 'host:status':
+        onSnapshot(m.snapshot);
         sendToAgent({ v: V, type: 'status', snapshot: m.snapshot });
         break;
       case 'host:visibility':

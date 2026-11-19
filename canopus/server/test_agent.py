@@ -256,6 +256,62 @@ def test_provider_tool_call_ids_are_kept_and_deduplicated():
     assert [m["tool_call_id"] for m in h.session._messages[-3:]] == ids
 
 
+class _AskThenReply:
+    """Provider that asks one ask_user question, then answers in text."""
+
+    def __init__(self, options):
+        self.options = options
+        self.seen = []
+
+    async def complete(self, messages, tools):
+        from providers import ProviderResult
+        self.seen.append([dict(m) for m in messages])
+        if len(self.seen) == 1:
+            return ProviderResult(tool_calls=[ToolCall(
+                id="ask1", name="ask_user",
+                arguments={"prompt": "Which target?", "options": self.options})])
+        return ProviderResult(text="ok")
+
+
+def _run_ask(options, answer):
+    """One user turn whose ask_user question gets `answer` from the client.
+    Returns (messages sent to the client, the tool result the model saw)."""
+    out = []
+    provider = _AskThenReply(options)
+    session = None
+
+    async def send(m):
+        out.append(m)
+        if m.get("type") == "question":
+            await session.on_message({"type": "answer", "questionId": m["questionId"], **answer})
+
+    session = AgentSession(send=send, provider=provider)
+    asyncio.run(session.on_message({"type": "user", "text": "point the scope"}))
+    tool_msg = next(m for m in provider.seen[1] if m["role"] == "tool")
+    import json
+    return out, json.loads(tool_msg["content"])
+
+
+def test_ask_user_shows_the_options_and_returns_the_tapped_one():
+    out, res = _run_ask(["M31", "M42", "M45"], {"choices": ["o2"]})
+    q = next(m for m in out if m["type"] == "question")
+    assert q["prompt"] == "Which target?"
+    assert [o["label"] for o in q["options"]] == ["M31", "M42", "M45"]
+    assert res == {"ok": True, "result": {"answer": "M42"}}
+    assert [m["type"] for m in out][-2:] == ["assistant", "done"]
+
+
+def test_ask_user_takes_a_typed_answer_over_the_options():
+    _out, res = _run_ask(["Yes", "No"], {"choices": [], "text": "only after midnight"})
+    assert res == {"ok": True, "result": {"answer": "only after midnight", "typed": True}}
+
+
+def test_ask_user_needs_two_options():
+    out, res = _run_ask(["Yes"], {"choices": ["o1"]})
+    assert not any(m["type"] == "question" for m in out)
+    assert res["ok"] is False
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):

@@ -155,6 +155,9 @@ def _build_allowlist() -> list[dict]:
 
 _ALLOWLIST = _build_allowlist()
 
+# True when the active catalog has a tool that hands the model an image.
+_HAS_VISION = any(t.get("returnsImage") or t.get("captureView") for t in CATALOG.get("tools", []))
+
 # Warmth flag the UI/health can read: true once the system-prompt + tool-catalog
 # prefix has been ingested into llama-server's cache.
 _warm = {"ready": False}
@@ -196,6 +199,8 @@ def manifest() -> JSONResponse:
     return JSONResponse({
         "version": 1,
         "tier": "local",
+        # The chat offers image questions only when the catalog can see images.
+        "vision": _HAS_VISION,
         "product": {"name": _product_name(),
                     "tagline": "Cloud model with your own API key" if API_PROVIDER else "On-device AI observing companion",
                     "iconEmoji": "🔭", "iconUrl": f"{BASE_PATH}/img/canopus-icon.png"},

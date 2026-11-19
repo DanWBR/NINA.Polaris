@@ -71,6 +71,14 @@ class MockProvider(Provider):
         (("plan",), "show_panel", {"tab": "plan"}),
         # A mutating example so the plan-approval path can be demoed. Eagle Neb.
         (("slew", "go to", "goto", "point at"), "slew_to", {"ra": 18.31, "dec": -13.79}),
+        # A question with tappable options, so the ask_user path can be demoed.
+        (("which target", "choose"), "ask_user",
+         {"prompt": "Which target do you want tonight?", "options": ["M31", "M42", "M45"]}),
+    ]
+    # Plain replies, for the parts of the chat that react to the text itself
+    # (a reply ending in a question gets Yes and No badges).
+    _KEYWORD_TEXT = [
+        (("dew",), "Humidity is high tonight. Shall I turn the anti-dew heater on?"),
     ]
 
     async def complete(self, messages: list[dict], tools: list[dict]) -> ProviderResult:
@@ -86,6 +94,10 @@ class MockProvider(Provider):
             if m.get("role") == "user":
                 text = (m.get("content") or "").lower()
                 break
+
+        for keywords, reply in self._KEYWORD_TEXT:
+            if any(k in text for k in keywords):
+                return ProviderResult(text=reply)
 
         tool_names = {t["function"]["name"] for t in tools}
         for keywords, name, args in self._KEYWORD_TOOL:

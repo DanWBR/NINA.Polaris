@@ -15783,6 +15783,11 @@ function ninaApp() {
                 focus: { hfr: this.lastHfr || 0 },
                 meridian: { minutesToFlip: this.mfTimeToFlipMinutes },
                 liveStack: { active: !!this.liveActive },
+                // The dome or roll-off roof, so the chat can offer "Close the
+                // roof" while it is open.
+                dome: this.dome && this.dome.connected ? {
+                    connected: true, shutter: this.dome.shutter || 'Unknown', rollOff: !!this.dome.rollOff
+                } : null,
                 // The single file the user has selected in the STUDIO Files
                 // browser, so the assistant can analyze it directly (no need to
                 // open the preview modal, which would cover the panel).
