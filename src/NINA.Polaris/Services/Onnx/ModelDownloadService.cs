@@ -39,6 +39,7 @@ public sealed class ModelDownloadService {
     private readonly ILogger<ModelDownloadService> _logger;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private volatile DownloadState _state = DownloadState.Idle;
+    private CancellationTokenSource? _cts;   // the running download, for Cancel
 
     public ModelDownloadService(IHttpClientFactory http, ProfileService profile,
                                 OnnxModelRegistry registry,
@@ -116,13 +117,32 @@ public sealed class ModelDownloadService {
         if (!IsConfigured) throw new InvalidOperationException("No model catalogue available.");
         if (!_gate.Wait(0)) return false;   // already downloading
         _state = new DownloadState(dir, version, 0, 0, "downloading", null);
+        var cts = new CancellationTokenSource();
+        _cts = cts;
         _ = Task.Run(async () => {
-            try { await DownloadAsync(dir, version, CancellationToken.None); }
+            try { await DownloadAsync(dir, version, cts.Token); }
+            catch (OperationCanceledException) when (cts.IsCancellationRequested) {
+                _logger.LogInformation("Model download cancelled: {Dir}/{Ver}", dir, version);
+                _state = _state with { State = "cancelled", Error = null };
+            }
             catch (Exception ex) {
                 _logger.LogWarning(ex, "Model download failed: {Dir}/{Ver}", dir, version);
                 _state = _state with { State = "failed", Error = ex.Message };
-            } finally { _gate.Release(); }
+            } finally {
+                _cts = null;
+                cts.Dispose();
+                _gate.Release();
+            }
         });
+        return true;
+    }
+
+    /// <summary>Stop the running download, if there is one, and delete its
+    /// partial file. Returns false when nothing was downloading.</summary>
+    public bool Cancel() {
+        var cts = _cts;
+        if (cts is null) return false;
+        try { cts.Cancel(); } catch (ObjectDisposedException) { return false; }
         return true;
     }
 
@@ -151,13 +171,21 @@ public sealed class ModelDownloadService {
             var total = resp.Content.Headers.ContentLength ?? entry.Bytes;
             _state = _state with { TotalBytes = total };
             await using var src = await resp.Content.ReadAsStreamAsync(ct);
-            await using var dst = File.Create(tmp);
-            var buf = new byte[1 << 20];   // 1 MB
-            long got = 0; int n;
-            while ((n = await src.ReadAsync(buf, ct)) > 0) {
-                await dst.WriteAsync(buf.AsMemory(0, n), ct);
-                got += n;
-                _state = _state with { ReceivedBytes = got };
+            long got = 0;
+            await using (var dst = File.Create(tmp)) {
+                var buf = new byte[1 << 20];   // 1 MB
+                int n;
+                try {
+                    while ((n = await src.ReadAsync(buf, ct)) > 0) {
+                        await dst.WriteAsync(buf.AsMemory(0, n), ct);
+                        got += n;
+                        _state = _state with { ReceivedBytes = got };
+                    }
+                } catch (OperationCanceledException) {
+                    await dst.DisposeAsync();
+                    try { File.Delete(tmp); } catch (IOException) { }
+                    throw;
+                }
             }
 
             // Sanity guard for mirror hosts (e.g. SourceForge) that 302 to a

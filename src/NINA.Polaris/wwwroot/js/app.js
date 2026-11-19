@@ -4699,7 +4699,7 @@ function ninaApp() {
             // On-demand download progress for a tool model. active gates the
             // inline "Downloading…" strip in the tool modals.
             dl: { active: false, family: '', version: '', phase: '',
-                  pct: 0, error: '', via: '' },
+                  pct: 0, error: '', via: '', cancelled: false },
         },
         // GX-6: consent modal state. _onnxLicenseResolver is the Promise
         // resolver awaited by `_ensureOnnxLicenseAccepted`; the
@@ -39207,26 +39207,43 @@ function ninaApp() {
             }
             const dl = this.onnx.dl;
             dl.active = true; dl.family = family; dl.version = version;
-            dl.pct = 0; dl.error = ''; dl.via = 'host';
+            dl.pct = 0; dl.error = ''; dl.via = 'host'; dl.cancelled = false;
             dl.phase = this.$t('Downloading on the host…');
             try {
                 // 1) Host-side download (server reaches the bucket).
                 const hostOk = await this._ensureViaHost(entry);
                 if (hostOk) { await this._refreshOnnxAfterDownload(); return true; }
+                if (dl.cancelled) return false;
                 // 2) Client-proxy fallback (host offline): fetch here, push up.
                 dl.via = 'client';
                 dl.phase = this.$t('Downloading via this device…');
                 const clientOk = await this._ensureViaClient(entry);
                 if (clientOk) { await this._refreshOnnxAfterDownload(); return true; }
+                if (dl.cancelled) return false;
                 if (!dl.error) dl.error = this.$t('Download failed.');
                 this.toast(dl.error, 'error', 7000);
                 return false;
             } catch (e) {
+                if (dl.cancelled) return false;
                 dl.error = (e && e.message) ? e.message : String(e);
                 this.toast(this.$t('Model download failed:') + ' ' + dl.error, 'error', 7000);
                 return false;
             } finally {
                 dl.active = false;
+                this._onnxDlAbort = null;
+            }
+        },
+
+        // Stop the model download that is running, on the host or through this
+        // device. ensureModelInstalled then returns false without an error.
+        async onnxCancelDownload() {
+            const dl = this.onnx.dl;
+            if (!dl.active || dl.cancelled) return;
+            dl.cancelled = true;
+            dl.phase = this.$t('Cancelling…');
+            try { this._onnxDlAbort?.abort(); } catch {}
+            if (dl.via === 'host') {
+                try { await this.apiPost('/api/onnx/download-cancel'); } catch {}
             }
         },
 
@@ -39250,7 +39267,8 @@ function ninaApp() {
                 await new Promise(r => setTimeout(r, 700));
                 let s;
                 try { s = await this.apiGet('/api/onnx/download-status'); }
-                catch { continue; }
+                catch { if (dl.cancelled) return false; continue; }
+                if (s && s.state === 'cancelled') return false;
                 if (s && s.totalBytes)
                     dl.pct = Math.min(100, Math.round((s.receivedBytes / s.totalBytes) * 100));
                 if (s && s.state === 'verifying') dl.phase = this.$t('Verifying…');
@@ -39269,8 +39287,10 @@ function ninaApp() {
             const dl = this.onnx.dl;
             if (!entry.url) { dl.error = this.$t('No download URL for this model.'); return false; }
             let blob;
+            const abort = new AbortController();
+            this._onnxDlAbort = abort;
             try {
-                const resp = await fetch(entry.url, { mode: 'cors' });
+                const resp = await fetch(entry.url, { mode: 'cors', signal: abort.signal });
                 if (!resp.ok) throw new Error('HTTP ' + resp.status);
                 const total = Number(resp.headers.get('content-length')) || entry.bytes || 0;
                 if (resp.body && total) {
@@ -39300,6 +39320,7 @@ function ninaApp() {
                 fd.append('model', blob, 'model.onnx');
                 // A model is 40-500 MB; the default 15s apiFetch timeout would
                 // abort mid-upload. dedup:false skips teeing the body.
+                if (dl.cancelled) return false;
                 const resp = await this.apiFetch('/api/onnx/upload-model',
                     { method: 'POST', body: fd, timeout: 3600000, dedup: false });
                 if (!resp.ok) {
@@ -40510,12 +40531,16 @@ function ninaApp() {
             if (precs.length && !precs.includes(this.starRemoval.options.precision))
                 this.starRemoval.options.precision = precs.includes('fp16') ? 'fp16' : precs[0];
         },
-        starRemovalCloseOptions() { this.starRemoval.options.open = false; },
+        // Cancel, Esc or a click outside. While the model downloads, closing
+        // the dialog also stops the download.
+        starRemovalCloseOptions() {
+            if (this.onnx.dl.active) this.onnxCancelDownload();
+            this.starRemoval.options.open = false;
+        },
         // Confirm the options modal → run with the chosen settings.
         async starRemovalConfirm() {
             const o = this.starRemoval.options;
             const path = o.path;
-            o.open = false;
             // Map the precision choice to a model version: FP32 = the original
             // 1.0.0; FP16 = the 1.0.0-fp16 sibling (lighter, the default).
             // Leave undefined when the choice isn't offered so the pipeline's
@@ -40526,8 +40551,12 @@ function ninaApp() {
             // AI-TOOLS-DISCOVERY: pull the model on demand if it isn't on the
             // host yet (host download, else client proxy). Aborts the run if the
             // download fails so the pipeline never 404s fetching model bytes.
+            // The dialog stays open during the download, so its progress strip
+            // shows and Cancel stops it.
             const model = o.model || 'starrem2k13';
             if (!(await this._ensureStarModel(model, version))) return;
+            if (!o.open) return;   // closed while the model downloaded
+            o.open = false;
             await this.starRemovalRun(path, {
                 model,
                 version,

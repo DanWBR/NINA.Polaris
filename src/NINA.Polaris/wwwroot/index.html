@@ -22253,6 +22253,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             <span x-text="onnx.dl.phase"></span>
                             <span x-text="(onnx.dl.pct || 0) + '%'"></span>
                         </div>
+                        <button class="btn btn-sm" type="button" style="margin-top:6px"
+                                @click="onnxCancelDownload()" :disabled="onnx.dl.cancelled">Cancel download</button>
                     </div>
                 </template>
                 <p class="hint text-warn" x-show="onnx.dl.error" x-text="onnx.dl.error"></p>
@@ -22520,14 +22522,15 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             <span x-text="onnx.dl.phase"></span>
                             <span x-text="(onnx.dl.pct || 0) + '%'"></span>
                         </div>
+                        <button class="btn btn-sm" type="button" style="margin-top:6px"
+                                @click="onnxCancelDownload()" :disabled="onnx.dl.cancelled">Cancel download</button>
                     </div>
                 </template>
                 <p class="hint text-warn" x-show="onnx.dl.error" x-text="onnx.dl.error"></p>
             </div>
 
             <div class="siril-modal-actions">
-                <button class="btn" @click="starRemovalCloseOptions()"
-                        :disabled="onnx.dl.active">Cancel</button>
+                <button class="btn" @click="starRemovalCloseOptions()">Cancel</button>
                 <button class="btn btn-primary" @click="starRemovalConfirm()"
                         :disabled="onnx.dl.active">Remove stars</button>
             </div>
@@ -26847,7 +26850,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261119-blinkclose"></script>
+    <script src="/js/app.js?v=20261119-dlcancel"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>
