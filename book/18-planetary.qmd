@@ -10,7 +10,9 @@ an image sharper than any single long exposure could be. The VIDEO tab
 implements this workflow in two panes: **Capture** records continuous
 high-frame-rate video to SER files [@ser_format] (SER is a simple raw
 video format shared by planetary imaging tools), and **Process** runs
-them through the built-in lucky-imaging stack pipeline.
+them through the built-in lucky-imaging stack pipeline. A third pane,
+**Planet + Moons**, runs both steps for you twice, once for a planet
+and once for its moons, and merges the two results into one picture.
 
 ## The Capture sub-tab
 
@@ -198,6 +200,125 @@ Photoshop and apply wavelet sharpening (the multi-scale sharpening
 technique planetary imagers favor) and saturation in your
 favorite tool; the Polaris EDITOR (@sec-editor) targets deep-sky
 post-processing, so planetary finishing is best done externally.
+
+## The Planet + Moons sub-tab {#sec-planet-moons}
+
+A bright planet and its moons are hard to show in one picture, because
+they need very different exposures. Jupiter's disc wants a few
+milliseconds. Its moons are much fainter, so they need tens or hundreds
+of milliseconds, and at that exposure the disc turns into a white,
+featureless blob. The **Planet + Moons** sub-tab takes both pictures and
+merges them: the planet comes from the short exposure, and the moons
+and the field around them come from the long one.
+
+### Before you start
+
+Start the stream on **Capture** with the planet and its moons in the
+frame, and set the gain. If you use an ROI (a region of interest, a
+smaller part of the sensor read out to raise the frame rate), keep it
+wide enough for the moons. Polaris only changes the exposure during the
+job, and it puts the stream's exposure back when the job ends. The gain,
+the ROI and the framing stay as you set them. The job doesn't start
+while a recording or a stack is already running.
+
+### What happens when you press Start
+
+Polaris runs the whole job on the live stream, and the step list under
+the settings shows where it is:
+
+1. **Meter the planet:** Polaris tries exposures until the brightest
+   part of the disc sits at about three quarters of the camera's range
+   above the sky background, without clipping. It reads three frames
+   for each exposure it tries and uses the middle reading, so a single
+   bad frame doesn't throw the result off.
+2. **Record the planet:** Polaris records a SER clip at that exposure.
+3. **Meter the moons:** Polaris starts at ten times the planet
+   exposure and adjusts it until the brightest moon sits at about 60 %
+   of the range. The disc saturates at this exposure, which is expected.
+4. **Record the moons:** Polaris records a second SER clip at the moon
+   exposure. From here on, the camera is free again, because the rest
+   of the job only works on the files.
+5. **Stack both clips** with the built-in stacker described above. The
+   planet stack keeps your share of the best frames and uses alignment
+   points on the disc. The moon stack keeps 60 % of its frames and
+   reuses the planet's colour balance, because a balance measured on a
+   saturated disc would tint the moons.
+6. **Merge the two stacks:** Polaris stretches each stack for its own
+   subject, so the disc tops out just below white and the brightest moon
+   sits a little lower. It then lines up the moon stack on the planet
+   stack by the centre of the disc, and it blends the two through a
+   soft-edged mask over the disc and its glow. Inside the mask the
+   picture comes from the planet stack, and outside it comes from the
+   moon stack.
+
+### Settings
+
+- **Planet**: Jupiter, Saturn, Uranus, Neptune or Mars. The name is
+  used for the files.
+- **Keep %**: the share of the best planet frames that goes into the
+  planet stack, 25 by default.
+- **Planet frames** and **max s**: the planet recording stops at 1500
+  frames or after 60 s, whichever comes first. Jupiter turns fast, so
+  its detail smears if you record it for more than about 90 s.
+- **max ms** (planet): the longest exposure the planet metering may
+  use, 100 ms by default.
+- **Moon frames**, **max s** and **max ms** (moons): the same limits
+  for the moon recording, 200 frames, 60 s and 1000 ms by default.
+
+### The result
+
+When the job finishes, the merged picture appears under the settings,
+with **Open in Studio** and **Download PNG**. The recordings land in the
+usual `planetary/{target}/` folder, the two stacks in its `stacked/`
+folder, and the merged picture in its `composite/` folder, as a 16-bit
+FITS and a PNG named `{target}_moons_composite_{time}`.
+
+If something keeps the job from a good result, Polaris says so in the
+step list:
+
+- If the planet saturates even at the shortest exposure, the job stops
+  and asks you to lower the gain.
+- If the planet doesn't get bright enough within the planet's **max
+  ms**, Polaris records it at that limit and suggests a higher gain.
+- If Polaris doesn't find a moon up to the moons' **max ms**, it still
+  records the field at that exposure, and it tells you that the outer
+  field comes from that exposure.
+
+**Abort** stops the job at any step, and Polaris still puts the
+stream's exposure back.
+
+### Using two videos you recorded earlier
+
+If you already have the two clips, for example from an earlier night
+or from another capture program, choose **Use
+recorded videos** at the top of the sub-tab instead of **Record now**.
+Then press **Choose…** next to **Planet video** and pick the short
+exposure, and do the same next to **Moons video** for the long one.
+The file dialog only lists `.ser` files, and once you have picked one
+video, it opens the second dialog in the same folder. Polaris keeps
+both paths in the browser, so they are still there the next time you
+open the sub-tab.
+
+In this mode the camera isn't involved, so the stream doesn't need to
+be running, and Polaris doesn't touch the exposure or a recording you
+start in the meantime. When you press **Start**, the step list shows
+four steps:
+
+1. **Check the videos:** Polaris makes sure that the two files are
+   different and that their frames have the same size, because the
+   merge needs both stacks on the same pixel grid. If you picked the
+   two the other way round, Polaris notices it from the middle frame of
+   each clip, since the moons clip shows a saturated or much brighter
+   disc. In that case it swaps them and says so under the step list.
+2. **Stack the planet** and **Stack the moons**, with the same settings
+   as in a recorded run. **Keep %** still applies to the planet stack.
+3. **Merge**, exactly as described above.
+
+The stacks and the merged picture land next to the planet video, in
+its `stacked/` and `composite/` folders. The recording limits (**Planet
+frames**, **Moon frames** and the **max s** and **max ms** fields) are
+hidden in this mode, because they only apply when Polaris records the
+clips itself.
 
 ## The stream owns the camera
 

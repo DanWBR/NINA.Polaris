@@ -37,12 +37,16 @@ the full multi-target plan is a cloud-tier feature; the local tiers still
 suggest targets, exposures and framing.)
 
 **It drives the rig, with your approval.** Slewing to a target,
-autofocusing (@sec-focusing), starting a sequence or a live stack, and
-dithering are each proposed as an action you **approve**, **review**, or
-**reject**. When it acts, it navigates the Polaris UI to the relevant
-panel so you can watch focus, guiding (@sec-guiding), or the stack as it
-works. (Parking the mount and stopping guiding or a live stack are
-cloud-tier extras.)
+autofocusing (@sec-focusing), starting guiding, a sequence or a live
+stack, dithering, taking a test frame, cooling the camera, changing the
+filter, nudging the focuser, and opening or closing the dome or roof are
+each proposed as an action you **approve**, **review**, or **reject**.
+When it acts, it navigates the Polaris UI to the relevant panel so you can
+watch focus, guiding (@sec-guiding), or the stack as it works. If you
+mention rain or clouds coming, it proposes to close the roof right away,
+and on the cloud tier to park the mount as well. (The local tiers can slew, autofocus, start guiding and
+a live stack, dither, take a test frame and close the roof; the other
+actions are cloud-tier extras.)
 
 **It knows astrophotography.** Grounded, practical answers on focusing,
 guiding, exposure and histograms, filters, polar alignment
@@ -58,6 +62,45 @@ a folder of subs and drive the STUDIO stacking and post-processing tools
 needs a vision-capable model: the subscription tier has one, the
 bring-your-own-key backend has one as long as the model you name can see
 images, and the two local tiers are text only.
+
+## Tapping instead of typing {#sec-assistant-badges}
+
+At the telescope you often hold a tablet in cold hands, so the chat offers
+tappable badges (rounded buttons) above the text field. When you tap one,
+Polaris sends it exactly as if you had typed it. The text field always
+stays there, so you can type anything the badges don't cover.
+
+**Suggestions:** While the chat is empty, and again after every reply, the
+badges suggest what you are likely to ask next. They depend on the tab you
+are on and on the rig. In GUIDE they offer "How is guiding?" and, while
+nothing is guiding, "Start guiding". In FOCUS they offer "Is my focus
+good?" and "Run autofocus". While the dome or roof is open, "Close the
+roof" comes first. After a reply, the badges also follow from what the
+assistant just did: after it lists tonight's targets you get "Make a plan
+with these", and after it reads the logs you get "How do I fix it?". On a
+backend that can see images, LIVE and PREVIEW offer "Does this image look
+good?"; on the text-only local tiers they offer "Take a test frame"
+instead.
+
+**Answers:** When the assistant needs you to choose (which target, which
+filter, which of two fixes), it asks with the options as buttons, so one
+tap answers it. The text field stays open while it waits, and if you type
+an answer instead, the assistant takes the typed one. When a reply ends
+with a yes-or-no question and doesn't carry its own options, the badges
+start with **Yes** and **No**. (Buttons for a question with options work on
+the cloud tier and with your own key; the local tiers still get the Yes and
+No badges.)
+
+**Your own questions:** Every question you send has a pin (📌) beside it.
+When you tap the pin, the question becomes a badge of its own that comes
+first in the row, so a question you repeat all night, "How is guiding?" for
+example, is always one tap away. The pinned questions are kept in this
+browser, up to eight of them. To remove one, tap its pin again, or open the
+⚙ menu and tap it under **Pinned questions**.
+
+On a touch screen the chat doesn't put the cursor in the text field after
+each reply, because that would open the on-screen keyboard over the
+badges.
 
 ## Choosing a backend {#sec-assistant-backends}
 

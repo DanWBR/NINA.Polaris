@@ -398,6 +398,25 @@ test frame.
   (`sudo apt install libraw23` enables the real-RAW path). Either
   way, the untouched RAW file is what gets saved to disk (`.cr2`,
   `.nef`, `.arw`), so your subs are always full quality.
+- **Less waiting between subs**: Polaris writes and decodes each RAW
+  file while the next exposure is already running. On a Raspberry Pi 4
+  the write takes 1 to 3 s and the decode several seconds for a 33 MP
+  body, so this time used to sit between every two subs. At the end of
+  a run, Polaris waits for the last file before it runs the end
+  actions. When `indiserver` runs on the same machine as Polaris, the
+  frames also arrive faster: Polaris connects to the server's local
+  Unix socket (a connection between two programs on the same machine
+  that doesn't go through the network stack) instead of TCP, and
+  indiserver hands each frame over as shared memory instead of
+  encoding it as text. On a Raspberry Pi 4 that saves 0.7 s per sub for
+  a 35 MB RAW and 1.4 s for a 67 MB one, and it works for every INDI
+  camera, not only DSLRs. With both changes, a Sony a7 IV on a
+  Raspberry Pi 4 went from 16.5 s of idle time between subs to 2.7 s.
+  The Polaris log says on connect which path is in use. If Polaris
+  can't find the indiserver that owns the configured port, it stays on
+  TCP. You can set `Indi:UnixSocketPath` in `appsettings.json` to a
+  fixed socket path, or to `off` to keep everything on TCP. A remote
+  indiserver always uses TCP.
 - **Sensor temperature**: most DSLRs do not report a sensor
   temperature to the OS. Polaris shows the field as blank for these
   cameras, and the Camera card hides cooler controls accordingly.

@@ -126,6 +126,22 @@ range). DSLR and mirrorless bodies report **ISO** instead: when the
 driver publishes a `CCD_ISO` list, Polaris shows an ISO dropdown in
 the capture controls in place of the numeric gain box (see @sec-dslr).
 
+**Anti-dew heater:** Some cameras carry a small heater on the window
+in front of the sensor, so that dew can't form on it on a humid night.
+When the connected camera reports one, the Camera card shows an
+**Anti-dew heater** switch. Polaris finds the heater on ZWO, ToupTek,
+Altair and Player One cameras, both through their native SDK and
+through INDI. If the heater has power levels, the card also shows the
+level it runs at, as "level 2 of 3" or as a percentage. When you switch
+a heater with levels on, Polaris turns it on at the last level it ran
+at. If it hasn't run yet, ToupTek and Altair heaters start at their top
+level, and a Player One heater starts at the SDK default or at 50 %.
+You set the level itself in the camera's own controls, for example with
+a property control panel or the INDI control panel (both described
+later in this chapter). A ZWO heater is only on or off, and Polaris
+switches it back on when it reopens a ZWO camera that dropped off USB.
+The auxiliary camera card has the same switch.
+
 ### Mount
 
 The driver dropdown offers INDI Telescope, Alpaca Telescope, or one of
@@ -253,6 +269,20 @@ flattens both into the generic channel list, so the same card and the
 same sequencer instructions work whether the box is reached over INDI,
 ASCOM COM, or Alpaca. The ASCOM COM path is Windows-only; INDI and
 Alpaca cover the Linux SBCs.
+
+**Roll-off roofs:** An INDI roll-off roof driver, such as
+`indi_rolloffino` or the INDI roll-off roof simulator, presents the
+roof as a dome that can park but doesn't have a shutter. When Polaris
+finds a dome driver like that, it treats the device as a roof. The
+Dome card then labels the state **Roof** instead of **Shutter**, and
+its buttons read **Open Roof** and **Close Roof**. Open Roof unparks
+the roof, which rolls it open, and Close Roof parks it, which rolls it
+shut. While the roof moves, the card shows **Opening** or **Closing**.
+The sequencer's instructions to open and close the dome shutter
+(@sec-adv-sequencer) open and close the roof the same way, so an
+unattended night can open the roof at the start and close it at the
+end. An ASCOM or Alpaca roof driver already presents the roof as a
+dome shutter, so the regular shutter buttons work with it.
 
 ## Managing rigs
 
@@ -975,6 +1005,16 @@ first session knows where to start:
   Polaris reads through an explicit-layout struct overlapping `int`
   and `double` at offset 0. If gain, exposure, or temperature come
   back nonsensical, this translation is the prime suspect.
+- **SVBony camera mode:** An SVBony camera has a normal mode, in
+  which it streams frames continuously, and a soft-trigger mode, in
+  which it takes one frame each time Polaris asks for it. On some
+  models, such as the SV605CC, every switch between the two modes
+  resets the camera's USB connection, and other devices on the same
+  USB link can drop with it. So Polaris puts a camera that supports
+  soft triggering into that mode when it connects and keeps it there
+  between still frames. The camera only switches to normal mode when
+  the video stream starts, and it switches back when the next still
+  frame is taken.
 - **ROI alignment (all SDK backends).** Sub-frame width and height
   are snapped to the vendor's required multiples (ZWO width % 8 and
   height % 2; PlayerOne width % 4 and height % 2; ToupTek even). A

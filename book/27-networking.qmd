@@ -430,15 +430,21 @@ public endpoint does carry a real Let's Encrypt certificate.
 
 Polaris ships with a password gate covering the API, the live
 WebSocket streams, and the embedded sub-applications (the PHD2
-interface, the INDI Web Manager, Stellarium). There is no default
-password and the setup cannot be skipped: hardcoded defaults get
-forgotten and never changed.
+interface, the INDI Web Manager, Stellarium). Polaris doesn't ship
+a default password, because a hardcoded default gets forgotten and
+is never changed.
 
 ### First run and daily sign-in
 
 The first time any browser opens a fresh install, a full-screen
-prompt asks you to set a password (minimum 8 characters). After
-that, every other device sees a **Sign in** overlay instead. Tick
+prompt asks you to set a password (minimum 8 characters). If the rig
+sits on a network you trust, you can choose **Continue without a
+password** instead, and Polaris turns the login off. You can set a
+password later in **SETTINGS**, **Authentication**, **Set a
+password**, and when you do, the login comes back on.
+
+Once a password is set, every other device sees a **Sign in**
+overlay. Tick
 **Remember on this device** to stay signed in across browser
 restarts; leave it unticked and the session ends when the tab
 closes. Sessions also expire after 24 hours of inactivity, with the
@@ -481,14 +487,14 @@ there is no email reset. Edit the active profile:
 
 ```bash
 ssh polaris@polaris-pi.local
-nano ~/.config/NINA.Polaris/profiles/active.json
+nano ~/.local/share/NINA.Polaris/profiles/active.json
 ```
 
 Set both stored values to empty strings:
 
 ```json
-  "AuthPasswordHash": "",
-  "AuthPasswordSalt": "",
+  "authPasswordHash": "",
+  "authPasswordSalt": "",
 ```
 
 Then restart the service with
