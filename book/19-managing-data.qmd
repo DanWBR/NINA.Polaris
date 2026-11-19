@@ -235,7 +235,11 @@ capture does not park the night's lights behind it. A frame is
 written under a temporary name and renamed once complete, so a
 half-copied file is never mistaken for a finished one. Repeated
 failures trip a breaker rather than retrying forever; **Retry
-failed** clears it once the destination is back. **Backfill** walks
+failed** clears it once the destination is back. If the name of an SMB
+server doesn't resolve, which happens on home networks when the router
+is slow to answer name lookups, Polaris tries again after a second. If
+the second lookup also fails, Polaris uses the address it last reached
+the server at, as long as that was within the last hour. **Backfill** walks
 the capture folder and queues whatever the destination does not
 already have.
 

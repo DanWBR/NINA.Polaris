@@ -283,6 +283,9 @@ When you know the task but not the panel, this table is the map.
 | Image several targets in one night | **PLAN** | Targets with time windows and per-target frame lists |
 | Live-stack (EAA) | **LIVE** | Start the loop and watch the stack grow; save as you go |
 | Planetary or lucky imaging | **VIDEO** | High-fps capture, SER recording, stack the best frames |
+| A planet and its moons in one picture | **VIDEO**, **Planet + Moons** | Meters, records and stacks both, then merges them (@sec-planet-moons) |
+| Open or close a roll-off roof | **RIGS**, **Dome** card | **Open Roof** and **Close Roof** appear when the dome driver is a roof |
+| Turn on the camera's anti-dew heater | **RIGS**, **Camera** card | The **Anti-dew heater** switch, on cameras that have one |
 | Take flats | **AUTORUN**, **Flat Wizard** | Automated flat acquisition |
 | Complex conditional sequences | **ADV** | The tree-based Advanced Sequencer |
 | Browse or open my files | **STUDIO** | The file browser; double-click or **View** opens the viewer |
