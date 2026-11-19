@@ -1870,6 +1870,9 @@ function ninaApp() {
             target: 'Jupiter', keepPercent: 25,
             planetFrames: 1500, planetMaxSeconds: 60, planetMaxExposureMs: 100,
             moonFrames: 200, moonMaxSeconds: 60, moonMaxExposureMs: 1000,
+            // 'live' records both videos on the stream; 'files' takes two SER
+            // files recorded earlier, picked on the host.
+            source: 'live', planetSer: '', moonSer: '',
         },
         planetMoonsJob: null,
         _planetMoonsTimer: null,
@@ -20933,20 +20936,21 @@ function ninaApp() {
             d.selectedPaths = [];
             d.error = '';
             d.open = true;
-            this._hostDialogInit();
+            this._hostDialogInit(opts.startDir);
             return new Promise((resolve) => { d._resolve = resolve; });
         },
         // The entry's absolute path. The /api/files/list DTO emits `fullPath`;
         // older code read `path`, so accept either.
         _hostEntryPath(e) { return e.fullPath || e.path || ''; },
 
-        async _hostDialogInit() {
+        async _hostDialogInit(startDir) {
             const d = this.hostDialog;
             try { d.roots = await this.apiGet('/api/files/roots'); }
             catch { d.roots = []; }
-            // Start in the last-visited FILES folder, else the Studio home, else
-            // the imageOutputDir, else the first platform root.
-            let start = this.files.cwd || '';
+            // Start in the folder the caller asked for, else the last-visited
+            // FILES folder, else the Studio home, else the imageOutputDir, else
+            // the first platform root.
+            let start = startDir || this.files.cwd || '';
             if (!start) {
                 try {
                     const sr = await this.apiGet('/api/files/studio-root');
@@ -31568,10 +31572,46 @@ function ninaApp() {
             } catch (_) { /* storage blocked: keep the defaults */ }
             this.planetMoonsPoll();
         },
-        async planetMoonsStart() {
+        _planetMoonsPersist() {
             try { localStorage.setItem('polaris.planetMoons', JSON.stringify(this.planetMoons)); } catch (_) { }
+        },
+        // Pick one of the two SER files for the 'files' source. The dialog
+        // opens in the folder of the other video when one is already chosen,
+        // because the two usually sit side by side.
+        async planetMoonsPick(which) {
+            const pm = this.planetMoons;
+            const other = which === 'planet' ? pm.moonSer : pm.planetSer;
+            const dirOf = (p) => (p || '').replace(/[\\/][^\\/]*$/, '');
+            const path = await this._openHostFileDialog({
+                mode: 'open', accept: ['.ser'],
+                title: which === 'planet' ? this._t('Choose the planet video') : this._t('Choose the moons video'),
+                startDir: dirOf(other) || dirOf(which === 'planet' ? pm.planetSer : pm.moonSer) || '' });
+            if (!path) return;
+            if (which === 'planet') pm.planetSer = path; else pm.moonSer = path;
+            this._planetMoonsPersist();
+        },
+        planetMoonsFileName(p) { return p ? p.split(/[\\/]/).pop() : ''; },
+        planetMoonsCanStart() {
+            const pm = this.planetMoons;
+            if (this.planetMoonsJob?.running) return false;
+            if (pm.source === 'files') return !!(pm.planetSer && pm.moonSer);
+            return !!this.cameraStream.running && !this.videoRecording.recording;
+        },
+        async planetMoonsStart() {
+            this._planetMoonsPersist();
+            const pm = this.planetMoons;
+            const body = { target: pm.target, keepPercent: pm.keepPercent };
+            if (pm.source === 'files') {
+                body.planetSer = pm.planetSer;
+                body.moonSer = pm.moonSer;
+            } else {
+                Object.assign(body, {
+                    planetFrames: pm.planetFrames, planetMaxSeconds: pm.planetMaxSeconds,
+                    planetMaxExposureMs: pm.planetMaxExposureMs, moonFrames: pm.moonFrames,
+                    moonMaxSeconds: pm.moonMaxSeconds, moonMaxExposureMs: pm.moonMaxExposureMs });
+            }
             try {
-                await this.apiPost('/api/video/planet-moons/start', { ...this.planetMoons });
+                await this.apiPost('/api/video/planet-moons/start', body);
                 this.toast('Planet + moons started', 'ok');
                 await this.planetMoonsPoll();
             } catch (e) {
@@ -31598,6 +31638,7 @@ function ninaApp() {
         },
         planetMoonsSteps() {
             const j = this.planetMoonsJob;
+            if (j?.fromFiles) return this._planetMoonsFileSteps(j);
             const steps = [
                 ['meter-planet', 'Meter the planet', j?.planetExposureMs != null ? j.planetExposureMs.toFixed(2) + ' ms' : ''],
                 ['record-planet', 'Record the planet', ''],
@@ -31634,6 +31675,31 @@ function ninaApp() {
                 return { key, label, detail, state };
             });
         },
+        // Steps for two videos recorded earlier: check them, stack both, merge.
+        _planetMoonsFileSteps(j) {
+            const steps = [
+                ['check', 'Check the videos', j.planetSer ? this.planetMoonsFileName(j.planetSer) + ' · ' + this.planetMoonsFileName(j.moonSer) : ''],
+                ['stack-planet', 'Stack the planet', ''],
+                ['stack-moons', 'Stack the moons', ''],
+                ['composite', 'Merge', ''],
+            ];
+            const idx = steps.findIndex(s => s[0] === j.phase);
+            const finished = j.phase === 'done';
+            const ended = j.phase === 'failed' || j.phase === 'cancelled';
+            let failedAt = 0;
+            if (j.planetSer) failedAt = 1;
+            if (j.planetStack) failedAt = 2;
+            if (j.moonStack) failedAt = 3;
+            return steps.map(([key, label, detail], i) => {
+                let state = 'pending';
+                if (finished) state = 'done';
+                else if (ended) state = i < failedAt ? 'done' : (i === failedAt ? 'failed' : 'pending');
+                else if (idx >= 0) state = i < idx ? 'done' : (i === idx ? 'active' : 'pending');
+                if (state === 'active' && (key === 'stack-planet' || key === 'stack-moons') && j.stackPhase)
+                    detail = j.stackPhase + (j.stackTotal ? ' · ' + (j.stackFrames || 0) + ' / ' + j.stackTotal : '');
+                return { key, label, detail, state };
+            });
+        },
         async planetMoonsOpenInStudio() {
             const p = this.planetMoonsJob?.compositeFits;
             if (!p) return;
@@ -31650,6 +31716,14 @@ function ninaApp() {
             // The planet + moons run stacks its own recordings and shows the
             // merged result itself: asking about each stack would interrupt it.
             if (this.planetMoonsJob?.running) return;
+            // Its last stack can end a moment before the job reports done,
+            // so a stack that finished inside the job's run is its own too.
+            const pm = this.planetMoonsJob;
+            if (pm && j.completedAt && pm.startedAt) {
+                const t = new Date(j.completedAt).getTime();
+                if (t >= new Date(pm.startedAt).getTime()
+                    && (!pm.completedAt || t <= new Date(pm.completedAt).getTime())) return;
+            }
             if (this._stackDonePromptedId === j.id) return;
             this._stackDonePromptedId = j.id;
             // A job that ended before this page loaded was already offered

@@ -245,8 +245,21 @@ public static class VideoEndpoints {
 
         // ----- Planet + moons (metered pair of recordings, stacked and merged) -----
 
-        group.MapPost("/planet-moons/start", (PlanetMoonsService svc, PlanetMoonsStartRequest req) => {
+        group.MapPost("/planet-moons/start", (PlanetMoonsService svc, FileBrowserService browser, PlanetMoonsStartRequest req) => {
             try {
+                // Two videos recorded earlier, picked on the host: validated
+                // through the same un-jailed browser the picker uses.
+                string? planetSer = null, moonSer = null;
+                bool hasPlanet = !string.IsNullOrWhiteSpace(req.PlanetSer), hasMoon = !string.IsNullOrWhiteSpace(req.MoonSer);
+                if (hasPlanet != hasMoon)
+                    return Results.BadRequest(new { error = "Choose both videos, the planet one and the moons one" });
+                if (hasPlanet) {
+                    planetSer = browser.ResolveSafe(req.PlanetSer!, mustExist: true);
+                    moonSer = browser.ResolveSafe(req.MoonSer!, mustExist: true);
+                    foreach (var f in new[] { planetSer, moonSer })
+                        if (!f.EndsWith(".ser", StringComparison.OrdinalIgnoreCase))
+                            return Results.BadRequest(new { error = "Not a SER video: " + Path.GetFileName(f) });
+                }
                 var job = svc.Start(new PlanetMoonsConfig(
                     Target: string.IsNullOrWhiteSpace(req.Target) ? "Jupiter" : req.Target!.Trim(),
                     PlanetFrames: Math.Clamp(req.PlanetFrames ?? 1500, 50, 20000),
@@ -256,7 +269,9 @@ public static class VideoEndpoints {
                     PlanetMaxExposureMs: Math.Clamp(req.PlanetMaxExposureMs ?? 100, 1, 2000),
                     MoonMaxExposureMs: Math.Clamp(req.MoonMaxExposureMs ?? 1000, 10, 10000),
                     KeepPercent: Math.Clamp(req.KeepPercent ?? 25, 1, 100),
-                    BitDepth: req.BitDepth == 8 ? 8 : 16));
+                    BitDepth: req.BitDepth == 8 ? 8 : 16,
+                    PlanetSer: planetSer,
+                    MoonSer: moonSer));
                 return Results.Ok(new { jobId = job.Id });
             } catch (Exception ex) {
                 return Results.BadRequest(new { error = ex.Message });
@@ -275,6 +290,7 @@ public static class VideoEndpoints {
                 error = j.Error,
                 warnings = j.Warnings.ToArray(),
                 target = j.Config.Target,
+                fromFiles = j.Config.FromFiles,
                 planetExposureMs = j.PlanetExposureMs,
                 moonExposureMs = j.MoonExposureMs,
                 planetLevel = j.PlanetLevel,
@@ -534,7 +550,10 @@ public static class VideoEndpoints {
         double? PlanetMaxExposureMs,
         double? MoonMaxExposureMs,
         double? KeepPercent,
-        int? BitDepth);
+        int? BitDepth,
+        /// <summary>Two SER files recorded earlier; both or neither.</summary>
+        string? PlanetSer = null,
+        string? MoonSer = null);
 
     public record StackStartRequest(
         string SerPath,
