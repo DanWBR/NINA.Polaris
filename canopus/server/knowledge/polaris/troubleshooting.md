@@ -1,40 +1,52 @@
 # Troubleshooting
 
-Common problems + diagnostic checklists. If your issue isn't here,
-open an issue on the repo with: Polaris version, OS, INDI driver
-version, what you were doing, what you expected, what happened.
+Common problems and their fixes, organized by symptom. Where a fix
+is covered in depth by a chapter, this appendix gives the short
+version and points there. If your issue is not here, open an issue on
+the repository and include: the Polaris version, the OS, the INDI
+driver version, what you were doing, what you expected, and what
+happened. The LOG panel can export all of that as one file
+(the "Administration and Diagnostics" chapter).
 
-## Server won't start
+## Troubleshooting / The server will not start
 
-**`The application requires the .NET runtime 10.x`**, install:
+**"The application requires the .NET runtime 10.x"**. You are running
+a framework-dependent build without the runtime. Install it:
 
 ```bash
 # Linux
 sudo apt install dotnet-runtime-10.0
-# Or self-contained binary that bundles the runtime, see installation.md
 ```
 
-**`Address already in use`**, port 5000 is taken. Either kill the
-other process (`sudo lsof -i :5000`) or change Polaris's port via
-`appsettings.json`:
+Or use a self-contained release build, which bundles the runtime;
+the "Installation" chapter covers both.
 
-```jsonc
-{ "Kestrel": { "Endpoints": { "Http": { "Url": "http://0.0.0.0:5001" } } } }
+**"Address already in use"**. Another process holds one of Polaris's
+ports: 5000 (the HTTPS listener) or 5080 (the loopback-only HTTP
+listener). Either stop the other process (`sudo lsof -i :5000` names
+it) or move Polaris in `appsettings.json`:
+
+```json
+{ "Server": { "Https": { "Port": 5001 } } }
 ```
 
-**Hangs on first request**, verify `indiserver` is reachable. Polaris
-doesn't require INDI on startup, but the first RIGS tab visit will
-spin trying to enumerate.
+`Server:Http:Port` moves the HTTP side the same way; the "API and Configuration" chapter lists
+every server setting.
 
-## INDI not connecting
+**The first request hangs**. Polaris does not require INDI at
+startup, but the first visit to the **RIGS** tab will spin while it
+tries to enumerate devices; verify `indiserver` is reachable (next
+section).
 
-**Click Connect → spinner forever, no error**, INDI server isn't
+## Troubleshooting / INDI will not connect
+
+**Connect shows a spinner forever, no error**. The INDI server is not
 running. Verify:
 
 ```bash
 ps aux | grep indiserver       # process listed?
 ss -tlnp | grep 7624           # listening on port 7624?
-nc -v localhost 7624            # netcat connects?
+nc -v localhost 7624           # can a connection open?
 ```
 
 Start it manually with the drivers you need:
@@ -43,346 +55,287 @@ Start it manually with the drivers you need:
 indiserver -v indi_asi_ccd indi_eqmod_telescope
 ```
 
-For permanent setup, use `indiwebmanager` (web UI for driver picking).
+For a permanent setup, use indi-web [@knro_indiwebmanager], the
+driver-picking web UI that Polaris embeds in the **RIGS** tab
+(the "Rigs and Device Drivers" chapter).
 
-**Connects, but devices list is empty**, INDI server is up but no
-drivers loaded. Add `-v` to indiserver + watch its output for driver
-errors (often "device not present" because USB isn't plugged or
-permissions denied).
+**It connects, but the device list is empty**. The server is up but
+no drivers loaded. Run `indiserver` with `-v` and watch its output
+for driver errors; the usual culprit is "device not present" because
+the USB cable is unplugged or permissions are denied.
 
-**Permission denied on USB device**, your user isn't in `dialout` /
-`plugdev`. Run:
+**Permission denied on a USB device**. Your user is not in the
+`dialout` or `plugdev` groups:
 
 ```bash
 sudo usermod -aG dialout,plugdev $USER
-# Log out + back in
+# then log out and back in
 ```
 
-For udev rules per device (ZWO especially), check the vendor's installer.
+For per-device udev rules (ZWO especially), run the vendor's
+installer.
 
-## A device vanished from the bus: Reset USB
+## Troubleshooting / USB devices crash mid-operation (under-voltage)
 
-**Symptoms:** a camera that no longer appears in the picker, a focuser
-whose serial port is gone, a driver that answers every command with an
-I/O error because the port it had open renumbered.
+**Symptoms**: the focuser disconnects ("DISCONNECTED within 500ms of
+move to X" in the LOG panel), the filter wheel drops mid-change, a
+camera download fails halfway, or the mount throws communication
+errors only under load. The telltale pattern is that short or idle
+operations work fine while longer, heavier operations crash the
+device; often the device disappears from the INDI device list
+entirely and has to be re-discovered.
 
-**The button:** RIGS, the INDI card, **Reset USB**. It re-enumerates
-the bus, which is what physically unplugging and replugging every
-cable would do, and then restarts the INDI drivers so none of them is
-left holding a port that no longer exists. The chain carrying the root
-filesystem is never touched, so a board that boots from a USB SSD
-cannot re-enumerate its own disk.
+**Root cause**: the Raspberry Pi's USB ports share a budget of about
+1.2 A total (on a Pi 4) across every connected device. When the
+combined draw of camera, mount, focuser, filter wheel, and
+USB-to-serial adapters exceeds that budget under peak load (a focuser
+running its motor while the camera reads out a frame), the 5 V rail
+sags below about 4.65 V, and at that point the device firmware cannot
+keep its USB session alive.
 
-**Read the result.** It names what came back and what did not:
+The author hit exactly this with a ZWO AM3, EAF, EFW, and ASI camera
+on a Pi 4: short focuser moves worked, long moves and Reset & Home
+crashed the focuser every time. Plugging the focuser and camera into
+a powered USB hub instead of the Pi fixed it on the first try.
 
-- something appeared: the kernel had lost track of it and the reset
-  recovered it
-- nothing changed: the device is electrically absent. A USB-C cable
-  with no data pairs comes back as a `USB Billboard Device` however
-  many times it is re-enumerated, and no amount of software will fix
-  a cable
-
-**Do not press it during a capture.** Every device disconnects and
-comes back, cameras included.
-
-## USB device crashes mid-operation (under-voltage)
-
-**Symptoms:** focuser disconnects ("DISCONNECTED within 500ms of
-move to X" in the LOG panel), filter wheel drops mid-change,
-camera download fails halfway, mount communication errors only
-under load. The pattern is "short / idle operations work fine,
-longer / heavier operations crash the device". Often the device
-even disappears from the INDI device list and has to be
-re-discovered.
-
-**Root cause:** the Raspberry Pi USB ports share a budget of
-~1.2A total (Pi 4) across every connected device. When the
-combined draw of camera + mount + focuser + filter wheel +
-USB-to-serial adapters exceeds the budget under peak load (a
-focuser running its motor while the camera is reading out a
-frame), the 5V rail sags below ~4.65V. At that point the EAF /
-EFW / ZWO camera firmware can't keep its USB session alive and
-disconnects.
-
-The author hit exactly this with a ZWO AM3 + ZWO EAF + ZWO EFW
-+ ASI camera setup on a Pi 4: short focuser moves worked, long
-moves and Reset & Home crashed the EAF every time. Plugging the
-EAF (and the camera) into a powered USB hub instead of the Pi
-direct fixed it on the first try.
-
-**Confirm it's under-voltage:**
+**Confirm it is under-voltage**:
 
 ```bash
-# 1. Pi's hardware voltage monitor. Any non-zero bit (especially
-#    0x1, 0x10000, 0x40000, 0x50005) confirms under-voltage was
-#    detected at some point since boot.
+# 1. The Pi's hardware voltage monitor. Any non-zero value
+#    (especially 0x1, 0x10000, 0x40000, 0x50005) confirms
+#    under-voltage was detected at some point since boot.
 vcgencmd get_throttled
-# 0x0           = OK ever since boot
-# 0x50005       = under-voltage RIGHT NOW + throttled
-# 0x50000       = throttled now + was under-voltage earlier
-# 0x40000       = was throttled earlier (often follows UV)
+# 0x0     = OK ever since boot
+# 0x50005 = under-voltage RIGHT NOW and throttled
+# 0x50000 = throttled now, was under-voltage earlier
+# 0x40000 = was throttled earlier (often follows under-voltage)
 
-# 2. Kernel log -- searches for the explicit warning the Pi
-#    firmware prints when the 5V rail drops below threshold.
+# 2. The kernel log carries an explicit warning when the 5V rail
+#    drops below threshold.
 dmesg | grep -iE 'under-voltage|hwmon|voltage'
 # "Under-voltage detected! (0x00050005)" = confirmed
-
-# 3. If you have a USB power meter (e.g. AVHzY CT-3), measure
-#    the actual current draw on the Pi's USB-C power input
-#    during a long focuser move. Expect spikes well past 1.5A on
-#    a loaded setup -- that's where 3A-rated PSUs save you.
 ```
 
-**Fix (cheap → expensive):**
+If you have a USB power meter, measure the actual draw on the Pi's
+USB-C input during a long focuser move; expect spikes well past
+1.5 A on a loaded setup, which is where 3 A-rated supplies save you.
 
-1. **Powered USB hub** (~$15-30) - best ratio of cost to fix.
-   Plug your highest-current devices (EAF, cooled cameras, EFW
-   if motor-driven) into the hub; leave lighter devices (USB-
-   to-serial mount adapter, GPS dongle) on the Pi direct.
-   Sabrent HB-UMP3, Anker 4-port powered, or any hub with its
-   own 5V 2A+ wall wart.
+**Fixes, cheapest first**:
 
-2. **Official Raspberry Pi 5.1V 3A USB-C PSU.** The "1.2A USB
-   budget" assumes the Pi's input PSU is delivering its rated
-   5.1V - many generic phone chargers sag to 4.9V or less under
-   load, which steals headroom from your devices. The official
-   Pi PSU has tight regulation under load.
-
-3. **Shorter / thicker USB cables.** Cable resistance drops
-   real voltage at peak draw. Replace any 28 AWG / >1m cable
-   with a 24 AWG / ≤1m one for the high-current devices. ZWO's
-   bundled cables are usually fine; aftermarket extension
+1. **A powered USB hub** (about $15-30), the best ratio of cost to
+   fix. Plug the highest-current devices (focuser, cooled camera,
+   motorized filter wheel) into the hub; leave light devices (the
+   USB-to-serial mount adapter, a GPS dongle) on the Pi directly.
+2. **The official Raspberry Pi 5.1 V 3 A USB-C supply.** The 1.2 A
+   USB budget assumes the input supply delivers its rated 5.1 V; many
+   generic phone chargers sag to 4.9 V or less under load, stealing
+   headroom from your devices.
+3. **Shorter, thicker USB cables.** Cable resistance drops real
+   voltage at peak draw; replace any thin (28 AWG) or over-1-meter
+   cable on a high-current device with a thicker (24 AWG), shorter
+   one. Vendor-bundled cables are usually fine; aftermarket extension
    cables are often the culprit.
+4. **External power on the device.** Some focuser revisions take
+   12 V auxiliary power so USB carries data only; cooled cameras have
+   a 12 V barrel jack, and the cooler should never be powered from
+   the Pi's USB.
 
-4. **External power on the device.** Some EAF revisions have a
-   12V aux power port that bypasses USB for the motor (USB
-   carries data only). The ASI cooled cameras have a 12V DC
-   barrel jack; if you were powering the cooler over USB-PD
-   from the Pi (don't), switch to the barrel jack with a
-   separate 12V supply.
+**What software cannot do**: chunking long moves, settling waits, and
+retries do not fix under-voltage; they only spread the peak draw out,
+which sometimes helps marginal cases and fails when the budget is
+genuinely exceeded. The **Reset** button on the focuser card cycles
+the INDI connection, which clears a wedged USB session after a crash,
+but it does not prevent the next one. The hardware checklist in
+the "Installation" chapter sizes the power system correctly from the start.
 
-**What software CAN'T do:** chunking long moves, settling waits,
-retries - none of these fix under-voltage. They just spread the
-peak draw out, which sometimes works for marginal cases and
-fails when the budget is genuinely exceeded. The Polaris Reset
-button on the focuser card cycles the INDI CONNECTION switch
-which clears a wedged USB session (useful right after a crash to
-get back to working state) but doesn't prevent the next crash.
+## Troubleshooting / Plate solving fails
 
-## Plate solve fails
+**"Astrometric solution failed"** during Slew & Center or Smart
+Calibrate. Work down this checklist:
 
-**`Astrometric solution failed`** in Slew & Center or Smart Calibrate
-, diagnostic checklist:
+1. **Are there stars in the frame?** Open the **PREVIEW** tab and
+   take a manual exposure. A uniform gray field means focus is far
+   off; focus manually until stars appear (the "Focusing" chapter).
+2. **Is the hint accurate?** The solver narrows its search using
+   pixel scale, field of view, and the (RA, Dec) hint, all derived
+   from your rig's focal length. Check that **RIGS**, Main Telescope,
+   **Focal length** matches the actual setup.
+3. **Is ASTAP installed with its star database?** The program alone
+   cannot solve; the "Installation" chapter covers downloading the database.
+4. **Try a blind solve.** In **SETTINGS**, under **Plate solver**,
+   set the blind solver to **Astrometry.net online** and retry. Slow
+   (about 30 s) but it needs no hints.
 
-1. **Are there stars in the frame?** Open the PREVIEW tab + take a
-   manual exposure. If you see a uniform grey field, focus is too far
-   off, manually focus until stars appear.
-2. **Is the catalog hint accurate?** Plate solver uses pixel scale +
-   FOV + (RA, Dec) hint to narrow the search. If your rig's focal
-   length is wrong, hints are off. Check RIGS → Main Telescope
-   → Focal length matches your actual setup.
-3. **Is ASTAP installed + has its star database?** ASTAP needs the
-   `h17`, `g17`, or `g05` star database, download from the ASTAP
-   website + drop into ASTAP's data folder.
-4. **Try blind solve**, Settings → Plate solver → set blind solver
-   to "Astrometry.net online" + retry. Slow (~30s) but no hints needed.
+## Troubleshooting / Plate solving or centering fails with "No space left on device"
 
-## PHD2 calibration fails
+**"No space left on device : '/tmp/nina_solve_...fits'"** during Slew &
+Center, plate solving, or polar alignment, even though your SSD has
+hundreds of gigabytes free. The disk is not the problem: on the
+Raspberry Pi and single-board-computer images `/tmp` is a RAM-backed
+filesystem (tmpfs), not part of the SSD, and it is small. A 4 GB board
+gives `/tmp` only a couple of gigabytes, shared with everything else,
+so the temporary FITS these operations write fills it in seconds while
+the SSD sits nearly empty.
 
-**`Calibration aborted`**, the most common cause is the guide star
-moved out of frame during the calibration sweep. Solutions:
+The fix shipped in **v0.98.47**: Polaris now points its temporary
+directory at the SSD-backed data folder on startup, so solve,
+centering, polar alignment and live-stack scratch all write to the SSD.
+Update to that version or newer (the one-click updater, or reflash the
+current image) and it is handled.
 
-1. Point closer to the celestial equator (Smart Calibrate has a "slew
-   to equator" toggle that does this for you)
-2. Increase `MaxStepCount` in PHD2 Brain (allow more steps per
-   direction)
-3. Verify your guide rate setting matches the mount's actual rate
-4. Polaris's Smart Calibrate auto-computes step size based on pixel
-   scale + guide rate, if you've manually overridden it to something
-   too small, calibration won't reach a measurable angle
-
-## Auto-focus moves to a wildly wrong position
-
-V-curve parabola fit was poisoned by outlier samples (clouds, frame
-without enough stars, satellite trail). Polaris validates "best within
-±2 × StepSize × N/2 of starting position", outside that range
-it logs a warning but still moves.
-
-**Mitigations**:
-
-- Bump `Min Stars` to 20+ to reject noisy samples
-- Enable Backlash compensation if your focuser has hysteresis
-- Pre-focus manually to within a step or two before running AF
-- Increase `Steps` from 9 → 15 for a longer baseline
-
-## Live stacking shows "frame count: 1" forever
-
-Alignment failing on every frame after the first. Means the first
-frame's reference stars can't be matched to subsequent frames.
-
-**Causes**:
-
-- Field rotation (you slewed during the stack), Reset + restart
-- Focus drifted hard (stars became too bloated to detect), Reset +
-  refocus
-- First frame had unusual lighting (satellite, plane) creating false
-  "stars", Reset (next first frame becomes the new reference)
-
-Verify in `/ws/status` payload: `liveStack.referenceStarCount` should
-be 50+ for a good reference. If it's 5, the first frame was bad.
-
-## Sequence stops mid-run with no error
-
-Check the **AUTORUN** tab, if `state = running` but `currentFrameInItem`
-isn't incrementing, the camera is hung. Causes:
-
-- USB cable popped (check INDI logs)
-- Cooler ran a power-cycle reset (some cameras do this on overcurrent)
-- Mount tracking off (filter wheel waiting on tracking-on state)
-
-The sequence engine doesn't currently detect these silently, it's on
-the roadmap. Workaround: Stop + Restart the sequence with the camera
-reconnected.
-
-## Meridian flip hangs
-
-Most common cause: your mount needs an **explicit pier-side command**
-to flip; just slewing back doesn't trigger the flip. EQMod-based
-mounts (CGEM, AVX, EQ6-R) flip on slew; some Celestron mounts via
-ASCOM don't.
-
-Workaround: open INDI / ASCOM control panel for your mount + click
-the "Flip" or "Force Pier Side: East/West" button manually mid-flip.
-
-File an issue with your mount model, we'd like to support more.
-
-## Mount kept tracking past the meridian / cables wound up
-
-If a mount tracks for hours past the meridian **without flipping**, the
-RA axis winds the cabling around the head until something snags (a real
-ASIAIR incident on a high-declination target ripped a USB cable). This
-happens when meridian flip is off (or the mount - e.g. a strain-wave
-AM3/AM5 - is set to track far past the meridian) and the session keeps
-running, often while clouded out and looping on lost guide stars.
-
-Polaris guards against this with the **mount safety stop** (Meridian
-Flip panel → *Safety guard*, on by default):
-
-- **Past-meridian limit** - stops tracking + aborts the session if the
-  target tracks more than *N* minutes past the meridian without a flip
-  (default 60). A healthy flipped GEM never trips; a flip-less mount
-  trips purely on time past the meridian.
-- **Guide circuit breaker** - stops the session after *N* consecutive
-  lost-star failures with no recovery (default 20) instead of looping
-  forever.
-
-On a trip Polaris turns **tracking off** (ending the winding), aborts
-the sequence/LIVE run, and shows a red banner with a **Dismiss**
-button. Enable *Park on safety stop* to also send the mount home
-(unwinds fully). Tune both limits per rig in the same panel; set a
-field to 0 to disable that guard. For deliberate far-past-meridian
-imaging on a strain-wave mount, raise the minutes limit.
-
-## Embedded PHD2 GUI (xpra) shows blank iframe
-
-Linux + xpra setup, but iframe stays blank. Diagnostic:
+On an older build you can redirect it yourself over SSH, without
+updating, by pointing the service's temp dir at `/var/tmp` (which lives
+on the SSD):
 
 ```bash
-# Is xpra session running?
-xpra list
-
-# Can you connect locally?
-curl http://localhost:14600/
-
-# Logs from the xpra session
-cat ~/.xpra/:100.log
+sudo mkdir -p /etc/systemd/system/polaris.service.d
+printf '[Service]\nEnvironment=TMPDIR=/var/tmp\n' | sudo tee /etc/systemd/system/polaris.service.d/tmpdir.conf
+sudo systemctl daemon-reload
+sudo systemctl restart polaris.service
 ```
 
-Usually one of:
+Do not simply enlarge `/tmp` on a 4 GB board: tmpfs is RAM, and the
+memory you hand it is memory taken from live stacking.
 
-- Xorg-dummy config not switched (see `docs/phd2-gui-embedding.md`
-  Step 2, `/etc/xpra/conf.d/55_server_x11.conf`)
-- xpra password set, browser session storage doesn't have it, open
-  the iframe URL in a new tab once + type the password (xpra
-  remembers it in sessionStorage from there)
+## Troubleshooting / PHD2 calibration fails
 
-## STUDIO frame library is empty
+**"Calibration aborted"**. The most common cause is the guide star
+moving out of frame during the calibration sweep:
 
-**Rescan** button didn't pick up files. Causes:
+1. Point closer to the celestial equator; Smart Calibrate has a
+   **slew to equator** toggle that does this for you (the "Autoguiding" chapter).
+2. Increase `MaxStepCount` in the PHD2 Brain dialog to allow more
+   steps per direction.
+3. Verify the guide rate setting matches the mount's actual rate.
+4. Smart Calibrate auto-computes the step size from pixel scale and
+   guide rate; if you manually overrode it to something too small,
+   calibration never reaches a measurable angle.
 
-- `ImageOutputDir` is wrong, check FILES tab Studio root indicator;
-  re-set it from the actual folder containing `{rig}/lights/...`
-- New files were saved while the rescan was running, re-click Rescan
+## Troubleshooting / Auto-focus moves to a wildly wrong position
 
-## Live preview canvas is black
+The V-curve's parabola fit was poisoned by outlier samples: clouds, a
+frame without enough stars, a satellite trail. Polaris validates that
+the best position falls within the sweep's own range around the
+starting position; outside it, it logs a warning but still moves.
+Mitigations, all detailed in the "Focusing" chapter:
 
-WebGL2 isn't initialized. Browser console (F12) shows shader compile
-errors. Workaround: Settings → "Force JPEG mode" → server encodes
-JPEGs instead. Slightly more CPU on the host but works in any browser.
+- raise **Min Stars** to 20+ to reject noisy samples;
+- enable backlash compensation if the focuser has hysteresis;
+- pre-focus manually to within a step or two before running
+  auto-focus;
+- increase **Steps** from 9 to 15 for a longer baseline.
 
-## Everything fails at once and the equipment looks broken
+## Troubleshooting / Live stacking shows "frame count: 1" forever
 
-A weak WiFi link between the **browser** and the host produces a very
-convincing impression of failing hardware: commands time out, the mount
-coordinates stop moving, the cooler temperature sits still, the preview
-freezes on the last frame that made it through. Nothing is wrong with the
-rig. The session runs **on the host**, and it keeps running while your
-browser is starving.
+Alignment is failing on every frame after the first, meaning the
+first frame's reference stars cannot be matched to later frames.
+Causes:
 
-Polaris measures that leg and says so:
+- field rotation (you slewed during the stack): reset and restart;
+- focus drifted hard, so stars are too bloated to detect: reset and
+  refocus;
+- the first frame had unusual lighting (a satellite or plane)
+  creating false "stars": reset, so the next first frame becomes the
+  reference.
 
-- The **⇅ chip** in the activity bar is the round trip from *this device* to
-  the host. Amber means slow, red means no status is arriving. The tooltip
-  carries the round trip, the age of the last status frame, and the share of
-  unanswered pings.
-- The **WiFi bars beside it are the host's radio**, reported by the host. They
-  can read a healthy 70% while your own leg is the problem, which is exactly
-  how a bad link gets mistaken for bad equipment.
-- When the link stays bad, the page **dims the panels that carry live numbers**
-  and the banner says the host keeps running the session on its own. Frozen
-  numbers that still look live are the whole illusion.
-- A command that gets no reply now says so as a **network** message instead of
-  a device one, and warns that the host may have executed it anyway. Re-press
-  a command only after the link recovers and you can see the real state again.
-- When the link recovers, one toast summarises how long it was bad and how
-  many commands went unanswered.
+In the `/ws/status` payload, `liveStack.referenceStarCount` should be
+50 or more for a good reference; a value like 5 means the first frame
+was bad. the "Live Stacking and EAA" chapter has the full alignment story.
 
-If the chip is red while the host's WiFi bars are full, move the *client*
-closer to the access point, or reach the host over Ethernet. If both are bad,
-the problem is at the host end or at the access point.
+## Troubleshooting / A sequence stops mid-run with no error
 
-## The warning says slow network but the network is fine
+Check the **AUTORUN** tab: if the state is running but the current
+frame counter is not incrementing, the camera is hung. Causes:
 
-Read the banner: when Polaris can tell, it names the host instead. The chip
-and the banner say **"The host is busy right now, not the network"** and list
-what it is doing (a recording, the camera stream, a sequence). Nothing is
-wrong with your WiFi and nothing needs pressing; the panels catch up on their
-own.
+- the USB cable popped (check the INDI logs);
+- the cooler power-cycled itself (some cameras do this on
+  overcurrent);
+- mount tracking is off and a step is waiting on the tracking-on
+  state.
 
-How it can tell: status frames stopping looks identical whether the host went
-quiet or the network dropped them, so the frame age alone cannot answer it.
-The socket can. While the connection is still open and the last frame the host
-sent said it was busy, or that its own equipment snapshot had gone stale, the
-host is the one that is behind. A socket that closed is the network.
+The sequence engine does not yet detect these silently; it is on the
+roadmap. The workaround is to stop, reconnect the camera, and restart
+the sequence (the "Simple Sequences and the Flat Wizard" chapter).
 
-Field report 2026-09-22: moving the mount with the video panel's joystick
-while a stream was running froze the host for a few seconds and the client
-painted the amber network warning, which sent the operator looking at WiFi.
-The cause was on the host: the 1 Hz status payload was reading live hardware
-(camera temperature, cooler, focuser temperature) on the thread that served
-the socket, and those reads block. On a ZWO camera each one waits for the
-per-handle SDK lock that the video grab loop re-takes immediately; on an
-Alpaca device each one is an HTTP call with a 15 s timeout. Slow builds then
-made every connected browser start its own, each parking another thread, until
-there was none left to answer the joystick's request. Those reads now happen
-on a thread of their own and the payload is built once at a time, so a slow
-device makes the numbers stale instead of freezing the host. If the equipment
-panel is stale while everything else is responsive, one device is not
-answering; the chip tooltip says how old the snapshot is.
+## Troubleshooting / The meridian flip hangs
 
-## See also
+The most common cause: your mount needs an explicit pier-side command
+to flip, and slewing back through the target position alone does not
+trigger it. EQMod-based mounts (CGEM, AVX, EQ6-R) flip on slew; some
+Celestron mounts driven over ASCOM do not. Workaround: open the INDI
+or ASCOM control panel for the mount and click its **Flip** or
+**Force Pier Side: East/West** button manually mid-flip. File an
+issue with your mount model; the project would like to support more.
+the "Mounts and WiFi Accessories" chapter covers the flip workflow end to end.
 
-- [FAQ](faq.md), quick-answer questions
-- [GUIDE PHD2 troubleshooting](guide-phd2.md#common-pitfalls)
-- [LIVE stacking troubleshooting](live-stacking.md#common-pitfalls)
-- Per-feature pages all have a "Common pitfalls" section
+## Troubleshooting / The mount kept tracking past the meridian
+
+If a mount tracks for hours past the meridian without flipping, the
+RA axis winds the cabling around the mount head until something
+snags; a real incident of this kind on another controller ripped a
+USB cable on a high-declination target. It happens when the meridian
+flip is off, or the mount (a strain-wave AM3/AM5, for example) is set
+to track far past the meridian, and the session keeps running, often
+clouded out and looping on lost guide stars.
+
+Polaris guards against this with the mount safety stop (in the
+Meridian Flip panel, under **Safety guard**, on by default):
+
+- the **past-meridian limit** stops tracking and aborts the session
+  if the target tracks more than N minutes past the meridian without
+  a flip (default 60); a healthy flipped mount never trips it;
+- the **guide circuit breaker** stops the session after N consecutive
+  lost-star failures with no recovery (default 20), instead of
+  looping forever.
+
+On a trip, Polaris turns tracking off (ending the winding), aborts
+the sequence or LIVE run, and shows a red banner with a **Dismiss**
+button. Enable **Park on safety stop** to also send the mount home,
+which unwinds fully. Both limits are tunable per rig in the same
+panel; setting a field to 0 disables that guard, and for deliberate
+far-past-meridian imaging on a strain-wave mount you raise the
+minutes limit. the "Mounts and WiFi Accessories" chapter has the details.
+
+## Troubleshooting / The embedded PHD2 GUI shows a blank panel
+
+Linux with xpra set up, but the embedded window stays blank.
+Diagnose:
+
+```bash
+xpra list                    # is the xpra session running?
+curl http://localhost:14600/ # can you connect locally?
+cat ~/.xpra/:100.log         # the session's own log
+```
+
+It is usually one of:
+
+- the Xorg-dummy configuration was not switched (see the setup steps
+  in the "Autoguiding" chapter; the file is
+  `/etc/xpra/conf.d/55_server_x11.conf`);
+- an xpra password is set but this browser has never supplied it:
+  open the embedded panel's URL in a new tab once and type the
+  password; xpra remembers it for that browser session from there.
+
+## Troubleshooting / The STUDIO frame library is empty
+
+The **Rescan** button found no files. Causes:
+
+- `ImageOutputDir` points at the wrong place: check the Studio root
+  indicator in the **FILES** tab and re-set it from the folder that
+  actually contains `{rig}/lights/...` (the "Managing Your Data" chapter);
+- new files were saved while the rescan was running: click **Rescan**
+  again.
+
+## Troubleshooting / The live preview canvas is black
+
+WebGL2 (the browser's gateway to the graphics card) failed to
+initialize; the browser console (F12) will show shader compile
+errors. Workaround: in **SETTINGS**, enable **Force JPEG mode**, and
+the server encodes JPEG previews instead. Slightly more CPU on the
+host, but it works in any browser.
+
+## Troubleshooting / See also
+
+Quick answers to non-failure questions live in the FAQ (the "Frequently Asked Questions" chapter),
+and every capture chapter ends with a "common pitfalls" section for
+its own feature.

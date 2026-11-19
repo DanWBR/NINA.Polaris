@@ -1,0 +1,410 @@
+# Managing Your Data
+
+An imaging night produces a lot of files: dozens or hundreds of light
+frames (the actual exposures of your target), calibration frames
+(darks, flats, and biases, the support exposures that map your
+sensor's defects; the "Glossary" chapter has the full definitions), saved live
+stacks, test snaps, and eventually masters, composites, and exports.
+All of it lives on the host, the machine running the Polaris server,
+not on the laptop or tablet you are browsing from. This chapter is
+about managing that data: where frames land, how the built-in file
+browser works, how to move files on and off the host, and how to keep
+a small SD card from filling up mid-project.
+
+The file browser is the left column of the **STUDIO** tab and it is
+always on screen there; the right column switches between the
+**Stack** workspace (batch processing, the "STUDIO: Calibration and Stacking" chapter) and the **Edit**
+workspace (single-frame adjustments, the "The EDITOR" chapter), with a third
+sub-tab, **Auto Workflow**, for saved processing pipelines
+(the "STUDIO: Calibration and Stacking" chapter). Earlier releases split this across three separate
+sidebar tabs, FILES, STUDIO, and EDITOR; they were three views of the
+same universe, the image files on the host's disk, and splitting them
+forced a tab jump in the middle of every workflow (pick lights, stack,
+edit the master). Unified, the browser keeps your selection and your
+place in the folder tree while the right side changes role. If you
+see the name "FILES tab" in older Polaris material, this browser is
+what it means.
+
+## Managing Your Data / Where frames land
+
+Every capture path in Polaris writes under one folder, the
+**Studio root**, stored in the profile setting `ImageOutputDir`. The
+default is `$HOME/Pictures/Polaris` on Linux and
+`%USERPROFILE%/Pictures/Polaris` on Windows; the `.deb` package
+install points it at `/home/polaris/files` instead (the "Installation" chapter
+covers the defaults and how to override them).
+
+Inside the root, each rig (each named equipment profile,
+the "Rigs and Device Drivers" chapter) gets its own folder, and each kind of capture gets a
+predictable subtree:
+
+```
+{ImageOutputDir}/
+  {RigName}/
+    {Target}/lights/{Night}/         one object's subs, night by night
+    {Target}/aux/{Night}/            the second camera, same object
+    {Target}/stacked/{Night}/        integrations you asked for
+    {Target}/planetary/              SER clips and their stacks
+    calibration/{Camera}/dark/{Exposure}s_g{Gain}/
+    calibration/{Camera}/flat/{Filter}_g{Gain}/
+    calibration/{Camera}/bias/g{Gain}/
+    calibration/{Camera}/masters/    masters built in Studio
+    snaps/{Filter}_{Night}/          from PREVIEW with Save on
+    logs/{Night}/                    one log per PLAN, AUTORUN, ADV or LIVE run
+    calibrated/ integrated/ processed/   Studio output
+```
+
+**The run log:** every PLAN, AUTORUN, ADV and LIVE run writes a plain text
+log into `logs/{Night}/` (with a night-first layout, `{Night}/logs/`),
+even when it never saves a frame. It opens with what the run was asked
+to do (targets, frames, start and end times) and the ten minutes logged
+before it started, follows the whole run, and ends with how it finished,
+or why it did not start. The guide logs written during the run (the
+PHD2-format log of the built-in guider, its debug log, and the log of an
+external PHD2 on the same host) are copied beside it, into `guide/`.
+With the storage push on, all of them go to the destination with the
+frames (see the next section).
+
+Light frames are therefore grouped by target, then by night, which
+makes both housekeeping ("delete the cloudy night of June 3rd") and
+processing ("select every sub of IC 4606") a matter of navigating to
+one folder. There is no filter level: the filter is in the file name
+and in the FITS header, which is where Studio reads it from.
+
+The night in that path is the astronomical night, not the calendar
+day: it rolls over at local midday, so a frame taken at 02:30 belongs
+to the evening that started the night before, and one session is one
+folder.
+
+**Folder layout**, in Settings under Image Output, decides the order of
+the first two levels:
+
+| Choice | A light lands at |
+| --- | --- |
+| Target, then night (the default) | `{rig}/M42/lights/2026-09-28/` |
+| Night, then target, `20260928` | `{rig}/20260928/M42/lights/` |
+| Night, then target, `2026-09-28` | `{rig}/2026-09-28/M42/lights/` |
+
+The night-first shapes are what an ASIAIR card looks like, and they
+suit an operator who thinks in sessions: everything shot on one night
+is one folder to copy off, back up or delete. Target-first suits one
+who thinks in projects: a target's whole history in one place.
+
+Aux frames and stacks follow the choice, so a night never splits
+across two shapes. Calibration does not: darks, flats and biases stay
+at `{rig}/calibration/{camera}/...`, because a master outlives the
+night it was shot on, and because a master belongs to the sensor that
+took it rather than to the rig. A rig with an imager and an aux camera
+used to drop both their darks into one folder whenever the exposure
+and gain agreed. Changing the setting moves nothing that is already on disk,
+and Studio indexes both shapes, since it reads FITS headers rather
+than path segments.
+
+The card also shows, in one line, where tonight's light will land and
+what it will be called, which is faster than reasoning about the
+tokens. The processing
+stages described in the next chapters add their own subtrees under the
+same rig folder: `calibration/masters/` for master frames,
+`calibrated/` for calibrated lights, `integrated/` for stacked
+masters and their `composed/` channel combinations, and
+`processed/` for exported bitmaps (the "STUDIO: Calibration and Stacking" chapter, the "Mono, LRGB, and Narrowband" chapter).
+
+## Managing Your Data / The browser
+
+The left column is a full file manager for the host's disk, not just
+for the Studio root:
+
+- **Drive picker**: on Windows it lists the lettered drives; on Linux
+  it offers `/`, `/home`, `/mnt`, `/media`, and `~` (the server
+  user's home folder). Removable disks and network mounts usually
+  appear under `/mnt` or `/media`.
+- **Path crumbs**: the current path is shown as clickable segments;
+  click any of them to jump back up.
+- **Toolbar**: **New folder**, **Upload**, **Download**, **Cut**,
+  **Copy**, **Paste**, **Rename**, **Delete**, **Compare**, **Crop**,
+  **Set as Studio root**, and **GraXpert** (the AI cleanup entry
+  point, the "AI Cleanup: GraXpert in the Browser" chapter).
+- **Listing**: rows with name, size, modified date, and type columns,
+  each with a selection checkbox. Double-click a folder to enter it;
+  double-click a file to preview it. Multi-select with Ctrl-click and
+  Shift-click, as in a desktop file manager.
+- **Selection bar**: a summary such as "2 files · 124 MB" plus an
+  indicator showing the current Studio root.
+
+### Managing Your Data / The browser / Per-frame repair tools
+
+Some defects belong to one frame and to the telescope that took it, not
+to a stack, so the toolbar row also holds single-frame repairs that write
+a new FITS and keep the original. Two are worth knowing about by name.
+
+**Violet halo** removes the out-of-focus violet skirt an ED doublet
+spreads around bright stars, from roughly 6 px outwards. It brings blue
+down towards the other two channels inside the halo only, capped per
+pixel at the mean of that pixel's own red and green, so star cores and
+their colour are left alone. **Halo strength** and **Halo radius** are
+the two knobs; larger focal ratios and brighter stars spread the skirt
+further. Because it corrects a telescope defect, run it on the original
+frame rather than on the output of a star colour repair.
+
+**Star fix** is the separate star colour repair, for cores that came out
+the wrong colour rather than for the skirt around them. The violet stage
+used to live inside it; it is its own tool now, since the two answer
+different faults and reach for different frames.
+
+The same row holds **Crop**, **Compare**, **Wavelets** and the
+**GraXpert** entry point (the "AI Cleanup: GraXpert in the Browser" chapter).
+
+### Managing Your Data / The browser / FITS metadata columns
+
+Above the listing sits a **Show FITS metadata** checkbox, off by
+default so that folders holding thousands of files still list
+quickly. Turn it on and four extra columns appear: **Type**,
+**Filter**, **Target**, and **Exposure (s)**, read from each file's
+FITS header (FITS is the standard astronomy image format, and its
+header carries this shot metadata inside the file [@pence2010fits]).
+
+The values do not come from opening each file on demand; they come
+from the frame library, an index of every image Polaris knows about,
+kept in a SQLite database [@sqlite] (a small database engine that
+stores everything in a single file on the host). The lookup is a
+single batch query, under 100 ms even with hundreds of rows in view.
+Files that have not been indexed yet show "--" in those columns;
+click **Rescan** in the toolbar to index them. The checkbox state is
+remembered across sessions on that browser device. (The preference is stored in the browser's localStorage, so it is per client device, not per host.)
+
+Use this when you inherit a folder of mixed lights, darks, and flats
+and do not want to open each file to check what it is.
+
+### Managing Your Data / The browser / Previewing files
+
+Double-clicking a file opens a preview appropriate to its type:
+
+- **FITS, XISF, TIFF, PNG, JPG**: a zoomable, pannable viewer
+  (OpenSeadragon [@openseadragon], the deep-zoom viewer used
+  throughout Polaris), with an automatic contrast stretch applied to
+  FITS files so a linear frame is actually visible. XISF is the
+  image format from the PixInsight world [@pixinsight]; Polaris reads
+  it alongside FITS.
+- **TXT, LOG, JSON, MD**: a text modal showing the first 32 KB of
+  the file.
+
+## Managing Your Data / Moving, copying, and deleting
+
+The mutation operations follow desktop conventions:
+
+- **Cut** then **Paste** moves files; a move across volumes (from the
+  SD card to a USB disk, say) is handled as a copy followed by a
+  delete.
+- **Copy** then **Paste** duplicates.
+- **Delete** asks for confirmation and writes a line to the server
+  log, so a destructive mistake is at least traceable.
+- **Rename** edits the name inline on the row.
+- **Upload** pushes files from the client device to the host;
+  **Download** pulls them the other way. Downloading a multi-file
+  selection streams a single ZIP archive to the browser, packed on
+  the fly, so there is no temporary archive eating disk space on the
+  host.
+
+One practical note on large downloads: if you reach Polaris through a
+reverse proxy (an intermediary web server in front of Polaris), a
+long-running ZIP download can hit the proxy's read timeout and abort.
+Give the proxy a long read timeout, or download over the direct LAN
+connection on port 5000, which has no such limit.
+
+## Managing Your Data / Sending data off the host
+
+Everything above moves data by hand. Polaris can also do it by
+itself: **Settings -> Storage push** copies every saved frame to a
+NAS over SMB, to another machine over SFTP, to a mounted folder, or
+to a cloud account, rebuilding the same folder tree at the far end.
+
+**The local copy always stays on the host.** The push is a copy and
+never a move; nothing is deleted at either end. A failed upload can
+cost you time, never data.
+
+The queue runs in the background with two lanes, one for images and
+one for the much heavier video and SER files, so a 4 GB planetary
+capture does not park the night's lights behind it. A frame is
+written under a temporary name and renamed once complete, so a
+half-copied file is never mistaken for a finished one. Repeated
+failures trip a breaker rather than retrying forever; **Retry
+failed** clears it once the destination is back. If the name of an SMB
+server doesn't resolve, which happens on home networks when the router
+is slow to answer name lookups, Polaris tries again after a second. If
+the second lookup also fails, Polaris uses the address it last reached
+the server at, as long as that was within the last hour. **Backfill** walks
+the capture folder and queues whatever the destination does not
+already have.
+
+On the LAN kinds, **Link share** caps how much of the network link
+the push may take, so the browser watching the session over that same
+link stays usable.
+
+### Managing Your Data / Sending data off the host / Cloud accounts
+
+Choose the **Cloud** kind for Google Drive, OneDrive, Dropbox,
+Nextcloud or WebDAV, SFTP and S3-compatible storage. The provider
+protocols and their sign in are handled by
+[rclone](https://rclone.org), which Polaris runs for you. It is a
+recommended package on a `.deb` install, so it is usually already
+there; if it is not, the card says so, lists every path it searched,
+and names the package:
+
+```bash
+sudo apt install rclone
+```
+
+On a Windows host, `winget install Rclone.Rclone` does the same job.
+Polaris also looks along PATH, so it finds the binary wherever the
+package manager put it.
+
+Your cloud account never enters the Polaris profile. rclone keeps it
+in its own configuration file inside the Polaris data directory,
+readable only by the account Polaris runs as, and Polaris only ever
+writes it through rclone itself.
+
+Signing in happens in the browser you already have Polaris open in.
+The Pi has none of its own, but it does not need one:
+
+1. **Set up a remote**, pick the provider, and give it a short name.
+2. Press **Sign in with the provider**. A tab opens on Google,
+   Microsoft or Dropbox.
+3. Sign in there. Your browser then lands on an address that cannot
+   load, which is expected: it points at the Pi, not at your phone or
+   laptop.
+4. Copy that whole address from the address bar, paste it into
+   **Address your browser landed on**, and press **Finish sign in**.
+
+That copy is the only manual step, and only because the provider
+insists on redirecting to rclone's own local address. With Polaris
+open on the host itself there is nothing to copy at all.
+
+OneDrive is the one exception: the sign in alone does not carry the
+drive id, so use **Sign in on another computer instead**, run
+`rclone config` there, and paste the whole section it writes.
+
+Because rclone runs its own transfer loop, the Link share control
+cannot reach it. The cloud kind gets a hard **Upload speed limit**
+instead. Pick something below your actual upload speed and the
+session, the preview and the guiding stay responsive while a night
+goes up.
+
+### Managing Your Data / Sending data off the host / When it uploads
+
+- **As each frame is saved**, which is the default.
+- **When a run finishes**, if *Upload the session folder when a run
+  finishes* is on. This catches the files that a live stack, a plate
+  solve or a Studio step wrote without saving a new frame, which the
+  per-frame push never sees.
+- **The run log** of a PLAN, AUTORUN, ADV or LIVE run and its guide
+  logs (see the folder tree above) go up
+  every five minutes while the run is going, and once more when it
+  ends. A power-off at the end of a run waits up to a minute for that
+  last copy, so the log of the night is on the destination even when
+  the host is already off by morning.
+- **On demand**, from this tab: select exactly one folder and press
+  **Send to cloud**. Only what the destination is missing is queued,
+  so sending the same night twice costs nothing.
+
+## Managing Your Data / Downloading and sharing one frame
+
+**Download** sends the selection to your device: a single file goes
+straight through, several are packed into a ZIP on the fly. In the
+mobile app the download is handed to the phone's own download manager,
+which is what copes with a multi-gigabyte selection.
+
+**Share** hands one file to whatever your device shares with:
+WhatsApp, Telegram, AirDrop, the photo library. A FITS is shared as
+the rendered image, with the same stretch the viewer shows, because
+nothing on a phone opens a FITS and the messaging apps refuse the
+size. Files that are already images go as they are.
+
+## Managing Your Data / Switching the Studio root
+
+Navigate to any folder and click **Set as Studio root** (the
+star-marked toolbar button). This updates the profile's
+`ImageOutputDir` and re-indexes the frame library against the new
+root. It is the canonical way to switch storage targets between
+sessions: point it at a bigger USB SSD, a NAS share mounted under
+`/mnt`, or a fresh project folder, and every subsequent capture and
+processing output lands there.
+
+## Managing Your Data / Saving to a USB drive
+
+A USB stick or a USB SSD (a solid-state drive, fast and sturdy) is
+the simplest way to give the host more room and to carry a night's
+data home. Polaris on Linux mounts the drive by itself, that is, it
+makes the files on it reachable, under `/media/polaris/<drive name>`.
+The drive can be formatted as exFAT (the format Windows and macOS
+both read and write, and the best choice for large files), FAT32,
+NTFS, or a Linux format such as ext4.
+
+- **Plugged in while Polaris runs:** a "USB drive detected" message
+  asks whether to use it as the capture home. Answer yes and every
+  later capture is saved on the drive.
+- **Plugged in before the host started:** Polaris does not ask about
+  a drive that was already there. Open **Settings → Image Output**,
+  press **Find USB drives**, pick the drive (its free space is shown
+  next to the name) and press **Save here**.
+- **Unplugged while it holds the capture home:** Polaris offers to go
+  back to the default folder (`files` in the polaris user's home) so
+  the next capture does not fail.
+
+Videos recorded in the VIDEO tab follow the same setting: SER files
+(the frame-by-frame video format planetary stacking programs read)
+are written under `<capture home>/<rig>/planetary/<target>/`.
+
+To use a folder on the drive instead of its top level, browse to that
+folder in FILES and press **Set as Studio root**, as above.
+
+## Managing Your Data / Housekeeping on a small SD card
+
+A Raspberry Pi booting from a 32 or 64 GB SD card does not hold many
+nights of 24-megapixel FITS files, and stacking multiplies the
+footprint: calibrated copies, integrated masters, and composites all
+land next to the originals. A few habits keep the card healthy:
+
+- **Watch the disk gauge.** The bottom status bar shows the host's
+  disk usage at all times (the "A Tour of the Interface" chapter); glance at it before a long
+  unattended night.
+- **Prefer external storage for data.** Plug in a USB SSD (or mount
+  a NAS share) and **Set as Studio root** on it. The SD card then
+  holds only the operating system and Polaris itself, and card wear
+  and space pressure both disappear.
+- **Transfer, then delete.** After a session, select the night's
+  folders and **Download** them as one ZIP to your processing
+  machine, or **Cut** and **Paste** them onto an attached disk; then
+  **Delete** the originals. The per-date session folders under
+  `lights/{Target}/{Filter}/` make it easy to remove exactly one
+  night.
+- **Prune the processing by-products.** Calibrated intermediates
+  under `calibrated/` can be regenerated from the raw lights and the
+  masters at any time (the "STUDIO: Calibration and Stacking" chapter), so they are safe to delete once
+  you have the integrated master.
+
+## Managing Your Data / Security model
+
+The browser is powerful, and it is worth being explicit about what it
+exposes. Polaris assumes a trusted home network: the file browser can
+reach the entire filesystem of the host, limited only by the
+permissions of the user account the server runs as. A blocklist
+covers the obvious traps (`/proc`, `/sys`, `/dev/shm`,
+`/etc/shadow`, `~/.ssh`, and the Windows registry hives), and
+destructive operations require double confirmation, but the surface
+is deliberately wide; that is what makes it useful.
+
+The consequence: do not expose Polaris directly to the internet. For
+access from outside your network, use the Relay, which adds access
+tokens, TLS encryption, and rate limiting (the "Networking and Remote Access" chapter).
+
+## Managing Your Data / Common pitfalls
+
+**FITS metadata columns are blank ("--").** Those files are not in
+the frame library yet. Click **Rescan** in the toolbar.
+
+**A long ZIP download times out.** A reverse proxy in the path needs
+a longer read timeout; direct LAN access on port 5000 is unaffected.
+
+**New files do not appear in the listing.** The capture pipeline may
+still be flushing the file to disk; wait a few seconds and refresh or
+**Rescan**.

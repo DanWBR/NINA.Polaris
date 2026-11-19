@@ -1,0 +1,443 @@
+# DSLR and Mirrorless Cameras
+
+A DSLR or mirrorless body is a perfectly good deep-sky camera, and
+Polaris supports the three big vendors through two different roads.
+On Linux, everything goes through the `indi_gphoto_ccd` driver of
+INDI (the open-source driver system astronomy gear speaks on Linux,
+the "Rigs and Device Drivers" chapter). That driver is built on libgphoto2, the open-source
+library Linux uses to talk to consumer cameras, and covers hundreds
+of camera models from all vendors. On Windows, Polaris instead uses
+each vendor's own driver library (its SDK, software development
+kit): the Canon path is complete and battle-tested, while the Nikon
+and Sony drivers are skeletons awaiting contributions, documented
+here so the status and the plan are on record.
+
+Two behaviors are common to every DSLR path. First, these bodies
+report **ISO** rather than analogue gain, so the Camera card and the
+capture controls show an ISO dropdown in place of the numeric gain
+box that dedicated astronomy cameras get (the "Rigs and Device Drivers" chapter). Second, Polaris
+always keeps your raw file: the untouched CR2, CR3, NEF, or ARW (the
+camera-raw formats of Canon, Nikon, and Sony) is what lands on disk,
+alongside whatever preview path feeds the screen.
+
+## DSLR and Mirrorless Cameras / Canon on Windows (EDSDK)
+
+On Windows, Polaris talks to Canon EOS bodies, DSLR and mirrorless,
+through Canon's EOS Digital SDK (EDSDK), the official kit Canon
+publishes for controlling its cameras [@canon_edsdk]. Linux users
+should use the INDI gphoto driver instead, described later in this
+chapter.
+
+Every camera supported by EDSDK 13.x and 14.x works: everything from
+the EOS 5D Mark II era forward among the DSLRs, plus all the modern
+EOS R, RP, Ra, R5, R6, R7, R8, R10, R50, and R100 mirrorless bodies.
+The Canon support matrix at
+<https://developercommunity.usa.canon.com/> is the source of truth.
+
+### DSLR and Mirrorless Cameras / Canon on Windows (EDSDK) / Installing the EDSDK DLLs
+
+Canon's EULA (its licence agreement) does not permit redistribution
+of EDSDK in third-party software, so each user has to register and
+download the SDK themselves. It is a one-time, free process:
+
+1. Go to <https://developercommunity.usa.canon.com/> (or the
+   equivalent regional Canon developer portal).
+2. Sign up for a free developer account.
+3. Accept the EDSDK licence and download the latest version (13.x or
+   newer). The download is a Zip archive.
+4. In the RIGS tab's Camera card, pick **Canon EOS (EDSDK)** in the
+   driver list (it reads *(not installed)* until the SDK is in place)
+   and press **Install from the EDSDK zip…**. Choose the zip you
+   downloaded. Polaris takes out the two DLLs it needs (DLLs are the
+   library files that make up the SDK), `EDSDK.dll` and
+   `EdsImage.dll`, and puts them in its own SDK folder,
+   `%LOCALAPPDATA%\NINA.Polaris\profiles\native-sdks\canon-edsdk`. No
+   administrator rights are needed, updates leave that folder alone,
+   and Polaris uses the SDK at once, without a restart. If you
+   already extracted the zip, choose those two files from its
+   `EDSDK_64\Dll` folder instead.
+
+The zip holds each DLL twice. The copies under `EDSDK\Dll` are
+32-bit and the ones under `EDSDK_64\Dll` are 64-bit (the two kinds
+of Windows program, which cannot load each other's libraries).
+Polaris is a 64-bit program, so only the second pair works; the
+installer tells them apart by reading the files themselves. To
+install by hand instead, copy the 64-bit pair next to the Polaris
+executable, into `plugins\canon-edsdk` beside it, or into the SDK
+folder above, and restart Polaris.
+
+### DSLR and Mirrorless Cameras / Canon on Windows (EDSDK) / Connecting the camera
+
+Plug the camera into the host with a USB cable; use the cable that
+came with the camera or a known-good USB 2.0 cable, since USB 3.0
+cables sometimes confuse the body's USB controller. Power the camera
+on and set the mode dial to **M** (manual). In the RIGS tab's Camera
+card, pick the **Canon EOS (EDSDK)** entry in the driver dropdown; if
+the entry shows *Not installed*, install the SDK as described above.
+Click
+**Detect** to refresh the list of connected Canon bodies, pick the
+body ("EOS RP", "EOS 6D Mark II", and so on), and click **Connect**.
+
+### DSLR and Mirrorless Cameras / Canon on Windows (EDSDK) / Capture behaviour
+
+- **Save destination**: Polaris sets `SaveTo = Host` on every
+  connect, so frames go directly into Polaris instead of the camera's
+  SD card. You can leave the card removed if you want.
+- **Image format**: leave the camera set to **RAW + JPEG**. Polaris
+  uses the JPEG for the on-screen preview and saves the CR2 (or CR3)
+  verbatim under `{rig}/lights/{target}/{filter}/{session}/`,
+  alongside what dedicated astronomy cameras produce (the "Managing Your Data" chapter).
+- **ISO**: surfaced as a dropdown in the Camera card, in place of the
+  gain field that astronomy cameras use, with common values from
+  ISO 50 to ISO 102400.
+- **Shutter speed**: for any exposure of 30 s or less, Polaris picks
+  the closest of the camera's preset shutter speeds (its discrete Tv
+  values). Anything past 30 s automatically uses
+  **Bulb** mode: the SDK opens the shutter, Polaris waits the
+  requested time, then closes it.
+- **Autofocus**: Polaris does not drive the camera's autofocus. Set
+  the lens or body to **MF** before connecting, so the Polaris
+  auto-focus routine, which expects an INDI or ASCOM focuser (ASCOM
+  is the Windows astronomy-driver standard, the "Rigs and Device Drivers" chapter;
+  the "Focusing" chapter covers focusing), does not interact with the lens
+  motor.
+
+### DSLR and Mirrorless Cameras / Canon on Windows (EDSDK) / Tips for tethered sessions
+
+Tethered sessions keep the camera awake the whole time, so use a
+dummy battery with an AC adapter (Canon DR-E18, DR-E6, or DR-E17
+depending on the body) or a USB-PD (USB Power Delivery) trigger that
+emulates the battery
+slot. A USB cable hanging off a moving telescope can unplug itself
+mid-sequence; loop the cable through the tripod or saddle once before
+plugging it in. And only one application can hold an EDSDK session
+per camera: close Canon EOS Utility, DigiCamControl, BackyardEOS, and
+similar tools before connecting in Polaris, otherwise the connect
+call returns `EDS_ERR_DEVICE_BUSY`.
+
+### DSLR and Mirrorless Cameras / Canon on Windows (EDSDK) / Troubleshooting Canon
+
+- **"EdsInitializeSDK failed"**, or *(not installed)* after copying
+  the DLLs by hand: they are the 32-bit copies from `EDSDK\Dll`, or
+  not in one of the folders Polaris searches. Use **Install from the
+  EDSDK zip…**, which picks the right copies itself.
+- **Detect returns no cameras**: another app holds the EDSDK session,
+  or the camera's USB mode is set to PC mode but the cable is bad or
+  the port is USB-power-only.
+- **Capture hangs**: switch the camera to RAW + JPEG mode if it was
+  set to RAW only. Polaris times out the JPEG download after 300 ms;
+  if your camera reports a longer transfer, this is the first thing
+  to suspect.
+- **CR2 saved but no preview shown**: same cause, the JPEG asset
+  never arrived. Most modern bodies always emit a JPEG even in
+  RAW-only mode (as the image-review thumbnail), but some older
+  bodies do not.
+
+## DSLR and Mirrorless Cameras / Nikon on Windows (open work)
+
+The Nikon driver in the current build is a skeleton. The Camera card
+recognises the driver and lists it in the dropdown as *(not
+installed)*, but the actual capture path is a stub (a placeholder
+with no working code behind it); contributions are
+welcome (the "Building and Contributing" chapter). For developers who want to pick the
+work up, the scaffolding is already in place: a
+`src/NINA.Camera.NikonSdk/` project with the correct
+`<SupportedOSPlatform>windows</SupportedOSPlatform>` attribute, a
+`NikonSdkCamera : ICamera` with the right shape (ISO options from 64
+to 102400, `Capabilities.Dslr` so cooler and binning controls are
+hidden in the UI, and `Gain` aliased to ISO so the status broadcast
+renders the right field), discovery and registry stubs that return
+empty so the UI surfaces the install banner without crashing, and the
+`nikon-sdk` entry already wired into `EquipmentManager.SelectCamera`
+and the camera-drivers endpoint (An endpoint is one specific web address inside Polaris's own API, the machine-readable interface the browser UI talks to; this one serves the list of camera drivers.).
+Once a real binding lands (the glue code that connects Polaris to
+the vendor's library), the driver becomes selectable end to end with
+no other wiring changes.
+
+Nikon's software stack splits in two [@nikon_sdk]; which to implement
+depends on the bodies to support:
+
+**Option A, the MAID SDK** (DSLRs and older bodies). The Module-based
+API for Image Devices (API: the set of commands a piece of software
+exposes to other programs) is Nikon's classic SDK. It works through
+`.md3` module files, small add-on files loaded from disk at run
+time, one per body class. Coverage runs
+through the DSLR line to the D6 era, plus the Z7 and Z7 II on the
+newer modules. The recommended path is to start from MekNikon
+[@meklarian_meknikon], a C# wrapper under the permissive MIT
+open-source licence that already covers
+the D500 and Z7/Z7 II, either by vendoring its native binding code
+(copying that glue code into the Polaris source tree at
+`src/NINA.Camera.NikonSdk/Native/`) or by adopting its NuGet package
+(NuGet is the .NET package repository), if
+published. The MAID `.md3` modules are not redistributable, the same
+arrangement as Canon EDSDK: users register at
+<https://sdk.nikonimaging.com/>, accept the EULA, download the SDK,
+and drop the modules into `plugins/nikon-sdk/`.
+
+**Option B, the Nikon Imaging SDK** (Z series only). Nikon's newer
+SDK targets the Z-mount mirrorless line (Z 5, Z 6, Z 7, Z 8, Z 9 and
+their II variants). Its interface is built from C++ classes, which
+makes P/Invoke (P/Invoke is the .NET mechanism a C# program such as Polaris uses to call into a native library; plain C-style libraries are straightforward to call this way, libraries built from C++ classes much less so.) harder than MAID, but the modern bodies are
+better supported. Registration is the same page at
+<https://sdk.nikonimaging.com/>; headers, samples, and the matching
+SDK DLLs ship in the zip.
+
+Whichever lands, the capture path should match the Canon driver's
+shape so the rest of Polaris does not need to change: capture in
+RAW + JPEG on the camera, pull both assets on each shutter trigger,
+attach the NEF bytes to the returned image data with the `.nef`
+extension, decode the JPEG to a luminance array (a brightness-only
+version of the image) for the live preview,
+and map the requested exposure to the closest discrete Tv value with
+a fall-back to Bulb (most Nikon bodies expose Bulb via the SDK as a
+special shutter-speed value). Once the binding works, the workflow is
+the familiar one: pick the **Nikon (MAID SDK)** entry in the Camera
+card, **Detect**, pick the body, **Connect**, and captures land in
+`{rig}/lights/{target}/{filter}/{session}/IMG_*.nef` exactly as Canon
+frames do as CR2.
+
+For tethered Nikon sessions: the EH-7P adapter with the EP-5B dummy
+battery keeps Z bodies awake during long sessions, while D-series
+bodies need the corresponding EH-5B and EP-5 kit. Close Nikon Camera
+Control Pro 2, Nikon NX Tether, and similar tools before connecting,
+the same single-session-at-a-time constraint as Canon. And note that
+the MAID `.md3` modules are version-locked to specific bodies, so new
+camera models need fresh `.md3` files from a Nikon SDK refresh.
+
+## DSLR and Mirrorless Cameras / Sony on Windows and Linux (open work)
+
+The Sony driver is also a skeleton in the current build: the Camera
+card lists it as *(not installed)* and the capture path is a stub.
+It is, however, the most attractive vendor driver to finish, because
+unlike Canon EDSDK and the Nikon stack (both Windows-only), Sony's
+Camera Remote SDK (SCRSDK) v2.x ships ready-built library files for
+both Windows and Linux, including ARM64 (the Raspberry Pi's
+processor family) [@sony_scrsdk]. That makes it the
+only vendor SDK that could ship to Raspberry Pi users running Polaris
+headless; Canon and Nikon users on Linux go through the INDI gphoto
+path instead.
+
+The developer scaffolding mirrors Nikon's: a
+`src/NINA.Camera.SonySdk/` project
+(deliberately without a `<SupportedOSPlatform>` attribute so the
+assembly compiles on Linux too, with a runtime SDK probe making the
+per-host decision), a `SonySdkCamera : ICamera` with ISO options from
+50 to 102400, `Capabilities.Dslr`, and `Gain` aliased to ISO,
+discovery and registry stubs, and the `sony-sdk` entry already wired
+into the equipment manager and the camera-drivers endpoint.
+
+Sony's tethering stack splits in two, by camera generation:
+
+**Option A, Camera Remote API v1.90** (plain web commands over
+Wi-Fi, older bodies).
+Cameras released roughly 2013 to 2017 can be driven over Wi-Fi
+through JSON-RPC (JSON-RPC is a way of sending commands as small structured text messages over ordinary web requests; the camera itself runs a tiny web server that answers them. This is Sony's "Smart Remote Control" mode.). No vendor
+library, no USB driver dance, no platform restrictions: it works the
+same on Windows, Linux, and a Raspberry Pi. Any body with the "Smart
+Remote Control" PlayMemories app works, including the α6000, α6300,
+and α6500; the original α7, α7R, and α7S; the α7 II, α7R II, and
+α7S II; the NEX-5R, NEX-5T, and NEX-6; the DSC-QX10 and QX100 lens
+cameras; and Wi-Fi-equipped HX-series compacts. The recommended
+reference is the nantcom/SonyCameraSDK project
+[@nantcom_sonycamerasdk], a portable C# client for this exact API
+under the permissive MS-PL open-source licence:
+discovery via SSDP on port 1900 (the same network-discovery
+broadcast smart TVs use), then JSON-RPC commands posted to
+`http://{cam-ip}:8080/sony/camera` using the `startRecMode`,
+`actTakePicture`, `getEvent`, `setIsoSpeedRate`, `setShutterSpeed`,
+and `setExposureMode` methods. This path needs no
+redistribution-restricted DLLs, since the camera has the API built
+in.
+
+**Option B, Camera Remote SDK v2.x** (USB tether, modern bodies).
+Cameras released from 2018 onward dropped the Wi-Fi command
+interface in favour of SCRSDK, a native library driven over a USB
+tether. Coverage
+includes the α7 III and α7 IV; the α7R III, IV, and V; the α7S III;
+the α9 II and α1; the α7C, α7C II, and α7C R; the ZV-E1 and ZV-E10
+II; the FX3 and FX30; and the α6700. The path: register at
+<https://developer.sony.com/imaging-products/camera-remote-sdk/>
+(free, accept the SDK licence), download SCRSDK v2.x for the
+platforms you care about (Windows x64, Linux x64, Linux ARM64),
+implement the native bindings under
+`src/NINA.Camera.SonySdk/Native/` (the SDK exposes a C-style API,
+`SCRSDK::Init`, `EnumCameraObjects`, `Connect`, `SetDeviceProperty`,
+`SendCommand(S1Shooting)`, easier to P/Invoke than Canon EDSDK or the
+Nikon Imaging SDK), and wire discovery and capture against it. The
+SCRSDK binaries are not redistributable; users drop them into
+`plugins/sony-sdk/` after accepting the EULA, the same arrangement as
+Canon and Nikon.
+
+Option A is the easier win: pure web requests, no native
+dependencies, no
+platform restrictions, no EULA dance, and it covers the cameras a
+hobbyist astrophotographer is most likely to have on hand. Option B
+is needed for current bodies. Both can live in the same
+`NINA.Camera.SonySdk` project with internal branching by camera
+generation. The capture-path expectations match Canon's: RAW + JPEG
+on the camera (Sony calls it RAW + JPEG or ARW + JPEG), both assets
+pulled per shutter trigger, ARW bytes attached with the `.arw`
+extension, the JPEG decoded for the live preview, and exposure mapped
+to the closest shutter-speed value with a Bulb fall-back. Once
+working, captures land in
+`{rig}/lights/{target}/{filter}/{session}/IMG_*.arw`.
+
+For tethered Sony sessions: α bodies accept USB Power Delivery, so a
+PD-capable battery pack or wall adapter with at least 9 V output
+powers the body during long sessions while the internal NP-FZ100
+stays charged. Set the camera's USB Connection mode to **PC Remote**,
+not Mass Storage or MTP, or the SDK will not see the camera. Close
+Sony Imaging Edge Desktop or Remote before connecting. And check
+firmware: newer α bodies often need updates to match newer SCRSDK
+versions; the SCRSDK release notes list the minimum firmware per
+body.
+
+## DSLR and Mirrorless Cameras / Linux: INDI and gphoto2
+
+On Linux, Polaris reuses the INDI `indi_gphoto_ccd` driver to talk to
+DSLR and mirrorless cameras. That driver wraps libgphoto2
+[@gphoto_libgphoto2] internally and emits captured frames as INDI
+BLOBs (binary data blocks, the INDI protocol's way of shipping an
+image file), which Polaris already consumes via its INDI client. No
+additional Polaris configuration is required beyond installing the
+driver and selecting the camera in the RIGS tab. The list of
+supported camera bodies is libgphoto2's list, at
+<http://www.gphoto.org/proj/libgphoto2/support.php>.
+
+### DSLR and Mirrorless Cameras / Linux: INDI and gphoto2 / Installing the driver
+
+On Debian or Raspberry Pi OS:
+
+```bash
+sudo apt install indi-gphoto
+```
+
+On distributions that ship a minimal INDI metapackage, the full
+third-party set covers it:
+
+```bash
+sudo apt install indi-3rdparty
+```
+
+If the package is not in your distribution, build from the
+indi-3rdparty repository [@indilib_3rdparty]:
+
+```bash
+git clone https://github.com/indilib/indi-3rdparty.git
+cd indi-3rdparty/indi-gphoto
+mkdir build && cd build
+cmake -DCMAKE_INSTALL_PREFIX=/usr ..
+make -j$(nproc)
+sudo make install
+```
+
+### DSLR and Mirrorless Cameras / Linux: INDI and gphoto2 / Starting the INDI server with the gphoto driver
+
+Either include it in your usual `indiserver` invocation:
+
+```bash
+indiserver -v indi_gphoto_ccd
+```
+
+or, if you use the embedded INDI drivers manager (the "Rigs and Device Drivers" chapter), add
+**GPhoto** to the active profile and start the server from its UI.
+
+### DSLR and Mirrorless Cameras / Linux: INDI and gphoto2 / Connecting the camera
+
+Plug the camera into the host with a USB cable; use a USB 2.0 port or
+a powered hub, since bus-powered USB 3.0 hubs are flaky with some
+camera bodies. Power the camera on and set it to **M** (manual)
+shooting mode. Point Polaris's INDI connection at the machine running
+`indiserver` (typically `localhost:7624`) and connect. The camera
+dropdown in the RIGS tab should now list the body (*GPhoto CCD*,
+*EOS Ra*, *Z 6*, *α7R IV*); pick it, click **Connect**, and capture a
+test frame.
+
+### DSLR and Mirrorless Cameras / Linux: INDI and gphoto2 / Tips
+
+- **ISO, not gain**: when the gphoto driver publishes its `CCD_ISO`
+  list, Polaris replaces the numeric **Gain** box in the capture
+  controls with an ISO dropdown (100 / 200 / 400 / ...), and the
+  selected ISO is applied before each exposure. Dedicated astronomy
+  cameras keep the gain box.
+- **Battery life**: cameras do not sleep while in tether mode. Always
+  use a dummy battery with an AC adapter, or a USB-PD trigger that
+  mimics the model's power input, for long sessions.
+- **Storage**: by default the driver pulls captures straight to the
+  host, so no SD card is needed. If you also want a copy on the card,
+  set the `CAPTURE_TARGET` switch to **Internal RAM + Card** via the
+  INDI control panel (the "Rigs and Device Drivers" chapter).
+- **Bulb mode**: exposures longer than the camera's native maximum
+  (often 30 s) require Bulb; the gphoto driver handles this
+  automatically when the exposure is set above 30 s on bodies that
+  support it.
+- **RAW vs JPEG**: the driver exposes a `CAPTURE_FORMAT` switch. Most
+  users want **Native** (the camera's CR2, NEF, or ARW) so STUDIO can
+  demosaic later, turning the sensor's raw colour mosaic into a
+  full-colour image (the "STUDIO: Calibration and Stacking" chapter); set **JPEG** only for quick
+  preview frames. Polaris always asks the driver for **Native** on a
+  DSLR or mirrorless body and decodes the frame server-side.
+- **RAW decoding with libraw**: libraw is the open-source library
+  that decodes camera RAW files. When it is
+  present (the Debian and Raspberry Pi OS package `libraw23`, pulled
+  in automatically by the Polaris `.deb` as a *Recommends*, a soft
+  dependency), Polaris
+  decodes the camera RAW to the true 16-bit linear sensor data for
+  the live preview and live stack, giving full dynamic range, far
+  better than the 8-bit embedded JPEG. If `libraw` is missing it
+  falls back to the embedded full-resolution JPEG
+  (`sudo apt install libraw23` enables the real-RAW path). Either
+  way, the untouched RAW file is what gets saved to disk (`.cr2`,
+  `.nef`, `.arw`), so your subs are always full quality.
+- **Less waiting between subs**: Polaris writes and decodes each RAW
+  file while the next exposure is already running. On a Raspberry Pi 4
+  the write takes 1 to 3 s and the decode several seconds for a 33 MP
+  body, so this time used to sit between every two subs. At the end of
+  a run, Polaris waits for the last file before it runs the end
+  actions. When `indiserver` runs on the same machine as Polaris, the
+  frames also arrive faster: Polaris connects to the server's local
+  Unix socket (a connection between two programs on the same machine
+  that doesn't go through the network stack) instead of TCP, and
+  indiserver hands each frame over as shared memory instead of
+  encoding it as text. On a Raspberry Pi 4 that saves 0.7 s per sub for
+  a 35 MB RAW and 1.4 s for a 67 MB one, and it works for every INDI
+  camera, not only DSLRs. With both changes, a Sony a7 IV on a
+  Raspberry Pi 4 went from 16.5 s of idle time between subs to 2.7 s.
+  The Polaris log says on connect which path is in use. If Polaris
+  can't find the indiserver that owns the configured port, it stays on
+  TCP. You can set `Indi:UnixSocketPath` in `appsettings.json` to a
+  fixed socket path, or to `off` to keep everything on TCP. A remote
+  indiserver always uses TCP.
+- **Sensor temperature**: most DSLRs do not report a sensor
+  temperature to the OS. Polaris shows the field as blank for these
+  cameras, and the Camera card hides cooler controls accordingly.
+
+### DSLR and Mirrorless Cameras / Linux: INDI and gphoto2 / Troubleshooting Linux DSLR
+
+- **Camera not detected**: check `lsusb` (the command that lists
+  connected USB devices) for the body. If it does not
+  appear, suspect the cable or the USB port. If it appears but
+  `gphoto2 --auto-detect` (gphoto2 is libgphoto2's command-line
+  companion) does not list it, kill any process that has
+  claimed the device; `gvfsd-gphoto2` from GNOME and desktop file
+  managers is the usual culprit (`pkill -f gvfsd-gphoto2`).
+- **"Could not claim USB device" errors in the `indiserver` log**:
+  another process is holding the USB handle; same fix as above.
+- **Driver crashes mid-capture**: turn the camera off, unplug the
+  cable, plug it back in, and power the camera on. The gphoto state
+  machine can get wedged after a USB disconnect.
+
+Note that `indi_gphoto_ccd` does not run on Windows; on Windows,
+Polaris uses the native vendor SDKs described earlier in this
+chapter.
+
+## DSLR and Mirrorless Cameras / A note on licensing
+
+None of the vendor SDK binaries (Canon EDSDK DLLs, Nikon SDK DLLs and
+`.md3` modules, Sony SCRSDK libraries) may be redistributed; each
+user downloads them after accepting the vendor's EULA. The
+Polaris-side wrappers in the repository (`NINA.Camera.CanonEdsdk` and
+its siblings) are under the MPL 2.0 open-source licence and ship
+only Polaris's own calling code (the P/Invoke surface), no
+vendor code.

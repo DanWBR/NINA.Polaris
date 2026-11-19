@@ -7,17 +7,24 @@ Two layers, both indexed together:
 - **This folder (top level)**: hand-written, vendor-neutral general
   astrophotography notes (focusing, guiding, exposure, filters, polar
   alignment, calibration frames, planning, common problems).
-- **`polaris/`**: a mirror of the full N.I.N.A. Polaris user guide (every tab,
-  workflow and setting), so the assistant can answer product/navigation
-  questions and orient confused users. **Do not hand-edit these**: they are
-  generated. Re-sync from the docs with:
-  `python scripts/sync-polaris-docs.py` (copies `nina-polaris/docs/user-guide`
-  here; the guide's `README.md` lands as `polaris/index.md`). The synced files
-  are committed so the deployed cloud has them without the nina-polaris checkout.
+- **`polaris/`**: the Polaris Handbook (`book/*.qmd`), one file per chapter,
+  so the assistant can answer product and navigation questions and orient
+  confused users. **Do not hand-edit these**, because they are generated.
+  When the book changes, regenerate them from the repository root with
+  `python scripts/sync-canopus-knowledge.py`. The script removes the Quarto
+  syntax, keeps footnotes inline in parentheses, turns cross references into
+  section names, and prefixes every section title with its chapter
+  ("Autoguiding / Calibration"). The generated files are committed, so the SBC
+  build and the cloud tier have them without a checkout of the book. The cloud
+  tier runs the same script with `--dest` pointing at its own corpus.
 
 ## How it works
 
-- Each `.md` file is split into passages at `#`/`##`/`###` headings.
+- Each `.md` file is split into passages at `#`/`##`/`###` headings. A `#`
+  line inside a fenced code block is a comment, not a heading.
+- A passage longer than 800 characters is split into chunks at paragraph
+  boundaries, and every chunk keeps its section title, so a search result is
+  never cut short.
 - `knowledge.py` builds a from-scratch BM25 index over those passages (no external
   deps) and returns the top matches for a query.
 - The agent exposes it as a local tool; the model calls it and grounds its answer in

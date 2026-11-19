@@ -1,0 +1,311 @@
+# A Tour of the Interface
+
+Everything in Polaris happens in one web page. The left edge of that
+page is a sidebar, the main navigation rail; each button on it opens
+one panel, and some panels add a row of pills or tabs across the top
+for sub-views. The sidebar is deliberately ordered like a real
+session, top to bottom: connect your equipment, pick a target, focus,
+guide, capture, watch, process. This chapter walks the rail once,
+shows what is always on screen regardless of the panel, and ends with
+a task index for the moments when you know what you want to do but not
+where it lives.
+
+The Polaris UI, here on the SKY tab: the sidebar rail on the left, connection and guiding badges in the top bar, and host telemetry (CPU, memory, disk) in the bottom status bar.
+
+## A Tour of the Interface / The sidebar, top to bottom
+
+**HOME** is the landing dashboard shown when you connect. It
+summarizes the session at a glance and offers quick jumps into the
+other panels; the next section describes it.
+
+**RIGS** is the equipment hub. Here you pick and connect your camera,
+mount, focuser, filter wheel, and guide gear, and you save each
+combination as a named rig so switching between a permanent setup and
+a travel kit is one click. Every way Polaris can talk to equipment
+lives here too: INDI (the standard driver system for astronomy gear
+on Linux), ASCOM Alpaca (the network flavor of the Windows ASCOM
+driver standard), classic ASCOM COM on Windows, the camera makers'
+own driver libraries (native SDKs), and the DSLR drivers, along with
+the embedded INDI Drivers Manager.
+the "Rigs and Device Drivers" chapter covers it in full; DSLR bodies get their own chapter in
+the "DSLR and Mirrorless Cameras" chapter and mounts and accessories in the "Mounts and WiFi Accessories" chapter.
+
+**POLAR** aligns the mount's polar axis before the night starts,
+using either TPPA (three-point polar alignment) with a live refinement
+loop, or a rudimentary single-target method for sites without a view
+of the pole. See the "Polar Alignment" chapter.
+
+**SKY** is the Sky Explorer: an offline interactive sky map where you
+search for targets, frame them with a draggable field-of-view overlay,
+plan mosaics, and command slew-and-center. Its pill row adds
+**Tonight**, altitude curves and the best objects for your site and
+date, and **Weather**, current conditions and the forecast. See
+the "Sky Explorer and Session Planning" chapter.
+
+**FOCUS** handles focusing and field analysis: manual stepping with a
+live HFR readout (HFR, half-flux radius, is a per-star size measure;
+smaller numbers mean sharper focus), the automated V-curve auto-focus
+(which samples star size across a range of focuser positions and
+moves to the minimum), a Bahtinov mask helper, and the tilt and
+aberration inspection tools. See the "Focusing" chapter.
+
+**GUIDE** starts, stops, and monitors autoguiding (a second camera
+watches a star and continuously corrects the mount's tracking)
+through either the built-in guider or an external PHD2, the free
+guiding program most amateur astrophotographers use, including
+calibration and the live guide graph. See the "Autoguiding" chapter.
+
+**PREVIEW** takes single test exposures for framing and focus checks,
+streams continuously if you want live framing, and can plate-solve
+the current frame (plate solving matches the stars in the frame
+against a catalog to work out exactly where the telescope is
+pointing). See the "Test Shots with PREVIEW" chapter.
+
+**AUTORUN** is the straightforward sequence runner: a frame list
+(exposure by count per filter, gain, and binning) shot unattended
+against the current target, plus end-of-session actions and the Flat
+Wizard for automated flats. See the "Simple Sequences and the Flat Wizard" chapter.
+
+**PLAN** is the multi-target night planner in the ASIAIR style: queue
+several targets with time windows and per-target frame lists, review
+the elevation chart, and let it run the whole night with automatic
+slews, plate-solve centering, and meridian flips (the side swap a
+German equatorial mount must make as a target crosses the meridian).
+See the "The Multi-Target Night Planner" chapter.
+
+**LIVE** is live stacking for electronically-assisted astronomy
+(EAA: observing on screen as the image builds up in near real time):
+frames are aligned and integrated as they arrive, with optional
+per-frame calibration and pixel rejection, and the growing stack can
+be saved at any time. See the "Live Stacking and EAA" chapter.
+
+**VIDEO** covers planetary and lucky imaging (shooting thousands of
+short video frames and keeping only the sharpest): high-frame-rate
+capture to SER files (a raw video format made for planetary work)
+with ROI subframing (reading out only a region of the sensor, for
+higher frame rates), frame-quality scoring, and a lucky-imaging
+stacker that keeps the best frames. See the "Planetary and Lucky Imaging" chapter.
+
+**ADV** is the Advanced Sequencer, a N.I.N.A.-style tree of
+containers, instructions, conditions, and triggers for automated
+nights that outgrow AUTORUN and PLAN. See the "The Advanced Sequencer" chapter.
+
+**STUDIO** is where captured data becomes a finished image: a file
+browser for everything on the host (the "Managing Your Data" chapter), master generation,
+calibration, grading, and integration (the "STUDIO: Calibration and Stacking" chapter), channel
+combination for mono and narrowband work (the "Mono, LRGB, and Narrowband" chapter), color
+calibration up to PCC and SPCC (photometric methods that set the
+color balance by comparing your stars against catalog measurements;
+the "Color Calibration" chapter),
+the AI cleanup tools (the "AI Cleanup: GraXpert in the Browser" chapter), star removal and blending
+(the "Star Removal and Image Blend" chapter), and the non-destructive EDITOR
+(the "The EDITOR" chapter).
+
+**SETTINGS** holds global configuration and host management, from the
+observer location to networking, authentication, and self-update. An
+overview follows below; the details are split between the "Networking and Remote Access" chapter
+and the "Administration and Diagnostics" chapter.
+
+**HELP** is the in-app guidance panel: tutorials, a first-night
+checklist, troubleshooting, and a one-click problem report. More on it
+below.
+
+**Changing the order:** the order above is the default, and you can
+change it. Press and hold a button on the rail for half a second (a
+long press with a finger, or a long click with the mouse) until it
+lights up, then drag it to its new place; the other buttons make room
+as you go. **SETTINGS > Appearance > Menu order** lists the same buttons
+with up and down arrows, and its **Reset** button brings back the
+default. The order is saved on the host, not in the browser, so every
+phone, tablet and computer that opens this Polaris shows the same rail.
+
+## A Tour of the Interface / The HOME dashboard
+
+HOME is the first thing a connecting browser sees. It shows a session
+summary: the active rig, the connection status of each device, and
+what Polaris is currently doing. Quick-navigation shortcuts jump
+straight into the panel you need next. A host-info card identifies
+the machine running Polaris: model, operating system, architecture,
+core count, and CPU. When something feels wrong mid-session, HOME is
+the one-glance answer to "what state is everything in?".
+
+## A Tour of the Interface / Always on screen
+
+A few UI elements are present no matter which panel is open.
+
+The top status bar is the session's instrument cluster. It carries
+connection badges for INDI, Alpaca, and PHD2, the camera temperature,
+the live-stack frame count, the battery level of the client device,
+the clock, and the guider's dither and settle state (dithering nudges
+the mount slightly between frames so noise does not stack up in the
+same pixels; settling is the short wait for the mount to steady again
+afterwards). It also hosts a
+global sequence-abort button, the green **Update** badge that appears
+on `.deb` installs when a newer release exists (the "Administration and Diagnostics" chapter),
+and the **LOG** badge described below. Next to it, activity and
+transfer chips report live network throughput, in-flight uploads and
+downloads, and image-frame and exposure progress.
+
+Toasts are the transient notifications that slide in when something
+completes or fails. They disappear on their own, but nothing is lost:
+every toast is captured in the debug log.
+
+The **LOG** badge opens the debug log panel, which collects every
+server log line, HTTP request, toast, and browser error into one
+filterable stream, exportable as a JSONL file (a plain-text format
+with one log entry per line, easy for tools to read) for bug reports.
+When you file
+an issue, this is the attachment that makes it actionable;
+the "Administration and Diagnostics" chapter covers it.
+
+Two smaller conveniences round out the frame: multi-instance tabs let
+one browser manage several Polaris hosts side by side, and dismissable
+health chips surface host problems such as Raspberry Pi under-voltage
+warnings.
+
+## A Tour of the Interface / On a phone: Field Mode
+
+Open Polaris on a phone and it changes shape. The full interface
+assumes a wide screen, so on a small one Polaris switches to **Field
+Mode**, a touch-first shell modelled on a handset controller like the
+ASIAIR. It turns on by itself when the shorter side of the screen is
+small enough, which catches a phone held either way and leaves tablets
+and desktops alone. Field Mode is not a separate app: it drives the
+same session as the full interface, so a change in one shows up in the
+other, and you can move between them mid-session without losing your
+place. A **Full Mode** button in the corner returns you to the full
+UI, and on a phone a **Field mode** pill brings you back here.
+
+Opened in the middle of a session, Polaris starts on what the rig is
+doing rather than on its default screen: a live stack opens LIVE, a
+running Autorun opens Autorun, a video recording opens Video, an
+auto-focus run opens Focus. The full interface does the same, and also
+opens Plan, Mosaic or the Advanced Sequencer when one of those is
+running. Field Mode does not have screens for those three, so it keeps
+Preview for them.
+
+The image fills the screen. A menu at the top moves between the
+screens you use at the scope: Preview, Focus, Sky, Autorun, Live, and
+Video. Two icons beside it jump straight to Guide and Setup. Each
+screen shows only its own controls: exposure, gain, and binning as
+tap-to-expand steppers, a large shutter to start and stop, and, when a
+mount is connected, a movement pad with a slew-speed slider and
+**Home**, **Park**, and **Sync** buttons, each behind a confirmation.
+
+Sky is the same map as the full UI with a search box, a card for the
+selected object carrying **Slew & Center** and **GoTo only**, and the
+movement pad in the corner, so a GoTo that lands slightly off the mark
+is nudged onto the target without leaving the map. The pad starts
+collapsed to its side rail and expands with the arrows icon, which
+keeps the sky clear until you want it.
+
+**Setup** gets the rig online and covers the basics without leaving
+Field Mode. It lists your devices with a dropdown to choose each one
+and a single **Connect all**, a gear beside each device that opens
+that device's full settings, and cards for the studio folder, display
+name, plate solving, WiFi, network storage, software updates, and
+power, plus a scale control that sizes the field interface on its own.
+Anything deeper, such as editing an INDI profile, sends you to the
+full UI. See the "Networking and Remote Access" chapter and the "Administration and Diagnostics" chapter for those
+settings.
+
+## A Tour of the Interface / SETTINGS at a glance
+
+The **SETTINGS** panel gathers everything that is global rather than
+per-panel. Expect to find:
+
+- **Profiles and location**: the observer location (with a first-run
+  setup modal), units, and app-wide preferences.
+- **Appearance**: theme and font picker.
+- **Plate solving**: solver choice and downsampling (shrinking the
+  image before solving, for speed), plus a
+  **Colour calibration data** card showing the status of the APASS
+  star-brightness catalog, spectra, and sensor curves used by PCC and
+  SPCC (the "Color Calibration" chapter).
+- **AI inference**: settings for the ONNX AI models (ONNX is the file
+  format the AI models come in) and the on-device model downloader
+  (the "AI Cleanup: GraXpert in the Browser" chapter).
+- **Network mode**: the ASIAIR-style hotspot-to-station WiFi panel
+  (the "Networking and Remote Access" chapter).
+- **Remote access**: the relay for encrypted (TLS-tunneled) access
+  from outside the LAN, HTTPS setup, and authentication
+  (the "Networking and Remote Access" chapter).
+- **Remote terminal**: an embedded SSH terminal (a remote command
+  line for the host machine) for managing a headless host, one with
+  no monitor or keyboard, from the browser (the "Administration and Diagnostics" chapter).
+- **Clock**: keep the host clock on internet time (NTP, the Network
+  Time Protocol, which sets the clock from a time server) when the rig
+  has internet, or push the browser's time to a Pi that has neither
+  internet nor a clock battery (the "Administration and Diagnostics" chapter). Pushing the
+  browser's time leaves internet time as it was; while the host is in
+  sync with a time server, the push is refused, because a time server
+  is more accurate than a phone.
+- **Equipment simulator**: the built-in fake rig that renders real
+  stars (the "The Equipment Simulator" chapter).
+- **Benchmark**: synthetic workloads to compare hardware, with a
+  saved results history (the "Administration and Diagnostics" chapter).
+- **Power**: host power actions, the self-update check, and the
+  version rollback list (the "Administration and Diagnostics" chapter).
+
+## A Tour of the Interface / Getting help inside the app
+
+The **HELP** panel is the built-in manual for the moments you do not
+have this book at hand. It contains step-by-step tutorials, from
+capture-to-export to specific workflows such as LRGB mono, planetary,
+and photometric color calibration, plus a guided first-night
+checklist (the same ground the "Your First Night" chapter covers) and a
+troubleshooting accordion with links into the full user guide. The
+**Report a problem** action opens a pre-filled GitHub issue or
+discussion with client and server diagnostics already attached, so a
+useful bug report is one click, not an archaeology session.
+
+## A Tour of the Interface / Where do I go to do X?
+
+When you know the task but not the panel, this table is the map.
+
+| Task | Go to | Notes |
+|---|---|---|
+| Connect my gear | **RIGS** | Pick each device, click **Connect**, save the combination as a rig |
+| Set my location | **SETTINGS** | The first-run setup prompts for it; change it here later |
+| Polar align | **POLAR** | Choose TPPA or Rudimentary and follow the steps |
+| Find a target | **SKY** | Search or browse the map; drag the FOV box to set rotation and framing |
+| See what is good tonight | **SKY**, **Tonight** pill | Altitude curves and ranked targets for your site and date |
+| Check the weather | **SKY**, **Weather** pill | Current conditions and forecast |
+| Go to and center a target | **SKY** | Slew-and-center slews, plate-solves, and re-centers |
+| Snap a quick test shot | **PREVIEW** | Set exposure and gain, take one frame |
+| Plate-solve the current frame | **PREVIEW** | The **Plate solve** button |
+| Auto-focus | **FOCUS** | Runs the V-curve sweep and moves to best focus |
+| Focus by hand | **FOCUS** | Watch HFR, or use the Bahtinov overlay |
+| Start guiding | **GUIDE** | Connect PHD2 or the native guider, calibrate, guide; the graph shows RMS (the average guiding error) |
+| Image one target unattended | **AUTORUN** | Set exposure, gain, filter, and count, then start |
+| Image several targets in one night | **PLAN** | Targets with time windows and per-target frame lists |
+| Live-stack (EAA) | **LIVE** | Start the loop and watch the stack grow; save as you go |
+| Planetary or lucky imaging | **VIDEO** | High-fps capture, SER recording, stack the best frames |
+| A planet and its moons in one picture | **VIDEO**, **Planet + Moons** | Meters, records and stacks both, then merges them (the "The Planet + Moons sub-tab" section) |
+| Open or close a roll-off roof | **RIGS**, **Dome** card | **Open Roof** and **Close Roof** appear when the dome driver is a roof |
+| Turn on the camera's anti-dew heater | **RIGS**, **Camera** card | The **Anti-dew heater** switch, on cameras that have one |
+| Take flats | **AUTORUN**, **Flat Wizard** | Automated flat acquisition |
+| Complex conditional sequences | **ADV** | The tree-based Advanced Sequencer |
+| Browse or open my files | **STUDIO** | The file browser; double-click or **View** opens the viewer |
+| Pick the best subs and stack them | **STUDIO** | Add your light frames (the subs), grade them, integrate the keepers |
+| Color calibrate | **STUDIO** | **Color Cal (PCC)** or **SPCC** on a plate-solved RGB master; re-solve via **Solve** if matches are low |
+| Combine channels (LRGB / SHO) | **STUDIO** | The **Combine** tool |
+| Background extraction, denoise, deconvolution, upscale | **STUDIO** | The AI tools, or the EDITOR's AI section |
+| Remove stars | **STUDIO** | Star removal, then blend back if wanted |
+| Edit (stretch, curves, crop) | **STUDIO**, **Editor** | Opens on an image |
+| Compare before and after | The comparator | Opens after a tool runs; keep the stretch toggle on **Independent** for color changes |
+| Change the plate solver or downsample | **SETTINGS**, **Plate solving** | |
+| Color-calibration data status | **SETTINGS**, **Colour calibration data** | APASS, spectra, and curve status |
+| Network, remote access, HTTPS, relay | **SETTINGS** | See the "Networking and Remote Access" chapter |
+| AI and ONNX model settings | **SETTINGS** | See the "AI Cleanup: GraXpert in the Browser" chapter |
+| Tutorials and troubleshooting | **HELP** | |
+| Use Polaris from my phone | Field Mode | Turns on by itself on a phone; a top menu switches screens, **Full Mode** returns to the full UI |
+
+## A Tour of the Interface / If you are just lost
+
+Start at **HOME** for status, then follow the sidebar top to bottom;
+it is ordered like a real session: RIGS to connect, SKY to pick a
+target, FOCUS, GUIDE, then AUTORUN or PLAN to capture, LIVE to watch,
+and STUDIO to process. **HELP** has a guided first-night checklist,
+and the next chapter (the "Your First Night" chapter) walks that same path with you
+in half an hour.
