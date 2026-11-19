@@ -5446,6 +5446,14 @@ function ninaApp() {
             this.$watch('settings.longitude', siteChanged);
             // Resume the deferred first-run WiFi prompt once the location modal closes.
             this.$watch('showLocationSetup', (v) => { if (!v && this._wifiSetupPending) { this._wifiSetupPending = false; this._maybeShowWifiSetup(); } });
+            // The image viewer's full page sits above every dialog (OpenSeadragon
+            // puts it at z-index 999999999). If a script dialog, a confirmation
+            // or the mount sync question opens meanwhile, it would wait unseen
+            // behind the image, so the viewer leaves full page first.
+            const leaveFullPage = (open) => { if (open && this.imageViewerFullPage) this.osdExitFullPage(); };
+            this.$watch('scripts.dialog.open', leaveFullPage);
+            this.$watch('confirmModal.open', leaveFullPage);
+            this.$watch('mountSiteSync', leaveFullPage);
             if (this.basicMode) this.$nextTick(() => this._basicEnter());
 
             // Restore the guide-frame brightness/contrast slider prefs.
