@@ -44,12 +44,12 @@
          ?v= cache-bust token, bumped together on every deploy. -->
     <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20261112-navorder">
     <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20261107-advexamples">
-    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20261114-mountbtn">
+    <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20261119-modalscroll">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20261112-afphone">
-    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20261024-cloudhourly">
+    <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20261119-modalscroll">
     <link rel="stylesheet" href="/css/parts/06-modals-overlays.css?v=20261011-kblift">
     <link rel="stylesheet" href="/css/parts/07-guide-editor.css?v=20261119-pmfiles">
-    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20261027-asterion">
+    <link rel="stylesheet" href="/css/parts/08-plan-misc.css?v=20261119-modalscroll">
     <link rel="stylesheet" href="/css/parts/09-mobile.css?v=20260801-hscroll">
     <link rel="stylesheet" href="/css/parts/10-density.css?v=20260728-slimaddr">
     <!-- SWE-3-bugfix: celestial.css dropped, SKY tab is now the
@@ -26716,19 +26716,25 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
 
     <!-- polarispy declarative script dialog (Phase 2). Rendered from a spec the
          running script posts; the values are sent back when the user submits. -->
-    <div class="confirm-modal-overlay" x-show="scripts.dialog.open" x-cloak>
-        <div class="confirm-modal-card" :style="(scripts.dialog.preview || scripts.dialog.blink) ? 'width:880px; height:620px; max-width:96vw; max-height:90vh; min-width:600px; min-height:380px; resize:both; overflow:hidden; display:flex; flex-direction:column' : 'max-width:460px; width:92%'">
+    <div class="confirm-modal-overlay" x-show="scripts.dialog.open" x-cloak
+         @keydown.escape.window="_closeScriptDialog()">
+        <!-- The minimum size is capped by the screen (min-width beats
+             max-width), so on a phone the card, its ✕ and its buttons stay
+             on the screen. -->
+        <div class="confirm-modal-card" :style="(scripts.dialog.preview || scripts.dialog.blink) ? 'width:880px; height:620px; max-width:96vw; max-height:90vh; min-width:min(600px, 96vw); min-height:min(380px, 90vh); resize:both; overflow:hidden; display:flex; flex-direction:column' : 'max-width:460px; width:92%'">
             <div style="flex:0 0 auto; display:flex; align-items:center; gap:10px; flex-wrap:wrap">
                 <h3 class="confirm-modal-title" style="margin:0" x-text="scripts.dialog.title"></h3>
                 <span x-show="scripts.dialog.dataKind"
                       :style="'font-size:10px; text-transform:uppercase; letter-spacing:.04em; padding:2px 8px; border-radius:10px; border:1px solid var(--border); ' + (scripts.dialog.dataKind==='stretched' ? 'color:#d29922' : (scripts.dialog.dataKind==='linear' ? 'color:#58a6ff' : 'color:var(--text-muted)'))"
                       x-text="'Expects ' + scripts.dialog.dataKind + ' data'"></span>
+                <button class="btn btn-sm" style="margin-left:auto" @click="_closeScriptDialog()"
+                        title="Close" aria-label="Close">✕</button>
             </div>
             <!-- Filename / info text: full width, above the two columns. -->
             <template x-for="(f, i) in scripts.dialog.fields" :key="'info'+i">
                 <p x-show="f.type==='info'" class="text-muted" style="flex:0 0 auto; font-size:12px; margin:6px 0 0; padding-bottom:10px" x-text="f.text"></p>
             </template>
-            <div :style="(scripts.dialog.preview || scripts.dialog.blink) ? 'display:flex; gap:16px; flex:1 1 auto; min-height:0; margin-top:6px' : ''">
+            <div :style="(scripts.dialog.preview || scripts.dialog.blink) ? 'display:flex; flex-wrap:wrap; gap:16px; flex:1 1 auto; min-height:0; overflow-y:auto; margin-top:6px' : ''">
               <div x-show="!scripts.dialog.blink || scripts.dialog.fields.some(f => f.type !== 'info')"
                    :style="(scripts.dialog.preview || scripts.dialog.blink) ? 'flex:0 0 300px; width:300px; overflow-y:auto; min-height:0' : ''">
                 <div style="display:grid; grid-template-columns:1fr; margin:16px 0; line-height:1.5"
@@ -26772,7 +26778,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                     </template>
                 </div>
               </div>
-              <div x-show="scripts.dialog.preview" style="flex:1 1 auto; min-width:0; min-height:0; display:flex; flex-direction:column; gap:6px; margin:14px 0">
+              <div x-show="scripts.dialog.preview" style="flex:1 1 260px; min-width:0; min-height:220px; display:flex; flex-direction:column; gap:6px; margin:14px 0">
                 <div style="position:relative; flex:1 1 auto; min-height:0; background:var(--bg); border:1px solid var(--border); border-radius:8px; display:flex; align-items:center; justify-content:center; overflow:hidden">
                     <img x-show="scripts.dialog.previewUrl" :src="scripts.dialog.previewUrl" style="width:100%; height:100%; object-fit:contain; display:block">
                     <span x-show="!scripts.dialog.previewUrl && !scripts.dialog.previewErr" class="text-muted" style="font-size:12px">Preview will appear here…</span>
@@ -26782,8 +26788,8 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                 <span class="text-muted" style="font-size:10px">Auto-stretched preview. The saved file keeps its linear data.</span>
               </div>
               <!-- Blink comparator player: controls on top, image fills below -->
-              <div x-show="scripts.dialog.blink" style="flex:1 1 auto; min-width:0; min-height:0; display:flex; flex-direction:column; gap:8px; margin:14px 0">
-                <div style="flex:0 0 auto; display:flex; align-items:center; gap:10px; font-size:12px">
+              <div x-show="scripts.dialog.blink" style="flex:1 1 260px; min-width:0; min-height:220px; display:flex; flex-direction:column; gap:8px; margin:14px 0">
+                <div style="flex:0 0 auto; display:flex; align-items:center; gap:10px; font-size:12px; flex-wrap:wrap">
                     <button class="btn btn-sm" @click="blinkStep(-1)" title="Previous">‹</button>
                     <button class="btn btn-sm btn-primary" @click="blinkToggle()" x-text="scripts.dialog.blinkPlaying ? '❚❚ Pause' : '► Play'"></button>
                     <button class="btn btn-sm" @click="blinkStep(1)" title="Next">›</button>
@@ -27128,7 +27134,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261118-antidew"></script>
+    <script src="/js/app.js?v=20261119-blinkclose"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

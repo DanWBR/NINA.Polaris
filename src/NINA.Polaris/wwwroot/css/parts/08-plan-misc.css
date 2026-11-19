@@ -1555,3 +1555,18 @@ label:has(> input[type="radio"]:not(.checkbox-native):disabled) {
 .indi-drivers-action { white-space: nowrap; text-align: right; }
 .indi-drivers-summary { color: var(--text-muted, #8b94a8); font-size: 11px; margin-top: 2px; }
 .indi-drivers-error { font-size: 12px; margin-top: 6px; }
+
+/* A dialog taller than the screen (a phone, landscape, a raised UI scale)
+   used to overflow above and below a backdrop that could not scroll, and
+   its Close or Cancel button, at the bottom, was out of reach. The
+   backdrop now scrolls, and "safe center" keeps the top of the card
+   reachable instead of centring it above the screen edge. Browsers that
+   don't know "safe" drop that line and keep the plain centring. */
+.modal-overlay,
+.confirm-modal-overlay,
+.siril-modal,
+.location-setup-modal {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    align-items: safe center;
+}

@@ -17473,7 +17473,9 @@ function ninaApp() {
         },
         // ---- Blink comparator player (dlg.blink) ----
         _blinkUrl(path) {
-            return '/api/files/preview?path=' + encodeURIComponent(path) + '&maxDim=1600';
+            // authUrl: an <img> can't send the bearer header, so with the
+            // login on the frames would come back 401 and show a black box.
+            return this.authUrl('/api/files/preview?path=' + encodeURIComponent(path) + '&maxDim=1600');
         },
         _startBlink() {
             const d = this.scripts.dialog;
@@ -17508,6 +17510,13 @@ function ninaApp() {
             if (!id) return;
             try { await this.apiPost('/api/script/' + id + '/dialog/submit', { values: this.scripts.dialog.values }); }
             catch (_) {}
+        },
+        // The ✕ in the title and Esc. The blink player has only one way out,
+        // its OK button ("Close"), so they do the same; other dialogs cancel.
+        _closeScriptDialog() {
+            if (!this.scripts.dialog.open) return;
+            if (this.scripts.dialog.blink) this._submitScriptDialog();
+            else this._cancelScriptDialog();
         },
         async _cancelScriptDialog() {
             clearTimeout(this._blinkTimer);
