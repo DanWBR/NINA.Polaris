@@ -112,6 +112,10 @@ public static class OnnxEndpoints {
         // Poll for progress of the current/last download.
         g.MapGet("/download-status", (ModelDownloadService dl) => Results.Ok(dl.Status));
 
+        // Stop the running download. The status then reads "cancelled".
+        g.MapPost("/download-cancel", (ModelDownloadService dl) =>
+            Results.Ok(new { ok = true, cancelled = dl.Cancel() }));
+
         // ─── client-proxy upload ─────────────────────────────────────
         // For a host with NO internet: the browser fetches the model bytes
         // from the public bucket itself, then POSTs them here so the host
