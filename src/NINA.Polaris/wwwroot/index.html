@@ -7142,10 +7142,11 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     <button class="btn btn-sm btn-danger" @click="disconnectIndi()">Disconnect</button>
                 </div>
 
-                <!-- Driver-source picker (INDI vs ASCOM Alpaca), shown
-                     when nothing is connected yet. The expanded form
-                     below acts like an "expanded" variant of the strip. -->
-                <div class="equip-connect-prompt" x-show="!indiConnected">
+                <!-- Driver-source picker (INDI vs ASCOM Alpaca). It stays
+                     visible while INDI is connected, so that a rig can mix
+                     INDI and Alpaca devices; only the INDI connect form
+                     hides once INDI is up, since the strip above covers it. -->
+                <div class="equip-connect-prompt">
                     <div class="equip-source-tabs">
                         <button class="btn" :class="equipSource === 'indi' ? 'btn-active' : ''"
                                 @click="equipSource = 'indi'">INDI</button>
@@ -7154,7 +7155,10 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                     </div>
 
                     <!-- INDI panel -->
-                    <div x-show="equipSource === 'indi'" class="control-row"
+                    <p x-show="equipSource === 'indi' && indiConnected" class="muted" style="margin-top:10px">
+                        INDI is connected. To use another server, press Disconnect above first.
+                    </p>
+                    <div x-show="equipSource === 'indi' && !indiConnected" class="control-row"
                          style="margin-top:10px; align-items:center; flex-wrap:wrap;">
                         <label>Host<input type="text" x-model="settings.indiHost" class="input-md"></label>
                         <label>Port<input type="number" x-model.number="settings.indiPort" class="input-sm"></label>

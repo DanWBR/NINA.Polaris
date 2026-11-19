@@ -5581,5 +5581,6 @@
   "Turn the aux anti-dew heater ON": "Zusätzliche Taukappenheizung EIN",
   "Use recorded videos": "Aufgenommene Videos verwenden",
   "with the planet and its moons in the frame (keep the ROI wide enough for the moons), set the gain, then press Start. Polaris finds the exposure for the planet and for the moons, records both, stacks them and merges the result.": "mit dem Planeten und seinen Monden im Bild (lassen Sie den ROI breit genug für die Monde), stellen Sie das Gain ein und drücken Sie Start. Polaris findet die Belichtung für den Planeten und für die Monde, nimmt beide auf, stapelt sie und führt das Ergebnis zusammen.",
-  "Cancel download": "Download abbrechen"
+  "Cancel download": "Download abbrechen",
+  "INDI is connected. To use another server, press Disconnect above first.": "INDI ist verbunden. Um einen anderen Server zu verwenden, drücken Sie zuerst oben auf Trennen."
 }

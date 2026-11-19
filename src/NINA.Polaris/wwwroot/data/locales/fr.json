@@ -5581,5 +5581,6 @@
   "Turn the aux anti-dew heater ON": "ALLUMER le chauffage anti-buée auxiliaire",
   "Use recorded videos": "Utiliser des vidéos enregistrées",
   "with the planet and its moons in the frame (keep the ROI wide enough for the moons), set the gain, then press Start. Polaris finds the exposure for the planet and for the moons, records both, stacks them and merges the result.": "avec la planète et ses lunes dans le champ (gardez un ROI assez large pour les lunes), réglez le gain, puis appuyez sur Démarrer. Polaris trouve la pose de la planète et celle des lunes, enregistre les deux, les empile et fusionne le résultat.",
-  "Cancel download": "Annuler le téléchargement"
+  "Cancel download": "Annuler le téléchargement",
+  "INDI is connected. To use another server, press Disconnect above first.": "INDI est connecté. Pour utiliser un autre serveur, appuyez d'abord sur Déconnecter, ci-dessus."
 }
