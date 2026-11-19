@@ -190,9 +190,25 @@ public class AuthService : IDisposable {
         _profile.Active.AuthPasswordHash = hash;
         _profile.Active.AuthPasswordSalt = salt;
         _profile.Active.AuthHashAlgo = "pbkdf2-sha256-100000";
+        // If the operator skipped the password at first run and sets one
+        // later in Settings, the login comes back on with it.
+        _profile.Active.AuthEnabled = true;
         _profile.Save();
         _logger.LogInformation("Auth: initial password set");
         return CreateSession(remember);
+    }
+
+    /// <summary>First run, "Continue without a password": turns the login
+    /// off while no password is set. Returns false once a password exists,
+    /// because then turning the login off needs that password
+    /// (<see cref="SetEnabled"/>). This doesn't open anything new: until the
+    /// first password is set, anyone on the network can already set one.</summary>
+    public bool SkipSetup() {
+        if (IsConfigured) return false;
+        _profile.Active.AuthEnabled = false;
+        _profile.Save();
+        _logger.LogInformation("Auth: first-run password skipped, login off");
+        return true;
     }
 
     /// <summary>Change password after authenticating with the current one.

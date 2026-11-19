@@ -564,6 +564,9 @@ function ninaApp() {
             setupPassword: '',
             setupConfirm: '',
             setupError: '',
+            setupBusy: false,
+            // Set-password modal (Settings), when the first run was skipped
+            spOpen: false,
             // Change-password modal fields (Settings)
             cpOpen: false,
             cpCurrent: '',
@@ -6943,6 +6946,74 @@ function ninaApp() {
             }
         },
 
+        // First run, "Continue without a password": the server turns the
+        // login off, and the operator can set a password later in
+        // Settings, Authentication.
+        async authSkipSetup() {
+            this.auth.setupError = '';
+            this.auth.setupBusy = true;
+            try {
+                const r = await fetch('/api/auth/skip', { method: 'POST' });
+                if (!r.ok) {
+                    this.auth.setupError = 'Could not skip (HTTP ' + r.status + ')';
+                    return;
+                }
+                this.auth.setupPassword = '';
+                this.auth.setupConfirm = '';
+                this.auth.needSetup = false;
+                this.auth.enabled = false;
+                this._initAfterAuth();
+            } catch (e) {
+                this.auth.setupError = 'Network error';
+            } finally {
+                this.auth.setupBusy = false;
+            }
+        },
+
+        // Settings, Authentication, "Set a password": when the first run
+        // was skipped, the server doesn't have a password yet. Setting one
+        // turns the login back on and signs this device in.
+        async authSetPassword() {
+            this.auth.setupError = '';
+            if (!this.auth.setupPassword || this.auth.setupPassword.length < 8) {
+                this.auth.setupError = 'Password must be at least 8 characters';
+                return;
+            }
+            if (this.auth.setupPassword !== this.auth.setupConfirm) {
+                this.auth.setupError = 'Passwords do not match';
+                return;
+            }
+            this.auth.setupBusy = true;
+            try {
+                const r = await fetch('/api/auth/setup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: this.auth.setupPassword })
+                });
+                if (!r.ok) {
+                    const t = await r.text();
+                    this.auth.setupError = 'Failed: ' + t;
+                    return;
+                }
+                const j = await r.json();
+                // The server remembers a first password on this device, so
+                // the client keeps the token across restarts too.
+                this.auth.rememberMe = true;
+                this._authStoreToken(j.token);
+                this.auth.setupPassword = '';
+                this.auth.setupConfirm = '';
+                this.auth.spOpen = false;
+                this.auth.configured = true;
+                this.auth.enabled = true;
+                this.auth.authenticated = true;
+                this.toast('Password set, login is on', 'ok');
+            } catch (e) {
+                this.auth.setupError = 'Network error';
+            } finally {
+                this.auth.setupBusy = false;
+            }
+        },
+
         async authLogout() {
             try {
                 await this.apiPost('/api/auth/logout');
@@ -7440,10 +7511,10 @@ function ninaApp() {
                         screenshot: 'first-night/02-password.png',
                         docLink: 'authentication.md',
                         body: [
-                            'The first visit shows a full-screen wizard asking you to set a password. There is no default and no skip, this protects the rig from anyone else on the same WiFi.',
+                            'The first visit shows a full-screen wizard asking you to set a password. Polaris does not ship a default password, so the password you choose keeps out anyone else on the same Wi-Fi. If the rig is on a network you trust, you can choose Continue without a password and set one later in Settings, Authentication.',
                             'Pick something at least 8 characters. You will use this on every other device that opens Polaris (laptop, phone, second tablet). The "Remember on this client device" checkbox at the login screen later persists across browser restarts.'
                         ],
-                        warn: 'Forgot it later? SSH to the Pi and clear AuthPasswordHash + AuthPasswordSalt in ~/.config/NINA.Polaris/profiles/active.json, restart the service, set a new one in the wizard.'
+                        warn: 'Forgot it later? SSH to the Pi and clear AuthPasswordHash + AuthPasswordSalt in ~/.local/share/NINA.Polaris/profiles/active.json, restart the service, set a new one in the wizard.'
                     },
                     {
                         title: 'Set the observatory location',
