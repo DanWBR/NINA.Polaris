@@ -18,9 +18,15 @@ When you open `https://polaris-pi.local:5000` for the first time
 Type a password (minimum 8 characters), confirm it, click
 **Set password & continue**. The app loads.
 
-There is no default password. The wizard cannot be skipped. This is
-intentional: hardcoded defaults like `polaris1234` get forgotten and
-never changed.
+Polaris doesn't ship a default password, because a hardcoded default
+like `polaris1234` gets forgotten and is never changed.
+
+If the rig is on a network you trust and you don't want a login, click
+**Continue without a password** under the button. Polaris turns the
+login off and opens. Anyone on the network can then control it, the
+same as with **Disable auth** below. When you want a password later,
+go to Settings → **Authentication** → **🔑 Set a password**; once you
+set it, the login comes back on.
 
 ## Day-to-day login
 
@@ -81,7 +87,9 @@ network reaches Polaris without a password.
 
 Re-enable: Settings → **Authentication** → **Re-enable auth**,
 type the password when prompted. The same password you set in the
-wizard still works.
+wizard still works. If you skipped the password at first run, the
+card shows **🔑 Set a password** instead, and setting one turns the
+login back on.
 
 ## Forgot the password
 
@@ -95,7 +103,7 @@ browser session.
 
 ```bash
 ssh polaris@polaris-pi.local
-sed -i 's/"authPasswordHash": *"[^"]*"/"authPasswordHash": ""/; s/"authPasswordSalt": *"[^"]*"/"authPasswordSalt": ""/' ~/.config/NINA.Polaris/profiles/active.json
+sed -i 's/"authPasswordHash": *"[^"]*"/"authPasswordHash": ""/; s/"authPasswordSalt": *"[^"]*"/"authPasswordSalt": ""/' ~/.local/share/NINA.Polaris/profiles/active.json
 sudo systemctl restart polaris.service
 ```
 
@@ -109,7 +117,7 @@ $p = "$env:LOCALAPPDATA\NINA.Polaris\profiles\active.json"
 
 Start Polaris again and open it in the browser.
 
-By hand, the file is `~/.config/NINA.Polaris/profiles/active.json` on
+By hand, the file is `~/.local/share/NINA.Polaris/profiles/active.json` on
 Linux and `%LOCALAPPDATA%\NINA.Polaris\profiles\active.json` on Windows.
 Find the lines:
 

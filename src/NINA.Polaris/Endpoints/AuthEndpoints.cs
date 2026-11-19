@@ -62,6 +62,15 @@ public static class AuthEndpoints {
             }
         });
 
+        // POST /api/auth/skip
+        // First run only: the operator doesn't want a password, so the
+        // login is turned off. Rejected once a password is set.
+        g.MapPost("/skip", (AuthService auth) => {
+            if (!auth.SkipSetup())
+                return Results.Conflict(new { error = "already configured" });
+            return Results.Ok(new { ok = true, enabled = false });
+        });
+
         // POST /api/auth/login { password }
         // Returns the session token + sets the cookie. Rate-limited
         // per IP; lockout response includes a Retry-After header.

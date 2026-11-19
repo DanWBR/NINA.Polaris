@@ -92,6 +92,35 @@ public class AuthServiceTests {
             "Setup must only succeed on a fresh install");
     }
 
+    /// <summary>First run, "Continue without a password": the login goes
+    /// off, and a password set later in Settings turns it back on.</summary>
+    [Test]
+    public void SkipSetup_TurnsTheLoginOff_AndALaterPasswordTurnsItOn() {
+        var (auth, profiles) = Make();
+        Assert.That(auth.SkipSetup(), Is.True);
+        Assert.Multiple(() => {
+            Assert.That(auth.IsEnabled, Is.False);
+            Assert.That(auth.IsConfigured, Is.False);
+            Assert.That(profiles.Active.AuthEnabled, Is.False);
+        });
+
+        var token = auth.SetInitialPassword("hunter2!");
+        Assert.Multiple(() => {
+            Assert.That(token, Is.Not.Null);
+            Assert.That(auth.IsConfigured, Is.True);
+            Assert.That(auth.IsEnabled, Is.True, "setting the password turns the login back on");
+        });
+    }
+
+    [Test]
+    public void SkipSetup_OnceAPasswordIsSet_IsRefused() {
+        var (auth, _) = Make();
+        auth.SetInitialPassword("hunter2!");
+        Assert.That(auth.SkipSetup(), Is.False,
+            "with a password set, turning the login off needs that password");
+        Assert.That(auth.IsEnabled, Is.True);
+    }
+
     [Test]
     public void SetInitialPassword_TooShort_Throws() {
         var (auth, _) = Make();

@@ -1304,6 +1304,15 @@
     padding: 10px;
     font-size: 13px;
 }
+/* First run, "Continue without a password": a quiet second choice under
+   the primary button. */
+.auth-modal .auth-skip {
+    width: 100%;
+    margin-top: 8px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+}
 
 /* ---- HELP-1: tutorial stepper + landing layout -----------------
    .help-panel hosts both the landing 4-card picker and the stepper

@@ -159,16 +159,18 @@
         </div>
 
         <!-- First-run wizard: AuthService.IsConfigured == false on
-             the server. Force the operator to set a password before
-             any other tab is reachable; no default credentials means
-             no skipped-the-step-forgot-to-change-it problem. -->
+             the server. The operator sets a password before any other
+             tab is reachable, or chooses "Continue without a password",
+             which turns the login off (POST /api/auth/skip). Polaris
+             doesn't ship default credentials, so a password is never
+             one that was left unchanged. -->
         <div class="auth-modal" x-show="auth.needSetup && !auth.booting">
             <div class="auth-brand auth-brand-static">
                 <img src="/favicon-192.png" alt="" class="auth-brand-icon">
             </div>
             <h2>Set a password</h2>
             <p class="auth-hint">
-                Polaris is reachable from any device on this network?.
+                Polaris is reachable from any device on this network.
                 Pick a password that protects this rig from
                 unauthorized access. You will use this on every fresh
                 browser / device.
@@ -190,13 +192,23 @@
                 </label>
                 <p class="auth-error" x-show="auth.setupError"
                    x-text="auth.setupError"></p>
-                <button class="btn btn-primary" type="submit">
+                <button class="btn btn-primary" type="submit"
+                        :disabled="auth.setupBusy">
                     Set password &amp; continue
                 </button>
+                <button class="btn btn-sm auth-skip" type="button"
+                        @click="authSkipSetup()" :disabled="auth.setupBusy">
+                    Continue without a password
+                </button>
+                <p class="auth-hint auth-recover">
+                    If you continue without a password, anyone on this
+                    network can control Polaris. You can set a password
+                    later in Settings, Authentication.
+                </p>
                 <p class="auth-hint auth-recover">
                     Forgot the password later? SSH to the Pi and
                     clear AuthPasswordHash + AuthPasswordSalt in
-                    ~/.config/NINA.Polaris/profiles/active.json,
+                    ~/.local/share/NINA.Polaris/profiles/active.json,
                     then restart the polaris service.
                 </p>
             </form>
@@ -17423,6 +17435,10 @@ Windows  winget install Rclone.Rclone</code></pre>
                             <span x-show="auth.enabled" style="color:#86efac">🟢 Enabled</span>
                             <span x-show="!auth.enabled" style="color:#fcd34d">🟡 Disabled</span>
                         </div>
+                        <div x-show="!auth.configured" class="text-muted">
+                            A password isn't set yet, so anyone on this
+                            network can control Polaris.
+                        </div>
                         <div x-show="auth.enabled">
                             Session timeout:
                             <strong x-text="auth.sessionTimeoutHours + 'h'"></strong>
@@ -17439,7 +17455,53 @@ Windows  winget install Rclone.Rclone</code></pre>
                                 @click="auth.disableOpen=true; auth.disableError=''; auth.disablePassword=''"
                                 x-show="auth.enabled">Disable auth…</button>
                         <button class="btn btn-sm" @click="authEnable()"
-                                x-show="!auth.enabled">Re-enable auth</button>
+                                x-show="!auth.enabled && auth.configured">Re-enable auth</button>
+                        <button class="btn btn-sm"
+                                @click="auth.spOpen=true; auth.setupError=''; auth.setupPassword=''; auth.setupConfirm=''"
+                                x-show="!auth.configured">🔑 Set a password</button>
+                    </div>
+
+                    <!-- Set-password modal: the first run was skipped, so the
+                         server doesn't have a password yet. Setting one turns
+                         the login on (POST /api/auth/setup). -->
+                    <div class="auth-overlay" x-transition.opacity.duration.200ms x-cloak x-show="auth.spOpen">
+                        <div class="auth-modal">
+                            <h2>Set a password</h2>
+                            <p class="auth-hint">
+                                When you set a password, Polaris turns the
+                                login on, and every other device will need
+                                the password to open it.
+                            </p>
+                            <form @submit.prevent="authSetPassword()">
+                                <label class="auth-field">
+                                    <span>New password</span>
+                                    <input type="password"
+                                           x-model="auth.setupPassword"
+                                           autocomplete="new-password"
+                                           required minlength="8" />
+                                </label>
+                                <label class="auth-field">
+                                    <span>Confirm password</span>
+                                    <input type="password"
+                                           x-model="auth.setupConfirm"
+                                           autocomplete="new-password"
+                                           required minlength="8" />
+                                </label>
+                                <p class="auth-error" x-show="auth.setupError"
+                                   x-text="auth.setupError"></p>
+                                <div style="display:flex; gap:8px">
+                                    <button type="button" class="btn"
+                                            @click="auth.spOpen=false"
+                                            :disabled="auth.setupBusy">Cancel</button>
+                                    <button type="submit" class="btn btn-primary"
+                                            :disabled="auth.setupBusy"
+                                            style="flex:1">
+                                        <span x-show="!auth.setupBusy">Set password</span>
+                                        <span x-show="auth.setupBusy">Saving…</span>
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
 
                     <!-- Change-password modal. -->
@@ -17520,7 +17582,7 @@ Windows  winget install Rclone.Rclone</code></pre>
                 </div>
 
                 <!-- Device name: friendly label shown when this Pi is
-                     discovered on the network?. Each Pi already self-names
+                     discovered on the network. Each Pi already self-names
                      uniquely (polaris-app-XXXX from its hardware id), so a
                      cloned SD-card image just works; this lets the owner
                      give each one a readable name. -->
@@ -20458,7 +20520,7 @@ Windows  winget install Rclone.Rclone</code></pre>
                                     choose to turn on one of the optional
                                     internet features listed further down.</p>
                                     <p>You do not need to create an account to
-                                    use Polaris on your own network?.</p>
+                                    use Polaris on your own network.</p>
                                 </div>
                             </details>
 
