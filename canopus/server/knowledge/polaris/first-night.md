@@ -1,206 +1,273 @@
-# First-night setup
+# Your First Night
 
-Goal: from "I just opened Polaris in my browser" to "first ten frames
-of a target are landing on disk". ~30 minutes if everything cooperates.
+The goal of this chapter is simple: from "I just opened Polaris in my
+browser" to "the first ten frames of a target are landing on disk", in
+about thirty minutes if everything cooperates. It assumes Polaris is
+installed (the "Installation" chapter) and you are looking at the welcome
+screen. Every step below gets a full chapter later in the book; here
+we take the shortest sensible path through them all once, so the whole
+workflow clicks into place.
 
-This walkthrough assumes you have [Polaris installed](installation.md)
-and at the welcome screen.
+## Your First Night / Before you start: pick a target
 
-## Pre-flight: pick a target
+Pick something easy the first time. Bright single stars like Vega,
+Altair, or Arcturus are great for focus and guiding tests. Bright,
+famous targets like M31, M42, or the Pleiades are visible to the naked
+eye, which makes pointing trivial to verify. Whatever you choose, keep
+it at 30 degrees of altitude or higher; avoid the horizon. You do not
+need to type any coordinates: Polaris has a built-in catalog, and you
+will search by name later.
 
-Pick something easy your first time:
+## Your First Night / Step 1: set your location
 
-- **Vega, Altair, Arcturus**, bright single stars. Great for focus +
-  guiding tests.
-- **M31, M42, Pleiades**, bright famous targets. Visible to the
-  naked eye, easy to verify pointing.
-- **Anything ≥30° altitude**, avoid the horizon.
+Polaris uses your location for every sky calculation: altitude,
+twilight times, and meridian flips (the side swap a German equatorial
+mount must make as a target crosses the meridian). On first run a
+location window should appear; fill it in with any of three methods:
 
-You don't need to type RA/Dec, Polaris has a built-in catalog. We'll
-search by name later.
+- **Address search**: type "Brasília, Brazil" or your city and
+  country, press Enter, and pick the matching result. The search answers
+  from a gazetteer of some 70 000 towns embedded in Polaris itself, so it
+  works on a field network with no internet at all, and adds online
+  results when it can reach them.
+- **Pick on map**: an offline world map you can pan and zoom (wheel or
+  pinch), with town labels, where a tap places the marker. This is the
+  one to use in the field, since it needs nothing but the host.
+- **Browser geolocation**: click **Use my location** (available over
+  HTTPS only).
+- **Manual entry**: type latitude, longitude and altitude. The fields
+  take a decimal comma as well as a point, and are parsed when you leave
+  them, so a half-typed number is never read as your position.
 
-## Step 1, Set your location
+If you dismissed that window, open **SETTINGS** and find
+**Observatory location**. Do not skip this: with the location wrong, the SKY tab,
+meridian-flip timing, and tonight's-best altitude rankings are all
+garbage. The glossary entry for local sidereal time (the "Glossary" chapter)
+explains why.
 
-Polaris uses your location for sky calculations (altitude, twilight,
-meridian flips). On first run you should see a location modal, fill
-it in with one of:
+## Your First Night / The first-run wizard
 
-- **Address search**, types like "Brasília, Brazil" or your city +
-  country, hits ↵, picks the matching result
-- **Browser geolocation**, clicks "Use my location" (HTTPS only)
-- **Manual lat/lng**, types decimal degrees
+On a fresh install, and before the steps below, Polaris offers to walk
+you through connecting your equipment once the location and WiFi prompts
+are out of the way. Taking the offer is usually faster than the manual
+path, and the manual path is still there if you decline.
 
-If you skipped the modal, go to **Settings** in the sidebar → Observatory
-location.
+The wizard probes for what is actually attached rather than asking you to
+know. On Linux it starts a temporary INDI profile carrying the camera
+family drivers that are installed, reads back the devices that appear,
+resolves them against the USB devices it can see, and assigns
+serial-bridge mounts per port, so a mount on a CH340 adapter is offered
+against the port it is really on. On Windows it fans out to ASCOM and
+Alpaca discovery per role instead. You pick a device for each role,
+it connects them, and on finishing it writes a real profile with
+autostart and auto-connect enabled, starts it, and deletes the temporary
+one. Declining or aborting cleans the temporary profile up too.
 
-> **Why this matters**: with location wrong, the Sky tab + meridian
-> flip + tonight's-best altitudes are all garbage. ⤴ See
-> [Glossary → LST](GLOSSARY.md#l) for the why.
+It runs once: a server-side flag records that you have been through it,
+so it does not reappear on every browser you open.
 
-## Step 2, Create a rig
+## Your First Night / Step 2: create a rig
 
-Click **RIGS** in the sidebar.
+Click **RIGS** in the sidebar. You start with a rig called "Default";
+either rename it to something meaningful or create a new one:
 
-You start with a rig called "Default". Either rename it to something
-meaningful or create a new one:
+1. At the top of the **RIGS** tab, find the rig dropdown and the
+   **Manage rigs...** button.
+2. Click **Manage rigs...**, type a name like "Backyard SCT 8\"" in
+   the **New rig name** input, click **+ New empty rig**, and close
+   the modal.
+3. The new rig is now active, selected in the dropdown.
 
-1. Top of the RIGS tab: rig dropdown + "Manage rigs…" button.
-2. Click **Manage rigs…** → type a name like "Backyard SCT 8\"" in
-   the "New rig name" input → **+ New empty rig** → close the modal.
-3. The new rig is now active (selected in the dropdown).
+A rig is a saved bundle of equipment selections and per-setup
+defaults; when you later move from the backyard SCT to a travel APO,
+you switch rigs in one click and everything follows. the "Rigs and Device Drivers" chapter covers
+the full feature surface.
 
-> **Rigs explained**: a rig is a saved bundle of equipment selections
-> + per-setup defaults. Switch rigs in one click when you move from
-> backyard SCT to travel APO. See [RIGS tab guide](rigs.md) for the
-> full feature surface.
+## Your First Night / Step 3: describe the telescope
 
-## Step 3, Configure the Main Telescope card
+Back on the **RIGS** tab, the first card is **Main Telescope**. Pick a
+**Brand** from the dropdown (Askar, Celestron, Sky-Watcher, GSO, and
+others), then a **Model**; aperture, focal length, focal ratio, and
+back-focus fill in automatically. If you use a reducer or flattener,
+pick it under **Accessory** and the effective focal length
+recalculates. If your scope is not in the catalog, leave Brand set to
+**Manual entry** and type the focal length and aperture by hand; the
+catalog is a convenience, not a requirement.
 
-Now you're back on the RIGS tab. The first card is **Main Telescope**.
+A rig taking shape on the RIGS tab: the Main Telescope card with its optics filled in from the catalog (reducer included), and the camera card already connected, cooling toward its target.
 
-Pick **Brand** from the dropdown (Askar / Celestron / Sky-Watcher /
-GSO / ...) → pick **Model**. Aperture + focal length + f-ratio + back-focus
-fill in automatically.
-
-If you have a reducer / flattener, pick **Accessory** too, the
-effective focal length recalculates.
-
-> **What if your scope isn't in the catalog?** Leave Brand = "Manual
-> entry" and type focal length + aperture by hand. The catalog is just
-> a convenience, Polaris doesn't require it.
-
-## Step 4, Connect INDI (Linux) or Alpaca (Windows)
+## Your First Night / Step 4: connect to your drivers
 
 The cards below Main Telescope (Camera, Mount, Focuser, Filter Wheel,
-etc.) show empty dropdowns until you connect to a driver host.
+and so on) show empty dropdowns until Polaris is connected to a
+driver host, the program that actually talks to your hardware; on
+Linux that is INDI, the standard equipment-driver system for
+astronomy gear. At the top of the **RIGS** tab sits a connection
+strip. If an `indiserver` (the INDI driver host) is running on the
+same machine (the normal case on a `.deb` install, see
+the "Installation" chapter):
 
-Top of the RIGS tab there's a **connection strip**. If `indiserver` is
-running on the same machine:
+1. Stay on the **INDI** tab of the strip (it is the default).
+2. Leave Host as `localhost` and Port as `7624`; the defaults are
+   fine.
+3. Click **Connect INDI**.
 
-1. Tab **INDI** (the default)
-2. Host `localhost`, Port `7624`, defaults are fine
-3. Click **Connect INDI**
+The strip turns green and reads "INDI · localhost:7624 · N devices",
+and each role card's dropdown now lists the matching INDI devices. On
+Windows, switch the strip to the **ASCOM/Alpaca** tab (ASCOM is the
+long-standing Windows astronomy driver standard; Alpaca is its
+network-based flavor) and click **Discover** to auto-find Alpaca
+Remote Servers on your LAN. If the
+connection refuses to come up, the "Troubleshooting" chapter has the INDI
+diagnostic checklist.
 
-You should see the connection strip turn green with "✓ INDI · localhost:7624
-· N devices". Each role card's dropdown now lists the matching INDI
-devices.
-
-For Windows + Alpaca, switch the tab to **ASCOM/Alpaca** + click
-**Discover** to auto-find Remote Servers on your LAN.
-
-> **Troubleshooting**: see [Troubleshooting → "INDI not connecting"](troubleshooting.md#indi-not-connecting).
-
-## Step 5, Pick devices in each card
+## Your First Night / Step 5: pick and connect each device
 
 For each card you actually have hardware for:
 
-1. Pick the device from the dropdown ("ZWO CCD ASI2600MC Pro", etc.)
-2. Click **Connect**, the status dot goes green
-3. (Camera) Set the cooler target temperature if you have one
-4. Cards you don't use stay "Select device", Polaris ignores them
+1. Pick the device from the dropdown ("ZWO CCD ASI2600MC Pro", and so
+   on).
+2. Click **Connect**; the status dot goes green.
+3. For a cooled camera, set the cooler target temperature.
 
-Click **💾 Save selections** at the top to persist the picks in the
-active rig. You won't need to redo this next session, switching rigs
-restores everything.
+Cards you do not use simply stay at "Select device" and Polaris
+ignores them. When everything is green, click **Save selections** at
+the top to persist the picks in the active rig. You will not redo this
+next session; switching rigs restores everything.
 
-## Step 6, (Optional) Hook PHD2
+## Your First Night / Step 6: hook up PHD2 (optional)
 
-If you have a guide scope + guide camera:
+If you have a guide scope and guide camera, wire up guiding now:
+autoguiding uses that second camera to watch a star and continuously
+correct the mount's tracking, and PHD2 is the free guiding program
+most amateur astrophotographers use. Otherwise skip ahead and come
+back another night.
 
-1. **GUIDE** tab in the sidebar
-2. Default tab **Control** is open
-3. If PHD2 isn't installed yet, the banner gives a download link
-4. Click **Launch PHD2** if you have it auto-detected, or **Connect**
-   if PHD2 is already running on `localhost:4400`
-5. In PHD2 itself (or via the **PHD2 GUI** tab on Linux): pick the
-   profile that matches your guide camera + mount
-6. Click **▶ Connect equipment** in Polaris → PHD2 wires up its own
-   gear
-7. **▶ Loop** to start exposure cycling → **find star** → **▶ Smart
-   Calibrate** if calibration isn't done yet
+1. Open the **GUIDE** tab; the default **Control** sub-tab is already
+   open.
+2. If PHD2 is not installed, a banner gives you the download link.
+3. Click **Launch PHD2** if Polaris auto-detected it, or **Connect**
+   if PHD2 is already running on `localhost:4400`.
+4. In PHD2 itself (or through the **PHD2 GUI** sub-tab on Linux),
+   pick the profile matching your guide camera and mount.
+5. Click **Connect equipment** in Polaris; PHD2 wires up its own
+   gear.
+6. Click **Loop** to start exposure cycling, find a star, then run
+   **Smart Calibrate** if calibration has not been done yet.
 
-> **First-time calibration**: point the mount somewhere within 30° of
-> the celestial equator (Dec near 0°) for best results. Polaris's
-> Smart Calibrate computes the step size from pixel scale + guide rate
-> for you.
+For a first-time calibration, point the mount somewhere within 30
+degrees of the celestial equator (declination near zero) for best
+results. Smart Calibrate computes the calibration step size from your
+pixel scale and guide rate for you. Guiding in both its PHD2 and
+native forms is the subject of the "Autoguiding" chapter.
 
-## Step 7, Slew to your target
+The GUIDE tab while guiding: the correction graph on top, the guide-camera field with the locked star, and the Target scatter showing how tightly the star is being held.
 
-1. **SKY** tab in the sidebar
-2. Search bar at top → type "Vega" (or your target name) → ↵
-3. Result card appears → click it → preview shows it on the sky map
-4. Click **🎯 Slew & Center** → Polaris commands the mount, captures a
-   plate solve frame, computes the offset, and re-slews until centered
-   to within 30 arcsec
-5. The whole flow takes 30 seconds to 2 minutes depending on how far
-   off the mount's pointing was
+## Your First Night / Step 7: slew to the target
 
-> **What if Slew & Center fails?** The plate solve probably can't find
-> a match. Check that:
-> - Focus is close enough that stars actually exist in the frame
-> - Exposure is long enough for stars to register (try 5-10s for the
->   solve)
-> - The catalog hints (focal length, pixel scale) on the active rig
->   are accurate
+1. Open the **SKY** tab.
+2. Type your target's name ("Vega") in the search bar at the top and
+   press Enter.
+3. A result card appears; click it, and the preview shows the target
+   on the sky map.
+4. Click **Slew & Center**. Polaris commands the mount, captures a
+   short exposure and plate-solves it (matching its stars against a
+   catalog to work out exactly where the telescope is pointing),
+   computes the offset, and re-slews until the target is centered to
+   within 30 arcseconds.
 
-## Step 8, Quick focus check
+The whole flow takes 30 seconds to 2 minutes depending on how far off
+the mount's initial pointing was. If Slew & Center fails, the plate
+solve probably could not find a match; check that focus is close
+enough for stars to actually exist in the frame, that the solve
+exposure is long enough for stars to register (try 5 to 10 seconds),
+and that the catalog hints on the active rig (focal length, pixel
+scale) are accurate. the "Sky Explorer and Session Planning" chapter covers the Sky Explorer in
+depth.
 
-Before committing to a sequence:
+A target card in the SKY tab, ready to go: coordinates, tonight's altitude curve, and the Slew & Center button.
 
-1. **FOCUS** tab → set **Step Size** to ~20 (your focuser, your
-   numbers)
-2. Tap the **round shutter** in the PREVIEW tab sidebar → see what
-   the field looks like
-3. Back to FOCUS → manually step in / out a few times watching the
-   HFR value in the stats bar; when it bottoms out you're at focus
-4. (Better) Click **▶ Start AF** in the auto-focus panel → V-curve
-   sweep runs, parabola fit, focuser moves to the vertex. Watch the
-   live frame preview canvas as it samples each position.
+## Your First Night / Step 8: a quick focus check
 
-## Step 9, Run a test sequence
+Before committing to a sequence, make sure the stars are tight:
+
+1. Open the **FOCUS** tab and set **Step Size** to about 20 (your
+   focuser, your numbers).
+2. Take a snap from the **PREVIEW** tab (the round shutter button in
+   its sidebar) to see what the field looks like.
+3. Back in **FOCUS**, manually step in and out a few times while
+   watching the HFR value in the stats bar (HFR is a measure of star
+   size; smaller means sharper); when it bottoms out, you are at
+   focus.
+4. Better still, click **Start AF** in the auto-focus panel: Polaris
+   sweeps the focuser through a range of positions, measuring star
+   size at each one (plotted, the points form a V, hence "V-curve"),
+   fits a parabola through them, and moves the focuser to the vertex,
+   the bottom of the V. Watch the live frame preview as it samples
+   each position.
+
+Auto-focus, the Bahtinov helper (an on-screen assistant for focusing
+with a Bahtinov diffraction mask), and the field-analysis tools are
+covered in the "Focusing" chapter.
+
+## Your First Night / Step 9: run a test sequence
 
 Now the actual capture:
 
-1. **AUTORUN** tab
-2. **+ Add target** → pre-fills with your current SKY tab target
-3. Set:
-   - Filter (or leave blank if mono filter wheel)
-   - Exposure time (start with 30s for a bright target)
-   - Count (10 to start)
-   - Optional: Bin, Gain
-4. Click **▶ Start sequence** → captures begin
-5. Files land in `{ImageOutputDir}/{RigName}/lights/{Target}/{Filter}/{Date}/`
+1. Open the **AUTORUN** tab.
+2. Click **+ Add target**; it pre-fills with your current SKY-tab
+   target.
+3. Set the filter (or leave it blank with a mono filter wheel), an
+   exposure time (start with 30 seconds for a bright target), and a
+   count of 10 to start. Binning (merging neighboring pixels for a
+   brighter, smaller image) and gain (the camera's amplification
+   setting) are optional.
+4. Click **Start sequence**; captures begin.
 
-Watch the LIVE tab to see the latest frame + running statistics. Toggle
-the **Stack ON** button to enable live integration, frames pile up
-in a single growing image.
+Files land in
+`{ImageOutputDir}/{RigName}/lights/{Target}/{Filter}/{Date}/` (see
+the "Installation" chapter for where `ImageOutputDir` points). While the
+sequence runs, watch the **LIVE** tab: it shows the latest frame with
+running statistics, and toggling **Stack ON** enables live
+integration, so the frames pile up into a single growing image
+(the "Live Stacking and EAA" chapter).
 
-## Step 10, Stop + look at your work
+## Your First Night / Step 10: stop and look at your work
 
-When the sequence completes (or you click ⏹ Stop):
+When the sequence completes, or you click **Stop**:
 
-1. **STUDIO** tab in the sidebar → rescan → all your captures appear
-   in the frame browser
-2. Click any frame → see the full-resolution viewer with stats
-3. Continue with master generation + calibration + stack, see
-   [Studio guide](studio.md) for the post-processing flow
+1. Open the **STUDIO** tab and rescan; all your captures appear in
+   the frame browser.
+2. Click any frame to open the full-resolution viewer with its
+   statistics.
+3. From here, the post-processing flow of the "STUDIO: Calibration and Stacking" chapter takes over:
+   building master calibration frames, calibrating your lights with
+   them, and stacking the results.
 
-## What just happened
+The morning after, in STUDIO: the night's FITS files in the frame browser on the left, and the Stack workspace on the right waiting for lights, darks, flats, and biases.
 
-In 30 minutes you covered the full Polaris workflow:
+## Your First Night / What just happened
 
-- **Location → Rig → Equipment** (RIGS tab), one-time setup, persistent
-- **PHD2 hook-up** (GUIDE tab), once per equipment combo, then auto-
-  resumes
-- **Slew & Center** (SKY tab), every new target
-- **Auto-focus** (FOCUS tab), once per session + auto-triggered during
-  long stacks (see [LIVE auto re-focus](live-stacking.md))
-- **Sequence run** (AUTORUN tab), the unattended capture engine
-- **Live preview + Studio**, visual feedback + offline processing
+In thirty minutes you covered the full Polaris workflow, and each
+piece has a home you can return to:
 
-From here, dig into each feature page as your needs grow, auto-focus
-during sequences, meridian flips, dithering, plate-solve recenter
-triggers, planetary lucky imaging, the embedded PHD2 GUI, the relay
-server for remote access.
+- **Location, rig, equipment** on the RIGS tab: one-time setup, and
+  it persists.
+- **PHD2 hook-up** on the GUIDE tab: once per equipment combination,
+  then it auto-resumes.
+- **Slew & Center** on the SKY tab: every new target.
+- **Auto-focus** on the FOCUS tab: once per session, and it can be
+  auto-triggered during long stacks (the "Live Stacking and EAA" chapter).
+- **The sequence run** on the AUTORUN tab: the unattended capture
+  engine.
+- **Live preview and STUDIO**: visual feedback tonight, processing
+  tomorrow.
 
-Welcome aboard. ✨
+From here, dig into the chapters as your needs grow: auto-focus
+during sequences (the "Simple Sequences and the Flat Wizard" chapter), meridian flips and dithering, the
+small random nudges between frames that keep noise from stacking up
+in the same pixels (the "Autoguiding" chapter), multi-target nights
+(the "The Multi-Target Night Planner" chapter), planetary lucky imaging, which keeps only the
+sharpest of thousands of short video frames (the "Planetary and Lucky Imaging" chapter), and
+remote access from outside your LAN (the "Networking and Remote Access" chapter). Welcome
+aboard.

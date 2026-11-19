@@ -1,0 +1,267 @@
+# The Advanced Sequencer
+
+The ADV tab hosts Polaris's tree-based sequence engine, modeled on the
+one in N.I.N.A. [@berg_nina] (the free Windows imaging suite Polaris
+descends from), and built for multi-target unattended runs that need
+conditions, triggers, and branches. For simple flat lists, use AUTORUN
+instead (the "Simple Sequences and the Flat Wizard" chapter); ADV is for the cases where flat lists fall
+short. The PLAN night planner (the "The Multi-Target Night Planner" chapter) compiles its plans
+into Advanced Sequencer documents and runs them on this same engine, so
+what you learn here also explains what PLAN does under the hood.
+
+## The Advanced Sequencer / When to use ADV versus AUTORUN
+
+| Use case | Pick |
+|---|---|
+| 100 frames of M81 in L | AUTORUN |
+| LRGB across 3 targets with end-of-night warm-down | AUTORUN |
+| LRGB + Ha across 5 targets with conditional weather safety | ADV |
+| Per-target rotator + filter offsets + dither cadence variations | ADV |
+| Mosaic with branching capture per panel | ADV |
+| Anything like "if temperature drops 2°C, run an auto-focus" | ADV |
+
+## The Advanced Sequencer / The tree model
+
+A sequence is a tree built from four kinds of items:
+
+- **Containers** group children: Sequential, Parallel, DeepSkyObject,
+  and Templated containers.
+- **Instructions** are atomic actions: Take Exposure, Slew, Center,
+  Move Focuser, Dither, Park, and so on.
+- **Conditions** gate execution: Loop Until Time, Loop Until Altitude,
+  Loop For N Exposures, and similar.
+- **Triggers** fire on events: Auto-focus on Temperature Change, the
+  Meridian Flip Trigger, Dither After N Exposures, and similar.
+
+Triggers attach to containers and apply to every instruction underneath
+them. An "Auto-focus on Temperature Change" trigger attached to a Deep
+Sky Object container will therefore fire an AF run whenever the
+temperature threshold is crossed during any instruction inside that
+target.
+
+## The Advanced Sequencer / The tri-pane editor
+
+The editor splits into three panes. On the left sits the **Palette** of
+available items, filterable by name; you drag items from it onto the
+tree. The center holds the **Tree view**, with drag-to-reorder,
+expand and collapse, and status colouring during runs: a highlighted
+green row for the step running now, dimmed for done, red for errored.
+On the right, the **Properties
+panel** shows the selected item's numeric, text, and dropdown fields,
+driven by that item type's metadata.
+
+Every parameter of the item is listed, including optional ones left
+empty, and an empty optional field says what happens instead. On Take
+Exposure, an empty **Gain** keeps whatever gain the camera already
+has, which after a plate solve is usually the solve's gain, so set it
+on each exposure set whose gain matters; an empty **Offset** uses the
+rig's offset from RIGS.
+
+Coordinates (the RA and Dec of a target block, a Meridian Flip, Center
+After Drift or Loop Until Altitude) take either form: RA as
+`20:45:43.8`, `20h45m43.8s` or decimal hours (`20.7622`), Dec as
+`-05:23:28`, `-5°23'28"` or decimal degrees, all J2000 (the standard
+catalogue epoch). They are shown as HH:MM:SS and ±DD:MM:SS. When you
+change a target block's RA or Dec, its triggers and conditions that
+still held the old value follow it; **Copy coordinates to triggers**
+copies them into all of that target's triggers and conditions at once.
+
+### The Advanced Sequencer / The tri-pane editor / Following a run
+
+While a sequence runs, the **Now** bar above the tree shows the path
+of the running step (for example *Two targets › M42 › 120 s light*),
+the frame number within the current exposure set, the exposure's own
+progress as a thin bar along the bottom, and the time since the run
+started. A trigger that is firing, such as a meridian flip or an
+autofocus run, appears beside the path. The running step is
+highlighted in the tree, which scrolls to it as the run moves on, and
+each exposure set shows how many of its frames are done (*3/10*).
+After the run, the bar stays with how it ended.
+
+The **Last frame** panel, above the Properties panel, shows each frame
+the run captures, with the same zoom and stretch controls as the other
+image views. Hide it with ✕ when you need the room for editing, and
+bring it back with **Show last frame**.
+
+The toolbar offers **New**, **Templates**, **Start**, **Stop**,
+**Validate**, **Save tree**, **Download JSON**, and **Upload JSON**.
+JSON is a plain-text data format: **Download JSON** writes the whole
+tree to a single file you can back up, share, or edit by hand, and
+**Upload JSON** reads one back in. **Save tree** sends your edits to
+the engine without starting a run; **Start** does that for you too.
+
+## The Advanced Sequencer / Starting from an example
+
+You rarely need to build a tree from an empty root. **New** offers an
+empty sequence and four ready-made examples:
+
+- **One target all night**: cool the camera, wait for dark, start
+  guiding, focus, then image one target until it sinks below 30°, and
+  park at the end.
+- **Two targets in one night**: the first target until it gets low,
+  then a wait for the second one to rise, then the second target.
+- **LRGB with refocus on filter change**: cycles the L, R, G, and B
+  filters on one target and refocuses after every filter swap.
+- **Darks and biases**: cools to the imaging temperature and takes a
+  library of darks and biases (dark frames record the sensor's own
+  signal with the shutter closed; biases are the shortest exposures it
+  can take). Cover the telescope first.
+
+The examples answer the question new users ask most: in what order do
+the pieces go? Click any block and its description, in the Properties
+panel, says why it sits where it does. The order they share is the one
+the engine was built around:
+
+1. **At the root, before any target:** unpark, cool, wait for dark,
+   start guiding, and focus once.
+2. **One DeepSkyObject block per target:** it slews and centres on its
+   own at the start (pausing guiding for the slew and restarting it
+   afterwards), so there is no separate Slew, Center, or Start Guiding
+   inside it.
+3. **Triggers on the target block:** the meridian flip, the dither
+   cadence, refocus, and restore guiding. A trigger attached there
+   watches every exposure inside that target.
+4. **A loop condition on the target block:** "Repeat this block" plus a
+   condition such as Loop Until Altitude is what ends a target. Without
+   the condition, the block repeats until you stop the run.
+5. **At the root, after the last target:** stop guiding, warm the
+   camera, and park. Stopping the run by hand skips these, so park
+   yourself if you stop early.
+
+Replace the example targets (M42 and M104, chosen because both
+hemispheres can reach them) with your own: change the name and
+coordinates on the target block, and the same coordinates on its
+Meridian Flip trigger and its Loop Until Altitude condition, which time
+themselves from them.
+
+## The Advanced Sequencer / From a PLAN night
+
+A night built in the PLAN tab (the "The Multi-Target Night Planner" chapter) already compiles to
+this same kind of tree. **Open in ADV**, in the PLAN tab's bottom bar,
+opens that tree in the editor, so you can start from your PLAN night
+and add what PLAN does not offer, such as a dome, a flat panel, or a
+power-box step. The plan itself does not change. One difference: PLAN
+runs its end-of-session actions even after a stop at dawn, while in ADV
+they become an **End of session** block at the end of the tree, which
+a manual stop skips.
+
+## The Advanced Sequencer / Templates
+
+Any block can be saved as a template, for example an "M81 LRGB
+nightly" target block carrying a specific filter plan, dither cadence,
+and refocus triggers. Select the block and choose **Templates → Save
+selected block as template**. **Templates → Insert** copies a saved
+template into the selected block (or into the root when nothing, or an
+instruction, is selected); each copy edits independently. Templates are
+stored as `{AppData}/Polaris/sequencer/templates/*.json`.
+
+## The Advanced Sequencer / Available instructions
+
+The palette reflects what is loaded; this list is representative, not
+exhaustive.
+
+- **Mount**: Slew, Slew & Center, Park, Unpark, Set Tracking,
+  Solve & Sync. Solve & Sync plate-solves, that is, it takes a short
+  exposure, matches its star pattern against a catalog to learn
+  exactly where the scope points, and updates the mount's own idea of
+  its position to match.
+- **Camera**: Take Exposure, Take Many Exposures, Cool Camera, Warm
+  Camera, Take Aux Exposure, Cool Aux Camera, Warm Aux Camera. The Aux
+  variants drive the secondary (aux) camera and save frames to the
+  `aux/` subtree; exposure, gain, and binning default to the rig's aux
+  settings when left blank.
+- **Focuser**: Auto Focus, Move Focuser, Move to Filter Offset. Move
+  Focuser has a **target** selector (main / aux / guide) and Auto Focus
+  has a **focuser source** selector (main / aux / guide), so a sequence
+  can refocus the aux or guide optical train, not just the imaging one.
+- **Filter Wheel**: Switch Filter.
+- **Guider (PHD2)**: Start Guiding, Stop Guiding, Dither, Auto-select
+  Star, and Set Guider Gain. PHD2 is the free autoguiding program most
+  amateur astrophotographers use. Set Guider Gain applies to Polaris's
+  built-in (native) guider only; PHD2 owns its own gain.
+- **Dome / Flat Panel / Rotator**: open and close, slew azimuth, set
+  brightness, rotate to angle.
+- **Power Box**: Set Outlet On/Off, Set Dew Heater (a PWM channel
+  level), Power Cycle Outlet (off → wait → on), and Set Switch Value
+  (any ISwitchV2 channel by index). Channel indexes match the RIGS
+  Power Box card; connect a power box in RIGS first.
+- **Flow control**: Wait For Time, Wait Until Above Horizon, Wait For
+  Altitude, Wait For Moon Below Horizon, Wait For Sun Below Horizon.
+- **External**: Run External Script, Send HTTP Request, Send Email.
+- **Host**: Shutdown Host powers the computer that runs Polaris off.
+  Put it last, after Park Mount and Warm Camera: the sequence ends
+  there. The run only reaches it when the instructions before it did
+  not abort the run, so a night that failed leaves the host on to be
+  looked at.
+
+## The Advanced Sequencer / Conditions
+
+- **Loop Until Time**, a datetime cutoff.
+- **Loop Until Altitude**, until the target's altitude drops below a
+  threshold.
+- **Loop For N Exposures**, a frame counter.
+- **Loop For Duration**, a wall-clock timer.
+- **Loop While Safe**, which checks weather safety.
+
+## The Advanced Sequencer / Triggers
+
+- **Auto Focus on Temperature Change**, with a temperature-change
+  (Δ°C) threshold.
+- **Auto Focus on HFR Increase**, firing when the average star size
+  (HFR, half-flux radius; lower means sharper focus) grows a set
+  percentage above baseline.
+- **Auto Focus on Time Elapsed**, on an interval.
+- **Auto Focus on Filter Change**, firing after every filter swap.
+- **Meridian Flip Trigger**, which flips the mount when the target
+  crosses the meridian (the imaginary north-south line overhead;
+  German equatorial mounts must swing the telescope to the other side
+  of the pier there to keep tracking).
+- **Dither After N Exposures**, the dither cadence. A dither nudges
+  the mount slightly between frames so hot pixels and other
+  fixed-pattern noise land on different sky pixels each time.
+- **Center After Drift**, a periodic plate solve and re-center.
+- **Safety Trigger**, which aborts to a safe state on a weather event.
+
+The auto-focus machinery these triggers invoke is described in
+the "Focusing" chapter, and guiding in the "Autoguiding" chapter.
+
+## The Advanced Sequencer / Things to check
+
+**Validate** reports two kinds of finding. **Errors** are values the
+engine cannot run, such as a negative exposure; a sequence with errors
+does not start. **Things to check** are trees that run but probably not
+the way you meant, the pieces people forget on a multi-target night:
+
+- a Meridian Flip trigger, Center After Drift trigger, or Loop Until
+  Altitude condition whose coordinates differ from its target's (the
+  usual result of changing a target in one place only);
+- one Meridian Flip trigger at the root shared by several targets,
+  timed off only one of them;
+- a target block with light frames and no Meridian Flip trigger
+  covering it;
+- a target block whose coordinates were never filled in;
+- "Repeat this block" with no loop condition (it never ends), or a
+  loop condition with "Repeat this block" off (the condition is
+  ignored);
+- dithering or Restore Guiding with no Start Guiding before the
+  exposures;
+- light frames before anything points the telescope;
+- a cooled camera never warmed, or a run that ends without parking.
+
+**Start** runs the same review and, when it finds something, lists it
+and asks once before starting. You can start anyway; nothing here
+blocks a run.
+
+## The Advanced Sequencer / Common pitfalls
+
+**The sequence appears to do nothing.** A condition's gate is always
+false. Inspect the tree for a `Loop While Safe` condition with no
+weather device connected.
+
+**Triggers fire infinitely.** Your trigger condition matches a state
+that the triggered action does not reset. For example, Auto-focus on
+HFR Increase without a baseline fires on every frame. Combine it with
+an "every N frames" trigger as a floor.
+
+**Lost work.** Saving to JSON is not automatic. Save manually before
+running long sessions.

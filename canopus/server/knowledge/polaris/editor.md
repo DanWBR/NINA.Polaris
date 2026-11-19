@@ -1,128 +1,129 @@
-# Editor, Lightroom-style post-processing
+# The EDITOR
 
-The **EDITOR** tab is the last step of the Polaris workflow. After STUDIO
-has produced a master integrated image (or you've imported a TIFF/PNG
-from Siril/PixInsight), the editor gives you the same kind of slider-
-driven, non-destructive tone work you'd otherwise do in Lightroom, but
-inside the browser, against the file on the Polaris host.
+The EDITOR tab is the last step of the Polaris workflow. After
+STUDIO has produced a master integrated image (the "STUDIO: Calibration and Stacking" chapter), or you
+have imported a TIFF or PNG from Siril or PixInsight, the editor
+gives you the slider-driven tone and colour work you would otherwise
+do in Lightroom, but inside the browser, against the file on the
+Polaris host. It is fully non-destructive: the source pixels are
+never modified, and every slider position lives in a small sidecar
+file (a companion file saved next to the image) that the editor
+reads back the next time you open the same source.
 
-## Workflow at a glance
+## The EDITOR / Workflow at a glance
 
 1. **Open a source.** Three ways:
-   - **EDITOR → Open file dropzone**, drag a `.fits` / `.xisf` / `.png`
-     / `.jpg` / `.tif` from your desktop, or click to pick from disk.
-   - **EDITOR → From server path**, paste an absolute path of a file
-     already on the Polaris host (handy when you SSH'd a file in).
-   - **STUDIO → select a single master → 🎨 Open in editor** in the
-     selection bar, or **FILES → select one file → 🎨 Edit** in the
-     toolbar.
-2. **Drag sliders.** Light, Color, Effects and Detail sections each
-   collapse and expand independently. Changes preview in ~80 ms
-   (debounced) so dragging stays smooth even on the Raspberry Pi.
-3. **Compare.** Hold **👁 Hold to compare** to flip back to the
-   unedited reference. Release to return.
-4. **💾 Save edits** writes a `{source}.edit.json` sidecar next to the
-   source. Reopening that source later in the editor hydrates every
-   slider to the saved state, fully non-destructive.
-5. **↓ Export…** opens the export dialog (format, JPEG quality, resize).
-   The exported file lands in `{sourceDir}/edited/{stem}__edited_{stamp}.{ext}`
-   and the FILES index rescans automatically.
+   - **EDITOR → Open file** dropzone: drag a `.fits`, `.xisf`,
+     `.png`, `.jpg`, or `.tif` from your desktop, or click to pick
+     from disk.
+   - **EDITOR → From server path**: paste the absolute path of a
+     file already on the host (handy when you copied a file in over
+     SSH).
+   - From the other tabs: select a single master in STUDIO and
+     click **Open in editor** in the selection bar, or select one
+     file in FILES and click **Edit** in the toolbar.
+2. **Drag sliders.** The Light, Color, Effects, and Detail sections
+   collapse and expand independently. Changes preview in about
+   80 milliseconds, so dragging stays smooth even when the host is
+   a Raspberry Pi.
+3. **Compare.** Hold **Hold to compare** to flip back to the
+   unedited reference; release to return.
+4. **Save edits** writes a `{source}.edit.json` sidecar next to the
+   source. Reopening that source later restores every slider to the
+   saved state.
+5. **Export** renders the finished image to JPEG, PNG, or TIFF.
 
-## Auto adjust
+## The EDITOR / Auto adjust
 
-The **✨ Auto** button at the top of the right-rail sliders computes a
+The **Auto** button at the top of the right-rail sliders computes a
 reasonable starting point for the Light and Color sections from the
-source frame's histogram. The sliders move to the computed values, the
-preview re-renders, and you can keep tweaking from there. **↺ Reset**
-sits next to Auto and zeros every slider in one click. **→ Workflow**
-(next to them) turns your current edits into a saveable
-[Auto Workflow](studio.md#auto-workflow) so you can name them and
-batch-apply the same look to other frames.
-
-**Stretch mode:** the histogram panel has a **Mode** selector - `MTF`
-(the classic black/mid/white handles) or `GHS` / `asinh` (a
-generalized-hyperbolic / arc-sinh curve driven by the D + B sliders).
-GHS/asinh apply as a linked, colour-preserving curve over the neutral
-base; the same stretch is available as an Auto Workflow step.
+source frame's histogram. The sliders move to the computed values,
+the preview re-renders, and you keep tweaking from there. **Reset**
+sits next to it and zeros every slider in one click, and
+**Workflow** turns your current edits into a saveable Auto Workflow
+(the "STUDIO: Calibration and Stacking" chapter) so you can name the look and batch-apply it to other
+frames.
 
 What Auto touches:
 
 | Section | Sliders set | Logic |
 |---|---|---|
-| **Light** | Exposure / Contrast / Highlights / Shadows / Whites / Blacks | Reads p0.5, p5, median, p99.5 from the histogram. Exposure nudges the median toward Zone V (0.18), capped at &plusmn;1.5 stops because the source is already auto-stretched upstream. Highlights/Shadows/Whites/Blacks engage only when the histogram is actually clipped or has unused headroom. Contrast gets a gentle +0.10 bias unless the histogram already spans most of the range. |
-| **Color** (RGB only) | Vibrance | Gentle +0.25 bump. Vibrance protects already-saturated pixels (star cores stay coloured, they don't blow neon). Saturation stays at 0. |
+| **Light** | Exposure, Contrast, Highlights, Shadows, Whites, Blacks | Reads key percentiles from the histogram. Exposure nudges the median toward middle gray (0.18, the photographic Zone V), capped at plus or minus 1.5 stops because the source is already auto-stretched upstream. Highlights, Shadows, Whites, and Blacks engage only when the histogram is actually clipped or has unused headroom. Contrast gets a gentle +0.10 bias unless the histogram already spans most of the range. |
+| **Color** (RGB only) | Vibrance | A gentle +0.25 bump. Vibrance protects already-saturated pixels, so star cores stay coloured rather than turning neon. Saturation stays at 0. |
 
-What Auto does **not** touch: White Balance (use the PCC or BG
-Neutralization tools in STUDIO for scientifically grounded WB), Tone
-Curve, Effects, Detail. Those stay where they were, so you can stack
-Auto on top of an existing edit without losing previous work.
+What Auto does **not** touch: White Balance (use the photometric
+colour calibration or background neutralization tools of
+the "Color Calibration" chapter for scientifically grounded colour), Tone
+Curve, Effects, and Detail. Those stay where they were, so you can
+stack Auto on top of an existing edit without losing earlier work.
+Auto applies through the same setters the sliders use, so it is one
+undoable step: press the toolbar **Undo** to revert. The
+computation reads the cached working image, so the round trip is
+typically under 50 milliseconds even on a Pi.
 
-Behaviour:
+The histogram panel also has a stretch **Mode** selector: `MTF`
+(the classic three-handle black, midtones, white stretch) or `GHS`
+and `asinh`, two curve families (GHS is the generalized hyperbolic stretch and asinh the inverse-hyperbolic-sine stretch, both popular in astro processing because they lift faint signal steeply while compressing the bright end gently.) driven by the D and B sliders.
+GHS and asinh apply as a linked, colour-preserving curve, and the
+same stretch is available as an Auto Workflow step.
 
-- Each computed value is applied via the same setter the slider uses,
-  so Auto becomes one undoable step (press the toolbar **Undo** to
-  revert) and the sidecar-dirty flag fires normally.
-- After Auto you can refine any slider manually; the new value
-  overrides what Auto picked.
-- The endpoint reads the cached working buffer; there's no extra
-  decoding cost. Roundtrip is typically under 50 ms even on a Pi.
+## The EDITOR / The sections
 
-## Sections
-
-### Light
-
-| Slider | What it does |
-|---|---|
-| **Exposure** | Multiplies brightness in stops (-5 to +5). +1 ≈ 2× brighter. |
-| **Contrast** | Lerps toward a smoothstep S-curve (endpoint-preserving). Positive pulls below-mid down + above-mid up; negative flattens. |
-| **Highlights** | Pulls or pushes pixels above 0.5. Negative recovers blown highlights, positive emphasises them. |
-| **Shadows** | Mirror of Highlights for the lower half. Positive lifts shadows; negative crushes them. |
-| **Whites** | Specifically targets the top end (≥ 0.7) of the range. Lift to push details near white; cut to add headroom. |
-| **Blacks** | Mirror of Whites at the bottom (≤ 0.3). |
-
-### Color
+### The EDITOR / The sections / Light
 
 | Slider | What it does |
 |---|---|
-| **Temp** (K) | White-balance temperature, 2000K (warm/red) ↔ 15000K (cool/blue). Defaults at 6500K (D65 neutral). |
-| **Tint** | Magenta ↔ green balance. Negative = more magenta, positive = greener. |
-| **Vibrance** | Per-pixel saturation boost scaled by `(1 - currentSaturation)`, protects already-saturated pixels so portraits / nebula cores don't go neon. |
-| **Saturation** | Flat HSL scale of every pixel's S channel. -1 = full grayscale. |
-| **Hue** | Rotates the whole colour wheel by -180° to +180°. |
+| **Exposure** | Multiplies brightness in stops, -5 to +5; +1 is about twice as bright. |
+| **Contrast** | Blends toward a smooth S-curve that preserves the endpoints. Positive pulls the dark half down and the bright half up; negative flattens. |
+| **Highlights** | Pulls or pushes pixels above middle brightness. Negative recovers blown highlights, positive emphasises them. |
+| **Shadows** | The mirror of Highlights for the lower half. Positive lifts shadows; negative crushes them. |
+| **Whites** | Targets the top end of the range specifically. Lift to push details near white; cut to add headroom. |
+| **Blacks** | The mirror of Whites at the bottom. |
 
-### Effects
-
-| Slider | What it does |
-|---|---|
-| **Texture** | Mid-radius (~3 px) unsharp-mask. Adds bite to fine structure without affecting overall tonal balance. |
-| **Clarity** | Large-radius (auto: image-width / 80) USM on luminance only. Adds punch to broad structures; doesn't shift colour. |
-| **Dehaze** | Per-channel auto-stretch toward black with mild saturation lift. Approximation of He et al. 2009, fine for editor UX, won't match a research-grade dehaze algorithm. |
-| **Vignette** | Radial multiply. Negative darkens corners; positive brightens. Feather controls falloff softness. |
-
-### Detail
+### The EDITOR / The sections / Color
 
 | Slider | What it does |
 |---|---|
-| **Sharpen** (amount/radius) | Unsharp-mask on luminance. Amount 0-1, radius 0.5-5 px. |
-| **Noise reduce** | Conservative 3×3 median on luminance, blended back at the slider's strength. For heavy NR run GraXpert Denoise on the FITS first, this is just polish. |
+| **Temp** (K) | White-balance temperature, 2000 K (warm, red) to 15000 K (cool, blue). Defaults to the 6500 K daylight neutral. |
+| **Tint** | Magenta to green balance; negative is more magenta, positive greener. |
+| **Vibrance** | A saturation boost that scales down for pixels that are already saturated, so nebula cores and star colours do not go neon. |
+| **Saturation** | A flat scale of every pixel's saturation; -1 is full grayscale. |
+| **Hue** | Rotates the whole colour wheel, -180 to +180 degrees. |
 
-## Pipeline order
+### The EDITOR / The sections / Effects
 
-Each step short-circuits when its section is at defaults, so a slider
-you haven't touched costs zero work. The fixed order is:
+| Slider | What it does |
+|---|---|
+| **Texture** | A medium-radius (about 3 pixel) unsharp mask, the classic sharpening technique that boosts local contrast. Adds bite to fine structure without shifting the overall tonal balance. |
+| **Clarity** | A large-radius unsharp mask (the radius adapts to the image width) applied to brightness only. Adds punch to broad structures without shifting colour. |
+| **Dehaze** | A per-channel stretch toward black with a mild saturation lift. An approximation for editing feel, not a research-grade haze-removal algorithm. |
+| **Vignette** | A radial brightness multiply. Negative darkens corners, positive brightens them; **Feather** controls how soft the falloff is. |
+
+### The EDITOR / The sections / Detail
+
+| Slider | What it does |
+|---|---|
+| **Sharpen** (amount, radius) | An unsharp mask on brightness only; amount 0 to 1, radius 0.5 to 5 pixels. |
+| **Noise reduce** | A conservative 3 by 3 median filter on brightness, blended back at the slider's strength. For heavy noise reduction, run the GraXpert Denoise of the "AI Cleanup: GraXpert in the Browser" chapter on the FITS first; this slider is just polish. |
+
+## The EDITOR / Pipeline order
+
+The edits always apply in one fixed order, and any step whose
+section sits at its defaults is skipped entirely, so an untouched
+slider costs nothing:
 
 1. White balance → 2. Exposure → 3. Contrast → 4. Highlights →
-5. Shadows → 6. Whites/Blacks → 7. Tone curves → 8. Vibrance/Saturation
-→ 9. Hue → 10. Clarity → 11. Dehaze → 12. Texture → 13. Sharpen →
-14. Noise reduce → 15. Vignette → 16. Crop + Resize (export only).
+5. Shadows → 6. Whites/Blacks → 7. Tone curves →
+8. Vibrance/Saturation → 9. Hue → 10. Clarity → 11. Dehaze →
+12. Texture → 13. Sharpen → 14. Noise reduce → 15. Vignette →
+16. Crop and Resize (export only).
 
-This is deterministic so the server-side and (future) WASM client-side
-implementations produce byte-identical output for the same edits.
+The order is deterministic so that every implementation of the
+pipeline produces byte-identical output for the same edits.
 
-## Sidecar (`.edit.json`)
+## The EDITOR / The sidecar
 
-When you click **Save edits**, the editor writes a small JSON file next
-to the source:
+**Save edits** writes a small JSON file next to the source:
 
 ```jsonc
 {
@@ -137,63 +138,55 @@ to the source:
 }
 ```
 
-Sections you didn't touch are omitted entirely. If the source's
-directory isn't writable (read-only mount, SMB without write access),
-the sidecar falls back to
-`%LOCALAPPDATA%\Polaris\sidecars\{md5-of-path}.edit.json` on the Polaris
+Sections you did not touch are omitted entirely. If the source's
+directory is not writable (a read-only mount, or a network share
+without write access), the sidecar falls back to
+`%LOCALAPPDATA%\Polaris\sidecars\{md5-of-path}.edit.json` on the
 host.
 
-The exported file (in `edited/`) doesn't carry a sidecar, re-opening
-the export in the editor will start from defaults. The sidecar always
-lives with the **source**, not the export.
+The sidecar always lives with the source, not the export: an
+exported file does not carry one, so re-opening an export in the
+editor starts from defaults.
 
-## Compute model
+## The EDITOR / Export
 
-Today every edit runs on the Polaris **server**: each slider tick POSTs
-to `/api/editor/preview`, the server applies the pipeline + encodes a
-JPEG, the browser swaps the `<img>`'s blob URL. The decoded source
-stays in memory in a session keyed by Guid (auto-evicted after 30 min
-idle), so only the first `/preview` call after `/load` pays for the FITS
-decode + AutoStretch.
+**Export** opens a dialog with:
 
-A future build (ED-6) will move the pipeline into the WASM bundle when
-the browser is capable, eliminating the network round-trip and dropping
-slider latency to roughly the time it takes the canvas to repaint. The
-math is identical, so output stays byte-for-byte the same; the toggle
-will live in Settings.
+- **Format**: JPEG (best for sharing), PNG (lossless), or 16-bit
+  TIFF (for further editing in Photoshop or Affinity).
+- **Quality**: JPEG quality 0 to 100; 90 is a sweet spot for the
+  web, 100 for archiving.
+- **Resize**: a pixel width and height, or a percentage of the
+  source; leave empty for full resolution.
+- **Filename**: defaults to `{stem}__edited_{timestamp}.{ext}`.
 
-## Known limitations
+The exported file lands in
+`{sourceDir}/edited/{stem}__edited_{timestamp}.{ext}` and the FILES
+index rescans automatically, so you can download it from the FILES
+tab (the "Managing Your Data" chapter) right away.
 
-- **XISF** is supported as source via FITS-like header decode, but
-  PixInsight projects that pack multiple frames into one XISF aren't
-  parsed (only the primary image). Export it as TIFF/PNG out of
-  PixInsight if in doubt.
-- **CR2 / NEF / ARW (raw)** aren't supported as editor input; the
-  decoder is FITS + Skia (PNG/JPG/TIFF). Export the demosaiced TIFF
-  first.
-- **Local adjustments** (brush, gradient, radial) are out of scope for
-  this version. Crop and resize live in the export dialog; everything
-  else is global.
-- The editor opens **one frame per session**. Batch editing across
-  many files is best done by saving sliders to a sidecar on one frame,
-  then copying that `.edit.json` next to each sibling file (manual
-  step today).
+## The EDITOR / How it computes
 
-## API reference
+Every edit currently runs on the host: each slider movement posts
+the full edit state to the server, which applies the pipeline,
+encodes a JPEG preview, and sends it back; the browser swaps the
+image it displays. The decoded source stays in the host's memory in
+a per-file session, so only the first preview after opening pays
+for the FITS decode and auto-stretch; sessions are freed after 30
+minutes of inactivity. (The endpoints live under `/api/editor` (`/load`, `/preview`, `/histogram`, `/export`, `/sidecar`, `/upload`, `/release`, `/sessions`); see the "API and Configuration" chapter for the API conventions. A planned build moves the pipeline into the browser via WebAssembly (near-native-speed code running client-side) on capable devices, eliminating the network round trip; the math is identical, so output stays byte-for-byte the same.)
 
-All endpoints live under `/api/editor`:
+## The EDITOR / Known limitations
 
-| Method + Path | Body | Returns |
-|---|---|---|
-| `POST /load` | `{ path }` | `{ sessionId, sourcePath, width, height, channels, edits }` (edits null when no sidecar) |
-| `POST /preview` | `{ sessionId, edits, maxDim, quality }` | JPEG bytes |
-| `POST /histogram` | `{ sessionId, edits }` | `int[256]` (mono) or `int[768]` (RGB) |
-| `POST /export` | `{ sessionId, edits, format, quality, targetWidth, targetHeight, outputPath }` | `{ path }` |
-| `GET /sidecar?path=…` |, | `{ exists, edits }` |
-| `PUT /sidecar` | `{ path, edits }` | `{ sidecarPath }` |
-| `POST /upload` | multipart `file` | `{ path }` |
-| `POST /release` | `{ sessionId }` | `{ released: true }` |
-| `GET /sessions` |, | array of active session info (debug) |
-
-Sessions auto-evict after 30 min of inactivity. `POST /release` frees
-one early.
+- **XISF** works as a source, but PixInsight projects that pack
+  multiple frames into one XISF are not parsed (only the primary
+  image); export a TIFF or PNG from PixInsight if in doubt.
+- **Camera raw files** (CR2, NEF, ARW) are not accepted as editor
+  input; the decoder handles FITS plus PNG, JPEG, and TIFF. Export
+  a demosaiced TIFF first.
+- **Local adjustments** (brush, gradient, radial) are out of scope
+  in this version; crop and resize live in the export dialog, and
+  everything else is global.
+- The editor opens **one frame per session**. To batch-edit
+  siblings, save the sliders to a sidecar on one frame, then copy
+  that `.edit.json` next to each sibling file (a manual step
+  today).

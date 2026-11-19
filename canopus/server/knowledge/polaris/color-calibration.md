@@ -1,209 +1,325 @@
-# Color calibration (Siril-style)
+# Color Calibration
 
-The STUDIO **Color calibration** button gives you three calibrators
-that map to the three Siril tools astrophotographers reach for after
-stacking + before the editor:
+A freshly combined (or freshly debayered) master almost never has
+believable color: filters, sensor response, and sky glow each pull
+the balance their own way, leaving a color cast over the whole
+frame. STUDIO's **Color calibration** tool answers with three
+calibrators that map directly onto the three tools Siril [@siril]
+users reach for between stacking and editing, plus a fourth,
+spectrophotometric method covered later in this chapter:
 
-| Mode | What it does | When you use it |
+| Mode | What it does | When to use it |
 |---|---|---|
-| **BG neutralize** | Subtract per-channel offsets so the background is neutral grey. | Quick first pass on any colour-cast master. No setup. |
-| **Manual** | BG neutralize + a white-reference patch you pick. | When the BG step alone leaves a tint and you have a known-white target in frame (G2V star, galaxy core). |
-| **PCC** | Photometric Color Calibration via bundled APASS DR9 catalog. | The gold standard. Star colours match catalog B-V values. Requires plate-solved source + the catalog populated. |
+| **BG neutralize** | Subtracts per-channel offsets so the sky background becomes neutral gray. | Quick first pass on any color-cast master. No setup. |
+| **Manual** | BG neutralize plus a white-reference patch you pick. | When the background step alone leaves a tint and a known-white target (a Sun-like star, a galaxy core) is in frame. |
+| **PCC** | Photometric Color Calibration against the bundled APASS star catalog [@henden2014apass]. | The gold standard: your stars' colors are fitted to their published catalog colors. Needs a plate-solved image and the catalog installed. |
 
 All three are non-destructive: each writes a sibling FITS next to
-the source (`{stem}_bgneu.fits` / `{stem}_ccal.fits` / `{stem}_pcc.fits`)
-and indexes it in the frame library. The originals stay untouched
-so you can experiment.
+the source (`{stem}_bgneu.fits`, `{stem}_ccal.fits`, or
+`{stem}_pcc.fits`) and indexes it in the frame library. The original
+stays untouched, so you can experiment freely.
 
-## When to run color calibration
+## Color Calibration / Where it fits in the pipeline
 
-Slot it between **channel combine** and **GraXpert AI cleanup** in
-the mono workflow:
+Slot color calibration between channel combination and the AI
+cleanup in the mono workflow:
 
 ```
-per-filter masters → Combine → Color calibration → BGE → Denoise → Decon → Editor → Export
+per-filter masters → Combine → Color calibration → BGE → Denoise → Decon → EDITOR → Export
                               ^^^^^^^^^^^^^^^^^^
-                              this page
+                              this chapter
 ```
 
-For OSC shooters: drop in between **debayer** and the AI cleanup,
-or skip it entirely if your OSC pipeline already produces a neutral
-result.
+For OSC (one-shot color) shooters, run it between debayering and the
+AI cleanup, or skip it entirely if your pipeline already produces a
+neutral result.
 
-## Workflow
+## Color Calibration / Running a calibration
 
-1. Select **one** RGB FITS master in STUDIO (the Combine button's
-   output, typically `rgb_*.fits` or `lrgb_*.fits`).
-2. Click **🎯 Color calibration** in the selection bar. The modal
+1. Select one RGB FITS master in STUDIO, typically the Combine
+   output (`rgb_*.fits` or `lrgb_*.fits`, the "Mono, LRGB, and Narrowband" chapter).
+2. Click **Color calibration** in the selection bar. The modal
    opens.
-3. Pick a tab (defaults to BG):
-   - **BG neutralize**: leave on Auto unless you have a specific
-     dark patch in mind, then click **▶ Calibrate**.
-   - **Manual**: keep BG on Auto, type pixel coordinates for the
-     white patch (e.g. a small rect around a known G2V star), then
-     click **▶ Calibrate**.
+3. Pick a tab (it defaults to BG neutralize):
+   - **BG neutralize**: leave the sampling on **Auto** unless you
+     have a specific dark patch in mind, then click **Calibrate**.
+   - **Manual**: keep BG on Auto, type the pixel coordinates of a
+     white-reference patch (a small rectangle around a known
+     Sun-like star, say), then click **Calibrate**.
    - **PCC**: check the catalog badge at the top of the tab. If it
-     shows ✓ APASS DR9, click **▶ Calibrate**. Otherwise see the
-     "Setup" section below.
-4. Wait. BG/Manual take a few seconds; PCC takes 10-30 s depending
-   on input size + matched star count.
-5. The toast on completion shows the output path, per-channel
-   gains, and (for PCC) matched-star count. Open the sibling FITS
-   in the STUDIO viewer to compare against the source.
+     shows the APASS catalog as installed, click **Calibrate**;
+     otherwise see the setup section below.
+4. Wait. BG and Manual take a few seconds; PCC takes 10 to 30
+   seconds depending on the image size and how many stars match.
+5. The completion toast shows the output path, the per-channel
+   gains, and, for PCC, the matched-star count. Open the sibling
+   FITS in the viewer to compare against the source.
 
-## Mode details
+## Color Calibration / BG neutralize
 
-### BG neutralize
+The simplest case: per-channel offsets are subtracted so the chosen
+background region becomes neutral gray at the level of the dimmest
+channel. Overall image brightness is preserved. Two sampling modes:
 
-The simplest case: per-channel offsets are subtracted so the
-chosen background region becomes neutral grey at the dimmest
-channel's level. Overall image brightness is preserved.
+- **Auto** (recommended): samples the lowest-luminance 5% of pixels
+  across the whole frame, which finds the darkest background
+  automatically and works on any frame with some empty sky.
+- **Patch**: type `x, y, w, h` in pixel coordinates for a rectangle
+  over a dark, empty-sky region. Use it when the auto-sample picks
+  up something it should not: very dim nebulosity, a vignetted
+  corner, amplifier glow.
 
-Sample modes:
-- **Auto** (recommended): the service samples the lowest-luminance
-  5% of pixels across the entire frame. Picks the darkest
-  background portion automatically, works on any frame with empty
-  sky.
-- **Patch**: type `x, y, w, h` in pixel coordinates of a rectangle
-  covering a dark empty-sky region. Use this when the auto-sample
-  picks up unwanted content (very dim nebula, vignette corner,
-  amp glow).
+Output: `{stem}_bgneu.fits`, with the mode and the three per-channel
+offsets recorded in the FITS header.
 
-Output: `{stem}_bgneu.fits` with `CCAL_MODE=bg` and the three
-per-channel offset values in the FITS headers.
+## Color Calibration / Manual
 
-### Manual
+Background neutralization plus a white-reference rescale. After the
+background step, per-channel gains are computed to bring your chosen
+patch to neutral. In this mode the background step subtracts each
+channel's full median (a "zero background") so the subsequent gain
+does not pull the background away from neutrality again.
 
-BG neutralization plus a white-reference rescale. After the BG
-step, the service computes per-channel gains that bring the white
-patch to neutral. The BG step uses zero-background offsets (each
-channel's full median subtracted) in this mode so the subsequent
-gain does not pull background away from neutrality.
+Good white references:
 
-Good white-reference targets:
-- G2V star (Sun-like, B-V ≈ 0.65). Visible all over the sky.
-- Galaxy core for spiral galaxies (M31, M81). Usually neutral
-  except for very dust-heavy cores.
-- Neutral region of a nebula (where ionization is balanced).
+- A G2V star, meaning one of the same spectral class as the Sun,
+  with a color index B-V of about 0.65 (B-V compares a star's
+  brightness through blue and green-yellow filters; smaller is
+  bluer). By definition, sunlight is what we perceive as white, and
+  G2V stars are visible all over the sky.
+- The core of a spiral galaxy (M31, M81): usually neutral, except
+  for heavily dust-reddened cores.
+- A neutral region of a nebula, where ionization is balanced.
 
-Output: `{stem}_ccal.fits` with `CCAL_MODE=manual` plus offsets +
-gains.
+Output: `{stem}_ccal.fits`, with offsets and gains in the header.
 
-### PCC (Photometric Color Calibration)
+## Color Calibration / PCC: photometric color calibration
 
-The science-grade tool, modelled after Siril's PCC. Requires a
-plate-solved source + the bundled APASS DR9 catalog.
+The science-grade tool, modeled after Siril's PCC [@siril]. Instead
+of trusting any patch of your image, it measures the brightness of
+identified stars in each channel (photometry) and fits the channel
+gains so those stars match the colors a published survey measured
+for them. The pipeline:
 
-Pipeline:
-1. Read the WCS coords from the source FITS headers (must be
-   plate-solved, see Setup).
-2. Detect stars on the green plane (highest SNR).
-3. Measure per-channel flux for each detected star via aperture
-   photometry (`StarPhotometer`, 2 × HFR aperture with annulus
-   background subtraction).
-4. Query APASS for catalog stars in the field of view.
-5. Match catalog (RA, Dec) to detected (X, Y) within 3 pixels.
-   Drop saturated stars and catalog entries without B-V data.
-6. For each matched star, compute expected R/G and B/G ratios from
-   the B-V index (log-linear fit anchored at G2V). Divide observed
-   by expected, take the median across all matched stars to get
-   per-channel gains.
-7. Apply BG neutralization (zero-background) so the output is both
-   star-colour-calibrated and background-neutral.
+1. Read the sky coordinates from the source's WCS headers (WCS,
+   World Coordinate System, is the FITS convention that maps pixel
+   positions to sky positions; it is written by plate solving, see
+   the setup below).
+2. Detect stars on the green plane, which has the highest
+   signal-to-noise.
+3. Measure each star's per-channel flux with aperture photometry:
+   summing the pixels in a small circle of twice the star's HFR,
+   minus the local background measured in a surrounding ring.
+4. Query the APASS catalog for the stars in the field of view.
+5. Match catalog positions to detected stars within 3 pixels,
+   dropping saturated stars and catalog entries without B-V data.
+6. For each matched star, compute the expected R/G and B/G ratios
+   from its B-V index (a log-linear relation anchored at G2V);
+   divide observed by expected, and take the median across all
+   matched stars as the per-channel gains.
+7. Apply zero-background neutralization, so the output is both
+   star-color-calibrated and background-neutral.
 
-Output: `{stem}_pcc.fits` with `CCAL_MODE=pcc`, the per-channel
-gains, and `MatchedStars` reported in the toast. Requires at least
-5 matched stars; PCC fails loudly with an actionable error if
+Output: `{stem}_pcc.fits`, with the gains in the header and the
+matched-star count reported in the toast. PCC requires at least 5
+matched stars and fails with an actionable error message if it finds
 fewer.
 
-## Setup (PCC only)
+## Color Calibration / Setting up PCC
 
-PCC needs two ingredients the other modes do not:
+PCC needs two ingredients the other modes do not.
 
-### 1. Plate-solved source
+### Color Calibration / Setting up PCC / A plate-solved source
 
-The source FITS must have WCS headers (CRVAL/CRPIX/CD matrix).
-ASTAP writes these automatically when you run STUDIO → Solve;
-they survive integration via `BatchStackingService` and channel
-combine via `ChannelCombineService` because Polaris carries WCS
-through the reference frame.
+The source FITS must carry WCS headers (`CRVAL`, `CRPIX`, and the
+`CD` matrix). ASTAP [@kleijn_astap], the plate solver bundled with
+Polaris, writes them automatically when you run **Solve** in STUDIO,
+and they survive integration and channel combination because Polaris
+carries the WCS through on the reference frame. If PCC fails with
+"source FITS has no WCS", run **Solve** on the master first and
+retry.
 
-If PCC fails with "source FITS has no WCS", run STUDIO → Solve on
-the master first, then retry.
+### Color Calibration / Setting up PCC / The APASS catalog
 
-### 2. APASS catalog
-
-Bundled APASS DR9 lives at `wwwroot/catalogs/apass/apass.db`
-(~600 MB at the default Vmag ≤ 13 cap, ~5.3M stars). The file
-is **not committed to the repo** because of size + the catalog's
-CC-BY attribution requirement. Populate it once on the deployment
-host:
+The catalog is AAVSO's Photometric All-Sky Survey, APASS DR9
+[@henden2014apass], stored at `wwwroot/catalogs/apass/apass.db`
+under the Polaris install: about 600 MB at the default magnitude cap
+(V ≤ 13), roughly 5.3 million stars. The file does not ship inside
+Polaris releases, because of its size and the catalog's attribution
+requirement, so you populate it once. The easiest route is
+**Settings → Colour calibration data → Download**: Polaris fetches the
+catalog as one file of about 80 MB from its data pack on GitHub and
+builds the database on the host. If that file cannot be reached, it
+queries VizieR directly instead, which takes longer and needs the CDS
+servers in Strasbourg to answer. From a shell, the script does the
+VizieR route:
 
 ```bash
 python scripts/download-apass.py
 ```
 
-The script pulls APASS DR9 from CDS VizieR's TAP service
-(`II/336/apass9`) in Dec stripes, filters to stars with V mag ≤
-13, and builds the SQLite database with an R*tree spatial index.
-~5 min wall-clock on a desktop with a reasonable home internet
-link, ~15 min on a Pi 5. Per-stripe TSVs are kept in
-`scripts/.apass-cache/` so a re-run with `--skip-download`
-rebuilds the SQLite from the cache without hitting VizieR again.
+The script pulls APASS DR9 from the VizieR astronomical data service
+(catalog `II/336/apass9`) in declination stripes, filters to stars
+brighter than V magnitude 13, and builds the SQLite database with a
+spatial index for fast sky queries. (An R*tree index, which lets the "which stars fall inside this field of view" query run in milliseconds.) Expect about 5 minutes on a desktop with a reasonable
+home connection, about 15 on a Raspberry Pi 5. The downloaded
+stripes are cached in `scripts/.apass-cache/`, so a re-run with
+`--skip-download` rebuilds the database without touching the network
+again.
 
-Why DR9 and not DR10: AAVSO has not published DR10 as a
-programmatic download. DR9 is what Siril and the rest of the
-astrophotography toolchain ship against today; it contains 62
-million stars and is more than enough for PCC. If AAVSO publishes
-DR10 download endpoints later, swap the TAP source in
-`scripts/download-apass.py` and rerun.
+Two overrides matter at the extremes: `--mag-limit 15` deepens the
+catalog for very long focal lengths (the file grows to roughly
+3 GB), and `--stripe-deg 2.5` halves the per-query stripe if a
+future catalog update ever hits the service's per-query row cap.
 
-Override the magnitude cap with `--mag-limit 15` (catalog grows
-to ~3 GB) for plate solves at very long focal lengths. Override
-the per-query Dec stripe with `--stripe-deg 2.5` if the default
-5-degree stripes hit the VizieR TAP per-query row cap on a future
-catalog update.
+Why DR9 rather than the newer DR10: AAVSO has not published DR10 as
+a programmatic download, and DR9, with 62 million stars, is what
+Siril and the rest of the astrophotography toolchain ship against
+today; it is more than enough for PCC.
 
-The PCC tab's catalog badge tells you whether the file is in
-place. If you see "⚠ not installed", run the script and reload
-the modal.
+The PCC tab's catalog badge tells you whether the file is in place;
+if it reads "not installed", run the script and reopen the modal.
 
-### Alternative catalogs
+### Color Calibration / Setting up PCC / Alternative catalogs
 
-The `ApassCatalog` service reads a generic schema (`stars` table
-with `ra`, `dec`, `mag_v`, `mag_b`, `b_v`, `source` + a `stars_idx`
-R*tree). If you have a Gaia DR3 or Tycho-2 subset in the same
-schema, drop it in at the bundled path as `apass.db` and Polaris
-uses it transparently.
+The catalog reader uses a generic layout (a `stars` table with `ra`,
+`dec`, `mag_v`, `mag_b`, `b_v`, and `source` columns plus the
+spatial index), so a Gaia DR3 [@gaia2023dr3] or Tycho-2 subset in
+the same layout, dropped in at the bundled path as `apass.db`, works
+transparently.
 
-## Worked example: M81 LRGB end-to-end with PCC
+## Color Calibration / SPCC: spectrophotometric color calibration
 
-Pi 5 host, ZWO ASI2600MM Pro, ASKAR FRA600, LRGB filter set,
-APASS catalog already populated.
+PCC maps each star's broadband color (B-V) to expected channel
+ratios through one fixed empirical slope. SPCC goes a step further:
+it integrates an actual stellar spectrum through the actual total
+response of each of your channels, the filter's transmission curve
+multiplied by the sensor's quantum efficiency (QE, the fraction of
+arriving photons the sensor converts to signal at each wavelength),
+the way PixInsight's SPCC [@pixinsight] and Siril 1.2+ do. The
+white balance becomes physically grounded in your specific gear
+rather than a generic star-color rule.
 
-| Step | Time | Output |
-|---|---|---|
-| Capture: 30L + 15R + 15G + 15B at 180s each (5 hours unattended) | 5 h | 75 raw lights |
-| STUDIO: calibrate + integrate per filter | 10 min | 4 per-filter masters |
-| STUDIO: Combine (LRGB tab, Lab swap) | 25 s | `lrgb_M81_*.fits` |
-| STUDIO: Solve (if not solved already) | 5 s | WCS in FITS headers |
-| **STUDIO: Color calibration → PCC** | **20 s** | **`lrgb_M81_*_pcc.fits`** |
-| FILES: GraXpert BGE | 30 s | `_bge.fits` |
-| FILES: GraXpert Denoise | 90 s | `_denoise.fits` |
-| Editor: tone work | 8 min | sidecar saved |
-| Export JPG quality 92 | 3 s | final image |
+Open it from the Stack workspace: add the plate-solved, integrated
+RGB master to the **Lights** slot, then press **SPCC** (next to
+**Color Cal (PCC)**).
 
-The PCC step is fast (the heavy work is the cone-search + match,
-which is fast on SQLite R*tree) and produces an output where star
-colours match what a published catalog predicts. No more "is this
-green cast really there or just my filter mix"; PCC fits it from
-real photometry data.
+When the modal opens it reads the master's FITS header (the camera
+model in `INSTRUME` and the Bayer pattern in `BAYERPAT`) and
+pre-selects the sensor and the OSC/mono type for you. A frame from a
+"ZWO ASI2600MC Pro" auto-picks the Sony IMX571 (OSC) curve; a mono
+ASI183MM picks IMX183 (mono). A short note says what it matched, and
+you can always override it. If the camera is not in the curve
+database it falls back to the generic sensor of the right type.
 
-## Output FITS headers (recipe audit)
+In the SPCC modal you pick:
 
-Every output FITS carries the recipe in its headers so PixInsight's
-**FITS Header** view (or any FITS inspector) can show what
-happened:
+- **Sensor**: an OSC camera (its color-filter-array response is
+  built in) or a mono sensor (one QE curve, combined with an RGB
+  filter set).
+- **Filter set**: for OSC, an optional broadband or UV/IR-cut
+  filter, or none; for mono, the R/G/B filter set.
+- **White reference**: the spectrum that should come out neutral: a
+  G2V star (Sun-like), an average spiral galaxy, daylight D65 (the
+  standard daylight illuminant), or an equal-energy flat spectrum.
+- **Spectra**: where each star's spectrum comes from:
+  - **Blackbody** (from B-V): always available, fully offline, and a
+    good broadband approximation. Each star is modeled as an ideal
+    glowing body at the temperature its B-V color implies.
+  - **Pickles**: empirical stellar spectra with real absorption
+    lines, from the 131-template Pickles UVKLIB library
+    [@pickles1998library]. Ships bundled
+    (`wwwroot/catalogs/spcc/pickles.json`), so it works out of the
+    box; rebuild the file with `python scripts/download-pickles.py`
+    if ever needed.
+  - **Gaia DR3**: per-star measured spectra from the Gaia space
+    observatory [@gaia2023dr3]. Planned; it is a heavy download,
+    scaffolded via `scripts/download-gaia-spcc.py`.
+  - **Auto** picks the best installed source, preferring Gaia, then
+    Pickles, then Blackbody.
+
+SPCC needs the same pre-flight as PCC: a plate-solved master and the
+APASS catalog, which supplies the star positions and B-V colors.
+
+### Color Calibration / SPCC: spectrophotometric color calibration / The White Balance summary
+
+When PCC or SPCC finishes, the input modal closes and a **White
+Balance summary** appears: two scatter plots (B/G and R/G) of each
+matched star's measured channel ratio against its expected ratio,
+with a robust line fit, the same read-out Siril and PixInsight show.
+A tight cluster along the green fit line means a confident
+calibration; the header reports the fit slope, the scatter (sigma),
+the star count, the outliers removed, and the applied R/G/B gains. A
+**Before / after** button opens the comparator; for color
+calibration the comparator stretches each side independently, so the
+color change is actually visible rather than being masked by a
+shared stretch.
+
+The before-and-after comparator on a grid of matched star crops after photometric calibration: drag the divider to sweep between the uncalibrated colors on the left and the calibrated result on the right.
+
+### Color Calibration / SPCC: spectrophotometric color calibration / Filter and sensor curves
+
+Polaris ships two curve databases, both merged into the same
+dropdowns.
+
+The first, `wwwroot/catalogs/spcc/curves.json`, holds generic,
+idealized curves so SPCC works on any offline install out of the
+box. They are labeled "Generic" and are not measured manufacturer
+data. The set covers a spread of archetypes: OSC (neutral, modern
+back-illuminated with strong red and near-infrared response, and
+older front-illuminated CCD), mono (standard and modern high-QE),
+and filter sets (no filter, UV/IR-cut, broadband light-pollution,
+dual-band Ha+OIII, and RGB for mono).
+
+The second, `wwwroot/catalogs/spcc/curves-siril.json`, is the
+community-curated **Siril SPCC database** [@siril] imported into the
+same schema. It carries real measured QE and transmission curves for
+dozens of actual cameras (Sony, Canon, Nikon, Kodak sensors) and
+filters (Antlia, Astronomik, Baader, Optolong, ZWO, and more),
+labeled "(Siril)". It is distributed under the GPL v3 with
+attribution (see `wwwroot/catalogs/spcc/LICENSE.txt`); regenerate it
+with `python scripts/download-siril-spcc.py --src <clone of the
+Siril SPCC repo>`. If your exact camera and filter are in the list,
+pick those for a much closer match than the generic archetypes.
+
+For gear in neither list, edit `curves.json` and drop in your own
+filter transmission and sensor QE curves. Each curve is:
+
+```json
+{ "wl": [400, 450, ...], "v": [0.32, 0.61, ...] }
+```
+
+with wavelengths in nanometers, strictly increasing, and values from
+0 to 1; a channel's total response is sensor times filter.
+
+You can check what is installed under **SETTINGS → Colour
+calibration data**: the APASS catalog status, which SPCC spectral
+sources are present (Blackbody always, Pickles bundled, Gaia
+planned), the count of sensor and filter curves (generic and Siril
+combined), and the path to `curves.json` for editing.
+
+### Color Calibration / SPCC: spectrophotometric color calibration / The method, for the curious
+
+For each channel c, the expected signal from a star is the
+photon-weighted band integral of its spectrum through that channel's
+response:
+
+```
+Exp_c = ∫ F(λ) · T_filter(λ) · QE(λ) · λ dλ
+```
+
+SPCC recovers each channel's unknown system throughput as the median
+of observed over expected across the matched stars, then sets the
+gains so the chosen white reference comes out neutral, anchored at
+green. Blackbody spectra use Planck's law, with the effective
+temperature derived from B-V via the Ballesteros relation
+[@ballesteros2012temperature].
+
+## Color Calibration / The recipe in the headers
+
+Every output FITS records what was done to it, so any FITS header
+inspector (PixInsight's FITS Header view, for example) can answer
+"why does this look like this" months later:
 
 ```
 CCAL_MOD = 'bg' / 'manual' / 'pcc'
@@ -216,136 +332,57 @@ CCAL_GNB = 0.953
 CCAL_SRC = 'lrgb_M81_2026.fits'   (source file name)
 ```
 
-Useful for "why does this look weird" debugging months later.
+PCC outputs additionally record the matched-star count
+(`CCAL_NSTAR`).
 
-## Common pitfalls
+## Color Calibration / Worked example: M81 LRGB with PCC
 
-- **PCC says "only 3 matched stars"**: either the field has very
-  few catalog stars (planetary close-ups, dark molecular clouds)
-  or plate-solve accuracy is too low for the 3-pixel match radius.
-  Re-solve with a better hint, or use Manual mode.
-- **PCC output looks tinted**: the linear B-V → RGB fit is
-  approximate (~5% accuracy). For exact colour fidelity use Manual
-  mode with a measured G2V star reference, or wait for a future
-  SPCC-style upgrade with full spectral integration.
-- **BG output still has a cast**: the auto-sample picked up faint
+Raspberry Pi 5 host, ZWO ASI2600MM Pro, Askar FRA600, LRGB filters,
+APASS catalog already populated:
+
+| Step | Time | Output |
+|---|---|---|
+| Capture: 30L + 15R + 15G + 15B at 180 s each, unattended | 5 h | 75 raw lights |
+| STUDIO: calibrate and integrate per filter | 10 min | 4 per-filter masters |
+| STUDIO: Combine (LRGB, Lab swap) | 25 s | `lrgb_M81_*.fits` |
+| STUDIO: Solve (if not already solved) | 5 s | WCS in the headers |
+| **STUDIO: Color calibration → PCC** | **20 s** | **`lrgb_M81_*_pcc.fits`** |
+| GraXpert background extraction | 30 s | `_bge.fits` |
+| GraXpert denoise | 90 s | `_denoise.fits` |
+| EDITOR tone work | 8 min | sidecar saved |
+| Export JPG at quality 92 | 3 s | final image |
+
+The PCC step is fast (the heavy part, the catalog cone search and
+star matching, runs in milliseconds on the indexed database) and
+ends the "is this green cast real or just my filter mix" debate:
+the gains are fitted from real photometry.
+
+## Color Calibration / Common pitfalls
+
+- **PCC reports "only 3 matched stars"**: the field genuinely has
+  few catalog stars (planetary close-ups, dark molecular clouds), or
+  the plate solve is too inaccurate for the 3-pixel match radius.
+  Re-solve with a better hint, or fall back to Manual mode.
+- **PCC output still looks slightly tinted**: the linear B-V fit is
+  approximate, to roughly 5%. For tighter fidelity use SPCC, which
+  integrates real spectra through your gear's response, or Manual
+  mode with a measured G2V star.
+- **BG output still has a cast**: the auto-sample caught faint
   nebulosity. Switch to Patch mode and pick a darker corner.
-- **Manual output has neutral BG but tinted white patch**: the
-  patch coordinates landed on something that isn't actually neutral
-  (a coloured star, a nebula edge). Pick a different patch and
-  re-run.
-- **Catalog file is missing after deploy**: the .db is gitignored.
-  Run `python scripts/download-apass.py` on the deploy host. The
-  publish output picks it up via wwwroot/** so a re-deploy is not
-  needed.
+- **Manual output has a neutral background but a tinted white
+  patch**: the patch landed on something that is not neutral (a
+  colored star, a nebula edge). Pick a different patch and re-run.
+- **The catalog badge says "not installed" after deployment**: the
+  database is not part of the release package. Press **Download** in
+  Settings → Colour calibration data, or run
+  `python scripts/download-apass.py` on the host; no redeploy is
+  needed afterwards.
 
-## SPCC (SpectroPhotometric Color Calibration)
-
-PCC maps each catalog star's broadband colour (B-V) to expected channel
-ratios through a fixed empirical slope. **SPCC** goes a step further: it
-integrates an actual stellar *spectrum* through the actual total response of
-each channel (filter transmission x sensor quantum efficiency), the way
-PixInsight SPCC and Siril 1.2+ do. That makes the white balance physically
-grounded in your specific gear rather than a generic star-colour rule.
-
-Open it from the STUDIO stack workspace: add the plate-solved integrated RGB
-master to the Lights slot, then press **SPCC** (next to **Color Cal (PCC)**).
-
-When the modal opens it reads the master's FITS header (INSTRUME + BAYERPAT)
-and **pre-selects** the sensor and OSC/mono type for you - e.g. a frame from a
-"ZWO ASI2600MC Pro" auto-picks the Sony IMX571 (OSC) curve, and a mono
-ASI183MM picks IMX183 (mono). A short note says what it matched; you can always
-override it. If the camera isn't in the curve database it falls back to the
-generic sensor of the right type.
-
-In the SPCC modal you pick:
-
-- **Sensor** - an OSC camera (its Bayer CFA response is built in) or a mono
-  sensor (one QE curve, combined with an RGB filter set).
-- **Filter set** - for OSC, an optional broadband / UV-IR filter (or none);
-  for mono, the R/G/B filter set.
-- **White reference** - the spectrum that should come out neutral: G2V
-  (Sun-like), an average spiral galaxy, daylight D65, or equal-energy flat.
-- **Spectra** - where each star's spectrum comes from:
-  - **Blackbody** (from B-V) - always available, fully offline. A good
-    broadband approximation.
-  - **Pickles** - empirical stellar templates with real absorption lines.
-    **Ships bundled** (`wwwroot/catalogs/spcc/pickles.json`, the 131-template
-    Pickles 1998 UVKLIB set) so it works out of the box - nothing to install.
-    Rebuild it with `python scripts/download-pickles.py` if needed.
-  - **Gaia DR3** - optional per-star measured spectra (planned; heavy download,
-    scaffolded via `scripts/download-gaia-spcc.py`).
-  - **Auto** picks the best installed source (Gaia > Pickles > Blackbody).
-
-SPCC needs the same pre-flight as PCC: a plate-solved master (WCS in the FITS
-header) and the APASS catalog for star colours.
-
-### The White Balance summary
-
-When PCC or SPCC finishes, the input modal closes and a **White Balance
-summary** appears: two scatter plots (B/G and R/G) of each matched star's
-*measured* channel ratio against its *expected* ratio, with a robust
-line fit - the same read-out Siril and PixInsight show. A tight cluster on the
-green fit line means a confident calibration; the header reports the slope,
-scatter (sigma), star count and outliers removed, and the applied R/G/B gains.
-A **Before / after** button opens the comparator (colour calibration uses an
-**independent** stretch per side so the colour change is actually visible).
-
-### Filter / QE curves
-
-Polaris ships **two** curve databases, both merged into the same dropdowns:
-
-- **Generic archetypes** (`wwwroot/catalogs/spcc/curves.json`) - hand-built,
-  idealised curves so SPCC works on any offline install out of the box. They are
-  labelled "Generic" and are **not** measured manufacturer data. They cover a
-  spread of archetypes - OSC (neutral, modern back-illuminated with strong
-  red/NIR, and older front-illuminated CCD), mono (standard and modern high-QE),
-  and filter sets (no filter, UV/IR-cut, broadband light-pollution, dual-band
-  Ha+OIII, and RGB for mono).
-- **Real measured curves from the Siril SPCC database**
-  (`wwwroot/catalogs/spcc/curves-siril.json`) - dozens of actual cameras
-  (Sony/Canon/Nikon/Kodak sensors) and filters (Antlia, Astronomik, Baader,
-  Optolong, ZWO, ...), labelled "(Siril)". These are the same community-curated,
-  measured QE / transmission curves Siril's SPCC uses, imported under GPLv3 with
-  attribution (see `wwwroot/catalogs/spcc/LICENSE.txt`). Regenerate them with
-  `python scripts/download-siril-spcc.py --src <clone of the Siril SPCC repo>`.
-  If your exact camera + filter is in the list, pick those for a much closer
-  match than the generic archetypes.
-
-For gear that is in neither list, edit `curves.json` and drop in your own filter
-transmission and sensor QE curves - each is `{ "wl": [nm...], "v": [0..1...] }`
-with wavelength strictly increasing. Channel total response is `sensor x filter`.
-Give every entry an `id` no other entry uses, in either curve file: a repeated id
-hides the later entry from the dropdowns, and a chip you own in both a mono and a
-colour version needs two ids, not one.
-
-You can check what's installed under **Config -> Colour calibration data**: the
-APASS catalog status, which SPCC spectral sources are present (Blackbody always,
-Pickles bundled, Gaia planned), and the count of sensor/filter curves (generic +
-Siril combined), plus the path to `curves.json` for editing.
-
-### Method (for the curious)
-
-For each channel c, the expected signal from a star is the photon-weighted
-band integral `Exp_c = integral F(lambda) x Tfilter(lambda) x QE(lambda) x
-lambda d(lambda)`. SPCC recovers the unknown per-channel system throughput
-`k_c` as the median of `observed_c / Exp_c` over the matched stars, then sets
-gains so the chosen white reference comes out neutral (anchored at green).
-Blackbody spectra use Planck's law with effective temperature from B-V via
-the Ballesteros (2012) relation.
-
-## See also
-
-- [Mono workflow](lrgb-mono-workflow.md), where color calibration
-  fits in the full mono pipeline.
-- [End-to-end workflow](end-to-end-workflow.md), OSC + mono
-  pipelines from capture to export.
-- [STUDIO guide](studio.md), the full STUDIO toolkit reference.
-
-## Attribution
+## Color Calibration / Attribution
 
 APASS data is provided by the AAVSO under a CC-BY 4.0 license. If
-you publish images calibrated with PCC, please credit:
+you publish images calibrated with PCC or SPCC, please credit the
+survey [@henden2014apass]:
 
 > Henden, A. A., Levine, S., Terrell, D., Welch, D. L., Munari, U.,
 > & Kloppenborg, B. K. (2016). "AAVSO Photometric All Sky Survey

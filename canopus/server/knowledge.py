@@ -46,20 +46,74 @@ class Passage:
     length: int = 0
 
 
+# A passage longer than this is split into chunks at paragraph boundaries, so
+# that search() returns whole chunks instead of cutting a long section after
+# its first few hundred characters.
+CHUNK_CHARS = 800
+
+_FENCE_RE = re.compile(r"^\s*(```|~~~)")
+
+
+def _blocks(body: str) -> list[str]:
+    """Paragraphs of a passage body. A fenced code block stays one block even
+    when it has blank lines inside."""
+    blocks: list[str] = []
+    cur: list[str] = []
+    in_code = False
+    for line in body.splitlines():
+        if _FENCE_RE.match(line):
+            in_code = not in_code
+        if not line.strip() and not in_code:
+            if cur:
+                blocks.append("\n".join(cur))
+                cur = []
+            continue
+        cur.append(line)
+    if cur:
+        blocks.append("\n".join(cur))
+    return blocks
+
+
+def _chunks(body: str, limit: int = CHUNK_CHARS) -> list[str]:
+    if len(body) <= limit:
+        return [body]
+    out: list[str] = []
+    cur = ""
+    for block in _blocks(body):
+        # A single block over the limit (a long table or list) is cut at lines.
+        pieces = [block] if len(block) <= limit else block.splitlines()
+        for piece in pieces:
+            sep = "\n\n" if piece is block else "\n"
+            if cur and len(cur) + len(sep) + len(piece) > limit:
+                out.append(cur)
+                cur = piece
+            else:
+                cur = cur + sep + piece if cur else piece
+    if cur:
+        out.append(cur)
+    return out
+
+
 def _split_passages(source: str, md: str) -> list[Passage]:
-    """Split a Markdown doc into passages at `#`/`##`/`###` headings. Text
-    before the first heading is attached to a synthetic 'Overview' passage."""
+    """Split a Markdown doc into passages at `#`/`##`/`###` headings, and a
+    long passage into chunks that keep its title. Text before the first
+    heading is attached to a synthetic 'Overview' passage. A `#` line inside a
+    fenced code block is a shell comment, not a heading."""
     passages: list[Passage] = []
     cur_title = "Overview"
     cur_lines: list[str] = []
+    in_code = False
 
     def flush():
         body = "\n".join(cur_lines).strip()
         if body:
-            passages.append(Passage(source=source, title=cur_title.strip(), text=body))
+            for chunk in _chunks(body):
+                passages.append(Passage(source=source, title=cur_title.strip(), text=chunk))
 
     for line in md.splitlines():
-        m = re.match(r"^#{1,3}\s+(.*)$", line)
+        if _FENCE_RE.match(line):
+            in_code = not in_code
+        m = None if in_code else re.match(r"^#{1,3}\s+(.*)$", line)
         if m:
             flush()
             cur_title = m.group(1)

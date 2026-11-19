@@ -1,199 +1,193 @@
-# FAQ
+# Frequently Asked Questions
 
-Quick-answer questions. For longer diagnostics, see
-[Troubleshooting](troubleshooting.md).
+The questions that come up a lot, with short answers and pointers
+into the chapters that go deeper. For failure symptoms and
+diagnostics, see the "Troubleshooting" chapter.
 
-## General
+## Frequently Asked Questions / General
 
-**Q: Is Polaris a NINA replacement?**
+**Is Polaris a N.I.N.A. replacement?**
+No. It is a community fork built specifically for headless operation
+(Linux, Raspberry Pi, or a Windows mini-PC without a display). The
+original N.I.N.A. at nighttime-imaging.eu is a full Windows desktop
+application and remains the gold standard on that platform
+[@berg_nina]; Polaris targets the remote-site and single-board-
+computer use cases it does not (the "What is Polaris?" chapter).
 
-A: No, it's a community fork specifically for **headless** operation
-(Linux, RPi, Windows mini-PC without a display). The "real" NINA at
-nighttime-imaging.eu is a full Windows desktop app and remains the
-gold standard for that platform. Polaris is for remote-site / SBC
-use cases NINA doesn't target.
+**Does Polaris share code with N.I.N.A.?**
+Some, but heavily forked. The Windows-only WPF UI layer is gone,
+replaced by ASP.NET Core and Alpine.js. Core libraries (the FITS
+reader, star detection, plate solving) retain N.I.N.A. heritage but
+have diverged. The license remains MPL 2.0.
 
-**Q: Does Polaris share code with NINA?**
+**Will my N.I.N.A. sequences work?**
+There is no automatic import. The Advanced Sequencer's JSON format is
+similar but not bit-compatible; rebuilding sequences in the **ADV**
+tab is the right path, and it does not take long for typical
+multi-target plans (the "The Advanced Sequencer" chapter).
 
-A: Some, but heavily forked. We've stripped the Windows-only WPF UI
-layer + replaced with ASP.NET Core + Alpine.js. Core libraries (FITS
-reader, star detection, Plate-solving) retain heritage from NINA but
-have diverged. License remains MPL 2.0.
+## Frequently Asked Questions / Hardware
 
-**Q: Will my NINA sequences work?**
+**What cameras work?**
+Any camera with an INDI driver (most ZWO, QHY, Atik, ToupTek,
+ToupSky, Altair, and gphoto-supported DSLRs, among others), Alpaca
+cameras on Windows, and DSLR or mirrorless bodies through the vendor
+SDKs (Canon EDSDK, Nikon Imaging SDK, Sony Camera Remote SDK 2). The
+driver dropdown on the camera card in **RIGS** shows what Polaris
+detected on your host (the "Rigs and Device Drivers" chapter, the "DSLR and Mirrorless Cameras" chapter).
 
-A: No automatic import. The Advanced Sequencer JSON format is similar
-but not bit-compatible. Rebuilding sequences in Polaris's ADV tab is
-the right path; it doesn't take long for typical multi-target plans.
+**What mounts work?**
+Via INDI: EQMod (CGEM, EQ6, AVX, HEQ5, Atlas), Celestron NexStar,
+iOptron, Sky-Watcher, and LX200. Via Alpaca: anything with an ASCOM
+driver. Via direct WiFi: SynScan, NexStar, and LX200 over TCP
+(the "Mounts and WiFi Accessories" chapter).
 
-## Hardware
+**Raspberry Pi 4 or 5?**
+A Pi 4 with 4 GB or more handles capture and live stacking fine. The
+Pi 5 is faster for planetary processing and the xpra-embedded PHD2
+GUI (about three times faster xpra rendering). A Pi 3 is too slow for
+live stacking. The full sizing table is in the "Requirements Matrix" chapter.
 
-**Q: What cameras work?**
+**Can Polaris and the equipment be on different machines?**
+Yes: INDI can run on a Pi at the telescope while Polaris runs
+elsewhere; set `Indi:Host` in `appsettings.json` to the remote Pi's
+address (the "API and Configuration" chapter). But this is fragile, because USB drivers want to
+be physically next to the camera; the reference deployment is Polaris
+and INDI together on the same computer at the telescope.
 
-A: Any camera with an INDI driver (most ZWO, QHY, Atik, Touptek, ToupSky,
-Altair, gphoto-supported DSLRs, etc.), Alpaca cameras on Windows, and
-DSLRs via vendor SDKs (Canon EDSDK, Nikon Imaging SDK, Sony Camera
-Remote SDK 2). See RIGS → Camera card → Driver dropdown for what
-Polaris detected on your host.
+**I need the INDI control panel but my Pi OS no longer packages it.**
+Use the built-in **INDI control panel** sub-tab in **RIGS**. It is a
+full in-browser property browser (read and edit every device
+property, auto-saved to the driver configuration), so the standalone
+Qt application, which recent Pi OS and libindi 2.x releases no longer
+ship, is not needed. Each property also has a **(?)** help icon:
+hover for a plain-language description, click to write your own note
+(the "Rigs and Device Drivers" chapter).
 
-**Q: What mounts work?**
+## Frequently Asked Questions / Workflow
 
-A: INDI: EQMod (CGEM/EQ6/AVX/HEQ5/Atlas), Celestron NexStar, iOptron,
-Sky-Watcher, LX200. Alpaca: anything with an ASCOM driver. Direct
-WiFi: SynScan, NexStar, LX200 TCP.
+**AUTORUN or ADV, which should I use?**
+AUTORUN for "shoot 100 frames of M81 in L tonight". ADV for "M81 in
+LRGB, with auto-flip, dither every 3 frames, and a safety abort on
+cloud cover". See the "Simple Sequences and the Flat Wizard" chapter and the "The Advanced Sequencer" chapter.
 
-**Q: Raspberry Pi 4 vs 5?**
+**Can I edit a sequence while it runs?**
+In AUTORUN, in a limited way: pause, edit, resume. In ADV the same,
+with the caveat that some container types lock their children during
+execution.
 
-A: Pi 4 (4GB+) handles capture + live stacking fine. Pi 5 is faster
-for planetary processing + xpra-embedded PHD2 GUI (3x improvement in
-xpra rendering). Pi 3 is too slow for live stacking.
+**Do I have to focus before every sequence?**
+The first time each night, yes. After that, enable auto-focus
+triggers (in ADV) or the LIVE tab's auto-refocus, and Polaris
+refocuses automatically on temperature change, HFR degradation,
+elapsed time, or frame count (the "Focusing" chapter, the "Live Stacking and EAA" chapter).
 
-**Q: Does Polaris work over WiFi to a remote rig?**
-
-A: Yes, INDI can run on the Pi while Polaris itself runs on a
-different machine. Just set `Indi:Host` in `appsettings.json` to the
-remote Pi's IP. But this is fragile (USB drivers want to be physically
-co-located with the camera). The reference deploy is Polaris + INDI
-on the same SBC at the telescope.
-
-**Q: I need indi_control_panel but my Pi OS doesn't have it. Now what?**
-
-A: Use the built-in **RIGS → INDI control panel** sub-tab. It is a
-full in-browser property browser (read + edit every device property,
-auto-saved to the driver config) so you do not need the standalone Qt
-app, which recent Pi OS / libindi 2.x no longer package. Each property
-also has a **(?)** help icon: hover for a plain-language description,
-click to write your own note. See [RIGS](rigs.md#indi-control-panel-property-browser).
-
-## Workflow
-
-**Q: AUTORUN vs ADV, which should I use?**
-
-A: AUTORUN for "shoot 100 frames of M81 in L tonight". ADV for "M81
-in LRGB, with auto-flip + dither every 3 + safety abort on cloud
-cover". See [AUTORUN](autorun.md) vs [ADV](adv-sequencer.md).
-
-**Q: Can I edit sequences while they're running?**
-
-A: AUTORUN: limited, pause, edit, resume. ADV: same, with the caveat
-that some Container types lock their children during execution.
-
-**Q: Do I have to focus before every sequence?**
-
-A: First time of the night, yes. After that, enable AF triggers (in
-ADV) or the LIVE tab's auto-refocus and Polaris handles it
-automatically based on temperature / HFR / time / frame count.
-
-**Q: What's the difference between LIVE auto-recenter and the ADV
+**What is the difference between LIVE auto-recenter and the ADV
 "Center After Drift" trigger?**
+LIVE's recenter is scoped to the live stack: it uses the first
+frame's plate solve as its reference and can solve every frame if the
+drift threshold is enabled. ADV's trigger fires within a sequence
+between exposures and uses the target's intended (RA, Dec) as the
+reference. They serve different workflows; both are equally valid
+(the "Live Stacking and EAA" chapter, the "The Advanced Sequencer" chapter).
 
-A: LIVE's recenter is scoped to the live stack, uses the first-frame
-plate-solve as reference, fires per-frame solves if drift threshold
-enabled. ADV's "Center After Drift" trigger fires within a sequence
-between exposures, uses the AUTORUN target's intended (RA, Dec) as
-reference. They serve different workflows; both are equally valid.
+## Frequently Asked Questions / Storage
 
-## Storage
+**How much disk does a typical session take?**
+Deep-sky capture: 30-50 MB per FITS frame, so 200 frames is 6-10 GB.
+Planetary: 1.5-3 GB per 60-second SER video. Calibration masters are
+trivial. Plan for 50+ GB free for a full night (the "Managing Your Data" chapter).
 
-**Q: How much disk for a typical session?**
+**Can I store to a network share or NAS?**
+Yes: in the **FILES** tab, navigate to the mount point (for example
+`/mnt/nas/astro/`) and click **Set as Studio root**. Writing frames
+is slightly slower over the network than to a local SSD; live
+stacking is unaffected because it accumulates in memory (the "Managing Your Data" chapter).
 
-A: DSO capture: 30-50 MB per FITS frame. 200 frames = 6-10 GB.
-Planetary: 1.5-3 GB per 60-second SER. Calibration masters: trivial.
-Plan for 50+ GB free for a full night.
+**Where are my profiles stored?**
+In `profile.json` under the per-user application data folder:
+`%LocalAppData%\Polaris\` on Windows, `~/.config/polaris/` on Linux.
+Back it up before major OS upgrades; losing it loses your rig
+configurations (the "Administration and Diagnostics" chapter).
 
-**Q: Can I store to a network share / NAS?**
+**How do I wipe all my settings, say before sharing an SD card?**
+In **SETTINGS**, use **Reset everything to factory defaults**. It
+clears every profile and rig, the app password and login sessions,
+the observer location, and the browser's UI preferences, then reloads
+into first-run state. Captured images and FITS files are kept. It
+cannot be undone, so back up the profile first if you might want it
+later (the "Administration and Diagnostics" chapter).
 
-A: Yes, FILES tab → navigate to the mount point (e.g.
-`/mnt/nas/astro/`) → Set as Studio root. INDI BLOB writes will be
-slightly slower over network than local SSD; live stacking is
-unaffected (in-memory accumulation).
+## Frequently Asked Questions / Software
 
-**Q: Where are my profiles stored?**
+**Why .NET 10?**
+A faster runtime, better cross-platform performance, first-class
+async support, and native ARM64 publishing. .NET 8 LTS would work
+too; the project tracks the latest short-term-support release for
+performance (the "Architecture" chapter).
 
-A: `{AppData}/Polaris/profile.json` (Windows: `%LocalAppData%`, Linux:
-`~/.config/Polaris/`). Back this up before major OS upgrades, losing
-it loses your rig configurations.
+**Why ASP.NET Core and Alpine.js instead of React or Vue?**
+Server-side rendering of the HTML plus a minimal JavaScript framework
+keeps the download tiny (about 150 KB before the WebGL2 shaders),
+first paint fast on mobile, and the contributor experience free of
+any build pipeline. Alpine.js provides reactivity without the
+complexity of a bundler. The trade-off is less suitability for a
+complex single-page app, but Polaris is a multi-tab dashboard, not a
+CRUD app (the "Architecture" chapter).
 
-**Q: How do I wipe all my settings (e.g. before sharing an SD card)?**
+**How do I see live logs?**
+The server logs to standard output; run it from a terminal to watch.
+Set `Logging:LogLevel:Default` to `"Debug"` in `appsettings.json` for
+verbose output. The LOG panel in the UI collects server logs, HTTP
+traffic, and browser errors into one exportable stream
+(the "Administration and Diagnostics" chapter).
 
-A: Settings → "Reset everything to factory defaults". It clears every
-profile, rig, the app password and login sessions, observer location,
-and the browser's UI preferences, then reloads into first-run state.
-Your captured images and FITS files are kept. This cannot be undone,
-so back up the profile first if you might want it later.
+**Can I write plugins?**
+There is a plugin system (`Services/Plugins/PluginLoaderService.cs`)
+that loads MEF-exported types (MEF is .NET's built-in extension
+loader) from the `plugins/` folder at startup. The specification is
+loose right now; if you want to write one, open an issue and the
+project will help you bootstrap (the "Building and Contributing" chapter).
 
-## Software
+## Frequently Asked Questions / Network
 
-**Q: Why .NET 10?**
+**I am at a dark site with no internet. Does Polaris work?**
+Yes. The sky catalog, the map engine, and the DSO database are all
+offline (the bundled sky tiles cover stars to at least magnitude 12,
+deep-sky surveys, constellations, and the Milky Way). Plate solving
+via ASTAP is offline, and PHD2 and INDI are local. The only
+internet-dependent feature is the Tonight's Best image fetcher, which
+pulls NASA and Wikipedia thumbnails and simply shows placeholders
+offline (the "Sky Explorer and Session Planning" chapter, the "Requirements Matrix" chapter).
 
-A: Faster runtime + better cross-platform performance + first-class
-async/await + native ARM64 publish. .NET 8 LTS would work too; we
-track the latest STS for performance.
+**Can multiple browsers connect to the same Polaris?**
+Yes. Each browser gets its own WebSocket streams, and state lives on
+the server, so all clients see the same view. Useful for showing an
+astrophotography buddy what the rig is seeing
+(the "What is Polaris?" chapter).
 
-**Q: Why ASP.NET Core + Alpine.js instead of React / Vue?**
+## Frequently Asked Questions / On the images themselves
 
-A: Server-side rendering of the HTML + minimal JS framework keeps the
-download tiny (~150 KB before WebGL2 shaders), fast first-paint on
-mobile, and no build pipeline needed for contributors. Alpine.js gives
-us reactivity without webpack/Vite/Bun complexity. The tradeoff is
-less suited for a complex SPA, but Polaris is a multi-tab dashboard
-not a CRUD app.
+**Polaris detects 0 stars on focused frames.**
+The exposure is too short or the sky is too bright (twilight). Bump
+the exposure to 5 s or more and try again at full astronomical
+darkness.
 
-**Q: How do I see live logs?**
+**HFR jumps by 30% after a meridian flip. That is not normal, is
+it?**
+It can be. The pier-side change rotates the field; star detection
+sees "new" stars and the median shifts temporarily. If it persists
+more than 3-5 frames, something else (collimation, dew, flexure) is
+wrong.
 
-A: Server stdout. Run from a terminal to see them. Set
-`Logging:LogLevel:Default = "Debug"` in `appsettings.json` for verbose.
+**Plate solving uses ASTAP, but I have Astrometry.net set up. Can I
+use it?**
+Yes: in **SETTINGS**, under **Plate solver**, set the primary solver
+to **Astrometry.net local**. You need `solve-field` on the PATH and
+the matching index files (the "Requirements Matrix" chapter).
 
-**Q: Can I write plugins?**
-
-A: There's a plugin system (`Services/Plugins/PluginLoaderService.cs`)
-that loads MEF-exported types from `plugins/` at startup. Spec is
-loose right now; if you want to write one, open an issue + we'll
-help bootstrap.
-
-## Network
-
-**Q: I'm at a dark site with no internet, does Polaris work?**
-
-A: Yes. Sky catalog + stellarium-web-engine map + DSO database are all
-offline (the bundled HiPS skydata covers stars to ≥ mag 12, DSO
-surveys, constellations, and Milky Way tiles).
-Plate solving via ASTAP is offline. PHD2 + INDI are local. The only
-internet-dependent feature is the Tonight's Best image fetcher (pulls
-NASA/Wikipedia thumbs), it just shows placeholders offline.
-
-**Q: Can multiple browsers connect to the same Polaris?**
-
-A: Yes. Each browser gets its own WebSocket streams. State is server-
-side so all clients see the same view. Useful for "show astrophotography
-buddy what we're seeing".
-
-## Astrophotography questions
-
-**Q: Polaris detects 0 stars on focused frames.**
-
-A: Exposure is too short or sky is too bright (twilight). Bump to 5s+
-and try at full astronomical darkness.
-
-**Q: HFR jumps by 30% after meridian flip, that's not normal, is it?**
-
-A: It can be. Pier-side change rotates the field; star detection sees
-"new" stars and the median shifts temporarily. If it persists more
-than 3-5 frames, something else (collimation, dew, flexure) is wrong.
-
-**Q: Polaris's plate solve uses ASTAP but I have Astrometry.net set
-up, can I use that?**
-
-A: Settings → Plate solver → Primary solver dropdown → "Astrometry.net
-local". You'll need `solve-field` in PATH + the matching index files.
-
-**Q: How accurate is the dithering?**
-
-A: PHD2's dither is sub-pixel accurate. Polaris just triggers it +
-waits for settle. The dither_amount you configure is in guide-cam
-pixels; main cam motion depends on the focal ratio of guide vs main.
-
-## See also
-
-- [Troubleshooting](troubleshooting.md), longer diagnostic walkthroughs
-- [Glossary](GLOSSARY.md), term definitions
+**How accurate is the dithering?**
+PHD2's dither is sub-pixel accurate; Polaris just triggers it and
+waits for settling. The dither amount you configure is in guide-
+camera pixels; how far the main camera moves depends on the ratio of
+guide to main focal lengths (the "Autoguiding" chapter).

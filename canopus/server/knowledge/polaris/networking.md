@@ -1,0 +1,745 @@
+# Networking and Remote Access
+
+Everything in Polaris happens over the network: the host sits at the
+telescope, and every screen you look at is a browser somewhere else.
+This chapter covers the four layers that make that connection work,
+in the order you meet them. First the WiFi link itself: the host's
+own hotspot for the field, and the switch onto your home network,
+with a safety net so a typo in the password can never strand the
+box. Then finding the host by name instead of by IP address. Then
+the encrypted connection (HTTPS) and the password gate that protect
+the link. Last, the relay, which lets you reach the rig from
+anywhere on the internet without opening your home router.
+
+## Networking and Remote Access / The two ports
+
+Polaris serves its interface on two ports (a port is the numbered
+"door" on a machine that a network service listens behind):
+
+- **Port 5000, HTTPS.** The encrypted endpoint, and the one you
+  type: `https://polaris-pi.local:5000`. It is reachable from every
+  device on the network and uses a certificate the host generates
+  for itself (more on that below). This is the only way a LAN
+  device gets real content from Polaris.
+- **Port 5080, plain HTTP.** Unencrypted, and by default it serves
+  content only to the host machine itself (loopback, the network
+  path a computer uses to talk to its own programs). It exists for
+  scripts running on the host and for the relay tunnel, both of
+  which never leave the machine. To other devices on the LAN this
+  port only ever answers with a redirect that bounces the browser
+  to the HTTPS address, so typing `http://` by mistake still lands
+  you on the right page instead of an error.
+
+Both sides are configurable in `appsettings.json`, the server's
+configuration file (see the "API and Configuration" chapter for where it lives):
+
+```jsonc
+"Server": {
+  "Https": { "Enabled": true,  "Port": 5000 },
+  "Http":  { "Enabled": true,  "Port": 5080,
+             "Bind": "loopback",          // "any" exposes HTTP to the LAN
+             "RedirectToHttps": true }
+}
+```
+
+If you disable HTTPS entirely, remember that plain HTTP stays
+loopback-only unless you also set `Server:Http:Bind` to `"any"`;
+otherwise no other device can connect at all. (Older Polaris documentation described HTTP on port 5000 and HTTPS on port 5001. The defaults have since swapped: HTTPS took over 5000, the address users naturally type, and HTTP moved to 5080. Configuration overrides for either port are still honoured.)
+
+## Networking and Remote Access / WiFi: hotspot and station
+
+A Raspberry Pi installed from the Polaris `.deb` package
+(the "Installation" chapter) boots as a **WiFi hotspot**: it broadcasts its
+own network, named `Polaris-Hotspot-XXXX` with password `polaris1234`
+(XXXX is the last four hex digits of the host's WiFi adapter, so two or
+three rigs at the same site each announce their own name),
+instead of joining one. That is what you connect your phone or
+laptop to on the first night in the field, before the host has ever
+seen your home WiFi. If you have used an ASIAIR, this is the same
+model as its Station Mode toggle.
+
+### Networking and Remote Access / WiFi: hotspot and station / First boot in the field
+
+1. Flash Raspberry Pi OS and install the Polaris `.deb`
+   (the "Installation" chapter covers this end to end), then reboot.
+2. Wait about 30 seconds, then look for the WiFi network
+   `Polaris-Hotspot-XXXX` on your phone. Connect with `polaris1234`.
+3. Open `https://polaris-pi.local:5000` and accept the certificate
+   warning once (explained under HTTPS below).
+
+You can stop there. The hotspot comes back every boot with no
+further setup, which is all you need for an off-grid site.
+
+### Networking and Remote Access / WiFi: hotspot and station / Joining your home network
+
+At home it is better to put the host on your existing WiFi, where
+it can also reach the internet for updates, time sync, and catalog
+downloads. This is called **station mode** (the host joins a
+network as an ordinary client instead of broadcasting its own).
+
+1. Open **SETTINGS**, **Network (WiFi)**.
+2. Click **Switch to Station Mode**.
+3. Pick your network from the scan list, sorted by signal
+   strength. For a hidden network (one that does not broadcast its
+   name), pick **Other (hidden SSID)** and type the name; SSID is
+   simply the technical term for a WiFi network's name.
+4. Type the password (WPA2, the standard WiFi encryption; 8 to 63
+   characters) and click **Connect & switch**.
+
+Your browser's connection drops the moment the switch starts,
+because the device you are holding was riding on the hotspot that
+just went away. That is expected. Reconnect your phone or laptop to
+your home WiFi and reopen `https://polaris-pi.local:5000`; the name
+resolves on the new network too, so the URL never changes.
+
+### Networking and Remote Access / WiFi: hotspot and station / The safety net: try and revert
+
+What if the password was wrong? Polaris waits up to 30 seconds for
+the host to actually obtain an address on the new network and reach
+its gateway (in other words, to be genuinely usable there). If that
+does not happen, it automatically reverts to the hotspot. Reconnect
+to `Polaris-Hotspot-XXXX` and try again. The same revert covers a
+network that is out of range or a router that is up but not handing
+out addresses. The host can never strand itself with no working
+WiFi.
+
+### Networking and Remote Access / WiFi: hotspot and station / Arriving somewhere new: automatic hotspot fallback
+
+The try-and-revert net protects you during a switch. A second
+watchdog protects you across reboots. Suppose the host is set to
+station mode on your home WiFi and you drive it to a dark site.
+Your home network is out of range, so the host cannot join anything
+on boot, and without a screen you would need an Ethernet cable to
+reach it. Polaris watches for exactly this: if the host stays
+disconnected from every saved network for about 45 seconds after
+boot, it brings `Polaris-Hotspot-XXXX` back up on its own. Connect with
+your phone as on the first night; the **Network** panel shows a
+note that the hotspot started automatically, and from there you can
+join whatever WiFi the new site offers. Back home, the saved home
+network takes priority again on the next boot with no action from
+you.
+
+The watchdog is on by default and tunable in configuration:
+`Network:AutoHotspotFallback` (default `true`) is the master
+switch, and `Network:HotspotFallbackSeconds` (default `45`, minimum
+`20`) is how long the host waits before starting the hotspot.
+
+### Networking and Remote Access / WiFi: hotspot and station / Switching back, and changing the hotspot credentials
+
+In station mode the same panel shows a **Switch back to Hotspot**
+button; click it and reconnect your device to `Polaris-Hotspot-XXXX`.
+The default hotspot name and password are public knowledge, so
+change them if the rig lives anywhere a stranger might wander past:
+**SETTINGS**, **Network**, **Edit hotspot SSID / password** accepts
+a name of 1 to 32 characters and a WPA2 password of 8 to 63.
+Devices on the old name are disconnected; rejoin with the new one.
+
+### Networking and Remote Access / WiFi: hotspot and station / Choosing the hotspot radio
+
+Some hosts carry more than one WiFi radio, most often the board's
+built-in one plus an external USB antenna added for range. When Polaris
+sees more than one, a **Hotspot adapter** picker appears in
+**SETTINGS**, **Network**. Choose a radio and Polaris rebinds both the
+hotspot and station mode to it, so you can serve `Polaris-Hotspot-XXXX` from
+a high-gain USB antenna instead of the weaker built-in radio. The
+picker is reachable in either mode; with a single radio it is hidden,
+since there is nothing to choose.
+
+### Networking and Remote Access / WiFi: hotspot and station / When the panel is read-only
+
+WiFi management needs Linux with NetworkManager, the standard Linux
+network configuration service [@networkmanager_project]. The panel
+explains itself with a banner when it cannot help:
+
+- On Windows or macOS hosts the panel is read-only; manage WiFi in
+  the operating system's own settings.
+- "nmcli not installed" means NetworkManager is missing: run
+  `sudo apt install network-manager` and reboot. A normal `.deb`
+  install pulls it in automatically.
+- "No WiFi interface detected" means the host has no WiFi radio at
+  all (a mini-PC on Ethernet, for example). Polaris manages only
+  WiFi; a wired connection is left entirely to the operating
+  system, and works alongside either WiFi mode.
+
+A few limits worth knowing: the hotspot runs on 2.4 GHz only, for
+maximum client compatibility; the hotspot and station share a single
+adapter at a time, the one chosen in the picker above; and both modes
+use WPA2, not WPA3. (For the curious: Polaris drives NetworkManager through `nmcli` as the unprivileged `polaris` system user, authorized by a PolicyKit rule the `.deb` installs at `/etc/polkit-1/rules.d/50-polaris-nm.rules` that grants that user NetworkManager actions only. It maintains two named connections: `polaris-hotspot` (created at first boot, autoconnect priority -10, shared addressing so clients get addresses automatically) and `polaris-station` (recreated on every switch so credentials stay fresh, priority 10, so a reachable home network always beats the hotspot). WiFi passwords are stored by NetworkManager itself in `/etc/NetworkManager/system-connections/`, root-owned; Polaris does not copy them anywhere.)
+
+### Networking and Remote Access / WiFi: hotspot and station / Turning WiFi off while the cable is in
+
+**Settings, Network, Turn WiFi off while a network cable is connected**,
+off by default, exists because of a failure that looks like something
+else entirely.
+
+A host with an Ethernet address and a WiFi address on the **same subnet**
+answers ARP for either address out of either interface. Your browser can
+therefore end up holding the wrong hardware address for the address it is
+talking to, and when the WiFi then hiccups, a re-association, a lost DHCP
+lease, the session you opened over the cable stalls with no error at all:
+the interface simply stops answering. Field case: a rig on Ethernet
+`192.168.3.133` plus WiFi `192.168.3.136`, the WiFi lease dropped for
+four minutes, and the video stream in the browser died mid-session while
+the host itself never restarted and its log showed nothing wrong. "It
+rebooted" is the natural conclusion, and it is the wrong one.
+
+With the option on, Polaris parks the radio once the cable has held an
+IPv4 address for about 20 seconds, and brings it back the moment the
+cable stops carrying one, with no grace period, including right after a
+Polaris restart, because it reads the radio's real state rather than
+trusting a flag of its own. It leaves the hotspot alone while a phone or
+tablet is still associated with it, and the auto-hotspot fallback and
+auto station reconnect (the "WiFi: hotspot and station" section) stand down while the radio is
+parked so nothing fights over it.
+
+Two things to know. Ticking the box from a browser that reached the host
+over WiFi will cut that session, so reconnect on the wired address. And
+Polaris refuses to enable it when there is no wired address yet, since
+parking the radio then would leave a headless rig with no way in. While
+the option is off, Polaris never touches the radio at all.
+
+### Networking and Remote Access / WiFi: hotspot and station / When the adapter is there and nothing works
+
+One failure looks like missing hardware and is not. On a host installed from
+a plain Debian image, the wireless adapter is often declared in
+`/etc/network/interfaces`, the older Debian networking file. That hands the
+adapter to `ifupdown`, and NetworkManager, seeing another subsystem already
+owns it, marks it **unmanaged** and refuses every command aimed at it.
+
+What that looks like from the outside is confusing in a specific way: the
+hotspot fallback never starts and fills the log with complaints that there is
+no suitable device, and the network panel decides the host is on a wired
+connection, because as far as NetworkManager is concerned there is no wireless
+here at all. The card in Settings used to agree with it and say no WiFi
+interface was detected, on a machine you could see had one.
+
+Polaris now names the adapter and says so. Handing it to NetworkManager for
+the current boot is one command:
+
+```bash
+sudo nmcli device set wlp2s0 managed yes
+```
+
+To make it survive a reboot, remove that adapter's stanza from
+`/etc/network/interfaces` and restart the service:
+
+```bash
+sudo systemctl restart NetworkManager
+```
+
+Polaris will not edit that file for you. It is yours, and on a remote host it
+may hold the very configuration that keeps the machine answering.
+
+## Networking and Remote Access / Finding the host by name
+
+The URLs in this book use names like `polaris-pi.local` rather than
+IP addresses. That works thanks to mDNS (multicast DNS, a protocol
+that lets machines on a local network announce their own names, so
+`hostname.local` resolves without any central server). On Raspberry
+Pi OS this is provided by the system's Avahi service, and every
+modern phone, tablet, and desktop understands it. The practical
+consequence: the address you bookmark survives router reboots,
+DHCP changes, and the hotspot-to-station switch, because it names
+the machine, not its current IP.
+
+Polaris also announces itself as a discoverable service
+(`_nina._tcp`, on the HTTPS port 5000), so client software can find
+every Polaris host on the network without knowing any names. Each
+instance auto-generates a unique service name, `polaris-app-XXXX`,
+derived from a stable hardware identifier (the Pi's serial number,
+or failing that the network adapter's address), which means a single
+prepared SD-card image can be cloned onto several Pis without name
+collisions. The friendly device name you set in **SETTINGS** is
+broadcast alongside it, so discovery lists can show "Telescope on
+the balcony" instead of a serial. Both behaviours can be tuned with
+the `Mdns:Enabled`, `Mdns:Port`, and `Mdns:InstanceName`
+configuration keys.
+
+## Networking and Remote Access / HTTPS and the self-signed certificate
+
+HTTPS is the encrypted flavour of ordinary web traffic: the browser
+and server negotiate TLS (Transport Layer Security, the encryption
+layer behind the padlock icon) so nobody on the network can read or
+tamper with what passes between them. On a home LAN that is nice to
+have; for Polaris it is also strictly necessary, for a less obvious
+reason.
+
+### Networking and Remote Access / HTTPS and the self-signed certificate / Why HTTPS matters on a LAN
+
+Browsers gate their most powerful features behind a "secure
+context" check: the page must arrive over HTTPS, or from
+`localhost` on the same machine. Two of those features carry the
+Polaris processing pipeline described in the "AI Cleanup: GraXpert in the Browser" chapter:
+
+- **WebGPU**, the browser's route to the client device's graphics
+  card. The AI tools (background extraction, denoising,
+  deconvolution) need it to run at full speed. Over plain HTTP to
+  any address other than `localhost`, WebGPU simply does not
+  exist, and the tools fall back to their slowest path. The
+  difference is not subtle: a heavy denoise run that takes about
+  ten seconds on a modern GPU can take half an hour on the
+  single-threaded fallback.
+- **SharedArrayBuffer**, a browser facility that lets that
+  fallback at least use every processor core instead of one, for
+  a four to eight times speedup on machines without a usable GPU.
+
+Typing `localhost` in a browser running on the host itself counts
+as secure without any ceremony, but `polaris-pi.local` or a raw IP
+address does not. That is what the HTTPS endpoint is for.
+
+### Networking and Remote Access / HTTPS and the self-signed certificate / What Polaris generates
+
+On first boot Polaris creates its own certificate (the digital
+identity document a server presents to prove who it is; normally a
+public authority signs it, here the host signs it itself, hence
+"self-signed"):
+
+1. It collects every name and address a client might use to reach
+   the host: `localhost`, the machine's hostname, `hostname.local`,
+   `polaris.local`, `polaris-app.local`, and every real IP address
+   on every active network interface.
+2. It generates an RSA-2048 certificate listing all of them, valid
+   for five years.
+3. It stores the certificate, private key included, under the
+   Polaris data directory: on Linux
+   `~/.local/share/NINA.Polaris/cert/polaris.pfx`, on Windows
+   `%LOCALAPPDATA%\NINA.Polaris\cert\polaris.pfx`.
+4. It serves HTTPS on port 5000 with it.
+
+The same certificate is reused on later boots. It is regenerated
+only if the file is missing, expiry is less than 30 days away, or
+the set of names and addresses has changed substantially, for
+example after moving the box to a different network.
+
+### Networking and Remote Access / HTTPS and the self-signed certificate / The first visit from each device
+
+Because no public authority vouches for a self-signed certificate,
+each browser warns once: "Your connection is not private" or
+`NET::ERR_CERT_AUTHORITY_INVALID`. Click **Advanced**, then
+**Proceed** (Chrome) or **Accept the Risk and Continue** (Firefox).
+The browser remembers the exception for that device, and refreshes
+work normally afterwards. **SETTINGS** lists ready-to-click HTTPS
+URLs for every name in the certificate, along with the
+certificate's fingerprint (a short checksum that uniquely
+identifies it). If you want certainty that the certificate your
+browser sees is the one Polaris generated, compare the fingerprint
+in the browser's certificate details dialog against the one
+**SETTINGS** prints; a match rules out anything sitting between
+you and the host.
+
+To confirm the payoff, open the browser's developer console on the
+HTTPS page and run:
+
+```js
+navigator.gpu.requestAdapter().then(a => console.log(a))
+```
+
+A non-null result means WebGPU is available.
+
+### Networking and Remote Access / HTTPS and the self-signed certificate / Trusting the certificate permanently
+
+The warning-and-exception dance works, but you can also install the
+certificate into a device's trust store once, after which every
+browser on that device shows a normal padlock until the certificate
+expires. First download it: on the device to be trusted, open
+Polaris over HTTPS, go to **SETTINGS**, **HTTPS endpoints**, and
+click **Download certificate**; the file `polaris-root.crt` lands
+in your Downloads. (The same file is served at
+`https://polaris-pi.local:5000/api/system/server-cert`; it contains
+only the public certificate, never the private key.) Then install
+it:
+
+- **Windows (Chrome, Edge).** Double-click `polaris-root.crt`,
+  **Install Certificate**, **Local Machine**, place it in the
+  **Trusted Root Certification Authorities** store. Windows shows
+  the fingerprint before committing; compare it with **SETTINGS**,
+  confirm, restart the browser.
+- **macOS (Safari, Chrome).** Double-click the file to open
+  Keychain Access, drag the certificate from **login** to
+  **System**, then open it, expand **Trust**, and set **When using
+  this certificate** to **Always Trust**. Restart the browser.
+- **iPhone and iPad.** Download in Safari and allow the
+  configuration profile, install it under **Settings**, **Profile
+  Downloaded**. Then the step that catches everyone: **Settings**,
+  **General**, **About**, **Certificate Trust Settings**, and
+  toggle the *polaris-root* entry on. Without that last switch iOS
+  accepts the profile but Safari still distrusts it.
+- **Android.** Chrome on Android does not trust user-installed
+  certificates at all, so the padlock cannot be fixed there.
+  Workable alternatives: install Polaris to the home screen as an
+  app (Chrome menu, **Install app**), which hides the warning; use
+  Firefox, which honours user-installed certificates; or reach the
+  rig through the relay, which carries a publicly trusted
+  certificate.
+- **Linux (Chrome).** Import into the NSS database Chrome reads:
+
+  ```bash
+  sudo apt install libnss3-tools
+  certutil -d sql:$HOME/.pki/nssdb -A -t "C,," \
+      -n "polaris-root" -i polaris-root.crt
+  ```
+
+  For Firefox, import under **Settings**, **Privacy & Security**,
+  **Certificates**, **Authorities**, ticking "Trust this CA to
+  identify websites".
+
+The install is per device, not per browser profile: once the
+operating system trusts the certificate, every browser that
+respects the system store does too. After installing, verify the
+fingerprint once more against **SETTINGS**.
+
+### Networking and Remote Access / HTTPS and the self-signed certificate / Turning HTTPS off
+
+If you only ever open Polaris on the host machine itself via
+`localhost`, HTTPS adds nothing; disable it in `appsettings.json`:
+
+```jsonc
+"Server": {
+  "Https": { "Enabled": false }
+}
+```
+
+`Server:Https:Port` moves the endpoint off 5000 if something else
+needs that port.
+
+### Networking and Remote Access / HTTPS and the self-signed certificate / Why not a free public certificate?
+
+Let's Encrypt [@letsencrypt_isrg], the service that issues free
+publicly trusted certificates to most of the web, requires a domain
+name that resolves on the public internet plus proof of control
+over it. A Pi in an observatory answering to `polaris.local` has
+neither, so for LAN access the self-signed route is the only
+practical one. The relay, described below, is the exception: its
+public endpoint does carry a real Let's Encrypt certificate.
+
+## Networking and Remote Access / Authentication
+
+Polaris ships with a password gate covering the API, the live
+WebSocket streams, and the embedded sub-applications (the PHD2
+interface, the INDI Web Manager, Stellarium). Polaris doesn't ship
+a default password, because a hardcoded default gets forgotten and
+is never changed.
+
+### Networking and Remote Access / Authentication / First run and daily sign-in
+
+The first time any browser opens a fresh install, a full-screen
+prompt asks you to set a password (minimum 8 characters). If the rig
+sits on a network you trust, you can choose **Continue without a
+password** instead, and Polaris turns the login off. You can set a
+password later in **SETTINGS**, **Authentication**, **Set a
+password**, and when you do, the login comes back on.
+
+Once a password is set, every other device sees a **Sign in**
+overlay. Tick
+**Remember on this device** to stay signed in across browser
+restarts; leave it unticked and the session ends when the tab
+closes. Sessions also expire after 24 hours of inactivity, with the
+timer reset by every request, so an active imaging night never logs
+you out. All sessions end if the Polaris server restarts.
+
+To change the password, open **SETTINGS**, **Authentication**,
+**Change password**. On success every other device is signed out
+immediately and must use the new password; your own session
+continues. **Sign out** in the same card ends the current session.
+
+### Networking and Remote Access / Authentication / Local connections skip the gate
+
+Connections from the host machine itself (loopback) bypass
+authentication entirely, the same convention Jupyter and Grafana
+use. Anyone who can already run commands on the host can control
+Polaris by other means anyway, so a password there adds nothing.
+This is what makes host-side scripts and SSH tunnels frictionless:
+
+```bash
+ssh -L 5080:localhost:5080 polaris@polaris-pi.local
+curl http://localhost:5080/api/system/status   # no token needed
+```
+
+(Note the plain-HTTP port 5080 here: loopback traffic never leaves
+the machine, so encryption buys nothing.)
+
+### Networking and Remote Access / Authentication / Turning the gate off
+
+On a genuinely trusted network, an offline observatory or an
+isolated field router, you can disable authentication:
+**SETTINGS**, **Authentication**, **Disable auth**, confirm with
+your current password. Re-enable it the same way; the original
+password still applies.
+
+### Networking and Remote Access / Authentication / If you forget the password
+
+Recovery requires file access to the host, by SSH or otherwise;
+there is no email reset. Edit the active profile:
+
+```bash
+ssh polaris@polaris-pi.local
+nano ~/.local/share/NINA.Polaris/profiles/active.json
+```
+
+Set both stored values to empty strings:
+
+```json
+  "authPasswordHash": "",
+  "authPasswordSalt": "",
+```
+
+Then restart the service with
+`sudo systemctl restart polaris.service`. The next browser visit
+shows the first-run prompt again, and the restart has already
+signed out every old session.
+
+### Networking and Remote Access / Authentication / What the gate is made of
+
+The password is never stored, only a salted hash (Specifically PBKDF2-SHA256 with 100,000 iterations and a random 16-byte salt, a deliberately slow one-way transformation that makes guessing the password from the stored value expensive. Session tokens are 32 random bytes held only in server memory, delivered as a bearer header, a query parameter for plain download links, or a strictly-scoped session cookie. Failed sign-ins are rate limited to five per minute per client address, with exponential backoff capped at one hour, and password checks use constant-time comparison. The gate covers `/api/*` (except the sign-in endpoints and the version probe), `/ws/*`, and the embedded sub-app paths; static files stay open so the sign-in page itself can load.) of it. Be clear about
+what it does not protect against: someone with shell access to the
+host can simply edit the profile, and the relay adds its own
+separate token layer on top (next section); the two compose rather
+than overlap.
+
+## Networking and Remote Access / The relay: access from outside
+
+Everything so far assumes you and the host share a network. The
+**relay** removes that assumption: it is a small server you run on
+a cloud machine with a public address, and it forwards browser
+traffic to the Polaris host through a tunnel that the host itself
+opens outward. Because the host dials out (an ordinary outbound
+connection, like any web request), nothing on your home router
+needs to change: no port forwarding (Port forwarding is the router configuration that exposes a machine on your home network to the internet; it works, but it means maintaining a hole in your firewall and a way to find your home's changing public address.),
+no dynamic DNS, and the host is never directly exposed to the
+internet.
+
+```
+Phone (anywhere) ──HTTPS──► relay server (cloud) ──tunnel──► Polaris host
+                                                   the host opened this
+                                                   connection outward
+```
+
+You want the relay when the rig is at a remote site and you are
+hours away, or when a friend should be able to check on a running
+session from their own home. You do not need it when your tablet
+and the host share a WiFi network; local access is simpler and
+faster. For a personal rig you may not need the relay at all: a VPN
+(the "A simpler alternative: a VPN" section) reaches a remote site with less setup, and it is worth
+checking first.
+
+### Networking and Remote Access / The relay: access from outside / Setting up the relay server
+
+The relay is a separate program in the Polaris repository
+(`src/NINA.Relay.Server`) that you build and run on any rented
+cloud machine (a VPS, a small virtual private server costing a few
+dollars a month) with a public hostname. One-time setup:
+
+1. Point a DNS record at the machine:
+   `relay.yourdomain.com -> your-VPS-IP`.
+2. Open port 443 (standard HTTPS), and optionally port 80 for the
+   certificate-issuance redirect.
+3. Run it with `Tls:Mode=letsencrypt` and it obtains and renews a
+   real Let's Encrypt certificate automatically via LettuceEncrypt
+   [@lettuceencrypt_project], a library that handles the
+   certificate paperwork inside the server itself, so remote
+   browsers see a normal padlock with no warnings.
+4. Open the admin interface at
+   `https://relay.yourdomain.com/admin/` (guarded by the
+   `Admin:Password` you set, over HTTP Basic auth).
+5. Create a **tenant**, the relay's name for one Polaris rig: a
+   hostname such as `yourname` plus a generated long random access
+   token, with an optional monthly traffic quota and token expiry
+   date.
+
+The relay keeps its state in a single `tenants.json` file, easy to
+back up. (Deployment, TLS, and mutual-TLS specifics for integrators live in `src/NINA.Relay.Server/README.md`; running one shared relay for many users, with options and costs, is covered in `src/NINA.Relay.Server/HOSTING.md`.)
+
+### Networking and Remote Access / The relay: access from outside / Connecting the host
+
+The simple path is the **Remote access relay** card in **SETTINGS**:
+tick **Enable the relay tunnel**, paste the tunnel URL and the access
+token the relay operator issued, and click **Save and connect**. The
+tunnel comes up in place, no restart, and the card shows the state
+and, once connected, the public address the rig is reachable at. The
+token is stored on the host and never shown again; the field's
+placeholder just tells you one is set.
+
+The same settings can go in `appsettings.json` instead, which suits a
+headless install managed by scripts (the card's settings take
+precedence when the card is enabled):
+
+```jsonc
+{
+  "Relay": {
+    "Enabled": true,
+    "ServerUrl": "wss://relay.yourdomain.com/_tunnel",
+    "Token": "the-token-from-the-server-admin",
+    "ClientCertPath": "/etc/nina/relay-client.pfx",
+    "ClientCertPassword": "optional-pfx-password"
+  }
+}
+```
+
+The two `ClientCert*` keys are optional, only needed for mTLS, and
+available only through `appsettings.json`; there is no tenant id on
+the host, the relay assigns the hostname from the token. The host
+opens a persistent WebSocket connection (a long-lived two-way
+channel, the same technology the live status feed uses) to the relay
+and keeps it open; its state is reported at `GET /api/system/relay`
+(**Connected** once the tunnel is up). Internally the tunnel
+delivers requests to the host's loopback HTTP port (5080 by default,
+following `Server:Http:Port`), which is one of the reasons that port
+exists.
+
+### Networking and Remote Access / The relay: access from outside / Using it from a browser
+
+Once the tunnel is up, the full Polaris interface is available at:
+
+```
+https://relay.yourdomain.com/t/polaris-yourname/
+```
+
+A prompt asks for the tenant token. From there everything works as
+it does locally, including the live preview and sequence updates,
+because the WebSocket streams tunnel through as well. The regular
+Polaris password gate still applies behind the tenant token; the
+two layers are independent.
+
+### Networking and Remote Access / The relay: access from outside / Security and behaviour
+
+The relay server is built to face the internet: publicly trusted
+TLS with automatic renewal, per-tenant tokens with optional expiry,
+per-tenant monthly byte quotas with automatic throttling, request
+rate limits, and a per-tenant audit log recording every request
+with timestamp, origin address, endpoint, and size. Optionally the
+tunnel itself can require mTLS (mutual TLS, where the host proves
+its identity to the relay with its own certificate, on top of the
+token).
+
+The host reconnects automatically after any interruption, with an
+exponential backoff that starts at two seconds and grows to a
+one-minute cap. While the tunnel is down the relay answers browser
+requests with a 502; once it reconnects, requests flow again.
+
+Common pitfalls: a "Tunnel not connected" (502) page means the
+host's relay client is not running or the token is wrong; check the
+Polaris log on the host (the "Administration and Diagnostics" chapter). A connection that
+drops every 30 seconds usually means the VPS provider's idle
+timeout is shorter than the tunnel's 30-second ping/pong keepalive;
+that interval is fixed, so front the relay with Caddy or nginx, or
+pick a provider that does not cut idle WebSockets. A quota-exceeded
+message means the monthly byte cap is spent; the live image stream
+is the bandwidth hog, so switch it to JPEG mode or live with
+status-only access until the month rolls over.
+
+## Networking and Remote Access / A simpler alternative: a VPN
+
+For a single rig that only you, and perhaps a few trusted people,
+need to reach, a **VPN** is usually the simplest and most private way
+in, and often less work than running a relay. A VPN puts your phone
+or laptop onto the *same virtual network* as the host, so you reach
+it exactly as you would at home: open `https://<host-ip>:5000` and
+everything works, including the live streams. There is no cloud relay
+to operate and nothing is published to the public internet.
+
+A VPN needs only one thing: the remote site must have working
+internet (any uplink, even a modest fibre or 4G line). The VPN rides
+over that connection, it does not create one.
+
+### Networking and Remote Access / A simpler alternative: a VPN / First, the question that decides the method: public IP or CGNAT?
+
+There are two families of VPN setup, and which one you can use
+depends on whether the remote site has a **public IPv4 address** or
+sits behind **CGNAT** (carrier-grade NAT, where the provider shares
+one public address among many customers to save IPv4 space). A
+router's built-in VPN *server* accepts inbound connections, so it
+works only with a real public address. CGNAT makes inbound
+impossible no matter how the router is configured, and it is very
+common on smaller and residential fibre plans.
+
+You can tell the two apart from a terminal on a machine at the site.
+First ask the internet what public address it sees:
+
+```bash
+curl -4 https://api.ipify.org
+```
+
+On Windows PowerShell, write `curl.exe` so it is not mistaken for a
+built-in alias. This alone is not conclusive: under CGNAT it returns
+the provider's *shared* public address, which still looks like a
+normal IP. The deciding test is a traceroute, which reveals whether a
+carrier NAT sits between your router and the internet:
+
+```bash
+tracert -d 8.8.8.8      # Windows
+traceroute -n 8.8.8.8   # macOS / Linux
+```
+
+Look at the hops right after your own router (the first hop, usually
+`192.168.x.1`):
+
+- A hop in the range **`100.64.0.0` to `100.127.255.255`** (for
+  example `100.83.0.1`) means **CGNAT**: use Path B.
+- If the trace jumps straight to public addresses with nothing in
+  that `100.64/10` range, you have a **public IPv4** and Path A is
+  available (Path B still works too).
+
+Run this test at the *remote* site specifically, since that is the
+network you need to reach into. Note that a publicly routable IPv6
+address does not settle the question: it is common to have public
+IPv6 and a CGNAT'd IPv4 at the same time, so test the IPv4 path as
+above.
+
+### Networking and Remote Access / A simpler alternative: a VPN / Path A: your router's built-in VPN server (public IP)
+
+Many home routers, TP-Link Deco among them, can run a **WireGuard or
+OpenVPN server** built in. With a public IPv4 this is the tidiest
+option, because nothing is installed on the host:
+
+1. In the router's app or admin page, enable the VPN server
+   (WireGuard if offered, otherwise OpenVPN). The router must be in
+   *router* mode, not access-point or bridge mode.
+2. Enable the router's dynamic-DNS feature (many vendors include a
+   free name such as `something.tplinkdns.com`) so the changing
+   public address always resolves to a stable name.
+3. Export the client profile and import it into the WireGuard or
+   OpenVPN app on your phone or laptop.
+4. With the VPN connected, reach the host by its LAN address on the
+   remote network, for example `https://192.168.68.x:5000`. Reserve
+   that address in the router's DHCP settings so it does not change.
+
+### Networking and Remote Access / A simpler alternative: a VPN / Path B: Tailscale on the host (works behind CGNAT)
+
+When the site is behind CGNAT, an inbound router VPN cannot work.
+**Tailscale** (a managed WireGuard mesh) solves this because the host
+dials *outward* to join the mesh, the same way the relay's tunnel
+does, so it needs no public address and no router change. It is the
+most reliable choice for a remote observatory, and if both ends have
+public IPv6 it will use that for a fast, direct connection.
+
+On the host:
+
+```bash
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up
+tailscale ip -4        # note the 100.x.y.z address it prints
+```
+
+Authenticate at the link it shows, then install the Tailscale app on
+your phone or laptop and sign in with the **same account**. From
+anywhere, reach the host at `https://100.x.y.z:5000`. Turning on
+MagicDNS in the Tailscale admin lets you use a name instead of the
+number.
+
+### Networking and Remote Access / A simpler alternative: a VPN / Two things that trip people up
+
+Whichever path you take:
+
+- **`.local` names do not cross a VPN.** The mDNS discovery from
+  the "Finding the host by name" section is link-local and is not routed through the tunnel, so use
+  the host's numeric address (its LAN IP on Path A, or its `100.x`
+  Tailscale address on Path B), not `nina.local`.
+- **Expect a certificate warning the first time.** You are reaching
+  the host by an address that is not in the self-signed certificate's
+  name list (the "HTTPS and the self-signed certificate" section), so the browser warns once. Accept it for
+  your own host, or install the certificate as that section describes.
+
+A VPN carries the full local experience, including the raw image
+stream, with no compression. That is fine for checking in and
+adjusting a sequence; continuous live view over a metered mobile link
+uses real data, the same caveat as the relay.

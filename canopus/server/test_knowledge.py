@@ -33,8 +33,8 @@ def test_polaris_product_corpus_is_indexed():
     assert len(polaris) > 20, f"expected the Polaris manual to be indexed, got {len(polaris)} docs"
     # And the generic top-level astro notes must still be there.
     assert "focusing" in sources
-    # The guide's README is mirrored as polaris/index (README.md is otherwise skipped).
-    assert "polaris/index" in sources
+    # The handbook's interface tour holds the "where do I go to do X?" table.
+    assert "polaris/ui-tour" in sources
 
 
 def test_navigation_query_returns_a_polaris_passage():
@@ -50,6 +50,32 @@ def test_generic_astro_query_still_works():
     kb = _kb()
     hits = kb.search("why are my stars elongated", k=3)
     assert hits
+
+
+def test_long_sections_are_chunked_so_search_never_cuts_them():
+    kb = _kb()
+    assert max(len(p.text) for p in kb.passages) <= 800
+    hits = kb.search("set a password or continue without one", k=4, max_chars=900)
+    assert all(not h["text"].endswith("…") for h in hits)
+
+
+def test_a_comment_in_a_code_block_is_not_a_heading():
+    from knowledge import _split_passages
+    md = "\n".join([
+        "# Setup", "", "Run this:", "",
+        "```bash", "# open the firewall", "sudo ufw allow 22", "```",
+        "", "Done."])
+    passages = _split_passages("x", md)
+    assert [p.title for p in passages] == ["Setup"]
+    assert "# open the firewall" in passages[0].text
+
+
+def test_a_chunk_keeps_its_section_title():
+    from knowledge import _split_passages
+    body = "\n\n".join(f"Paragraph {i} " + "word " * 60 for i in range(6))
+    passages = _split_passages("x", "## Guiding / Calibration\n\n" + body)
+    assert len(passages) > 1
+    assert {p.title for p in passages} == {"Guiding / Calibration"}
 
 
 if __name__ == "__main__":
