@@ -202,7 +202,7 @@ public sealed class CanopusServerService : BackgroundService {
         if (mode == CanopusMode.Api) {
             api ??= CanopusApiConfig.Default;
             // Full catalog + full prompt (no CANOPUS_LOCAL_TIER): a frontier model
-            // ingests the 34 tools fine and reads images.
+            // ingests every tool fine and reads images.
             env["CANOPUS_API_PROVIDER"] = api.Provider;
             env["CANOPUS_API_KEY"] = api.ApiKey;
             env["CANOPUS_API_MODEL"] = api.Model;

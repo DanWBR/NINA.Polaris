@@ -170,7 +170,7 @@
     },
     {
       "name": "search_knowledge",
-      "description": "Search the assistant's knowledge base, which covers BOTH general astrophotography best-practice (focusing, guiding, exposure/gain/histogram, light pollution & filters, polar alignment, calibration frames, planning & targets, diagnosing bad subs) AND the full N.I.N.A. Polaris user manual — every tab, workflow, setting and button. Use it whenever the user asks 'how do I / where is / what does this do / why', or seems lost or confused, whether the question is general technique or product-specific (which screen to open, how a Polaris feature works, what a setting means, fixing an error message). Base your answer on the returned passages (each has a `source` like 'polaris/live-stacking' or 'focusing'); if the answer is about a screen, also call show_panel to take the user there. If nothing relevant comes back, answer from general knowledge and say so.",
+      "description": "Search the assistant's knowledge base, which covers BOTH general astrophotography best-practice (focusing, guiding, exposure/gain/histogram, light pollution & filters, polar alignment, calibration frames, planning & targets, diagnosing bad subs) AND the full Polaris Handbook: every tab, workflow, setting and button. Use it whenever the user asks 'how do I / where is / what does this do / why', or seems lost or confused, whether the question is general technique or product-specific (which screen to open, how a Polaris feature works, what a setting means, fixing an error message). Base your answer on the returned passages (each has a `source` like 'polaris/live-stacking' or 'focusing'); if the answer is about a screen, also call show_panel to take the user there. If nothing relevant comes back, answer from general knowledge and say so.",
       "category": "knowledge",
       "mutates": false,
       "requiresApproval": false,
@@ -377,6 +377,86 @@
         "body": {
           "pixels": "$args.pixels"
         }
+      }
+    },
+    {
+      "name": "start_guiding",
+      "description": "Start autoguiding with the connected guider (PHD2 or the native guider). It calibrates first when there is no calibration, or when recalibrate is true, and then guides; the call returns at once and progress shows in get_status. Use it when the user asks to start guiding or before a long capture. MUTATES: the guider starts moving the mount. Only inside an approved plan.",
+      "category": "guide",
+      "mutates": true,
+      "requiresApproval": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "recalibrate": {
+            "type": "boolean",
+            "default": false,
+            "description": "Calibrate again even when a calibration exists (after moving the guide camera, or far from the last calibration)."
+          }
+        },
+        "required": []
+      },
+      "polaris": {
+        "method": "POST",
+        "path": "/api/guider/guide",
+        "body": {
+          "recalibrate": "$args.recalibrate"
+        }
+      }
+    },
+    {
+      "name": "take_test_frame",
+      "description": "Take one test exposure with the main camera, show it in PREVIEW, and return its statistics (star count, median HFR in pixels, background mean and median, SNR). The frame is not saved and does not go into a live stack. Use it to check framing, focus or exposure before a session, then call analyze_frame if you need to look at the picture. MUTATES: uses the camera, so it fails while a capture or the video stream holds it. Only inside an approved plan.",
+      "category": "capture",
+      "mutates": true,
+      "requiresApproval": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "exposure": {
+            "type": "number",
+            "description": "Exposure in seconds."
+          },
+          "gain": {
+            "type": "integer",
+            "description": "Camera gain (omit to keep the rig's gain)."
+          },
+          "binning": {
+            "type": "integer",
+            "default": 1
+          }
+        },
+        "required": [
+          "exposure"
+        ]
+      },
+      "polaris": {
+        "method": "POST",
+        "path": "/api/camera/capture",
+        "body": {
+          "exposure": "$args.exposure",
+          "gain": "$args.gain",
+          "binning": "$args.binning",
+          "kind": "preview",
+          "feedLiveStack": false,
+          "saveToDisk": false
+        }
+      }
+    },
+    {
+      "name": "close_dome",
+      "description": "Close the dome shutter, or roll a roll-off roof shut. Use it at the end of the night, or at once when the user mentions rain, clouds coming or wind. MUTATES: moves the observatory roof or shutter. Only inside an approved plan.",
+      "category": "mount",
+      "mutates": true,
+      "requiresApproval": true,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "polaris": {
+        "method": "POST",
+        "path": "/api/dome/shutter/close"
       }
     }
   ]
