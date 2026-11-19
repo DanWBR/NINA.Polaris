@@ -93,6 +93,43 @@ public class PlanetMoonsPipelineTests {
     }
 
     [Test]
+    public void CheckRecordings_KeepsTheOrderTheOperatorPicked() {
+        var planetSer = WriteSer("planet", 4.5, 6, 1);
+        var moonSer = WriteSer("moons", 150, 6, 2);
+        var c = PlanetMoonsService.CheckRecordings(planetSer, moonSer);
+        Assert.That(c.Swapped, Is.False);
+        Assert.That(c.PlanetSer, Is.EqualTo(planetSer));
+        Assert.That(c.MoonSer, Is.EqualTo(moonSer));
+        Assert.That(c.MoonsFound, Is.True);
+    }
+
+    [Test]
+    public void CheckRecordings_SwapsTwoVideosPickedTheOtherWayRound() {
+        var planetSer = WriteSer("planet", 4.5, 6, 1);
+        var moonSer = WriteSer("moons", 150, 6, 2);
+        var c = PlanetMoonsService.CheckRecordings(moonSer, planetSer);
+        Assert.That(c.Swapped, Is.True);
+        Assert.That(c.PlanetSer, Is.EqualTo(planetSer));
+        Assert.That(c.MoonSer, Is.EqualTo(moonSer));
+    }
+
+    [Test]
+    public void CheckRecordings_RefusesVideosOfDifferentSizes() {
+        var planetSer = WriteSer("planet", 4.5, 4, 1);
+        var small = Path.Combine(_dir, "small.ser");
+        using (var w = new SerFileWriter(small, 64, 48, 16, SerColorMode.Mono))
+            for (int i = 0; i < 3; i++) w.WriteFrame(new ushort[64 * 48], DateTime.UtcNow);
+        var ex = Assert.Throws<InvalidOperationException>(() => PlanetMoonsService.CheckRecordings(planetSer, small));
+        Assert.That(ex!.Message, Does.Contain("differ in size"));
+    }
+
+    [Test]
+    public void CheckRecordings_RefusesTheSameVideoTwice() {
+        var planetSer = WriteSer("planet", 4.5, 4, 1);
+        Assert.Throws<InvalidOperationException>(() => PlanetMoonsService.CheckRecordings(planetSer, planetSer));
+    }
+
+    [Test]
     public async Task RecordingsToComposite() {
         var planetSer = WriteSer("planet", 4.5, 40, 1);
         var moonSer = WriteSer("moons", 150, 30, 2);

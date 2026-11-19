@@ -50,10 +50,15 @@ public class PlanetMoonsService {
         lock (_lock) {
             if (Current is { Running: true })
                 throw new InvalidOperationException("A planet + moons capture is already running");
-            if (!_stream.IsRunning)
-                throw new InvalidOperationException("Start the video stream with the planet in view first");
-            if (_recorder.IsRecording)
-                throw new InvalidOperationException("A recording is in progress, stop it first");
+            if (cfg.FromFiles) {
+                if (!File.Exists(cfg.PlanetSer)) throw new InvalidOperationException("The planet video was not found: " + cfg.PlanetSer);
+                if (!File.Exists(cfg.MoonSer)) throw new InvalidOperationException("The moons video was not found: " + cfg.MoonSer);
+            } else {
+                if (!_stream.IsRunning)
+                    throw new InvalidOperationException("Start the video stream with the planet in view first");
+                if (_recorder.IsRecording)
+                    throw new InvalidOperationException("A recording is in progress, stop it first");
+            }
             var stack = _stacker.CurrentJob;
             if (stack != null && stack.CompletedAt == null)
                 throw new InvalidOperationException("A stack is running, wait for it to finish");
@@ -63,8 +68,8 @@ public class PlanetMoonsService {
                 Config = cfg,
                 Running = true,
                 StartedAt = DateTime.UtcNow,
-                Phase = "meter-planet",
-                Message = "Metering the planet",
+                Phase = cfg.FromFiles ? "check" : "meter-planet",
+                Message = cfg.FromFiles ? "Checking the two videos" : "Metering the planet",
             };
             job.Cts = new CancellationTokenSource();
             Current = job;
@@ -80,27 +85,40 @@ public class PlanetMoonsService {
 
     private async Task RunAsync(PlanetMoonsJob job, CancellationToken ct) {
         var cfg = job.Config;
+        // Two videos recorded earlier: the camera is not involved at all, so
+        // the stream, the recorder and the exposure are left alone.
+        bool fromFiles = cfg.FromFiles;
         double originalExposure = _stream.ExposureSeconds;
         try {
-            // 1. Planet exposure.
-            double planetExp = await MeterPlanetAsync(job, ct);
-            job.PlanetExposureMs = planetExp * 1000;
+            if (fromFiles) {
+                var check = await Task.Run(() => CheckRecordings(cfg.PlanetSer!, cfg.MoonSer!), ct);
+                job.PlanetSer = check.PlanetSer;
+                job.MoonSer = check.MoonSer;
+                job.MoonsFound = check.MoonsFound;
+                job.MoonsSeen = check.MoonsSeen;
+                if (check.Swapped)
+                    job.Warnings.Add("The planet video was the brighter of the two, so Polaris used the two videos the other way round");
+            } else {
+                // 1. Planet exposure.
+                double planetExp = await MeterPlanetAsync(job, ct);
+                job.PlanetExposureMs = planetExp * 1000;
 
-            // 2. Planet recording.
-            Step(job, "record-planet", $"Recording the planet at {planetExp * 1000:F1} ms");
-            job.PlanetSer = await RecordAsync(job, planetExp, cfg.PlanetFrames, cfg.PlanetMaxSeconds, ct);
+                // 2. Planet recording.
+                Step(job, "record-planet", $"Recording the planet at {planetExp * 1000:F1} ms");
+                job.PlanetSer = await RecordAsync(job, planetExp, cfg.PlanetFrames, cfg.PlanetMaxSeconds, ct);
 
-            // 3. Moons exposure.
-            Step(job, "meter-moons", "Metering the moons");
-            double moonExp = await MeterMoonsAsync(job, planetExp, ct);
-            job.MoonExposureMs = moonExp * 1000;
+                // 3. Moons exposure.
+                Step(job, "meter-moons", "Metering the moons");
+                double moonExp = await MeterMoonsAsync(job, planetExp, ct);
+                job.MoonExposureMs = moonExp * 1000;
 
-            // 4. Moons recording.
-            Step(job, "record-moons", $"Recording the moons at {moonExp * 1000:F0} ms");
-            job.MoonSer = await RecordAsync(job, moonExp, cfg.MoonFrames, cfg.MoonMaxSeconds, ct);
+                // 4. Moons recording.
+                Step(job, "record-moons", $"Recording the moons at {moonExp * 1000:F0} ms");
+                job.MoonSer = await RecordAsync(job, moonExp, cfg.MoonFrames, cfg.MoonMaxSeconds, ct);
 
-            // The camera is free for the operator again while the stacks run.
-            await RestoreExposureAsync(originalExposure);
+                // The camera is free for the operator again while the stacks run.
+                await RestoreExposureAsync(originalExposure);
+            }
 
             // 5. Stacks.
             var dir = Path.GetDirectoryName(job.PlanetSer) ?? ".";
@@ -126,7 +144,9 @@ public class PlanetMoonsService {
             job.CompositePng = written.Png;
             Step(job, "done", job.MoonsFound
                 ? "Done"
-                : "Done, but no moon was found at the longest exposure; the outer field is from that exposure");
+                : fromFiles
+                    ? "Done, but no moon was found in the moons video"
+                    : "Done, but no moon was found at the longest exposure; the outer field is from that exposure");
         } catch (OperationCanceledException) {
             job.Error = "Cancelled";
             Step(job, "cancelled", "Cancelled");
@@ -135,9 +155,10 @@ public class PlanetMoonsService {
             job.Error = ex.Message;
             Step(job, "failed", ex.Message);
         } finally {
-            if (_recorder.IsRecording) { try { await _recorder.StopAsync(); } catch { } }
+            // A recording the operator started while the files were stacking is theirs.
+            if (!fromFiles && _recorder.IsRecording) { try { await _recorder.StopAsync(); } catch { } }
             if (job.Phase is "cancelled" or "failed" && job.StackJobId is string sid) _stacker.Abort(sid);
-            await RestoreExposureAsync(originalExposure);
+            if (!fromFiles) await RestoreExposureAsync(originalExposure);
             job.Running = false;
             job.CompletedAt = DateTime.UtcNow;
         }
@@ -323,6 +344,64 @@ public class PlanetMoonsService {
     }
 
     // -----------------------------------------------------------------
+    // Videos recorded earlier
+    // -----------------------------------------------------------------
+
+    internal sealed record RecordingCheck(string PlanetSer, string MoonSer, bool Swapped,
+                                          bool MoonsFound, int MoonsSeen);
+
+    /// <summary>Check two SER files picked as the planet and the moons
+    /// videos before minutes of stacking: they must be different files of
+    /// the same frame size. When the middle frame of each shows which one was
+    /// exposed longer and the operator picked them the other way round, the
+    /// two are swapped. The moons reading comes from the longer video's
+    /// middle frame; when a frame cannot be read (an RGB file, a disc that
+    /// is not found), the files are taken as given and the moons as found.</summary>
+    internal static RecordingCheck CheckRecordings(string planetSer, string moonSer) {
+        if (string.Equals(Path.GetFullPath(planetSer), Path.GetFullPath(moonSer), StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Choose two different videos, one for the planet and one for the moons");
+        using var p = new SerFileReader(planetSer);
+        using var m = new SerFileReader(moonSer);
+        if (p.FrameCount < 2) throw new InvalidOperationException("The planet video has fewer than 2 frames");
+        if (m.FrameCount < 2) throw new InvalidOperationException("The moons video has fewer than 2 frames");
+        if (p.Width != m.Width || p.Height != m.Height)
+            throw new InvalidOperationException(
+                $"The two videos differ in size ({p.Width}x{p.Height} and {m.Width}x{m.Height}): record both with the same camera and the same ROI");
+        var rp = Probe(p);
+        var rm = Probe(m);
+        bool swapped = rp is { } a && rm is { } b && ExposedLonger(a.Disc, b.Disc);
+        var moons = swapped ? rp : rm;
+        return new RecordingCheck(
+            swapped ? moonSer : planetSer,
+            swapped ? planetSer : moonSer,
+            swapped,
+            moons?.Moons.Found ?? true,
+            moons?.Moons.Count ?? 0);
+    }
+
+    private static Reading? Probe(SerFileReader r) {
+        if (r.ColorMode is SerColorMode.Rgb or SerColorMode.Bgr || r.BitDepth is not (8 or 16)) return null;
+        try {
+            var frame = r.ReadFrameAsUshort(r.FrameCount / 2);
+            var (plane, w, h) = PlanetMoonsMath.Bin2(frame, r.Width, r.Height);
+            var disc = PlanetMoonsMath.ReadDisc(plane, w, h);
+            if (!disc.Found) return null;
+            return new Reading(disc, PlanetMoonsMath.ReadMoons(plane, w, h, disc));
+        } catch (Exception) {
+            return null;
+        }
+    }
+
+    /// <summary>Whether disc <paramref name="a"/> was clearly exposed longer
+    /// than disc <paramref name="b"/>: saturated while the other is not, or,
+    /// with neither saturated, more than twice as bright.</summary>
+    internal static bool ExposedLonger(PlanetMoonsMath.DiscReading a, PlanetMoonsMath.DiscReading b) {
+        const double clipped = 0.05, clean = 0.005;
+        if (a.SaturatedFraction > clipped && b.SaturatedFraction < clean) return true;
+        return a.SaturatedFraction < clean && b.SaturatedFraction < clean && a.Signal > 2 * b.Signal;
+    }
+
+    // -----------------------------------------------------------------
     // Composite
     // -----------------------------------------------------------------
 
@@ -410,14 +489,21 @@ public record PlanetMoonsConfig(
     double PlanetMaxExposureMs = 100,
     double MoonMaxExposureMs = 1000,
     double KeepPercent = 25,
-    int BitDepth = 16);
+    int BitDepth = 16,
+    /// <summary>Two SER files recorded earlier. When both are set, the job
+    /// skips the metering and the recordings and starts at the stacks.</summary>
+    string? PlanetSer = null,
+    string? MoonSer = null) {
+    public bool FromFiles => !string.IsNullOrWhiteSpace(PlanetSer) && !string.IsNullOrWhiteSpace(MoonSer);
+}
 
 public class PlanetMoonsJob {
     public string Id { get; set; } = "";
     public PlanetMoonsConfig Config { get; set; } = new();
     public bool Running { get; set; }
-    /// <summary>meter-planet, record-planet, meter-moons, record-moons,
-    /// stack-planet, stack-moons, composite, done, failed, cancelled.</summary>
+    /// <summary>meter-planet, record-planet, meter-moons, record-moons (or
+    /// check, for two videos recorded earlier), stack-planet, stack-moons,
+    /// composite, done, failed, cancelled.</summary>
     public string Phase { get; set; } = "";
     public string Message { get; set; } = "";
     public string? Error { get; set; }

@@ -2162,6 +2162,10 @@
 
 /* Planet + Moons sub-tab (VIDEO). */
 .pm-pane .pm-stream { margin: 6px 0 10px; }
+.pm-source { display: flex; gap: 4px; margin-bottom: 8px; flex-wrap: wrap; }
+.pm-file-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; min-width: 0; }
+.pm-file-label { flex: 0 0 96px; font-size: 13px; }
+.pm-file-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
 .pm-steps { list-style: none; margin: 12px 0 6px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .pm-steps li { display: flex; gap: 8px; align-items: baseline; font-size: 13px; }
 .pm-step-mark { width: 14px; text-align: center; }
