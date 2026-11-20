@@ -79,6 +79,29 @@ public static class AutoFocusRunLog {
         } catch { }
     }
 
+    /// <summary>Backlash estimates of earlier successful runs, newest first:
+    /// same focuser and same compensation context only, at most
+    /// <paramref name="max"/> of them, looking through the newest
+    /// <paramref name="scan"/> files.</summary>
+    public static List<double> BacklashHistory(string? focuser, string context,
+            int max = 9, int scan = 60, string? dir = null) {
+        dir ??= Dir;
+        var list = new List<double>();
+        if (!Directory.Exists(dir)) return list;
+        foreach (var f in new DirectoryInfo(dir).EnumerateFiles("af_*.json")
+                     .OrderByDescending(f => f.LastWriteTimeUtc).Take(scan)) {
+            try {
+                var run = JsonSerializer.Deserialize<Run>(File.ReadAllText(f.FullName), Json);
+                var r = run?.Result;
+                if (r is not { Success: true, BacklashSteps: double b } || !double.IsFinite(b)) continue;
+                if (run!.Focuser != focuser || r.BacklashContext != context) continue;
+                list.Add(b);
+                if (list.Count >= max) break;
+            } catch { /* an unreadable file is skipped */ }
+        }
+        return list;
+    }
+
     /// <summary>Newest first, with what a list needs to tell runs apart.
     /// A file that does not parse is listed by name only.</summary>
     public static List<Summary> List(string? dir = null, int max = 300) {

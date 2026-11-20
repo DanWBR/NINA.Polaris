@@ -5908,5 +5908,11 @@
   "Use recorded videos": "Использовать записанные видео",
   "with the planet and its moons in the frame (keep the ROI wide enough for the moons), set the gain, then press Start. Polaris finds the exposure for the planet and for the moons, records both, stacks them and merges the result.": "с планетой и её спутниками в кадре (оставьте ROI достаточно широким для спутников), задайте усиление и нажмите «Запустить». Polaris подберёт экспозицию для планеты и для спутников, запишет оба видео, сложит их и объединит результат.",
   "Cancel download": "Отменить загрузку",
-  "INDI is connected. To use another server, press Disconnect above first.": "INDI подключён. Чтобы использовать другой сервер, сначала нажмите «Отключить» выше."
+  "INDI is connected. To use another server, press Disconnect above first.": "INDI подключён. Чтобы использовать другой сервер, сначала нажмите «Отключить» выше.",
+  "in-to-out": "изнутри наружу",
+  "out-to-in": "снаружи внутрь",
+  "Backlash on the {rev} reversal: {n} steps": "Люфт при смене направления {rev}: {n} шагов",
+  "median of {k} runs: {m}": "медиана по {k} запускам: {m}",
+  "Autofocus lands on focus anyway, because it approaches the result from the same side as the fine points. Other moves (filter offsets, manual moves) don't, so set about {m} steps of backlash in the focuser driver or in the autofocus settings.": "Автофокус всё равно попадает в фокус, потому что подходит к результату с той же стороны, что и точные точки. Другие перемещения (смещения фильтров, ручные перемещения) так не делают, поэтому задайте около {m} шагов люфта в драйвере фокусёра или в настройках автофокуса.",
+  "steps": "шагов"
 }

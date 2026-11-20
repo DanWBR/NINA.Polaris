@@ -5580,5 +5580,11 @@
   "Use recorded videos": "Utiliser des vidéos enregistrées",
   "with the planet and its moons in the frame (keep the ROI wide enough for the moons), set the gain, then press Start. Polaris finds the exposure for the planet and for the moons, records both, stacks them and merges the result.": "avec la planète et ses lunes dans le champ (gardez un ROI assez large pour les lunes), réglez le gain, puis appuyez sur Démarrer. Polaris trouve la pose de la planète et celle des lunes, enregistre les deux, les empile et fusionne le résultat.",
   "Cancel download": "Annuler le téléchargement",
-  "INDI is connected. To use another server, press Disconnect above first.": "INDI est connecté. Pour utiliser un autre serveur, appuyez d'abord sur Déconnecter, ci-dessus."
+  "INDI is connected. To use another server, press Disconnect above first.": "INDI est connecté. Pour utiliser un autre serveur, appuyez d'abord sur Déconnecter, ci-dessus.",
+  "in-to-out": "de l'intérieur vers l'extérieur",
+  "out-to-in": "de l'extérieur vers l'intérieur",
+  "Backlash on the {rev} reversal: {n} steps": "Jeu à l'inversion {rev} : {n} pas",
+  "median of {k} runs: {m}": "médiane de {k} exécutions : {m}",
+  "Autofocus lands on focus anyway, because it approaches the result from the same side as the fine points. Other moves (filter offsets, manual moves) don't, so set about {m} steps of backlash in the focuser driver or in the autofocus settings.": "L'autofocus atteint quand même le point, car il approche le résultat du même côté que les points fins. Les autres mouvements (décalages de filtre, mouvements manuels) ne le font pas : réglez environ {m} pas de jeu dans le pilote du focuser ou dans les réglages de l'autofocus.",
+  "steps": "pas"
 }

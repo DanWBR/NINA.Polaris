@@ -2255,3 +2255,15 @@
 }
 .sky-rot-num { width: 64px; text-align: right; font-variant-numeric: tabular-nums; }
 .sky-rot-row .hint { font-size: 0.8em; opacity: 0.8; }
+
+/* Backlash estimate + confirmation warning under the V-curve. */
+.af-backlash {
+    padding: 6px 10px;
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--text-muted, #9fb0d6);
+    background: rgba(255, 255, 255, 0.03);
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+.af-backlash-advice { color: var(--text, #e7ecf7); margin-top: 2px; }
+.af-warning { color: #ffb74d; margin-top: 2px; }
