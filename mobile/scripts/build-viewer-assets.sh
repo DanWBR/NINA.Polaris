@@ -20,15 +20,20 @@ proj="$repo/src/NINA.Polaris.Wasm/NINA.Polaris.Wasm.csproj"
 bundle="$repo/src/NINA.Polaris.Wasm/bin/Release/net10.0/browser-wasm/AppBundle"
 wwwroot_wasm="$repo/src/NINA.Polaris/wwwroot/js/wasm"
 
-# The project targets net10.0. Under the .NET 10 SDK that needs the
-# "wasm-tools" workload, but the GitHub runners also carry a newer SDK, and
-# because the repo doesn't have a global.json, `dotnet` resolves to the
-# newest one. Under SDK 11 "wasm-tools" means net11, and net10.0 needs
-# "wasm-tools-net10" instead (NETSDK1147 otherwise).
-sdk_major="$(dotnet --version | cut -d. -f1)"
-if [[ "$sdk_major" -gt 10 ]]; then workload="wasm-tools-net10"; else workload="wasm-tools"; fi
-echo "==> Installing the $workload workload (SDK $(dotnet --version))"
-dotnet workload install "$workload"
+# The project targets net10.0 and publishes with the .NET 10 SDK. The GitHub
+# runners also carry a newer SDK, and because the repo doesn't have a
+# global.json, `dotnet` resolves to the newest one, where a net10.0
+# browser-wasm publish fails (NETSDK1147 for the workload, then NETSDK1102 on
+# trimming). So, while this script runs, a temporary global.json at the repo
+# root pins SDK 10; it is removed on exit and never written over a real one.
+global_json="$repo/global.json"
+if [[ "$(dotnet --version | cut -d. -f1)" -gt 10 && ! -e "$global_json" ]]; then
+    printf '{ "sdk": { "version": "10.0.100", "rollForward": "latestFeature" } }\n' > "$global_json"
+    trap 'rm -f "$global_json"' EXIT
+fi
+cd "$repo"
+echo "==> Installing the wasm-tools workload (SDK $(dotnet --version))"
+dotnet workload install wasm-tools
 
 echo "==> Publishing NINA.Polaris.Wasm"
 dotnet publish "$proj" -c Release --nologo
