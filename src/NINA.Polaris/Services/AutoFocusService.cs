@@ -223,6 +223,20 @@ public class AutoFocusService {
             var tracker = new AfStarTracker(o.UseBrightestStars);
             var backlash = new BacklashState();
 
+            // Reversal the fine walk measures, and the compensation in effect:
+            // past estimates are only comparable under the same compensation.
+            // The approach margin has to be larger than the backlash for the
+            // slack to be taken up before a point is measured, so it grows
+            // with what earlier runs measured.
+            int walkSign = o.OvershootBacklash && o.BacklashIn > 0 && o.BacklashOut == 0 ? -1 : 1;
+            string backlashContext = BacklashContext(o, focuser, walkSign);
+            int approachMargin = Math.Max(2 * o.StepSize, Math.Max(o.BacklashIn, o.BacklashOut));
+            try {
+                var past = Logging.AutoFocusRunLog.BacklashHistory(focuser.DeviceName, backlashContext);
+                if (past.Count > 0)
+                    approachMargin = Math.Max(approachMargin, (int)Math.Ceiling(2 * Math.Abs(Median(past))));
+            } catch (Exception ex) { _logger.LogDebug(ex, "AF backlash history unreadable"); }
+
             // Initial-HFR baseline at the start position. Desktop only takes
             // it when the R² gate is off; Polaris keeps it best-effort in all
             // cases because the worse-than-start guard (MaxHfrRatio) is a
@@ -291,7 +305,7 @@ public class AutoFocusService {
                 int cursor = ClampToTravel(focuser, startPosition + sign * o.OffsetSteps * o.StepSize);
                 for (int i = 0; i <= o.OffsetSteps; i++) {
                     ct.ThrowIfCancellationRequested();
-                    await SamplePointAsync(cursor, camera, focuser, source, o, tracker, backlash, ct);
+                    await SamplePointAsync(cursor, camera, focuser, source, o, tracker, backlash, ct, -sign, approachMargin);
                     cursor = ClampToTravel(focuser, cursor - sign * o.StepSize);
                 }
 
@@ -328,7 +342,7 @@ public class AutoFocusService {
                         break;
                     }
 
-                    await SamplePointAsync(clamped, camera, focuser, source, o, tracker, backlash, ct);
+                    await SamplePointAsync(clamped, camera, focuser, source, o, tracker, backlash, ct, -sign, approachMargin);
                 }
 
                 // ---- Low-wing soft rejection (FIELD2-1, kept from the old
@@ -365,10 +379,22 @@ public class AutoFocusService {
                 // bowl. Sample a few points there with a small step and refit
                 // on those alone: near the minimum the curve is almost flat, so
                 // this is where precision is won or lost.
+                //
+                // The coarse points were reached moving -sign; the fine walk
+                // reaches its points moving +sign, so any backlash the
+                // compensation left over shows up as the distance between the
+                // two vertices. The final position is then reached from the
+                // same side as the points that located it, which cancels that
+                // backlash whatever its size.
+                FocusRefineOutcome? fine = null;
+                int approachDir = -sign;
                 if (o.RefineNearVertex && o.RefinePoints >= 3) {
-                    int refined = await RefineAroundVertexAsync(
-                        bestPosition, camera, focuser, source, o, tracker, backlash, ct);
-                    if (refined > 0) bestPosition = refined;
+                    fine = await RefineAroundVertexAsync(
+                        final.X, sign, approachMargin, camera, focuser, source, o, tracker, backlash, ct);
+                    if (fine.Ok) {
+                        bestPosition = (int)Math.Round(fine.Vertex);
+                        approachDir = sign;
+                    }
                 }
 
                 // ---- Move to the result + confirmation ----
@@ -379,7 +405,7 @@ public class AutoFocusService {
                 // confirmation frame. A progress bar that stops moving is read
                 // as a hang, so say what is happening instead.
                 Progress = Progress with { Phase = "moving", CurrentPosition = bestPosition };
-                await MoveWithBacklashAsync(focuser, bestPosition, o, backlash, ct);
+                await ApproachAsync(focuser, bestPosition, approachDir, approachMargin, o, backlash, ct);
                 int finalPosition = focuser.Focuser_ReadCurrentSafely();
                 Progress = Progress with { CurrentPosition = finalPosition };
 
@@ -403,6 +429,19 @@ public class AutoFocusService {
                     throw new InvalidOperationException($"Auto-focus result worse than start ({lastReason})");
                 }
 
+                // ---- Backlash estimate + confirmation check ----
+                double? backlashSteps = fine is { Ok: true } ? Math.Round(fine.BacklashSteps, 1) : null;
+                double? backlashMedian = null;
+                int backlashRuns = 0;
+                if (backlashSteps is double est) {
+                    var history = Logging.AutoFocusRunLog.BacklashHistory(focuser.DeviceName, backlashContext);
+                    history.Insert(0, est);
+                    backlashRuns = history.Count;
+                    backlashMedian = Math.Round(Median(history), 1);
+                }
+                string? warning = ConfirmationWarning(o, finalHfr, fine, Progress.Points);
+                if (warning != null) _logger.LogWarning("AF confirmation: {Warning}", warning);
+
                 var result = new AutoFocusResult {
                     Success = true,
                     StartPosition = startPosition,
@@ -421,7 +460,13 @@ public class AutoFocusService {
                     InitialHfr = initialHfr,
                     Attempts = attempt,
                     StartedAt = Progress.StartedAt,
-                    CompletedAt = DateTime.UtcNow
+                    CompletedAt = DateTime.UtcNow,
+                    BacklashSteps = backlashSteps,
+                    BacklashReversal = sign > 0 ? "in-to-out" : "out-to-in",
+                    BacklashMedianSteps = backlashMedian,
+                    BacklashRuns = backlashRuns,
+                    BacklashContext = backlashContext,
+                    Warning = warning
                 };
 
                 lock (_stateLock) {
@@ -542,61 +587,50 @@ public class AutoFocusService {
         Error = error
     };
 
-    /// <summary>Move to a sweep position (backlash-aware), measure a point
-    /// (FramesPerPoint exposures) and append it to Progress with live fits.</summary>
     /// <summary>
-    /// Second pass: sample <see cref="AutoFocusRunOptions.RefinePoints"/> points
-    /// centred on <paramref name="vertex"/> with a small step, fit a parabola to
-    /// those alone, and return the refined position (0 = keep the coarse one).
+    /// Second pass: walk through the bottom of the curve with a small step,
+    /// reaching every point from the side opposite to the coarse sweep, until
+    /// the HFR has passed its minimum and risen clearly again (see
+    /// <see cref="FocusRefineWalk"/>). Fits the fine points alone and returns
+    /// the outcome, whose vertex is valid only for a final position reached
+    /// moving in <paramref name="dir"/>. Its distance from the coarse vertex is
+    /// the backlash the compensation in effect left over.
     ///
     /// Fitting ONLY the fine points is deliberate. Mixing them with the coarse
     /// sweep would let the far arms, which are an order of magnitude larger in
     /// HFR, dominate the least squares and drag the vertex right back to where
-    /// the coarse fit already put it, so the pass would cost frames and change
-    /// nothing.
+    /// the coarse fit already put it, and the coarse points were reached from
+    /// the other side, so with backlash they sit on a shifted curve.
     ///
-    /// Every guard here is a refusal to make things worse: too few usable
-    /// points, a fit that is not a bowl, or a vertex outside the fine window
-    /// all return 0 and leave the coarse answer standing. A refinement that
-    /// cannot demonstrate a better minimum has no business overriding a fit
-    /// that already passed validation.
+    /// A walk that can't show a minimum returns a failed outcome and the
+    /// coarse answer stands: a refinement that cannot demonstrate a better
+    /// minimum has no business overriding a fit that already passed validation.
     /// </summary>
-    private async Task<int> RefineAroundVertexAsync(
-            int vertex, ICamera camera, IFocuser focuser, string source,
+    private async Task<FocusRefineOutcome> RefineAroundVertexAsync(
+            double vertex, int dir, int margin, ICamera camera, IFocuser focuser, string source,
             AutoFocusRunOptions o, AfStarTracker tracker, BacklashState backlash,
             CancellationToken ct) {
 
         int step = o.RefineStepSize > 0 ? o.RefineStepSize : Math.Max(1, o.StepSize / 4);
-        int n = Math.Clamp(o.RefinePoints, 3, 8);
-
-        // Positions centred on the vertex: for n=4 and step=12 that is
-        // vertex-18, vertex-6, vertex+6, vertex+18, the whole window sits
-        // inside one coarse interval either side.
-        var targets = new List<int>(n);
-        double half = (n - 1) / 2.0;
-        for (int i = 0; i < n; i++) {
-            targets.Add((int)Math.Round(vertex + (i - half) * step));
-        }
-
-        // Same travel clamp the coarse sweep uses. Distinct() matters: near a
-        // limit several fine targets clamp onto the same position, and sampling
-        // one position three times would fake a fit through a single point.
-        targets = targets.Select(t => ClampToTravel(focuser, t))
-                         .Distinct().OrderBy(t => t).ToList();
-        if (targets.Count < 3) {
-            _logger.LogDebug("AF refinement skipped: fine window collapsed at the travel limit");
-            return 0;
-        }
+        var walk = new FocusRefineWalk(vertex, o.StepSize, step, dir,
+            minPoints: Math.Clamp(o.RefinePoints, 3, 8) + 2);
 
         _logger.LogInformation(
-            "AF refinement: {N} points around {Vertex} with step {Step} (coarse step was {Coarse})",
-            targets.Count, vertex, step, o.StepSize);
+            "AF refinement: walking {Dir} from {Start} with step {Step} (coarse vertex {Vertex:F0}, "
+            + "coarse step {Coarse}, approach margin {Margin}, limit {Limit})",
+            dir > 0 ? "out" : "in", walk.StartPosition, step, vertex, o.StepSize, margin, walk.Limit);
         Progress = Progress with { Phase = "refining" };
 
-        var fine = new List<FocusPoint>(targets.Count);
-        foreach (var t in targets) {
+        int lastLogical = int.MinValue;
+        while (walk.Next() is int t) {
             ct.ThrowIfCancellationRequested();
-            int logicalPos = await MoveWithBacklashAsync(focuser, t, o, backlash, ct);
+            int clamped = ClampToTravel(focuser, t);
+            if (clamped != t || clamped == lastLogical) {
+                _logger.LogInformation("AF refinement stopped at the focuser travel limit ({Pos})", clamped);
+                break;
+            }
+            int logicalPos = await ApproachAsync(focuser, clamped, dir, margin, o, backlash, ct);
+            lastLogical = clamped;
             Progress = Progress with { CurrentPosition = logicalPos };
             var (measure, stdev, starCount) = await MeasurePointFramesAsync(camera, source, o, tracker, ct);
 
@@ -618,39 +652,32 @@ public class AutoFocusService {
             };
             _logger.LogInformation("AF refine sample: pos={Pos} stars={Stars} HFR={HFR:F2}±{Err:F2}",
                 logicalPos, starCount, measure, stdev);
-
-            if (measure > 0) fine.Add(new FocusPoint(logicalPos, measure, Math.Max(0.001, stdev)));
+            walk.Add(logicalPos, measure, stdev);
         }
 
-        if (fine.Count < 3) {
-            _logger.LogWarning("AF refinement inconclusive: only {N} usable point(s), keeping the coarse result",
-                fine.Count);
-            return 0;
+        var outcome = walk.Finish();
+        if (!outcome.Ok) {
+            _logger.LogWarning("AF refinement inconclusive ({Reason}), keeping the coarse result {Coarse:F0}",
+                outcome.Reason, vertex);
+        } else {
+            _logger.LogInformation(
+                "AF refinement: {Coarse:F0} -> {Refined:F0}; backlash on the {Rev} reversal ≈ {B:F0} steps",
+                vertex, outcome.Vertex, dir > 0 ? "in-to-out" : "out-to-in", outcome.BacklashSteps);
         }
-
-        var fit = new QuadraticFitting().Calculate(fine);
-        if (!fit.HasFit || fit.A2 <= 0) {
-            _logger.LogWarning("AF refinement inconclusive: fine points are not a bowl, keeping the coarse result");
-            return 0;
-        }
-
-        int refined = (int)Math.Round(fit.Minimum.X);
-        int lo = targets[0], hi = targets[^1];
-        if (refined < lo || refined > hi) {
-            _logger.LogWarning(
-                "AF refinement rejected: vertex {Refined} outside the fine window [{Lo}..{Hi}], keeping {Coarse}",
-                refined, lo, hi, vertex);
-            return 0;
-        }
-
-        _logger.LogInformation("AF refinement: {Coarse} -> {Refined} (R²={R2:F3})",
-            vertex, refined, fit.RSquared);
-        return refined;
+        return outcome;
     }
 
     private async Task SamplePointAsync(int target, ICamera camera, IFocuser focuser, string source,
-            AutoFocusRunOptions o, AfStarTracker tracker, BacklashState backlash, CancellationToken ct) {
-        int logicalPos = await MoveWithBacklashAsync(focuser, target, o, backlash, ct);
+            AutoFocusRunOptions o, AfStarTracker tracker, BacklashState backlash, CancellationToken ct,
+            int approachDir = 0, int margin = 0) {
+        // Every coarse point is reached moving the same way (approachDir), so
+        // that all of them sit on one curve: the first point is reached after
+        // the move out from the start position, and an extension of the far
+        // arm after a reversal, and with backlash both would land off the
+        // curve the rest of the sweep draws.
+        int logicalPos = approachDir != 0
+            ? await ApproachAsync(focuser, target, approachDir, margin, o, backlash, ct)
+            : await MoveWithBacklashAsync(focuser, target, o, backlash, ct);
         Progress = Progress with { CurrentPosition = logicalPos };
 
         var (measure, stdev, starCount) = await MeasurePointFramesAsync(camera, source, o, tracker, ct);
@@ -1141,6 +1168,71 @@ public class AutoFocusService {
     private sealed class BacklashState {
         public int LastDirection;   // -1 in, +1 out, 0 unknown
         public int Offset;          // persistent position offset (ABSOLUTE)
+        /// <summary>Direction of the last physical move, in every model: the
+        /// final leg of an overshoot counts, since that is the side the gears
+        /// are loaded from.</summary>
+        public int LastMoveDir;
+    }
+
+    /// <summary>Which reversal the fine walk measures and which compensation
+    /// was in effect, as one comparable string. A backlash estimate is what
+    /// that compensation left over, so a median only mixes runs that share it.</summary>
+    private static string BacklashContext(AutoFocusRunOptions o, IFocuser focuser, int walkSign) {
+        string driver;
+        try {
+            driver = focuser.DriverBacklash is { } d ? (d.Enabled ? $"on:{d.Steps}" : "off") : "none";
+        } catch { driver = "unknown"; }
+        return $"{(walkSign > 0 ? "in-to-out" : "out-to-in")}|polaris:{(o.OvershootBacklash ? "overshoot" : "absolute")}"
+            + $":{o.BacklashIn}:{o.BacklashOut}|driver:{driver}";
+    }
+
+    private static double Median(List<double> values) {
+        var v = values.OrderBy(x => x).ToList();
+        int n = v.Count;
+        return n == 0 ? 0 : n % 2 == 1 ? v[n / 2] : (v[n / 2 - 1] + v[n / 2]) / 2;
+    }
+
+    /// <summary>
+    /// The confirmation frame should look like the best point of the curve it
+    /// was taken at. When its HFR is more than 20 % worse, the run still
+    /// stands (seeing changes, and a worse-than-start result is already
+    /// rejected), but the result says so: that gap is what the field report
+    /// was, focus reported fine while the focuser had stopped short of it.
+    /// </summary>
+    private static string? ConfirmationWarning(AutoFocusRunOptions o, double? finalHfr,
+            FocusRefineOutcome? fine, IReadOnlyList<AutoFocusPoint> points) {
+        if (o.Metric != AutoFocusMetric.StarHfr || finalHfr is not > 0) return null;
+        double expected = fine is { Ok: true }
+            ? fine.BestMeasuredHfr
+            : points.Where(p => !p.Refinement && p.HFR > 0).Select(p => p.HFR).DefaultIfEmpty(0).Min();
+        if (expected <= 0 || finalHfr.Value <= expected * 1.2) return null;
+        return $"The confirmation frame measured HFR {finalHfr.Value:F2}, {(finalHfr.Value / expected - 1) * 100:F0} % "
+            + $"worse than the best point of the curve ({expected:F2}). The seeing may have changed, or the focuser "
+            + "didn't reach the focus position (backlash).";
+    }
+
+    /// <summary>
+    /// Reach <paramref name="target"/> moving in <paramref name="dir"/> (+1 out,
+    /// -1 in). When the focuser is on the wrong side of the target, or its last
+    /// move went the other way, it first goes <paramref name="margin"/> steps
+    /// past the target on the far side, so that the slack is taken up before
+    /// the approach. A point reached this way sits on the same curve as every
+    /// other point reached in that direction, whatever the backlash.
+    /// </summary>
+    private async Task<int> ApproachAsync(IFocuser focuser, int target, int dir, int margin,
+            AutoFocusRunOptions o, BacklashState st, CancellationToken ct) {
+        // Compensation configured in Polaris already fixes the side every
+        // move ends from (overshoot) or tracks the offset (absolute); a
+        // pre-move on top of it would only double the travel.
+        if (o.BacklashIn > 0 || o.BacklashOut > 0) return await MoveWithBacklashAsync(focuser, target, o, st, ct);
+        target = ClampToTravel(focuser, target);
+        int current = focuser.Position;
+        bool onApproachSide = dir * (target - current) > 0;
+        if (!onApproachSide || st.LastMoveDir != dir) {
+            int pre = ClampToTravel(focuser, target - dir * margin);
+            if (pre != target) await MoveWithBacklashAsync(focuser, pre, o, st, ct);
+        }
+        return await MoveWithBacklashAsync(focuser, target, o, st, ct);
     }
 
     /// <summary>
@@ -1165,6 +1257,7 @@ public class AutoFocusService {
                 st.Offset += movingIn ? -o.BacklashIn : o.BacklashOut;
             }
             st.LastDirection = dir;
+            st.LastMoveDir = dir;
             await MoveAndSettleAsync(focuser, ClampToTravel(focuser, target + st.Offset), ct);
             // Logical position (offset hidden, desktop parity), taken from
             // where the focuser actually stopped rather than where it was sent.
@@ -1172,12 +1265,13 @@ public class AutoFocusService {
         }
 
         // OVERSHOOT model
+        st.LastMoveDir = movingIn ? -1 : 1;
         if (movingIn && o.BacklashIn > 0) {
             int overshoot = ClampToTravel(focuser, target - o.BacklashIn);
-            if (overshoot < target) await MoveAndSettleAsync(focuser, overshoot, ct);
+            if (overshoot < target) { await MoveAndSettleAsync(focuser, overshoot, ct); st.LastMoveDir = 1; }
         } else if (!movingIn && o.BacklashOut > 0) {
             int overshoot = ClampToTravel(focuser, target + o.BacklashOut);
-            if (overshoot > target) await MoveAndSettleAsync(focuser, overshoot, ct);
+            if (overshoot > target) { await MoveAndSettleAsync(focuser, overshoot, ct); st.LastMoveDir = -1; }
         }
         await MoveAndSettleAsync(focuser, target, ct);
         return focuser.Position;
@@ -1618,4 +1712,22 @@ public class AutoFocusResult {
     public DateTime StartedAt { get; set; }
     public DateTime CompletedAt { get; set; }
     public string? Error { get; set; }
+
+    /// <summary>Backlash the fine walk measured on <see cref="BacklashReversal"/>:
+    /// how far its vertex sat from the coarse one along the walk, in steps.
+    /// About 0 when the compensation in effect already covers it. Null when
+    /// the fine walk didn't reach a result.</summary>
+    public double? BacklashSteps { get; set; }
+    /// <summary>"in-to-out" or "out-to-in": the reversal the estimate is for.</summary>
+    public string? BacklashReversal { get; set; }
+    /// <summary>Median of this estimate and the earlier ones from the same
+    /// focuser under the same compensation (<see cref="BacklashContext"/>),
+    /// over <see cref="BacklashRuns"/> runs. One run is good to about a fine
+    /// step; the median converges on the real value.</summary>
+    public double? BacklashMedianSteps { get; set; }
+    public int BacklashRuns { get; set; }
+    public string? BacklashContext { get; set; }
+    /// <summary>A successful run that still looks wrong, such as a confirmation
+    /// frame much worse than the curve's best point.</summary>
+    public string? Warning { get; set; }
 }

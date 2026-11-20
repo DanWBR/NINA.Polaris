@@ -3699,6 +3699,13 @@
                             <span x-show="autoFocus.bestPosition"><span class="legend-dot" style="background:#4caf50;"></span>Best position: <strong x-text="autoFocus.bestPosition"></strong></span>
                             <span x-show="autoFocus.bestHfr"><strong x-text="'HFR ≈ ' + autoFocus.bestHfr?.toFixed(2)"></strong></span>
                         </div>
+                        <!-- After a run: the backlash the fine walk measured, and a
+                             warning when the confirmation frame didn't match the curve. -->
+                        <div class="af-backlash" x-show="autoFocus.state !== 'running' && (afBacklashText() || autoFocus.warning)">
+                            <div x-show="afBacklashText()" x-text="afBacklashText()"></div>
+                            <div class="af-backlash-advice" x-show="afBacklashAdvice()" x-text="afBacklashAdvice()"></div>
+                            <div class="af-warning" x-show="autoFocus.warning" x-text="autoFocus.warning ? '⚠ ' + autoFocus.warning : ''"></div>
+                        </div>
                     </div>
                     </div><!-- /af-bottom-row -->
                 </div>

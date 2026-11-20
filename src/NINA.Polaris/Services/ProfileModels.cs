@@ -1574,20 +1574,23 @@ public class AutoFocusSettings {
     /// HFR by more than this factor. 0 disables.</summary>
     public double MaxHfrRatio { get; set; } = 1.15;
 
-    /// <summary>Second pass: after the coarse V-curve, sample a few points
-    /// around its vertex with a small step and refit on those alone. The coarse
-    /// sweep has to span far enough out for both arms to rise, which leaves its
-    /// step too big to resolve the flat bottom of the bowl. Costs RefinePoints
-    /// extra exposures per run.</summary>
+    /// <summary>Second pass: after the coarse V-curve, walk through the
+    /// bottom of the curve with a small step, from the side opposite to the
+    /// coarse sweep, until the HFR has passed its minimum and risen again, and
+    /// refit on those points alone. The coarse sweep has to span far enough out
+    /// for both arms to rise, which leaves its step too big to resolve the flat
+    /// bottom of the bowl. The distance between the two vertices is the
+    /// focuser's backlash, which the result reports. Costs typically 8 to 14
+    /// extra exposures per run, more when the backlash is large.</summary>
     public bool RefineNearVertex { get; set; } = true;
 
-    /// <summary>Points in the refinement pass. 3 is the minimum a parabola
-    /// needs; 4 leaves one degree of freedom to average noise.</summary>
+    /// <summary>Minimum points before the fine walk may stop (the walk adds
+    /// two to this). It goes on past this until the HFR has clearly risen
+    /// after its minimum.</summary>
     public int RefinePoints { get; set; } = 4;
 
     /// <summary>Step for the refinement pass. 0 derives it from StepSize (a
-    /// quarter), keeping the fine window inside one coarse interval either
-    /// side of the vertex.</summary>
+    /// quarter).</summary>
     public int RefineStepSize { get; set; }
 
     /// <summary>Centered crop ratio used for AF exposures/detection

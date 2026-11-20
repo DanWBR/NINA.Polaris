@@ -34,6 +34,11 @@ public class IndiFocuser : NINA.Image.Interfaces.IFocuser {
     public int Position => (int)_client.GetNumber(DeviceName, "ABS_FOCUS_POSITION", "FOCUS_ABSOLUTE_POSITION");
     public double Temperature => _client.GetNumber(DeviceName, "FOCUS_TEMPERATURE", "TEMPERATURE");
     public int MaxPosition => (int)_client.GetNumber(DeviceName, "FOCUS_MAX", "FOCUS_MAX_VALUE");
+
+    public (bool Enabled, int Steps)? DriverBacklash
+        => _client.GetProperty(DeviceName, "FOCUS_BACKLASH_TOGGLE") == null ? null
+         : (_client.GetSwitch(DeviceName, "FOCUS_BACKLASH_TOGGLE", "INDI_ENABLED"),
+            (int)_client.GetNumber(DeviceName, "FOCUS_BACKLASH_STEPS", "FOCUS_BACKLASH_VALUE"));
     public bool IsMoving {
         get {
             var prop = _client.GetProperty(DeviceName, "ABS_FOCUS_POSITION");

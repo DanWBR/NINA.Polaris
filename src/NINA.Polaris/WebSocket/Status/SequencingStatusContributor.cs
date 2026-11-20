@@ -144,7 +144,16 @@ public sealed class SequencingStatusContributor : IStatusContributor {
             starY = autoFocus.Progress.StarY,
             starHfr = autoFocus.Progress.StarHfr,
             frameWidth = autoFocus.Progress.FrameWidth,
-            frameHeight = autoFocus.Progress.FrameHeight
+            frameHeight = autoFocus.Progress.FrameHeight,
+            // The last run's backlash estimate (fine vertex minus coarse
+            // vertex), its median over earlier runs, and a warning when the
+            // confirmation frame didn't match the curve.
+            finalHfr = autoFocus.LastResult?.FinalMeasuredHfr,
+            backlashSteps = autoFocus.LastResult?.BacklashSteps,
+            backlashReversal = autoFocus.LastResult?.BacklashReversal,
+            backlashMedianSteps = autoFocus.LastResult?.BacklashMedianSteps,
+            backlashRuns = autoFocus.LastResult?.BacklashRuns,
+            warning = autoFocus.LastResult?.Warning
         };
 
             tick.Blocks["sequence"] = new {

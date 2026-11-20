@@ -113,6 +113,12 @@ public interface IFocuser {
             CancellationToken ct = default) =>
         throw new NotSupportedException(
             "Backlash compensation not supported by this focuser driver");
+
+    /// <summary>The driver-side backlash compensation in effect, or null when
+    /// the driver doesn't have any. Autofocus records it next to each backlash
+    /// estimate, because an estimate measures only what the compensation in
+    /// effect left over.</summary>
+    (bool Enabled, int Steps)? DriverBacklash => null;
 }
 
 /// <summary>Optional-feature flags for <see cref="IFocuser"/>. UI

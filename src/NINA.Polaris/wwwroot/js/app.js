@@ -5157,7 +5157,11 @@ function ninaApp() {
             fits: null,
             // The star the run is following, in the pixels of the frame it was
             // measured in (w/h). Zero w means "no star published yet".
-            star: { x: 0, y: 0, hfr: 0, w: 0, h: 0 }
+            star: { x: 0, y: 0, hfr: 0, w: 0, h: 0 },
+            // Last run: backlash the fine walk measured, its median over the
+            // earlier runs, and a warning when the confirmation frame was off.
+            finalHfr: null, backlashSteps: null, backlashReversal: null,
+            backlashMedianSteps: null, backlashRuns: 0, warning: null
         },
         // PA-4: TPPA polar alignment state. Mirrors the WS payload's
         // polarAlignment sub-object. completedOk + isActive are
@@ -25604,6 +25608,25 @@ function ninaApp() {
                 this.afLogViewer.error = this.$t('Could not read the autofocus run') + ': ' + (e.message || '');
             }
         },
+        // The backlash line under the V-curve after a run: what this run's fine
+        // walk measured, the median over the earlier runs under the same
+        // compensation, and what to do about it once it is clearly not zero.
+        afBacklashText() {
+            const a = this.autoFocus;
+            if (typeof a.backlashSteps !== 'number') return '';
+            const rev = a.backlashReversal === 'out-to-in' ? this.$t('out-to-in') : this.$t('in-to-out');
+            let s = this.$t('Backlash on the {rev} reversal: {n} steps', { rev, n: Math.round(a.backlashSteps) });
+            if (a.backlashRuns > 1 && typeof a.backlashMedianSteps === 'number') {
+                s += ' · ' + this.$t('median of {k} runs: {m}', { k: a.backlashRuns, m: Math.round(a.backlashMedianSteps) });
+            }
+            return s;
+        },
+        afBacklashAdvice() {
+            const a = this.autoFocus;
+            const v = typeof a.backlashMedianSteps === 'number' ? a.backlashMedianSteps : a.backlashSteps;
+            if (typeof v !== 'number' || Math.abs(v) < 15) return '';
+            return this.$t("Autofocus lands on focus anyway, because it approaches the result from the same side as the fine points. Other moves (filter offsets, manual moves) don't, so set about {m} steps of backlash in the focuser driver or in the autofocus settings.", { m: Math.round(Math.abs(v)) });
+        },
         get afLogTiles() {
             const run = this.afLogViewer.run;
             const r = run && run.result;
@@ -25616,6 +25639,8 @@ function ninaApp() {
                 { label: 'R²', value: num(r.rSquared, 2), unit: '' },
                 { label: 'Temperature', value: num(run.temperatureC, 1), unit: '°C' },
                 { label: 'Attempts', value: String(r.attempts ?? '--'), unit: '' },
+                ...(typeof r.backlashSteps === 'number'
+                    ? [{ label: 'Backlash', value: num(r.backlashSteps, 0), unit: this.$t('steps') }] : []),
             ];
         },
         _renderAfLogChart() {
@@ -52211,7 +52236,13 @@ function ninaApp() {
                     star: {
                         x: af.starX ?? 0, y: af.starY ?? 0, hfr: af.starHfr ?? 0,
                         w: af.frameWidth ?? 0, h: af.frameHeight ?? 0
-                    }
+                    },
+                    finalHfr: af.finalHfr ?? null,
+                    backlashSteps: af.backlashSteps ?? null,
+                    backlashReversal: af.backlashReversal ?? null,
+                    backlashMedianSteps: af.backlashMedianSteps ?? null,
+                    backlashRuns: af.backlashRuns ?? 0,
+                    warning: af.warning ?? null
                 };
                 this.redrawFocusStarOverlay();
             }
