@@ -1,0 +1,24 @@
+{
+  "name": "polaris-smb",
+  "version": "0.1.0",
+  "description": "Read-only SMB browsing and downloads for the Polaris app's Files page (smbj on Android, SMBClient on iOS).",
+  "license": "MPL-2.0",
+  "main": "index.js",
+  "files": [
+    "index.js",
+    "android/",
+    "ios/",
+    "PolarisSmb.podspec"
+  ],
+  "peerDependencies": {
+    "@capacitor/core": "^6.0.0"
+  },
+  "capacitor": {
+    "ios": {
+      "src": "ios"
+    },
+    "android": {
+      "src": "android"
+    }
+  }
+}

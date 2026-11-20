@@ -505,74 +505,12 @@ public static class FilesEndpoints {
                 using var fs = File.OpenRead(full);
                 var headers = FITSReader.ReadHeadersOnly(fs);
 
-                // Project to JSON-friendly DTOs grouped by topic. The
-                // grouping mirrors the categories the FITS spec uses
-                // and matches how PixInsight/Siril display headers
-                // (Observation / Instrument / Image / Other), so an
-                // astrophotographer sees a layout that feels familiar.
-                static GroupedCard Card(FITSHeaderCard c)
-                    => new(c.Keyword, c.Value?.Trim() ?? "", c.Comment ?? "");
-                bool In(string key, params string[] set)
-                    => set.Any(k => string.Equals(k, key, StringComparison.OrdinalIgnoreCase));
-
-                var imageKeys = new[] {
-                    "SIMPLE","BITPIX","NAXIS","NAXIS1","NAXIS2","NAXIS3",
-                    "BZERO","BSCALE","BAYERPAT","XBAYROFF","YBAYROFF",
-                    "DATATYPE","CTYPE1","CTYPE2","CRVAL1","CRVAL2"
-                };
-                var observationKeys = new[] {
-                    "OBJECT","OBJCTRA","OBJCTDEC","OBJCTROT","RA","DEC",
-                    "DATE-OBS","DATE-AVG","MJD-OBS","EXPTIME","EXPOSURE",
-                    "FILTER","IMAGETYP","NCOMBINE","EXPTOTAL","FRAMENR"
-                };
-                var instrumentKeys = new[] {
-                    "INSTRUME","TELESCOP","OTA","FOCALLEN","FOCRATIO","APERTURE",
-                    "XPIXSZ","YPIXSZ","XBINNING","YBINNING","GAIN","ISOSPEED","EGAIN",
-                    "OFFSET","READOUTM","CCD-TEMP","SET-TEMP","FWHEEL",
-                    "ROTATOR","ROTATANG","FOCNAME","FOCPOS","FOCTEMP","PIERSIDE"
-                };
-                var siteKeys = new[] {
-                    "SITELAT","SITELONG","SITEELEV","SITENAME","OBSERVER",
-                    "OBSERVAT","CLOUDCVR","DEWPOINT","HUMIDITY","PRESSURE",
-                    "SKYBRGHT","MPSAS","AMBTEMP","WINDSPD","WINDDIR","WINDGUST"
-                };
-                var processingKeys = new[] {
-                    "CREATOR","SWCREATE","CALSTAT","INTMETH","REJECT","BGREMOVE",
-                    "NRMETHOD","NRRADIUS","SHARPEN","SHARPAMT","SHARPRAD","SHARPTHR"
-                };
-
-                var image       = new List<GroupedCard>();
-                var observation = new List<GroupedCard>();
-                var instrument  = new List<GroupedCard>();
-                var site        = new List<GroupedCard>();
-                var processing  = new List<GroupedCard>();
-                var other       = new List<GroupedCard>();
-
-                foreach (var c in headers.Values) {
-                    if (c.Keyword is "END" or "") continue;
-                    var dto = Card(c);
-                    if (In(c.Keyword, imageKeys))           image.Add(dto);
-                    else if (In(c.Keyword, observationKeys)) observation.Add(dto);
-                    else if (In(c.Keyword, instrumentKeys))  instrument.Add(dto);
-                    else if (In(c.Keyword, siteKeys))        site.Add(dto);
-                    else if (In(c.Keyword, processingKeys))  processing.Add(dto);
-                    else                                     other.Add(dto);
-                }
-
-                static List<GroupedCard> Sort(List<GroupedCard> xs)
-                    => xs.OrderBy(c => c.Keyword, StringComparer.OrdinalIgnoreCase).ToList();
-
+                // Grouped the way the header panel shows them; the browser-wasm
+                // viewer builds the same groups from FitsHeaderGroups.
                 return Results.Ok(new {
                     fileName = Path.GetFileName(full),
                     totalCards = headers.Count,
-                    groups = new[] {
-                        new { name = "Observation", cards = Sort(observation) },
-                        new { name = "Instrument",  cards = Sort(instrument)  },
-                        new { name = "Image",       cards = Sort(image)       },
-                        new { name = "Site & Weather", cards = Sort(site)     },
-                        new { name = "Processing",  cards = Sort(processing)  },
-                        new { name = "Other",       cards = Sort(other)       }
-                    }
+                    groups = FitsHeaderGroups.Build(headers.Values)
                 });
             } catch (UnauthorizedAccessException ex) {
                 return Results.Json(new { error = ex.Message },
@@ -871,7 +809,6 @@ public static class FilesEndpoints {
     public record BatchRenameRequest(List<string> Paths, string Template, bool DryRun);
     public record ZipRequest(List<string> Paths, string? RootForNames, string? FileName);
     public record StudioRootRequest(string Path);
-    public record GroupedCard(string Keyword, string Value, string Comment);
     public record UpdateFitsHeadersRequest(string Path, List<HeaderUpdate> Headers);
     public record HeaderUpdate(string Keyword, string Value);
 }

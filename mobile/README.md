@@ -9,7 +9,15 @@ and adds the few things only a device can do:
   NNAPI/XNNPACK on Android) through the local `polaris-onnx` plugin.
   This bypasses the mobile-browser WebGPU/Safari-OOM limits, so the
   GraXpert `.onnx` models actually run fast on a phone/tablet.
-- M0 - connect screen (mDNS discovery + manual host/Relay), keep-awake.
+- M0 - connect screen (mDNS discovery + manual host/Relay), keep-awake,
+  favourite and recent hosts.
+- **Files** - a viewer that works with every host off. It opens FITS, JPG
+  and PNG files from the device, from "Open with" in another app, and from
+  SMB shares on the network (the local `polaris-smb` plugin: smbj on
+  Android, SMBClient on iOS). The FITS decode, debayer and auto-stretch run
+  in the `NINA.Polaris.Wasm` module with the same code as the host's FILES
+  preview, so `npm run viewer:assets` (or `scripts/build-viewer-assets.sh` in
+  CI) has to copy that bundle in before `cap sync`.
 - (later) M2 push, M3 sensor "Aim" helper.
 
 This folder is **completely separate** from `NINA.sln` and the .deb
@@ -23,7 +31,11 @@ mobile/
     index.html               connect / discovery screen + tab bar + frames
     connect.js               mDNS browse, host entry, tabbed multi-instance
     onnx-native-shim.js       injected into the Polaris UI; routes ORT -> native
+    files/                   offline viewer: files.js (viewer), network.js (SMB browsing);
+                             vendor/ holds OpenSeadragon + the WASM bundle (generated)
   plugins/polaris-onnx/      local Capacitor plugin: native ONNX Runtime
+  plugins/polaris-smb/       local Capacitor plugin: read-only SMB, NetBIOS discovery,
+                             passwords in the Android Keystore / iOS Keychain
   capacitor.config.ts        appId, allowNavigation (so the remote Pi UI keeps the bridge)
 ```
 

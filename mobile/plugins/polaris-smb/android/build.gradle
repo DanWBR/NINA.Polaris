@@ -1,0 +1,36 @@
+ext {
+    junitVersion = project.hasProperty('junitVersion') ? rootProject.ext.junitVersion : '4.13.2'
+}
+
+buildscript {
+    repositories { google(); mavenCentral() }
+    dependencies { classpath 'com.android.tools.build:gradle:8.2.1' }
+}
+
+apply plugin: 'com.android.library'
+
+android {
+    namespace "dev.danwbr.polaris.smb"
+    compileSdk project.hasProperty('compileSdkVersion') ? rootProject.ext.compileSdkVersion : 34
+    defaultConfig {
+        minSdkVersion project.hasProperty('minSdkVersion') ? rootProject.ext.minSdkVersion : 24
+        targetSdkVersion project.hasProperty('targetSdkVersion') ? rootProject.ext.targetSdkVersion : 34
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+repositories { google(); mavenCentral() }
+
+dependencies {
+    implementation project(':capacitor-android')
+    // SMB 2/3 client (Apache 2.0).
+    implementation 'com.hierynomus:smbj:0.15.0'
+    // DCE/RPC over SMB (BSD-3-Clause), only for listing a server's shares
+    // (NetShareEnum). Its own smbj pin is replaced by the one above.
+    implementation('com.rapid7.client:dcerpc:0.12.13') {
+        exclude group: 'com.hierynomus', module: 'smbj'
+    }
+}

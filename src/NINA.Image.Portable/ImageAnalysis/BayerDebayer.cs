@@ -202,6 +202,48 @@ public static class BayerDebayer {
     /// fully described by its top-left 2x2 block, so a length-4 int[]
     /// replaces the old per-pixel delegate entirely.
     /// </summary>
+    /// <summary>
+    /// Superpixel debayer: each 2x2 CFA cell becomes one RGB pixel (R and B
+    /// taken as they are, G the mean of the two greens), so the planes come
+    /// out at half the width and half the height. An odd last row or column
+    /// is dropped. A preview that will be shown at half the sensor size or
+    /// less loses nothing visible this way, and it needs a quarter of the
+    /// memory of <see cref="Bilinear(ushort[], int, int, BayerPatternEnum)"/>,
+    /// which matters in the browser-wasm module on a phone.
+    /// </summary>
+    public static (Channels planes, int width, int height) Superpixel(
+            ushort[] cfa, int width, int height, BayerPatternEnum pattern) {
+        if (cfa.Length < width * height)
+            throw new ArgumentException("CFA buffer too small for declared dimensions.", nameof(cfa));
+        int[] block = ColorBlockFor(pattern);
+        int w2 = width / 2, h2 = height / 2, n = w2 * h2;
+        var r = new ushort[n];
+        var g = new ushort[n];
+        var b = new ushort[n];
+        for (int y = 0; y < h2; y++) {
+            int row0 = 2 * y * width, row1 = row0 + width;
+            for (int x = 0; x < w2; x++) {
+                int x0 = 2 * x;
+                uint gs = 0;
+                ushort rv = 0, bv = 0;
+                // block layout: 0 = (x0,y0), 1 = (x1,y0), 2 = (x0,y1), 3 = (x1,y1)
+                for (int k = 0; k < 4; k++) {
+                    ushort v = cfa[(k < 2 ? row0 : row1) + x0 + (k & 1)];
+                    switch (block[k]) {
+                        case 0: rv = v; break;
+                        case 1: gs += v; break;
+                        default: bv = v; break;
+                    }
+                }
+                int o = y * w2 + x;
+                r[o] = rv;
+                g[o] = (ushort)((gs + 1) >> 1);
+                b[o] = bv;
+            }
+        }
+        return (new Channels(r, g, b), w2, h2);
+    }
+
     private static int[] ColorBlockFor(BayerPatternEnum pattern) {
         // Layout: index 0 = (x0,y0), 1 = (x1,y0), 2 = (x0,y1), 3 = (x1,y1).
         return pattern switch {

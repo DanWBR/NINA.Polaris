@@ -30,8 +30,11 @@ const els = {
   openSelectedBtn: document.getElementById('openSelectedBtn'),
   reopenRow: document.getElementById('reopenRow'),
   reopenLink: document.getElementById('reopenLink'),
-  lastRow: document.getElementById('lastHostRow'),
-  lastLink: document.getElementById('lastHostLink'),
+  favSection: document.getElementById('favSection'),
+  favList: document.getElementById('favList'),
+  recentSection: document.getElementById('recentSection'),
+  recentList: document.getElementById('recentList'),
+  clearRecentBtn: document.getElementById('clearRecentBtn'),
   tabBar: document.getElementById('tabBar'),
   frames: document.getElementById('frames'),
   pickerDoneBtn: document.getElementById('pickerDoneBtn'),
@@ -365,6 +368,204 @@ async function prefRemove(key) {
 
 const getLastHost = () => prefGet(LAST_HOST_KEY);
 const setLastHost = (url) => prefSet(LAST_HOST_KEY, url);
+
+// ---------- favorite + recent hosts ----------
+// Favorites are the hosts the operator starred, with an optional nickname.
+// Recent are the last hosts this app opened, newest first. Both keep the
+// host's mDNS service name (`svc`) next to its address, so that when the
+// router hands the box another IP, the next discovery of the same service
+// moves the saved entry to the new address instead of leaving a dead one.
+const HOSTS_KEY = 'polaris.hosts';
+const RECENT_MAX = 8;
+let saved = { favorites: [], recent: [] };   // entry: { origin, name, svc, nick?, at? }
+
+const validEntry = (e) => !!e && typeof e.origin === 'string' && /^https?:\/\//i.test(e.origin);
+
+async function loadSaved() {
+  try {
+    const o = JSON.parse(await prefGet(HOSTS_KEY) || 'null');
+    if (o && typeof o === 'object') {
+      saved = {
+        favorites: Array.isArray(o.favorites) ? o.favorites.filter(validEntry) : [],
+        recent: Array.isArray(o.recent) ? o.recent.filter(validEntry) : [],
+      };
+    }
+  } catch { /* corrupt value: start empty */ }
+  // The app used to keep only the single last address. If this is the first
+  // launch with the lists, that address becomes the first recent host.
+  if (saved.favorites.length === 0 && saved.recent.length === 0) {
+    const last = await getLastHost();
+    if (last && validEntry({ origin: last })) {
+      // at: 0, because the old key did not record when it was used.
+      saved.recent.push({ origin: last, name: hostLabel(last), svc: null, at: 0 });
+      persistSaved();
+    }
+  }
+}
+
+function persistSaved() { prefSet(HOSTS_KEY, JSON.stringify(saved)); }
+
+// Same host: same address, or, when both sides know it, same mDNS service.
+function findSaved(list, origin, svc) {
+  return list.find(e => e.origin === origin) || (svc ? list.find(e => e.svc === svc) : undefined);
+}
+
+function svcForOrigin(origin) {
+  const d = discovered.get(origin);
+  if (d && d.svc) return d.svc;
+  for (const [k, o] of Object.entries(knownOrigins)) if (o === origin) return k;
+  return null;
+}
+
+function recordRecent(origin, name) {
+  const svc = svcForOrigin(origin);
+  const prev = findSaved(saved.recent, origin, svc);
+  saved.recent = saved.recent.filter(e => e !== prev);
+  saved.recent.unshift({
+    origin,
+    name: name || (prev && prev.name) || hostLabel(origin),
+    svc: svc || (prev && prev.svc) || null,
+    at: Date.now(),
+  });
+  if (saved.recent.length > RECENT_MAX) saved.recent.length = RECENT_MAX;
+  // If a favorite was opened under a new address, keep its address current.
+  const fav = findSaved(saved.favorites, origin, svc);
+  if (fav) { fav.origin = origin; if (svc) fav.svc = svc; }
+  persistSaved();
+  renderSaved();
+}
+
+// Called for every host that discovery finds. When a saved entry with the same
+// service shows up at another address, the entry follows it; when a saved entry
+// at this address has not learned its service yet, it learns it now.
+function noteDiscovered(origin, svc, name) {
+  if (!svc) return;
+  let changed = false;
+  for (const e of saved.favorites.concat(saved.recent)) {
+    if (e.svc === svc && e.origin !== origin) { e.origin = origin; changed = true; }
+    else if (!e.svc && e.origin === origin) { e.svc = svc; changed = true; }
+    if (e.origin === origin && name && e.name !== name) { e.name = name; changed = true; }
+  }
+  if (!changed) return;
+  const dedupe = (list) => list.filter((e, i) => list.findIndex(x => x.origin === e.origin) === i);
+  saved.favorites = dedupe(saved.favorites);
+  saved.recent = dedupe(saved.recent);
+  persistSaved();
+}
+
+function isFavorite(origin, svc) { return !!findSaved(saved.favorites, origin, svc); }
+
+async function toggleFavorite(origin, name, svc) {
+  const fav = findSaved(saved.favorites, origin, svc);
+  if (fav) {
+    const label = fav.nick || fav.name;
+    if (!(await confirmDialog(`Remove ${label} from favorites?`,
+          'If you open it again, it shows up under Recent.', 'Remove'))) return;
+    saved.favorites = saved.favorites.filter(e => e !== fav);
+  } else {
+    saved.favorites.push({ origin, name: name || hostLabel(origin), svc: svc || null });
+  }
+  persistSaved();
+  renderSaved();
+  renderList();
+}
+
+async function renameFavorite(entry) {
+  const v = await confirmDialog('Name this host',
+    'The name only changes on this device. Leave it empty to use the name the host announces.',
+    'Save', { input: entry.nick || entry.name });
+  if (v === false) return;
+  const nick = String(v).trim();
+  entry.nick = (nick && nick !== entry.name) ? nick : undefined;
+  persistSaved();
+  renderSaved();
+}
+
+function timeAgo(ms) {
+  if (!ms) return '';
+  const s = Math.max(0, (Date.now() - ms) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return `${Math.floor(s / 60)} min ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)} h ago`;
+  const d = Math.floor(s / 86400);
+  if (d < 30) return d === 1 ? 'yesterday' : `${d} days ago`;
+  return new Date(ms).toLocaleDateString();
+}
+
+function iconButton(cls, text, label, onClick) {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'h-btn ' + cls;
+  b.textContent = text;
+  b.setAttribute('aria-label', label);
+  b.title = label;
+  b.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
+  return b;
+}
+
+// One row of the Favorites or Recent list. A tap opens the host (or switches
+// to its tab when it is already open).
+function savedRow(entry, favorite) {
+  const li = document.createElement('li');
+  const main = document.createElement('span');
+  main.className = 'h-main';
+  const nm = document.createElement('span');
+  nm.className = 'h-name';
+  nm.textContent = entry.nick || entry.name || hostLabel(entry.origin);
+  main.appendChild(nm);
+  if (instances.has(entry.origin)) {
+    const o = document.createElement('span');
+    o.className = 'h-open';
+    o.textContent = '● open';
+    main.appendChild(o);
+  } else if (discovered.has(entry.origin)) {
+    const o = document.createElement('span');
+    o.className = 'h-online';
+    o.textContent = '● on this network';
+    main.appendChild(o);
+  }
+  // Second line: the address, unless the name already is the address (a
+  // typed host), plus how long ago it was opened for a recent one.
+  const when = favorite ? '' : timeAgo(entry.at);
+  const where = hostLabel(entry.origin);
+  const parts = (where === nm.textContent ? [] : [where]).concat(when ? [when] : []);
+  if (parts.length) {
+    main.appendChild(document.createElement('br'));
+    const addr = document.createElement('span');
+    addr.className = 'h-addr';
+    addr.textContent = parts.join(' · ');
+    main.appendChild(addr);
+  }
+  li.appendChild(main);
+
+  if (favorite) {
+    li.appendChild(iconButton('h-rename', '✎', 'Rename', () => renameFavorite(entry)));
+    li.appendChild(iconButton('h-star on', '★', 'Remove from favorites',
+      () => toggleFavorite(entry.origin, entry.name, entry.svc)));
+  } else {
+    li.appendChild(iconButton('h-star', '☆', 'Add to favorites',
+      () => toggleFavorite(entry.origin, entry.name, entry.svc)));
+    li.appendChild(iconButton('h-remove', '✕', 'Remove from recent', () => {
+      saved.recent = saved.recent.filter(e => e !== entry);
+      persistSaved();
+      renderSaved();
+    }));
+  }
+  li.addEventListener('click', () => openHost(entry.origin, entry.nick || entry.name));
+  return li;
+}
+
+function renderSaved() {
+  els.favList.innerHTML = '';
+  for (const e of saved.favorites) els.favList.appendChild(savedRow(e, true));
+  els.favSection.hidden = saved.favorites.length === 0;
+
+  // A favorite already has its own row above, so Recent leaves it out.
+  const recent = saved.recent.filter(e => !isFavorite(e.origin, e.svc));
+  els.recentList.innerHTML = '';
+  for (const e of recent) els.recentList.appendChild(savedRow(e, false));
+  els.recentSection.hidden = recent.length === 0;
+}
 async function getLastSet() {
   const raw = await prefGet(LAST_SET_KEY);
   if (!raw) return [];
@@ -444,13 +645,12 @@ async function probeOrigin(origin) {
     const info = await r.json();
     if (!info || info.app !== 'polaris') return;
     if (discovered.has(origin)) return;   // mDNS beat us to it, keep its entry
-    discovered.set(origin, {
-      name: info.friendly || info.instance || hostLabel(origin),
-      addr: hostLabel(origin)
-    });
+    const name = info.friendly || info.instance || hostLabel(origin);
+    discovered.set(origin, { name, addr: hostLabel(origin), svc: info.instance || null });
     // Key by the mDNS instance name so a later mDNS-based discovery of the
     // same box reuses this origin (stable localStorage / auth token).
     if (info.instance) rememberOrigin(info.instance, origin);
+    noteDiscovered(origin, info.instance || null, name);
     els.scanHint.textContent = `${discovered.size} found.`;
     renderList();
   } catch { /* unreachable, or a pre-/api/identify server, ignore */ }
@@ -461,6 +661,7 @@ async function probeFallback() {
   const candidates = new Set();
   for (const o of Object.values(knownOrigins)) candidates.add(o);
   try { for (const o of await getLastSet()) candidates.add(o); } catch {}
+  for (const e of saved.favorites.concat(saved.recent)) candidates.add(e.origin);
   for (const gw of HOTSPOT_GATEWAYS) candidates.add(toOrigin(gw, 5000));
   for (const o of candidates) probeOrigin(o);   // fire in parallel
 }
@@ -472,16 +673,41 @@ function renderList() {
   for (const [origin, info] of discovered) {
     const li = document.createElement('li');
     li.className = selected.has(origin) ? 'selected' : '';
-    const open = instances.has(origin);
-    li.innerHTML =
-      `<input type="checkbox" class="host-check"${selected.has(origin) ? ' checked' : ''}>` +
-      `<span class="h-main"><span class="h-name">${info.name}</span>` +
-      (open ? '<span class="h-open">● open</span>' : '') +
-      `<br><span class="h-addr">${info.addr}</span></span>`;
+    const check = document.createElement('input');
+    check.type = 'checkbox';
+    check.className = 'host-check';
+    check.checked = selected.has(origin);
+    li.appendChild(check);
+    // Built with textContent: the name comes from the network (mDNS TXT or
+    // /api/identify), so it must never be parsed as HTML.
+    const main = document.createElement('span');
+    main.className = 'h-main';
+    const nm = document.createElement('span');
+    nm.className = 'h-name';
+    nm.textContent = info.name;
+    main.appendChild(nm);
+    if (instances.has(origin)) {
+      const o = document.createElement('span');
+      o.className = 'h-open';
+      o.textContent = '● open';
+      main.appendChild(o);
+    }
+    main.appendChild(document.createElement('br'));
+    const addr = document.createElement('span');
+    addr.className = 'h-addr';
+    addr.textContent = info.addr;
+    main.appendChild(addr);
+    li.appendChild(main);
+    const fav = isFavorite(origin, info.svc);
+    li.appendChild(iconButton('h-star' + (fav ? ' on' : ''), fav ? '★' : '☆',
+      fav ? 'Remove from favorites' : 'Add to favorites',
+      () => toggleFavorite(origin, info.name, info.svc)));
     li.addEventListener('click', () => toggleSelected(origin));
     els.hostList.appendChild(li);
   }
   updateOpenButton();
+  // The saved lists mark which of their hosts are on this network.
+  renderSaved();
 }
 
 function toggleSelected(origin) {
@@ -567,7 +793,8 @@ async function scan() {
         if (!addr) return;
         const origin = toOrigin(addr, s.port || 5000);
         rememberOrigin(svcKey, origin);
-        discovered.set(origin, { name: friendly, addr: `${addr}:${s.port || 5000}` });
+        discovered.set(origin, { name: friendly, addr: `${addr}:${s.port || 5000}`, svc: svcKey });
+        noteDiscovered(origin, svcKey, friendly);
         els.scanHint.textContent = `${discovered.size} found.`;
         renderList();
       })
@@ -668,6 +895,7 @@ function buildErrorOverlay(inst) {
 
 function addInstance(origin, name, { activate = false } = {}) {
   if (!origin) return;
+  recordRecent(origin, name);
   if (!instances.has(origin)) {
     const frame = document.createElement('iframe');
     frame.className = 'instance-frame';
@@ -759,9 +987,11 @@ function reloadTab(origin) {
 // on a narrow bar and a stray tap would drop the operator's view of a running
 // session. An in-shell card rather than window.confirm(), so it looks the same
 // on Android and iOS and cannot be suppressed by the WebView. Resolves true on
-// confirm, false on Cancel, a tap outside the card, or Escape.
+// confirm, false on Cancel, a tap outside the card, or Escape. With
+// opts.input set, the card also has a text field prefilled with that value,
+// and a confirm resolves with the field's text instead of true.
 let _confirmOpen = null;
-function confirmDialog(title, message, okLabel) {
+function confirmDialog(title, message, okLabel, opts = {}) {
   if (_confirmOpen) _confirmOpen(false);
   return new Promise((resolve) => {
     const wrap = document.createElement('div');
@@ -790,6 +1020,17 @@ function confirmDialog(title, message, okLabel) {
     actions.appendChild(ok);
     card.appendChild(h);
     card.appendChild(m);
+    let field = null;
+    if (opts.input !== undefined) {
+      field = document.createElement('input');
+      field.type = 'text';
+      field.className = 'confirm-input';
+      field.value = String(opts.input || '');
+      field.setAttribute('autocapitalize', 'off');
+      field.setAttribute('spellcheck', 'false');
+      field.addEventListener('keydown', (e) => { if (e.key === 'Enter') done(field.value); });
+      card.appendChild(field);
+    }
     card.appendChild(actions);
     wrap.appendChild(card);
     const onKey = (e) => { if (e.key === 'Escape') done(false); };
@@ -801,12 +1042,12 @@ function confirmDialog(title, message, okLabel) {
       resolve(v);
     };
     cancel.addEventListener('click', () => done(false));
-    ok.addEventListener('click', () => done(true));
+    ok.addEventListener('click', () => done(field ? field.value : true));
     wrap.addEventListener('click', (e) => { if (e.target === wrap) done(false); });
     document.addEventListener('keydown', onKey);
     _confirmOpen = done;
     document.body.appendChild(wrap);
-    ok.focus();
+    if (field) { field.focus(); field.select(); } else ok.focus();
   });
 }
 
@@ -928,16 +1169,9 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('pagehide', stopScan);
 
-// Refresh the "Last used" + "Reopen last (N)" rows on the picker.
+// Refresh the Favorites + Recent lists and the "Reopen last (N)" row on the picker.
 async function refreshPickerExtras() {
-  const last = await getLastHost();
-  if (last && !instances.has(last)) {
-    els.lastLink.textContent = last;
-    els.lastLink.onclick = (e) => { e.preventDefault(); openHost(last, null); };
-    els.lastRow.hidden = false;
-  } else {
-    els.lastRow.hidden = true;
-  }
+  renderSaved();
   const set = (await getLastSet()).filter(o => !instances.has(o));
   if (set.length > 0) {
     els.reopenLink.textContent = `Reopen last ${set.length > 1 ? set.length + ' instances' : 'instance'}`;
@@ -967,6 +1201,39 @@ function wireHardwareBack() {
   });
 }
 
+// ---------- "Open with Polaris" ----------
+// A file manager or the Drive app opened a FITS file with Polaris
+// (android-postadd.sh declares the intent filter). The Files page shows it.
+// getLaunchUrl keeps returning the same URI for as long as the app runs, so
+// the URI that was already opened is remembered for the session; otherwise
+// coming back from Files would open it again.
+const OPENED_KEY = 'polaris.openedLaunchUrl';
+const isFileUri = (u) => typeof u === 'string' && /^(content|file):/i.test(u);
+
+async function openInFiles(url) {
+  try { sessionStorage.setItem(OPENED_KEY, url); } catch {}
+  if (instances.size > 0) {
+    const ok = await confirmDialog('Open the file?',
+      'Polaris shows it in Files, which closes the open tabs here. Your hosts keep running, and you can open them again from Recent.',
+      'Open');
+    if (!ok) return;
+  }
+  location.href = 'files/index.html#open=' + encodeURIComponent(url);
+}
+
+function wireOpenWith() {
+  if (!AppPlugin || typeof AppPlugin.addListener !== 'function') return;
+  AppPlugin.addListener('appUrlOpen', (ev) => { if (ev && isFileUri(ev.url)) openInFiles(ev.url); });
+  if (typeof AppPlugin.getLaunchUrl !== 'function') return;
+  AppPlugin.getLaunchUrl().then((r) => {
+    const url = r && r.url;
+    if (!isFileUri(url)) return;
+    let seen = null;
+    try { seen = sessionStorage.getItem(OPENED_KEY); } catch {}
+    if (seen !== url) openInFiles(url);
+  }).catch(() => {});
+}
+
 function wire() {
   els.rescanBtn.addEventListener('click', scan);
   els.openSelectedBtn.addEventListener('click', openSelected);
@@ -978,6 +1245,13 @@ function wire() {
     openHost(origin, hostLabel(origin));
   };
   els.connectBtn.addEventListener('click', manual);
+  els.clearRecentBtn.addEventListener('click', async () => {
+    if (!(await confirmDialog('Clear the recent hosts?',
+          'Favorites stay. Only the Recent list is emptied.', 'Clear'))) return;
+    saved.recent = [];
+    persistSaved();
+    renderSaved();
+  });
   els.hostInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') manual(); });
 }
 
@@ -1007,9 +1281,11 @@ async function requestStartupPermissions() {
   // below (plugin calls, discovery) throws.
   wire();
   wireHardwareBack();
-  refreshPickerExtras();
-  // Load the per-service origin memory before discovery kicks in, so the
-  // first scan already reuses each instance's established origin.
+  wireOpenWith();
+  // Load the saved hosts and the per-service origin memory before discovery
+  // kicks in, so that the first scan already reuses each instance's
+  // established origin and probes the saved addresses.
+  loadSaved().then(refreshPickerExtras);
   loadKnownOrigins();
   // Prompt for location right away (see requestStartupPermissions).
   requestStartupPermissions();

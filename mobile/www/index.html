@@ -21,6 +21,19 @@
         </div>
 
         <div class="panels">
+        <section class="saved" id="favSection" hidden>
+            <h2>Favorites</h2>
+            <ul class="host-list" id="favList"></ul>
+        </section>
+
+        <section class="saved" id="recentSection" hidden>
+            <div class="row-head">
+                <h2>Recent</h2>
+                <button class="link" id="clearRecentBtn" type="button">Clear</button>
+            </div>
+            <ul class="host-list" id="recentList"></ul>
+        </section>
+
         <section class="found" id="foundSection">
             <div class="row-head">
                 <h2>Found on this network</h2>
@@ -48,12 +61,15 @@
         <p class="last" id="reopenRow" hidden>
             <a href="#" id="reopenLink"></a>
         </p>
-        <p class="last" id="lastHostRow" hidden>
-            Last used: <a href="#" id="lastHostLink"></a>
-        </p>
 
         <section class="tools">
             <h2>Tools</h2>
+            <a class="tool-link" href="files/index.html">
+                <span class="tool-ico">🖼️</span>
+                <span><strong>Files</strong><br>
+                <span class="hint">Look at FITS and JPG files on this device, with the FITS header. Works without a host.</span></span>
+                <span class="go">→</span>
+            </a>
             <a class="tool-link" href="aim/index.html">
                 <span class="tool-ico">🧭</span>
                 <span><strong>Aim helper</strong><br>

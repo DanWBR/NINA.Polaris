@@ -6,6 +6,7 @@
   "license": "MPL-2.0",
   "scripts": {
     "sync": "cap sync",
+    "viewer:assets": "node scripts/copy-viewer-assets.mjs",
     "android": "cap run android",
     "ios": "cap run ios",
     "open:android": "cap open android",
@@ -25,7 +26,8 @@
     "@capacitor/share": "^6.0.2",
     "capacitor-zeroconf": "^3.0.0",
     "polaris-onnx": "file:plugins/polaris-onnx",
-    "polaris-llama": "file:plugins/polaris-llama"
+    "polaris-llama": "file:plugins/polaris-llama",
+    "polaris-smb": "file:plugins/polaris-smb"
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",

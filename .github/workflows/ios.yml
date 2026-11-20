@@ -30,6 +30,7 @@ on:
     paths:
       - 'mobile/**'
       - '.github/workflows/ios.yml'
+      - 'src/NINA.Polaris.Wasm/**'
 
 jobs:
   # ---- Unsigned build: the always-on CI gate (no secrets required) ----
@@ -53,6 +54,13 @@ jobs:
 
       - name: Install JS deps
         run: npm install
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.x'
+
+      - name: Build the FITS renderer (WASM) + Files viewer assets
+        run: bash scripts/build-viewer-assets.sh
 
       - name: Build native ONNX plugin
         run: npm run plugin:build
@@ -121,6 +129,13 @@ jobs:
 
       - name: Install JS deps
         run: npm install
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.x'
+
+      - name: Build the FITS renderer (WASM) + Files viewer assets
+        run: bash scripts/build-viewer-assets.sh
 
       - name: Build native ONNX plugin
         run: npm run plugin:build

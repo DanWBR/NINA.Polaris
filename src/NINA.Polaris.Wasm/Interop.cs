@@ -17,6 +17,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using NINA.Core.Enum;
 using NINA.Image.Editor;
+using NINA.Image.FileFormat.FITS;
 using NINA.Image.ImageAnalysis;
 using NINA.Image.ImageData;
 
@@ -54,6 +55,21 @@ namespace NINA.Polaris.Wasm;
 [JsonSerializable(typeof(List<CurvePoint>))]
 internal partial class EditorJsonContext : JsonSerializerContext { }
 
+/// <summary>What <see cref="Interop.FitsOpen"/> tells the page about a file:
+/// its geometry, the Bayer pattern it declares, and the header panel groups
+/// (the same shape /api/files/fits-headers returns, so that the page can use
+/// one renderer for both).</summary>
+public sealed record FitsOpenInfo(
+    int Width, int Height, int Channels, int BitDepth, string Bayer,
+    int TotalCards, IReadOnlyList<FitsHeaderGroup> Groups);
+
+/// <summary>Source-generated metadata for <see cref="FitsOpenInfo"/>, for the
+/// same trimming reason as <see cref="EditorJsonContext"/>.</summary>
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(FitsOpenInfo))]
+[JsonSerializable(typeof(string))]
+internal partial class FitsJsonContext : JsonSerializerContext { }
+
 /// <summary>
 /// JS-callable surface for the browser-side image editor.
 ///
@@ -72,7 +88,77 @@ public static partial class Interop {
     /// marshalling works. Bump the suffix on protocol-breaking changes so
     /// a stale cached bundle is detectable.</summary>
     [JSExport]
-    public static string Ping() => "pong v0.7 (ED-6 editor + JsonContext, stacker removed)";
+    public static string Ping() => "pong v0.8 (ED-6 editor + offline FITS viewer)";
+
+    // ───────────────────────────────────────────────────────────────────
+    // Offline FITS viewer. The mobile app opens files from a network share
+    // with no Polaris host running, so the decode, the debayer and the
+    // auto-stretch run here, with the same NINA.Image.Portable code the
+    // host's /api/files/preview uses (FitsPreview), and the header panel is
+    // built by the same FitsHeaderGroups.
+    //
+    // One file at a time, held statically like the editor buffer: FitsOpen
+    // replaces it, FitsRelease frees it.
+    // ───────────────────────────────────────────────────────────────────
+
+    private static ushort[]? _fitsData;
+    private static int _fitsW, _fitsH, _fitsChannels, _fitsBits;
+    private static BayerPatternEnum _fitsPattern;
+    private static int _fitsOutW, _fitsOutH;
+
+    /// <summary>Decode a whole FITS file. Returns <see cref="FitsOpenInfo"/> as
+    /// JSON, or a JSON object with an "error" member when the bytes are not a
+    /// FITS this reader understands.</summary>
+    [JSExport]
+    public static string FitsOpen(byte[] fitsBytes) {
+        FitsRelease();
+        try {
+            var headers = FITSReader.ReadHeadersOnly(new MemoryStream(fitsBytes, writable: false));
+            var img = FITSReader.Read(fitsBytes);
+            var p = img.Properties;
+            _fitsData = img.Data;
+            _fitsW = p.Width;
+            _fitsH = p.Height;
+            _fitsChannels = Math.Max(1, p.Channels);
+            _fitsBits = p.BitDepth;
+            _fitsPattern = p.BayerPattern;
+            var info = new FitsOpenInfo(_fitsW, _fitsH, _fitsChannels, _fitsBits,
+                _fitsPattern.ToString(), headers.Count, FitsHeaderGroups.Build(headers.Values));
+            return JsonSerializer.Serialize(info, FitsJsonContext.Default.FitsOpenInfo);
+        } catch (Exception ex) {
+            FitsRelease();
+            return "{\"error\":" + JsonSerializer.Serialize(ex.Message, FitsJsonContext.Default.String) + "}";
+        }
+    }
+
+    /// <summary>Render the open file as RGBA8888, auto-stretched, at least
+    /// <paramref name="maxDim"/> on the long side when the file is larger (0
+    /// keeps the full resolution). <paramref name="bayer"/> is the viewer's
+    /// dropdown value: empty uses the file's pattern, RGGB/BGGR/GBRG/GRBG
+    /// override it. <see cref="FitsGetRenderDims"/> gives the size.</summary>
+    [JSExport]
+    public static byte[] FitsRender(int maxDim, string bayer) {
+        if (_fitsData == null) return Array.Empty<byte>();
+        var (rgba, w, h) = FitsPreview.RenderRgba(_fitsData, _fitsW, _fitsH, _fitsChannels, _fitsBits,
+            _fitsPattern, FitsPreview.ParseBayer(bayer), maxDim);
+        _fitsOutW = w;
+        _fitsOutH = h;
+        return rgba;
+    }
+
+    /// <summary>[width, height] of the most recent <see cref="FitsRender"/>.</summary>
+    [JSExport]
+    public static int[] FitsGetRenderDims() => [_fitsOutW, _fitsOutH];
+
+    /// <summary>Free the open file, so that a 100 MB frame does not stay on the
+    /// WASM heap after the viewer closes.</summary>
+    [JSExport]
+    public static void FitsRelease() {
+        _fitsData = null;
+        _fitsW = _fitsH = _fitsChannels = _fitsBits = 0;
+        _fitsPattern = BayerPatternEnum.None;
+        _fitsOutW = _fitsOutH = 0;
+    }
 
     // ───────────────────────────────────────────────────────────────────
     // ED-6: editor pipeline in the browser. Same math as the server's

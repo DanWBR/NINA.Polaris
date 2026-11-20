@@ -19,6 +19,8 @@ plugins/*/android/.gradle/
 # Build artifacts
 dist/
 www/build/
+# OpenSeadragon + the WASM bundle for the Files page (scripts/copy-viewer-assets.mjs)
+www/files/vendor/
 *.apk
 *.aab
 *.ipa

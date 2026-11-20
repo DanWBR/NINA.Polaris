@@ -255,6 +255,18 @@ h2 { margin: 0 0 12px; font-size: 14px; font-weight: 600; color: var(--muted);
 .host-list .h-name { font-weight: 600; }
 .host-list .h-open { color: var(--accent); font-size: 11px; margin-left: 8px; }
 .host-list .h-addr { color: var(--muted); font-size: 12px; }
+.host-list .h-name { overflow-wrap: anywhere; }
+.host-list .h-online { color: #5fd38d; font-size: 11px; margin-left: 8px; }
+/* Star, rename and remove buttons on a host row (connect.js iconButton).
+   40 px wide so a thumb hits them without opening the host by mistake. */
+.host-list .h-btn {
+    flex: 0 0 auto; width: 40px; height: 40px; margin: -8px -6px -8px 0;
+    background: none; border: none; border-radius: 8px;
+    color: var(--muted); font-size: 20px; line-height: 1; cursor: pointer;
+}
+.host-list .h-btn:active { background: rgba(255,255,255,0.08); }
+.host-list .h-star.on { color: #ffc84a; }
+.host-list .h-rename, .host-list .h-remove { font-size: 17px; }
 
 .hint { color: var(--muted); font-size: 12px; margin: 8px 0 0; line-height: 1.4; }
 .hint code { background: rgba(255,255,255,0.06); padding: 1px 5px; border-radius: 4px; }
@@ -284,6 +296,7 @@ input[type="text"]:focus { outline: none; border-color: var(--accent); }
     border-radius: 10px; background: var(--bg2);
 }
 .tool-link:active { border-color: var(--accent); }
+.tool-link + .tool-link { margin-top: 8px; }
 .tool-ico { font-size: 22px; }
 .tool-link .go { margin-left: auto; color: var(--accent); font-size: 18px; }
 .tool-link .hint { margin: 0; }
@@ -314,6 +327,7 @@ input[type="text"]:focus { outline: none; border-color: var(--accent); }
 }
 .confirm-title { font-size: 16px; font-weight: 700; color: var(--text); word-break: break-word; }
 .confirm-msg { margin-top: 8px; font-size: 13px; line-height: 1.5; color: var(--muted); }
+.confirm-input { display: block; width: 100%; margin-top: 12px; box-sizing: border-box; }
 .confirm-actions { margin-top: 18px; display: flex; gap: 10px; justify-content: flex-end; }
 .confirm-cancel, .confirm-ok {
     border-radius: 10px; padding: 10px 18px;

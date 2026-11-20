@@ -258,32 +258,9 @@ public static class FitsThumbnailer {
     /// small, or targetMax is the int.MaxValue "full-res" sentinel), so those
     /// paths stay byte-for-byte unchanged.</summary>
     internal static (ushort[] pix, int w, int h) DownsampleForPreview(
-            ushort[] src, int width, int height, int planes, int targetMax) {
-        int longest = Math.Max(width, height);
-        // floor: guarantees binned longest >= targetMax, so the final Resize is
-        // still a genuine downscale to the exact target (preserves dimensions).
-        int f = targetMax > 0 ? Math.Max(1, longest / targetMax) : 1;
-        if (f <= 1) return (src, width, height);
-        int dw = (width + f - 1) / f, dh = (height + f - 1) / f;
-        var dst = new ushort[dw * dh * planes];
-        for (int pl = 0; pl < planes; pl++) {
-            int sOff = pl * width * height, dOff = pl * dw * dh;
-            for (int by = 0; by < dh; by++) {
-                int y0 = by * f, y1 = Math.Min(y0 + f, height);
-                int drow = dOff + by * dw;
-                for (int bx = 0; bx < dw; bx++) {
-                    int x0 = bx * f, x1 = Math.Min(x0 + f, width);
-                    uint sum = 0; int n = 0;
-                    for (int y = y0; y < y1; y++) {
-                        int srow = sOff + y * width;
-                        for (int x = x0; x < x1; x++) { sum += src[srow + x]; n++; }
-                    }
-                    dst[drow + bx] = (ushort)(n > 0 ? sum / (uint)n : 0);
-                }
-            }
-        }
-        return (dst, dw, dh);
-    }
+            ushort[] src, int width, int height, int planes, int targetMax)
+        // Shared with the browser-wasm viewer, see FitsPreview.
+        => FitsPreview.Downsample(src, width, height, planes, targetMax);
 
     public static byte[] RenderJpegFromBuffer(ushort[] pixels, int width, int height,
                                               int bitDepth, int maxDim = 256, int quality = 85,

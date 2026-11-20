@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <meta name="theme-color" content="#0a1633">
+    <title>Polaris -- Files</title>
+    <link rel="stylesheet" href="files.css">
+</head>
+<body>
+    <header class="bar">
+        <a class="back" href="../index.html" aria-label="Back">‹</a>
+        <h1>Files</h1>
+    </header>
+
+    <main class="files-main">
+        <section id="deviceSection">
+            <h2>On this device</h2>
+            <button class="btn" id="pickBtn" type="button">Open files…</button>
+            <!-- No accept filter on purpose. Android maps each extension to a
+                 MIME type, and file providers report a FITS file as
+                 application/octet-stream, so ".fits" would grey out the very
+                 files this page is for. files.js skips what it can't show. -->
+            <input type="file" id="pickInput" multiple hidden>
+            <p class="hint">
+                FITS, JPG or PNG from this device's storage, a memory card or a
+                cloud drive app. Polaris renders them on this device, so a host
+                doesn't need to be on.
+            </p>
+            <p class="hint pick-skipped" id="pickSkipped" hidden></p>
+        </section>
+
+        <section id="listSection" hidden>
+            <div class="row-head">
+                <h2 id="listTitle">Opened</h2>
+            </div>
+            <ul class="file-list" id="fileList"></ul>
+        </section>
+
+        <!-- Network servers (network.js + the polaris-smb plugin): SMB shares
+             such as the one a Polaris host pushes its frames to. -->
+        <section id="netRecentSection" hidden>
+            <h2>Recent folders</h2>
+            <ul class="file-list" id="netRecent"></ul>
+        </section>
+
+        <section id="netSection">
+            <div class="row-head">
+                <h2>Network servers</h2>
+                <button class="link" id="netFindBtn" type="button">Find</button>
+            </div>
+            <ul class="file-list" id="netServers"></ul>
+            <ul class="file-list found" id="netFound"></ul>
+            <p class="hint" id="netHint">
+                Look at the files a Polaris host saved to a shared folder (SMB) on
+                your network, with every host turned off.
+            </p>
+            <button class="btn btn-quiet" id="netAddBtn" type="button">Add server…</button>
+        </section>
+
+        <section id="browseSection" hidden>
+            <div class="browse-head">
+                <button class="v-btn" id="brUp" type="button" aria-label="Up one folder">‹</button>
+                <div class="crumbs" id="brCrumbs"></div>
+                <button class="v-btn" id="brRefresh" type="button" aria-label="Refresh">↻</button>
+            </div>
+            <p class="hint" id="brStatus" hidden></p>
+            <ul class="file-list" id="brList"></ul>
+        </section>
+    </main>
+
+    <!-- Server address and sign-in. The password goes to the native plugin,
+         which keeps it encrypted with an Android Keystore key when "Remember"
+         is on; the page never reads it back. -->
+    <div class="dlg" id="credDlg" hidden>
+        <form class="dlg-card" id="credForm" autocomplete="off">
+            <h3 id="credTitle">Add a network server</h3>
+            <p class="hint dlg-msg" id="credMsg" hidden></p>
+            <label id="credHostRow">Server name or address
+                <input id="credHost" placeholder="JUPITER or 192.168.0.20" autocapitalize="off" spellcheck="false" inputmode="url">
+            </label>
+            <label>User name
+                <input id="credUser" autocapitalize="off" spellcheck="false" placeholder="Leave empty to sign in as guest">
+            </label>
+            <label>Password
+                <input id="credPass" type="password">
+            </label>
+            <label>Domain or workgroup (optional)
+                <input id="credDomain" autocapitalize="off" spellcheck="false">
+            </label>
+            <label class="check"><input type="checkbox" id="credRemember" checked> Remember on this device</label>
+            <div class="dlg-actions">
+                <button class="link" id="credCancel" type="button">Cancel</button>
+                <button class="btn" id="credOk" type="submit">Connect</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Full-screen viewer: OpenSeadragon for pinch, pan and zoom, the same
+         toolbar as the FILES viewer in the Polaris UI, and the FITS header
+         panel as a sheet over the image. -->
+    <div class="viewer" id="viewer" hidden>
+        <div class="v-bar">
+            <button class="v-btn" id="vClose" type="button" aria-label="Close">✕</button>
+            <span class="v-title" id="vTitle"></span>
+            <button class="v-btn" id="vPrev" type="button" aria-label="Previous file">‹</button>
+            <button class="v-btn" id="vNext" type="button" aria-label="Next file">›</button>
+        </div>
+        <div class="v-stage">
+            <div id="osd"></div>
+            <div class="v-busy" id="vBusy" hidden><span class="spinner"></span><span id="vBusyText">Rendering…</span></div>
+            <div class="v-error" id="vError" hidden></div>
+            <button class="v-btn v-exit-full" id="vExitFull" type="button" aria-label="Leave full page" hidden>⤡</button>
+        </div>
+        <div class="v-tools">
+            <button class="v-btn" id="vZoomOut" type="button" aria-label="Zoom out">−</button>
+            <button class="v-btn" id="vHome" type="button" aria-label="Fit to view">⊡</button>
+            <button class="v-btn" id="vZoomIn" type="button" aria-label="Zoom in">+</button>
+            <button class="v-btn" id="vFull" type="button" aria-label="Full page">⤢</button>
+            <select id="vBayer" title="Bayer pattern override">
+                <option value="">Bayer: auto</option>
+                <option value="RGGB">RGGB</option>
+                <option value="BGGR">BGGR</option>
+                <option value="GBRG">GBRG</option>
+                <option value="GRBG">GRBG</option>
+            </select>
+            <select id="vFilter" title="How the image is resampled when zoomed in. Affects the view only, never the file.">
+                <option value="nearest">Nearest (real pixels)</option>
+                <option value="smooth">Smooth</option>
+            </select>
+            <button class="v-btn v-hdr-btn" id="vHdrBtn" type="button" aria-label="FITS header">FITS header</button>
+        </div>
+        <div class="v-info" id="vInfo"></div>
+        <aside class="v-headers" id="vHeaders" hidden>
+            <div class="v-headers-head">
+                <strong id="vHdrTitle">FITS header</strong>
+                <input type="search" id="vHdrFilter" placeholder="Filter keywords" autocomplete="off" spellcheck="false">
+                <button class="v-btn" id="vHdrClose" type="button" aria-label="Hide the header">✕</button>
+            </div>
+            <div class="v-headers-body" id="vHdrBody"></div>
+        </aside>
+    </div>
+
+    <script src="vendor/openseadragon.min.js"></script>
+    <script type="module" src="files.js"></script>
+    <script type="module" src="network.js"></script>
+</body>
+</html>
