@@ -716,6 +716,56 @@ public static class SkyEndpoints {
             return Results.Ok(new { points = new List<HorizonPoint>() });
         });
 
+        // ---- Site landscape (the ground SKY draws under the sky, issue #80) ----
+
+        group.MapGet("/landscape", (NINA.Polaris.Services.Sky.SiteLandscapeService land) =>
+            Results.Ok(new { landscape = land.Info }));
+
+        // Multipart: "file" (equirectangular panorama, 360 deg of azimuth across
+        // its width), "topAlt" and "bottomAlt" (altitude of the top and bottom
+        // rows), "leftAz" (azimuth of the left edge, default 0 = north), "name".
+        group.MapPost("/landscape", async (HttpRequest req, ProfileService profile,
+                NINA.Polaris.Services.Sky.SiteLandscapeService land, CancellationToken ct) => {
+            if (!req.HasFormContentType)
+                return Results.BadRequest(new { error = "Send the panorama as a multipart form." });
+            var form = await req.ReadFormAsync(ct);
+            var file = form.Files.GetFile("file");
+            if (file == null || file.Length == 0)
+                return Results.BadRequest(new { error = "Choose a panorama image." });
+            static double Num(string? s, double fallback) =>
+                double.TryParse(s, System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : fallback;
+            var options = new NINA.Polaris.Services.Sky.LandscapeHipsBuilder.Options(
+                TopAltitudeDeg: Num(form["topAlt"], double.NaN),
+                BottomAltitudeDeg: Num(form["bottomAlt"], double.NaN),
+                LeftAzimuthDeg: Num(form["leftAz"], 0),
+                Title: string.IsNullOrWhiteSpace(form["name"]) ? Path.GetFileNameWithoutExtension(file.FileName) : form["name"].ToString());
+            try {
+                await using var s = file.OpenReadStream();
+                var info = await land.ImportAsync(s, options, profile.Active.HorizonPoints, ct);
+                return Results.Ok(new { landscape = info });
+            } catch (NINA.Polaris.Services.Sky.LandscapeImportException ex) {
+                return Results.BadRequest(new { error = ex.Message });
+            }
+        });
+
+        group.MapDelete("/landscape", async (NINA.Polaris.Services.Sky.SiteLandscapeService land) => {
+            await land.RemoveAsync();
+            return Results.Ok(new { landscape = (object?)null });
+        });
+
+        // The HiPS files the SKY engine fetches. The version segment changes on
+        // every import so the engine (which caches tiles by URL) never mixes an
+        // old landscape's tiles into a new one; the files themselves don't
+        // depend on it.
+        group.MapGet("/landscape/hips/{version}/{**path}", (string version, string path,
+                NINA.Polaris.Services.Sky.SiteLandscapeService land) => {
+            var file = land.Resolve(path);
+            if (file == null) return Results.NotFound();
+            var mime = file.EndsWith(".webp", StringComparison.OrdinalIgnoreCase) ? "image/webp" : "text/plain";
+            return Results.File(file, mime, enableRangeProcessing: false);
+        });
+
         // Resolve a celestial object name to a thumbnail image URL (NASA
         // Image Library, falling back to Wikipedia). Caches per-name on
         // disk for 30 days. Returns { available: false } when neither

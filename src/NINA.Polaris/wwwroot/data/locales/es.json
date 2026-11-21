@@ -5586,5 +5586,19 @@
   "Backlash on the {rev} reversal: {n} steps": "Holgura en la inversión {rev}: {n} pasos",
   "median of {k} runs: {m}": "mediana de {k} ejecuciones: {m}",
   "Autofocus lands on focus anyway, because it approaches the result from the same side as the fine points. Other moves (filter offsets, manual moves) don't, so set about {m} steps of backlash in the focuser driver or in the autofocus settings.": "El autofoco llega al foco de todos modos, porque se acerca al resultado por el mismo lado que los puntos finos. Los demás movimientos (offsets de filtro, movimientos manuales) no lo hacen, así que configure unos {m} pasos de holgura en el driver del enfocador o en los ajustes del autofoco.",
-  "steps": "pasos"
+  "steps": "pasos",
+  "Landscape": "Paisaje",
+  "Import a 360° panorama of your site so that the SKY tab shows your trees and houses under the horizon line. Its width must cover 360° of azimuth. A PNG with a transparent sky works best; if the photo has a sky, Polaris cuts it along your custom horizon.": "Importa un panorama de 360° de tu sitio para que la pestaña SKY muestre tus árboles y casas debajo de la línea del horizonte. El ancho de la imagen debe cubrir 360° de azimut. Un PNG con el cielo transparente funciona mejor; si la foto tiene cielo, Polaris lo recorta según tu horizonte personalizado.",
+  "Choose panorama": "Elegir panorama",
+  "Use the default landscape": "Usar el paisaje predeterminado",
+  "Top edge altitude (°)": "Altitud del borde superior (°)",
+  "Bottom edge altitude (°)": "Altitud del borde inferior (°)",
+  "Azimuth at the left edge (°)": "Azimut del borde izquierdo (°)",
+  "Polaris suggests the edges for square pixels with the top row at the zenith. If your panorama is cropped, enter the real altitudes (Stellarium's maptex_top and maptex_bottom). The left edge is north (0°) unless you enter another azimuth.": "Polaris sugiere los bordes suponiendo píxeles cuadrados y la fila superior en el cenit. Si tu panorama está recortado, introduce las altitudes reales (maptex_top y maptex_bottom de Stellarium). El borde izquierdo es el norte (0°), salvo que introduzcas otro azimut.",
+  "In use: {name}": "En uso: {name}",
+  "sky cut along the horizon": "cielo recortado según el horizonte",
+  "Converting…": "Convirtiendo…",
+  "Import landscape": "Importar paisaje",
+  "Landscape imported": "Paisaje importado",
+  "Could not import the landscape": "No se pudo importar el paisaje"
 }

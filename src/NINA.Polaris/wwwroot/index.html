@@ -19074,6 +19074,54 @@ Windows  winget install Rclone.Rclone</code></pre>
                                   x-text="horizonPoints.length + ' point' + (horizonPoints.length === 1 ? '' : 's')"></span>
                             <span class="hint text-ok" style="margin:0" x-show="horizonSavedFlash">Saved</span>
                         </div>
+
+                        <!-- Site landscape (issue #80): the ground SKY draws
+                             under the sky, from the user's own 360° panorama
+                             instead of the bundled Guéreins field. -->
+                        <div style="margin-top:14px" x-init="siteLandscapeLoad()">
+                            <h4 style="margin:0 0 4px">Landscape</h4>
+                            <p class="hint" style="margin-top:0">
+                                Import a 360° panorama of your site so that the SKY tab shows your trees and houses under the horizon line.
+                                Its width must cover 360° of azimuth. A PNG with a transparent sky works best; if the photo has a sky, Polaris cuts it along your custom horizon.
+                            </p>
+                            <p class="hint" style="margin:0 0 6px" x-show="siteLandscape" x-cloak>
+                                <span x-text="$t('In use: {name}', { name: siteLandscape?.name || '' })"></span>
+                                <span x-text="' (' + (siteLandscape?.width || 0) + ' × ' + (siteLandscape?.height || 0) + ' px, ' + Math.round((siteLandscape?.bytes || 0) / 1024) + ' kB)'"></span>
+                                <span x-show="siteLandscape?.maskedFromHorizon" x-text="' · ' + $t('sky cut along the horizon')"></span>
+                            </p>
+                            <div class="control-row" style="gap:8px;align-items:center;flex-wrap:wrap">
+                                <button class="btn btn-sm" @click="$refs.landscapeFile.click()" :disabled="siteLandscapeBusy">Choose panorama</button>
+                                <input type="file" x-ref="landscapeFile" accept="image/png,image/webp,image/jpeg,.png,.webp,.jpg,.jpeg"
+                                       style="display:none" @change="siteLandscapePick($event)">
+                                <button class="btn btn-sm" @click="siteLandscapeRemove()"
+                                        :disabled="!siteLandscape || siteLandscapeBusy">Use the default landscape</button>
+                            </div>
+                            <div x-show="siteLandscapeForm.file" x-cloak style="margin-top:8px">
+                                <p class="hint" style="margin:0 0 6px">
+                                    <span x-text="siteLandscapeForm.file?.name"></span>
+                                    <span x-show="siteLandscapeForm.width" x-text="' (' + siteLandscapeForm.width + ' × ' + siteLandscapeForm.height + ' px)'"></span>
+                                </p>
+                                <div class="control-row" style="gap:8px;align-items:center;flex-wrap:wrap">
+                                    <label class="hint" style="margin:0" for="landscape-top">Top edge altitude (°)</label>
+                                    <input id="landscape-top" type="text" inputmode="decimal" class="input-sm" style="width:70px"
+                                           x-model="siteLandscapeForm.topAlt">
+                                    <label class="hint" style="margin:0" for="landscape-bottom">Bottom edge altitude (°)</label>
+                                    <input id="landscape-bottom" type="text" inputmode="decimal" class="input-sm" style="width:70px"
+                                           x-model="siteLandscapeForm.bottomAlt">
+                                    <label class="hint" style="margin:0" for="landscape-left">Azimuth at the left edge (°)</label>
+                                    <input id="landscape-left" type="text" inputmode="decimal" class="input-sm" style="width:70px"
+                                           x-model="siteLandscapeForm.leftAz">
+                                </div>
+                                <p class="hint" style="margin:6px 0">
+                                    Polaris suggests the edges for square pixels with the top row at the zenith. If your panorama is cropped, enter the real altitudes (Stellarium's maptex_top and maptex_bottom). The left edge is north (0°) unless you enter another azimuth.
+                                </p>
+                                <div class="control-row" style="gap:8px;align-items:center;flex-wrap:wrap">
+                                    <button class="btn btn-sm btn-primary" @click="siteLandscapeImport()" :disabled="siteLandscapeBusy"
+                                            x-text="siteLandscapeBusy ? $t('Converting…') : $t('Import landscape')"></button>
+                                    <button class="btn btn-sm" @click="siteLandscapeForm.file = null" :disabled="siteLandscapeBusy">Cancel</button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

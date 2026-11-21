@@ -5586,5 +5586,19 @@
   "Backlash on the {rev} reversal: {n} steps": "Spiel bei der Umkehr {rev}: {n} Schritte",
   "median of {k} runs: {m}": "Median aus {k} Läufen: {m}",
   "Autofocus lands on focus anyway, because it approaches the result from the same side as the fine points. Other moves (filter offsets, manual moves) don't, so set about {m} steps of backlash in the focuser driver or in the autofocus settings.": "Der Autofokus trifft den Fokus trotzdem, weil er das Ergebnis von derselben Seite anfährt wie die Feinpunkte. Andere Bewegungen (Filter-Offsets, manuelle Bewegungen) tun das nicht, also stellen Sie etwa {m} Schritte Spiel im Fokussierer-Treiber oder in den Autofokus-Einstellungen ein.",
-  "steps": "Schritte"
+  "steps": "Schritte",
+  "Landscape": "Landschaft",
+  "Import a 360° panorama of your site so that the SKY tab shows your trees and houses under the horizon line. Its width must cover 360° of azimuth. A PNG with a transparent sky works best; if the photo has a sky, Polaris cuts it along your custom horizon.": "Importiere ein 360°-Panorama deines Standorts, damit der SKY-Tab deine Bäume und Häuser unter der Horizontlinie zeigt. Die Bildbreite muss 360° Azimut abdecken. Ein PNG mit transparentem Himmel funktioniert am besten; wenn das Foto einen Himmel hat, schneidet Polaris ihn entlang deines eigenen Horizonts aus.",
+  "Choose panorama": "Panorama wählen",
+  "Use the default landscape": "Standardlandschaft verwenden",
+  "Top edge altitude (°)": "Höhe der Oberkante (°)",
+  "Bottom edge altitude (°)": "Höhe der Unterkante (°)",
+  "Azimuth at the left edge (°)": "Azimut der linken Kante (°)",
+  "Polaris suggests the edges for square pixels with the top row at the zenith. If your panorama is cropped, enter the real altitudes (Stellarium's maptex_top and maptex_bottom). The left edge is north (0°) unless you enter another azimuth.": "Polaris schlägt die Kanten für quadratische Pixel vor, mit der obersten Zeile im Zenit. Wenn dein Panorama beschnitten ist, gib die tatsächlichen Höhen ein (maptex_top und maptex_bottom aus Stellarium). Die linke Kante ist Norden (0°), sofern du keinen anderen Azimut eingibst.",
+  "In use: {name}": "In Verwendung: {name}",
+  "sky cut along the horizon": "Himmel entlang des Horizonts ausgeschnitten",
+  "Converting…": "Wird konvertiert…",
+  "Import landscape": "Landschaft importieren",
+  "Landscape imported": "Landschaft importiert",
+  "Could not import the landscape": "Die Landschaft konnte nicht importiert werden"
 }

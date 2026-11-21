@@ -5914,5 +5914,19 @@
   "Backlash on the {rev} reversal: {n} steps": "Люфт при смене направления {rev}: {n} шагов",
   "median of {k} runs: {m}": "медиана по {k} запускам: {m}",
   "Autofocus lands on focus anyway, because it approaches the result from the same side as the fine points. Other moves (filter offsets, manual moves) don't, so set about {m} steps of backlash in the focuser driver or in the autofocus settings.": "Автофокус всё равно попадает в фокус, потому что подходит к результату с той же стороны, что и точные точки. Другие перемещения (смещения фильтров, ручные перемещения) так не делают, поэтому задайте около {m} шагов люфта в драйвере фокусёра или в настройках автофокуса.",
-  "steps": "шагов"
+  "steps": "шагов",
+  "Landscape": "Ландшафт",
+  "Import a 360° panorama of your site so that the SKY tab shows your trees and houses under the horizon line. Its width must cover 360° of azimuth. A PNG with a transparent sky works best; if the photo has a sky, Polaris cuts it along your custom horizon.": "Импортируйте панораму места наблюдения на 360°, чтобы вкладка SKY показывала ваши деревья и дома под линией горизонта. Ширина изображения должна охватывать 360° по азимуту. Лучше всего подходит PNG с прозрачным небом; если на фото есть небо, Polaris вырежет его по вашему горизонту.",
+  "Choose panorama": "Выбрать панораму",
+  "Use the default landscape": "Использовать стандартный ландшафт",
+  "Top edge altitude (°)": "Высота верхнего края (°)",
+  "Bottom edge altitude (°)": "Высота нижнего края (°)",
+  "Azimuth at the left edge (°)": "Азимут левого края (°)",
+  "Polaris suggests the edges for square pixels with the top row at the zenith. If your panorama is cropped, enter the real altitudes (Stellarium's maptex_top and maptex_bottom). The left edge is north (0°) unless you enter another azimuth.": "Polaris предлагает края для квадратных пикселей, с верхней строкой в зените. Если панорама обрезана, введите реальные высоты (maptex_top и maptex_bottom из Stellarium). Левый край соответствует северу (0°), если вы не введёте другой азимут.",
+  "In use: {name}": "Используется: {name}",
+  "sky cut along the horizon": "небо вырезано по горизонту",
+  "Converting…": "Преобразование…",
+  "Import landscape": "Импортировать ландшафт",
+  "Landscape imported": "Ландшафт импортирован",
+  "Could not import the landscape": "Не удалось импортировать ландшафт"
 }

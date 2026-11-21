@@ -5222,5 +5222,19 @@
   "Backlash on the {rev} reversal: {n} steps": "",
   "median of {k} runs: {m}": "",
   "Autofocus lands on focus anyway, because it approaches the result from the same side as the fine points. Other moves (filter offsets, manual moves) don't, so set about {m} steps of backlash in the focuser driver or in the autofocus settings.": "",
-  "steps": ""
+  "steps": "",
+  "Landscape": "",
+  "Import a 360° panorama of your site so that the SKY tab shows your trees and houses under the horizon line. Its width must cover 360° of azimuth. A PNG with a transparent sky works best; if the photo has a sky, Polaris cuts it along your custom horizon.": "",
+  "Choose panorama": "",
+  "Use the default landscape": "",
+  "Top edge altitude (°)": "",
+  "Bottom edge altitude (°)": "",
+  "Azimuth at the left edge (°)": "",
+  "Polaris suggests the edges for square pixels with the top row at the zenith. If your panorama is cropped, enter the real altitudes (Stellarium's maptex_top and maptex_bottom). The left edge is north (0°) unless you enter another azimuth.": "",
+  "In use: {name}": "",
+  "sky cut along the horizon": "",
+  "Converting…": "",
+  "Import landscape": "",
+  "Landscape imported": "",
+  "Could not import the landscape": ""
 }

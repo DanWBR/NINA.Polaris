@@ -1237,6 +1237,44 @@
         return [ra / D2R, dec / D2R];
     }
 
+    // Site landscape (issue #80): the user's own panorama, converted on the
+    // host into a HiPS landscape and served at
+    // /api/sky/landscape/hips/{version}/. The engine keeps every landscape it
+    // was given and draws the one in current_id, so Guéreins stays registered
+    // and comes back when the site one is removed. The properties file is
+    // probed first: if it doesn't load (removed, or the login cookie is
+    // missing), Guéreins stays on instead of an empty ground.
+    function apiBaseUrl() {
+        return skyBaseUrl().replace(/sky\/$/, '');
+    }
+    function skyApplySiteLandscape(info) {
+        var lss = window.__stel && window.__stel.core && window.__stel.core.landscapes;
+        if (!lss) return;
+        if (!info || !info.version) {
+            try { lss.current_id = 'guereins'; } catch (e) { /* engine without landscapes */ }
+            return;
+        }
+        var base = apiBaseUrl() + 'api/sky/landscape/hips/' + info.version;
+        var key = 'site-' + info.version;
+        fetch(base + '/properties', { credentials: 'same-origin', cache: 'no-store' })
+            .then(function (r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                lss.addDataSource({ url: base, key: key });
+                lss.current_id = key;
+                console.log('[Sky] site landscape on: ' + (info.name || key));
+            })
+            .catch(function (e) {
+                console.warn('[Sky] site landscape unavailable, keeping Guéreins:', e);
+                try { lss.current_id = 'guereins'; } catch (e2) { /* ignore */ }
+            });
+    }
+    function skyLoadSiteLandscape() {
+        fetch(apiBaseUrl() + 'api/sky/landscape', { credentials: 'same-origin', cache: 'no-store' })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (j) { if (j && j.landscape) skyApplySiteLandscape(j.landscape); })
+            .catch(function (e) { console.warn('[Sky] could not ask for a site landscape:', e); });
+    }
+
     function skySetHorizon(points) {
         __horizonPoints = (points || []).map(function (p) {
             return { azimuth: ((+p.azimuth % 360) + 360) % 360, altitude: +p.altitude };
@@ -1675,6 +1713,10 @@
                         if ('fog_visible' in ls) ls.fog_visible = !!msg.visible;
                     }
                 } catch (e) { console.warn('[Sky] landscape toggle failed:', e); }
+                break;
+            case 'set-site-landscape':
+                // After an import or a remove in SETTINGS: { landscape } or null.
+                skyApplySiteLandscape(msg.landscape || null);
                 break;
             case 'set-horizon':
                 // Custom horizon (az→alt visibility mask). Drawn in the engine's
@@ -2152,6 +2194,8 @@
                         url: SKYDATA_BASE + 'landscapes/guereins',
                         key: 'guereins'
                     });
+                    // The site's own panorama, when one was imported (issue #80).
+                    skyLoadSiteLandscape();
                     core.milkyway.addDataSource({
                         url: SKYDATA_BASE + 'surveys/milkyway'
                     });
