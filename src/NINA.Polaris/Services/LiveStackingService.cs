@@ -276,6 +276,8 @@ public class LiveStackingService {
     private ushort[]? _scratchNorm;
     // Last reference-orientation alignment, the prediction for the next frame.
     private AffineTransform? _lastAligned;
+    // Last post-flip (180-deg) alignment, the prediction for the next flipped frame.
+    private AffineTransform? _lastAlignedFlipped;
 
     // Welford M2 (sum of squared deviations) per pixel, allocated only while
     // SigmaRejection is on. Mono uses _stackBuffer as the running sum; colour
@@ -967,6 +969,7 @@ public class LiveStackingService {
             _weightBuffer = null;
             _scratchNorm = null;
             _lastAligned = null;
+            _lastAlignedFlipped = null;
             _refBackground = null;
             _refNoise = 0;
             _refSignal = 0;
@@ -1488,6 +1491,7 @@ public class LiveStackingService {
                     }
                     isReference = true;
                     _lastAligned = null;
+                    _lastAlignedFlipped = null;
                     _refBackground = null;
                     LastFrameWeight = 1;
                     if (FrameWeighting) _weightBuffer = new float[pixelCount];
@@ -1943,34 +1947,102 @@ public class LiveStackingService {
                     return Warp(data, t, warp);
                 }
             } else {
-                var rotStars = Rotate180Stars(stars, _width, _height);
-                // Bigger search radius: a flip that wasn't plate-solve
-                // recentred can leave a large residual translation that the
-                // default 50 px window would miss.
-                var t = StarMatcher.Match(_referenceStars!, rotStars, maxSearchRadius: 250.0,
-                    minVotes: WideMatchMinVotes);
-                if (t != null) {
-                    // Single warp lands the (un-rotated) frame on the
-                    // reference grid: rotate 180 then apply the residual
-                    // match, composed into one transform.
-                    var rot180 = new AffineTransform {
-                        M00 = -1, M11 = -1, Tx = _width - 1, Ty = _height - 1
-                    };
-                    var composed = AffineTransform.Compose(t, rot180);
-                    if (Supported(composed, stars, "flipped") == null) continue;
-                    usedFlipped = true;
-                    used = composed;
-                    _logger.LogDebug("Frame aligned (flipped): residual dx={Tx:F1} dy={Ty:F1}",
-                        t.Tx, t.Ty);
-                    // The composed transform takes the frame's own star
-                    // positions to the reference, so the refinement pairs
-                    // the unrotated stars through it.
-                    warp = RefineWarp(stars, composed);
-                    return Warp(data, composed, warp);
-                }
+                // The composed transform takes the frame's own star positions
+                // to the reference, so the warp and its refinement use the
+                // unrotated frame.
+                var composed = AlignFlipped(stars);
+                if (composed == null) continue;
+                usedFlipped = true;
+                used = composed;
+                _lastAlignedFlipped = composed;
+                _logger.LogDebug("Frame aligned (flipped): rotation {Deg:F2} deg, dx={Tx:F1} dy={Ty:F1}",
+                    RotationDeg(composed), composed.Tx, composed.Ty);
+                warp = RefineWarp(stars, composed);
+                return Warp(data, composed, warp);
             }
         }
         return null;
+    }
+
+    /// <summary>
+    /// Align a frame that arrives rotated by about 180 degrees after a meridian
+    /// flip, or null when it doesn't register. Callers hold _lock.
+    ///
+    /// <para>The matcher only searches a translation: it votes on star offsets
+    /// in 5 px bins, so a rotation left in the stars scatters the votes. A
+    /// session has always rotated a little since its reference frame (polar
+    /// alignment is never perfect: 1.2 degrees in two hours on T Cep), and the
+    /// frames before the flip only aligned because each was predicted through
+    /// the last one. Rotating a post-flip frame by exactly 180 degrees left that
+    /// rotation in, which on a large sensor moves the corners tens of pixels,
+    /// and every frame after the flip was dropped as "alignment failed" with
+    /// plenty of stars in it. So this rotates by 180 degrees plus the rotation
+    /// the session had reached, tries a few angles around it, and searches the
+    /// translation as widely as the reference-orientation path does, because a
+    /// recentering after the flip puts the frame back on the target, not where
+    /// the reference was. Once a flipped frame aligned, the next ones are
+    /// predicted from it, like the frames before the flip.</para>
+    /// </summary>
+    private AffineTransform? AlignFlipped(List<DetectedStar> stars) {
+        if (_referenceStars == null) return null;
+
+        var prior = _lastAlignedFlipped;
+        if (prior != null) {
+            var residual = StarMatcher.Match(_referenceStars, TransformStars(stars, prior));
+            if (residual != null) {
+                var t = AffineTransform.Compose(residual, prior);
+                if (CentreShift(t, prior) <= MaxPredictedJumpPx && Supported(t, stars, "flipped, predicted") is { } ok)
+                    return ok;
+            }
+        }
+        if (stars.Count < WideMatchMinStars || _referenceStars.Count < WideMatchMinStars) return null;
+
+        // The rotation the session last aligned at, beyond the 180 degrees.
+        double baseDeg = prior != null ? NormalizeDeg(RotationDeg(prior) - 180)
+            : _lastAligned != null ? RotationDeg(_lastAligned) : 0;
+        foreach (double offset in FlipAngleOffsetsDeg) {
+            var start = RotationAbout(180 + baseDeg + offset, _width, _height);
+            var rotStars = TransformStars(stars, start);
+            foreach (double radius in WideMatchRadii) {
+                var r = StarMatcher.Match(_referenceStars, rotStars, maxSearchRadius: radius,
+                    minVotes: WideMatchMinVotes);
+                if (r == null) continue;
+                var t = Supported(AffineTransform.Compose(r, start), stars, "flipped");
+                if (t == null) continue;
+                if (offset != 0 || radius > WideMatchRadii[0])
+                    _logger.LogInformation(
+                        "Live stack: post-flip frame aligned at {Deg:F2} deg beyond 180 (searched from {Base:F2}), "
+                        + "dx={Tx:F0} dy={Ty:F0} px", NormalizeDeg(RotationDeg(t) - 180), baseDeg, t.Tx, t.Ty);
+                return t;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>Angles tried around the session's rotation for a post-flip
+    /// frame, nearest first. Half a degree apart keeps the corners of a 6000 px
+    /// sensor within the matcher's reach between two tries.</summary>
+    private static readonly double[] FlipAngleOffsetsDeg = { 0, 0.5, -0.5, 1, -1, 1.5, -1.5, 2, -2, 3, -3 };
+
+    /// <summary>Rotation by <paramref name="deg"/> about the frame centre.</summary>
+    internal static AffineTransform RotationAbout(double deg, int width, int height) {
+        double a = deg * Math.PI / 180, c = Math.Cos(a), s = Math.Sin(a);
+        double cx = (width - 1) / 2.0, cy = (height - 1) / 2.0;
+        return new AffineTransform {
+            M00 = c, M01 = -s, M10 = s, M11 = c,
+            Tx = cx - c * cx + s * cy,
+            Ty = cy - s * cx - c * cy
+        };
+    }
+
+    /// <summary>Rotation angle of an alignment, in degrees (-180..180].</summary>
+    internal static double RotationDeg(AffineTransform t) => Math.Atan2(t.M10, t.M00) * 180 / Math.PI;
+
+    private static double NormalizeDeg(double d) {
+        d %= 360;
+        if (d > 180) d -= 360;
+        if (d <= -180) d += 360;
+        return d;
     }
 
     /// <summary>Affine warp + bilinear resample, on the GPU when available
