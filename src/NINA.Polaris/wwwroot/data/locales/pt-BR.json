@@ -5588,5 +5588,19 @@
   "Backlash on the {rev} reversal: {n} steps": "Folga na inversão {rev}: {n} passos",
   "median of {k} runs: {m}": "mediana de {k} execuções: {m}",
   "Autofocus lands on focus anyway, because it approaches the result from the same side as the fine points. Other moves (filter offsets, manual moves) don't, so set about {m} steps of backlash in the focuser driver or in the autofocus settings.": "O autofoco chega ao foco mesmo assim, porque se aproxima do resultado pelo mesmo lado dos pontos finos. Os outros movimentos (offsets de filtro, movimentos manuais) não fazem isso, então configure cerca de {m} passos de folga no driver do focalizador ou nas configurações do autofoco.",
-  "steps": "passos"
+  "steps": "passos",
+  "Landscape": "Paisagem",
+  "Import a 360° panorama of your site so that the SKY tab shows your trees and houses under the horizon line. Its width must cover 360° of azimuth. A PNG with a transparent sky works best; if the photo has a sky, Polaris cuts it along your custom horizon.": "Importe um panorama de 360° do seu local para que a aba SKY mostre as suas árvores e casas abaixo da linha do horizonte. A largura da imagem precisa cobrir 360° de azimute. Um PNG com o céu transparente funciona melhor; se a foto tiver céu, o Polaris recorta o céu pelo seu horizonte personalizado.",
+  "Choose panorama": "Escolher panorama",
+  "Use the default landscape": "Usar a paisagem padrão",
+  "Top edge altitude (°)": "Altitude da borda de cima (°)",
+  "Bottom edge altitude (°)": "Altitude da borda de baixo (°)",
+  "Azimuth at the left edge (°)": "Azimute da borda esquerda (°)",
+  "Polaris suggests the edges for square pixels with the top row at the zenith. If your panorama is cropped, enter the real altitudes (Stellarium's maptex_top and maptex_bottom). The left edge is north (0°) unless you enter another azimuth.": "O Polaris sugere as bordas supondo pixels quadrados e a linha de cima no zênite. Se o seu panorama for recortado, digite as altitudes reais (maptex_top e maptex_bottom do Stellarium). A borda esquerda é o norte (0°), a menos que você digite outro azimute.",
+  "In use: {name}": "Em uso: {name}",
+  "sky cut along the horizon": "céu recortado pelo horizonte",
+  "Converting…": "Convertendo…",
+  "Import landscape": "Importar paisagem",
+  "Landscape imported": "Paisagem importada",
+  "Could not import the landscape": "Não foi possível importar a paisagem"
 }

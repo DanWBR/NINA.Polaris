@@ -1063,6 +1063,11 @@ function ninaApp() {
         horizonPoints: [],          // [{ azimuth, altitude }] sorted by azimuth
         horizonDragIdx: -1,         // point being dragged, -1 = none
         horizonSavedFlash: false,
+        // Site landscape (Settings → Custom horizon → Landscape, issue #80):
+        // the ground SKY draws under the sky, imported from a site panorama.
+        siteLandscape: null,        // { name, version, width, height, topAltitudeDeg, ... } or null
+        siteLandscapeForm: { file: null, name: '', topAlt: '', bottomAlt: '', leftAz: '0', width: 0, height: 0 },
+        siteLandscapeBusy: false,
         _skyInfoChart: null,
         // Aux camera anti-dew heater state from the status (null = none).
         auxAntiDew: null,
@@ -46696,6 +46701,73 @@ function ninaApp() {
             this.horizonSaveDebounced();
             this.toast(this.$t('Added horizon point')
                 + ' (' + a.toFixed(0) + '°, ' + alt.toFixed(0) + '°)', 'ok');
+        },
+
+        // ---- Site landscape (issue #80) -----------------------------------
+        async siteLandscapeLoad() {
+            try {
+                const r = await this.apiGet('/api/sky/landscape');
+                this.siteLandscape = r?.landscape || null;
+            } catch (e) { this.siteLandscape = null; }
+        },
+        // A panorama was picked: read its size in the browser and suggest the
+        // edges for square pixels with the top row at the zenith. The user
+        // corrects them when the image is cropped.
+        async siteLandscapePick(evt) {
+            const file = evt.target?.files?.[0];
+            evt.target.value = '';
+            if (!file) return;
+            const f = this.siteLandscapeForm;
+            f.file = file;
+            f.name = file.name.replace(/\.[^.]+$/, '');
+            f.width = 0; f.height = 0;
+            try {
+                const bmp = await createImageBitmap(file);
+                f.width = bmp.width; f.height = bmp.height;
+                bmp.close?.();
+                if (f.topAlt === '' && f.bottomAlt === '' && f.width > 0) {
+                    const span = 360 * f.height / f.width;
+                    f.topAlt = '90';
+                    f.bottomAlt = String(Math.max(-90, Math.round((90 - span) * 10) / 10));
+                }
+            } catch (e) { /* the host reads it anyway */ }
+        },
+        async siteLandscapeImport() {
+            const f = this.siteLandscapeForm;
+            if (!f.file || this.siteLandscapeBusy) return;
+            const fd = new FormData();
+            fd.append('file', f.file, f.file.name);
+            fd.append('name', f.name || '');
+            fd.append('topAlt', String(f.topAlt).replace(',', '.'));
+            fd.append('bottomAlt', String(f.bottomAlt).replace(',', '.'));
+            fd.append('leftAz', String(f.leftAz || '0').replace(',', '.'));
+            this.siteLandscapeBusy = true;
+            try {
+                const resp = await this.apiFetch('/api/sky/landscape', { method: 'POST', body: fd, dedup: false });
+                const r = await resp.json().catch(() => null);
+                if (resp.ok && r?.landscape) {
+                    this.siteLandscape = r.landscape;
+                    this.siteLandscapeForm = { file: null, name: '', topAlt: '', bottomAlt: '', leftAz: '0', width: 0, height: 0 };
+                    this.toast(this.$t('Landscape imported'), 'ok');
+                    this._pushSiteLandscapeToSky();
+                } else {
+                    this.toast((r && r.error) || this.$t('Could not import the landscape'), 'warn');
+                }
+            } catch (e) {
+                this.toastFail(this.$t('Could not import the landscape'), e);
+            } finally {
+                this.siteLandscapeBusy = false;
+            }
+        },
+        async siteLandscapeRemove() {
+            try { await this.apiFetch('/api/sky/landscape', { method: 'DELETE' }); } catch (e) { /* best effort */ }
+            this.siteLandscape = null;
+            this._pushSiteLandscapeToSky();
+        },
+        _pushSiteLandscapeToSky() {
+            try {
+                if (this._skySendMessage) this._skySendMessage({ type: 'set-site-landscape', landscape: this.siteLandscape });
+            } catch (e) { /* SKY not live */ }
         },
 
         // Push the horizon polygon to the Sky-map iframe (drawn there in the

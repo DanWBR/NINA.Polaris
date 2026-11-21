@@ -776,6 +776,7 @@ builder.Services.AddSingleton<BenchmarkService>();
 // higher HEALPix orders (4 ~110 MB, 5 ~400 MB) into the bundled skydata dir
 // so the SKY map reaches ASIAIR-grade detail without shipping them in git.
 builder.Services.AddSingleton<NINA.Polaris.Services.External.DssDownloadService>();
+builder.Services.AddSingleton<NINA.Polaris.Services.Sky.SiteLandscapeService>();
 // THUMBPACK: on-demand downloader for the full DSO thumbnail set, excluded from
 // the package to keep it slim. Serves from the download dir + bundled core subset.
 builder.Services.AddSingleton<NINA.Polaris.Services.External.DsoThumbPackService>();
