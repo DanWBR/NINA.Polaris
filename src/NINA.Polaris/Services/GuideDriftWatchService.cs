@@ -30,9 +30,18 @@ namespace NINA.Polaris.Services;
 /// direction over several frames means the guider is not following the sky
 /// (a guide star that is a hot pixel or a reflection, a dewed guide scope
 /// leaving only a few such points, a guide scope that is not rigid with the
-/// main one). Dithers are single jumps in random directions, so the drift is
-/// read from the median frame-to-frame velocity and only counted when most
-/// frame pairs agree with it.</para>
+/// main one). The drift is read from the median frame-to-frame velocity and
+/// only counted when most frame pairs agree with it.</para>
+///
+/// <para>A dither moves the field on purpose, so a pair of frames with a
+/// guider settle between them doesn't count, and neither does the pair that
+/// follows it: the guider declares the settle done inside its tolerance
+/// (1.5 guide px is several main-camera px) and keeps closing on the new lock
+/// position during the next exposure. FRA400 rig, 2026-11-21: 30 s frames
+/// with a 5 px dither every third frame. The dithers moved the field 15 px
+/// each and the next frame another 2.7 px in the same direction, so three of
+/// the six pairs moved together and the watch reported a 6"/min drift that
+/// wasn't there.</para>
 /// </summary>
 public sealed class GuideDriftWatchService : IHostedService {
     /// <summary>Frame pairs the drift is judged over.</summary>
@@ -43,8 +52,16 @@ public sealed class GuideDriftWatchService : IHostedService {
     internal const double MinDriftArcsecPerMin = 3.0;
     /// <summary>Drift that counts, px per minute, when the scale is not known.</summary>
     internal const double MinDriftPxPerMinWithoutScale = 3.0;
+    /// <summary>Net motion along the drift, summed over the counted pairs,
+    /// below which the velocity is star-centroid jitter between short frames.</summary>
+    internal const double MinNetDriftPx = 3.0;
+    /// <summary>Frames kept to find <see cref="Window"/> usable pairs when
+    /// dithers take some of them out.</summary>
+    internal const int History = 4 * Window + 2;
     /// <summary>Pairs further apart than this are not consecutive exposures.</summary>
     private static readonly TimeSpan MaxPairGap = TimeSpan.FromMinutes(20);
+    /// <summary>Pairs older than this, before the newest frame, are not counted.</summary>
+    private static readonly TimeSpan MaxSpan = TimeSpan.FromMinutes(60);
     private static readonly TimeSpan RepeatAfter = TimeSpan.FromMinutes(30);
 
     private readonly LiveStackingService _live;
@@ -58,13 +75,17 @@ public sealed class GuideDriftWatchService : IHostedService {
     private readonly List<Sample> _samples = new();
     private DateTime _lastWarnUtc = DateTime.MinValue;
 
-    /// <summary>One stacked frame: where it sat (px), when, and whether the
-    /// guider was guiding (not paused, calibrating or settling) at that point.</summary>
-    internal sealed record Sample(int Frame, double Tx, double Ty, bool Flipped, DateTime AtUtc, bool Guiding);
+    /// <summary>One stacked frame: where it sat (px), when, whether the guider
+    /// was guiding (not paused, calibrating, dithering or settling) at that
+    /// point, and when the guider last finished a settle (a dither or the
+    /// start of guiding), so pairs across a settle can be left out.</summary>
+    internal sealed record Sample(int Frame, double Tx, double Ty, bool Flipped, DateTime AtUtc, bool Guiding,
+        DateTime? SettledAtUtc = null);
 
     /// <summary>A steady drift: median velocity in px/min along the frame's
-    /// x and y, and how many pairs agreed with it.</summary>
-    internal sealed record Drift(double VxPxPerMin, double VyPxPerMin, int Agreeing, int Pairs) {
+    /// x and y, how many pairs agreed with it, and the net motion (px) along
+    /// it summed over the pairs.</summary>
+    internal sealed record Drift(double VxPxPerMin, double VyPxPerMin, int Agreeing, int Pairs, double NetPx = double.PositiveInfinity) {
         public double SpeedPxPerMin => Math.Sqrt(VxPxPerMin * VxPxPerMin + VyPxPerMin * VyPxPerMin);
     }
 
@@ -97,15 +118,17 @@ public sealed class GuideDriftWatchService : IHostedService {
 
     private void Check(LiveFrameAlignment frame) {
         var g = _guiders.Active;
-        bool guiding = g.IsConnected && g.IsGuiding && !g.IsPaused && !g.IsCalibrating;
-        var now = new Sample(frame.FrameCount, frame.Tx, frame.Ty, frame.Flipped, frame.AtUtc, guiding);
+        bool guiding = g.IsConnected && g.IsGuiding && !g.IsPaused && !g.IsCalibrating
+            && !g.IsDithering && !g.IsSettling;
+        var now = new Sample(frame.FrameCount, frame.Tx, frame.Ty, frame.Flipped, frame.AtUtc, guiding,
+            g.LastSettleAt);
 
         List<Sample> window;
         lock (_gate) {
             // A new stack starts the count again.
             if (_samples.Count > 0 && frame.FrameCount <= _samples[^1].Frame) _samples.Clear();
             _samples.Add(now);
-            while (_samples.Count > Window + 1) _samples.RemoveAt(0);
+            while (_samples.Count > History) _samples.RemoveAt(0);
             window = new List<Sample>(_samples);
         }
 
@@ -117,41 +140,55 @@ public sealed class GuideDriftWatchService : IHostedService {
         _lastWarnUtc = DateTime.UtcNow;
 
         var message = Describe(drift, scale, g.RmsTotal);
-        _logger.LogWarning("Guide drift watch: {Message} (velocity x {Vx:F1} y {Vy:F1} px/min, {Agree}/{Pairs} frame pairs agree, frames {F0}-{F1})",
-            message, drift.VxPxPerMin, drift.VyPxPerMin, drift.Agreeing, drift.Pairs, window[0].Frame, window[^1].Frame);
+        _logger.LogWarning("Guide drift watch: {Message} (velocity x {Vx:F1} y {Vy:F1} px/min, {Agree}/{Pairs} frame pairs agree, net {Net:F1} px, frames {F0}-{F1}; positions {Positions})",
+            message, drift.VxPxPerMin, drift.VyPxPerMin, drift.Agreeing, drift.Pairs, drift.NetPx,
+            window[0].Frame, window[^1].Frame,
+            string.Join(" ", window.Select(s => $"#{s.Frame}({s.Tx:F1},{s.Ty:F1}{(s.Guiding ? "" : ",unguided")})")));
         _notify.Push("warn", message, 30000);
     }
 
     /// <summary>
     /// The steady drift across <paramref name="samples"/> (oldest first), or
     /// null when there are not enough guided, consecutive frame pairs to tell.
-    /// Only pairs with both frames guided, on the same pier side and close in
-    /// time count.
+    /// Only pairs with both frames guided, on the same pier side, close in
+    /// time and clear of a guider settle count, and only the newest
+    /// <see cref="Window"/> of them.
     /// </summary>
     internal static Drift? Measure(IReadOnlyList<Sample> samples) {
-        var v = new List<(double X, double Y)>();
-        for (int i = 1; i < samples.Count; i++) {
+        var pairs = new List<(double X, double Y, double Dx, double Dy)>();
+        if (samples.Count < 2) return null;
+        var newest = samples[^1].AtUtc;
+        for (int i = samples.Count - 1; i >= 1 && pairs.Count < Window; i--) {
             var a = samples[i - 1];
             var b = samples[i];
             if (!a.Guiding || !b.Guiding || a.Flipped != b.Flipped) continue;
+            if (newest - b.AtUtc > MaxSpan) break;
+            // A settle between the two frames (a dither): the field jumped.
+            if (b.SettledAtUtc != a.SettledAtUtc) continue;
+            // The first frame after a settle: the guider was still closing on
+            // the new lock position while it was exposed.
+            if (i >= 2 && a.SettledAtUtc != samples[i - 2].SettledAtUtc) continue;
             var dt = b.AtUtc - a.AtUtc;
             if (dt <= TimeSpan.Zero || dt > MaxPairGap) continue;
             double min = dt.TotalMinutes;
-            v.Add(((b.Tx - a.Tx) / min, (b.Ty - a.Ty) / min));
+            double dx = b.Tx - a.Tx, dy = b.Ty - a.Ty;
+            pairs.Add((dx / min, dy / min, dx, dy));
         }
-        if (v.Count < MinAgreeing + 1) return null;
+        if (pairs.Count < MinAgreeing + 1) return null;
 
-        double mx = Median(v.Select(p => p.X)), my = Median(v.Select(p => p.Y));
+        double mx = Median(pairs.Select(p => p.X)), my = Median(pairs.Select(p => p.Y));
         double speed = Math.Sqrt(mx * mx + my * my);
-        if (speed <= 0) return new Drift(mx, my, 0, v.Count);
+        if (speed <= 0) return new Drift(mx, my, 0, pairs.Count, 0);
         // A pair agrees when it moved at least half the median speed in the
         // median direction: a dither jump in another direction does not.
-        int agreeing = v.Count(p => (p.X * mx + p.Y * my) / speed >= 0.5 * speed);
-        return new Drift(mx, my, agreeing, v.Count);
+        int agreeing = pairs.Count(p => (p.X * mx + p.Y * my) / speed >= 0.5 * speed);
+        double net = pairs.Sum(p => (p.Dx * mx + p.Dy * my) / speed);
+        return new Drift(mx, my, agreeing, pairs.Count, net);
     }
 
     internal static bool IsSignificant(Drift drift, double? scaleArcsecPerPx) {
         if (drift.Agreeing < MinAgreeing) return false;
+        if (drift.NetPx < MinNetDriftPx) return false;
         return scaleArcsecPerPx is double s && s > 0
             ? drift.SpeedPxPerMin * s >= MinDriftArcsecPerMin
             : drift.SpeedPxPerMin >= MinDriftPxPerMinWithoutScale;
