@@ -95,6 +95,13 @@ public sealed class AlpacaTelescope : ITelescope, IDisposable {
     public double Altitude => _alt;
     public double Azimuth => _az;
 
+    /// <summary>Site and clock, read every <see cref="SiteReadInterval"/> by
+    /// the poll loop rather than on every status tick.</summary>
+    public MountSiteReport? SiteReport => _siteReport;
+    private static readonly TimeSpan SiteReadInterval = TimeSpan.FromSeconds(15);
+    private MountSiteReport? _siteReport;
+    private DateTime _siteReadAt = DateTime.MinValue;
+
     public bool IsTracking => _isTracking;
     public bool IsParked => _isParked;
     public bool IsSlewing => _isSlewing;
@@ -377,6 +384,28 @@ public sealed class AlpacaTelescope : ITelescope, IDisposable {
         _isTracking  = await SafeBool("tracking", ct);
         _isParked    = await SafeBool("atpark", ct);
         _sideOfPier  = await SafePierSide(ct);
+        if (DateTime.UtcNow - _siteReadAt >= SiteReadInterval) {
+            _siteReadAt = DateTime.UtcNow;
+            _siteReport = await ReadSiteAsync(ct);
+        }
+    }
+
+    private async Task<MountSiteReport?> ReadSiteAsync(CancellationToken ct) {
+        double? Finite(double v) => double.IsFinite(v) ? v : null;
+        var lat = Finite(await SafeDouble("sitelatitude", ct));
+        var lon = Finite(await SafeDouble("sitelongitude", ct));
+        var elev = Finite(await SafeDouble("siteelevation", ct));
+        DateTime? utc = null, readAt = null;
+        try {
+            var s = await _client.GetAsync<string>("utcdate", ct);
+            readAt = DateTime.UtcNow;
+            if (DateTime.TryParse(s, CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var u))
+                utc = DateTime.SpecifyKind(u, DateTimeKind.Utc);
+        } catch (OperationCanceledException) { throw; }
+        catch { /* the driver doesn't report its clock */ }
+        if (lat == null && lon == null && utc == null) return null;
+        return new MountSiteReport(lat, lon, elev, utc, utc != null ? readAt : null, null, UtcIsLive: true);
     }
 
     private async Task<bool> SafeBool(string action, CancellationToken ct) {

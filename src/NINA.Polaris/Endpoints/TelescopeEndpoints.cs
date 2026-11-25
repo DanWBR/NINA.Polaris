@@ -356,6 +356,7 @@ public static class TelescopeEndpoints {
             var elev = body?.Elevation ?? p.Altitude;
             try {
                 await equip.Telescope.SetSiteLocationAsync(lat, lon, elev);
+                MountSiteLedger.NoteLocationSent(equip.Telescope.DeviceName);
                 return Results.Ok(new {
                     status = "synced",
                     latitude = lat, longitude = lon, elevation = elev
@@ -400,6 +401,7 @@ public static class TelescopeEndpoints {
                 ?? TimeZoneInfo.Local.GetUtcOffset(utc).TotalHours;
             try {
                 await equip.Telescope.SetSiteTimeAsync(utc, offset);
+                MountSiteLedger.NoteTimeSent(equip.Telescope.DeviceName);
                 return Results.Ok(new {
                     status = "synced",
                     utc = utc.ToString("o"),

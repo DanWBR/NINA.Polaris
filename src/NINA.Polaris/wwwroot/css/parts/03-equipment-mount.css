@@ -2751,3 +2751,10 @@ h5.sessions-h { margin-top: 14px; font-size: 13px; text-transform: uppercase; le
 .sessions-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .sessions-table th, .sessions-table td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--border, #2a2f3a); }
 .sessions-table td.ok { color: var(--ok, #8bc34a); }
+
+/* Mount card: what the mount holds next to what Polaris has. */
+.mount-site-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.mount-site-table th, .mount-site-table td { text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.mount-site-table thead th { color: var(--text-muted); font-weight: 600; font-size: 11px; }
+.mount-site-table tbody th { color: var(--text-muted); font-weight: 500; white-space: nowrap; }
+.mount-site-table tr.mount-site-differ td:nth-child(2) { color: var(--warning); }

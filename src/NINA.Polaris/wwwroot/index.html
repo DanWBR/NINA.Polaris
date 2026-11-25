@@ -8551,15 +8551,35 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                         Sync Time
                                     </button>
                                 </div>
-                                <!-- What "Sync Site" will push: the observatory
-                                     location (from Settings) and the host's
-                                     current clock (the UTC the mount receives).
-                                     Shown so the operator can confirm both are
-                                     right before syncing. -->
-                                <div class="hint mount-site-preview" x-show="mount.connected" x-cloak
-                                     style="margin-top:6px; display:grid; grid-template-columns:1fr; gap:4px">
-                                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
-                                        <span :class="(settings.latitude || settings.longitude) ? '' : 'text-warn'">
+                                <!-- What the mount holds next to what Polaris has
+                                     (and would send with Sync Site). The mount
+                                     column comes from the driver; a row turns
+                                     amber when the two disagree. -->
+                                <div class="mount-site-preview" x-show="mount.connected" x-cloak
+                                     style="margin-top:6px; display:grid; grid-template-columns:1fr; gap:6px">
+                                    <table class="mount-site-table">
+                                        <thead>
+                                            <tr>
+                                                <th></th>
+                                                <th x-text="$t('In the mount')"></th>
+                                                <th x-text="$t('In Polaris')"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <template x-for="row in mountSiteRows()" :key="row.key">
+                                                <tr :class="row.state === 'warn' ? 'mount-site-differ' : ''">
+                                                    <th x-text="row.label"></th>
+                                                    <td x-text="row.mount"></td>
+                                                    <td x-text="row.polaris"></td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                    <div class="hint" x-text="mountSiteClockNote()"></div>
+                                    <div class="hint" x-text="mountSiteSentNote()"></div>
+                                    <div class="hint" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+                                        <span :class="(settings.latitude || settings.longitude) ? '' : 'text-warn'"
+                                              x-show="!(settings.latitude || settings.longitude)">
                                             📍 <span x-text="mountSiteLocationText()"></span>
                                         </span>
                                         <!-- Same client-GPS handler as Settings / Observatory:
@@ -8574,7 +8594,6 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                             <span x-show="obsGpsLoading">…</span>
                                         </button>
                                     </div>
-                                    <div>🕐 <span x-text="mountSiteClockText()"></span></div>
                                 </div>
                                 <div class="obs-location-error" x-show="obsAddressError" x-text="obsAddressError"
                                      style="margin-top:4px"></div>

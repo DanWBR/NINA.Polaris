@@ -169,6 +169,12 @@ public interface ITelescope {
         throw new NotSupportedException(
             "SetSiteTime not supported by this mount driver");
 
+    /// <summary>The site and the date and time the mount holds, as far as
+    /// the driver reports them, so the operator can compare them with
+    /// Polaris's. Null when the driver doesn't report any of them. Reading
+    /// it never moves or changes the mount.</summary>
+    MountSiteReport? SiteReport => null;
+
     /// <summary>Select the tracking rate model. Sidereal follows the
     /// stars (default), Lunar follows the Moon's mean motion, Solar
     /// follows the Sun. Required by some INDI drivers BEFORE
@@ -279,3 +285,19 @@ public record MountCapabilities(
         SupportsFindHome: true, SupportsSetSiteLocation: true,
         SupportsSetSiteTime: true, SupportsTrackingModes: true);
 }
+
+/// <summary>The site and clock a mount holds (<see cref="ITelescope.SiteReport"/>).
+/// Each part is null when the driver doesn't report it.</summary>
+/// <param name="Latitude">Degrees, north positive.</param>
+/// <param name="Longitude">Degrees east, -180..+180.</param>
+/// <param name="Elevation">Metres above sea level.</param>
+/// <param name="Utc">The mount's date and time, in UTC.</param>
+/// <param name="UtcReadAt">The host's UTC when Polaris got <paramref name="Utc"/>.
+/// <c>Utc - UtcReadAt</c> is how far the mount's clock was from the host's
+/// at that moment.</param>
+/// <param name="UtcOffsetHours">The local time offset the mount holds, in hours east of UTC.</param>
+/// <param name="UtcIsLive">True when the driver reads the mount's running
+/// clock (Alpaca, ASCOM). False when it holds the last date and time it was
+/// sent or read when it connected (INDI's TIME_UTC).</param>
+public sealed record MountSiteReport(double? Latitude, double? Longitude, double? Elevation,
+    DateTime? Utc, DateTime? UtcReadAt, double? UtcOffsetHours, bool UtcIsLive);
