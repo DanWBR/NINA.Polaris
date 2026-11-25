@@ -118,16 +118,37 @@ public sealed class EffectiveFilterWheel : IFilterWheel {
     /// <summary>The effective name of the slot the wheel currently sits on.
     /// Resolved by matching the driver's own current name to its slot (so the
     /// per-driver position base, 0 vs 1, never enters into it) and returning the
-    /// overlaid name for that slot.</summary>
+    /// overlaid name for that slot. If the driver gives the same name to more
+    /// than one slot (blank names, or "Filter" on every slot), the name can't
+    /// tell the slots apart, so the slot comes from the position instead.</summary>
     public string CurrentFilterName {
         get {
             var driver = _inner.FilterNames ?? Array.Empty<string>();
             var cur = _inner.CurrentFilterName ?? "";
-            int idx = Array.FindIndex(driver,
-                n => string.Equals(n, cur, StringComparison.OrdinalIgnoreCase));
             var eff = FilterNames;
+            int idx = CurrentSlotIndex(driver, cur, () => _inner.Position, PositionBase(_inner));
             return (idx >= 0 && idx < eff.Length) ? eff[idx] : cur;
         }
+    }
+
+    /// <summary>INDI numbers its slots from 1; ASCOM, Alpaca and the vendor SDKs from 0.</summary>
+    internal static int PositionBase(IFilterWheel wheel) =>
+        wheel is NINA.INDI.Devices.IndiFilterWheel ? 1 : 0;
+
+    /// <summary>The slot the wheel stands on, as an index into the driver's
+    /// names: by name when exactly one slot carries it, and by position when
+    /// several do. -1 when neither works.</summary>
+    internal static int CurrentSlotIndex(string[] driverNames, string currentName,
+            Func<int> position, int positionBase) {
+        int first = -1, matches = 0;
+        for (int i = 0; i < driverNames.Length; i++) {
+            if (!string.Equals(driverNames[i], currentName, StringComparison.OrdinalIgnoreCase)) continue;
+            if (matches++ == 0) first = i;
+        }
+        if (matches == 1) return first;
+        int byPosition;
+        try { byPosition = position() - positionBase; } catch { return first; }
+        return byPosition >= 0 && byPosition < driverNames.Length ? byPosition : first;
     }
 
     /// <summary>Move to the slot whose EFFECTIVE name matches, then delegate to
@@ -141,8 +162,14 @@ public sealed class EffectiveFilterWheel : IFilterWheel {
             n => string.Equals(n, filterName, StringComparison.OrdinalIgnoreCase));
         if (idx < 0) return _inner.SetFilterByNameAsync(filterName, ct);
         var driver = _inner.FilterNames ?? Array.Empty<string>();
-        if (idx < driver.Length) return _inner.SetFilterByNameAsync(driver[idx], ct);
-        return _inner.SetPositionAsync(idx, ct);
+        if (idx >= driver.Length) return _inner.SetPositionAsync(idx + PositionBase(_inner), ct);
+        // If another slot carries the same driver name, the driver would pick
+        // the first of them, so the move goes by position.
+        bool shared = driver.Where((n, i) => i != idx
+            && string.Equals(n, driver[idx], StringComparison.OrdinalIgnoreCase)).Any();
+        return shared
+            ? _inner.SetPositionAsync(idx + PositionBase(_inner), ct)
+            : _inner.SetFilterByNameAsync(driver[idx], ct);
     }
 
     /// <summary>Persist filter names on the rig (the label source of truth for

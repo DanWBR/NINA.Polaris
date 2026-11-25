@@ -802,6 +802,10 @@ function ninaApp() {
         _manualFocusTimer: null,
 
         // Filter Wheel
+        // The filter a move asked for, while that move is still running. Every
+        // filter selector shows it until the wheel settles, so a selector
+        // doesn't jump back to the old filter during the move.
+        filterWheelTarget: '',
         filterWheel: {
             connected: false,
             position: 0,
@@ -29892,7 +29896,9 @@ function ninaApp() {
                     exposure: this.preview.exposure,
                     gain: this.preview.gain,
                     binning: parseInt(this.preview.binning) || 1,
-                    filter: this.preview.filter || null,
+                    // PREVIEW snaps through the filter the wheel is on; its
+                    // selector moves the wheel itself, like LIVE's.
+                    filter: null,
                     saveToDisk: !!this.preview.saveToDisk,
                     // Shared target field wins; fall back to the legacy
                     // per-preview name, then 'snap'.
@@ -30601,7 +30607,7 @@ function ninaApp() {
                 'exposure', 'gain', 'binning',
                 // PREVIEW
                 'preview.exposure', 'preview.gain', 'preview.binning',
-                'preview.filter', 'preview.saveToDisk',
+                'preview.saveToDisk',
                 // PREVIEW per-camera memory (exposure/gain/binning per source)
                 // + which camera is currently selected.
                 'preview.cameraSource', 'preview.bySource',
@@ -36924,11 +36930,20 @@ function ninaApp() {
             }
         },
 
+        // The filter every selector shows: the one a running move asked for,
+        // otherwise the one the wheel reports. LIVE, PREVIEW, VIDEO and FOCUS
+        // all show this, so they can't disagree.
+        filterShown() {
+            return this.filterWheelTarget || this.filterWheel.currentFilter || '';
+        },
+
         async setFilter(filterName) {
+            if (!filterName || this.filterWheelTarget) return;
             // Immediate ack so the user gets feedback that the click
             // registered; the server-side wait can take a few seconds
             // and a silent UI would feel broken.
             this.toast('Moving to filter: ' + filterName, 'info');
+            this.filterWheelTarget = filterName;
             try {
                 // The endpoint blocks (up to 30 s) until INDI reports
                 // the wheel settled — that's where we get the real
@@ -36942,9 +36957,12 @@ function ninaApp() {
                         'Filter wheel still moving:' + (r?.message || 'no settle ack'),
                         'warn');
                 }
+                if (r?.filter) this.filterWheel.currentFilter = r.filter;
                 this._handleFocusMemory(r?.focusMemory);
             } catch (e) {
                 this.toastFail('Filter change failed', e);
+            } finally {
+                this.filterWheelTarget = '';
             }
         },
 

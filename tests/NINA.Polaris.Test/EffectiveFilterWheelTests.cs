@@ -193,6 +193,37 @@ public class EffectiveFilterWheelTests {
             Is.EqualTo(new[] { "Ha" }));
     }
 
+    [Test]
+    public async Task CurrentFilterName_DriverNamesRepeat_ComesFromThePosition() {
+        // An 8-slot wheel whose driver calls every slot "Filter": the name
+        // can't tell the slots apart, so the first slot used to win.
+        var names = new[] { "Filter", "Filter", "Filter", "Filter", "Filter", "Filter", "Filter", "Filter" };
+        var inner = new FakeWheel { Names = names, CurrentDriverName = "Filter" };
+        SetSavedNames(new[] { "L", "R", "G", "B", "Ha", "OIII", "SII", "Dark" });
+        var w = new EffectiveFilterWheel(inner, _profiles);
+
+        await w.SetFilterByNameAsync("Dark");
+
+        Assert.That(inner.LastSetPosition, Is.EqualTo(7));
+        Assert.That(inner.LastSetByName, Is.Null);
+        Assert.That(w.CurrentFilterName, Is.EqualTo("Dark"));
+    }
+
+    [Test]
+    public void CurrentSlotIndex_UniqueName_IgnoresThePosition() {
+        var names = new[] { "L", "R", "G" };
+        Assert.That(EffectiveFilterWheel.CurrentSlotIndex(names, "G", () => 0, 0), Is.EqualTo(2));
+    }
+
+    [Test]
+    public void CurrentSlotIndex_RepeatedName_UsesThePositionBase() {
+        var names = new[] { "", "", "", "" };
+        Assert.That(EffectiveFilterWheel.CurrentSlotIndex(names, "", () => 4, 1), Is.EqualTo(3));
+        Assert.That(EffectiveFilterWheel.CurrentSlotIndex(names, "", () => 3, 0), Is.EqualTo(3));
+        // A position out of range falls back to the first match.
+        Assert.That(EffectiveFilterWheel.CurrentSlotIndex(names, "", () => 9, 0), Is.EqualTo(0));
+    }
+
     // ── fake backend ─────────────────────────────────────────────────
     private sealed class FakeWheel : IFilterWheel {
         public string[] Names { get; set; } = System.Array.Empty<string>();
