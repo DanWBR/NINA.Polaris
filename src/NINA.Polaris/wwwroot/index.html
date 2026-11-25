@@ -1478,13 +1478,15 @@
                               :title="'High Conversion Gain active (gain >= ' + hcgThreshold() + ')'">HCG</span>
                         <!-- Filter selector: shown below Gain and above the BIN
                              buttons whenever a filter wheel is connected. -->
-                        <label x-show="filterWheel.connected">Filter<select class="input-sm"
-                            @change="setFilter($event.target.value)"
-                            :value="filterWheel.currentFilter">
-                            <template x-for="f in filterWheel.filters" :key="f">
-                                <option :value="f" x-text="f" :selected="f === filterWheel.currentFilter"></option>
-                            </template>
-                        </select></label>
+                        <label x-show="filterWheel.connected">Filter
+                            <select class="input-sm"
+                                    :value="filterShown()"
+                                    :disabled="!!filterWheelTarget"
+                                    @change="setFilter($event.target.value)">
+                                <template x-for="(f, i) in filterWheel.filters" :key="'lf-' + i">
+                                    <option :value="f" x-text="f" :selected="f === filterShown()"></option>
+                                </template>
+                            </select></label>
                         <span class="bin-presets" role="group" aria-label="Binning">
                             <template x-for="b in binPresets()" :key="b">
                                 <button type="button" class="bin-preset"
@@ -3298,6 +3300,19 @@
                                     <option value="guide" x-show="guideFocuser">Guide</option>
                                 </select>
                             </label>
+                            <!-- The filter wheel sits on the main train. -->
+                            <label style="display:flex; align-items:center; gap:6px"
+                                   x-show="filterWheel.connected && filterWheel.filters.length > 0 && (focusCameraSource || 'main') === 'main'" x-cloak>
+                                Filter
+                                <select class="input-sm"
+                                        :value="filterShown()"
+                                        :disabled="!!filterWheelTarget || manualFocus.running"
+                                        @change="setFilter($event.target.value)">
+                                    <template x-for="(f, i) in filterWheel.filters" :key="'mff-' + i">
+                                        <option :value="f" x-text="f" :selected="f === filterShown()"></option>
+                                    </template>
+                                </select>
+                            </label>
                         </div>
 
                         <!-- SHUT-3: Polaris Shutter for FOCUS Manual.
@@ -3531,6 +3546,20 @@
                                 <option value="main">Main</option>
                                 <option value="aux" x-show="auxFocuser">Auxiliary</option>
                                 <option value="guide" x-show="guideFocuser">Guide</option>
+                            </select>
+                        </label>
+                        <!-- The filter the sweep runs through. It moves the wheel
+                             now, like the LIVE selector, and the run measures
+                             through whatever filter the wheel is on. -->
+                        <label x-show="filterWheel.connected && filterWheel.filters.length > 0 && (afParams.focuserSource || 'main') === 'main'" x-cloak
+                               title="The filter the sweep runs through. Changing it moves the filter wheel now.">Filter
+                            <select class="input-sm"
+                                    :value="filterShown()"
+                                    :disabled="!!filterWheelTarget || autoFocus.state === 'running'"
+                                    @change="setFilter($event.target.value)">
+                                <template x-for="(f, i) in filterWheel.filters" :key="'aff-' + i">
+                                    <option :value="f" x-text="f" :selected="f === filterShown()"></option>
+                                </template>
                             </select>
                         </label>
                     </div>
@@ -4301,13 +4330,16 @@
                                         x-text="'BIN' + b"></button>
                             </template>
                         </span>
+                        <!-- Same selector as LIVE: it moves the wheel and shows
+                             the filter the wheel is on, so every tab agrees. -->
                         <label x-show="filterWheel.connected && filterWheel.filters.length > 0">
                             Filter
-                            <select x-model="preview.filter" class="input-sm"
-                                    :disabled="preview.busy">
-                                <option value="">(current: <span x-text="filterWheel.currentFilter"></span>)</option>
-                                <template x-for="f in filterWheel.filters" :key="f">
-                                    <option :value="f" x-text="f"></option>
+                            <select class="input-sm"
+                                    :value="filterShown()"
+                                    :disabled="!!filterWheelTarget || preview.busy"
+                                    @change="setFilter($event.target.value)">
+                                <template x-for="(f, i) in filterWheel.filters" :key="'pf-' + i">
+                                    <option :value="f" x-text="f" :selected="f === filterShown()"></option>
                                 </template>
                             </select>
                         </label>
@@ -4913,12 +4945,11 @@
                         <label class="video-filter-row" x-show="filterWheel.connected">
                             <span>Filter</span>
                             <select class="input-sm"
-                                    :value="filterWheel.currentFilter"
-                                    :disabled="videoRecording.recording"
+                                    :value="filterShown()"
+                                    :disabled="!!filterWheelTarget || videoRecording.recording"
                                     @change="setFilter($event.target.value)">
-                                <template x-for="f in filterWheel.filters" :key="'vf-'+f">
-                                    <option :value="f" x-text="f"
-                                            :selected="f === filterWheel.currentFilter"></option>
+                                <template x-for="(f, i) in filterWheel.filters" :key="'vf-' + i">
+                                    <option :value="f" x-text="f" :selected="f === filterShown()"></option>
                                 </template>
                             </select>
                         </label>
