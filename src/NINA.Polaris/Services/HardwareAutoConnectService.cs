@@ -426,6 +426,7 @@ public class HardwareAutoConnectService : IHostedService {
             var utc = DateTime.UtcNow;
             var offsetHours = TimeZoneInfo.Local.GetUtcOffset(utc).TotalHours;
             await telescope.SetSiteTimeAsync(utc, offsetHours);
+            MountSiteLedger.NoteTimeSent(telescope.DeviceName);
             _logger.LogInformation(
                 "Mount auto-sync TIME_UTC: {Utc} offset={Offset:F2}h", utc, offsetHours);
         } catch (NotSupportedException) {
@@ -438,6 +439,7 @@ public class HardwareAutoConnectService : IHostedService {
             var p = _profiles.Active;
             if (p.Latitude != 0 || p.Longitude != 0) {
                 await telescope.SetSiteLocationAsync(p.Latitude, p.Longitude, p.Altitude);
+                MountSiteLedger.NoteLocationSent(telescope.DeviceName);
                 _logger.LogInformation(
                     "Mount auto-sync GEOGRAPHIC_COORD: lat={Lat:F4} lon={Lon:F4} elev={Elev:F0}m",
                     p.Latitude, p.Longitude, p.Altitude);

@@ -41,6 +41,7 @@ public static class MountTimeSync {
             var utc = DateTime.UtcNow;
             var offsetHours = TimeZoneInfo.Local.GetUtcOffset(utc).TotalHours;
             await telescope.SetSiteTimeAsync(utc, offsetHours, ct);
+            MountSiteLedger.NoteTimeSent(telescope.DeviceName);
             timeSet = true;
         } catch (NotSupportedException) { /* driver has no settable clock */ }
         catch { /* transient push error */ }
@@ -50,6 +51,7 @@ public static class MountTimeSync {
         if (locConfigured) {
             try {
                 await telescope.SetSiteLocationAsync(profile.Latitude, profile.Longitude, profile.Altitude, ct);
+                MountSiteLedger.NoteLocationSent(telescope.DeviceName);
                 locSet = true;
             } catch (NotSupportedException) { /* no settable site */ }
             catch { /* transient */ }

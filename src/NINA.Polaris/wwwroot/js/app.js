@@ -489,7 +489,10 @@ function ninaApp() {
             // don't show buttons that would 501 if clicked.
             capabilities: { park: true, trackingToggle: true, sync: true,
                             pierSide: true, manualJog: true, findHome: false,
-                            setSiteLocation: false }
+                            setSiteLocation: false },
+            // Site and clock the mount holds (status feed), for the
+            // mount-vs-Polaris table on the mount card.
+            site: null
         },
 
         // Floating mount control inside the Sky tab. Position lives
@@ -37125,18 +37128,109 @@ function ninaApp() {
             // read in the field as the minus sign having been lost.
             return `${Math.abs(la).toFixed(4)}° ${ns}, ${Math.abs(lo).toFixed(4)}° ${ew} (${la.toFixed(4)}, ${lo.toFixed(4)})`;
         },
-        // The clock "Sync Site"/"Sync Time" pushes is the HOST's, not this
-        // browser's. Show the host UTC (from the status feed, updates each tick)
-        // plus this device's local rendering of that same instant, so a wrong
-        // host clock is visible before it lands on the mount.
-        mountSiteClockText() {
-            let d = null;
-            if (this.clockSync.serverUtc) d = new Date(this.clockSync.serverUtc);
-            else d = new Date(Date.now() + (this.clockSync.skewSeconds | 0) * 1000);
-            if (!d || isNaN(d.getTime())) return this.$t('unknown');
-            const utc = d.toISOString().replace('T', ' ').replace(/\..*$/, '');
-            const local = d.toLocaleTimeString();
-            return `${utc} UTC (${local} ${this.$t('here')})`;
+        // ---- Mount card: what the mount holds vs what Polaris has ----
+        _siteAngle(v, pos, neg) {
+            if (v == null || !isFinite(v)) return '';
+            return `${Math.abs(v).toFixed(4)}° ${v >= 0 ? pos : neg} (${Number(v).toFixed(4)})`;
+        },
+        _siteUtcText(d) {
+            if (!d || isNaN(d.getTime())) return '';
+            return d.toISOString().replace('T', ' ').replace(/\..*$/, '');
+        },
+        _siteDuration(sec) {
+            const a = Math.abs(sec);
+            if (a < 90) return this.$t('{n} s', { n: Math.round(a) });
+            if (a < 5400) return this.$t('{n} min', { n: Math.round(a / 60) });
+            if (a < 172800) return this.$t('{n} h', { n: Math.round(a / 3600) });
+            // A driver's boot default (2000-01-01) is decades off; days would
+            // read as a five-digit number.
+            if (a < 2 * 31557600) return this.$t('{n} days', { n: Math.round(a / 86400) });
+            return this.$t('{n} years', { n: Math.round(a / 31557600) });
+        },
+        _polarisUtcNow() {
+            const d = this.clockSync.serverUtc ? new Date(this.clockSync.serverUtc)
+                : new Date(Date.now() + (this.clockSync.skewSeconds | 0) * 1000);
+            return isNaN(d.getTime()) ? null : d;
+        },
+        // How far the mount's clock was from the host's when Polaris read it,
+        // in seconds (mount minus host), or null when the driver doesn't say.
+        mountClockOffsetSec() {
+            const s = this.mount.site;
+            if (!s || !s.utc || !s.utcReadAt) return null;
+            const v = (new Date(s.utc).getTime() - new Date(s.utcReadAt).getTime()) / 1000;
+            return isFinite(v) ? v : null;
+        },
+        // Rows of the mount card table. state 'warn' marks a mount value that
+        // disagrees with Polaris's: more than 0.01° (about 1 km) for the
+        // location, more than a minute for the clock.
+        mountSiteRows() {
+            const s = this.mount.site || {};
+            const notReported = this.$t('not reported');
+            const notSet = this.$t('not set');
+            const plat = Number(this.settings.latitude) || 0;
+            const plon = Number(this.settings.longitude) || 0;
+            const located = !!(plat || plon);
+            const angleRow = (label, mv, pv, pos, neg) => {
+                const differ = mv != null && located && Math.abs(mv - pv) > 0.01;
+                return {
+                    key: label, label: this.$t(label),
+                    mount: mv != null ? this._siteAngle(mv, pos, neg) : notReported,
+                    polaris: located ? this._siteAngle(pv, pos, neg) : notSet,
+                    state: differ ? 'warn' : ''
+                };
+            };
+            const rows = [
+                angleRow('Latitude', s.latitude, plat, 'N', 'S'),
+                angleRow('Longitude', s.longitude, plon, 'E', 'W'),
+                {
+                    key: 'Elevation', label: this.$t('Elevation'),
+                    mount: s.elevation != null ? Math.round(s.elevation) + ' m' : notReported,
+                    polaris: located ? Math.round(Number(this.settings.altitude) || 0) + ' m' : notSet,
+                    state: ''
+                }
+            ];
+            const off = this.mountClockOffsetSec();
+            const now = this._polarisUtcNow();
+            let mountTime = notReported;
+            if (s.utc) {
+                // A live clock is shown as it runs; INDI's is the value it holds.
+                const t = new Date(s.utc);
+                if (s.utcIsLive && off != null && now) mountTime = this._siteUtcText(new Date(now.getTime() + off * 1000));
+                else mountTime = this._siteUtcText(t);
+            }
+            rows.push({
+                key: 'time', label: this.$t('Date and time (UTC)'),
+                mount: mountTime,
+                polaris: now ? this._siteUtcText(now) : this.$t('unknown'),
+                state: off != null && Math.abs(off) > 60 ? 'warn' : ''
+            });
+            return rows;
+        },
+        // The sentence under the table that says what the mount's clock means.
+        mountSiteClockNote() {
+            const s = this.mount.site;
+            if (!s || !s.utc) return this.$t("The driver doesn't report the mount's date and time.");
+            const off = this.mountClockOffsetSec();
+            const at = s.utcReadAt ? new Date(s.utcReadAt).toLocaleTimeString() : '';
+            const agree = off != null && Math.abs(off) <= 2;
+            const dir = off != null && off > 0 ? this.$t('ahead of') : this.$t('behind');
+            if (s.utcIsLive) {
+                return agree ? this.$t("The mount's clock agrees with Polaris's.")
+                    : this.$t("The mount's clock is {d} {dir} Polaris's.", { d: this._siteDuration(off), dir });
+            }
+            const base = this.$t("INDI keeps the date and time that was last sent to the mount, or read from it when it connected, and doesn't follow the mount's clock. The mount column shows that value, which arrived at {at}.", { at });
+            return base + ' ' + (agree ? this.$t("At that moment it matched Polaris's clock.")
+                : this.$t("At that moment it was {d} {dir} Polaris's clock.", { d: this._siteDuration(off), dir }));
+        },
+        // When Polaris last sent the date and time and the location to this mount.
+        mountSiteSentNote() {
+            const s = this.mount.site || {};
+            const fmt = v => new Date(v).toLocaleTimeString();
+            if (s.timeSentAt && s.locationSentAt)
+                return this.$t('Polaris sent the date and time at {t} and the location at {l}.', { t: fmt(s.timeSentAt), l: fmt(s.locationSentAt) });
+            if (s.timeSentAt) return this.$t("Polaris sent the date and time at {t}. It hasn't sent the location since it started.", { t: fmt(s.timeSentAt) });
+            if (s.locationSentAt) return this.$t("Polaris sent the location at {l}. It hasn't sent the date and time since it started.", { l: fmt(s.locationSentAt) });
+            return this.$t("Polaris hasn't sent the date and time or the location to this mount since it started.");
         },
 
         async telescopeSyncSite() {
@@ -52048,7 +52142,10 @@ function ninaApp() {
                     // case. Order is driver-reported (slow-to-fast on
                     // indilib mounts), which is what a left-to-right
                     // slider expects.
-                    slewRates: eq.telescope.slewRates || []
+                    slewRates: eq.telescope.slewRates || [],
+                    // What the mount holds for its site and clock, for the
+                    // mount-vs-Polaris table on the mount card.
+                    site: eq.telescope.site || null
                 });
                 // Same "disconnect-doesn't-stick" guard as the camera
                 // above, the EquipmentManager keeps Telescope!=null
