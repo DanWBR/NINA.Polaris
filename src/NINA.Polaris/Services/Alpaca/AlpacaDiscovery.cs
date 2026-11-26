@@ -145,8 +145,57 @@ public class AlpacaDiscovery {
             }
         }
 
-        _logger.LogInformation("Alpaca discovery found {N} server(s)", found.Count);
-        return found.Values.ToList();
+        var servers = DeduplicateLocalServers(found.Values, GetOwnIPv4Addresses());
+        if (servers.Count != found.Count) {
+            _logger.LogDebug("Alpaca discovery merged {N} duplicate local reply(ies)", found.Count - servers.Count);
+        }
+        _logger.LogInformation("Alpaca discovery found {N} server(s)", servers.Count);
+        return servers;
+    }
+
+    /// <summary>Collapse replies from the same local server seen on several
+    /// interfaces. We probe 127.0.0.1 and every NIC's broadcast, so a server
+    /// on this machine that answers every probe shows up once per interface
+    /// (lo, eth0, wlan0, ...). The discovery reply carries no server ID, so:
+    /// a reply from one of this machine's own addresses is dropped when a
+    /// 127.0.0.1 reply on the same port exists, returned devices, and either
+    /// reported the same device UniqueIDs or the interface entry returned none
+    /// (HTTP failed there). The loopback entry is the one kept.
+    ///
+    /// Remote hosts are never merged: their UniqueIDs aren't guaranteed to be
+    /// unique per unit (SV241's are compiled in), so two physical devices on
+    /// different machines could look identical.</summary>
+    internal static List<AlpacaServer> DeduplicateLocalServers(
+            IEnumerable<AlpacaServer> servers, ISet<IPAddress> ownAddresses) {
+        var list = servers.ToList();
+        var loopbackByPort = list
+            .Where(s => IPAddress.TryParse(s.Host, out var ip) && IPAddress.IsLoopback(ip) && s.Devices.Count > 0)
+            .GroupBy(s => s.Port)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        return list.Where(s => {
+            if (!IPAddress.TryParse(s.Host, out var ip) || IPAddress.IsLoopback(ip)) return true;
+            if (!ownAddresses.Contains(ip)) return true;
+            if (!loopbackByPort.TryGetValue(s.Port, out var loopback)) return true;
+            return s.Devices.Count > 0 && !DeviceIdKey(s).Equals(DeviceIdKey(loopback), StringComparison.OrdinalIgnoreCase);
+        }).ToList();
+    }
+
+    private static string DeviceIdKey(AlpacaServer s) =>
+        string.Join("|", s.Devices.Select(d => d.UniqueID).OrderBy(id => id, StringComparer.OrdinalIgnoreCase));
+
+    private static HashSet<IPAddress> GetOwnIPv4Addresses() {
+        var set = new HashSet<IPAddress>();
+        try {
+            foreach (var nic in NetworkInterface.GetAllNetworkInterfaces()) {
+                foreach (var ua in nic.GetIPProperties().UnicastAddresses) {
+                    if (ua.Address.AddressFamily == AddressFamily.InterNetwork) set.Add(ua.Address);
+                }
+            }
+        } catch {
+            // Enumeration failure just means no merging; duplicates are harmless.
+        }
+        return set;
     }
 
     /// <summary>Enumerate every IPv4 endpoint we should send the
