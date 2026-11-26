@@ -151,6 +151,27 @@ public sealed class AscomComTelescope : ITelescope, IDisposable {
         try { _driver.AbortSlew(); } catch { /* state-dependent */ }
     });
 
+    /// <summary>Site and clock from the driver's SiteLatitude, SiteLongitude,
+    /// SiteElevation and UTCDate, cached for 15 s so the status feed doesn't
+    /// make four COM calls on every tick.</summary>
+    public MountSiteReport? SiteReport {
+        get {
+            if (_driver == null) return null;
+            if (DateTime.UtcNow - _siteReadAt < TimeSpan.FromSeconds(15)) return _siteReport;
+            _siteReadAt = DateTime.UtcNow;
+            double? lat = Read<double?>(() => (double)_driver!.SiteLatitude, null);
+            double? lon = Read<double?>(() => (double)_driver!.SiteLongitude, null);
+            double? elev = Read<double?>(() => (double)_driver!.SiteElevation, null);
+            DateTime? utc = Read<DateTime?>(() => DateTime.SpecifyKind((DateTime)_driver!.UTCDate, DateTimeKind.Utc), null);
+            var readAt = DateTime.UtcNow;
+            _siteReport = (lat == null && lon == null && utc == null) ? null
+                : new MountSiteReport(lat, lon, elev, utc, utc != null ? readAt : null, null, UtcIsLive: true);
+            return _siteReport;
+        }
+    }
+    private MountSiteReport? _siteReport;
+    private DateTime _siteReadAt = DateTime.MinValue;
+
     public bool IsPulseGuiding => _driver != null
         && _disp.Invoke<bool>(() => SafeGet(() => (bool)_driver!.IsPulseGuiding)).Result;
 

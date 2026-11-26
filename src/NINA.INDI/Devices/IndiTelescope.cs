@@ -145,6 +145,34 @@ public class IndiTelescope : ITelescope {
         }
     }
 
+    /// <summary>The site from <see cref="DriverSite"/> plus the date and time
+    /// in <c>TIME_UTC</c>, with the moment Polaris received that value. The
+    /// time is not a running clock (see <see cref="DriverSite"/>), so it is
+    /// reported with <c>UtcIsLive = false</c>, and the UI compares it with the
+    /// host clock at the moment it arrived rather than with now.</summary>
+    public MountSiteReport? SiteReport {
+        get {
+            var (lat, lon, elev) = DriverSite;
+            DateTime? utc = null, readAt = null;
+            double? offset = null;
+            if (_client.GetProperty(DeviceName, "TIME_UTC") is IndiTextProperty t) {
+                if (t.Values.TryGetValue("UTC", out var s)
+                    && DateTime.TryParse(s?.Trim(), System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.AssumeUniversal
+                        | System.Globalization.DateTimeStyles.AdjustToUniversal, out var u)) {
+                    utc = DateTime.SpecifyKind(u, DateTimeKind.Utc);
+                    readAt = t.Timestamp.ToUniversalTime();
+                }
+                if (t.Values.TryGetValue("OFFSET", out var o)
+                    && double.TryParse(o?.Trim(), System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out var oh))
+                    offset = oh;
+            }
+            if (lat == null && lon == null && utc == null) return null;
+            return new MountSiteReport(lat, lon, elev, utc, readAt, offset, UtcIsLive: false);
+        }
+    }
+
     public IndiTelescope(IndiClient client, string deviceName) {
         _client = client;
         DeviceName = deviceName;

@@ -159,6 +159,7 @@ public sealed class MountSiteSyncService : BackgroundService {
                 var utc = DateTime.UtcNow;
                 var offset = TimeZoneInfo.Local.GetUtcOffset(utc).TotalHours;
                 await scope.SetSiteTimeAsync(utc, offset, ct);
+                MountSiteLedger.NoteTimeSent(scope.DeviceName);
                 timeStatus = "sent";
                 _logger.LogInformation("Mount time set: utc={Utc:o}, offset={Offset:F2}h", utc, offset);
             } catch (NotSupportedException) {
@@ -175,6 +176,7 @@ public sealed class MountSiteSyncService : BackgroundService {
             } else {
                 try {
                     await scope.SetSiteLocationAsync(p.Latitude, p.Longitude, p.Altitude, ct);
+                    MountSiteLedger.NoteLocationSent(scope.DeviceName);
                     locationStatus = "sent";
                     _logger.LogInformation("Mount location set: lat={Lat:F4}, lon={Lon:F4}, elev={Elev:F0}m",
                         p.Latitude, p.Longitude, p.Altitude);

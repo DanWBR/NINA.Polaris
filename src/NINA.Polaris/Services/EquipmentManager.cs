@@ -1230,6 +1230,9 @@ public class EquipmentManager : IDisposable {
                 slewRates = slewRates.Select(r => new {
                     name = r.Name, label = r.Label, active = r.Active
                 }).ToArray(),
+                // What the mount holds for its site and clock, and when
+                // Polaris last sent them, for the comparison on the mount card.
+                site = MountSiteStatus(Telescope),
                 capabilities = new {
                     park = caps.SupportsPark,
                     trackingToggle = caps.SupportsTrackingToggle,
@@ -1444,6 +1447,30 @@ public class EquipmentManager : IDisposable {
     }
 
     static double? Safe(double v) => double.IsNaN(v) || double.IsInfinity(v) ? null : v;
+
+    /// <summary>The mount card's "mount vs Polaris" block: the site and clock
+    /// the driver reports, and when Polaris last sent each to this mount. A
+    /// driver that throws while reading leaves the block empty rather than
+    /// taking the status message down.</summary>
+    static object MountSiteStatus(ITelescope scope) {
+        MountSiteReport? r = null;
+        try { r = scope.SiteReport; } catch { /* reported as unknown */ }
+        var device = scope.DeviceName;
+        var timeSent = MountSiteLedger.For(MountSiteLedger.TimeSent, device);
+        var locationSent = MountSiteLedger.For(MountSiteLedger.LocationSent, device);
+        static double? Finite(double? v) => v is { } d && double.IsFinite(d) ? d : null;
+        return new {
+            latitude = Finite(r?.Latitude),
+            longitude = Finite(r?.Longitude),
+            elevation = Finite(r?.Elevation),
+            utc = r?.Utc,
+            utcReadAt = r?.UtcReadAt,
+            utcOffsetHours = Finite(r?.UtcOffsetHours),
+            utcIsLive = r?.UtcIsLive ?? false,
+            timeSentAt = timeSent?.AtUtc,
+            locationSentAt = locationSent?.AtUtc
+        };
+    }
 
     /// <summary>The heater state for the status block; a backend that throws
     /// while reading it must not take the whole status message down.</summary>
