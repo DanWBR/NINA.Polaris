@@ -5950,5 +5950,20 @@
   "Polaris sent the date and time at {t}. It hasn't sent the location since it started.": "Polaris отправил дату и время в {t}. Местоположение он не отправлял с момента запуска.",
   "Polaris sent the location at {l}. It hasn't sent the date and time since it started.": "Polaris отправил местоположение в {l}. Дату и время он не отправлял с момента запуска.",
   "Polaris hasn't sent the date and time or the location to this mount since it started.": "С момента запуска Polaris не отправлял в эту монтировку ни дату и время, ни местоположение.",
-  "{n} years": "{n} лет"
+  "{n} years": "{n} лет",
+  "Pick area": "Выбрать область",
+  "The next tap on the frame places the focus area": "Следующее касание кадра задаёт область фокусировки",
+  "Centre": "Центр",
+  "Measure the centre of the frame again": "Снова измерять центр кадра",
+  "Autofocus on the focus area: the focuser goes out past focus and back, then stops at the sharpest position": "Автофокус по области: фокусёр проходит дальше фокуса, возвращается и останавливается в самом резком положении",
+  "Stop AF": "Остановить AF",
+  "Tap the frame where the detail is, such as a crater or the edge of a planet.": "Коснитесь кадра там, где есть детали, например кратер или край планеты.",
+  "Could not set the focus area": "Не удалось задать область фокусировки",
+  "Refining near the best focus": "Уточнение около лучшего фокуса",
+  "Moving to the best focus": "Переход к лучшему фокусу",
+  "Checking the result": "Проверка результата",
+  "Sweeping, point {n}": "Проход, точка {n}",
+  "Focused at {pos}, {pct}% sharper than at the start.": "Сфокусировано на {pos}, на {pct}% резче, чем в начале.",
+  "Focused at {pos}.": "Сфокусировано на {pos}.",
+  "Autofocus failed: {err}": "Автофокус не удался: {err}"
 }

@@ -39,15 +39,25 @@ public static class FrameQualityAnalyzer {
     public static double LaplacianVariance(ushort[] pixels, int width, int height, int? roiSize = null) {
         if (pixels == null || pixels.Length != width * height || width < 3 || height < 3) return 0;
 
-        int x0, y0, x1, y1;
         if (roiSize is int s && s > 2 && s < Math.Min(width, height)) {
-            x0 = (width - s) / 2;
-            y0 = (height - s) / 2;
-            x1 = x0 + s;
-            y1 = y0 + s;
-        } else {
-            x0 = 1; y0 = 1; x1 = width - 1; y1 = height - 1;
+            int x0 = (width - s) / 2;
+            int y0 = (height - s) / 2;
+            return LaplacianVariance(pixels, width, height, x0, y0, x0 + s, y0 + s);
         }
+        return LaplacianVariance(pixels, width, height, 1, 1, width - 1, height - 1);
+    }
+
+    /// <summary>
+    /// Variance of the 3×3 Laplacian over the window [x0, x1) × [y0, y1).
+    /// The window is pulled one pixel in from the frame edge, where the
+    /// Laplacian would read outside the frame.
+    /// </summary>
+    public static double LaplacianVariance(ushort[] pixels, int width, int height,
+                                           int x0, int y0, int x1, int y1) {
+        if (pixels == null || pixels.Length != width * height || width < 3 || height < 3) return 0;
+        x0 = Math.Max(1, x0); y0 = Math.Max(1, y0);
+        x1 = Math.Min(width - 1, x1); y1 = Math.Min(height - 1, y1);
+        if (x1 <= x0 || y1 <= y0) return 0;
 
         // Two-pass for numerical stability: sum, then sum of squared
         // deviations. Single-pass Welford would also work but

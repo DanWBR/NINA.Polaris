@@ -5624,5 +5624,20 @@
   "Polaris sent the date and time at {t}. It hasn't sent the location since it started.": "Polaris a envoyé la date et l'heure à {t}. Il n'a pas envoyé la position depuis son démarrage.",
   "Polaris sent the location at {l}. It hasn't sent the date and time since it started.": "Polaris a envoyé la position à {l}. Il n'a pas envoyé la date et l'heure depuis son démarrage.",
   "Polaris hasn't sent the date and time or the location to this mount since it started.": "Polaris n'a pas envoyé la date et l'heure ni la position à cette monture depuis son démarrage.",
-  "{n} years": "{n} ans"
+  "{n} years": "{n} ans",
+  "Pick area": "Choisir la zone",
+  "The next tap on the frame places the focus area": "Le prochain appui sur l'image place la zone de mise au point",
+  "Centre": "Centre",
+  "Measure the centre of the frame again": "Mesurer de nouveau le centre de l'image",
+  "Autofocus on the focus area: the focuser goes out past focus and back, then stops at the sharpest position": "Mise au point auto sur la zone : le focuser dépasse la mise au point, revient et s'arrête à la position la plus nette",
+  "Stop AF": "Arrêter l'AF",
+  "Tap the frame where the detail is, such as a crater or the edge of a planet.": "Touchez l'image là où se trouve le détail, comme un cratère ou le bord d'une planète.",
+  "Could not set the focus area": "Impossible de définir la zone de mise au point",
+  "Refining near the best focus": "Affinage près de la meilleure mise au point",
+  "Moving to the best focus": "Déplacement vers la meilleure mise au point",
+  "Checking the result": "Vérification du résultat",
+  "Sweeping, point {n}": "Balayage, point {n}",
+  "Focused at {pos}, {pct}% sharper than at the start.": "Mise au point à {pos}, {pct} % plus net qu'au départ.",
+  "Focused at {pos}.": "Mise au point à {pos}.",
+  "Autofocus failed: {err}": "La mise au point auto a échoué : {err}"
 }

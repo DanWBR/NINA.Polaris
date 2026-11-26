@@ -23,6 +23,7 @@
 using NINA.Image.ImageAnalysis;
 using NINA.Image.ImageAnalysis.AutoFocus;
 using NINA.Image.Interfaces;
+using NINA.Polaris.Services.Focus;
 
 namespace NINA.Polaris.Services;
 
@@ -63,16 +64,22 @@ public class AutoFocusService {
     public AutoFocusResult? LastResult { get; private set; }
     public string? LastError { get; private set; }
 
+    /// <summary>The VIDEO stream, for a run that measures its frames instead of
+    /// taking exposures. Null in tests that never ask for one.</summary>
+    private readonly CameraStreamService? _stream;
+
     public AutoFocusService(EquipmentManager equip,
                             ImageRelayService relay,
                             ActiveGuiderProvider guiders,
                             ProfileService profiles,
-                            ILogger<AutoFocusService> logger) {
+                            ILogger<AutoFocusService> logger,
+                            CameraStreamService? stream = null) {
         _equip = equip;
         _relay = relay;
         _guiders = guiders;
         _profiles = profiles;
         _logger = logger;
+        _stream = stream;
     }
 
     /// <summary>
@@ -127,6 +134,24 @@ public class AutoFocusService {
             // Validate the requested optical train (camera + focuser pair).
             var (_, _, source) = ResolveDevices(options.FocuserSource);
 
+            // Video autofocus: the frames come from the running stream, which
+            // keeps the camera, so none of the capture checks below apply.
+            if (options.FromStream) {
+                if (_stream is not { IsRunning: true })
+                    throw new InvalidOperationException(
+                        "Start the video stream first: the video autofocus measures its frames.");
+                if (source != "main")
+                    throw new InvalidOperationException(
+                        "The video autofocus only works with the main camera and focuser.");
+                if (options.StepSize <= 0)
+                    throw new ArgumentException("StepSize must be positive");
+                // The exposure that matters is the stream's: it sets how long
+                // to wait after a move before a frame can be trusted.
+                options = options with { ExposureSeconds = Math.Max(0.001, _stream.ExposureSeconds) };
+                BeginRun(options, fromStream: true);
+                return;
+            }
+
             // The guide scope shares its camera with the guider loop; running a
             // V-curve sweep while it is looping/guiding would yank the camera out
             // from under the guider. Require it stopped first.
@@ -149,31 +174,40 @@ public class AutoFocusService {
                     $"The {holder} is using the camera, so autofocus cannot take a frame. "
                     + "Stop it and start autofocus again.");
 
-            _cts = new CancellationTokenSource();
-            State = AutoFocusState.Running;
-            LastError = null;
-            Progress = new AutoFocusProgress {
-                // Progress denominator: the initial pass is OffsetSteps+1
-                // points, then up to OffsetSteps-1 per side of extension in
-                // the typical case; the hard cap is much higher, so show the
-                // typical total (2*OffsetSteps+1) like the desktop chart does.
-                Steps = options.OffsetSteps * 2 + 1,
-                Points = new List<AutoFocusPoint>(),
-                StartedAt = DateTime.UtcNow,
-                Mode = "vcurve",
-                Method = options.Method.ToString(),
-                Metric = AutoFocusMetricParser.Name(options.Metric)
-            };
+            BeginRun(options, fromStream: false);
         }
+    }
+
+    /// <summary>Set the run state and start the sweep. Called under
+    /// <see cref="_stateLock"/> once the checks for this kind of run passed.</summary>
+    private void BeginRun(AutoFocusRunOptions options, bool fromStream) {
+        _cts = new CancellationTokenSource();
+        State = AutoFocusState.Running;
+        LastError = null;
+        Progress = new AutoFocusProgress {
+            // Progress denominator: the initial pass is OffsetSteps+1
+            // points, then up to OffsetSteps-1 per side of extension in
+            // the typical case; the hard cap is much higher, so show the
+            // typical total (2*OffsetSteps+1) like the desktop chart does.
+            Steps = options.OffsetSteps * 2 + 1,
+            Points = new List<AutoFocusPoint>(),
+            StartedAt = DateTime.UtcNow,
+            Mode = "vcurve",
+            Method = options.Method.ToString(),
+            Metric = AutoFocusMetricParser.Name(options.Metric),
+            FromStream = fromStream
+        };
 
         _runTask = Task.Run(() => RunAsync(options, _cts!.Token));
         _logger.LogInformation(
             "Auto-focus started: source={Source} offsetSteps={Offset} stepSize={StepSize} exposure={Exp}s "
-            + "frames/pt={Frames} method={Method} r2>={R2} backlash={In}/{Out} ({Model}) crop={Crop} brightest={N}",
+            + "frames/pt={Frames} method={Method} r2>={R2} backlash={In}/{Out} ({Model}) crop={Crop} brightest={N} "
+            + "video={Video} region={Region}",
             options.FocuserSource, options.OffsetSteps, options.StepSize, options.ExposureSeconds,
             options.FramesPerPoint, options.Method, options.RSquaredThreshold,
             options.BacklashIn, options.BacklashOut, options.OvershootBacklash ? "overshoot" : "absolute",
-            options.InnerCropRatio, options.UseBrightestStars);
+            options.InnerCropRatio, options.UseBrightestStars, fromStream,
+            options.Region?.ToString() ?? "centre");
     }
 
     public void Abort() {
@@ -244,7 +278,11 @@ public class AutoFocusService {
             // as the full-frame reference that sizes the hardware ROI below.
             double initialHfr = 0;
             int fullWidth = 0, fullHeight = 0;
-            try {
+            if (o.FromStream) {
+                // Same baseline, read off the stream at the start position.
+                var (m0, _, _) = await MeasureStreamPointAsync(o, ct);
+                if (m0 > 0) initialHfr = m0;
+            } else try {
                 var img0 = await CaptureGated(source, camera, o.ExposureSeconds, ct);
                 fullWidth = img0.Properties.Width;
                 fullHeight = img0.Properties.Height;
@@ -715,6 +753,7 @@ public class AutoFocusService {
     private async Task<(double measure, double stdev, int starCount)> MeasurePointFramesAsync(
             ICamera camera, string source, AutoFocusRunOptions o, AfStarTracker tracker,
             CancellationToken ct) {
+        if (o.FromStream) return await MeasureStreamPointAsync(o, ct);
         var measures = new List<double>(o.FramesPerPoint);
         double sumVariance = 0;
         int lastCount = 0;
@@ -768,6 +807,60 @@ public class AutoFocusService {
             stdev = Math.Sqrt(sumVariance / measures.Count);
         }
         return (mean, Math.Max(stdev, 0.02 * mean + 0.01), lastCount);
+    }
+
+    /// <summary>Delay past the end of an exposure that could have started while
+    /// the focuser was still moving. Covers the driver's readout and transfer,
+    /// so the first frame used is one exposed entirely at the new position.</summary>
+    internal static readonly TimeSpan StreamFrameMargin = TimeSpan.FromMilliseconds(150);
+
+    /// <summary>Measure one sweep point on the VIDEO stream: FramesPerPoint
+    /// frames that started after the focuser stopped, each read as the
+    /// relative contrast of the focus region. The point is the mean of the
+    /// better half (see <see cref="VideoFocusMeasure.BetterHalf"/>), in fit
+    /// space like any contrast point, with the scatter of that half as its
+    /// error.</summary>
+    private async Task<(double measure, double stdev, int starCount)> MeasureStreamPointAsync(
+            AutoFocusRunOptions o, CancellationToken ct) {
+        var stream = _stream ?? throw new InvalidOperationException("The video stream isn't available.");
+        var region = o.Region;
+        var exposure = TimeSpan.FromSeconds(Math.Max(0.001, stream.ExposureSeconds));
+        var notBefore = DateTime.UtcNow + exposure + StreamFrameMargin;
+        var timeout = TimeSpan.FromSeconds(Math.Max(5, 4 * exposure.TotalSeconds + 2));
+
+        var readings = new List<double>(o.FramesPerPoint);
+        int frameW = 0, frameH = 0;
+        for (int i = 0; i < o.FramesPerPoint; i++) {
+            ct.ThrowIfCancellationRequested();
+            var (crop, arrivedAt) = await stream.NextFrameAsync(notBefore, frame => {
+                var px = frame.Data;
+                int w = frame.Properties.Width, h = frame.Properties.Height;
+                if (px == null || w <= 0 || h <= 0 || px.Length < w * h) return (Data: Array.Empty<ushort>(), W: 0, H: 0, FW: w, FH: h);
+                var c = VideoFocusMeasure.Crop(px, w, h, region, frame.Properties.IsBayered);
+                return (c.Data, W: c.Width, H: c.Height, FW: w, FH: h);
+            }, timeout, ct);
+            notBefore = arrivedAt;
+            frameW = crop.FW; frameH = crop.FH;
+            double c = VideoFocusMeasure.RelativeContrast(crop.Data, crop.W, crop.H);
+            if (c > 0) readings.Add(c * VideoFocusMeasure.FitScale);
+        }
+
+        if (readings.Count == 0) {
+            _logger.LogDebug("Video AF: the focus region is flat or black, point soft-rejected");
+            return (0, 1000, 0);
+        }
+
+        var best = VideoFocusMeasure.BetterHalf(readings);
+        var ys = best.Select(ContrastMeasure.ToFitSpace).ToList();
+        double mean = ys.Average();
+        double stdev = ys.Count > 1
+            ? Math.Sqrt(ys.Sum(y => (y - mean) * (y - mean)) / (ys.Count - 1))
+            : 0;
+        Progress = Progress with {
+            LastContrast = ContrastMeasure.FromFitSpace(mean),
+            FrameWidth = frameW, FrameHeight = frameH
+        };
+        return (mean, Math.Max(stdev, 0.02 * mean + 0.01), 0);
     }
 
     /// <summary>Detect stars on one frame and compute (mean HFR, stdev across
@@ -1469,6 +1562,20 @@ public class AutoFocusRequest {
     /// operator approves them, so a run in the middle of a sweep must not
     /// change the rig on its own.</summary>
     public bool? RecordFilterMemory { get; set; }
+
+    /// <summary>Video autofocus: measure the frames of the running VIDEO stream
+    /// instead of taking exposures. The metric is the contrast of the focus
+    /// region, so it works on the Moon and the planets without stars.</summary>
+    public bool? FromStream { get; set; }
+    /// <summary>Frames measured per point in a video autofocus, 3 to 30. Null
+    /// uses 8, which is enough for the better half to ride out the seeing.</summary>
+    public int? StreamFramesPerPoint { get; set; }
+    /// <summary>The focus region of a video autofocus, as fractions of the
+    /// frame. Null measures a centred square.</summary>
+    public double? RegionX { get; set; }
+    public double? RegionY { get; set; }
+    public double? RegionW { get; set; }
+    public double? RegionH { get; set; }
 }
 
 /// <summary>Fully-resolved run parameters (request overrides applied on top
@@ -1520,7 +1627,34 @@ public sealed record AutoFocusRunOptions {
     /// the run succeeds. False only for a run the per-filter sweep owns.</summary>
     public bool RecordFilterMemory { get; init; } = true;
 
+    /// <summary>Measure the VIDEO stream's frames instead of taking exposures.</summary>
+    public bool FromStream { get; init; }
+    /// <summary>Where a video autofocus measures; null is a centred square.</summary>
+    public FocusRegion? Region { get; init; }
+
     public static AutoFocusRunOptions Resolve(AutoFocusRequest? req, AutoFocusSettings? profile) {
+        var resolved = ResolveCaptured(req, profile);
+        if (req?.FromStream != true) return resolved;
+
+        // Video autofocus. The stream owns the camera, so the run cannot bin
+        // it or set a subframe, and it measures contrast whatever the rig's AF
+        // metric is: the stream is for the Moon and the planets, where there
+        // are no stars to measure. A Sobel request is kept; anything else
+        // becomes the Laplacian.
+        var metric = resolved.Metric == AutoFocusMetric.ContrastSobel
+            ? AutoFocusMetric.ContrastSobel : AutoFocusMetric.ContrastLaplace;
+        return resolved with {
+            FromStream = true,
+            Region = FocusRegion.From(req.RegionX, req.RegionY, req.RegionW, req.RegionH),
+            Metric = metric,
+            Method = AFCurveFittingMethod.Parabolic,
+            Binning = 1,
+            InnerCropRatio = 1.0,
+            FramesPerPoint = Math.Clamp(req.StreamFramesPerPoint ?? 8, 3, 30)
+        };
+    }
+
+    private static AutoFocusRunOptions ResolveCaptured(AutoFocusRequest? req, AutoFocusSettings? profile) {
         var p = profile ?? new AutoFocusSettings();
 
         // Legacy mapping: an explicit OffsetSteps wins; otherwise the old
@@ -1626,6 +1760,9 @@ public record AutoFocusProgress {
     public double StarHfr { get; init; }
     public int FrameWidth { get; init; }
     public int FrameHeight { get; init; }
+    /// <summary>True for a video autofocus, which the VIDEO panel reports and
+    /// the FOCUS panel only shows.</summary>
+    public bool FromStream { get; init; }
 }
 
 public class AutoFocusPoint {

@@ -5260,5 +5260,20 @@
   "Polaris sent the date and time at {t}. It hasn't sent the location since it started.": "",
   "Polaris sent the location at {l}. It hasn't sent the date and time since it started.": "",
   "Polaris hasn't sent the date and time or the location to this mount since it started.": "",
-  "{n} years": ""
+  "{n} years": "",
+  "Pick area": "",
+  "The next tap on the frame places the focus area": "",
+  "Centre": "",
+  "Measure the centre of the frame again": "",
+  "Autofocus on the focus area: the focuser goes out past focus and back, then stops at the sharpest position": "",
+  "Stop AF": "",
+  "Tap the frame where the detail is, such as a crater or the edge of a planet.": "",
+  "Could not set the focus area": "",
+  "Refining near the best focus": "",
+  "Moving to the best focus": "",
+  "Checking the result": "",
+  "Sweeping, point {n}": "",
+  "Focused at {pos}, {pct}% sharper than at the start.": "",
+  "Focused at {pos}.": "",
+  "Autofocus failed: {err}": ""
 }

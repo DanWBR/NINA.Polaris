@@ -43,7 +43,7 @@
          significant (CSS cascade), keep these in sequence. All share the same
          ?v= cache-bust token, bumped together on every deploy. -->
     <link rel="stylesheet" href="/css/parts/01-base-statusbar.css?v=20261112-navorder">
-    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20261107-advexamples">
+    <link rel="stylesheet" href="/css/parts/02-imaging-panels.css?v=20261126-tapfocus">
     <link rel="stylesheet" href="/css/parts/03-equipment-mount.css?v=20261119-modalscroll">
     <link rel="stylesheet" href="/css/parts/04-focus-settings.css?v=20261112-afphone">
     <link rel="stylesheet" href="/css/parts/05-inputs-forms.css?v=20261119-modalscroll">
@@ -4676,7 +4676,7 @@
                              pan/zoom transform _pzApply put there. -->
                         <canvas id="videoCaptureCanvas" class="preview-canvas"
                                 @click="videoCanvasClick($event)"
-                                :style="{ cursor: ((video.roiSize > 0 || video.bahtinov.on) &amp;&amp; cameraStream.running) ? 'crosshair' : '' }"></canvas>
+                                :style="{ cursor: cameraStream.running ? 'crosshair' : '' }"></canvas>
                         <!-- Bahtinov overlay. Same canvas pair pattern as the
                              LIVE and Manual Assist views: pointer-events none,
                              and _pzApply copies the pan/zoom transform onto it
@@ -5247,6 +5247,33 @@
                             <div class="text-muted" style="font-size:10.5px">
                                 Higher is sharper. The number only compares against itself, so turn
                                 the focuser and keep the direction that grows it.
+                            </div>
+                            <!-- Tap to focus: the bar and the AF below measure
+                                 the green box on the frame. A tap on a plain
+                                 frame places it; with a ROI or the Bahtinov
+                                 mask on, a tap already means something else,
+                                 so Pick area arms the next one. -->
+                            <div class="sharp-af-row">
+                                <button class="btn btn-sm" :class="video.focusPick ? 'btn-primary' : ''"
+                                        :disabled="videoAfRunning()"
+                                        @click="video.focusPick = !video.focusPick"
+                                        title="The next tap on the frame places the focus area">Pick area</button>
+                                <button class="btn btn-sm" x-show="cameraStream.focusRegion" x-cloak
+                                        :disabled="videoAfRunning()"
+                                        @click="videoClearFocusRegion()"
+                                        title="Measure the centre of the frame again">Centre</button>
+                                <span style="flex:1"></span>
+                                <button class="btn btn-sm btn-primary" x-show="!videoAfRunning()"
+                                        :disabled="!focusConnected"
+                                        @click="videoAfStart()"
+                                        title="Autofocus on the focus area: the focuser goes out past focus and back, then stops at the sharpest position">AF</button>
+                                <button class="btn btn-sm btn-danger" x-show="videoAfRunning()" x-cloak
+                                        @click="videoAfAbort()">Stop AF</button>
+                            </div>
+                            <div class="sharp-af-status" :class="videoAfTone()" x-show="videoAfStatus()" x-cloak
+                                 x-text="videoAfStatus()"></div>
+                            <div class="text-muted" style="font-size:10.5px" x-show="video.focusPick" x-cloak>
+                                Tap the frame where the detail is, such as a crater or the edge of a planet.
                             </div>
                         </div>
 
@@ -26959,7 +26986,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261119-dlcancel"></script>
+    <script src="/js/app.js?v=20261126-tapfocus"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

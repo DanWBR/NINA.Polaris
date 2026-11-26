@@ -93,6 +93,9 @@ public sealed class EquipmentStatusContributor : IStatusContributor {
                 sharpness = cameraStream.Sharpness,
                 sharpnessBest = cameraStream.SharpnessBest,
                 sharpnessHistory = cameraStream.SharpnessHistory,
+                // The area the sharpness and the video autofocus measure,
+                // as fractions of the frame; null is the centre.
+                focusRegion = cameraStream.FocusRegion,
                 // Honest exposure read: the preview auto-stretches, so a blown
                 // highlight looks fine on screen; this is the % actually clipped.
                 clipPercent = cameraStream.ClipPercent,
