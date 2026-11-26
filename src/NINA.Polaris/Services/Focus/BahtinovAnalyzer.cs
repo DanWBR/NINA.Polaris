@@ -29,15 +29,19 @@ namespace NINA.Polaris.Services.Focus;
 /// 1. Pick the brightest star in the frame (or use a caller-
 ///    supplied <c>(starX, starY)</c> from a click).
 /// 2. Crop a square ROI around it (200 px default).
-/// 3. Background-subtract via ROI median.
-/// 4. For each candidate angle θ ∈ [0°, 180°) at 0.5° steps:
-///    integrate intensity along a line through the ROI centre at
-///    angle θ. Result = 1-D signal of intensity vs angle.
-/// 5. Pick 3 peaks in that signal that are ≥ 30° apart. They are
-///    the 3 spike angles.
-/// 6. For each spike angle, refine to (θ, ρ): sweep ρ ∈ [-20, +20]
-///    px perpendicular to the line, find the offset that maximises
-///    line intensity. That gives 3 lines.
+/// 3. Background-subtract via the exact ROI median.
+/// 4. Joint (θ, ρ) sweep: for each candidate angle θ ∈ [0°, 180°) at
+///    0.5° steps, integrate intensity along lines at angle θ offset
+///    ρ ∈ [-R, +R] px from the ROI centre, and keep the best ρ.
+///    Result = 1-D signal of best line intensity vs angle. Searching
+///    ρ together with θ matters: out of focus the spikes do not pass
+///    through the star centre, and a line forced through the centre
+///    misses a displaced spike and reports a wrong angle.
+/// 5. Pick 3 local maxima in that signal that are ≥ 12° apart. They
+///    are the 3 spike angles. Common masks put the outer spikes 15-20°
+///    either side of the central one, so a larger gap rejects them.
+/// 6. Refine ρ of each spike to sub-pixel with a parabola through the
+///    best ρ and its neighbours. That gives 3 lines.
 /// 7. Outer two lines intersect at some point near (but not at) the
 ///    star centre. The perpendicular distance from the central spike
 ///    line to that intersection is the focus error.
@@ -50,8 +54,10 @@ namespace NINA.Polaris.Services.Focus;
 public static class BahtinovAnalyzer {
     private const int DefaultRoiHalf = 100;           // ROI is 200x200 px
     private const double AngleStepDeg = 0.5;
-    private const int RhoSearchRange = 20;            // ±20 px perpendicular
-    private const double MinPeakSeparationDeg = 30.0;
+    private const int RhoSearchRange = 20;            // ±20 px perpendicular (minimum)
+    // Outer spikes of common masks sit 15-20° from the central one
+    // (some designs use less), so the gap must stay well below that.
+    private const double MinPeakSeparationDeg = 12.0;
     private const double InFocusThresholdPx = 0.5;    // |offset| below = "in focus"
     private const double SaturatedPeak = 60000;       // 16-bit upper guard
 
@@ -97,67 +103,43 @@ public static class BahtinovAnalyzer {
         var roiSize = roiHalf * 2;
         var roi = ExtractRoi(pixels, width, height, sx - roiHalf, sy - roiHalf,
                               roiSize, roiSize);
-        var bg = MedianApprox(roi);
+        var bg = Median(roi);
         for (int i = 0; i < roi.Length; i++) {
             roi[i] = roi[i] > bg ? (ushort)(roi[i] - bg) : (ushort)0;
         }
 
-        // 4. Angular sweep: integrate intensity along a line through
-        // the ROI centre at angle θ for each θ.
+        // 4. Joint (θ, ρ) sweep: for each θ, the brightest line at that
+        // angle within ±rhoRange px of the ROI centre.
         var nAngles = (int)Math.Round(180.0 / AngleStepDeg);
         var angleSig = new double[nAngles];
+        var angleRho = new double[nAngles];
         var cx = roiHalf;
         var cy = roiHalf;
         var halfLen = roiHalf - 2;    // stay 2px inside the ROI edge
+        var rhoRange = Math.Max(RhoSearchRange, roiHalf / 5);
+        var rhoProfile = new double[2 * rhoRange + 1];
         for (int ai = 0; ai < nAngles; ai++) {
             var theta = ai * AngleStepDeg * Math.PI / 180.0;
-            var dx = Math.Cos(theta);
-            var dy = Math.Sin(theta);
-            double sum = 0;
-            int n = 0;
-            for (int t = -halfLen; t <= halfLen; t++) {
-                var x = (int)Math.Round(cx + t * dx);
-                var y = (int)Math.Round(cy + t * dy);
-                if (x < 0 || x >= roiSize || y < 0 || y >= roiSize) continue;
-                sum += roi[y * roiSize + x];
-                n++;
+            int bestIdx = 0;
+            for (int ri = 0; ri < rhoProfile.Length; ri++) {
+                rhoProfile[ri] = LineMean(roi, roiSize, cx, cy, halfLen, theta, ri - rhoRange);
+                if (rhoProfile[ri] > rhoProfile[bestIdx]) bestIdx = ri;
             }
-            angleSig[ai] = n > 0 ? sum / n : 0;
+            angleSig[ai] = rhoProfile[bestIdx];
+            angleRho[ai] = bestIdx - rhoRange + ParabolicOffset(rhoProfile, bestIdx);
         }
 
-        // 5. Find 3 peaks ≥ 30° apart.
+        // 5. Find 3 local maxima >= MinPeakSeparationDeg apart.
         var peakAngles = FindTopPeaks(angleSig, AngleStepDeg, MinPeakSeparationDeg, 3);
         if (peakAngles.Count < 3) {
             return BahtinovResult.Fail($"could not detect 3 diffraction spikes (found {peakAngles.Count}); is the Bahtinov mask installed and the star bright enough?");
         }
 
-        // 6. For each spike, refine ρ (perpendicular offset).
+        // 6. Each spike = (θ, sub-pixel ρ) from the sweep.
         var spikes = new List<BahtinovSpike>(3);
         foreach (var thetaDeg in peakAngles) {
-            var theta = thetaDeg * Math.PI / 180.0;
-            var dx = Math.Cos(theta);
-            var dy = Math.Sin(theta);
-            // Perpendicular direction (normal to spike line)
-            var nx = -dy;
-            var ny =  dx;
-            double bestSum = -1;
-            double bestRho = 0;
-            for (int rho = -RhoSearchRange; rho <= RhoSearchRange; rho++) {
-                double sum = 0;
-                int n = 0;
-                for (int t = -halfLen; t <= halfLen; t++) {
-                    var x = (int)Math.Round(cx + t * dx + rho * nx);
-                    var y = (int)Math.Round(cy + t * dy + rho * ny);
-                    if (x < 0 || x >= roiSize || y < 0 || y >= roiSize) continue;
-                    sum += roi[y * roiSize + x];
-                    n++;
-                }
-                if (n > 0 && sum / n > bestSum) {
-                    bestSum = sum / n;
-                    bestRho = rho;
-                }
-            }
-            spikes.Add(new BahtinovSpike(thetaDeg, bestRho, bestSum));
+            var ai = (int)Math.Round(thetaDeg / AngleStepDeg) % nAngles;
+            spikes.Add(new BahtinovSpike(thetaDeg, angleRho[ai], angleSig[ai]));
         }
 
         // 7. Identify the central spike (the one whose angle is closest
@@ -233,22 +215,60 @@ public static class BahtinovAnalyzer {
         return roi;
     }
 
-    // O(n) approximate median via 256-bin histogram on 16-bit data.
-    // Exact enough for background subtraction; faster than sort.
-    private static ushort MedianApprox(ushort[] data) {
-        var bins = new int[256];
-        foreach (var v in data) bins[v >> 8]++;
-        int half = data.Length / 2;
+    // Exact median via a full 16-bit histogram, O(n). A coarse
+    // histogram (256-count bins) returns 0 for cameras whose data use
+    // only the low bits (e.g. 10/12-bit sensors stored as 16-bit, with
+    // a background of ~60-100 ADU), so the background would never be
+    // removed and the line sums would be dominated by the sky level.
+    internal static ushort Median(ushort[] data) {
+        if (data.Length == 0) return 0;
+        var bins = new int[65536];
+        foreach (var v in data) bins[v]++;
+        int half = (data.Length + 1) / 2;
         int acc = 0;
-        for (int i = 0; i < 256; i++) {
+        for (int i = 0; i < bins.Length; i++) {
             acc += bins[i];
-            if (acc >= half) return (ushort)(i << 8);
+            if (acc >= half) return (ushort)i;
         }
         return 0;
     }
 
+    /// <summary>Mean ROI intensity along the line at angle
+    /// <paramref name="theta"/> (radians), offset <paramref name="rho"/>
+    /// px along its normal (-sin θ, cos θ) from (cx, cy).</summary>
+    private static double LineMean(ushort[] roi, int roiSize, int cx, int cy,
+                                   int halfLen, double theta, double rho) {
+        var dx = Math.Cos(theta);
+        var dy = Math.Sin(theta);
+        var x0 = cx - rho * dy;
+        var y0 = cy + rho * dx;
+        double sum = 0;
+        int n = 0;
+        for (int t = -halfLen; t <= halfLen; t++) {
+            var x = (int)Math.Round(x0 + t * dx);
+            var y = (int)Math.Round(y0 + t * dy);
+            if (x < 0 || x >= roiSize || y < 0 || y >= roiSize) continue;
+            sum += roi[y * roiSize + x];
+            n++;
+        }
+        return n > 0 ? sum / n : 0;
+    }
+
+    /// <summary>Sub-sample offset (-0.5..0.5) of the true maximum near
+    /// index <paramref name="i"/>, from a parabola through i-1, i, i+1.
+    /// 0 at the array ends or on a flat top.</summary>
+    internal static double ParabolicOffset(double[] v, int i) {
+        if (i <= 0 || i >= v.Length - 1) return 0;
+        var denom = v[i - 1] - 2 * v[i] + v[i + 1];
+        if (denom >= 0) return 0;
+        var off = 0.5 * (v[i - 1] - v[i + 1]) / denom;
+        return Math.Clamp(off, -0.5, 0.5);
+    }
+
     /// <summary>Find up to <paramref name="topN"/> local maxima in
-    /// <paramref name="signal"/> with each pair separated by at least
+    /// <paramref name="signal"/> (circular, 180° = 0°; a point counts
+    /// when it is not below either neighbour, so the shoulder of a
+    /// strong peak is never picked) with each pair separated by at least
     /// <paramref name="minSepDeg"/> degrees. Returns the angles in
     /// degrees (using the index → degree mapping
     /// <c>angle = index * stepDeg</c>).</summary>
@@ -260,7 +280,10 @@ public static class BahtinovAnalyzer {
         var indices = Enumerable.Range(0, signal.Length).ToArray();
         Array.Sort(indices, (a, b) => signal[b].CompareTo(signal[a]));
         var picked = new List<int>(topN);
+        var len = signal.Length;
         foreach (var i in indices) {
+            if (signal[i] < signal[(i + len - 1) % len] ||
+                signal[i] < signal[(i + 1) % len]) continue;
             bool ok = true;
             foreach (var p in picked) {
                 var d = Math.Abs(i - p);

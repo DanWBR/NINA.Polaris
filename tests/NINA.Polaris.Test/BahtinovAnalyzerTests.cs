@@ -130,6 +130,93 @@ public class BahtinovAnalyzerTests {
             $"offset {r.OffsetPx:F2} too small for defocused pattern");
     }
 
+    [Test]
+    public void Analyze_TwentyDegreeMask_FindsOuterSpikes() {
+        // Common masks put the outer spikes ~20° from the central one.
+        // A 30° minimum peak gap rejected them and picked noise instead.
+        var pixels = MakeBahtinovFrame(W, H, starX: 200, starY: 200,
+                                       outerAngle1Deg: 70, centralAngleDeg: 90,
+                                       outerAngle2Deg: 110,
+                                       centralRho: 4);
+        var r = BahtinovAnalyzer.Analyze(pixels, W, H, starX: 200, starY: 200);
+        Assert.That(r.Ok, Is.True, r.Error);
+        var angles = new[] { r.Spike1Angle, r.Spike2Angle, r.Spike3Angle }
+            .OrderBy(a => a).ToArray();
+        Assert.That(angles[0], Is.EqualTo(70).Within(1));
+        Assert.That(angles[1], Is.EqualTo(90).Within(1));
+        Assert.That(angles[2], Is.EqualTo(110).Within(1));
+        Assert.That(Math.Abs(r.OffsetPx), Is.EqualTo(4).Within(1));
+    }
+
+    [Test]
+    public void Analyze_OuterSpikesOffCentre_FoundByJointSearch() {
+        // Out of focus, the spikes do not all cross the star centre.
+        // Here the whole V is shifted 10 px, so no line through the
+        // ROI centre lies on an outer spike.
+        var px = new ushort[W * H];
+        for (int i = 0; i < px.Length; i++) px[i] = BackgroundLevel;
+        DrawSpike(px, W, H, 200, 200, 70, rho: 10);
+        DrawSpike(px, W, H, 200, 200, 110, rho: -10);
+        DrawSpike(px, W, H, 200, 200, 90, rho: 0);
+        var r = BahtinovAnalyzer.Analyze(px, W, H, starX: 200, starY: 200);
+        Assert.That(r.Ok, Is.True, r.Error);
+        var angles = new[] { r.Spike1Angle, r.Spike2Angle, r.Spike3Angle }
+            .OrderBy(a => a).ToArray();
+        Assert.That(angles[0], Is.EqualTo(70).Within(1));
+        Assert.That(angles[1], Is.EqualTo(90).Within(1));
+        Assert.That(angles[2], Is.EqualTo(110).Within(1));
+    }
+
+    [Test]
+    public void Median_LowBitCameraData_IsExact() {
+        // 10-bit sensor stored in 16-bit: background ~64 ADU. The old
+        // 256-count histogram returned 0 here, so nothing was removed.
+        var data = new ushort[1001];
+        for (int i = 0; i < data.Length; i++) data[i] = (ushort)(60 + i % 9);
+        data[0] = 1023;
+        Assert.That(BahtinovAnalyzer.Median(data), Is.EqualTo(64));
+    }
+
+    [Test]
+    public void FindTopPeaks_ShoulderOfStrongPeak_NotPicked() {
+        // A broad strong peak at 90° has a shoulder still above the
+        // real weaker peaks; only local maxima may be picked.
+        var signal = new double[360];
+        for (int i = 0; i < 360; i++) signal[i] = 100 * Math.Exp(-Math.Pow((i - 180) / 30.0, 2));
+        signal[140] = Math.Max(signal[140], 0) + 30;   // 70°
+        signal[220] = Math.Max(signal[220], 0) + 30;   // 110°
+        var peaks = BahtinovAnalyzer.FindTopPeaks(signal, 0.5, 12.0, 3);
+        peaks.Sort();
+        Assert.That(peaks, Is.EqualTo(new[] { 70.0, 90.0, 110.0 }));
+    }
+
+    [Test]
+    public void Analyze_RealFrame_J37aMask_FindsSpikes() {
+        // QHY5 (10-bit data, background ~66 ADU, core clipped at 1030)
+        // behind a J-37A 135 mm with a 3D printed mask (outer slots
+        // ±20°). Bright red light, slightly defocused. Spikes measured
+        // by hand: ~70.5°, 90°, 110°.
+        var px = LoadCrop("j37a_red_light_400x400.u16");
+        var r = BahtinovAnalyzer.Analyze(px, 400, 400, starX: 200, starY: 200);
+        Assert.That(r.Ok, Is.True, r.Error);
+        var angles = new[] { r.Spike1Angle, r.Spike2Angle, r.Spike3Angle }
+            .OrderBy(a => a).ToArray();
+        TestContext.Out.WriteLine($"angles {string.Join(", ", angles)} offset {r.OffsetPx:F2}");
+        Assert.That(angles[0], Is.EqualTo(70.5).Within(1.5));
+        Assert.That(angles[1], Is.EqualTo(90).Within(1.5));
+        Assert.That(angles[2], Is.EqualTo(110).Within(1.5));
+        Assert.That(r.CentreSpikeIndex, Is.EqualTo(1));
+    }
+
+    private static ushort[] LoadCrop(string name) {
+        var path = Path.Combine(TestContext.CurrentContext.TestDirectory,
+                                "TestData", "Bahtinov", name);
+        var bytes = File.ReadAllBytes(path);
+        var px = new ushort[bytes.Length / 2];
+        Buffer.BlockCopy(bytes, 0, px, 0, px.Length * 2);
+        return px;
+    }
+
     // ─── helpers ──────────────────────────────────────────────────
 
     /// <summary>Paints a Bahtinov-like 3-spike pattern into a fresh
