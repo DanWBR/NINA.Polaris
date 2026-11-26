@@ -18,6 +18,10 @@
     <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.*" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Real camera crops (raw little-endian uint16) for the Bahtinov analyser tests. -->
+    <None Include="TestData\Bahtinov\*.u16" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\..\src\NINA.Polaris\NINA.Polaris.csproj" />
     <ProjectReference Include="..\..\src\NINA.INDI\NINA.INDI.csproj" />
     <ProjectReference Include="..\..\src\NINA.Image.Portable\NINA.Image.Portable.csproj" />
