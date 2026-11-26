@@ -462,11 +462,19 @@ public class CameraStreamService : IDisposable {
             var px = frame.Data;
             if (px == null || px.Length == 0) return;
             int w = frame.Properties.Width, h = frame.Properties.Height;
-            // Centre window: the planet is what is being focused, and the
-            // corners are sky that only adds noise to the number.
-            int roi = Math.Min(w, h) / 2;
-            double v = NINA.Polaris.Services.Planetary.FrameQualityAnalyzer
-                          .LaplacianVariance(px, w, h, roi);
+            // The area the operator tapped, or else a centre window: the
+            // planet is what is being focused, and the corners are sky that
+            // only adds noise to the number.
+            double v;
+            if (FocusRegion is { } region) {
+                var (rx, ry, rw, rh) = region.ToPixels(w, h, evenAlign: false);
+                v = NINA.Polaris.Services.Planetary.FrameQualityAnalyzer
+                        .LaplacianVariance(px, w, h, rx, ry, rx + rw, ry + rh);
+            } else {
+                int roi = Math.Min(w, h) / 2;
+                v = NINA.Polaris.Services.Planetary.FrameQualityAnalyzer
+                        .LaplacianVariance(px, w, h, roi);
+            }
             Sharpness = v;
             if (v > SharpnessBest) SharpnessBest = v;
             lock (_sharpLock) {
@@ -497,6 +505,53 @@ public class CameraStreamService : IDisposable {
         SharpnessBest = 0;
         ClipPercent = 0;
         lock (_sharpLock) _sharpHistory.Clear();
+    }
+
+    /// <summary>The area the operator tapped on the VIDEO frame, which the
+    /// sharpness bar and the video autofocus measure. Null measures the centre
+    /// of the frame. It outlives a stream restart on purpose: changing the
+    /// exposure restarts a native stream, and the operator is still focusing
+    /// on the same crater.</summary>
+    public Focus.FocusRegion? FocusRegion { get; private set; }
+
+    /// <summary>Move the measured area. The best reading so far was taken on
+    /// another part of the frame, so it stops being a yardstick.</summary>
+    public void SetFocusRegion(Focus.FocusRegion? region) {
+        FocusRegion = region;
+        ResetSharpness();
+    }
+
+    /// <summary>
+    /// The first stream frame that arrives after <paramref name="notBeforeUtc"/>,
+    /// passed through <paramref name="extract"/> on the thread that delivered
+    /// it. The extract has to copy what it needs: a driver may reuse the
+    /// frame's buffer once the callback returns.
+    ///
+    /// The video autofocus waits this way after every focuser move, with the
+    /// time set past the end of an exposure that could have started while the
+    /// focuser was still moving, so a smeared frame never reaches the curve.
+    /// </summary>
+    public async Task<(T Value, DateTime ArrivedAt)> NextFrameAsync<T>(
+            DateTime notBeforeUtc, Func<IImageData, T> extract, TimeSpan timeout, CancellationToken ct) {
+        if (!IsRunning)
+            throw new InvalidOperationException("The video stream isn't running.");
+        var tcs = new TaskCompletionSource<(T, DateTime)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var sub = SubscribeFrames(frame => {
+            if (tcs.Task.IsCompleted) return;
+            var now = DateTime.UtcNow;
+            if (now <= notBeforeUtc) return;
+            try { tcs.TrySetResult((extract(frame), now)); }
+            catch (Exception ex) { tcs.TrySetException(ex); }
+        });
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeoutCts.CancelAfter(timeout);
+        try {
+            return await tcs.Task.WaitAsync(timeoutCts.Token);
+        } catch (OperationCanceledException) when (!ct.IsCancellationRequested) {
+            throw new InvalidOperationException(IsRunning
+                ? $"The video stream didn't deliver a frame for {timeout.TotalSeconds:0} s."
+                : "The video stream stopped.");
+        }
     }
 
     private void OnStreamFrame(IImageData frame) {

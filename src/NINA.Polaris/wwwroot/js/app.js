@@ -1923,6 +1923,13 @@ function ninaApp() {
             // large defocus, when the spikes run past the default box.
             bahtinov: { on: false, roiHalf: 100, starX: null, starY: null,
                         result: null, error: '', busy: false },
+            // Tap to focus. focusPick arms the next tap on the frame to place
+            // the focus area, for when a tap already means something else (ROI
+            // re-centre, Bahtinov star). af follows a video autofocus started
+            // from this panel: startedAt keeps an older result from being
+            // reported as this run's.
+            focusPick: false,
+            af: { requested: false, startedAt: 0, error: '' },
             exposure: 0.05,
             gain: 200,
             binning: 1,
@@ -30964,12 +30971,9 @@ function ninaApp() {
         async videoCenterRoiAt(ev) {
             if (this.video.roiW <= 0 || this.video.roiH <= 0) return; // FULL = nothing to recenter
             if (!this.cameraStream.running) return;       // canvas idle, click would not match a frame
-            const canvas = ev.currentTarget;
-            const rect = canvas.getBoundingClientRect();
-            if (rect.width <= 0 || rect.height <= 0) return;
-            const fx = (ev.clientX - rect.left) / rect.width;
-            const fy = (ev.clientY - rect.top) / rect.height;
-            if (fx < 0 || fx > 1 || fy < 0 || fy > 1) return;
+            const p = this._canvasEventFraction(ev);
+            if (!p) return;
+            const fx = p.x, fy = p.y;
             // Sensor coordinates of the click (currently roi'd view)
             const sensorClickX = this.video.roiX + fx * this.video.roiW;
             const sensorClickY = this.video.roiY + fy * this.video.roiH;
@@ -31136,12 +31140,9 @@ function ninaApp() {
         // sensor pixels (the ROI re-center click below works in sensor coords,
         // which is why these are two different handlers).
         videoBahtinovPickStar(ev) {
-            const canvas = ev.currentTarget;
-            const rect = canvas.getBoundingClientRect();
-            if (rect.width <= 0 || rect.height <= 0) return;
-            const fx = (ev.clientX - rect.left) / rect.width;
-            const fy = (ev.clientY - rect.top) / rect.height;
-            if (fx < 0 || fx > 1 || fy < 0 || fy > 1) return;
+            const p = this._canvasEventFraction(ev);
+            if (!p) return;
+            const fx = p.x, fy = p.y;
             // The WS status block names the streamed frame geometry
             // width/height; this is frame space, not sensor space.
             const fw = this.cameraStream.width || 0;
@@ -31160,9 +31161,34 @@ function ninaApp() {
         // One handler for the frame canvas: Bahtinov star pick when the tool
         // is on, ROI re-center otherwise. Without this the two features would
         // fight over the same click.
+        // Where a click landed on a frame canvas, as fractions of the frame.
+        // The canvas is drawn with object-fit: contain, so when the frame and
+        // the panel have different shapes the picture sits between empty
+        // bands; the element's box is not the picture's box. A click on a band
+        // is outside the frame and returns null. The pan/zoom transform scales
+        // the element and the picture together, so the bounding box already
+        // carries it.
+        _canvasEventFraction(ev) {
+            const canvas = ev.currentTarget;
+            const rect = canvas.getBoundingClientRect();
+            if (rect.width <= 0 || rect.height <= 0) return null;
+            const cw = canvas.width || rect.width, ch = canvas.height || rect.height;
+            const s = Math.min(rect.width / cw, rect.height / ch);
+            const pw = cw * s, ph = ch * s;
+            const x = (ev.clientX - rect.left - (rect.width - pw) / 2) / pw;
+            const y = (ev.clientY - rect.top - (rect.height - ph) / 2) / ph;
+            if (x < 0 || x > 1 || y < 0 || y > 1) return null;
+            return { x, y };
+        },
+
+        // When a tap already means something (ROI re-centre, Bahtinov star),
+        // the focus area takes the tap only once Pick area armed it; on a
+        // plain frame a tap places the focus area directly.
         videoCanvasClick(ev) {
+            if (this.video.focusPick) return this.videoSetFocusRegionAt(ev);
             if (this.video.bahtinov.on) return this.videoBahtinovPickStar(ev);
-            return this.videoCenterRoiAt(ev);
+            if (this.video.roiW > 0 && this.video.roiH > 0) return this.videoCenterRoiAt(ev);
+            return this.videoSetFocusRegionAt(ev);
         },
 
         _renderVideoBahtinovOverlay() {
@@ -31174,6 +31200,154 @@ function ninaApp() {
                 'videoCaptureCanvas', 'videoBahtinovCanvas', r,
                 r?.frameWidth || this.cameraStream.width,
                 r?.frameHeight || this.cameraStream.height);
+            this._drawVideoFocusRegion();
+        },
+
+        // ----- Tap to focus on the video stream -----
+        //
+        // The sharpness bar and the video autofocus measure one area of the
+        // frame. By default it is the centre, which on the Moon can be a smooth
+        // mare with nothing to focus on; a tap moves it onto a crater or the
+        // terminator. The area is kept as fractions of the frame, so it stays
+        // on the same spot whatever the JPEG scale or the canvas size.
+        videoSetFocusRegionAt(ev) {
+            this.video.focusPick = false;
+            if (!this.cameraStream.running || this.videoAfRunning()) return;
+            const p = this._canvasEventFraction(ev);
+            if (!p) return;
+            const fx = p.x, fy = p.y;
+            const fw = this.cameraStream.width || 0;
+            const fh = this.cameraStream.height || 0;
+            if (fw <= 0 || fh <= 0) return;
+            // A square a quarter of the short side: big enough to hold a
+            // crater and steady under seeing, small enough to stay on it.
+            const side = Math.max(48, Math.min(fw, fh) * 0.25);
+            const w = Math.min(1, side / fw), h = Math.min(1, side / fh);
+            const x = Math.max(0, Math.min(1 - w, fx - w / 2));
+            const y = Math.max(0, Math.min(1 - h, fy - h / 2));
+            this._videoPostFocusRegion({ x, y, w, h });
+        },
+
+        videoClearFocusRegion() {
+            this.video.focusPick = false;
+            this._videoPostFocusRegion(null);
+        },
+
+        async _videoPostFocusRegion(r) {
+            // Shown at once; the next status tick confirms it.
+            this.cameraStream = Object.assign({}, this.cameraStream, { focusRegion: r });
+            this._renderVideoBahtinovOverlay();
+            try {
+                await this.apiPost('/api/camera/stream/focus-region', r || {});
+            } catch (e) {
+                this.toastFail(this._t('Could not set the focus area'), e);
+            }
+        },
+
+        // The focus area on the overlay canvas, which carries the same pan and
+        // zoom as the frame. Green like the box the operator tapped; amber
+        // while an autofocus runs on it.
+        _drawVideoFocusRegion() {
+            const r = this.cameraStream.running ? this.cameraStream.focusRegion : null;
+            if (!r) return;
+            const live = document.getElementById('videoCaptureCanvas');
+            const ovr = document.getElementById('videoBahtinovCanvas');
+            if (!live || !ovr || !live.width || !live.height) return;
+            if (ovr.width !== live.width || ovr.height !== live.height) {
+                ovr.width = live.width;
+                ovr.height = live.height;
+            }
+            const ctx = ovr.getContext('2d');
+            const x = r.x * ovr.width, y = r.y * ovr.height;
+            const w = r.w * ovr.width, h = r.h * ovr.height;
+            const tick = Math.min(w, h) * 0.12;
+            ctx.save();
+            ctx.strokeStyle = this.videoAfRunning() ? 'rgba(245, 158, 11, 0.95)' : 'rgba(74, 222, 128, 0.95)';
+            ctx.lineWidth = Math.max(1.5, ovr.width / 600);
+            ctx.strokeRect(x, y, w, h);
+            ctx.beginPath();
+            ctx.moveTo(x + w / 2, y); ctx.lineTo(x + w / 2, y + tick);
+            ctx.moveTo(x + w / 2, y + h); ctx.lineTo(x + w / 2, y + h - tick);
+            ctx.moveTo(x, y + h / 2); ctx.lineTo(x + tick, y + h / 2);
+            ctx.moveTo(x + w, y + h / 2); ctx.lineTo(x + w - tick, y + h / 2);
+            ctx.stroke();
+            ctx.restore();
+        },
+
+        videoAfRunning() {
+            return this.autoFocus.state === 'running' && !!this.autoFocus.fromStream;
+        },
+
+        // Contrast autofocus on the stream's own frames: the focuser goes out
+        // past focus and back in, and stops at the sharpest position. Nothing
+        // is exposed and the stream keeps running. It doesn't record into the
+        // per-filter focus memory, because a Barlow on a planetary train moves
+        // the focus point and would leave a wrong position for the deep-sky
+        // filters.
+        async videoAfStart() {
+            if (!this.cameraStream.running || this.videoAfRunning()) return;
+            const r = this.cameraStream.focusRegion;
+            this.video.af = { requested: true, startedAt: Date.now(), error: '' };
+            try {
+                await this.apiPost('/api/autofocus/start', {
+                    fromStream: true,
+                    focuserSource: 'main',
+                    recordFilterMemory: false,
+                    regionX: r ? r.x : null, regionY: r ? r.y : null,
+                    regionW: r ? r.w : null, regionH: r ? r.h : null
+                });
+                // The running state arrives with the next status tick; show
+                // it now so the button doesn't sit idle for a second.
+                this.autoFocus = Object.assign({}, this.autoFocus,
+                    { state: 'running', fromStream: true, phase: 'sweep', points: [] });
+                this._renderVideoBahtinovOverlay();
+            } catch (e) {
+                // The panel line has room for the server's reason, not for
+                // the method, path and request id an ApiError wraps it in.
+                let reason = '';
+                try { reason = JSON.parse(e && e.body).error || ''; } catch (_) { /* not JSON */ }
+                this.video.af.requested = false;
+                this.video.af.error = this._t('Autofocus failed: {err}',
+                    { err: reason || (e && e.message) || String(e) });
+            }
+        },
+
+        async videoAfAbort() {
+            try { await this.apiPost('/api/autofocus/abort'); }
+            catch (e) { this.toastFail(this._t('Stop failed'), e); }
+        },
+
+        videoAfStatus() {
+            const af = this.autoFocus;
+            if (this.video.af.error) return this.video.af.error;
+            if (this.videoAfRunning()) {
+                if (af.phase === 'refining') return this._t('Refining near the best focus');
+                if (af.phase === 'moving') return this._t('Moving to the best focus');
+                if (af.phase === 'confirming') return this._t('Checking the result');
+                return this._t('Sweeping, point {n}', { n: (af.points || []).length + 1 });
+            }
+            if (!this.video.af.requested || !af.fromStream || !af.completedAt) return '';
+            if (Date.parse(af.completedAt) < this.video.af.startedAt - 5000) return '';
+            if (af.success) {
+                const i = Number(af.initialHfr), f = Number(af.finalHfr);
+                if (i > 0 && f > 0) {
+                    // Fit space is minus the log of the contrast, so the ratio
+                    // of the contrasts is the exponential of the difference.
+                    const pct = Math.round((Math.exp(i - f) - 1) * 100);
+                    return this._t('Focused at {pos}, {pct}% sharper than at the start.',
+                                   { pos: af.finalPosition, pct: pct >= 0 ? '+' + pct : String(pct) });
+                }
+                return this._t('Focused at {pos}.', { pos: af.finalPosition });
+            }
+            return this._t('Autofocus failed: {err}', { err: af.lastError || '' });
+        },
+
+        videoAfTone() {
+            if (this.video.af.error) return 'text-err';
+            if (this.videoAfRunning()) return 'text-warn';
+            const af = this.autoFocus;
+            if (!this.video.af.requested || !af.completedAt) return 'text-muted';
+            return af.success ? 'text-ok' : 'text-err';
         },
 
         videoBahtinovLabel() {
@@ -52931,7 +53105,14 @@ function ninaApp() {
                     backlashReversal: af.backlashReversal ?? null,
                     backlashMedianSteps: af.backlashMedianSteps ?? null,
                     backlashRuns: af.backlashRuns ?? 0,
-                    warning: af.warning ?? null
+                    warning: af.warning ?? null,
+                    // Video autofocus report (VIDEO panel).
+                    fromStream: !!af.fromStream,
+                    lastError: af.lastError ?? null,
+                    initialHfr: af.initialHfr ?? null,
+                    startPosition: af.startPosition ?? null,
+                    finalPosition: af.finalPosition ?? null,
+                    completedAt: af.completedAt ?? null
                 };
                 this.redrawFocusStarOverlay();
             }
@@ -53339,6 +53520,9 @@ function ninaApp() {
                 // Preserve last-known values so the button label stays
                 // readable while the stream service initialises.
                 this.cameraStream = Object.assign({}, this.cameraStream, msg.cameraStream);
+                // The focus area box follows the frame canvas, which can
+                // change size with the stream, and goes away when it stops.
+                if (this.tab === 'video') this._renderVideoBahtinovOverlay();
             }
             // BENCH: live progress for the Settings card. When a run
             // finishes, pull the full result + history once over REST.

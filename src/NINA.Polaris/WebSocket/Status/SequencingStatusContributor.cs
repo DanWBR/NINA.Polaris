@@ -153,7 +153,16 @@ public sealed class SequencingStatusContributor : IStatusContributor {
             backlashReversal = autoFocus.LastResult?.BacklashReversal,
             backlashMedianSteps = autoFocus.LastResult?.BacklashMedianSteps,
             backlashRuns = autoFocus.LastResult?.BacklashRuns,
-            warning = autoFocus.LastResult?.Warning
+            warning = autoFocus.LastResult?.Warning,
+            // The VIDEO panel reports a video autofocus itself: it needs to
+            // know the run came from the stream, how it ended, and the
+            // contrast at the start to say how much sharper the end is.
+            fromStream = autoFocus.Progress.FromStream,
+            lastError = autoFocus.LastError,
+            initialHfr = autoFocus.LastResult?.InitialHfr,
+            startPosition = autoFocus.LastResult?.StartPosition,
+            finalPosition = autoFocus.LastResult?.FinalPosition,
+            completedAt = autoFocus.LastResult?.CompletedAt
         };
 
             tick.Blocks["sequence"] = new {

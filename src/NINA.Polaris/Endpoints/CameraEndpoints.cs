@@ -818,6 +818,15 @@ public static class CameraEndpoints {
             return Results.Ok(new { reset = true });
         });
 
+        // The area the operator tapped on the VIDEO frame, as fractions of the
+        // frame. The sharpness bar and the video autofocus measure it. A body
+        // without a region goes back to the centre of the frame.
+        group.MapPost("/stream/focus-region", (CameraStreamService stream, FocusRegionRequest? req) => {
+            var region = NINA.Polaris.Services.Focus.FocusRegion.From(req?.X, req?.Y, req?.W, req?.H);
+            stream.SetFocusRegion(region);
+            return Results.Ok(new { focusRegion = region });
+        });
+
         // Live exposure/gain tweak for a running stream so the VIDEO controls
         // stay usable while streaming (ASIAIR-style). Loop mode picks the new
         // values up on the next frame; native mode is restarted to apply them.
@@ -988,6 +997,9 @@ public static class CameraEndpoints {
         bool? ForceLoop = null);
 
     public record StreamParamsRequest(double? Exposure = null, int? Gain = null);
+
+    /// <summary>Focus region of the video stream, as fractions of the frame.</summary>
+    public record FocusRegionRequest(double? X = null, double? Y = null, double? W = null, double? H = null);
 
     /// <summary>Body for POST /api/camera/controls/{id}. <c>Which</c> = main
     /// (default) | guide. <c>Auto</c> hands the value to the driver.</summary>

@@ -5622,5 +5622,20 @@
   "Polaris sent the date and time at {t}. It hasn't sent the location since it started.": "Polaris hat Datum und Uhrzeit um {t} gesendet. Den Standort hat es seit dem Start nicht gesendet.",
   "Polaris sent the location at {l}. It hasn't sent the date and time since it started.": "Polaris hat den Standort um {l} gesendet. Datum und Uhrzeit hat es seit dem Start nicht gesendet.",
   "Polaris hasn't sent the date and time or the location to this mount since it started.": "Polaris hat seit dem Start weder Datum und Uhrzeit noch den Standort an diese Montierung gesendet.",
-  "{n} years": "{n} Jahre"
+  "{n} years": "{n} Jahre",
+  "Pick area": "Bereich wählen",
+  "The next tap on the frame places the focus area": "Der nächste Tipp auf das Bild setzt den Fokusbereich",
+  "Centre": "Mitte",
+  "Measure the centre of the frame again": "Wieder die Bildmitte messen",
+  "Autofocus on the focus area: the focuser goes out past focus and back, then stops at the sharpest position": "Autofokus auf den Fokusbereich: Der Fokussierer fährt über den Fokus hinaus, zurück und hält an der schärfsten Position",
+  "Stop AF": "AF stoppen",
+  "Tap the frame where the detail is, such as a crater or the edge of a planet.": "Tippen Sie auf die Stelle mit Details, etwa einen Krater oder den Rand eines Planeten.",
+  "Could not set the focus area": "Der Fokusbereich konnte nicht gesetzt werden",
+  "Refining near the best focus": "Feinabstimmung nahe dem besten Fokus",
+  "Moving to the best focus": "Fahre zum besten Fokus",
+  "Checking the result": "Ergebnis wird geprüft",
+  "Sweeping, point {n}": "Abtastung, Punkt {n}",
+  "Focused at {pos}, {pct}% sharper than at the start.": "Fokussiert bei {pos}, {pct} % schärfer als am Anfang.",
+  "Focused at {pos}.": "Fokussiert bei {pos}.",
+  "Autofocus failed: {err}": "Autofokus fehlgeschlagen: {err}"
 }

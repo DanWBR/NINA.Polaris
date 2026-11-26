@@ -2120,6 +2120,16 @@ label select.input-sm.select-compact {
 .baht-row label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; }
 .baht-row input { width: 84px; }
 .baht-hint { font-size: 10.5px; line-height: 1.35; }
+/* Tap to focus: the focus area buttons and the video AF, under the bar. */
+.sharp-af-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding-top: 4px;
+    border-top: 1px solid var(--border);
+}
+.sharp-af-status { font-size: 12px; line-height: 1.35; }
 
 .sharp-head {
     display: flex;
