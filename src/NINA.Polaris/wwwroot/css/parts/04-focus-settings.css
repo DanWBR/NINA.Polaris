@@ -2195,13 +2195,17 @@
     margin-top: 8px;
 }
 
-/* SKY framing rotation panel: sits on the map, above the bottom action row,
-   so the slider is next to the red box it turns. */
+/* SKY framing rotation panel: a card on the right edge of the map, above the
+   bottom action row, so the red box it turns stays in view in the middle.
+   When the screen is a narrow portrait phone, the card would cover the box,
+   so it falls back to a strip across the bottom (see the media query below). */
 .sky-rot-adjust {
     position: absolute;
-    left: 12px;
+    top: 12px;
     right: 12px;
-    bottom: 64px;
+    width: min(300px, 42%);
+    max-height: calc(100% - 76px);
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -2255,6 +2259,16 @@
 }
 .sky-rot-num { width: 64px; text-align: right; font-variant-numeric: tabular-nums; }
 .sky-rot-row .hint { font-size: 0.8em; opacity: 0.8; }
+@media (orientation: portrait) and (max-width: 640px) {
+    .sky-rot-adjust {
+        top: auto;
+        left: 12px;
+        right: 12px;
+        bottom: 64px;
+        width: auto;
+        max-height: 45%;
+    }
+}
 
 /* Backlash estimate + confirmation warning under the V-curve. */
 .af-backlash {
