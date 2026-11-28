@@ -7311,6 +7311,7 @@ cd xpra-html5 &amp;&amp; sudo python3 ./setup.py install</pre>
                                             <code x-text="srv.host + ':' + srv.port"></code>
                                             <span x-show="srv.manufacturer" x-text="' · ' + srv.manufacturer"></span>
                                             <span x-show="srv.manufacturerVersion" x-text="' v' + srv.manufacturerVersion"></span>
+                                            <span x-show="srv.location" x-text="' · ' + srv.location"></span>
                                         </div>
                                         <table x-show="srv.devices && srv.devices.length > 0"
                                                style="width:100%;font-size:12px;border-collapse:collapse">
@@ -26986,7 +26987,7 @@ certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "polaris-root" \
                             });
                         })();
                     </script>
-    <script src="/js/app.js?v=20261126-tapfocus"></script>
+    <script src="/js/app.js?v=20261128-alpacalocation"></script>
     <!-- Interactive introductory tour. Self-contained; reads window.__alpineRoot
          only for navigation, issues no API calls (additive + isolated). -->
     <script src="/js/tour.js?v=20260728-bartour"></script>

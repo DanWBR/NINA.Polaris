@@ -139,6 +139,7 @@ public class AlpacaDiscovery {
                     server.ServerName = desc.Value.ServerName;
                     server.Manufacturer = desc.Value.Manufacturer;
                     server.ManufacturerVersion = desc.Value.ManufacturerVersion;
+                    server.Location = desc.Value.Location;
                 }
             } catch (Exception ex) {
                 _logger.LogDebug(ex, "Failed to query {Host}:{Port} for devices", server.Host, server.Port);
@@ -247,6 +248,7 @@ public class AlpacaServer {
     public string? ServerName { get; set; }
     public string? Manufacturer { get; set; }
     public string? ManufacturerVersion { get; set; }
+    public string? Location { get; set; }
     public List<AlpacaConfiguredDevice> Devices { get; set; } = new();
 }
 

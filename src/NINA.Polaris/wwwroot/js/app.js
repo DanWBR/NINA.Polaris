@@ -54104,6 +54104,7 @@ function ninaApp() {
                     host: s.host, port: s.port,
                     serverName: s.serverName, manufacturer: s.manufacturer,
                     manufacturerVersion: s.manufacturerVersion,
+                    location: s.location,
                     devices: s.devices || null, _probe: null
                 }));
                 this.alpaca.totalDevices = r.totalDevices || 0;

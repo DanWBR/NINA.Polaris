@@ -100,6 +100,7 @@ public static class AlpacaEndpoints {
                     serverName = s.ServerName,
                     manufacturer = s.Manufacturer,
                     manufacturerVersion = s.ManufacturerVersion,
+                    location = s.Location,
                     devices = (s.Devices ?? new()).Select(d => new {
                         deviceName = d.DeviceName,
                         deviceType = d.DeviceType,
