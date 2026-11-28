@@ -34,6 +34,7 @@ namespace NINA.Polaris.Services.Alpaca;
 public class AlpacaDiscovery {
     private readonly ILogger<AlpacaDiscovery> _logger;
     private const int DiscoveryPort = 32227;
+    private static readonly IPAddress LoopbackBroadcast = IPAddress.Parse("127.255.255.255");
     private const string DiscoveryMessage = "alpacadiscovery1";
 
     public AlpacaDiscovery(ILogger<AlpacaDiscovery> logger) {
@@ -203,6 +204,10 @@ public class AlpacaDiscovery {
     ///   - 255.255.255.255 (limited broadcast, main LAN sweep)
     ///   - 127.0.0.1 unicast (local-machine Alpaca server, since
     ///     limited broadcast on Windows doesn't deliver to loopback)
+    ///   - 127.255.255.255 loopback broadcast. A unicast to 127.0.0.1
+    ///     reaches only ONE of several local servers sharing port
+    ///     32227 via SO_REUSEADDR; on Linux the loopback broadcast is
+    ///     delivered to all of them, each replying from 127.0.0.1.
     /// Plus one directed broadcast per up + IPv4 interface
     ///   (e.g. 192.168.1.255 for a 192.168.1.0/24 NIC). This catches
     ///   Alpaca servers on the same /24 even when the host has
@@ -212,7 +217,12 @@ public class AlpacaDiscovery {
     private static List<IPEndPoint> BuildBroadcastTargets() {
         var targets = new List<IPEndPoint> {
             new(IPAddress.Broadcast, DiscoveryPort),
-            new(IPAddress.Loopback, DiscoveryPort)
+            new(IPAddress.Loopback, DiscoveryPort),
+            // Linux won't forward a datagram sent to a unicast address
+            // (127.0.0.1) to multiple services listening on the same
+            // port; only one gets it. Broadcasting to 127.255.255.255
+            // reaches every local Alpaca server.
+            new(LoopbackBroadcast, DiscoveryPort)
         };
         try {
             foreach (var nic in NetworkInterface.GetAllNetworkInterfaces()) {
@@ -235,7 +245,7 @@ public class AlpacaDiscovery {
             }
         } catch {
             // Iface enumeration can fail on locked-down systems; we
-            // still have the 2 baseline targets above.
+            // still have the 3 baseline targets above.
         }
         return targets;
     }
